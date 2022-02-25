@@ -230,7 +230,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         }                                                                                          \
         break
 
-#define HANDLE_RUST(s)                                                         \
+#define HANDLE_RUST_TMP(s)                                                         \
     case SYS_##s:                                                              \
         _syscallhandler_pre_syscall(sys, args->number, #s);                    \
         scr = rustsyscallhandler_##s(sys, args);                               \
@@ -258,24 +258,24 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     switch (args->number) {
         HANDLE_C(accept);
         HANDLE_C(accept4);
-        HANDLE_RUST(bind);
+        HANDLE_RUST_TMP(bind);
         HANDLE_C(brk);
         HANDLE_C(clock_gettime);
         HANDLE_C(clock_nanosleep);
         HANDLE_C(clone);
-        HANDLE_RUST(close);
+        HANDLE_RUST_TMP(close);
         HANDLE_C(connect);
         HANDLE_C(creat);
-        HANDLE_RUST(dup);
-        HANDLE_RUST(dup2);
-        HANDLE_RUST(dup3);
+        HANDLE_RUST_TMP(dup);
+        HANDLE_RUST_TMP(dup2);
+        HANDLE_RUST_TMP(dup3);
         HANDLE_C(epoll_create);
         HANDLE_C(epoll_create1);
         HANDLE_C(epoll_ctl);
         HANDLE_C(epoll_pwait);
         HANDLE_C(epoll_wait);
-        HANDLE_RUST(eventfd);
-        HANDLE_RUST(eventfd2);
+        HANDLE_RUST_TMP(eventfd);
+        HANDLE_RUST_TMP(eventfd2);
         HANDLE_C(execve);
         HANDLE_C(exit_group);
         HANDLE_C(faccessat);
@@ -285,9 +285,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(fchmodat);
         HANDLE_C(fchown);
         HANDLE_C(fchownat);
-        HANDLE_RUST(fcntl);
+        HANDLE_RUST_TMP(fcntl);
 #ifdef SYS_fcntl64
-        HANDLE_RUST(fcntl64);
+        HANDLE_RUST_TMP(fcntl64);
 #endif
         HANDLE_C(fdatasync);
         HANDLE_C(fgetxattr);
@@ -303,16 +303,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(futimesat);
         HANDLE_C(getdents);
         HANDLE_C(getdents64);
-        HANDLE_RUST(getpeername);
+        HANDLE_RUST_TMP(getpeername);
         HANDLE_C(getpid);
         HANDLE_C(getppid);
         HANDLE_C(gettid);
-        HANDLE_RUST(getrandom);
+        HANDLE_RUST_TMP(getrandom);
         HANDLE_C(get_robust_list);
-        HANDLE_RUST(getsockname);
+        HANDLE_RUST_TMP(getsockname);
         HANDLE_C(getsockopt);
         HANDLE_C(gettimeofday);
-        HANDLE_RUST(ioctl);
+        HANDLE_RUST_TMP(ioctl);
         HANDLE_C(kill);
         HANDLE_C(linkat);
         HANDLE_C(listen);
@@ -330,12 +330,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(newfstatat);
         HANDLE_C(open);
         HANDLE_C(openat);
-        HANDLE_RUST(pipe);
-        HANDLE_RUST(pipe2);
+        HANDLE_RUST_TMP(pipe);
+        HANDLE_RUST_TMP(pipe2);
         HANDLE_C(poll);
         HANDLE_C(ppoll);
         HANDLE_C(prctl);
-        HANDLE_RUST(pread64);
+        HANDLE_RUST_TMP(pread64);
         HANDLE_C(preadv);
 #ifdef SYS_preadv2
         HANDLE_C(preadv2);
@@ -347,16 +347,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(prlimit64);
 #endif
         HANDLE_C(pselect6);
-        HANDLE_RUST(pwrite64);
+        HANDLE_RUST_TMP(pwrite64);
         HANDLE_C(pwritev);
 #ifdef SYS_pwritev2
         HANDLE_C(pwritev2);
 #endif
-        HANDLE_RUST(read);
+        HANDLE_RUST_TMP(read);
         HANDLE_C(readahead);
         HANDLE_C(readlinkat);
         HANDLE_C(readv);
-        HANDLE_RUST(recvfrom);
+        HANDLE_RUST_TMP(recvfrom);
         HANDLE_C(renameat);
         HANDLE_C(renameat2);
         HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
@@ -365,7 +365,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(shadow_hostname_to_addr_ipv4);
         HANDLE_C(shadow_init_memory_manager);
         HANDLE_C(select);
-        HANDLE_RUST(sendto);
+        HANDLE_RUST_TMP(sendto);
         HANDLE_C(setsockopt);
 #ifdef SYS_sigaction
         // Superseded by rt_sigaction in Linux 2.2
@@ -385,8 +385,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(set_robust_list);
         HANDLE_C(set_tid_address);
         HANDLE_C(shutdown);
-        HANDLE_RUST(socket);
-        HANDLE_RUST(socketpair);
+        HANDLE_RUST_TMP(socket);
+        HANDLE_RUST_TMP(socketpair);
 #ifdef SYS_statx
         HANDLE_C(statx);
 #endif
@@ -403,7 +403,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(uname);
         HANDLE_C(unlinkat);
         HANDLE_C(utimensat);
-        HANDLE_RUST(write);
+        HANDLE_RUST_TMP(write);
         HANDLE_C(writev);
 
         // **************************************
