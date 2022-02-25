@@ -296,9 +296,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(fchmodat);
         HANDLE_C(fchown);
         HANDLE_C(fchownat);
-        HANDLE_RUST_TMP(fcntl);
+        HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
-        HANDLE_RUST_TMP(fcntl64);
+        // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
+        case SYS_fcntl64:
+            _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
+            args->number = SYS_fcntl;
+            scr = rustsyscallhandler_syscall(sys->syscall_handler_rs, sys, args);
+            args->number = SYS_fcntl64;
+            _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
+            break;
 #endif
         HANDLE_C(fdatasync);
         HANDLE_C(fgetxattr);

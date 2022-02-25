@@ -6,7 +6,7 @@ use crate::host::syscall_types::{SyscallError, SyscallResult};
 use nix::errno::Errno;
 
 mod eventfd;
-pub mod fcntl;
+mod fcntl;
 pub mod ioctl;
 mod random;
 pub mod socket;
@@ -25,6 +25,7 @@ impl SyscallHandler {
         match args.number {
             libc::SYS_eventfd => self.eventfd(ctx, args),
             libc::SYS_eventfd2 => self.eventfd2(ctx, args),
+            libc::SYS_fcntl => self.fcntl(ctx, args),
             libc::SYS_getrandom => self.getrandom(ctx, args),
             _ => Err(SyscallError::from(Errno::ENOSYS)),
         }
