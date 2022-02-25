@@ -285,8 +285,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(epoll_ctl);
         HANDLE_C(epoll_pwait);
         HANDLE_C(epoll_wait);
-        HANDLE_RUST_TMP(eventfd);
-        HANDLE_RUST_TMP(eventfd2);
+        HANDLE_RUST(eventfd);
+        HANDLE_RUST(eventfd2);
         HANDLE_C(execve);
         HANDLE_C(exit_group);
         HANDLE_C(faccessat);
