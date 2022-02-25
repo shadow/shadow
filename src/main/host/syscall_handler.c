@@ -274,12 +274,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(clock_gettime);
         HANDLE_C(clock_nanosleep);
         HANDLE_C(clone);
-        HANDLE_RUST_TMP(close);
+        HANDLE_RUST(close);
         HANDLE_C(connect);
         HANDLE_C(creat);
-        HANDLE_RUST_TMP(dup);
-        HANDLE_RUST_TMP(dup2);
-        HANDLE_RUST_TMP(dup3);
+        HANDLE_RUST(dup);
+        HANDLE_RUST(dup2);
+        HANDLE_RUST(dup3);
         HANDLE_C(epoll_create);
         HANDLE_C(epoll_create1);
         HANDLE_C(epoll_ctl);
@@ -348,12 +348,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(newfstatat);
         HANDLE_C(open);
         HANDLE_C(openat);
-        HANDLE_RUST_TMP(pipe);
-        HANDLE_RUST_TMP(pipe2);
+        HANDLE_RUST(pipe);
+        HANDLE_RUST(pipe2);
         HANDLE_C(poll);
         HANDLE_C(ppoll);
         HANDLE_C(prctl);
-        HANDLE_RUST_TMP(pread64);
+        HANDLE_RUST(pread64);
         HANDLE_C(preadv);
 #ifdef SYS_preadv2
         HANDLE_C(preadv2);
@@ -365,12 +365,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(prlimit64);
 #endif
         HANDLE_C(pselect6);
-        HANDLE_RUST_TMP(pwrite64);
+        HANDLE_RUST(pwrite64);
         HANDLE_C(pwritev);
 #ifdef SYS_pwritev2
         HANDLE_C(pwritev2);
 #endif
-        HANDLE_RUST_TMP(read);
+        HANDLE_RUST(read);
         HANDLE_C(readahead);
         HANDLE_C(readlinkat);
         HANDLE_C(readv);
@@ -421,7 +421,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(uname);
         HANDLE_C(unlinkat);
         HANDLE_C(utimensat);
-        HANDLE_RUST_TMP(write);
+        HANDLE_RUST(write);
         HANDLE_C(writev);
 
         // **************************************
