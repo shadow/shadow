@@ -269,7 +269,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     switch (args->number) {
         HANDLE_C(accept);
         HANDLE_C(accept4);
-        HANDLE_RUST_TMP(bind);
+        HANDLE_RUST(bind);
         HANDLE_C(brk);
         HANDLE_C(clock_gettime);
         HANDLE_C(clock_nanosleep);
@@ -321,13 +321,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(futimesat);
         HANDLE_C(getdents);
         HANDLE_C(getdents64);
-        HANDLE_RUST_TMP(getpeername);
+        HANDLE_RUST(getpeername);
         HANDLE_C(getpid);
         HANDLE_C(getppid);
         HANDLE_C(gettid);
         HANDLE_RUST(getrandom);
         HANDLE_C(get_robust_list);
-        HANDLE_RUST_TMP(getsockname);
+        HANDLE_RUST(getsockname);
         HANDLE_C(getsockopt);
         HANDLE_C(gettimeofday);
         HANDLE_RUST(ioctl);
@@ -374,7 +374,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(readahead);
         HANDLE_C(readlinkat);
         HANDLE_C(readv);
-        HANDLE_RUST_TMP(recvfrom);
+        HANDLE_RUST(recvfrom);
         HANDLE_C(renameat);
         HANDLE_C(renameat2);
         HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
@@ -383,7 +383,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(shadow_hostname_to_addr_ipv4);
         HANDLE_C(shadow_init_memory_manager);
         HANDLE_C(select);
-        HANDLE_RUST_TMP(sendto);
+        HANDLE_RUST(sendto);
         HANDLE_C(setsockopt);
 #ifdef SYS_sigaction
         // Superseded by rt_sigaction in Linux 2.2
@@ -403,8 +403,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(set_robust_list);
         HANDLE_C(set_tid_address);
         HANDLE_C(shutdown);
-        HANDLE_RUST_TMP(socket);
-        HANDLE_RUST_TMP(socketpair);
+        HANDLE_RUST(socket);
+        HANDLE_RUST(socketpair);
 #ifdef SYS_statx
         HANDLE_C(statx);
 #endif

@@ -9,7 +9,7 @@ mod eventfd;
 mod fcntl;
 mod ioctl;
 mod random;
-pub mod socket;
+mod socket;
 mod unistd;
 
 pub struct SyscallHandler {
@@ -23,6 +23,7 @@ impl SyscallHandler {
 
     pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         match args.number {
+            libc::SYS_bind => self.bind(ctx, args),
             libc::SYS_close => self.close(ctx, args),
             libc::SYS_dup => self.dup(ctx, args),
             libc::SYS_dup2 => self.dup2(ctx, args),
@@ -30,13 +31,19 @@ impl SyscallHandler {
             libc::SYS_eventfd => self.eventfd(ctx, args),
             libc::SYS_eventfd2 => self.eventfd2(ctx, args),
             libc::SYS_fcntl => self.fcntl(ctx, args),
-            libc::SYS_ioctl => self.ioctl(ctx, args),
+            libc::SYS_getpeername => self.getpeername(ctx, args),
             libc::SYS_getrandom => self.getrandom(ctx, args),
+            libc::SYS_getsockname => self.getsockname(ctx, args),
+            libc::SYS_ioctl => self.ioctl(ctx, args),
             libc::SYS_pipe => self.pipe(ctx, args),
             libc::SYS_pipe2 => self.pipe2(ctx, args),
             libc::SYS_pread64 => self.pread64(ctx, args),
             libc::SYS_pwrite64 => self.pwrite64(ctx, args),
             libc::SYS_read => self.read(ctx, args),
+            libc::SYS_recvfrom => self.recvfrom(ctx, args),
+            libc::SYS_sendto => self.sendto(ctx, args),
+            libc::SYS_socket => self.socket(ctx, args),
+            libc::SYS_socketpair => self.socketpair(ctx, args),
             libc::SYS_write => self.write(ctx, args),
             _ => Err(SyscallError::from(Errno::ENOSYS)),
         }

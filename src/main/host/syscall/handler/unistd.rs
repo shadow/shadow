@@ -224,7 +224,7 @@ impl SyscallHandler {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return super::socket::recvfrom_helper(
+            return self.recvfrom_helper(
                 ctx,
                 socket,
                 buf_ptr,
@@ -316,15 +316,7 @@ impl SyscallHandler {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return super::socket::sendto_helper(
-                ctx,
-                socket,
-                buf_ptr,
-                buf_size,
-                0,
-                PluginPtr::null(),
-                0,
-            );
+            return self.sendto_helper(ctx, socket, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
         }
 
         let file_status = posix_file.borrow().get_status();
