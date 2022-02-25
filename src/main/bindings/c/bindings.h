@@ -109,6 +109,8 @@ typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
 typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
 
+typedef struct SyscallHandler SyscallHandler;
+
 typedef uint64_t WatchHandle;
 
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
@@ -670,9 +672,15 @@ SysCallReturn log_syscall(Process *proc,
                           const char *args,
                           SysCallReturn result);
 
-SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
+struct SyscallHandler *rustsyscallhandler_new(void);
 
-SysCallReturn rustsyscallhandler_getrandom(SysCallHandler *sys, const SysCallArgs *args);
+void rustsyscallhandler_free(struct SyscallHandler *handler_ptr);
+
+SysCallReturn rustsyscallhandler_syscall(struct SyscallHandler *sys,
+                                         SysCallHandler *csys,
+                                         const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_socket(SysCallHandler *sys, const SysCallArgs *args);
 

@@ -63,6 +63,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .host = host,
         .process = process,
         .thread = thread,
+        .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
         .referenceCount = 1,
         // Like the timer above, we use an epoll object for servicing
@@ -119,6 +120,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     }
     if (sys->thread) {
         thread_unref(sys->thread);
+    }
+    if (sys->syscall_handler_rs) {
+        rustsyscallhandler_free(sys->syscall_handler_rs);
     }
 
     if (sys->epoll) {
@@ -204,7 +208,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define HANDLE_C(s)                                                                                  \
+#define HANDLE_C(s)                                                                                \
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
         scr = syscallhandler_##s(sys, args);                                                       \
@@ -230,11 +234,18 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         }                                                                                          \
         break
 
-#define HANDLE_RUST_TMP(s)                                                         \
-    case SYS_##s:                                                              \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                    \
-        scr = rustsyscallhandler_##s(sys, args);                               \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
+#define HANDLE_RUST_TMP(s)                                                                         \
+    case SYS_##s:                                                                                  \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
+        scr = rustsyscallhandler_##s(sys, args);                                                   \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
+        break
+
+#define HANDLE_RUST(s)                                                                             \
+    case SYS_##s:                                                                                  \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
+        scr = rustsyscallhandler_syscall(sys->syscall_handler_rs, sys, args);                      \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         break
 
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
@@ -307,7 +318,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(getpid);
         HANDLE_C(getppid);
         HANDLE_C(gettid);
-        HANDLE_RUST_TMP(getrandom);
+        HANDLE_RUST(getrandom);
         HANDLE_C(get_robust_list);
         HANDLE_RUST_TMP(getsockname);
         HANDLE_C(getsockopt);
