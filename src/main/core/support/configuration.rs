@@ -183,6 +183,12 @@ pub struct GeneralOptions {
     #[clap(help = GENERAL_HELP.get("template_directory").unwrap().as_str())]
     #[serde(default)]
     pub template_directory: Option<String>,
+
+    /// Show the simulation progress on stderr
+    #[clap(long, value_name = "bool")]
+    #[clap(help = GENERAL_HELP.get("progress").unwrap().as_str())]
+    #[serde(default = "default_some_false")]
+    pub progress: Option<bool>,
 }
 
 impl GeneralOptions {
@@ -368,11 +374,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_legacy_working_dir").unwrap().as_str())]
     pub use_legacy_working_dir: Option<bool>,
 
-    /// Show the simulation progress
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("progress").unwrap().as_str())]
-    pub progress: Option<bool>,
-
     /// Log level at which to print host statistics
     #[clap(long, value_name = "level")]
     #[clap(help = EXP_HELP.get("host_heartbeat_log_level").unwrap().as_str())]
@@ -431,7 +432,6 @@ impl Default for ExperimentalOptions {
             interface_qdisc: Some(QDiscMode::Fifo),
             worker_threads: None,
             use_legacy_working_dir: Some(false),
-            progress: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
@@ -783,6 +783,11 @@ fn default_some_time_0() -> Option<units::Time<units::TimePrefixUpper>> {
 /// Helper function for serde default `Some(true)` values.
 fn default_some_true() -> Option<bool> {
     Some(true)
+}
+
+/// Helper function for serde default `Some(false)` values.
+fn default_some_false() -> Option<bool> {
+    Some(false)
 }
 
 /// Helper function for serde default `Some(1)` values.
@@ -1361,7 +1366,7 @@ mod export {
     pub extern "C" fn config_getProgress(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.progress.unwrap()
+        config.general.progress.unwrap()
     }
 
     #[no_mangle]

@@ -52,6 +52,7 @@ hosts:
 - [`general.heartbeat_interval`](#generalheartbeat_interval)
 - [`general.log_level`](#generallog_level)
 - [`general.parallelism`](#generalparallelism)
+- [`general.progress`](#generalprogress)
 - [`general.seed`](#generalseed)
 - [`general.stop_time`](#generalstop_time)
 - [`general.template_directory`](#generaltemplate_directory)
@@ -70,7 +71,6 @@ hosts:
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.interpose_method`](#experimentalinterpose_method)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
-- [`experimental.progress`](#experimentalprogress)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler_policy`](#experimentalscheduler_policy)
 - [`experimental.socket_recv_autotune`](#experimentalsocket_recv_autotune)
@@ -164,6 +164,17 @@ Virtual hosts depend on network packets that can potentially arrive from other
 virtual hosts, so each worker can only advance according to the propagation
 delay to avoid dependency violations. Therefore, not all threads will have 100%
 CPU utilization.
+
+#### `general.progress`
+
+Default: false  
+Type: Bool
+
+Show the simulation progress on stderr.
+
+When running in a tty, the progress will be updated every second and shown at
+the bottom of the terminal. Otherwise the progress will be printed without ANSI
+escape codes at intervals which increase as the simulation progresses.
 
 #### `general.seed`
 
@@ -329,13 +340,6 @@ Default: 0
 Type: Integer
 
 Max number of iterations to busy-wait on IPC semaphore before blocking.
-
-#### `experimental.progress`
-
-Default: false  
-Type: Bool
-
-Show the simulation progress.
 
 #### `experimental.runahead`
 
