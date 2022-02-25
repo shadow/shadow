@@ -330,7 +330,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_RUST_TMP(getsockname);
         HANDLE_C(getsockopt);
         HANDLE_C(gettimeofday);
-        HANDLE_RUST_TMP(ioctl);
+        HANDLE_RUST(ioctl);
         HANDLE_C(kill);
         HANDLE_C(linkat);
         HANDLE_C(listen);

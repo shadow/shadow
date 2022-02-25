@@ -7,7 +7,7 @@ use nix::errno::Errno;
 
 mod eventfd;
 mod fcntl;
-pub mod ioctl;
+mod ioctl;
 mod random;
 pub mod socket;
 pub mod unistd;
@@ -26,6 +26,7 @@ impl SyscallHandler {
             libc::SYS_eventfd => self.eventfd(ctx, args),
             libc::SYS_eventfd2 => self.eventfd2(ctx, args),
             libc::SYS_fcntl => self.fcntl(ctx, args),
+            libc::SYS_ioctl => self.ioctl(ctx, args),
             libc::SYS_getrandom => self.getrandom(ctx, args),
             _ => Err(SyscallError::from(Errno::ENOSYS)),
         }
