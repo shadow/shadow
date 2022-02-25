@@ -5,7 +5,12 @@ use crate::host::syscall_types::{SyscallError, SyscallResult};
 
 use nix::errno::Errno;
 
+pub mod eventfd;
+pub mod fcntl;
+pub mod ioctl;
 mod random;
+pub mod socket;
+pub mod unistd;
 
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler

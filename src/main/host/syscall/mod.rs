@@ -2,13 +2,8 @@ use crate::cshadow as c;
 use crate::host::descriptor::{CompatDescriptor, FileState, PosixFile};
 use crate::host::process::Process;
 
-pub mod eventfd;
-pub mod fcntl;
 pub mod format;
 pub mod handler;
-pub mod ioctl;
-pub mod socket;
-pub mod unistd;
 
 pub struct Trigger(c::Trigger);
 
