@@ -233,14 +233,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
             scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
         }                                                                                          \
         break
-
-#define HANDLE_RUST_TMP(s)                                                                         \
-    case SYS_##s:                                                                                  \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
-        scr = rustsyscallhandler_##s(sys, args);                                                   \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
-        break
-
 #define HANDLE_RUST(s)                                                                             \
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
