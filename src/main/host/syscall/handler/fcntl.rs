@@ -8,10 +8,10 @@ use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use std::os::unix::prelude::RawFd;
 
-// TODO:fix use syscall_logger::log_syscall;
+use syscall_logger::log_syscall;
 
 impl SyscallHandler {
-    // TODO:fix #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
+    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
     pub fn fcntl(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: RawFd = args.args[0].into();
         let cmd: i32 = args.args[1].into();

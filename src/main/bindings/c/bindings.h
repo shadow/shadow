@@ -658,14 +658,6 @@ void process_deregisterLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
 // Get a temporary reference to a legacy descriptor.
 LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
 
-SysCallReturn rustsyscallhandler_eventfd(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_eventfd2(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs *args);
-
 SysCallReturn log_syscall(Process *proc,
                           pid_t tid,
                           const char *name,
@@ -679,42 +671,6 @@ void rustsyscallhandler_free(struct SyscallHandler *handler_ptr);
 SysCallReturn rustsyscallhandler_syscall(struct SyscallHandler *sys,
                                          SysCallHandler *csys,
                                          const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_socket(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_bind(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_sendto(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_recvfrom(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_getsockname(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_getpeername(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_socketpair(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_dup2(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_dup3(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_pread64(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_write(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_pwrite64(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
-
-SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
 
 struct NetworkGraph *networkgraph_load(const struct ConfigOptions *config);
 

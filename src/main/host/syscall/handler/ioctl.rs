@@ -5,10 +5,10 @@ use crate::host::syscall;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 
-// TODO:fix use syscall_logger::log_syscall;
+use syscall_logger::log_syscall;
 
 impl SyscallHandler {
-    // TODO:fix #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
+    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
     pub fn ioctl(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let request: libc::c_ulong = args.get(1).into();

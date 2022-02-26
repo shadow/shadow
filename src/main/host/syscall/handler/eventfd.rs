@@ -13,17 +13,17 @@ use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
 
-// TODO:fix use syscall_logger::log_syscall;
+use syscall_logger::log_syscall;
 
 impl SyscallHandler {
-    // TODO:fix #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]
+    #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]
     pub fn eventfd(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let init_val: libc::c_uint = args.get(0).into();
 
         self.eventfd_helper(ctx, init_val, 0)
     }
 
-    // TODO:fix #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint, /* flags */ nix::sys::eventfd::EfdFlags)]
+    #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint, /* flags */ nix::sys::eventfd::EfdFlags)]
     pub fn eventfd2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let init_val: libc::c_uint = args.get(0).into();
         let flags: libc::c_int = args.get(1).into();
