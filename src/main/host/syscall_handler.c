@@ -234,11 +234,14 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
-    case SYS_##s:                                                                                  \
+    case SYS_##s: {                                                                                \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
-        scr = rustsyscallhandler_syscall(sys->syscall_handler_rs, sys, args);                      \
+        SyscallHandler* handler = sys->syscall_handler_rs;                                         \
+        sys->syscall_handler_rs = NULL;                                                            \
+        scr = rustsyscallhandler_syscall(handler, sys, args);                                      \
+        sys->syscall_handler_rs = handler;                                                         \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
-        break
+    } break
 
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
@@ -291,13 +294,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
         // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
-        case SYS_fcntl64:
+        case SYS_fcntl64: {
             _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
+            SyscallHandler* handler = sys->syscall_handler_rs;
+            sys->syscall_handler_rs = NULL;
             args->number = SYS_fcntl;
-            scr = rustsyscallhandler_syscall(sys->syscall_handler_rs, sys, args);
+            scr = rustsyscallhandler_syscall(handler, sys, args);
             args->number = SYS_fcntl64;
+            sys->syscall_handler_rs = handler;
             _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
-            break;
+        } break;
 #endif
         HANDLE_C(fdatasync);
         HANDLE_C(fgetxattr);
