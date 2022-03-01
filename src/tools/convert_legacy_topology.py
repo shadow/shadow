@@ -8,6 +8,11 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from xml.sax.saxutils import unescape
 
+# required to fix a networkx bug
+# https://github.com/networkx/networkx/issues/5367
+import importlib
+import importlib.machinery
+
 import networkx as nx
 
 import yaml
