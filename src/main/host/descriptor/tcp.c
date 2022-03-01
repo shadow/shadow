@@ -843,9 +843,10 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, Host* host, enum Protoc
     _tcp_updateReceiveWindow(tcp);
 
     /* control packets have no sequence number
-     * (except FIN, so we close after sending everything) */
+     * (except SYN and FIN, so we close after sending everything) */
+    /* TODO: all FIN packets (including FIN,ACK) should increment the sequence number */
     gboolean isFinNotAck = ((flags & PTCP_FIN) && !(flags & PTCP_ACK));
-    guint sequence = !isEmpty || isFinNotAck ? tcp->send.next : 0;
+    guint sequence = !isEmpty || isFinNotAck || (flags & PTCP_SYN) ? tcp->send.next : 0;
 
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
     Packet* packet = packet_new(host);
@@ -1177,7 +1178,7 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packe
         tcp->send.delayedACKCounter = 0;
     }
 
-    if(header->sequence > 0 || (header->flags & PTCP_SYN)) {
+    if(header->sequence > 0) {
         /* store in retransmission buffer */
         _tcp_addRetransmit(tcp, packet);
 
@@ -1985,9 +1986,6 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 
                 responseFlags |= PTCP_ACK;
                 _tcp_setState(tcp, host, TCPS_ESTABLISHED);
-
-                /* remove the SYN from the retransmit queue */
-                _tcp_clearRetransmit(tcp, 1);
             }
             /* receive SYN, send ACK, move to SYNRECEIVED (simultaneous open) */
             else if(header->flags & PTCP_SYN) {
@@ -2007,9 +2005,6 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
             if(header->flags & PTCP_ACK) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, host, TCPS_ESTABLISHED);
-
-                /* remove the SYNACK from the retransmit queue */
-                _tcp_clearRetransmit(tcp, 1);
 
                 /* if this is a child, mark it accordingly */
                 if(tcp->child) {
@@ -2663,8 +2658,8 @@ TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     /* 0 is saved for representing control packets */
     guint32 initialSequenceNumber = 1;
 
-    // the first packet (the SYN packet) has a sequence number of 0
-    tcp->send.unacked = 0;
+    /* the first packet (the SYN packet) has a sequence number of 'initialSequenceNumber' */
+    tcp->send.unacked = initialSequenceNumber;
     tcp->send.next = initialSequenceNumber;
     tcp->send.end = initialSequenceNumber;
     tcp->send.lastAcknowledgment = initialSequenceNumber;
