@@ -176,6 +176,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     move || test_tcp_info(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_tcp_nodelay"),
+                    move || test_tcp_nodelay(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
             ];
 
             tests.extend(more_tests);
@@ -648,6 +653,48 @@ fn test_tcp_info(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), Stri
         // the libc package doesn't expose 'struct tcp_info' so if we wanted to look at the actual
         // values we'd have to use our own binding, but it's probably good enough here just to make
         // sure getsockopt() is returning something without an error
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the TCP_NODELAY option.
+fn test_tcp_nodelay(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_TCP;
+    let optname = libc::TCP_NODELAY;
+
+    // shadow doesn't support setting a value of 0
+    let optval = 1i32.to_ne_bytes();
+    let zero = 0i32.to_ne_bytes();
+
+    let mut get_args_1 = GetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+    let mut get_args_2 = GetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+    let mut set_args = SetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        let expected_errnos = if sock_type == libc::SOCK_STREAM {
+            vec![]
+        } else {
+            vec![libc::ENOPROTOOPT, libc::EOPNOTSUPP]
+        };
+        check_getsockopt_call(&mut get_args_1, &expected_errnos)?;
+
+        if sock_type == libc::SOCK_STREAM {
+            // in shadow will return 1, but in linux will return 0
+            let value = u32::from_ne_bytes(get_args_1.optval.unwrap().try_into().unwrap());
+            test_utils::result_assert([0, 1].contains(&value), "Unexpected value for TCP_NODELAY")?;
+        }
+
+        check_setsockopt_call(&mut set_args, &expected_errnos)?;
+        check_getsockopt_call(&mut get_args_2, &expected_errnos)?;
+
+        if sock_type == libc::SOCK_STREAM {
+            let value = u32::from_ne_bytes(get_args_2.optval.unwrap().try_into().unwrap());
+            test_utils::result_assert_eq(value, 1, "Unexpected value for TCP_NODELAY")?;
+        }
 
         Ok(())
     })
