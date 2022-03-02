@@ -196,22 +196,12 @@ static void _test_implicit_bind(gconstpointer gp) {
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     trace("listening on server socket with implicit bind");
-    assert_true_errno(listen(fd1, 0) == 0);
+    assert_true_errno(listen(fd1, 10) == 0);
 
     trace("checking socket address with getsockname");
     assert_true_errno(
         getsockname(fd1, (struct sockaddr*)&serveraddr, &addr_len) >= 0);
     g_assert_cmpint(serveraddr.sin_addr.s_addr,==,htonl(INADDR_ANY));
-
-    // FIXME start
-    // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
-    // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
-    // so we bail out early until we have a fix
-    if (!running_in_shadow()) {
-        close(fd1);
-        return;
-    }
-    // FIXME end
 
     trace("connecting client socket to server at 0.0.0.0");
     assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
