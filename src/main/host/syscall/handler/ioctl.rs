@@ -1,7 +1,6 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus};
-use crate::host::syscall;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 
@@ -17,7 +16,7 @@ impl SyscallHandler {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor_mut(ctx.process, fd)? {
+        let desc = match self.get_descriptor_mut(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {

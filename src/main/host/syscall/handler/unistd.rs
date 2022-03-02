@@ -6,7 +6,7 @@ use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
-use crate::host::syscall::{self, Trigger};
+use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -48,7 +48,7 @@ impl SyscallHandler {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor(ctx.process, fd)? {
+        let desc = match self.get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {
@@ -74,7 +74,7 @@ impl SyscallHandler {
         let new_fd = libc::c_int::from(args.get(1));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor(ctx.process, old_fd)? {
+        let desc = match self.get_descriptor(ctx.process, old_fd)? {
             CompatDescriptor::New(desc) => desc,
             // we don't support dup2 for legacy descriptors
             CompatDescriptor::Legacy(_) => {
@@ -119,7 +119,7 @@ impl SyscallHandler {
         let flags = libc::c_int::from(args.get(2));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor(ctx.process, old_fd)? {
+        let desc = match self.get_descriptor(ctx.process, old_fd)? {
             CompatDescriptor::New(desc) => desc,
             // we don't support dup3 for legacy descriptors
             CompatDescriptor::Legacy(_) => {
@@ -171,7 +171,7 @@ impl SyscallHandler {
         let offset = 0;
 
         // get the descriptor, or return early if it doesn't exist
-        match syscall::get_descriptor(ctx.process, fd)? {
+        match self.get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
                 let file = desc.get_file().clone();
                 self.read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
@@ -193,7 +193,7 @@ impl SyscallHandler {
         let offset = libc::off_t::from(args.get(3));
 
         // get the descriptor, or return early if it doesn't exist
-        match syscall::get_descriptor(ctx.process, fd)? {
+        match self.get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
                 let file = desc.get_file().clone();
                 self.read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
@@ -266,7 +266,7 @@ impl SyscallHandler {
         let offset = 0;
 
         // get the descriptor, or return early if it doesn't exist
-        match syscall::get_descriptor(ctx.process, fd)? {
+        match self.get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
                 let file = desc.get_file().clone();
                 self.write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
@@ -288,7 +288,7 @@ impl SyscallHandler {
         let offset = libc::off_t::from(args.get(3));
 
         // get the descriptor, or return early if it doesn't exist
-        match syscall::get_descriptor(ctx.process, fd)? {
+        match self.get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
                 let file = desc.get_file().clone();
                 self.write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)

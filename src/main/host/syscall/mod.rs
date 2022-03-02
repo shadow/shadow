@@ -1,9 +1,10 @@
 use crate::cshadow as c;
-use crate::host::descriptor::{CompatDescriptor, FileState, PosixFile};
-use crate::host::process::Process;
+use crate::host::descriptor::{FileState, PosixFile};
 
 pub mod format;
 pub mod handler;
+
+// The helpers defined here are syscall-related but not handler-specific.
 
 pub struct Trigger(c::Trigger);
 
@@ -48,33 +49,5 @@ impl c::SysCallReturn {
             retval: c::SysCallReg { as_i64: int },
             cond: std::ptr::null_mut(),
         }
-    }
-}
-
-/// Returns the `CompatDescriptor` for the fd if it exists, otherwise returns EBADF.
-pub fn get_descriptor(
-    process: &Process,
-    fd: impl TryInto<u32>,
-) -> Result<&CompatDescriptor, nix::errno::Errno> {
-    // check that fd is within bounds
-    let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
-
-    match process.get_descriptor(fd) {
-        Some(desc) => Ok(desc),
-        None => Err(nix::errno::Errno::EBADF),
-    }
-}
-
-/// Returns the `CompatDescriptor` for the fd if it exists, otherwise returns EBADF.
-pub fn get_descriptor_mut(
-    process: &mut Process,
-    fd: impl TryInto<u32>,
-) -> Result<&mut CompatDescriptor, nix::errno::Errno> {
-    // check that fd is within bounds
-    let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
-
-    match process.get_descriptor_mut(fd) {
-        Some(desc) => Ok(desc),
-        None => Err(nix::errno::Errno::EBADF),
     }
 }

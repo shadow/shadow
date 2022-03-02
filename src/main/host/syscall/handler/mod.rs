@@ -1,5 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
+use crate::host::descriptor::CompatDescriptor;
+use crate::host::process::Process;
 use crate::host::syscall_types::SysCallArgs;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
@@ -46,6 +48,38 @@ impl SyscallHandler {
             libc::SYS_socketpair => self.socketpair(ctx, args),
             libc::SYS_write => self.write(ctx, args),
             _ => Err(SyscallError::from(Errno::ENOSYS)),
+        }
+    }
+
+    /// Internal helper that returns the `CompatDescriptor` for the fd if it
+    /// exists, otherwise returns EBADF.
+    fn get_descriptor<'a>(
+        &'a self,
+        process: &'a Process,
+        fd: impl TryInto<u32>,
+    ) -> Result<&CompatDescriptor, nix::errno::Errno> {
+        // check that fd is within bounds
+        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+
+        match process.get_descriptor(fd) {
+            Some(desc) => Ok(desc),
+            None => Err(nix::errno::Errno::EBADF),
+        }
+    }
+
+    /// Internal helper that returns the `CompatDescriptor` for the fd if it
+    /// exists, otherwise returns EBADF.
+    fn get_descriptor_mut<'a>(
+        &'a self,
+        process: &'a mut Process,
+        fd: impl TryInto<u32>,
+    ) -> Result<&mut CompatDescriptor, nix::errno::Errno> {
+        // check that fd is within bounds
+        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+
+        match process.get_descriptor_mut(fd) {
+            Some(desc) => Ok(desc),
+            None => Err(nix::errno::Errno::EBADF),
         }
     }
 }

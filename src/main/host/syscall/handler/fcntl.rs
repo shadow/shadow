@@ -1,7 +1,6 @@
 use crate::cshadow;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, PosixFile};
-use crate::host::syscall;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
 use nix::errno::Errno;
@@ -17,7 +16,7 @@ impl SyscallHandler {
         let cmd: i32 = args.args[1].into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor_mut(ctx.process, fd)? {
+        let desc = match self.get_descriptor_mut(ctx.process, fd)? {
             CompatDescriptor::New(d) => d,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
