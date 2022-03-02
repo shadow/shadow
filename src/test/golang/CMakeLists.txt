@@ -30,10 +30,6 @@ add_golang_test_exe(BASENAME test_simple_http)
 add_shadow_tests(
     BASENAME simple_http
     CHECK_RETVAL false
-    # Fails on debian10-slim due to:
-    # - Different path to curl (/bin/curl vs /usr/bin/curl)
-    # - Deadlock in this version of curl. https://github.com/shadow/shadow/issues/1794
-    SKIP_METHODS preload ptrace
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)
