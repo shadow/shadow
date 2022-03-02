@@ -108,4 +108,6 @@ typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
 typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
 
+typedef struct SyscallHandler SyscallHandler;
+
 #endif /* main_opaque_bindings_h */
