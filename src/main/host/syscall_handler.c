@@ -63,6 +63,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .host = host,
         .process = process,
         .thread = thread,
+        .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
         .referenceCount = 1,
         // Like the timer above, we use an epoll object for servicing
@@ -119,6 +120,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     }
     if (sys->thread) {
         thread_unref(sys->thread);
+    }
+    if (sys->syscall_handler_rs) {
+        rustsyscallhandler_free(sys->syscall_handler_rs);
     }
 
     if (sys->epoll) {
@@ -204,7 +208,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define HANDLE(s)                                                                                  \
+#define HANDLE_C(s)                                                                                \
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
         scr = syscallhandler_##s(sys, args);                                                       \
@@ -229,13 +233,15 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
             scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
         }                                                                                          \
         break
-
-#define HANDLE_RUST(s)                                                         \
-    case SYS_##s:                                                              \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                    \
-        scr = rustsyscallhandler_##s(sys, args);                               \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
-        break
+#define HANDLE_RUST(s)                                                                             \
+    case SYS_##s: {                                                                                \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
+        SyscallHandler* handler = sys->syscall_handler_rs;                                         \
+        sys->syscall_handler_rs = NULL;                                                            \
+        scr = rustsyscallhandler_syscall(handler, sys, args);                                      \
+        sys->syscall_handler_rs = handler;                                                         \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
+    } break
 
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
@@ -256,123 +262,133 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     }
 
     switch (args->number) {
-        HANDLE(accept);
-        HANDLE(accept4);
+        HANDLE_C(accept);
+        HANDLE_C(accept4);
         HANDLE_RUST(bind);
-        HANDLE(brk);
-        HANDLE(clock_gettime);
-        HANDLE(clock_nanosleep);
-        HANDLE(clone);
+        HANDLE_C(brk);
+        HANDLE_C(clock_gettime);
+        HANDLE_C(clock_nanosleep);
+        HANDLE_C(clone);
         HANDLE_RUST(close);
-        HANDLE(connect);
-        HANDLE(creat);
+        HANDLE_C(connect);
+        HANDLE_C(creat);
         HANDLE_RUST(dup);
         HANDLE_RUST(dup2);
         HANDLE_RUST(dup3);
-        HANDLE(epoll_create);
-        HANDLE(epoll_create1);
-        HANDLE(epoll_ctl);
-        HANDLE(epoll_pwait);
-        HANDLE(epoll_wait);
+        HANDLE_C(epoll_create);
+        HANDLE_C(epoll_create1);
+        HANDLE_C(epoll_ctl);
+        HANDLE_C(epoll_pwait);
+        HANDLE_C(epoll_wait);
         HANDLE_RUST(eventfd);
         HANDLE_RUST(eventfd2);
-        HANDLE(execve);
-        HANDLE(exit_group);
-        HANDLE(faccessat);
-        HANDLE(fadvise64);
-        HANDLE(fallocate);
-        HANDLE(fchmod);
-        HANDLE(fchmodat);
-        HANDLE(fchown);
-        HANDLE(fchownat);
+        HANDLE_C(execve);
+        HANDLE_C(exit_group);
+        HANDLE_C(faccessat);
+        HANDLE_C(fadvise64);
+        HANDLE_C(fallocate);
+        HANDLE_C(fchmod);
+        HANDLE_C(fchmodat);
+        HANDLE_C(fchown);
+        HANDLE_C(fchownat);
         HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
-        HANDLE_RUST(fcntl64);
+        // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
+        case SYS_fcntl64: {
+            _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
+            SyscallHandler* handler = sys->syscall_handler_rs;
+            sys->syscall_handler_rs = NULL;
+            args->number = SYS_fcntl;
+            scr = rustsyscallhandler_syscall(handler, sys, args);
+            args->number = SYS_fcntl64;
+            sys->syscall_handler_rs = handler;
+            _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
+        } break;
 #endif
-        HANDLE(fdatasync);
-        HANDLE(fgetxattr);
-        HANDLE(flistxattr);
-        HANDLE(flock);
-        HANDLE(fremovexattr);
-        HANDLE(fsetxattr);
-        HANDLE(fstat);
-        HANDLE(fstatfs);
-        HANDLE(fsync);
-        HANDLE(ftruncate);
-        HANDLE(futex);
-        HANDLE(futimesat);
-        HANDLE(getdents);
-        HANDLE(getdents64);
+        HANDLE_C(fdatasync);
+        HANDLE_C(fgetxattr);
+        HANDLE_C(flistxattr);
+        HANDLE_C(flock);
+        HANDLE_C(fremovexattr);
+        HANDLE_C(fsetxattr);
+        HANDLE_C(fstat);
+        HANDLE_C(fstatfs);
+        HANDLE_C(fsync);
+        HANDLE_C(ftruncate);
+        HANDLE_C(futex);
+        HANDLE_C(futimesat);
+        HANDLE_C(getdents);
+        HANDLE_C(getdents64);
         HANDLE_RUST(getpeername);
-        HANDLE(getpid);
-        HANDLE(getppid);
-        HANDLE(gettid);
+        HANDLE_C(getpid);
+        HANDLE_C(getppid);
+        HANDLE_C(gettid);
         HANDLE_RUST(getrandom);
-        HANDLE(get_robust_list);
+        HANDLE_C(get_robust_list);
         HANDLE_RUST(getsockname);
-        HANDLE(getsockopt);
-        HANDLE(gettimeofday);
+        HANDLE_C(getsockopt);
+        HANDLE_C(gettimeofday);
         HANDLE_RUST(ioctl);
-        HANDLE(kill);
-        HANDLE(linkat);
-        HANDLE(listen);
-        HANDLE(lseek);
-        HANDLE(mkdirat);
-        HANDLE(mknodat);
-        HANDLE(mmap);
+        HANDLE_C(kill);
+        HANDLE_C(linkat);
+        HANDLE_C(listen);
+        HANDLE_C(lseek);
+        HANDLE_C(mkdirat);
+        HANDLE_C(mknodat);
+        HANDLE_C(mmap);
 #ifdef SYS_mmap2
-        HANDLE(mmap2);
+        HANDLE_C(mmap2);
 #endif
-        HANDLE(mprotect);
-        HANDLE(mremap);
-        HANDLE(munmap);
-        HANDLE(nanosleep);
-        HANDLE(newfstatat);
-        HANDLE(open);
-        HANDLE(openat);
+        HANDLE_C(mprotect);
+        HANDLE_C(mremap);
+        HANDLE_C(munmap);
+        HANDLE_C(nanosleep);
+        HANDLE_C(newfstatat);
+        HANDLE_C(open);
+        HANDLE_C(openat);
         HANDLE_RUST(pipe);
         HANDLE_RUST(pipe2);
-        HANDLE(poll);
-        HANDLE(ppoll);
-        HANDLE(prctl);
+        HANDLE_C(poll);
+        HANDLE_C(ppoll);
+        HANDLE_C(prctl);
         HANDLE_RUST(pread64);
-        HANDLE(preadv);
+        HANDLE_C(preadv);
 #ifdef SYS_preadv2
-        HANDLE(preadv2);
+        HANDLE_C(preadv2);
 #endif
 #ifdef SYS_prlimit
-        HANDLE(prlimit);
+        HANDLE_C(prlimit);
 #endif
 #ifdef SYS_prlimit64
-        HANDLE(prlimit64);
+        HANDLE_C(prlimit64);
 #endif
-        HANDLE(pselect6);
+        HANDLE_C(pselect6);
         HANDLE_RUST(pwrite64);
-        HANDLE(pwritev);
+        HANDLE_C(pwritev);
 #ifdef SYS_pwritev2
-        HANDLE(pwritev2);
+        HANDLE_C(pwritev2);
 #endif
         HANDLE_RUST(read);
-        HANDLE(readahead);
-        HANDLE(readlinkat);
-        HANDLE(readv);
+        HANDLE_C(readahead);
+        HANDLE_C(readlinkat);
+        HANDLE_C(readv);
         HANDLE_RUST(recvfrom);
-        HANDLE(renameat);
-        HANDLE(renameat2);
-        HANDLE(shadow_set_ptrace_allow_native_syscalls);
-        HANDLE(shadow_get_ipc_blk);
-        HANDLE(shadow_get_shm_blk);
-        HANDLE(shadow_hostname_to_addr_ipv4);
-        HANDLE(shadow_init_memory_manager);
-        HANDLE(select);
+        HANDLE_C(renameat);
+        HANDLE_C(renameat2);
+        HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
+        HANDLE_C(shadow_get_ipc_blk);
+        HANDLE_C(shadow_get_shm_blk);
+        HANDLE_C(shadow_hostname_to_addr_ipv4);
+        HANDLE_C(shadow_init_memory_manager);
+        HANDLE_C(select);
         HANDLE_RUST(sendto);
-        HANDLE(setsockopt);
+        HANDLE_C(setsockopt);
 #ifdef SYS_sigaction
         // Superseded by rt_sigaction in Linux 2.2
         UNSUPPORTED(sigaction);
 #endif
-        HANDLE(rt_sigaction);
-        HANDLE(sigaltstack);
+        HANDLE_C(rt_sigaction);
+        HANDLE_C(sigaltstack);
 #ifdef SYS_signal
         // Superseded by sigaction in glibc 2.0
         UNSUPPORTED(signal);
@@ -381,30 +397,30 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Superseded by rt_sigprocmask in Linux 2.2
         UNSUPPORTED(sigprocmask);
 #endif
-        HANDLE(rt_sigprocmask);
-        HANDLE(set_robust_list);
-        HANDLE(set_tid_address);
-        HANDLE(shutdown);
+        HANDLE_C(rt_sigprocmask);
+        HANDLE_C(set_robust_list);
+        HANDLE_C(set_tid_address);
+        HANDLE_C(shutdown);
         HANDLE_RUST(socket);
         HANDLE_RUST(socketpair);
 #ifdef SYS_statx
-        HANDLE(statx);
+        HANDLE_C(statx);
 #endif
-        HANDLE(symlinkat);
-        HANDLE(sync_file_range);
-        HANDLE(syncfs);
-        HANDLE(sysinfo);
-        HANDLE(tgkill);
-        HANDLE(time);
-        HANDLE(timerfd_create);
-        HANDLE(timerfd_gettime);
-        HANDLE(timerfd_settime);
-        HANDLE(tkill);
-        HANDLE(uname);
-        HANDLE(unlinkat);
-        HANDLE(utimensat);
+        HANDLE_C(symlinkat);
+        HANDLE_C(sync_file_range);
+        HANDLE_C(syncfs);
+        HANDLE_C(sysinfo);
+        HANDLE_C(tgkill);
+        HANDLE_C(time);
+        HANDLE_C(timerfd_create);
+        HANDLE_C(timerfd_gettime);
+        HANDLE_C(timerfd_settime);
+        HANDLE_C(tkill);
+        HANDLE_C(uname);
+        HANDLE_C(unlinkat);
+        HANDLE_C(utimensat);
         HANDLE_RUST(write);
-        HANDLE(writev);
+        HANDLE_C(writev);
 
         // **************************************
         // Not handled (yet):

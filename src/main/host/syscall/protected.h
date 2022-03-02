@@ -38,6 +38,9 @@ struct _SysCallHandler {
     Process* process;
     Thread* thread;
 
+    // For syscalls implemented in rust. Will eventually replace the C handler.
+    SyscallHandler* syscall_handler_rs;
+
     // Lock for the host's shared memory with the shim. The lock is taken at the
     // start of processing a syscall, and released at completion.
     //

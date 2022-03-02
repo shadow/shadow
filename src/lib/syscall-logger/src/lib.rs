@@ -67,12 +67,13 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let x = format!(
         r#"
         pub fn {syscall_name}(
+            &self,
             ctx: &mut crate::host::context::ThreadContext,
             args: &crate::host::syscall_types::SysCallArgs,
         ) -> crate::host::syscall_types::SyscallResult {{
             // exit early if strace logging is not enabled
             if !ctx.process.strace_logging_enabled() {{
-                return {syscall_name}_original(ctx, args);
+                return self.{syscall_name}_original(ctx, args);
             }}
 
             // make sure to include the full path to all used types
@@ -85,7 +86,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             let syscall_args = format!("{{}}", syscall_args);
 
             // make the syscall
-            let rv = {syscall_name}_original(ctx, args);
+            let rv = self.{syscall_name}_original(ctx, args);
 
             // format the result (returns None if the syscall didn't complete)
             let syscall_rv = SyscallResultFmt::<{syscall_rv}>::new(&rv, ctx.process.memory());
