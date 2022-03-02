@@ -4,9 +4,9 @@ set -euo pipefail
 
 if [ "$BUILDTYPE" = "coverage" ]
 then
-    # Preload tests are broken in coverage builds:
+    # Some preload tests are broken in coverage builds:
     # https://github.com/shadow/shadow/issues/867
-    EXCLUDE="shadow-preload"
+    EXCLUDE="determinism.*shadow-preload|phold-parallel-shadow-preload"
 else
     EXCLUDE=""
 fi
