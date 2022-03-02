@@ -43,8 +43,6 @@ add_linux_tests(
       LABELS golang)
 add_shadow_tests(
     BASENAME gc
-    # BUG: https://github.com/shadow/shadow/issues/1931
-    SKIP_METHODS preload
     CONFIGURATIONS extra 
     PROPERTIES
       LABELS golang)

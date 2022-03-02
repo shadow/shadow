@@ -38,8 +38,13 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
     // from this function to pass the seccomp filter.
     void* clone_rip = NULL;
     if (n == SYS_clone && (clone_rip = shim_seccomp_take_clone_rip()) != NULL) {
-        // Make the clone syscall, and then in the child thread immediately jump
-        // to the instruction after the original clone syscall instruction.
+        // Make the clone syscall, and then in the child thread initialize the shim's state,
+        // and then *jump* to the instruction after the original clone syscall instruction.
+        //
+        // Forcing the thread initialization to happen here instead of doing it
+        // lazily ensures that we don't try to install the sigaltstack from
+        // inside the seccomp signal handler. Doing so "works" without error,
+        // but is reverted when the signal handler returns.
         //
         // Note that from the child thread's point of view, many of the general purpose
         // registers will have different values than they had in the parent thread just-before.
@@ -49,15 +54,28 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
         // the other registers in the same way as we are the RIP register.
         register long r10 __asm__("r10") = arg4;
         register long r8 __asm__("r8") = arg5;
-        register long r9 __asm__("r9") = (long)clone_rip;
+        // Store clone_rip in a callee-save register, so that we can call shim_ensure_init
+        // without clobbering it.
+        register long r12 __asm__("r12") = (long)clone_rip;
+        // Store address of shim_ensure_init in a callee-save register.
+        // TODO: We ought to be able to put the literal "shim_ensure_init" in
+        // the inline assembly and have the assembler resolve the address for
+        // us, but on ubuntu 18.04's gcc this ends up generating a relocation it
+        // can't resolve at the link step.
+        register long r13 __asm__("r13") = (long)&shim_ensure_init;
         __asm__ __volatile__("syscall\n"
+                             // If in the parent, done with asm.
                              "cmp $0, %%rax\n"
                              "jne shim_native_syscallv_out\n"
-                             "jmp *%%r9\n"
+                             // Initialize state for this thread
+                             "callq *%%r13\n"
+                             // Restore return value of clone
+                             "movq $0, %%rax\n"
+                             // Jump to original clone call site.
+                             "jmp *%%r12\n"
                              "shim_native_syscallv_out:\n"
                              : "=a"(rv)
-                             : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8),
-                               "r"(r9), [CLONE_RIP] "rm"(&clone_rip)
+                             : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r12), "r"(r13)
                              : "rcx", "r11", "memory");
         // Wait for child to initialize itself.
         shim_newThreadFinish();

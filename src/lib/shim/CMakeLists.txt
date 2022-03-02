@@ -11,8 +11,6 @@ find_package(GLIB REQUIRED)
 find_package(RT REQUIRED)
 include_directories(${GLIB_INCLUDES})
 
-add_cflags(-fPIC)
-
 set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES
   binary_spinning_sem.cc
@@ -44,7 +42,7 @@ set(SHIM_FILES
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
-target_compile_options(${SHIM_LIB} PRIVATE -pthread -D_GNU_SOURCE)
+target_compile_options(${SHIM_LIB} PRIVATE -fPIC -pthread -D_GNU_SOURCE)
 target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem shadow-tsc logger
   ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
