@@ -12,6 +12,7 @@ mod fcntl;
 mod ioctl;
 mod random;
 mod socket;
+mod sysinfo;
 mod unistd;
 
 pub struct SyscallHandler {
@@ -46,6 +47,7 @@ impl SyscallHandler {
             libc::SYS_sendto => self.sendto(ctx, args),
             libc::SYS_socket => self.socket(ctx, args),
             libc::SYS_socketpair => self.socketpair(ctx, args),
+            libc::SYS_sysinfo => self.sysinfo(ctx, args),
             libc::SYS_write => self.write(ctx, args),
             _ => Err(SyscallError::from(Errno::ENOSYS)),
         }

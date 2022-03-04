@@ -137,6 +137,10 @@ path = "signal/test_signals.rs"
 name = "test_select"
 path = "select/test_select.rs"
 
+[[bin]]
+name = "test_sysinfo"
+path = "sysinfo/test_sysinfo.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.23.1"

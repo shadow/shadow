@@ -36,7 +36,6 @@
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
-#include "main/host/syscall/sysinfo.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
@@ -409,7 +408,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_C(symlinkat);
         HANDLE_C(sync_file_range);
         HANDLE_C(syncfs);
-        HANDLE_C(sysinfo);
+        HANDLE_RUST(sysinfo);
         HANDLE_C(tgkill);
         HANDLE_C(time);
         HANDLE_C(timerfd_create);
