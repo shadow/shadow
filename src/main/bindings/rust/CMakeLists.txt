@@ -22,7 +22,6 @@ add_custom_command(OUTPUT wrapper.rs
     COMMAND bindgen
         # Haven't decided how to handle glib struct types yet. Avoid using them
         # until we do.
-        --blacklist-type "_?GList"
         --blacklist-type "_?GQueue"
         # Needs GQueue
         --blacklist-type "_?Socket.*"
@@ -68,6 +67,15 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "syscallhandler_.*"
         --whitelist-function "worker_.*"
         --whitelist-function "workerc_.*"
+        --whitelist-function "packet_getSourceIP"
+        --whitelist-function "packet_getDestinationIP"
+        --whitelist-function "packet_getSourcePort"
+        --whitelist-function "packet_getDestinationPort"
+        --whitelist-function "packet_getHeaderSize"
+        --whitelist-function "packet_getPayloadLength"
+        --whitelist-function "packet_getProtocol"
+        --whitelist-function "packet_getTCPHeader"
+        --whitelist-function "packet_copyPayloadShadow"
         # Needs GQueue
         --blacklist-function "worker_finish"
         --blacklist-function "worker_bootHosts"
@@ -91,6 +99,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-type "LogInfoFlags"
         --whitelist-type "SimulationTime"
         --whitelist-type "SchedulerPolicyType"
+        --whitelist-type "ProtocolTCPFlags"
         --whitelist-var "CONFIG_PIPE_BUFFER_SIZE"
         --whitelist-var "SYSCALL_IO_BUFSIZE"
         --opaque-type "LegacyDescriptor"
@@ -101,6 +110,7 @@ add_custom_command(OUTPUT wrapper.rs
         --opaque-type "DescriptorTable"
         --opaque-type "MemoryManager"
         --opaque-type "Random"
+        --opaque-type "GList"
         --blacklist-type "Logger"
         --blacklist-type "CompatDescriptor"
         --whitelist-type "WorkerC"

@@ -76,6 +76,8 @@ typedef struct MemoryManager MemoryManager;
 // indexes.
 typedef struct NetworkGraph NetworkGraph;
 
+typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
+
 // Represents a POSIX description, or a Linux "struct file".
 typedef struct PosixFile PosixFile;
 
@@ -192,6 +194,19 @@ char *counter_alloc_string(struct Counter *counter);
 
 // Frees a string previously returned from counter_alloc_string.
 void counter_free_string(struct Counter *counter, char *ptr);
+
+// A new packet capture writer. Each packet (header and payload) captured will be truncated to
+// a length `capture_len`.
+struct PcapWriter_BufWriter_File *pcapwriter_new(const char *path, uint32_t capture_len);
+
+void pcapwriter_free(struct PcapWriter_BufWriter_File *pcap);
+
+// If there's an error, returns 1. Otherwise returns 0. If there's an error, the pcap file is
+// likely to be corrupt.
+int pcapwriter_writePacket(struct PcapWriter_BufWriter_File *pcap,
+                           uint32_t ts_sec,
+                           uint32_t ts_usec,
+                           const Packet *packet);
 
 struct Random *random_new(uint64_t seed);
 
