@@ -341,7 +341,7 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
     PCapPacket* pcapPacket = g_new0(PCapPacket, 1);
 
-    pcapPacket->headerSize = packet_getHeaderSize(packet) + CONFIG_HEADER_SIZE_ETH;
+    pcapPacket->headerSize = packet_getHeaderSize(packet);
     pcapPacket->payloadLength = packet_getPayloadLength(packet);
 
     if(pcapPacket->payloadLength > 0) {
