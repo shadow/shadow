@@ -338,8 +338,8 @@ gdouble packet_getPriority(const Packet* packet) {
 
 guint packet_getHeaderSize(Packet* packet) {
     MAGIC_ASSERT(packet);
-    guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIPETH :
-            packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIPETH : 0;
+    guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIP :
+            packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIP : 0;
     return size;
 }
 

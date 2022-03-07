@@ -341,7 +341,7 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
     PCapPacket* pcapPacket = g_new0(PCapPacket, 1);
 
-    pcapPacket->headerSize = packet_getHeaderSize(packet);
+    pcapPacket->headerSize = packet_getHeaderSize(packet) + CONFIG_HEADER_SIZE_ETH;
     pcapPacket->payloadLength = packet_getPayloadLength(packet);
 
     if(pcapPacket->payloadLength > 0) {
@@ -471,7 +471,8 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
             break;
         }
 
-        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet) +
+                                   CONFIG_HEADER_SIZE_ETH);
 
         _networkinterface_receivePacket(host, interface, packet);
 
@@ -625,7 +626,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
 
         /* successfully sent, calculate how long it took to 'send' this packet */
         if(!bootstrapping) {
-            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet) +
+                           CONFIG_HEADER_SIZE_ETH;
             _networkinterface_consumeTokenBucket(&interface->sendBucket,
                                                  length);
             _networkinterface_scheduleNextRefillIfNeeded(interface, src);
