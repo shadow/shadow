@@ -30,7 +30,7 @@ static void _pcapwriter_writeHeader(PCapWriter* pcap) {
     version_minor = 4;
     thiszone = 0;
     sigfigs = 0;
-    snaplen = 65535;
+    snaplen = 65535 + 14; /* includes the ethernet header */
     network = 1;
 
     fwrite(&magic_number, 1, sizeof(magic_number), pcap->pcapFile);
@@ -81,7 +81,7 @@ void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet) {
     /* write the IP header */
     guint8 versionAndHeaderLength = 0x45;
     guint8 fields = 0x00;
-    guint16 totalLength = htons(orig_len - 14);
+    guint16 totalLength = htons((guint16)(orig_len - 14));
     guint16 identification = 0x0000;
     guint16 flagsAndFragment = 0x0040;
     guint8 timeToLive = 64;
