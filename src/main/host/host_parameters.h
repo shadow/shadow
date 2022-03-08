@@ -30,6 +30,7 @@ struct _HostParameters {
     LogInfoFlags heartbeatLogInfo;
     LogLevel logLevel;
     gchar* pcapDir;
+    guint32 pcapCaptureSize;
     QDiscMode qdisc;
     guint64 recvBufSize;
     gboolean autotuneRecvBuf;

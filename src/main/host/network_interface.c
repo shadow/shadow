@@ -670,8 +670,8 @@ Router* networkinterface_getRouter(NetworkInterface* interface) {
 }
 
 NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwDownKiBps,
-                                       guint64 bwUpKiBps, gchar* pcapDir, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength) {
+                                       guint64 bwUpKiBps, gchar* pcapDir, guint32 pcapCaptureSize,
+                                       QDiscMode qdisc, guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -700,11 +700,6 @@ NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwD
 
         g_string_append_printf(filename, "%s-%s.pcap", address_toHostName(interface->address),
                                address_toHostIPString(interface->address));
-
-        /* From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
-         * capture all the data available from the packet". The maximum length of an IP packet
-         * (including the header) is 65535 bytes. */
-        guint32 pcapCaptureSize = 65535;
 
         interface->pcap = pcapwriter_new(filename->str, pcapCaptureSize);
         g_string_free(filename, TRUE);

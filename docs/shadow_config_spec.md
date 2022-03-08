@@ -95,6 +95,7 @@ hosts:
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.log_level`](#host_defaultslog_level)
+- [`host_defaults.pcap_capture_size`](#host_defaultspcap_capture_size)
 - [`host_defaults.pcap_directory`](#host_defaultspcap_directory)
 - [`hosts`](#hosts)
 - [`hosts.<hostname>.bandwidth_down`](#hostshostnamebandwidth_down)
@@ -528,6 +529,16 @@ Default: null
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace" OR null
 
 Log level at which to print host log messages.
+
+#### `host_defaults.pcap_capture_size`
+
+Default: "65535 B"  
+Type: String OR Integer
+
+How much data to capture per packet (header and payload) if pcap logging is
+enabled.
+
+The default of 65535 bytes is the maximum length of an IP packet.
 
 #### `host_defaults.pcap_directory`
 

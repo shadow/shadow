@@ -208,6 +208,7 @@ pub struct _HostParameters {
     pub heartbeatLogInfo: LogInfoFlags,
     pub logLevel: LogLevel,
     pub pcapDir: *mut gchar,
+    pub pcapCaptureSize: guint32,
     pub qdisc: QDiscMode,
     pub recvBufSize: guint64,
     pub autotuneRecvBuf: gboolean,
@@ -388,8 +389,18 @@ fn bindgen_test_layout__HostParameters() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapCaptureSize as *const _ as usize },
         96usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(pcapCaptureSize)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
+        100usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),

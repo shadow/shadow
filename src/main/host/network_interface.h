@@ -20,8 +20,8 @@
 typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwDownKiBps,
-                                       guint64 bwUpKiBps, gchar* pcapDir, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength);
+                                       guint64 bwUpKiBps, gchar* pcapDir, guint32 pcapCaptureSize,
+                                       QDiscMode qdisc, guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
 Address* networkinterface_getAddress(NetworkInterface* interface);

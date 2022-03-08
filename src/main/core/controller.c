@@ -352,6 +352,7 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
 
         params->logLevel = hostoptions_getLogLevel(host);
         params->pcapDir = hostoptions_getPcapDirectory(host);
+        params->pcapCaptureSize = hostoptions_getPcapCaptureSize(host);
 
         /* some options come from the config options and not the host options */
         params->heartbeatLogLevel = config_getHostHeartbeatLogLevel(config);

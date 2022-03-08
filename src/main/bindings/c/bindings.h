@@ -392,6 +392,8 @@ LogLevel hostoptions_getLogLevel(const struct HostOptions *host);
 
 char *hostoptions_getPcapDirectory(const struct HostOptions *host);
 
+uint32_t hostoptions_getPcapCaptureSize(const struct HostOptions *host);
+
 // Get the downstream bandwidth of the host if it exists. A non-zero return value means that
 // the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
 int hostoptions_getBandwidthDown(const struct HostOptions *host, uint64_t *bandwidth_down);
