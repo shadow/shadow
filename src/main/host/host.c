@@ -199,12 +199,12 @@ void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPat
     }
 
     /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback =
-        networkinterface_new(host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, pcapDir,
-                             host->params.qdisc, host->params.interfaceBufSize);
-    NetworkInterface* ethernet =
-        networkinterface_new(host, ethernetAddress, bwDownKiBps, bwUpKiBps, pcapDir,
-                             host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* loopback = networkinterface_new(
+        host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, pcapDir, host->params.pcapCaptureSize,
+        host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet = networkinterface_new(
+        host, ethernetAddress, bwDownKiBps, bwUpKiBps, pcapDir, host->params.pcapCaptureSize,
+        host->params.qdisc, host->params.interfaceBufSize);
 
     g_free(pcapDir);
 

@@ -459,6 +459,11 @@ pub struct HostDefaultOptions {
     #[clap(long, value_name = "path")]
     #[clap(help = HOST_HELP.get("pcap_directory").unwrap().as_str())]
     pub pcap_directory: Option<String>,
+
+    /// How much data to capture per packet (header and payload) if pcap logging is enabled
+    #[clap(long, value_name = "bytes")]
+    #[clap(help = HOST_HELP.get("pcap_capture_size").unwrap().as_str())]
+    pub pcap_capture_size: Option<units::Bytes<units::SiPrefixUpper>>,
 }
 
 impl HostDefaultOptions {
@@ -466,6 +471,7 @@ impl HostDefaultOptions {
         Self {
             log_level: None,
             pcap_directory: None,
+            pcap_capture_size: None,
         }
     }
 
@@ -481,6 +487,10 @@ impl Default for HostDefaultOptions {
         Self {
             log_level: None,
             pcap_directory: None,
+            // From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
+            // capture all the data available from the packet". The maximum length of an IP packet
+            // (including the header) is 65535 bytes.
+            pcap_capture_size: Some(units::Bytes::new(65535, units::SiPrefixUpper::Base)),
         }
     }
 }
@@ -1300,7 +1310,7 @@ mod export {
             .unwrap()
             .convert(units::SiPrefixUpper::Base)
             .unwrap()
-            .value() as u64
+            .value()
     }
 
     #[no_mangle]
@@ -1314,7 +1324,7 @@ mod export {
             .unwrap()
             .convert(units::SiPrefixUpper::Base)
             .unwrap()
-            .value() as u64
+            .value()
     }
 
     #[no_mangle]
@@ -1543,6 +1553,21 @@ mod export {
             }
             None => std::ptr::null_mut(),
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn hostoptions_getPcapCaptureSize(host: *const HostOptions) -> u32 {
+        assert!(!host.is_null());
+        let host = unsafe { &*host };
+
+        host.options
+            .pcap_capture_size
+            .unwrap()
+            .convert(units::SiPrefixUpper::Base)
+            .unwrap()
+            .value()
+            .try_into()
+            .unwrap()
     }
 
     /// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
