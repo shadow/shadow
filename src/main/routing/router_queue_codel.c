@@ -107,7 +107,8 @@ static void _routerqueuecodel_free(QueueManagerCoDel* queueManager) {
 }
 
 static inline guint64 _routerqueuecodel_getPacketLength(Packet* packet) {
-    return (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+    return (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet) +
+                     CONFIG_HEADER_SIZE_ETH);
 }
 
 static gboolean _routerqueuecodel_enqueue(QueueManagerCoDel* queueManager, Packet* packet) {

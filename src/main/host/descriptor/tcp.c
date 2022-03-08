@@ -789,7 +789,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
      * unordered input packets should count against buffer space, so use the _tcp version. */
     //gsize space = _tcp_getBufferSpaceIn(tcp); // causes throughput problems
     gsize space = socket_getInputBufferSpace(&(tcp->super));
-    gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
+    gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH);
     tcp->receive.window = nPackets;
 
     /* handle window updates */
@@ -1515,8 +1515,10 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 //  tcpinfo->tcpi_rto;
 //  tcpinfo->tcpi_ato;
-    tcpinfo->tcpi_snd_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
-    tcpinfo->tcpi_rcv_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
+    tcpinfo->tcpi_snd_mss =
+        (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH);
+    tcpinfo->tcpi_rcv_mss =
+        (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH);
 
     tcpinfo->tcpi_unacked = (u_int32_t)(tcp->send.next - tcp->send.unacked);
 //  tcpinfo->tcpi_sacked;
@@ -1542,7 +1544,8 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_rttvar = (u_int32_t)tcp->timing.rttVariance;
     tcpinfo->tcpi_snd_ssthresh = (u_int32_t)tcp->cong.hooks->tcp_cong_ssthresh(tcp);
     tcpinfo->tcpi_snd_cwnd = (u_int32_t)tcp->cong.cwnd;
-    tcpinfo->tcpi_advmss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
+    tcpinfo->tcpi_advmss =
+        (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH);
 //  tcpinfo->tcpi_reordering;
 
     tcpinfo->tcpi_rcv_rtt = (u_int32_t)tcp->info.rtt;
@@ -2275,7 +2278,7 @@ static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     gsize remaining = MIN(acceptable, space);
 
     /* break data into segments and send each in a packet */
-    gsize maxPacketLength = CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH;
+    gsize maxPacketLength = CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH;
     gsize bytesCopied = 0;
 
     /* create as many packets as needed */

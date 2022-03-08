@@ -75,6 +75,8 @@ typedef struct MemoryManager MemoryManager;
 // indexes.
 typedef struct NetworkGraph NetworkGraph;
 
+typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
+
 // Represents a POSIX description, or a Linux "struct file".
 typedef struct PosixFile PosixFile;
 

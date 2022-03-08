@@ -105,6 +105,7 @@ fn bindgen_test_layout___sigset_t() {
     );
 }
 pub type sigset_t = __sigset_t;
+pub type GList = [u64; 3usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _GTimer {
@@ -1295,12 +1296,21 @@ pub const _ProtocolType_PLOCAL: _ProtocolType = 1;
 pub const _ProtocolType_PTCP: _ProtocolType = 2;
 pub const _ProtocolType_PUDP: _ProtocolType = 3;
 pub type _ProtocolType = i32;
+pub const ProtocolTCPFlags_PTCP_NONE: ProtocolTCPFlags = 0;
+pub const ProtocolTCPFlags_PTCP_RST: ProtocolTCPFlags = 2;
+pub const ProtocolTCPFlags_PTCP_SYN: ProtocolTCPFlags = 4;
+pub const ProtocolTCPFlags_PTCP_ACK: ProtocolTCPFlags = 8;
+pub const ProtocolTCPFlags_PTCP_SACK: ProtocolTCPFlags = 16;
+pub const ProtocolTCPFlags_PTCP_FIN: ProtocolTCPFlags = 32;
+pub const ProtocolTCPFlags_PTCP_DUPACK: ProtocolTCPFlags = 64;
+pub type ProtocolTCPFlags = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Packet {
     _unused: [u8; 0],
 }
 pub type Packet = _Packet;
+pub type PacketTCPHeader = _PacketTCPHeader;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Futex {
@@ -2139,4 +2149,176 @@ extern "C" {
 }
 extern "C" {
     pub fn syscallcondition_unref(cond: *mut SysCallCondition);
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _PacketTCPHeader {
+    pub flags: ProtocolTCPFlags,
+    pub sourceIP: in_addr_t,
+    pub sourcePort: in_port_t,
+    pub destinationIP: in_addr_t,
+    pub destinationPort: in_port_t,
+    pub sequence: guint,
+    pub acknowledgment: guint,
+    pub selectiveACKs: *mut GList,
+    pub window: guint,
+    pub timestampValue: SimulationTime,
+    pub timestampEcho: SimulationTime,
+}
+#[test]
+fn bindgen_test_layout__PacketTCPHeader() {
+    assert_eq!(
+        ::std::mem::size_of::<_PacketTCPHeader>(),
+        64usize,
+        concat!("Size of: ", stringify!(_PacketTCPHeader))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_PacketTCPHeader>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_PacketTCPHeader))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).flags as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(flags)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sourceIP as *const _ as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(sourceIP)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sourcePort as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(sourcePort)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).destinationIP as *const _ as usize },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(destinationIP)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_PacketTCPHeader>())).destinationPort as *const _ as usize
+        },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(destinationPort)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sequence as *const _ as usize },
+        20usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(sequence)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).acknowledgment as *const _ as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(acknowledgment)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).selectiveACKs as *const _ as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(selectiveACKs)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).window as *const _ as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(window)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).timestampValue as *const _ as usize },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(timestampValue)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).timestampEcho as *const _ as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PacketTCPHeader),
+            "::",
+            stringify!(timestampEcho)
+        )
+    );
+}
+extern "C" {
+    pub fn packet_getPayloadLength(packet: *const Packet) -> guint;
+}
+extern "C" {
+    pub fn packet_getHeaderSize(packet: *const Packet) -> guint;
+}
+extern "C" {
+    pub fn packet_getDestinationIP(packet: *const Packet) -> in_addr_t;
+}
+extern "C" {
+    pub fn packet_getDestinationPort(packet: *const Packet) -> in_port_t;
+}
+extern "C" {
+    pub fn packet_getSourceIP(packet: *const Packet) -> in_addr_t;
+}
+extern "C" {
+    pub fn packet_getSourcePort(packet: *const Packet) -> in_port_t;
+}
+extern "C" {
+    pub fn packet_getProtocol(packet: *const Packet) -> ProtocolType;
+}
+extern "C" {
+    pub fn packet_copyPayloadShadow(
+        packet: *const Packet,
+        payloadOffset: gsize,
+        buffer: *mut ::std::os::raw::c_void,
+        bufferLength: gsize,
+    ) -> guint;
+}
+extern "C" {
+    pub fn packet_getTCPHeader(packet: *const Packet) -> *mut PacketTCPHeader;
 }

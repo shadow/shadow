@@ -336,14 +336,14 @@ gdouble packet_getPriority(const Packet* packet) {
     return packet->priority;
 }
 
-guint packet_getHeaderSize(Packet* packet) {
+guint packet_getHeaderSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIPETH :
-            packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIPETH : 0;
+    guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIP :
+            packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIP : 0;
     return size;
 }
 
-in_addr_t packet_getDestinationIP(Packet* packet) {
+in_addr_t packet_getDestinationIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
     in_addr_t ip = 0;
 
@@ -374,7 +374,7 @@ in_addr_t packet_getDestinationIP(Packet* packet) {
     return ip;
 }
 
-in_port_t packet_getDestinationPort(Packet* packet) {
+in_port_t packet_getDestinationPort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
@@ -407,7 +407,7 @@ in_port_t packet_getDestinationPort(Packet* packet) {
     return port;
 }
 
-in_addr_t packet_getSourceIP(Packet* packet) {
+in_addr_t packet_getSourceIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_addr_t ip = 0;
@@ -439,7 +439,7 @@ in_addr_t packet_getSourceIP(Packet* packet) {
     return ip;
 }
 
-in_port_t packet_getSourcePort(Packet* packet) {
+in_port_t packet_getSourcePort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
@@ -472,7 +472,7 @@ in_port_t packet_getSourcePort(Packet* packet) {
     return port;
 }
 
-ProtocolType packet_getProtocol(Packet* packet) {
+ProtocolType packet_getProtocol(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->protocol;
 }
@@ -488,7 +488,7 @@ gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOff
     }
 }
 
-guint packet_copyPayloadShadow(Packet* packet, gsize payloadOffset, void* buffer,
+guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
@@ -515,7 +515,7 @@ GList* packet_copyTCPSelectiveACKs(Packet* packet) {
     return selectiveACKsCopy;
 }
 
-PacketTCPHeader* packet_getTCPHeader(Packet* packet) {
+PacketTCPHeader* packet_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
     utility_assert(packet->protocol == PTCP);
     return (PacketTCPHeader*)packet->header;

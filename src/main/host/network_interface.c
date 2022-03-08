@@ -25,7 +25,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/utility/pcap_writer.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
@@ -75,7 +74,7 @@ struct _NetworkInterface {
     gboolean isRefillPending;
 
     /* To support capturing incoming and outgoing packets */
-    PCapWriter* pcap;
+    PcapWriter_BufWriter_File* pcap;
 
     MAGIC_DECLARE;
 };
@@ -339,41 +338,20 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 }
 
 static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
-    PCapPacket* pcapPacket = g_new0(PCapPacket, 1);
+    utility_assert(interface->pcap != NULL);
 
-    pcapPacket->headerSize = packet_getHeaderSize(packet);
-    pcapPacket->payloadLength = packet_getPayloadLength(packet);
+    /* get the current time that the packet is being sent/received */
+    SimulationTime now = worker_getCurrentTime();
+    guint32 ts_sec = now / SIMTIME_ONE_SECOND;
+    guint32 ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 
-    if(pcapPacket->payloadLength > 0) {
-        pcapPacket->payload = g_new0(guchar, pcapPacket->payloadLength);
-        packet_copyPayloadShadow(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
+    int error = pcapwriter_writePacket(interface->pcap, ts_sec, ts_usec, packet);
+    if (error) {
+        /* if there was a non-recoverable error */
+        warning("Fatal pcap logging error; stopping pcap logging for current interface");
+        pcapwriter_free(interface->pcap);
+        interface->pcap = NULL;
     }
-
-    PacketTCPHeader* tcpHeader = packet_getTCPHeader(packet);
-
-    pcapPacket->srcIP = tcpHeader->sourceIP;
-    pcapPacket->dstIP = tcpHeader->destinationIP;
-    pcapPacket->srcPort = tcpHeader->sourcePort;
-    pcapPacket->dstPort = tcpHeader->destinationPort;
-
-    if(tcpHeader->flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
-    if(tcpHeader->flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
-    if(tcpHeader->flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
-    if(tcpHeader->flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
-
-    pcapPacket->seq = (guint32)tcpHeader->sequence;
-    pcapPacket->win = (guint16)tcpHeader->window;
-    if(tcpHeader->flags & PTCP_ACK) {
-        pcapPacket->ack = (guint32)tcpHeader->acknowledgment;
-    }
-
-    pcapwriter_writePacket(interface->pcap, pcapPacket);
-
-    if(pcapPacket->payloadLength > 0) {
-        g_free(pcapPacket->payload);
-    }
-
-    g_free(pcapPacket);
 }
 
 static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
@@ -471,7 +449,8 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
             break;
         }
 
-        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet) +
+                                   CONFIG_HEADER_SIZE_ETH);
 
         _networkinterface_receivePacket(host, interface, packet);
 
@@ -625,7 +604,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
 
         /* successfully sent, calculate how long it took to 'send' this packet */
         if(!bootstrapping) {
-            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet) +
+                           CONFIG_HEADER_SIZE_ETH;
             _networkinterface_consumeTokenBucket(&interface->sendBucket,
                                                  length);
             _networkinterface_scheduleNextRefillIfNeeded(interface, src);
@@ -709,12 +689,24 @@ NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwD
     /* parse queuing discipline */
     interface->qdisc = qdisc;
 
-    if(pcapDir != NULL) {
+    if (pcapDir != NULL) {
         GString* filename = g_string_new(NULL);
-        g_string_printf(filename, "%s-%s",
-                address_toHostName(interface->address),
-                address_toHostIPString(interface->address));
-        interface->pcap = pcapwriter_new(host, pcapDir, filename->str);
+        g_string_append(filename, pcapDir);
+
+        /* Append trailing slash if not present */
+        if (!g_str_has_suffix(filename->str, "/")) {
+            g_string_append(filename, "/");
+        }
+
+        g_string_append_printf(filename, "%s-%s.pcap", address_toHostName(interface->address),
+                               address_toHostIPString(interface->address));
+
+        /* From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
+         * capture all the data available from the packet". The maximum length of an IP packet
+         * (including the header) is 65535 bytes. */
+        guint32 pcapCaptureSize = 65535;
+
+        interface->pcap = pcapwriter_new(filename->str, pcapCaptureSize);
         g_string_free(filename, TRUE);
     }
 

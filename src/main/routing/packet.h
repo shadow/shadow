@@ -59,20 +59,20 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
 
 guint packet_getPayloadLength(const Packet* packet);
 gdouble packet_getPriority(const Packet* packet);
-guint packet_getHeaderSize(Packet* packet);
+guint packet_getHeaderSize(const Packet* packet);
 
-in_addr_t packet_getDestinationIP(Packet* packet);
-in_port_t packet_getDestinationPort(Packet* packet);
-in_addr_t packet_getSourceIP(Packet* packet);
-in_port_t packet_getSourcePort(Packet* packet);
-ProtocolType packet_getProtocol(Packet* packet);
+in_addr_t packet_getDestinationIP(const Packet* packet);
+in_port_t packet_getDestinationPort(const Packet* packet);
+in_addr_t packet_getSourceIP(const Packet* packet);
+in_port_t packet_getSourcePort(const Packet* packet);
+ProtocolType packet_getProtocol(const Packet* packet);
 
 gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
                           PluginVirtualPtr buffer, gsize bufferLength);
-guint packet_copyPayloadShadow(Packet* packet, gsize payloadOffset, void* buffer,
+guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                gsize bufferLength);
 GList* packet_copyTCPSelectiveACKs(Packet* packet);
-PacketTCPHeader* packet_getTCPHeader(Packet* packet);
+PacketTCPHeader* packet_getTCPHeader(const Packet* packet);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
