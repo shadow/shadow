@@ -211,8 +211,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
         scr = syscallhandler_##s(sys, args);                                                       \
-        if (process_straceLoggingEnabled(sys->process)) {                                          \
-            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
+        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
+            scr = log_syscall(                                                                     \
+                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
         }                                                                                          \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         break
@@ -220,16 +221,18 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     case SYS_##s:                                                                                  \
         trace("native syscall %ld " #s, args->number);                                             \
         scr = (SysCallReturn){.state = SYSCALL_NATIVE};                                            \
-        if (process_straceLoggingEnabled(sys->process)) {                                          \
-            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
+        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
+            scr = log_syscall(                                                                     \
+                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
         }                                                                                          \
         break
 #define UNSUPPORTED(s)                                                                             \
     case SYS_##s:                                                                                  \
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
         scr = (SysCallReturn){.state = -ENOSYS};                                                   \
-        if (process_straceLoggingEnabled(sys->process)) {                                          \
-            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
+        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
+            scr = log_syscall(                                                                     \
+                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
@@ -248,6 +251,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 
     utility_assert(!sys->shimShmemHostLock);
     sys->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(sys->host));
+
+    StraceFmtMode straceLoggingMode = process_straceLoggingMode(sys->process);
 
     SysCallReturn scr;
 
@@ -512,10 +517,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                   ENOSYS, args->number);
             scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
 
-            if (process_straceLoggingEnabled(sys->process)) {
+            if (straceLoggingMode != STRACE_FMT_MODE_OFF) {
                 char arg_str[20] = {0};
                 snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
-                scr = log_syscall(sys->process, thread_getID(sys->thread), "syscall", arg_str, scr);
+                scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread),
+                                  "syscall", arg_str, scr);
             }
 
             break;

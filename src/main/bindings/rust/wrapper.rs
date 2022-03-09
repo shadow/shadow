@@ -124,6 +124,10 @@ pub type InterposeMethod = ::std::os::raw::c_uint;
 pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
 pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
 pub type QDiscMode = ::std::os::raw::c_uint;
+pub const StraceFmtMode_STRACE_FMT_MODE_OFF: StraceFmtMode = 0;
+pub const StraceFmtMode_STRACE_FMT_MODE_STANDARD: StraceFmtMode = 1;
+pub const StraceFmtMode_STRACE_FMT_MODE_DETERMINISTIC: StraceFmtMode = 2;
+pub type StraceFmtMode = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ChildPidWatcher {
@@ -938,7 +942,7 @@ extern "C" {
     pub fn process_getName(proc_: *mut Process) -> *const gchar;
 }
 extern "C" {
-    pub fn process_straceLoggingEnabled(proc_: *mut Process) -> bool;
+    pub fn process_straceLoggingMode(proc_: *mut Process) -> StraceFmtMode;
 }
 extern "C" {
     pub fn process_getStraceFd(proc_: *mut Process) -> ::std::os::raw::c_int;

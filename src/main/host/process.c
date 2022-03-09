@@ -73,8 +73,8 @@ ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
 static bool _use_legacy_working_dir = false;
 ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 
-static bool _use_strace_logging = false;
-ADD_CONFIG_HANDLER(config_getUseStraceLogging, _use_strace_logging)
+static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
+ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
 
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
@@ -139,7 +139,7 @@ struct _Process {
     File* stdoutFile;
     File* stderrFile;
 
-    bool straceLoggingEnabled;
+    StraceFmtMode straceLoggingMode;
     int straceFd;
 
     /* When true, threads are no longer runnable and should just be cleaned up. */
@@ -177,9 +177,9 @@ const gchar* process_getName(Process* proc) {
     return proc->processName->str;
 }
 
-bool process_straceLoggingEnabled(Process* proc) {
+StraceFmtMode process_straceLoggingMode(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->straceLoggingEnabled;
+    return proc->straceLoggingMode;
 }
 
 int process_getStraceFd(Process* proc) {
@@ -516,7 +516,7 @@ static void _process_start(Process* proc) {
     descriptor_ref((LegacyDescriptor*)proc->stderrFile);
     g_free(stderrFileName);
 
-    if (proc->straceLoggingEnabled) {
+    if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
         gchar* straceFileName = _process_outputFileName(proc, "strace");
         proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -846,7 +846,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->referenceCount = 1;
     proc->isExiting = false;
 
-    proc->straceLoggingEnabled = _use_strace_logging;
+    proc->straceLoggingMode = _strace_logging_mode;
     proc->straceFd = -1;
 
     proc->memoryMutRef = NULL;

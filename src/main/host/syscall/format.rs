@@ -11,6 +11,43 @@ use crate::host::syscall_types::{
 use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FmtOptions {
+    Standard,
+    Deterministic,
+}
+
+// this type is required until we no longer need to access the format options from C
+#[repr(C)]
+pub enum StraceFmtMode {
+    Off,
+    Standard,
+    Deterministic,
+}
+
+impl TryFrom<u32> for StraceFmtMode {
+    type Error = ();
+
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == Self::Off as u32 => Ok(Self::Off),
+            x if x == Self::Standard as u32 => Ok(Self::Standard),
+            x if x == Self::Deterministic as u32 => Ok(Self::Deterministic),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<StraceFmtMode> for Option<FmtOptions> {
+    fn from(x: StraceFmtMode) -> Self {
+        match x {
+            StraceFmtMode::Off => None,
+            StraceFmtMode::Standard => Some(FmtOptions::Standard),
+            StraceFmtMode::Deterministic => Some(FmtOptions::Deterministic),
+        }
+    }
+}
+
 /// Convert from a `SysCallReg`.
 pub trait TryFromSyscallReg
 where
@@ -27,7 +64,12 @@ pub trait SyscallDataDisplay {
 /// Format trait for syscall pointers. Should be implemented on `SyscallPtr<*const T>` or
 /// `SyscallPtr<[T; K]>` types.
 pub trait SyscallPtrDisplay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, mem: &MemoryManager) -> std::fmt::Result;
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result;
 }
 
 impl<T: From<SysCallReg>> TryFromSyscallReg for T {
@@ -77,12 +119,15 @@ macro_rules! simple_pointer_impl {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
+                options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, 1)) {
-                    Ok(vals) => write!(f, "{} ({:p})", &(*vals)[0], self.ptr),
+                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, 1))) {
+                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], self.ptr),
+                    (FmtOptions::Deterministic, Ok(_)) => write!(f, "<pointer>"),
                     // if we couldn't read the memory, just show the pointer instead
-                    Err(_) => write!(f, "{:p}", self.ptr),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{:p}", self.ptr),
+                    (FmtOptions::Deterministic, Err(_)) => write!(f, "<pointer>"),
                 }
             }
         }
@@ -101,9 +146,13 @@ macro_rules! safe_pointer_impl {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
+                options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
-                write!(f, "{:p}", self.ptr)
+                match options {
+                    FmtOptions::Standard => write!(f, "{:p}", self.ptr),
+                    FmtOptions::Deterministic => write!(f, "<pointer>"),
+                }
             }
         }
     };
@@ -120,12 +169,15 @@ macro_rules! simple_array_impl {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
+                options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, K)) {
-                    Ok(vals) => write!(f, "{:?} ({:p})", &(*vals), self.ptr),
+                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, K))) {
+                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), self.ptr),
+                    (FmtOptions::Deterministic, Ok(_)) => write!(f, "<pointer>"),
                     // if we couldn't read the memory, just show the pointer instead
-                    Err(_) => write!(f, "{:p}", self.ptr),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{:p}", self.ptr),
+                    (FmtOptions::Deterministic, Err(_)) => write!(f, "<pointer>"),
                 }
             }
         }
@@ -180,8 +232,17 @@ simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 
 impl SyscallPtrDisplay for SyscallPtr<*const i8> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, mem: &MemoryManager) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
         const DISPLAY_LEN: usize = 40;
+
+        if options == FmtOptions::Deterministic {
+            return write!(f, "<pointer>");
+        }
 
         // read up to one extra character to check if it's a null byte
         let mem_ref =
@@ -259,30 +320,30 @@ impl<T, const K: usize> From<SysCallReg> for SyscallPtr<[T; K]> {
 
 /// A trait for objects that can be read from plugin memory.
 pub trait FromSyscallMem<'a> {
-    fn from_mem(reg: SysCallReg, mem: &'a MemoryManager) -> Self;
+    fn from_mem(reg: SysCallReg, options: FmtOptions, mem: &'a MemoryManager) -> Self;
 }
 
 /// A syscall value, either data or a pointer.
 pub enum SyscallVal<'a, T> {
     Data(SysCallReg),
-    Ptr(SyscallPtr<T>, &'a MemoryManager),
+    Ptr(SyscallPtr<T>, FmtOptions, &'a MemoryManager),
 }
 
 impl<'a, T: TryFromSyscallReg> FromSyscallMem<'a> for SyscallVal<'a, T> {
-    fn from_mem(reg: SysCallReg, _mem: &'a MemoryManager) -> Self {
+    fn from_mem(reg: SysCallReg, _options: FmtOptions, _mem: &'a MemoryManager) -> Self {
         Self::Data(reg)
     }
 }
 
 impl<'a, T> FromSyscallMem<'a> for SyscallVal<'a, *const T> {
-    fn from_mem(reg: SysCallReg, mem: &'a MemoryManager) -> Self {
-        Self::Ptr(SyscallPtr::from(reg), mem)
+    fn from_mem(reg: SysCallReg, options: FmtOptions, mem: &'a MemoryManager) -> Self {
+        Self::Ptr(SyscallPtr::from(reg), options, mem)
     }
 }
 
 impl<'a, T, const K: usize> FromSyscallMem<'a> for SyscallVal<'a, [T; K]> {
-    fn from_mem(reg: SysCallReg, mem: &'a MemoryManager) -> Self {
-        Self::Ptr(SyscallPtr::from(reg), mem)
+    fn from_mem(reg: SysCallReg, options: FmtOptions, mem: &'a MemoryManager) -> Self {
+        Self::Ptr(SyscallPtr::from(reg), options, mem)
     }
 }
 
@@ -297,7 +358,7 @@ where
                 // if the conversion to type T was unsuccessful, just show an integer
                 None => write!(f, "{:#x} <invalid>", unsafe { reg.as_u64 }),
             },
-            Self::Ptr(_, _) => unreachable!(),
+            Self::Ptr(_, _, _) => unreachable!(),
         }
     }
 }
@@ -309,7 +370,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Data(_) => unreachable!(),
-            Self::Ptr(x, mem) => x.fmt(f, mem),
+            Self::Ptr(x, options, mem) => x.fmt(f, *options, mem),
         }
     }
 }
@@ -321,7 +382,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Data(_) => unreachable!(),
-            Self::Ptr(x, mem) => x.fmt(f, mem),
+            Self::Ptr(x, options, mem) => x.fmt(f, *options, mem),
         }
     }
 }
@@ -361,14 +422,14 @@ where
     SyscallVal<'a, E>: Display + FromSyscallMem<'a>,
     SyscallVal<'a, F>: Display + FromSyscallMem<'a>,
 {
-    pub fn new(args: &SysCallArgs, mem: &'a MemoryManager) -> Self {
+    pub fn new(args: &SysCallArgs, options: FmtOptions, mem: &'a MemoryManager) -> Self {
         Self {
-            a: SyscallVal::from_mem(args.get(0), mem),
-            b: SyscallVal::from_mem(args.get(1), mem),
-            c: SyscallVal::from_mem(args.get(2), mem),
-            d: SyscallVal::from_mem(args.get(3), mem),
-            e: SyscallVal::from_mem(args.get(4), mem),
-            f: SyscallVal::from_mem(args.get(5), mem),
+            a: SyscallVal::from_mem(args.get(0), options, mem),
+            b: SyscallVal::from_mem(args.get(1), options, mem),
+            c: SyscallVal::from_mem(args.get(2), options, mem),
+            d: SyscallVal::from_mem(args.get(3), options, mem),
+            e: SyscallVal::from_mem(args.get(4), options, mem),
+            f: SyscallVal::from_mem(args.get(5), options, mem),
         }
     }
 }
@@ -427,6 +488,7 @@ where
     RV: std::fmt::Debug,
 {
     rv: &'a SyscallResult,
+    options: FmtOptions,
     mem: &'a MemoryManager,
     _phantom: PhantomData<RV>,
 }
@@ -436,12 +498,13 @@ where
     SyscallVal<'a, RV>: Display + FromSyscallMem<'a>,
     RV: std::fmt::Debug,
 {
-    pub fn new(rv: &'a SyscallResult, mem: &'a MemoryManager) -> Option<Self> {
+    pub fn new(rv: &'a SyscallResult, options: FmtOptions, mem: &'a MemoryManager) -> Option<Self> {
         match &rv {
             SyscallResult::Ok(_)
             | SyscallResult::Err(SyscallError::Errno(_))
             | SyscallResult::Err(SyscallError::Native) => Some(Self {
                 rv,
+                options,
                 mem,
                 _phantom: PhantomData::default(),
             }),
@@ -459,14 +522,14 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.rv {
             SyscallResult::Ok(x) => {
-                let rv = SyscallVal::<'_, RV>::from_mem(*x, self.mem);
+                let rv = SyscallVal::<'_, RV>::from_mem(*x, self.options, self.mem);
                 write!(f, "{}", rv)
             }
             SyscallResult::Err(SyscallError::Errno(e)) => {
                 let rv = SysCallReg {
                     as_i64: -(*e as i64),
                 };
-                let rv = SyscallVal::<'_, RV>::from_mem(rv, self.mem);
+                let rv = SyscallVal::<'_, RV>::from_mem(rv, self.options, self.mem);
                 write!(f, "{} ({})", rv, e)
             }
             SyscallResult::Err(SyscallError::Native) => {
@@ -508,6 +571,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn log_syscall(
         proc: *mut c::Process,
+        logging_mode: c::StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,
         args: *const libc::c_char,
@@ -523,8 +587,15 @@ mod export {
         let args = unsafe { CStr::from_ptr(args) }.to_str().unwrap();
         let result = SyscallResult::from(result);
 
+        let logging_mode = StraceFmtMode::try_from(logging_mode).unwrap().into();
+        let logging_mode = match logging_mode {
+            Some(x) => x,
+            // logging was disabled
+            None => return result.into(),
+        };
+
         // we don't know the type, so just show it as an int
-        let rv = SyscallResultFmt::<libc::c_long>::new(&result, proc.memory());
+        let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, proc.memory());
 
         if let Some(ref rv) = rv {
             proc.with_strace_file(|file| {

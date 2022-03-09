@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
+use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 
@@ -9,11 +10,11 @@ use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU32;
 
 use super::simulation_time::{SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
 use crate::cshadow as c;
+use crate::host::syscall::format::StraceFmtMode;
 use log_bindings as c_log;
 
 const START_HELP_TEXT: &str = "\
@@ -391,9 +392,9 @@ pub struct ExperimentalOptions {
     pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Log the syscalls for each process to individual "strace" files
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_strace_logging").unwrap().as_str())]
-    pub use_strace_logging: Option<bool>,
+    #[clap(long, value_name = "mode")]
+    #[clap(help = EXP_HELP.get("strace_logging_mode").unwrap().as_str())]
+    pub strace_logging_mode: Option<StraceLoggingMode>,
 }
 
 impl ExperimentalOptions {
@@ -435,7 +436,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
-            use_strace_logging: Some(false),
+            strace_logging_mode: Some(StraceLoggingMode::Off),
         }
     }
 }
@@ -777,6 +778,22 @@ impl<'de> serde::Deserialize<'de> for ProcessArgs {
         }
 
         deserializer.deserialize_any(ProcessArgsVisitor)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StraceLoggingMode {
+    Off,
+    Standard,
+    Deterministic,
+}
+
+impl std::str::FromStr for StraceLoggingMode {
+    type Err = serde_yaml::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_yaml::from_str(s)
     }
 }
 
@@ -1427,11 +1444,15 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getUseStraceLogging(config: *const ConfigOptions) -> bool {
+    pub extern "C" fn config_getStraceLoggingMode(config: *const ConfigOptions) -> StraceFmtMode {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        config.experimental.use_strace_logging.unwrap()
+        match config.experimental.strace_logging_mode.as_ref().unwrap() {
+            StraceLoggingMode::Standard => StraceFmtMode::Standard,
+            StraceLoggingMode::Deterministic => StraceFmtMode::Deterministic,
+            StraceLoggingMode::Off => StraceFmtMode::Off,
+        }
     }
 
     #[no_mangle]
