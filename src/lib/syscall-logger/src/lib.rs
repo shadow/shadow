@@ -71,16 +71,17 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             ctx: &mut crate::host::context::ThreadContext,
             args: &crate::host::syscall_types::SysCallArgs,
         ) -> crate::host::syscall_types::SyscallResult {{
-            // exit early if strace logging is not enabled
-            if !ctx.process.strace_logging_enabled() {{
-                return self.{syscall_name}_original(ctx, args);
-            }}
+            let strace_fmt_options = match ctx.process.strace_logging_options() {{
+                Some(x) => x,
+                // exit early if strace logging is not enabled
+                None => return self.{syscall_name}_original(ctx, args),
+            }};
 
             // make sure to include the full path to all used types
             use crate::core::worker::Worker;
             use crate::host::syscall::format::{{SyscallArgsFmt, SyscallResultFmt, write_syscall}};
 
-            let syscall_args = SyscallArgsFmt::<{syscall_args}>::new(args, ctx.process.memory());
+            let syscall_args = SyscallArgsFmt::<{syscall_args}>::new(args, strace_fmt_options, ctx.process.memory());
             // need to convert to a string so that we read the plugin's memory before we potentially
             // modify it during the syscall
             let syscall_args = format!("{{}}", syscall_args);
@@ -89,7 +90,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             let rv = self.{syscall_name}_original(ctx, args);
 
             // format the result (returns None if the syscall didn't complete)
-            let syscall_rv = SyscallResultFmt::<{syscall_rv}>::new(&rv, ctx.process.memory());
+            let syscall_rv = SyscallResultFmt::<{syscall_rv}>::new(&rv, strace_fmt_options, ctx.process.memory());
 
             if let Some(ref syscall_rv) = syscall_rv {{
                 ctx.process.with_strace_file(|file| {{

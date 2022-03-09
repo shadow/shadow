@@ -369,7 +369,7 @@ LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
 
 SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
 
-bool config_getUseStraceLogging(const struct ConfigOptions *config);
+enum StraceFmtMode config_getStraceLoggingMode(const struct ConfigOptions *config);
 
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
@@ -676,6 +676,7 @@ void process_deregisterLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
 LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
 
 SysCallReturn log_syscall(Process *proc,
+                          enum StraceFmtMode logging_mode,
                           pid_t tid,
                           const char *name,
                           const char *args,

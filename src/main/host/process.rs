@@ -4,6 +4,7 @@ use nix::unistd::Pid;
 
 use crate::cshadow;
 use crate::host::descriptor::CompatDescriptor;
+use crate::host::syscall::format::{FmtOptions, StraceFmtMode};
 
 use super::{host::HostId, memory_manager::MemoryManager};
 
@@ -111,8 +112,10 @@ impl Process {
         removed_desc
     }
 
-    pub fn strace_logging_enabled(&self) -> bool {
-        unsafe { cshadow::process_straceLoggingEnabled(self.cprocess) }
+    pub fn strace_logging_options(&self) -> Option<FmtOptions> {
+        StraceFmtMode::try_from(unsafe { cshadow::process_straceLoggingMode(self.cprocess) })
+            .unwrap()
+            .into()
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.

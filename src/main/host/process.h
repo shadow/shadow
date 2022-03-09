@@ -73,7 +73,7 @@ gboolean process_isRunning(Process* proc);
  * outside of the process module. */
 const gchar* process_getName(Process* proc);
 
-bool process_straceLoggingEnabled(Process* proc);
+StraceFmtMode process_straceLoggingMode(Process* proc);
 int process_getStraceFd(Process* proc);
 
 /* Returns the name of the plugin from an internal buffer.

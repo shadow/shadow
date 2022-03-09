@@ -23,6 +23,12 @@ typedef enum QDiscMode {
   Q_DISC_MODE_ROUND_ROBIN,
 } QDiscMode;
 
+typedef enum StraceFmtMode {
+  STRACE_FMT_MODE_OFF,
+  STRACE_FMT_MODE_STANDARD,
+  STRACE_FMT_MODE_DETERMINISTIC,
+} StraceFmtMode;
+
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
 

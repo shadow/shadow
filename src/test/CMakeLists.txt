@@ -111,8 +111,8 @@ macro(add_shadow_tests)
    endif()
 
    # If strace logging is not explicitly set, we enable it
-   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-strace-logging.*")
-      list(APPEND SHADOW_TEST_ARGS "--use-strace-logging" "true")
+   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--strace-logging-mode.*")
+      list(APPEND SHADOW_TEST_ARGS "--strace-logging-mode" "standard")
    endif()
 
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
