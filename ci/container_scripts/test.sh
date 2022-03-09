@@ -6,7 +6,8 @@ if [ "$BUILDTYPE" = "coverage" ]
 then
     # Some preload tests are broken in coverage builds:
     # https://github.com/shadow/shadow/issues/867
-    EXCLUDE="determinism.*shadow-preload|phold-parallel-shadow-preload"
+    # Determinism tests are broken in coverage builds.
+    EXCLUDE="determinism.*|phold-parallel-shadow-preload"
 else
     EXCLUDE=""
 fi
