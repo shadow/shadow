@@ -100,8 +100,9 @@ struct _TCPServer {
     GHashTable* children;
     /* pending children to accept in order. */
     GQueue *pending;
-    /* maximum number of pending connections (capped at SOMAXCONN = 128) */
-    gint pendingMaxLength;
+    /* maximum number of pending connections (capped at SHADOW_SOMAXCONN) */
+    guint pendingMax;
+    guint pendingCount;
     /* IP and port of the last peer trying to connect to us */
     in_addr_t lastPeerIP;
     in_port_t lastPeerPort;
@@ -305,6 +306,25 @@ static void _tcpchild_free(TCPChild* child) {
     g_free(child);
 }
 
+static void _tcpserver_updateBacklog(TCPServer* server, gint _backlog) {
+    MAGIC_ASSERT(server);
+
+    // linux also makes this cast, so negative backlogs wrap around to large positive backlogs
+    // https://elixir.free-electrons.com/linux/v5.11.22/source/net/ipv4/af_inet.c#L212
+    guint backlog = _backlog;
+
+    // the linux '__sys_listen()' applies the somaxconn max to all protocols
+    backlog = MIN(backlog, SHADOW_SOMAXCONN);
+
+    // linux uses a limit of one greater than the provided backlog (ex: a backlog value of 0 allows
+    // for one incoming connection at a time)
+    if (backlog < G_MAXUINT) {
+        backlog += 1;
+    }
+
+    server->pendingMax = backlog;
+}
+
 static TCPServer* _tcpserver_new(gint backlog) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
@@ -312,7 +332,9 @@ static TCPServer* _tcpserver_new(gint backlog) {
     // store weak references to children
     server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) descriptor_unrefWeak);
     server->pending = g_queue_new();
-    server->pendingMaxLength = backlog;
+    server->pendingMax = 0;
+
+    _tcpserver_updateBacklog(server, backlog);
 
     return server;
 }
@@ -329,6 +351,11 @@ static void _tcpserver_free(TCPServer* server) {
 
     MAGIC_CLEAR(server);
     g_free(server);
+}
+
+static bool _tcpserver_acceptQueueFull(TCPServer* server) {
+    MAGIC_ASSERT(server);
+    return server->pendingCount >= server->pendingMax;
 }
 
 struct TCPCong_ *tcp_cong(TCP *tcp) {
@@ -1593,6 +1620,12 @@ void tcp_enterServerMode(TCP* tcp, Host* host, gint backlog) {
     _tcp_setState(tcp, host, TCPS_LISTEN);
 }
 
+void tcp_updateServerBacklog(TCP* tcp, gint backlog) {
+    MAGIC_ASSERT(tcp);
+    utility_assert(tcp_isValidListener(tcp));
+    _tcpserver_updateBacklog(tcp->server, backlog);
+}
+
 gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
                           gint* acceptedHandle) {
     MAGIC_ASSERT(tcp);
@@ -1621,6 +1654,8 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     if(!tcpChild) {
         return -ECONNABORTED;
     }
+
+    tcp->server->pendingCount -= 1;
 
     MAGIC_ASSERT(tcpChild);
     if(tcpChild->error == TCPE_CONNECTION_RESET) {
@@ -1941,6 +1976,16 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
             /* receive SYN, send SYNACK, move to SYNRECEIVED */
             if(header->flags & PTCP_SYN) {
                 MAGIC_ASSERT(tcp->server);
+
+                if (_tcpserver_acceptQueueFull(tcp->server)) {
+                    /* no more room, so drop the packet and let client send another SYN later */
+                    /* https://blog.cloudflare.com/syn-packet-handling-in-the-wild/#slowapplication
+                     */
+                    debug("Server socket accept queue is full; dropping SYN packet");
+                    packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
+                    return;
+                }
+
                 flags |= TCP_PF_PROCESSED;
 
                 /* we need to multiplex a new child */
@@ -1959,6 +2004,8 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                  * so we need another ref for the children table */
                 descriptor_refWeak(multiplexed);
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
+
+                tcp->server->pendingCount += 1;
 
                 multiplexed->receive.start = header->sequence;
                 multiplexed->receive.next = multiplexed->receive.start + 1;

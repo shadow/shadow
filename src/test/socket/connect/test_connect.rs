@@ -159,12 +159,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_connect_when_server_queue_full"),
                     move || test_connect_when_server_queue_full(domain, sock_type, flag),
-                    if domain != libc::AF_INET {
-                        set![TestEnv::Libc, TestEnv::Shadow]
-                    } else {
-                        // TODO: enable once we support fixed-sized accept queues for inet sockets
-                        set![TestEnv::Libc]
-                    },
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 )]);
             }
 
@@ -174,7 +169,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 if domain != libc::AF_INET {
                     set![TestEnv::Libc, TestEnv::Shadow]
                 } else {
-                    // TODO: enable once we support fixed-sized accept queues for inet sockets
+                    // TODO: enable once we send RST packets for unbound dest addresses (issue
+                    // #2162)
                     set![TestEnv::Libc]
                 },
             )]);

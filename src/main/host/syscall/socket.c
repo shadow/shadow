@@ -1173,11 +1173,10 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
             .state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
     }
 
-    /* if we are already listening, just return 0.
-     * linux may actually update the backlog to the new backlog passed into this
-     * function, but we currently do not make use of the backlog. */
+    /* if we are already listening, just update the backlog and return 0. */
     if (tcp_isValidListener(tcp_desc)) {
-        trace("Socket %i already set up as a listener", sockfd);
+        trace("Socket %i already set up as a listener; updating backlog", sockfd);
+        tcp_updateServerBacklog(tcp_desc, backlog);
         return (SysCallReturn){.state = SYSCALL_DONE};
     }
 
