@@ -124,7 +124,7 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr = self.read_sockaddr(ctx.process, addr_ptr, addr_len)?;
+        let addr = read_sockaddr(ctx.process, addr_ptr, addr_len)?;
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
@@ -194,7 +194,7 @@ impl SyscallHandler {
             return Err(Errno::EOPNOTSUPP.into());
         }
 
-        let addr = self.read_sockaddr(ctx.process, addr_ptr, addr_len)?;
+        let addr = read_sockaddr(ctx.process, addr_ptr, addr_len)?;
 
         debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -316,7 +316,7 @@ impl SyscallHandler {
         let (result, from_addr) = result?;
 
         if !addr_ptr.is_null() {
-            self.write_sockaddr(
+            write_sockaddr(
                 ctx.process,
                 from_addr,
                 addr_ptr,
@@ -358,11 +358,11 @@ impl SyscallHandler {
 
         let addr_to_write = match socket.borrow().get_bound_address() {
             Some(x) => x,
-            None => self.empty_sockaddr(socket.borrow().address_family()),
+            None => empty_sockaddr(socket.borrow().address_family()),
         };
 
         debug!("Returning socket address of {}", addr_to_write);
-        self.write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
+        write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
 
         Ok(0.into())
     }
@@ -399,7 +399,7 @@ impl SyscallHandler {
         let peer_addr = socket.borrow().get_peer_address();
         if let Some(addr_to_write) = peer_addr {
             debug!("Returning peer address of {}", addr_to_write);
-            self.write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
+            write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
         } else {
             return Err(Errno::ENOTCONN.into());
         }
@@ -468,7 +468,7 @@ impl SyscallHandler {
 
         // link the sockets together
         EventQueue::queue_and_run(|event_queue| {
-            let unnamed_sock_addr = self.empty_sockaddr(nix::sys::socket::AddressFamily::Unix);
+            let unnamed_sock_addr = empty_sockaddr(nix::sys::socket::AddressFamily::Unix);
             let unnamed_sock_addr = if let nix::sys::socket::SockAddr::Unix(x) = unnamed_sock_addr {
                 x
             } else {
@@ -540,129 +540,124 @@ impl SyscallHandler {
             }
         }
     }
+}
 
-    /// Returns a nix socket address object where only the family is set.
-    fn empty_sockaddr(
-        &self,
-        family: nix::sys::socket::AddressFamily,
-    ) -> nix::sys::socket::SockAddr {
-        let family = family as libc::sa_family_t;
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        addr.ss_family = family;
-        // the size of ss_family will be 2 bytes on linux
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
+/// Returns a nix socket address object where only the family is set.
+fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::SockAddr {
+    let family = family as libc::sa_family_t;
+    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
+    addr.ss_family = family;
+    // the size of ss_family will be 2 bytes on linux
+    nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
+}
+
+/// Copy the socket address to the plugin. Will return an error if either the address or address
+/// length pointers are NULL. The plugin's address length will be updated to store the size of the
+/// socket address, even if greater than the provided buffer size. If the address is `None`, the
+/// plugin's address length will be set to 0.
+fn write_sockaddr(
+    process: &mut Process,
+    addr: Option<nix::sys::socket::SockAddr>,
+    plugin_addr: PluginPtr,
+    plugin_addr_len: TypedPluginPtr<libc::socklen_t>,
+) -> Result<(), SyscallError> {
+    let addr = match addr {
+        Some(x) => x,
+        None => {
+            process.memory_mut().copy_to_ptr(plugin_addr_len, &[0])?;
+            return Ok(());
+        }
+    };
+
+    let (from_addr, from_len) = addr.as_ffi_pair();
+
+    // make sure that we have a real libc sockaddr before converting to a u8 pointer
+    let from_addr: &libc::sockaddr = from_addr;
+    let from_addr_slice = unsafe {
+        std::slice::from_raw_parts(
+            from_addr as *const _ as *const u8,
+            from_len.try_into().unwrap(),
+        )
+    };
+
+    // get the provided address buffer length, and overwrite it with the real address length
+    let plugin_addr_len = {
+        let mut plugin_addr_len = process.memory_mut().memory_ref_mut(plugin_addr_len)?;
+        let plugin_addr_len_value = plugin_addr_len.get_mut(0).unwrap();
+
+        // keep a copy before we change it
+        let plugin_addr_len_copy = *plugin_addr_len_value;
+
+        *plugin_addr_len_value = from_len;
+
+        plugin_addr_len.flush()?;
+        plugin_addr_len_copy
+    };
+
+    // return early if the address length is 0
+    if plugin_addr_len == 0 {
+        return Ok(());
     }
 
-    /// Copy the socket address to the plugin. Will return an error if either the address or address
-    /// length pointers are NULL. The plugin's address length will be updated to store the size of the
-    /// socket address, even if greater than the provided buffer size. If the address is `None`, the
-    /// plugin's address length will be set to 0.
-    fn write_sockaddr(
-        &self,
-        process: &mut Process,
-        addr: Option<nix::sys::socket::SockAddr>,
-        plugin_addr: PluginPtr,
-        plugin_addr_len: TypedPluginPtr<libc::socklen_t>,
-    ) -> Result<(), SyscallError> {
-        let addr = match addr {
-            Some(x) => x,
-            None => {
-                process.memory_mut().copy_to_ptr(plugin_addr_len, &[0])?;
-                return Ok(());
-            }
-        };
+    // the minimum of the given address buffer length and the real address length
+    let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-        let (from_addr, from_len) = addr.as_ffi_pair();
+    let plugin_addr = TypedPluginPtr::new::<u8>(plugin_addr, len_to_copy);
+    process
+        .memory_mut()
+        .copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
-        // make sure that we have a real libc sockaddr before converting to a u8 pointer
-        let from_addr: &libc::sockaddr = from_addr;
-        let from_addr_slice = unsafe {
-            std::slice::from_raw_parts(
-                from_addr as *const _ as *const u8,
-                from_len.try_into().unwrap(),
+    Ok(())
+}
+
+/// Reads a sockaddr pointer from the plugin. Returns `None` if the pointer is null, otherwise
+/// returns a nix `SockAddr`. The address length must be at most the size of
+/// [`nix::sys::socket::sockaddr_storage`].
+fn read_sockaddr(
+    process: &mut Process,
+    addr_ptr: PluginPtr,
+    addr_len: libc::socklen_t,
+) -> Result<Option<nix::sys::socket::SockAddr>, SyscallError> {
+    if addr_ptr.is_null() {
+        return Ok(None);
+    }
+
+    let addr_len: usize = addr_len.try_into().unwrap();
+
+    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
+
+    // make sure we will not lose data when we copy
+    if addr_len > std::mem::size_of_val(&addr) {
+        warn!(
+            "Shadow does not support the address length {}, which is larger than {}",
+            addr_len,
+            std::mem::size_of_val(&addr),
+        );
+        return Err(Errno::EINVAL.into());
+    }
+
+    // make sure that we have at least the address family
+    if addr_len < 2 {
+        return Err(Errno::EINVAL.into());
+    }
+
+    // limit the scope of the unsafe slice
+    {
+        // safety: do not make any other references to addr within this scope
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(
+                &mut addr as *mut _ as *mut u8,
+                std::mem::size_of_val(&addr),
             )
         };
 
-        // get the provided address buffer length, and overwrite it with the real address length
-        let plugin_addr_len = {
-            let mut plugin_addr_len = process.memory_mut().memory_ref_mut(plugin_addr_len)?;
-            let plugin_addr_len_value = plugin_addr_len.get_mut(0).unwrap();
-
-            // keep a copy before we change it
-            let plugin_addr_len_copy = *plugin_addr_len_value;
-
-            *plugin_addr_len_value = from_len;
-
-            plugin_addr_len.flush()?;
-            plugin_addr_len_copy
-        };
-
-        // return early if the address length is 0
-        if plugin_addr_len == 0 {
-            return Ok(());
-        }
-
-        // the minimum of the given address buffer length and the real address length
-        let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
-
-        let plugin_addr = TypedPluginPtr::new::<u8>(plugin_addr, len_to_copy);
-        process
-            .memory_mut()
-            .copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
-
-        Ok(())
+        process.memory().copy_from_ptr(
+            &mut slice[..addr_len],
+            TypedPluginPtr::new::<u8>(addr_ptr, addr_len),
+        )?;
     }
 
-    /// Reads a sockaddr pointer from the plugin. Returns `None` if the pointer is null, otherwise
-    /// returns a nix `SockAddr`. The address length must be at most the size of
-    /// [`nix::sys::socket::sockaddr_storage`].
-    fn read_sockaddr(
-        &self,
-        process: &mut Process,
-        addr_ptr: PluginPtr,
-        addr_len: libc::socklen_t,
-    ) -> Result<Option<nix::sys::socket::SockAddr>, SyscallError> {
-        if addr_ptr.is_null() {
-            return Ok(None);
-        }
-
-        let addr_len: usize = addr_len.try_into().unwrap();
-
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-
-        // make sure we will not lose data when we copy
-        if addr_len > std::mem::size_of_val(&addr) {
-            warn!(
-                "Shadow does not support the address length {}, which is larger than {}",
-                addr_len,
-                std::mem::size_of_val(&addr),
-            );
-            return Err(Errno::EINVAL.into());
-        }
-
-        // make sure that we have at least the address family
-        if addr_len < 2 {
-            return Err(Errno::EINVAL.into());
-        }
-
-        // limit the scope of the unsafe slice
-        {
-            // safety: do not make any other references to addr within this scope
-            let slice = unsafe {
-                std::slice::from_raw_parts_mut(
-                    &mut addr as *mut _ as *mut u8,
-                    std::mem::size_of_val(&addr),
-                )
-            };
-
-            process.memory().copy_from_ptr(
-                &mut slice[..addr_len],
-                TypedPluginPtr::new::<u8>(addr_ptr, addr_len),
-            )?;
-        }
-
-        Ok(Some(nix::sys::socket::sockaddr_storage_to_addr(
-            &addr, addr_len,
-        )?))
-    }
+    Ok(Some(nix::sys::socket::sockaddr_storage_to_addr(
+        &addr, addr_len,
+    )?))
 }
