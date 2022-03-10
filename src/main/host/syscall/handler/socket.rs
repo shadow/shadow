@@ -102,7 +102,7 @@ impl SyscallHandler {
         let addr_len: libc::socklen_t = args.get(2).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor(ctx.process, fd)? {
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
@@ -143,7 +143,7 @@ impl SyscallHandler {
         let addr_len: libc::socklen_t = args.get(5).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor(ctx.process, fd)? {
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
@@ -237,7 +237,7 @@ impl SyscallHandler {
         let addr_len_ptr: PluginPtr = args.get(5).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor(ctx.process, fd)? {
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
@@ -336,7 +336,7 @@ impl SyscallHandler {
             TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor(ctx.process, fd)? {
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
@@ -376,7 +376,7 @@ impl SyscallHandler {
             TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor(ctx.process, fd)? {
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {

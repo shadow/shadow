@@ -16,7 +16,7 @@ impl SyscallHandler {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor_mut(ctx.process, fd)? {
+        let desc = match Self::get_descriptor_mut(ctx.process, fd)? {
             CompatDescriptor::New(desc) => desc,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {

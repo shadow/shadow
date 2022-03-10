@@ -55,9 +55,8 @@ impl SyscallHandler {
 
     /// Internal helper that returns the `CompatDescriptor` for the fd if it
     /// exists, otherwise returns EBADF.
-    fn get_descriptor<'a>(
-        &'a self,
-        process: &'a Process,
+    fn get_descriptor(
+        process: &Process,
         fd: impl TryInto<u32>,
     ) -> Result<&CompatDescriptor, nix::errno::Errno> {
         // check that fd is within bounds
@@ -71,9 +70,8 @@ impl SyscallHandler {
 
     /// Internal helper that returns the `CompatDescriptor` for the fd if it
     /// exists, otherwise returns EBADF.
-    fn get_descriptor_mut<'a>(
-        &'a self,
-        process: &'a mut Process,
+    fn get_descriptor_mut(
+        process: &mut Process,
         fd: impl TryInto<u32>,
     ) -> Result<&mut CompatDescriptor, nix::errno::Errno> {
         // check that fd is within bounds

@@ -16,7 +16,7 @@ impl SyscallHandler {
         let cmd: i32 = args.args[1].into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match self.get_descriptor_mut(ctx.process, fd)? {
+        let desc = match Self::get_descriptor_mut(ctx.process, fd)? {
             CompatDescriptor::New(d) => d,
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => {
