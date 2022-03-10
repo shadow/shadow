@@ -5,7 +5,7 @@ use crate::host::descriptor::socket::SocketFile;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
 };
-use crate::host::process::Process;
+use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
@@ -124,7 +124,7 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr = read_sockaddr(ctx.process, addr_ptr, addr_len)?;
+        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?;
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
@@ -194,7 +194,7 @@ impl SyscallHandler {
             return Err(Errno::EOPNOTSUPP.into());
         }
 
-        let addr = read_sockaddr(ctx.process, addr_ptr, addr_len)?;
+        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?;
 
         debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -317,7 +317,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             write_sockaddr(
-                ctx.process,
+                ctx.process.memory_mut(),
                 from_addr,
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -362,7 +362,12 @@ impl SyscallHandler {
         };
 
         debug!("Returning socket address of {}", addr_to_write);
-        write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
+        write_sockaddr(
+            ctx.process.memory_mut(),
+            Some(addr_to_write),
+            addr_ptr,
+            addr_len_ptr,
+        )?;
 
         Ok(0.into())
     }
@@ -399,7 +404,12 @@ impl SyscallHandler {
         let peer_addr = socket.borrow().get_peer_address();
         if let Some(addr_to_write) = peer_addr {
             debug!("Returning peer address of {}", addr_to_write);
-            write_sockaddr(ctx.process, Some(addr_to_write), addr_ptr, addr_len_ptr)?;
+            write_sockaddr(
+                ctx.process.memory_mut(),
+                Some(addr_to_write),
+                addr_ptr,
+                addr_len_ptr,
+            )?;
         } else {
             return Err(Errno::ENOTCONN.into());
         }
@@ -556,7 +566,7 @@ fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::
 /// socket address, even if greater than the provided buffer size. If the address is `None`, the
 /// plugin's address length will be set to 0.
 fn write_sockaddr(
-    process: &mut Process,
+    mem: &mut MemoryManager,
     addr: Option<nix::sys::socket::SockAddr>,
     plugin_addr: PluginPtr,
     plugin_addr_len: TypedPluginPtr<libc::socklen_t>,
@@ -564,7 +574,7 @@ fn write_sockaddr(
     let addr = match addr {
         Some(x) => x,
         None => {
-            process.memory_mut().copy_to_ptr(plugin_addr_len, &[0])?;
+            mem.copy_to_ptr(plugin_addr_len, &[0])?;
             return Ok(());
         }
     };
@@ -582,7 +592,7 @@ fn write_sockaddr(
 
     // get the provided address buffer length, and overwrite it with the real address length
     let plugin_addr_len = {
-        let mut plugin_addr_len = process.memory_mut().memory_ref_mut(plugin_addr_len)?;
+        let mut plugin_addr_len = mem.memory_ref_mut(plugin_addr_len)?;
         let plugin_addr_len_value = plugin_addr_len.get_mut(0).unwrap();
 
         // keep a copy before we change it
@@ -603,9 +613,7 @@ fn write_sockaddr(
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
     let plugin_addr = TypedPluginPtr::new::<u8>(plugin_addr, len_to_copy);
-    process
-        .memory_mut()
-        .copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
+    mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
 }
@@ -614,7 +622,7 @@ fn write_sockaddr(
 /// returns a nix `SockAddr`. The address length must be at most the size of
 /// [`nix::sys::socket::sockaddr_storage`].
 fn read_sockaddr(
-    process: &mut Process,
+    mem: &MemoryManager,
     addr_ptr: PluginPtr,
     addr_len: libc::socklen_t,
 ) -> Result<Option<nix::sys::socket::SockAddr>, SyscallError> {
@@ -651,7 +659,7 @@ fn read_sockaddr(
             )
         };
 
-        process.memory().copy_from_ptr(
+        mem.copy_from_ptr(
             &mut slice[..addr_len],
             TypedPluginPtr::new::<u8>(addr_ptr, addr_len),
         )?;
