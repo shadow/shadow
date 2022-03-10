@@ -11,14 +11,14 @@ foreach(METHOD ptrace preload)
         METHODS ${METHOD}
         LOGLEVEL debug
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.yaml
-        ARGS --use-cpu-pinning true --parallelism 2
+        ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
         PROPERTIES RUN_SERIAL TRUE)
     add_shadow_tests(
         BASENAME determinism1b
         METHODS ${METHOD}
         LOGLEVEL debug
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.yaml
-        ARGS --use-cpu-pinning true --parallelism 2
+        ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
         PROPERTIES RUN_SERIAL TRUE)
     add_test(
         NAME determinism1-compare-shadow-${METHOD}
@@ -48,14 +48,14 @@ foreach(METHOD ptrace preload)
         METHODS ${METHOD}
         LOGLEVEL debug
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-        ARGS --use-cpu-pinning true --parallelism 2
+        ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
         PROPERTIES RUN_SERIAL TRUE)
     add_shadow_tests(
         BASENAME determinism2b
         METHODS ${METHOD}
         LOGLEVEL debug
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-        ARGS --use-cpu-pinning true --parallelism 2
+        ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
         PROPERTIES RUN_SERIAL TRUE)
     ## Now compare the output
     add_test(
