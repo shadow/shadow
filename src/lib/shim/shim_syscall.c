@@ -346,6 +346,8 @@ long shim_emulated_syscall(long n, ...) {
     return rv;
 }
 
+long shim_syscall(long n, ...);
+
 long shim_syscallv(long n, va_list args) {
     shim_ensure_init();
 
@@ -356,6 +358,12 @@ long shim_syscallv(long n, va_list args) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
+        // XXX hax
+        struct timespec t = {
+            .tv_sec = 0,
+            .tv_nsec = 10000,
+        };
+        shim_syscall(SYS_nanosleep, &t, NULL);
     } else if ((shim_interpositionEnabled() || syscall_num_is_shadow(n)) && shim_thisThreadEventIPC()) {
         // The syscall is made using the shmem IPC channel.
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
