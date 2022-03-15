@@ -47,6 +47,13 @@ add_shadow_tests(
     PROPERTIES
       LABELS golang)
 
+add_golang_test_exe(BASENAME test_intercept_golang_time)
+add_shadow_tests(
+    BASENAME intercept_golang_time
+    CONFIGURATIONS extra 
+    PROPERTIES
+      LABELS golang)
+
 add_golang_test_exe(BASENAME test_goroutines)
 add_linux_tests(
     BASENAME goroutines

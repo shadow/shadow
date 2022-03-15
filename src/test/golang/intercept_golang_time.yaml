@@ -1,0 +1,13 @@
+general:
+  stop_time: 2000s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: ./test_intercept_golang_time
+      start_time: 1s
