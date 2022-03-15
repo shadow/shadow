@@ -63,8 +63,6 @@ add_linux_tests(
       LABELS golang)
 add_shadow_tests(
     BASENAME goroutines
-    # BUG: https://github.com/shadow/shadow/issues/1932
-    SKIP_METHODS preload ptrace
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)
