@@ -45,13 +45,20 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
 
+    /* Ensure time is non-negative. */
+    if (req.tv_sec < 0 || req.tv_nsec < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
     /* Does the timeout request require us to block? */
-    int requestToBlock = req.tv_sec > 0 || req.tv_nsec > 0;
+    if (req.tv_sec == 0 && req.tv_nsec == 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
 
     /* Did we already block? */
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
-    if (requestToBlock && !wasBlocked) {
+    if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
         syscallcondition_setTimeout(cond, sys->host,
                                     worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
@@ -61,17 +68,27 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
         return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
     }
 
-    /* If needed, verify that the timer expired correctly. */
-    if (requestToBlock && wasBlocked) {
-        /* Make sure we don't have a pending timer. */
-        if (_syscallhandler_isListenTimeoutPending(sys)) {
-            utility_panic("nanosleep unblocked but a timer is still pending.");
-        }
+    SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
+    utility_assert(cond);
+    const Timer* timer = syscallcondition_getTimeout(cond);
+    utility_assert(timer);
+    if (timer_getExpirationCount(timer) == 0) {
+        // Should only happen if we were interrupted by a signal.
+        utility_assert(thread_unblockedSignalPending(sys->thread, sys->shimShmemHostLock));
 
-        /* The timer must have expired. */
-        if (!_syscallhandler_didListenTimeoutExpire(sys)) {
-            utility_panic("nanosleep unblocked but the timer did not expire.");
+        struct itimerspec timer_val;
+        timer_getTime(timer, &timer_val);
+        syscallcondition_cancel(cond);
+
+        /* Timer hasn't expired. Presumably we were interrupted. */
+        if (remainder.val) {
+            int rv = process_writePtr(
+                sys->process, remainder, &timer_val.it_value, sizeof(timer_val.it_value));
+            if (rv != 0) {
+                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+            }
         }
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINTR};
     }
 
     /* The syscall is now complete. */
