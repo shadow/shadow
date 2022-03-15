@@ -262,3 +262,13 @@ pub fn running_in_shadow() -> bool {
         _ => false,
     }
 }
+
+pub fn running_in_shadow_ptrace() -> bool {
+    if !running_in_shadow() {
+        return false;
+    }
+    match std::env::var("SHADOW_INTERPOSE_METHOD") {
+        Ok(val) => val == "PTRACE",
+        _ => false,
+    }
+}
