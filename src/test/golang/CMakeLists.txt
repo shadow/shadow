@@ -47,6 +47,13 @@ add_shadow_tests(
     PROPERTIES
       LABELS golang)
 
+add_golang_test_exe(BASENAME test_intercept_golang_time)
+add_shadow_tests(
+    BASENAME intercept_golang_time
+    CONFIGURATIONS extra 
+    PROPERTIES
+      LABELS golang)
+
 add_golang_test_exe(BASENAME test_goroutines)
 add_linux_tests(
     BASENAME goroutines
@@ -56,8 +63,6 @@ add_linux_tests(
       LABELS golang)
 add_shadow_tests(
     BASENAME goroutines
-    # BUG: https://github.com/shadow/shadow/issues/1932
-    SKIP_METHODS preload ptrace
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)

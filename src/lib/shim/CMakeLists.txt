@@ -29,6 +29,7 @@ target_link_libraries(${SHIM_HELPER_LIB} INTERFACE logger shadow-shmem)
 
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
+  patch_vdso.c
   shim.c
   shim_api_addrinfo.c
   shim_api_ifaddrs.c

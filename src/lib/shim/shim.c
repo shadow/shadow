@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
@@ -19,6 +20,7 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
+#include "lib/shim/patch_vdso.h"
 #include "lib/shim/shadow_sem.h"
 #include "lib/shim/shadow_signals.h"
 #include "lib/shim/shadow_spinlock.h"
@@ -457,6 +459,7 @@ static void _shim_ipc_wait_for_start_event() {
 static void _shim_parent_init_ptrace() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
     _shim_parent_init_host_shm();
     _shim_parent_init_process_shm();
     _shim_parent_init_logging();
@@ -477,8 +480,7 @@ static void _shim_parent_init_rdtsc_emu() {
 static void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
-    // The shim logger internally disables interposition while logging, so we open the log
-    // file with interposition disabled too to get a native file descriptor.
+    patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
     _shim_parent_init_host_shm();
     _shim_parent_init_process_shm();
     _shim_parent_init_thread_shm();
