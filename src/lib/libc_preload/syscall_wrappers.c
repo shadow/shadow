@@ -1,8 +1,3 @@
-/*
- * The Shadow Simulator
- * See LICENSE for licensing information
- */
-
 /// This file is generated with the 'gen_syscall_wrappers_c.py' script and in
 /// general SHOULD NOT be edited manually.
 ///
@@ -81,7 +76,7 @@ INTERPOSE(clock_getres);
 INTERPOSE(clock_gettime);
 #endif
 #ifdef SYS_clock_nanosleep // kernel entry: num=230 func=sys_clock_nanosleep
-INTERPOSE(clock_nanosleep);
+INTERPOSE_DIRECT_ERRORS(clock_nanosleep);
 #endif
 #ifdef SYS_clock_settime // kernel entry: num=227 func=sys_clock_settime
 INTERPOSE(clock_settime);
@@ -239,6 +234,9 @@ INTERPOSE(ftruncate);
 #endif
 #ifdef SYS_futex // kernel entry: num=202 func=sys_futex
 INTERPOSE(futex);
+#endif
+#ifdef SYS_futex_waitv // kernel entry: num=449 func=sys_futex_waitv
+INTERPOSE(futex_waitv);
 #endif
 #ifdef SYS_futimesat // kernel entry: num=261 func=sys_futimesat
 INTERPOSE(futimesat);
@@ -815,6 +813,9 @@ INTERPOSE(sendto);
 #endif
 #ifdef SYS_set_mempolicy // kernel entry: num=238 func=sys_set_mempolicy
 INTERPOSE(set_mempolicy);
+#endif
+#ifdef SYS_set_mempolicy_home_node // kernel entry: num=450 func=sys_set_mempolicy_home_node
+INTERPOSE(set_mempolicy_home_node);
 #endif
 #ifdef SYS_set_robust_list // kernel entry: num=273 func=sys_set_robust_list
 INTERPOSE(set_robust_list);
