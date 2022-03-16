@@ -119,9 +119,10 @@ static void _call_signal_handler(const struct shd_kernel_sigaction* action, int 
     shim_swapAllowNativeSyscalls(true);
 }
 
-static void _shim_process_signals(ShimShmemHostLock* host_lock) {
+static bool _shim_process_signals(ShimShmemHostLock* host_lock) {
     int signo;
     siginfo_t siginfo;
+    bool restartable = true;
     while ((signo = shimshmem_takePendingUnblockedSignal(
                 host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
         shd_kernel_sigset_t blocked_signals =
@@ -167,7 +168,10 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
                                       &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
         }
         if (action.ksa_flags & SA_RESTART) {
-            error("SA_RESTART unimplemented; ignoring.");
+            warning("XXX SA_RESTART partly implemented. let's see how it goes.");
+        } else {
+            warning("XXX SA_RESTART not set.");
+            restartable = false;
         }
 
         const stack_t ss_original = shimshmem_getSigAltStack(host_lock, shim_threadSharedMem());
@@ -218,6 +222,7 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
         // Restore mask
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
     }
+    return restartable;
 }
 
 static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
@@ -263,8 +268,18 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
                 ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
-                _shim_process_signals(host_lock);
+                bool restartable = _shim_process_signals(host_lock);
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+                if (rv.as_i64 < 0)  {
+                    warning("syscall:%ld rv.as_i64:%ld restartable:%d",
+                            syscall_event->event_data.syscall.syscall_args.number, rv.as_i64,
+                            restartable);
+                }
+                if (rv.as_i64 == -EINTR && restartable) {
+                    warning("XXX Restarting interrupted syscall %ld", syscall_event->event_data.syscall.syscall_args.number);
+                    shimevent_sendEventToShadow(ipc, syscall_event);
+                    continue;
+                }
 
                 return rv;
             }
