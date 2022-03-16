@@ -201,7 +201,7 @@ static bool _shim_process_signals(ShimShmemHostLock* host_lock) {
             handler_ctx.uc_stack.ss_sp = ss_original.ss_sp;
             handler_ctx.uc_stack.ss_size = ss_original.ss_size;
             makecontext(&handler_ctx, (void (*)(void))_call_signal_handler, 4, &action, signo,
-                        &siginfo, NULL);
+                        &siginfo, &orig_ctx);
 
             // Call the handler on the configured signal stack.
             shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
