@@ -704,8 +704,8 @@ fn sockaddr_storage_len_workaround(
     let mut tmp_addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     unsafe {
         std::ptr::copy(
-            &addr as *const _ as *const u8,
-            &mut tmp_addr as *mut _ as *mut u8,
+            addr as *const nix::sys::socket::sockaddr_storage as *const u8,
+            &mut tmp_addr as *mut libc::sockaddr_un as *mut u8,
             std::mem::size_of_val(&tmp_addr),
         )
     };
@@ -754,15 +754,15 @@ mod tests {
         let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
         unsafe {
             std::ptr::copy(
-                &addr_un as *const _ as *const u8,
-                &mut addr as *mut _ as *mut u8,
+                &addr_un as *const libc::sockaddr_un as *const u8,
+                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
                 addr_len,
             )
         };
 
         // apply a nix bug workaround that may shorten the addr length
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert!(corrected_addr_len <= addr_len);
+        assert_eq!(corrected_addr_len, 5);
 
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
@@ -784,8 +784,8 @@ mod tests {
         let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
         unsafe {
             std::ptr::copy(
-                &addr_un as *const _ as *const u8,
-                &mut addr as *mut _ as *mut u8,
+                &addr_un as *const libc::sockaddr_un as *const u8,
+                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
                 std::mem::size_of_val(&addr_un),
             )
         };
@@ -796,7 +796,7 @@ mod tests {
 
         // apply a nix bug workaround that may shorten the addr length
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert!(corrected_addr_len <= addr_len);
+        assert_eq!(corrected_addr_len, 5);
 
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
@@ -835,8 +835,8 @@ mod tests {
         let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
         unsafe {
             std::ptr::copy(
-                &addr_in as *const _ as *const u8,
-                &mut addr as *mut _ as *mut u8,
+                &addr_in as *const libc::sockaddr_in as *const u8,
+                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
                 addr_len,
             )
         };
@@ -864,8 +864,8 @@ mod tests {
         let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
         unsafe {
             std::ptr::copy(
-                &addr_in as *const _ as *const u8,
-                &mut addr as *mut _ as *mut u8,
+                &addr_in as *const libc::sockaddr_in as *const u8,
+                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
                 std::mem::size_of_val(&addr_in),
             )
         };
