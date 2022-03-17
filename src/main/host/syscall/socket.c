@@ -1256,9 +1256,8 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
         warning("unsupported socket type \"%i\", we only support SOCK_STREAM "
                 "and SOCK_DGRAM",
                 type_no_flags);
-        /* TODO: unclear if we should return EPROTONOSUPPORT or EINVAL */
         return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+            .state = SYSCALL_DONE, .retval.as_i64 = -ESOCKTNOSUPPORT};
     } else if (type_no_flags == SOCK_STREAM && protocol != 0 && protocol != IPPROTO_TCP) {
         warning(
             "unsupported socket protocol \"%i\", we only support IPPROTO_TCP on sockets of type SOCK_STREAM", protocol);
