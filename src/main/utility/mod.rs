@@ -38,3 +38,9 @@ impl<T> SyncSendPointer<T> {
         &mut self.0
     }
 }
+
+/// A trait we can use as a compile-time check to make sure that an object is Send.
+pub trait IsSend: Send {}
+
+/// A trait we can use as a compile-time check to make sure that an object is Sync.
+pub trait IsSync: Sync {}

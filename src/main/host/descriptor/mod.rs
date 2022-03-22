@@ -7,7 +7,7 @@ use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
-use crate::utility::SyncSendPointer;
+use crate::utility::{IsSend, IsSync, SyncSendPointer};
 
 use socket::{SocketFile, SocketFileRef, SocketFileRefMut};
 
@@ -16,12 +16,6 @@ pub mod eventfd;
 pub mod pipe;
 pub mod shared_buf;
 pub mod socket;
-
-/// A trait we can use as a compile-time check to make sure that an object is Send.
-trait IsSend: Send {}
-
-/// A trait we can use as a compile-time check to make sure that an object is Sync.
-trait IsSync: Sync {}
 
 bitflags::bitflags! {
     /// These are flags that can potentially be changed from the plugin (analagous to the Linux
