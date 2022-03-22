@@ -133,7 +133,7 @@ impl SocketFileRefMut<'_> {
         pub fn get_status(&self) -> FileStatus
     );
     enum_passthrough!(self, (event_queue), Unix;
-        pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+        pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>
     );
     enum_passthrough!(self, (status), Unix;
         pub fn set_status(&mut self, status: FileStatus)

@@ -8,7 +8,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -53,7 +53,7 @@ impl PipeFile {
         self.buffer.as_ref().unwrap().borrow().max_len()
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // drop the event listener handle so that we stop receiving new events
         self.buffer_event_handle.take().unwrap().stop_listening();
 
@@ -85,7 +85,7 @@ impl PipeFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn read<W>(

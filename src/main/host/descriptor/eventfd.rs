@@ -5,7 +5,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -40,7 +40,7 @@ impl EventFdFile {
         FileMode::READ | FileMode::WRITE
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
@@ -48,7 +48,7 @@ impl EventFdFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn read<W>(

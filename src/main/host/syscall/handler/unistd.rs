@@ -40,7 +40,8 @@ impl SyscallHandler {
         // if there are still valid descriptors to the posix file, close() will do nothing
         // and return None
         EventQueue::queue_and_run(|event_queue| desc.close(ctx.host.chost(), event_queue))
-            .unwrap_or(Ok(0.into()))
+            .unwrap_or(Ok(()))
+            .map(|()| 0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]

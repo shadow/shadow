@@ -10,8 +10,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::SysCallReg;
-use crate::host::syscall_types::{PluginPtr, SyscallError};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -134,7 +133,7 @@ impl UnixSocketFile {
         &self.recv_buffer
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // drop the event listener handles so that we stop receiving new events
         self.send_buffer_event_handle
             .take()
@@ -158,7 +157,7 @@ impl UnixSocketFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn bind(

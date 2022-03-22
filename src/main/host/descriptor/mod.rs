@@ -5,7 +5,7 @@ use nix::fcntl::OFlag;
 
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 use crate::utility::SyncSendPointer;
 
@@ -376,7 +376,7 @@ impl PosixFileRefMut<'_> {
         pub fn get_status(&self) -> FileStatus
     );
     enum_passthrough!(self, (event_queue), Pipe, EventFd, Socket;
-        pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+        pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>
     );
     enum_passthrough!(self, (status), Pipe, EventFd, Socket;
         pub fn set_status(&mut self, status: FileStatus)
@@ -502,7 +502,7 @@ impl Descriptor {
 
     /// Close the descriptor, and if this is the last descriptor pointing to its file, close
     /// the file as well.
-    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallResult> {
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
@@ -584,12 +584,16 @@ impl CompatDescriptor {
     }
 
     /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
-    pub fn close(self, host: *mut c::Host, event_queue: &mut EventQueue) -> Option<SyscallResult> {
+    pub fn close(
+        self,
+        host: *mut c::Host,
+        event_queue: &mut EventQueue,
+    ) -> Option<Result<(), SyscallError>> {
         match self {
             Self::New(desc) => desc.close(event_queue),
             Self::Legacy(desc) => {
                 unsafe { c::descriptor_close(desc.ptr(), host) };
-                Some(Ok(0.into()))
+                Some(Ok(()))
             }
         }
     }
