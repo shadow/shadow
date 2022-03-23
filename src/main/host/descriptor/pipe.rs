@@ -20,6 +20,9 @@ pub struct PipeFile {
     status: FileStatus,
     write_mode: WriteMode,
     buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl PipeFile {
@@ -34,6 +37,7 @@ impl PipeFile {
             status,
             write_mode: WriteMode::Stream,
             buffer_event_handle: None,
+            has_open_file: false,
         }
     }
 
@@ -47,6 +51,14 @@ impl PipeFile {
 
     pub fn mode(&self) -> FileMode {
         self.mode
+    }
+
+    pub fn has_open_file(&self) -> bool {
+        self.has_open_file
+    }
+
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
     }
 
     pub fn max_size(&self) -> usize {

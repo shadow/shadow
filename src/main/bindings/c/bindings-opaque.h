@@ -95,6 +95,8 @@ typedef struct NetworkGraph NetworkGraph;
 // `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
 // should probably only ever be created for a newly created file object. Otherwise for existing
 // file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
+//
+// There must also not be any existing mutable borrows of the file when an `OpenFile` is created.
 typedef struct OpenFile OpenFile;
 
 typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;

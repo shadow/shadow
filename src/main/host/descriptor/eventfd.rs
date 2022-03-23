@@ -15,6 +15,9 @@ pub struct EventFdFile {
     event_source: StateEventSource,
     state: FileState,
     status: FileStatus,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl EventFdFile {
@@ -25,6 +28,7 @@ impl EventFdFile {
             event_source: StateEventSource::new(),
             state: FileState::ACTIVE | FileState::WRITABLE,
             status,
+            has_open_file: false,
         }
     }
 
@@ -38,6 +42,14 @@ impl EventFdFile {
 
     pub fn mode(&self) -> FileMode {
         FileMode::READ | FileMode::WRITE
+    }
+
+    pub fn has_open_file(&self) -> bool {
+        self.has_open_file
+    }
+
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {

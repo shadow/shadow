@@ -100,6 +100,9 @@ impl SocketFileRef<'_> {
     enum_passthrough!(self, (), Unix;
         pub fn get_status(&self) -> FileStatus
     );
+    enum_passthrough!(self, (), Unix;
+        pub fn has_open_file(&self) -> bool
+    );
 }
 
 // socket-specific functions
@@ -131,6 +134,12 @@ impl SocketFileRefMut<'_> {
     );
     enum_passthrough!(self, (), Unix;
         pub fn get_status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Unix;
+        pub fn has_open_file(&self) -> bool
+    );
+    enum_passthrough!(self, (val), Unix;
+        pub fn set_has_open_file(&mut self, val: bool)
     );
     enum_passthrough!(self, (event_queue), Unix;
         pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>

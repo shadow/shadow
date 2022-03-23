@@ -357,6 +357,9 @@ impl GenericFileRef<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn get_status(&self) -> FileStatus
     );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
+        pub fn has_open_file(&self) -> bool
+    );
 }
 
 impl GenericFileRefMut<'_> {
@@ -368,6 +371,12 @@ impl GenericFileRefMut<'_> {
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn get_status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
+        pub fn has_open_file(&self) -> bool
+    );
+    enum_passthrough!(self, (val), Pipe, EventFd, Socket;
+        pub fn set_has_open_file(&mut self, val: bool)
     );
     enum_passthrough!(self, (event_queue), Pipe, EventFd, Socket;
         pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>
@@ -441,6 +450,8 @@ impl std::fmt::Debug for GenericFileRefMut<'_> {
 /// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
 /// should probably only ever be created for a newly created file object. Otherwise for existing
 /// file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
+///
+/// There must also not be any existing mutable borrows of the file when an `OpenFile` is created.
 #[derive(Clone, Debug)]
 pub struct OpenFile {
     inner: Arc<OpenFileInner>,
@@ -452,10 +463,30 @@ impl IsSync for OpenFile {}
 
 impl OpenFile {
     pub fn new(file: GenericFile) -> Self {
-        if let Ok(file) = file.try_borrow() {
+        {
+            let mut file = file.borrow_mut();
+
             if file.state().contains(FileState::CLOSED) {
+                // panic if debug assertions are enabled
+                #[cfg(debug_assertions)]
+                panic!("Creating an `OpenFile` object for a closed file");
+
+                // otherwise warn only if debug assertions are not enabled
+                #[cfg(not(debug_assertions))]
                 log::warn!("Creating an `OpenFile` object for a closed file");
             }
+
+            if file.has_open_file() {
+                // panic if debug assertions are enabled
+                #[cfg(debug_assertions)]
+                panic!("Creating an `OpenFile` object for a file that already has an `OpenFile` object");
+
+                // otherwise warn only if debug assertions are not enabled
+                #[cfg(not(debug_assertions))]
+                log::warn!("Creating an `OpenFile` object for a file that already has an `OpenFile` object");
+            }
+
+            file.set_has_open_file(true);
         }
 
         Self {
