@@ -30,7 +30,7 @@ impl SyscallHandler {
 
         // add the CLOEXEC flag
         if request == libc::FIOCLEX {
-            let mut flags = desc.get_flags();
+            let mut flags = desc.flags();
             flags.insert(DescriptorFlags::CLOEXEC);
             desc.set_flags(flags);
 
@@ -39,14 +39,14 @@ impl SyscallHandler {
 
         // remove the CLOEXEC flag
         if request == libc::FIONCLEX {
-            let mut flags = desc.get_flags();
+            let mut flags = desc.flags();
             flags.remove(DescriptorFlags::CLOEXEC);
             desc.set_flags(flags);
 
             return Ok(0.into());
         }
 
-        let file = desc.get_file().clone();
+        let file = desc.open_file().inner_file().clone();
         let mut file = file.borrow_mut();
 
         // all file types that shadow implements should support non-blocking operation

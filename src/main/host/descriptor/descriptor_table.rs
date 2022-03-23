@@ -1,10 +1,12 @@
-use super::CompatDescriptor;
-use crate::cshadow;
+use crate::cshadow as c;
+use crate::host::descriptor::CompatDescriptor;
 use crate::utility::notnull::*;
-use log::*;
+
 use std::collections::{BTreeSet, HashMap};
 
-/// Table of (file) descriptors. Typically owned by a Process.
+use log::*;
+
+/// Map of file handles to file descriptors. Typically owned by a Process.
 pub struct DescriptorTable {
     descriptors: HashMap<u32, CompatDescriptor>,
 
@@ -136,9 +138,7 @@ impl DescriptorTable {
         for descriptor in self.descriptors.values() {
             match descriptor {
                 CompatDescriptor::New(_) => continue,
-                CompatDescriptor::Legacy(d) => unsafe {
-                    cshadow::descriptor_shutdownHelper(d.ptr())
-                },
+                CompatDescriptor::Legacy(d) => unsafe { c::descriptor_shutdownHelper(d.ptr()) },
             };
         }
     }
@@ -207,7 +207,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn descriptortable_removeAndCloseAll(
         table: *mut DescriptorTable,
-        host: *mut cshadow::Host,
+        host: *mut c::Host,
     ) {
         let table = unsafe { table.as_mut().unwrap() };
 

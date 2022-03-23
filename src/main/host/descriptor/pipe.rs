@@ -8,7 +8,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -20,6 +20,9 @@ pub struct PipeFile {
     status: FileStatus,
     write_mode: WriteMode,
     buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl PipeFile {
@@ -34,6 +37,7 @@ impl PipeFile {
             status,
             write_mode: WriteMode::Stream,
             buffer_event_handle: None,
+            has_open_file: false,
         }
     }
 
@@ -49,11 +53,19 @@ impl PipeFile {
         self.mode
     }
 
+    pub fn has_open_file(&self) -> bool {
+        self.has_open_file
+    }
+
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
+    }
+
     pub fn max_size(&self) -> usize {
         self.buffer.as_ref().unwrap().borrow().max_len()
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // drop the event listener handle so that we stop receiving new events
         self.buffer_event_handle.take().unwrap().stop_listening();
 
@@ -85,7 +97,7 @@ impl PipeFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn read<W>(

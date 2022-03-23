@@ -34,7 +34,7 @@ static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, s
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
     LegacyDescriptorType dType = ldesc ? descriptor_getType(ldesc) : DT_NONE;
     Status dstat = ldesc ? descriptor_getStatus(ldesc)
-                         : posixfile_getStatus(compatdescriptor_borrowPosixFile(cdesc));
+                         : openfile_getStatus(compatdescriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {
         // Rely on the kernel to poll the OS-back file

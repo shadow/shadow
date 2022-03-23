@@ -19,7 +19,7 @@ typedef enum _TriggerType TriggerType;
 enum _TriggerType {
     TRIGGER_NONE,
     TRIGGER_DESCRIPTOR,
-    TRIGGER_POSIX_FILE,
+    TRIGGER_OPEN_FILE,
     TRIGGER_FUTEX,
 };
 
@@ -28,7 +28,7 @@ typedef union _TriggerObject TriggerObject;
 union _TriggerObject {
     void* as_pointer;
     LegacyDescriptor* as_descriptor;
-    const PosixFile* as_file;
+    const OpenFile* as_file;
     Futex* as_futex;
 };
 

@@ -10,8 +10,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::SysCallReg;
-use crate::host::syscall_types::{PluginPtr, SyscallError};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -30,6 +29,9 @@ pub struct UnixSocketFile {
     namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
     send_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
     recv_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl UnixSocketFile {
@@ -59,6 +61,7 @@ impl UnixSocketFile {
             namespace: Arc::clone(namespace),
             send_buffer_event_handle: None,
             recv_buffer_event_handle: None,
+            has_open_file: false,
         };
 
         let socket = Arc::new(AtomicRefCell::new(socket));
@@ -104,6 +107,14 @@ impl UnixSocketFile {
         self.mode
     }
 
+    pub fn has_open_file(&self) -> bool {
+        self.has_open_file
+    }
+
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
+    }
+
     pub fn get_bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.bound_addr
     }
@@ -134,7 +145,7 @@ impl UnixSocketFile {
         &self.recv_buffer
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // drop the event listener handles so that we stop receiving new events
         self.send_buffer_event_handle
             .take()
@@ -158,7 +169,7 @@ impl UnixSocketFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn bind(

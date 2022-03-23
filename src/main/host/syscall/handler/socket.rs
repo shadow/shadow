@@ -3,7 +3,8 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
 use crate::host::descriptor::socket::SocketFile;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
+    OpenFile,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
@@ -84,7 +85,7 @@ impl SyscallHandler {
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 
-        let mut desc = Descriptor::new(PosixFile::Socket(socket));
+        let mut desc = Descriptor::new(OpenFile::new(GenericFile::Socket(socket)));
         desc.set_flags(descriptor_flags);
 
         let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));
@@ -116,11 +117,11 @@ impl SyscallHandler {
             }
         };
 
-        let posix_file = desc.get_file().clone();
+        let file = desc.open_file().inner_file().clone();
 
         // get the socket for the descriptor
-        let socket = match posix_file {
-            PosixFile::Socket(ref x) => x,
+        let socket = match file {
+            GenericFile::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -157,27 +158,25 @@ impl SyscallHandler {
             }
         };
 
-        let posix_file = desc.get_file().clone();
-
-        // get the socket for the descriptor
-        let socket = match posix_file {
-            PosixFile::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
-        };
-
-        self.sendto_helper(ctx, socket, buf_ptr, buf_len, flags, addr_ptr, addr_len)
+        let open_file = desc.open_file().clone();
+        self.sendto_helper(ctx, open_file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
     }
 
     pub fn sendto_helper(
         &self,
         ctx: &mut ThreadContext,
-        socket: &SocketFile,
+        open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
         addr_ptr: PluginPtr,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
+        let socket = match open_file.inner_file() {
+            GenericFile::Socket(ref x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
         // get the send flags
         let flags = match MsgFlags::from_bits(flags) {
             Some(x) => x,
@@ -216,8 +215,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger =
-                Trigger::from_posix_file(PosixFile::Socket(socket.clone()), FileState::WRITABLE);
+            let trigger = Trigger::from_open_file(open_file, FileState::WRITABLE);
 
             return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
         };
@@ -251,27 +249,33 @@ impl SyscallHandler {
             }
         };
 
-        let posix_file = desc.get_file().clone();
-
-        // get the socket for the descriptor
-        let socket = match posix_file {
-            PosixFile::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
-        };
-
-        self.recvfrom_helper(ctx, socket, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
+        let open_file = desc.open_file().clone();
+        self.recvfrom_helper(
+            ctx,
+            open_file,
+            buf_ptr,
+            buf_len,
+            flags,
+            addr_ptr,
+            addr_len_ptr,
+        )
     }
 
     pub fn recvfrom_helper(
         &self,
         ctx: &mut ThreadContext,
-        socket: &SocketFile,
+        open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
         addr_ptr: PluginPtr,
         addr_len_ptr: PluginPtr,
     ) -> SyscallResult {
+        let socket = match open_file.inner_file() {
+            GenericFile::Socket(ref x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
         // get the recv flags
         let flags = match MsgFlags::from_bits(flags) {
             Some(x) => x,
@@ -307,8 +311,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger =
-                Trigger::from_posix_file(PosixFile::Socket(socket.clone()), FileState::READABLE);
+            let trigger = Trigger::from_open_file(open_file, FileState::READABLE);
 
             return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
         };
@@ -351,8 +354,8 @@ impl SyscallHandler {
         };
 
         // get the socket for the descriptor
-        let socket = match desc.get_file() {
-            PosixFile::Socket(x) => x,
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -396,8 +399,8 @@ impl SyscallHandler {
         };
 
         // get the socket for the descriptor
-        let socket = match desc.get_file() {
-            PosixFile::Socket(x) => x,
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -509,8 +512,12 @@ impl SyscallHandler {
         });
 
         // file descriptors for the sockets
-        let mut desc_1 = Descriptor::new(PosixFile::Socket(SocketFile::Unix(socket_1)));
-        let mut desc_2 = Descriptor::new(PosixFile::Socket(SocketFile::Unix(socket_2)));
+        let mut desc_1 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
+            socket_1,
+        ))));
+        let mut desc_2 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
+            socket_2,
+        ))));
 
         // set the file descriptor flags
         desc_1.set_flags(descriptor_flags);

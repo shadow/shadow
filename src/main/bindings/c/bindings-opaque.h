@@ -61,8 +61,11 @@ typedef struct ConfigOptions ConfigOptions;
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
-// Table of (file) descriptors. Typically owned by a Process.
+// Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;
+
+// A wrapper for any type of file object.
+typedef struct GenericFile GenericFile;
 
 typedef struct HostOptions HostOptions;
 
@@ -81,10 +84,22 @@ typedef struct MemoryManager MemoryManager;
 // indexes.
 typedef struct NetworkGraph NetworkGraph;
 
-typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
+// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
+// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
+// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
+// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
+// underlying file may close itself in extenuating circumstances (for example if the file has an
+// internal error).
+//
+// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
+// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
+// should probably only ever be created for a newly created file object. Otherwise for existing
+// file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
+//
+// There must also not be any existing mutable borrows of the file when an `OpenFile` is created.
+typedef struct OpenFile OpenFile;
 
-// Represents a POSIX description, or a Linux "struct file".
-typedef struct PosixFile PosixFile;
+typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
 
 // A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
 // allowing, e.g.:

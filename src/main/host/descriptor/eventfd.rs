@@ -5,7 +5,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -15,6 +15,9 @@ pub struct EventFdFile {
     event_source: StateEventSource,
     state: FileState,
     status: FileStatus,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl EventFdFile {
@@ -25,6 +28,7 @@ impl EventFdFile {
             event_source: StateEventSource::new(),
             state: FileState::ACTIVE | FileState::WRITABLE,
             status,
+            has_open_file: false,
         }
     }
 
@@ -40,7 +44,15 @@ impl EventFdFile {
         FileMode::READ | FileMode::WRITE
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn has_open_file(&self) -> bool {
+        self.has_open_file
+    }
+
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
+    }
+
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
@@ -48,7 +60,7 @@ impl EventFdFile {
             event_queue,
         );
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn read<W>(
