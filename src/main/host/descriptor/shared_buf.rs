@@ -9,6 +9,7 @@ pub struct SharedBuf {
     queue: ByteQueue,
     max_len: usize,
     state: FileState,
+    num_readers: u16,
     num_writers: u16,
     event_source: StateEventSource,
 }
@@ -20,6 +21,7 @@ impl SharedBuf {
             queue: ByteQueue::new(4096),
             max_len,
             state: FileState::WRITABLE,
+            num_readers: 0,
             num_writers: 0,
             event_source: StateEventSource::new(),
         }
@@ -35,6 +37,20 @@ impl SharedBuf {
 
     pub fn space_available(&self) -> usize {
         self.max_len - usize::try_from(self.queue.num_bytes()).unwrap()
+    }
+
+    pub fn add_reader(&mut self, event_queue: &mut EventQueue) {
+        self.num_readers += 1;
+        self.refresh_state(event_queue);
+    }
+
+    pub fn remove_reader(&mut self, event_queue: &mut EventQueue) {
+        self.num_readers -= 1;
+        self.refresh_state(event_queue);
+    }
+
+    pub fn num_readers(&self) -> u16 {
+        self.num_readers
     }
 
     pub fn add_writer(&mut self, event_queue: &mut EventQueue) {

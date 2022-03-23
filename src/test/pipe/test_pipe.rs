@@ -6,6 +6,8 @@
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
+use nix::sys::time::TimeValLike;
+
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -68,8 +70,18 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
-            "test_read_after_write_close",
-            test_read_after_write_close,
+            "test_read_after_write_close_with_empty_buffer",
+            test_read_after_write_close_with_empty_buffer,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_read_after_write_close_with_nonempty_buffer",
+            test_read_after_write_close_with_nonempty_buffer,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_write_after_read_close",
+            test_write_after_read_close,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -381,7 +393,7 @@ fn test_get_size() -> Result<(), String> {
     })
 }
 
-fn test_read_after_write_close() -> Result<(), String> {
+fn test_read_after_write_close_with_empty_buffer() -> Result<(), String> {
     let mut fds = [0 as libc::c_int; 2];
     test_utils::check_system_call!(
         || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
@@ -410,9 +422,86 @@ fn test_read_after_write_close() -> Result<(), String> {
             );
         });
 
+        // read fd should be readable
+        assert!(is_readable(read_fd).unwrap());
+
         // the write fd is closed, so reading should return 0
         assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
         assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
+    });
+
+    Ok(())
+}
+
+fn test_read_after_write_close_with_nonempty_buffer() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[read_fd], || {
+        let mut buf = vec![0u8; 10];
+
+        test_utils::run_and_close_fds(&[write_fd], || {
+            assert_eq!(
+                nix::unistd::read(read_fd, &mut buf).unwrap_err(),
+                nix::errno::Errno::EWOULDBLOCK
+            );
+
+            nix::unistd::write(write_fd, &[1, 2, 3]).unwrap();
+        });
+
+        // read fd should be readable
+        assert!(is_readable(read_fd).unwrap());
+
+        // the write fd is closed, but there are still bytes remaining
+        assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 3);
+
+        // read fd should be readable
+        assert!(is_readable(read_fd).unwrap());
+
+        // the write fd is closed, so reading should return 0
+        assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
+        assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
+    });
+
+    Ok(())
+}
+
+fn test_write_after_read_close() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd], || {
+        test_utils::run_and_close_fds(&[read_fd], || {
+            nix::unistd::write(write_fd, &[1, 2, 3]).unwrap();
+        });
+
+        // write fd should be writable
+        assert!(is_writable(write_fd).unwrap());
+
+        // the read fd is closed, so writing should return EPIPE
+        assert_eq!(
+            nix::unistd::write(write_fd, &[1, 2, 3]),
+            Err(nix::errno::Errno::EPIPE)
+        );
+
+        // write fd should be writable
+        assert!(is_writable(write_fd).unwrap());
     });
 
     Ok(())
@@ -800,4 +889,36 @@ fn test_o_direct_full_buffer_2() -> Result<(), String> {
 
         Ok(())
     })
+}
+
+fn is_readable(fd: libc::c_int) -> nix::Result<bool> {
+    let mut read_set = nix::sys::select::FdSet::new();
+    read_set.insert(fd);
+
+    let count = nix::sys::select::select(
+        None,
+        Some(&mut read_set),
+        None,
+        None,
+        // don't block
+        Some(&mut nix::sys::time::TimeVal::seconds(0)),
+    )?;
+
+    Ok(count == 1)
+}
+
+fn is_writable(fd: libc::c_int) -> nix::Result<bool> {
+    let mut write_set = nix::sys::select::FdSet::new();
+    write_set.insert(fd);
+
+    let count = nix::sys::select::select(
+        None,
+        None,
+        Some(&mut write_set),
+        None,
+        // don't block
+        Some(&mut nix::sys::time::TimeVal::seconds(0)),
+    )?;
+
+    Ok(count == 1)
 }
