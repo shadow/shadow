@@ -3,7 +3,8 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
+    OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
@@ -37,7 +38,7 @@ impl SyscallHandler {
             .deregister_descriptor(fd)
             .ok_or(nix::errno::Errno::EBADF)?;
 
-        // if there are still valid descriptors to the posix file, close() will do nothing
+        // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
         EventQueue::queue_and_run(|event_queue| desc.close(ctx.host.chost(), event_queue))
             .unwrap_or(Ok(()))
@@ -174,8 +175,8 @@ impl SyscallHandler {
         // get the descriptor, or return early if it doesn't exist
         match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
-                let file = desc.get_file().clone();
-                self.read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+                let file = desc.open_file().clone();
+                self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
             }
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {
@@ -196,8 +197,8 @@ impl SyscallHandler {
         // get the descriptor, or return early if it doesn't exist
         match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
-                let file = desc.get_file().clone();
-                self.read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+                let file = desc.open_file().clone();
+                self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
             }
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {
@@ -214,20 +215,22 @@ impl SyscallHandler {
         &self,
         ctx: &mut ThreadContext,
         _fd: libc::c_int,
-        posix_file: &PosixFile,
+        open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> SyscallResult {
+        let generic_file = open_file.inner_file();
+
         // if it's a socket, call recvfrom() instead
-        if let PosixFile::Socket(ref socket) = posix_file {
+        if let GenericFile::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
             return self.recvfrom_helper(
                 ctx,
-                socket,
+                open_file,
                 buf_ptr,
                 buf_size,
                 0,
@@ -236,12 +239,12 @@ impl SyscallHandler {
             );
         }
 
-        let file_status = posix_file.borrow().get_status();
+        let file_status = generic_file.borrow().get_status();
 
         let result =
             // call the file's read(), and run any resulting events
             EventQueue::queue_and_run(|event_queue| {
-                posix_file.borrow_mut().read(
+                generic_file.borrow_mut().read(
                     ctx.process.memory_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     event_queue,
@@ -250,7 +253,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_posix_file(posix_file.clone(), FileState::READABLE);
+            let trigger = Trigger::from_open_file(open_file, FileState::READABLE);
 
             return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
         }
@@ -269,8 +272,8 @@ impl SyscallHandler {
         // get the descriptor, or return early if it doesn't exist
         match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
-                let file = desc.get_file().clone();
-                self.write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+                let file = desc.open_file().clone();
+                self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
             }
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {
@@ -291,8 +294,8 @@ impl SyscallHandler {
         // get the descriptor, or return early if it doesn't exist
         match Self::get_descriptor(ctx.process, fd)? {
             CompatDescriptor::New(desc) => {
-                let file = desc.get_file().clone();
-                self.write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+                let file = desc.open_file().clone();
+                self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
             }
             // if it's a legacy descriptor, use the C syscall handler instead
             CompatDescriptor::Legacy(_) => unsafe {
@@ -306,26 +309,28 @@ impl SyscallHandler {
         &self,
         ctx: &mut ThreadContext,
         _fd: libc::c_int,
-        posix_file: &PosixFile,
+        open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> SyscallResult {
+        let generic_file = open_file.inner_file();
+
         // if it's a socket, call recvfrom() instead
-        if let PosixFile::Socket(ref socket) = posix_file {
+        if let GenericFile::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return self.sendto_helper(ctx, socket, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
+            return self.sendto_helper(ctx, open_file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
         }
 
-        let file_status = posix_file.borrow().get_status();
+        let file_status = generic_file.borrow().get_status();
 
         let result =
             // call the file's write(), and run any resulting events
             EventQueue::queue_and_run(|event_queue| {
-                posix_file.borrow_mut().write(
+                generic_file.borrow_mut().write(
                     ctx.process.memory().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     event_queue,
@@ -334,7 +339,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_posix_file(posix_file.clone(), FileState::WRITABLE);
+            let trigger = Trigger::from_open_file(open_file, FileState::WRITABLE);
 
             return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
         };
@@ -408,8 +413,8 @@ impl SyscallHandler {
         });
 
         // file descriptors for the read and write file objects
-        let mut reader_desc = Descriptor::new(PosixFile::Pipe(reader));
-        let mut writer_desc = Descriptor::new(PosixFile::Pipe(writer));
+        let mut reader_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(reader)));
+        let mut writer_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(writer)));
 
         // set the file descriptor flags
         reader_desc.set_flags(descriptor_flags);

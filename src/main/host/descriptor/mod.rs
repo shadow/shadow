@@ -260,48 +260,48 @@ impl StateEventSource {
     }
 }
 
-/// Represents a POSIX description, or a Linux "struct file".
+/// A wrapper for any type of file object.
 #[derive(Clone)]
-pub enum PosixFile {
+pub enum GenericFile {
     Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
     EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
     Socket(SocketFile),
 }
 
-// will not compile if `PosixFile` is not Send + Sync
-impl IsSend for PosixFile {}
-impl IsSync for PosixFile {}
+// will not compile if `GenericFile` is not Send + Sync
+impl IsSend for GenericFile {}
+impl IsSync for GenericFile {}
 
-impl PosixFile {
-    pub fn borrow(&self) -> PosixFileRef {
+impl GenericFile {
+    pub fn borrow(&self) -> GenericFileRef {
         match self {
-            Self::Pipe(ref f) => PosixFileRef::Pipe(f.borrow()),
-            Self::EventFd(ref f) => PosixFileRef::EventFd(f.borrow()),
-            Self::Socket(ref f) => PosixFileRef::Socket(f.borrow()),
+            Self::Pipe(ref f) => GenericFileRef::Pipe(f.borrow()),
+            Self::EventFd(ref f) => GenericFileRef::EventFd(f.borrow()),
+            Self::Socket(ref f) => GenericFileRef::Socket(f.borrow()),
         }
     }
 
-    pub fn try_borrow(&self) -> Result<PosixFileRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<GenericFileRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Pipe(ref f) => PosixFileRef::Pipe(f.try_borrow()?),
-            Self::EventFd(ref f) => PosixFileRef::EventFd(f.try_borrow()?),
-            Self::Socket(ref f) => PosixFileRef::Socket(f.try_borrow()?),
+            Self::Pipe(ref f) => GenericFileRef::Pipe(f.try_borrow()?),
+            Self::EventFd(ref f) => GenericFileRef::EventFd(f.try_borrow()?),
+            Self::Socket(ref f) => GenericFileRef::Socket(f.try_borrow()?),
         })
     }
 
-    pub fn borrow_mut(&self) -> PosixFileRefMut {
+    pub fn borrow_mut(&self) -> GenericFileRefMut {
         match self {
-            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.borrow_mut()),
-            Self::EventFd(ref f) => PosixFileRefMut::EventFd(f.borrow_mut()),
-            Self::Socket(ref f) => PosixFileRefMut::Socket(f.borrow_mut()),
+            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.borrow_mut()),
+            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(ref f) => GenericFileRefMut::Socket(f.borrow_mut()),
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<PosixFileRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<GenericFileRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.try_borrow_mut()?),
-            Self::EventFd(ref f) => PosixFileRefMut::EventFd(f.try_borrow_mut()?),
-            Self::Socket(ref f) => PosixFileRefMut::Socket(f.try_borrow_mut()?),
+            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.try_borrow_mut()?),
+            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(ref f) => GenericFileRefMut::Socket(f.try_borrow_mut()?),
         })
     }
 
@@ -314,7 +314,7 @@ impl PosixFile {
     }
 }
 
-impl std::fmt::Debug for PosixFile {
+impl std::fmt::Debug for GenericFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -335,19 +335,19 @@ impl std::fmt::Debug for PosixFile {
     }
 }
 
-pub enum PosixFileRef<'a> {
+pub enum GenericFileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
     Socket(SocketFileRef<'a>),
 }
 
-pub enum PosixFileRefMut<'a> {
+pub enum GenericFileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
     Socket(SocketFileRefMut<'a>),
 }
 
-impl PosixFileRef<'_> {
+impl GenericFileRef<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -359,7 +359,7 @@ impl PosixFileRef<'_> {
     );
 }
 
-impl PosixFileRefMut<'_> {
+impl GenericFileRefMut<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -396,7 +396,7 @@ impl PosixFileRefMut<'_> {
     );
 }
 
-impl std::fmt::Debug for PosixFileRef<'_> {
+impl std::fmt::Debug for GenericFileRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -413,7 +413,7 @@ impl std::fmt::Debug for PosixFileRef<'_> {
     }
 }
 
-impl std::fmt::Debug for PosixFileRefMut<'_> {
+impl std::fmt::Debug for GenericFileRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -427,12 +427,103 @@ impl std::fmt::Debug for PosixFileRefMut<'_> {
             self.state(),
             self.get_status()
         )
+    }
+}
+
+/// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
+/// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
+/// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
+/// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
+/// underlying file may close itself in extenuating circumstances (for example if the file has an
+/// internal error).
+///
+/// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
+/// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
+/// should probably only ever be created for a newly created file object. Otherwise for existing
+/// file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
+#[derive(Clone, Debug)]
+pub struct OpenFile {
+    inner: Arc<OpenFileInner>,
+}
+
+// will not compile if `OpenFile` is not Send + Sync
+impl IsSend for OpenFile {}
+impl IsSync for OpenFile {}
+
+impl OpenFile {
+    pub fn new(file: GenericFile) -> Self {
+        if let Ok(file) = file.try_borrow() {
+            if file.state().contains(FileState::CLOSED) {
+                log::warn!("Creating an `OpenFile` object for a closed file");
+            }
+        }
+
+        Self {
+            inner: Arc::new(OpenFileInner { file: Some(file) }),
+        }
+    }
+
+    pub fn inner_file(&self) -> &GenericFile {
+        &self.inner.file.as_ref().unwrap()
+    }
+
+    /// Will close the inner `GenericFile` object if this is the last `OpenFile` for that
+    /// `GenericFile`. This behaviour is the same as simply dropping this `OpenFile` object, but
+    /// allows you to pass an event queue and get the return value of the close operation.
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
+        let OpenFile { inner } = self;
+
+        // note: There is a race-condition here in a multi-threaded context. Since shadow should
+        // never be accessing host-specific objects from two threads at once, this shouldn't be an
+        // issue, but documenting here anyways:
+        //
+        // If there are two `Arc`s remaining and two threads are running this code at the same, it
+        // is not guaranteed that one will call `Arc::try_unwrap(inner)` and return `Ok(_)`. For
+        // example one thread might run `Arc::try_unwrap(inner)` and return `Err(arc)`, then the
+        // other thread runs `Arc::try_unwrap(inner)` and also returns `Err(arc)` since the `Arc` in
+        // the first thread hasn't been dropped yet (it's contained in the `Err` return value). So
+        // both remaining `Arc`s will be dropped without either `Arc::try_unwrap(inner)` ever
+        // returning `Ok(_)`.
+
+        // if this is the last reference, call close() on the file
+        if let Ok(inner) = Arc::try_unwrap(inner) {
+            Some(inner.close(event_queue))
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct OpenFileInner {
+    file: Option<GenericFile>,
+}
+
+impl OpenFileInner {
+    pub fn close(mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+        self.close_helper(event_queue)
+    }
+
+    fn close_helper(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+        if let Some(file) = self.file.take() {
+            file.borrow_mut().close(event_queue)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::ops::Drop for OpenFileInner {
+    fn drop(&mut self) {
+        // ignore any return value
+        let _ = EventQueue::queue_and_run(|event_queue| self.close_helper(event_queue));
     }
 }
 
 bitflags::bitflags! {
-    // Linux only supports a single descriptor flag:
-    // https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
+    /// Flags for a file descriptor.
+    ///
+    /// Linux only supports a single descriptor flag:
+    /// https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
     pub struct DescriptorFlags: libc::c_int {
         const CLOEXEC = libc::FD_CLOEXEC;
     }
@@ -461,32 +552,33 @@ impl DescriptorFlags {
     }
 }
 
-#[derive(Clone, Debug)]
+/// A file descriptor that reference an open file. Also contains flags that change the behaviour of
+/// this file descriptor.
+#[derive(Debug)]
 pub struct Descriptor {
-    /// The PosixFile that this descriptor points to.
-    file: PosixFile,
+    /// The file that this descriptor points to.
+    file: OpenFile,
     /// Descriptor flags.
     flags: DescriptorFlags,
-    /// A count of how many open descriptors there are with reference to this file. Since a
-    /// reference to the file can be held by other objects like an epoll file, it should
-    /// be true that `Arc::strong_count(&self.count)` <= `Arc::strong_count(&self.file)`.
-    open_count: Arc<()>,
 }
 
+// will not compile if `Descriptor` is not Send + Sync
+impl IsSend for Descriptor {}
+impl IsSync for Descriptor {}
+
 impl Descriptor {
-    pub fn new(file: PosixFile) -> Self {
+    pub fn new(file: OpenFile) -> Self {
         Self {
             file,
             flags: DescriptorFlags::empty(),
-            open_count: Arc::new(()),
         }
     }
 
-    pub fn get_file(&self) -> &PosixFile {
+    pub fn open_file(&self) -> &OpenFile {
         &self.file
     }
 
-    pub fn get_flags(&self) -> DescriptorFlags {
+    pub fn flags(&self) -> DescriptorFlags {
         self.flags
     }
 
@@ -494,29 +586,22 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    /// Close the descriptor, and if this is the last descriptor pointing to its file, close
-    /// the file as well.
     pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
-        // this isn't subject to race conditions since we should never access descriptors
-        // from multiple threads at the same time
-        if Arc::<()>::strong_count(&self.open_count) == 1 {
-            Some(self.file.borrow_mut().close(event_queue))
-        } else {
-            None
-        }
+        self.file.close(event_queue)
     }
 
-    /// Duplicate the descriptor, with both descriptors pointing to the same `PosixFile`. In
+    /// Duplicate the descriptor, with both descriptors pointing to the same `OpenFile`. In
     /// Linux, the descriptor flags aren't typically copied to the new descriptor, so we
     /// explicitly require a flags value to avoid confusion.
     pub fn dup(&self, flags: DescriptorFlags) -> Self {
-        let mut new_desc = self.clone();
-        new_desc.set_flags(flags);
-        new_desc
+        Self {
+            file: self.file.clone(),
+            flags,
+        }
     }
 }
 
-/// Represents an owned reference to a legacy descriptor. Will decrement the descriptor's ref
+/// Represents an owned reference to a legacy descriptor object. Will decrement the descriptor's ref
 /// count when dropped.
 #[derive(Debug)]
 pub struct OwnedLegacyDescriptor(SyncSendPointer<c::LegacyDescriptor>);
@@ -593,6 +678,16 @@ impl CompatDescriptor {
     }
 }
 
+impl std::fmt::Debug for c::SysCallReturn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysCallReturn")
+            .field("state", &self.state)
+            .field("retval", &self.retval)
+            .field("cond", &self.cond)
+            .finish()
+    }
+}
+
 mod export {
     use super::*;
 
@@ -627,61 +722,140 @@ mod export {
         }
     }
 
-    /// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's
-    /// ref count.
+    /// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
+    /// count.
     #[no_mangle]
     pub extern "C" fn compatdescriptor_free(descriptor: *mut CompatDescriptor) {
         CompatDescriptor::from_raw(descriptor);
     }
 
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-    /// posix file object. Otherwise returns NULL. The posix file object's ref count is not
-    /// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+    /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
+    /// modified, so the returned pointer must not outlive the lifetime of the compat descriptor.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_borrowPosixFile(
+    pub extern "C" fn compatdescriptor_borrowOpenFile(
         descriptor: *const CompatDescriptor,
-    ) -> *const PosixFile {
+    ) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
         match descriptor {
             CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => d.get_file(),
+            CompatDescriptor::New(d) => d.open_file(),
         }
     }
 
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-    /// posix file object. Otherwise returns NULL. The posix file object's ref count is
-    /// incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
-    /// the memory will leak.
+    /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is incremented,
+    /// so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
+    /// memory will leak.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_newRefPosixFile(
+    pub extern "C" fn compatdescriptor_newRefOpenFile(
         descriptor: *const CompatDescriptor,
-    ) -> *const PosixFile {
+    ) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
         match descriptor {
             CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.get_file().clone())),
+            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.open_file().clone())),
         }
     }
 
-    /// Decrement the ref count of the posix file object. The pointer must not be used after
-    /// calling this function.
+    /// Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
+    /// this function.
     #[no_mangle]
-    pub extern "C" fn posixfile_drop(file: *const PosixFile) {
+    pub extern "C" fn openfile_drop(file: *const OpenFile) {
         assert!(!file.is_null());
 
-        unsafe { Box::from_raw(file as *mut PosixFile) };
+        unsafe { Box::from_raw(file as *mut OpenFile) };
     }
 
-    /// Get the state of the posix file object.
-    #[allow(unused_variables)]
+    /// Get the state of the `OpenFile` object.
     #[no_mangle]
-    pub extern "C" fn posixfile_getStatus(file: *const PosixFile) -> c::Status {
+    pub extern "C" fn openfile_getStatus(file: *const OpenFile) -> c::Status {
+        assert!(!file.is_null());
+
+        let file = unsafe { &*file };
+
+        file.inner_file().borrow().state().into()
+    }
+
+    /// Add a status listener to the `OpenFile` object. This will increment the status listener's
+    /// ref count, and will decrement the ref count when this status listener is removed or when the
+    /// `OpenFile` is freed/dropped.
+    #[no_mangle]
+    pub extern "C" fn openfile_addListener(
+        file: *const OpenFile,
+        listener: *mut c::StatusListener,
+    ) {
+        assert!(!file.is_null());
+        assert!(!listener.is_null());
+
+        let file = unsafe { &*file };
+
+        file.inner_file().borrow_mut().add_legacy_listener(listener);
+    }
+
+    /// Remove a listener from the `OpenFile` object.
+    #[no_mangle]
+    pub extern "C" fn openfile_removeListener(
+        file: *const OpenFile,
+        listener: *mut c::StatusListener,
+    ) {
+        assert!(!file.is_null());
+        assert!(!listener.is_null());
+
+        let file = unsafe { &*file };
+
+        file.inner_file()
+            .borrow_mut()
+            .remove_legacy_listener(listener);
+    }
+
+    /// Get the canonical handle for an `OpenFile` object. Two `OpenFile` objects refer to the same
+    /// underlying data if their handles are equal.
+    #[no_mangle]
+    pub extern "C" fn openfile_getCanonicalHandle(file: *const OpenFile) -> libc::uintptr_t {
+        assert!(!file.is_null());
+
+        let file = unsafe { &*file };
+
+        file.inner_file().canonical_handle()
+    }
+
+    /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+    /// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
+    /// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
+    /// the memory will leak.
+    #[no_mangle]
+    pub extern "C" fn compatdescriptor_newRefGenericFile(
+        descriptor: *const CompatDescriptor,
+    ) -> *const GenericFile {
+        assert!(!descriptor.is_null());
+
+        let descriptor = unsafe { &*descriptor };
+
+        match descriptor {
+            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
+            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.open_file().inner_file().clone())),
+        }
+    }
+
+    /// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
+    /// calling this function.
+    #[no_mangle]
+    pub extern "C" fn genericfile_drop(file: *const GenericFile) {
+        assert!(!file.is_null());
+
+        unsafe { Box::from_raw(file as *mut GenericFile) };
+    }
+
+    /// Get the state of the `GenericFile` object.
+    #[no_mangle]
+    pub extern "C" fn genericfile_getStatus(file: *const GenericFile) -> c::Status {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -689,12 +863,12 @@ mod export {
         file.borrow().state().into()
     }
 
-    /// Add a status listener to the posix file object. This will increment the status
-    /// listener's ref count, and will decrement the ref count when this status listener is
-    /// removed or when the posix file is freed/dropped.
+    /// Add a status listener to the `GenericFile` object. This will increment the status listener's
+    /// ref count, and will decrement the ref count when this status listener is removed or when the
+    /// `GenericFile` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn posixfile_addListener(
-        file: *const PosixFile,
+    pub extern "C" fn genericfile_addListener(
+        file: *const GenericFile,
         listener: *mut c::StatusListener,
     ) {
         assert!(!file.is_null());
@@ -705,10 +879,10 @@ mod export {
         file.borrow_mut().add_legacy_listener(listener);
     }
 
-    /// Remove a listener from the posix file object.
+    /// Remove a listener from the `GenericFile` object.
     #[no_mangle]
-    pub extern "C" fn posixfile_removeListener(
-        file: *const PosixFile,
+    pub extern "C" fn genericfile_removeListener(
+        file: *const GenericFile,
         listener: *mut c::StatusListener,
     ) {
         assert!(!file.is_null());
@@ -719,25 +893,15 @@ mod export {
         file.borrow_mut().remove_legacy_listener(listener);
     }
 
-    /// Get the canonical handle for a posix file object. Two posix file objects refer to the same
-    /// underlying data if their handles are equal.
+    /// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
+    /// same underlying data if their handles are equal.
     #[no_mangle]
-    pub extern "C" fn posixfile_getCanonicalHandle(file: *const PosixFile) -> libc::uintptr_t {
+    pub extern "C" fn genericfile_getCanonicalHandle(file: *const GenericFile) -> libc::uintptr_t {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
 
         file.canonical_handle()
-    }
-}
-
-impl std::fmt::Debug for c::SysCallReturn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SysCallReturn")
-            .field("state", &self.state)
-            .field("retval", &self.retval)
-            .field("cond", &self.cond)
-            .finish()
     }
 }
 

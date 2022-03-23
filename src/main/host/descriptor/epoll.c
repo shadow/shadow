@@ -59,13 +59,13 @@ enum _EpollWatchFlags {
 typedef enum _EpollWatchTypes EpollWatchTypes;
 enum _EpollWatchTypes {
     EWT_LEGACY_DESCRIPTOR,
-    EWT_POSIX_FILE,
+    EWT_GENERIC_FILE,
 };
 
 typedef union _EpollWatchObject EpollWatchObject;
 union _EpollWatchObject {
     LegacyDescriptor* as_descriptor;
-    const PosixFile* as_file;
+    const GenericFile* as_file;
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -196,8 +196,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
     uintptr_t objectPtr;
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
         objectPtr = (uintptr_t)(void*)object.as_descriptor;
-    } else if (watch->watchType == EWT_POSIX_FILE) {
-        objectPtr = posixfile_getCanonicalHandle(object.as_file);
+    } else if (watch->watchType == EWT_GENERIC_FILE) {
+        objectPtr = genericfile_getCanonicalHandle(object.as_file);
     } else {
         warning("Unrecognized epoll watch type: %d", type);
         objectPtr = (uintptr_t)NULL;
@@ -220,9 +220,9 @@ static void _epollwatch_free(EpollWatch* watch) {
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
         descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
         descriptor_unref(watch->watchObject.as_descriptor);
-    } else if (watch->watchType == EWT_POSIX_FILE) {
-        posixfile_removeListener(watch->watchObject.as_file, watch->listener);
-        posixfile_drop(watch->watchObject.as_file);
+    } else if (watch->watchType == EWT_GENERIC_FILE) {
+        genericfile_removeListener(watch->watchObject.as_file, watch->listener);
+        genericfile_drop(watch->watchObject.as_file);
     }
 
     statuslistener_unref(watch->listener);
@@ -291,8 +291,8 @@ void epoll_clearWatchListeners(Epoll* epoll) {
 
         if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
             descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
-        } else if (watch->watchType == EWT_POSIX_FILE) {
-            posixfile_removeListener(watch->watchObject.as_file, watch->listener);
+        } else if (watch->watchType == EWT_GENERIC_FILE) {
+            genericfile_removeListener(watch->watchObject.as_file, watch->listener);
         }
 
         next_item = g_list_next(next_item);
@@ -358,8 +358,8 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     Status status;
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
         status = descriptor_getStatus(watch->watchObject.as_descriptor);
-    } else if (watch->watchType == EWT_POSIX_FILE) {
-        status = posixfile_getStatus(watch->watchObject.as_file);
+    } else if (watch->watchType == EWT_GENERIC_FILE) {
+        status = genericfile_getStatus(watch->watchObject.as_file);
     }
 
     watch->flags |= (status & STATUS_DESCRIPTOR_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
@@ -443,10 +443,10 @@ static void _getWatchObject(const CompatDescriptor* descriptor, EpollWatchTypes*
         *watchType = EWT_LEGACY_DESCRIPTOR;
         watchObject->as_descriptor = legacyDescriptor;
     } else {
-        const PosixFile* file = compatdescriptor_newRefPosixFile(descriptor);
-        /* if the compat descriptor is for a posix file object */
+        const GenericFile* file = compatdescriptor_newRefGenericFile(descriptor);
+        /* if the compat descriptor is for a generic file object */
         if (file != NULL) {
-            *watchType = EWT_POSIX_FILE;
+            *watchType = EWT_GENERIC_FILE;
             watchObject->as_file = file;
         } else {
             utility_panic("unrecognized watch object");
@@ -474,8 +474,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
         case EWT_LEGACY_DESCRIPTOR:
             key.objectPtr = (uintptr_t)(void*)watchObject.as_descriptor;
             break;
-        case EWT_POSIX_FILE:
-            key.objectPtr = posixfile_getCanonicalHandle(watchObject.as_file);
+        case EWT_GENERIC_FILE:
+            key.objectPtr = genericfile_getCanonicalHandle(watchObject.as_file);
             break;
         default: utility_panic("unrecognized watch type"); return -ENOENT;
     }
@@ -507,8 +507,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
                                             SLF_ALWAYS);
             if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
                 descriptor_addListener(watch->watchObject.as_descriptor, watch->listener);
-            } else if (watch->watchType == EWT_POSIX_FILE) {
-                posixfile_addListener(watch->watchObject.as_file, watch->listener);
+            } else if (watch->watchType == EWT_GENERIC_FILE) {
+                genericfile_addListener(watch->watchObject.as_file, watch->listener);
             }
 
             /* initiate a callback if the new watched object is ready */
@@ -551,8 +551,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
             statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
             if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
                 descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
-            } else if (watch->watchType == EWT_POSIX_FILE) {
-                posixfile_removeListener(watch->watchObject.as_file, watch->listener);
+            } else if (watch->watchType == EWT_GENERIC_FILE) {
+                genericfile_removeListener(watch->watchObject.as_file, watch->listener);
             }
 
             /* unref gets called on the watch when it is removed from these tables */

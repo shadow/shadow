@@ -1,6 +1,6 @@
 use crate::cshadow;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, PosixFile};
+use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, GenericFile};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
 use nix::errno::Errno;
@@ -32,7 +32,7 @@ impl SyscallHandler {
 
         Ok(match cmd {
             libc::F_GETFL => {
-                let file = desc.get_file().borrow();
+                let file = desc.open_file().inner_file().borrow();
                 // combine the file status and access mode flags
                 let flags = file.get_status().as_o_flags() | file.mode().as_o_flags();
                 SysCallReg::from(flags.bits())
@@ -53,7 +53,7 @@ impl SyscallHandler {
                         | OFlag::O_TRUNC,
                 );
 
-                let mut file = desc.get_file().borrow_mut();
+                let mut file = desc.open_file().inner_file().borrow_mut();
                 let old_flags = file.get_status().as_o_flags();
 
                 // fcntl(2): "On Linux, this command can change only the O_APPEND, O_ASYNC, O_DIRECT,
@@ -91,7 +91,7 @@ impl SyscallHandler {
                 SysCallReg::from(0)
             }
             libc::F_GETFD => {
-                let flags = desc.get_flags().bits();
+                let flags = desc.flags().bits();
                 // the only descriptor flag supported by Linux is FD_CLOEXEC, so let's make sure
                 // we're returning the correct value
                 debug_assert!(flags == 0 || flags == libc::FD_CLOEXEC);
@@ -126,7 +126,7 @@ impl SyscallHandler {
             libc::F_GETPIPE_SZ =>
             {
                 #[allow(irrefutable_let_patterns)]
-                if let PosixFile::Pipe(pipe) = desc.get_file() {
+                if let GenericFile::Pipe(pipe) = desc.open_file().inner_file() {
                     SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
                 } else {
                     return Err(Errno::EINVAL.into());

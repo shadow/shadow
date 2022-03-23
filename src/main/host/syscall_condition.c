@@ -60,7 +60,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
                 descriptor_ref(cond->trigger.object.as_descriptor);
                 return cond;
             }
-            case TRIGGER_POSIX_FILE: {
+            case TRIGGER_OPEN_FILE: {
                 /* The file represents an Arc, so the reference count is fine;
                  * Just need to remember to drop it later.
                  */
@@ -123,8 +123,8 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
                     cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
-            case TRIGGER_POSIX_FILE: {
-                posixfile_removeListener(cond->trigger.object.as_file, cond->triggerListener);
+            case TRIGGER_OPEN_FILE: {
+                openfile_removeListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -178,8 +178,8 @@ static void _syscallcondition_free(SysCallCondition* cond) {
                 descriptor_unref(cond->trigger.object.as_descriptor);
                 break;
             }
-            case TRIGGER_POSIX_FILE: {
-                posixfile_drop(cond->trigger.object.as_file);
+            case TRIGGER_OPEN_FILE: {
+                openfile_drop(cond->trigger.object.as_file);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -236,8 +236,8 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
                                        cond->timeout ? " and " : "");
                 break;
             }
-            case TRIGGER_POSIX_FILE: {
-                g_string_append_printf(string, "status on posix file %p%s",
+            case TRIGGER_OPEN_FILE: {
+                g_string_append_printf(string, "status on open file %p%s",
                                        (void*)cond->trigger.object.as_file,
                                        cond->timeout ? " and " : "");
                 break;
@@ -282,8 +282,8 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
             }
             break;
         }
-        case TRIGGER_POSIX_FILE: {
-            if (posixfile_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
+        case TRIGGER_OPEN_FILE: {
+            if (openfile_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
                 return true;
             }
             break;
@@ -465,13 +465,13 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                 descriptor_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
-            case TRIGGER_POSIX_FILE: {
+            case TRIGGER_OPEN_FILE: {
                 /* Monitor the requested status when it transitions from off to on. */
                 statuslistener_setMonitorStatus(
                     cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
-                posixfile_addListener(cond->trigger.object.as_file, cond->triggerListener);
+                openfile_addListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {

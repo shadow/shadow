@@ -56,8 +56,11 @@ typedef struct ConfigOptions ConfigOptions;
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
-// Table of (file) descriptors. Typically owned by a Process.
+// Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;
+
+// A wrapper for any type of file object.
+typedef struct GenericFile GenericFile;
 
 typedef struct HostOptions HostOptions;
 
@@ -76,10 +79,20 @@ typedef struct MemoryManager MemoryManager;
 // indexes.
 typedef struct NetworkGraph NetworkGraph;
 
-typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
+// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
+// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
+// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
+// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
+// underlying file may close itself in extenuating circumstances (for example if the file has an
+// internal error).
+//
+// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
+// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
+// should probably only ever be created for a newly created file object. Otherwise for existing
+// file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
+typedef struct OpenFile OpenFile;
 
-// Represents a POSIX description, or a Linux "struct file".
-typedef struct PosixFile PosixFile;
+typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
 
 // A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
 // allowing, e.g.:
@@ -513,39 +526,64 @@ struct CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_de
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
 LegacyDescriptor *compatdescriptor_asLegacy(const struct CompatDescriptor *descriptor);
 
-// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's
-// ref count.
+// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
+// count.
 void compatdescriptor_free(struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-// posix file object. Otherwise returns NULL. The posix file object's ref count is not
-// modified, so the pointer must not outlive the lifetime of the compat descriptor.
-const struct PosixFile *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
+// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
+// modified, so the returned pointer must not outlive the lifetime of the compat descriptor.
+const struct OpenFile *compatdescriptor_borrowOpenFile(const struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-// posix file object. Otherwise returns NULL. The posix file object's ref count is
-// incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
-// the memory will leak.
-const struct PosixFile *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
+// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is incremented,
+// so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
+// memory will leak.
+const struct OpenFile *compatdescriptor_newRefOpenFile(const struct CompatDescriptor *descriptor);
 
-// Decrement the ref count of the posix file object. The pointer must not be used after
-// calling this function.
-void posixfile_drop(const struct PosixFile *file);
+// Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
+// this function.
+void openfile_drop(const struct OpenFile *file);
 
-// Get the state of the posix file object.
-Status posixfile_getStatus(const struct PosixFile *file);
+// Get the state of the `OpenFile` object.
+Status openfile_getStatus(const struct OpenFile *file);
 
-// Add a status listener to the posix file object. This will increment the status
-// listener's ref count, and will decrement the ref count when this status listener is
-// removed or when the posix file is freed/dropped.
-void posixfile_addListener(const struct PosixFile *file, StatusListener *listener);
+// Add a status listener to the `OpenFile` object. This will increment the status listener's
+// ref count, and will decrement the ref count when this status listener is removed or when the
+// `OpenFile` is freed/dropped.
+void openfile_addListener(const struct OpenFile *file, StatusListener *listener);
 
-// Remove a listener from the posix file object.
-void posixfile_removeListener(const struct PosixFile *file, StatusListener *listener);
+// Remove a listener from the `OpenFile` object.
+void openfile_removeListener(const struct OpenFile *file, StatusListener *listener);
 
-// Get the canonical handle for a posix file object. Two posix file objects refer to the same
+// Get the canonical handle for an `OpenFile` object. Two `OpenFile` objects refer to the same
 // underlying data if their handles are equal.
-uintptr_t posixfile_getCanonicalHandle(const struct PosixFile *file);
+uintptr_t openfile_getCanonicalHandle(const struct OpenFile *file);
+
+// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
+// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
+// the memory will leak.
+const struct GenericFile *compatdescriptor_newRefGenericFile(const struct CompatDescriptor *descriptor);
+
+// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
+// calling this function.
+void genericfile_drop(const struct GenericFile *file);
+
+// Get the state of the `GenericFile` object.
+Status genericfile_getStatus(const struct GenericFile *file);
+
+// Add a status listener to the `GenericFile` object. This will increment the status listener's
+// ref count, and will decrement the ref count when this status listener is removed or when the
+// `GenericFile` is freed/dropped.
+void genericfile_addListener(const struct GenericFile *file, StatusListener *listener);
+
+// Remove a listener from the `GenericFile` object.
+void genericfile_removeListener(const struct GenericFile *file, StatusListener *listener);
+
+// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
+// same underlying data if their handles are equal.
+uintptr_t genericfile_getCanonicalHandle(const struct GenericFile *file);
 
 // # Safety
 // * `thread` must point to a valid object.
