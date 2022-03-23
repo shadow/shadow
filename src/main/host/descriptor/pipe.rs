@@ -66,6 +66,15 @@ impl PipeFile {
                 .remove_writer(event_queue);
         }
 
+        // if open for reading, inform the buffer that there is one fewer readers
+        if self.mode.contains(FileMode::READ) {
+            self.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .remove_reader(event_queue);
+        }
+
         // no need to hold on to the buffer anymore
         self.buffer = None;
 
@@ -140,6 +149,10 @@ impl PipeFile {
 
         let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
 
+        if buffer.num_readers() == 0 {
+            return Err(nix::errno::Errno::EPIPE.into());
+        }
+
         if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
             // switch to stream mode immediately, regardless of whether the buffer is empty or not
             self.write_mode = WriteMode::Stream;
@@ -212,6 +225,14 @@ impl PipeFile {
                 .unwrap()
                 .borrow_mut()
                 .add_writer(event_queue);
+        }
+
+        if pipe.mode.contains(FileMode::READ) {
+            pipe.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .add_reader(event_queue);
         }
 
         // remove any state flags that aren't relevant to us
