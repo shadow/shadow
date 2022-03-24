@@ -2,6 +2,7 @@ use super::host::HostId;
 use super::process::ProcessId;
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
+use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::syscall;
 use nix::unistd::Pid;
 
@@ -15,6 +16,8 @@ pub trait Thread {
     fn system_tid(&self) -> Pid;
     fn csyscallhandler(&mut self) -> *mut c::SysCallHandler;
     fn id(&self) -> ThreadId;
+    fn syscall_condition(&self) -> Option<SysCallConditionRef>;
+    fn syscall_condition_mut(&mut self) -> Option<SysCallConditionRefMut>;
 
     /// Natively execute munmap(2) on the given thread.
     fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
@@ -185,6 +188,24 @@ impl Thread for CThread {
 
     fn id(&self) -> ThreadId {
         ThreadId(unsafe { c::thread_getID(self.cthread).try_into().unwrap() })
+    }
+
+    fn syscall_condition(&self) -> Option<SysCallConditionRef> {
+        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread) };
+        if syscall_condition_ptr.is_null() {
+            return None;
+        }
+
+        Some(unsafe { SysCallConditionRef::borrow_from_c(syscall_condition_ptr) })
+    }
+
+    fn syscall_condition_mut(&mut self) -> Option<SysCallConditionRefMut> {
+        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread) };
+        if syscall_condition_ptr.is_null() {
+            return None;
+        }
+
+        Some(unsafe { SysCallConditionRefMut::borrow_from_c(syscall_condition_ptr) })
     }
 
     fn process_id(&self) -> ProcessId {

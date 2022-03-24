@@ -64,6 +64,8 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "statuslistener_onStatusChanged"
         --whitelist-function "syscallcondition_new"
         --whitelist-function "syscallcondition_unref"
+        --whitelist-function "syscallcondition_getActiveFile"
+        --whitelist-function "syscallcondition_setActiveFile"
         --whitelist-function "syscallhandler_.*"
         --whitelist-function "worker_.*"
         --whitelist-function "workerc_.*"

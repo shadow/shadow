@@ -25,6 +25,8 @@ struct _SysCallCondition {
     Trigger trigger;
     // Non-null if the condition will trigger upon a timeout firing.
     Timer* timeout;
+    // The active file in the blocked syscall. This is state used when resuming a blocked syscall.
+    OpenFile* activeFile;
     // Non-null if we are listening for status updates on a trigger object
     StatusListener* triggerListener;
     // Non-null if we are listening for status updates on the timeout
@@ -101,6 +103,16 @@ void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTim
     }
 }
 
+void syscallcondition_setActiveFile(SysCallCondition* cond, OpenFile* file) {
+    MAGIC_ASSERT(cond);
+
+    if (cond->activeFile) {
+        openfile_drop(cond->activeFile);
+    }
+
+    cond->activeFile = file;
+}
+
 static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
 
@@ -172,6 +184,12 @@ static void _syscallcondition_free(SysCallCondition* cond) {
     if (cond->timeout) {
         descriptor_unref(cond->timeout);
     }
+
+    if (cond->activeFile) {
+        openfile_drop(cond->activeFile);
+        cond->activeFile = NULL;
+    }
+
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
@@ -524,3 +542,5 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock*
 }
 
 Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }
+
+OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond) { return cond->activeFile; }

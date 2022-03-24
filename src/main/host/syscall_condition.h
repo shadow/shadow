@@ -52,6 +52,11 @@ SysCallCondition* syscallcondition_new(Trigger trigger);
  * `worker_getEmulatedTime`. */
 void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t);
 
+/* Add a file to the condition which can be used in the syscall handler once it becomes unblocked,
+ * without needing to lookup the file again in the descriptor table (since it may no longer exist in
+ * the descriptor table). */
+void syscallcondition_setActiveFile(SysCallCondition* cond, OpenFile* file);
+
 /* Increment the reference count on the given condition. */
 void syscallcondition_ref(SysCallCondition* cond);
 
@@ -72,6 +77,9 @@ void syscallcondition_cancel(SysCallCondition* cond);
 
 /* Get the timer for the condition, or NULL if there isn't one. */
 Timer* syscallcondition_getTimeout(SysCallCondition* cond);
+
+/* Get the active file for the condition, or NULL if there isn't one. */
+OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond);
 
 /* If the condition's thread doesn't have `signo` blocked, schedule a wakeup.
  *

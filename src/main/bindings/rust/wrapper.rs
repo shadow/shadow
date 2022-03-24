@@ -2163,7 +2163,13 @@ extern "C" {
     pub fn syscallcondition_new(trigger: Trigger) -> *mut SysCallCondition;
 }
 extern "C" {
+    pub fn syscallcondition_setActiveFile(cond: *mut SysCallCondition, file: *mut OpenFile);
+}
+extern "C" {
     pub fn syscallcondition_unref(cond: *mut SysCallCondition);
+}
+extern "C" {
+    pub fn syscallcondition_getActiveFile(cond: *mut SysCallCondition) -> *mut OpenFile;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

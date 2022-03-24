@@ -6,6 +6,8 @@
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
+use std::time::Duration;
+
 use nix::sys::time::TimeValLike;
 
 fn main() -> Result<(), String> {
@@ -132,6 +134,16 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_o_direct_full_buffer_2",
             test_o_direct_full_buffer_2,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_close_during_blocking_read",
+            test_close_during_blocking_read,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_close_during_blocking_write",
+            test_close_during_blocking_write,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
@@ -939,6 +951,110 @@ fn test_o_direct_full_buffer_2() -> Result<(), String> {
 
         Ok(())
     })
+}
+
+fn test_close_during_blocking_read() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe2(fds.as_mut_ptr(), 0) } }, &[])?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    let thread_handle = std::thread::spawn(move || {
+        // 2. wait for the first read() to start
+        std::thread::sleep(Duration::from_secs(1));
+
+        // 3. close the reader while the first read() is blocked
+        nix::unistd::close(read_fd).unwrap();
+
+        // 4. wake the reader by writing
+        assert_eq!(nix::unistd::write(write_fd, &[1, 2, 3]), Ok(3));
+
+        // 6. wait for the second read() to complete
+        std::thread::sleep(Duration::from_secs(1));
+
+        // 7. after the read() syscall completes the read end should be closed, so we can't write
+        // anymore
+        assert_eq!(
+            nix::unistd::write(write_fd, &[1, 2, 3]),
+            Err(nix::errno::Errno::EPIPE)
+        );
+        nix::unistd::close(write_fd).unwrap();
+    });
+
+    // 1. the first read will block until there are bytes to read
+    let mut buf = vec![0u8; 10];
+    assert_eq!(nix::unistd::read(read_fd, &mut buf), Ok(3));
+
+    // 5. after returning from the first read, the read fd should be closed
+    assert_eq!(
+        nix::unistd::read(read_fd, &mut buf),
+        Err(nix::errno::Errno::EBADF)
+    );
+
+    thread_handle.join().unwrap();
+
+    Ok(())
+}
+
+fn test_close_during_blocking_write() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe2(fds.as_mut_ptr(), 0) } }, &[])?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    let thread_handle = std::thread::spawn(move || {
+        // 2. wait for writes to block
+        std::thread::sleep(Duration::from_secs(1));
+
+        // 3. close the writer while the write() is blocked
+        nix::unistd::close(write_fd).unwrap();
+
+        // 4. wake the writer by reading
+        // on linux, must read an amount greater than one page in order to unblock writer:
+        // https://stackoverflow.com/a/29233953
+        let mut buf = vec![0u8; 5000];
+        assert_eq!(nix::unistd::read(read_fd, &mut buf), Ok(5000));
+
+        // 6. wait for the blocked write() to complete
+        std::thread::sleep(Duration::from_secs(1));
+
+        // 7. after the write() syscall completes the write end should be closed, so we can read
+        // bytes until the buffer is empty, then will read EOF
+        loop {
+            match nix::unistd::read(read_fd, &mut buf) {
+                Ok(0) => break,
+                Ok(x) => assert!(x > 0),
+                Err(e) => panic!("Unexpected error {}", e),
+            }
+        }
+        nix::unistd::close(read_fd).unwrap();
+    });
+
+    loop {
+        // 1. write repeatedly until it blocks
+        match nix::unistd::write(write_fd, &[0u8; 789]) {
+            // linux will only write in 789 byte chuncks, but shadow might write fewer
+            Ok(n) => assert!(n > 0 && n <= 789),
+            Err(nix::errno::Errno::EBADF) => break,
+            Err(e) => panic!("Unexpected error {}", e),
+        }
+    }
+
+    // 5. write should fail since the write end is closed
+    assert_eq!(
+        nix::unistd::write(write_fd, &[0u8; 789]),
+        Err(nix::errno::Errno::EBADF)
+    );
+
+    thread_handle.join().unwrap();
+
+    Ok(())
 }
 
 fn is_readable(fd: libc::c_int) -> nix::Result<bool> {

@@ -172,18 +172,35 @@ impl SyscallHandler {
         let buf_size = libc::size_t::from(args.get(2));
         let offset = 0;
 
-        // get the descriptor, or return early if it doesn't exist
-        match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => {
-                let file = desc.open_file().clone();
-                self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
-            }
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                c::syscallhandler_read(ctx.thread.csyscallhandler(), args as *const SysCallArgs)
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_read(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
+                }
             },
-        }
+        };
+
+        self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
@@ -194,21 +211,35 @@ impl SyscallHandler {
         let buf_size = libc::size_t::from(args.get(2));
         let offset = libc::off_t::from(args.get(3));
 
-        // get the descriptor, or return early if it doesn't exist
-        match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => {
-                let file = desc.open_file().clone();
-                self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
-            }
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                c::syscallhandler_pread64(
-                    ctx.thread.csyscallhandler(),
-                    args as *const c::SysCallArgs,
-                )
-                .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_pread64(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
+                }
             },
-        }
+        };
+
+        self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn read_helper(
@@ -253,9 +284,11 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file, FileState::READABLE);
+            let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
+            let mut cond = SysCallCondition::new(trigger);
+            cond.set_active_file(open_file);
 
-            return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
+            return Err(SyscallError::Cond(cond));
         }
 
         result
@@ -269,18 +302,35 @@ impl SyscallHandler {
         let buf_size = libc::size_t::from(args.get(2));
         let offset = 0;
 
-        // get the descriptor, or return early if it doesn't exist
-        match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => {
-                let file = desc.open_file().clone();
-                self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
-            }
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                c::syscallhandler_write(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_write(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
+                }
             },
-        }
+        };
+
+        self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_char,
@@ -291,18 +341,35 @@ impl SyscallHandler {
         let buf_size = libc::size_t::from(args.get(2));
         let offset = libc::off_t::from(args.get(3));
 
-        // get the descriptor, or return early if it doesn't exist
-        match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => {
-                let file = desc.open_file().clone();
-                self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
-            }
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                c::syscallhandler_pwrite64(ctx.thread.csyscallhandler(), args as *const SysCallArgs)
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_pwrite64(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
+                }
             },
-        }
+        };
+
+        self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn write_helper(
@@ -339,9 +406,11 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file, FileState::WRITABLE);
+            let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
+            let mut cond = SysCallCondition::new(trigger);
+            cond.set_active_file(open_file);
 
-            return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
+            return Err(SyscallError::Cond(cond));
         };
 
         result
