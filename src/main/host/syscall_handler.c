@@ -249,9 +249,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    utility_assert(!host_getShimShmemLock(sys->host));
-    host_lockShimShmemLock(sys->host);
-
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(sys->process);
 
     SysCallReturn scr;
@@ -566,8 +563,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
         process_freePtrsWithoutFlushing(sys->process);
     }
-
-    host_unlockShimShmemLock(sys->host);
 
     return scr;
 }

@@ -639,6 +639,8 @@ void process_continue(Process* proc, Thread* thread) {
     worker_setActiveProcess(proc);
     worker_setActiveThread(thread);
 
+    host_lockShimShmemLock(proc->host);
+
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -665,6 +667,8 @@ void process_continue(Process* proc, Thread* thread) {
     } else {
         _process_check_thread(proc, thread);
     }
+
+    host_unlockShimShmemLock(proc->host);
 
     worker_setActiveProcess(NULL);
     worker_setActiveThread(NULL);
