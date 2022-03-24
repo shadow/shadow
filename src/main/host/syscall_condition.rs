@@ -1,4 +1,5 @@
 use crate::cshadow;
+use crate::host::descriptor::OpenFile;
 use crate::host::syscall::Trigger;
 
 use std::marker::PhantomData;
@@ -16,12 +17,21 @@ impl<'a> SysCallConditionRef<'a> {
     /// when dropped.
     /// `ptr` must point to a valid object that will not be accessed by other threads
     /// for the lifetime of this object.
-    pub fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
+    pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
             c_ptr: ptr,
             _phantom: PhantomData::default(),
         }
+    }
+
+    pub fn active_file(&self) -> Option<&OpenFile> {
+        let file_ptr = unsafe { cshadow::syscallcondition_getActiveFile(self.c_ptr) };
+        if file_ptr.is_null() {
+            return None;
+        }
+
+        Some(unsafe { file_ptr.as_ref() }.unwrap())
     }
 }
 
@@ -37,11 +47,16 @@ impl<'a> SysCallConditionRefMut<'a> {
     /// when dropped.
     /// `ptr` must point to a valid object that will not be accessed by other threads
     /// for the lifetime of this object.
-    pub fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
+    pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
-            condition: SysCallConditionRef::borrow_from_c(ptr),
+            condition: unsafe { SysCallConditionRef::borrow_from_c(ptr) },
         }
+    }
+
+    pub fn set_active_file(&mut self, file: OpenFile) {
+        let file_ptr = Box::into_raw(Box::new(file));
+        unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr, file_ptr) };
     }
 }
 
@@ -67,7 +82,7 @@ impl SysCallCondition {
     pub unsafe fn consume_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
-            condition: Some(SysCallConditionRefMut::borrow_from_c(ptr)),
+            condition: Some(unsafe { SysCallConditionRefMut::borrow_from_c(ptr) }),
         }
     }
 
@@ -76,9 +91,9 @@ impl SysCallCondition {
     // implementation or wrapper.
     pub fn new(trigger: Trigger) -> Self {
         SysCallCondition {
-            condition: Some(SysCallConditionRefMut::borrow_from_c(unsafe {
-                cshadow::syscallcondition_new(trigger.into())
-            })),
+            condition: Some(unsafe {
+                SysCallConditionRefMut::borrow_from_c(cshadow::syscallcondition_new(trigger.into()))
+            }),
         }
     }
 

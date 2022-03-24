@@ -22,6 +22,7 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_numbers.h"
 #include "main/host/thread_protected.h"
 #include "main/utility/fork_proxy.h"
@@ -957,6 +958,13 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             case THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL: {
                 trace("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
+
+                // remove the thread's old syscall condition since it's no longer needed
+                if (thread->base.cond) {
+                    syscallcondition_unref(thread->base.cond);
+                    thread->base.cond = NULL;
+                }
+
                 if (condition) {
                     if (_useONWaitpidWorkarounds) {
                         // Keep inactive plugins off worker thread's tracee
@@ -970,6 +978,13 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             case THREAD_PTRACE_CHILD_STATE_SYSCALL: {
                 trace("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
+
+                // remove the thread's old syscall condition since it's no longer needed
+                if (thread->base.cond) {
+                    syscallcondition_unref(thread->base.cond);
+                    thread->base.cond = NULL;
+                }
+
                 if (condition) {
                     if (_useONWaitpidWorkarounds) {
                         // Keep inactive plugins off worker thread's tracee

@@ -17,6 +17,7 @@
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
 
@@ -279,6 +280,12 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     handler, &thread->currentEvent.event_data.syscall.syscall_args);
                 syscallhandler_unref(handler);
                 handler = NULL;
+
+                // remove the thread's old syscall condition since it's no longer needed
+                if (thread->base.cond) {
+                    syscallcondition_unref(thread->base.cond);
+                    thread->base.cond = NULL;
+                }
 
                 if (!thread->isRunning) {
                     return NULL;

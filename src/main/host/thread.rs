@@ -196,7 +196,7 @@ impl Thread for CThread {
             return None;
         }
 
-        Some(SysCallConditionRef::borrow_from_c(syscall_condition_ptr))
+        Some(unsafe { SysCallConditionRef::borrow_from_c(syscall_condition_ptr) })
     }
 
     fn syscall_condition_mut(&mut self) -> Option<SysCallConditionRefMut> {
@@ -205,7 +205,7 @@ impl Thread for CThread {
             return None;
         }
 
-        Some(SysCallConditionRefMut::borrow_from_c(syscall_condition_ptr))
+        Some(unsafe { SysCallConditionRefMut::borrow_from_c(syscall_condition_ptr) })
     }
 
     fn process_id(&self) -> ProcessId {
