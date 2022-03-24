@@ -80,8 +80,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
-            "test_write_after_read_close",
-            test_write_after_read_close,
+            "test_write_after_read_close_with_full_buffer",
+            test_write_after_read_close_with_full_buffer,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_write_after_read_close_with_nonfull_buffer",
+            test_write_after_read_close_with_nonfull_buffer,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -474,7 +479,7 @@ fn test_read_after_write_close_with_nonempty_buffer() -> Result<(), String> {
     Ok(())
 }
 
-fn test_write_after_read_close() -> Result<(), String> {
+fn test_write_after_read_close_with_full_buffer() -> Result<(), String> {
     let mut fds = [0 as libc::c_int; 2];
     test_utils::check_system_call!(
         || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
@@ -487,6 +492,51 @@ fn test_write_after_read_close() -> Result<(), String> {
     let (read_fd, write_fd) = (fds[0], fds[1]);
 
     test_utils::run_and_close_fds(&[write_fd], || {
+        // write until buffer is full
+        loop {
+            let rv = nix::unistd::write(write_fd, &[1; 500]);
+            if let Err(e) = rv {
+                assert_eq!(e, nix::errno::Errno::EAGAIN);
+                break;
+            }
+        }
+
+        // write fd should not be writable
+        assert!(!is_writable(write_fd).unwrap());
+
+        // close the read fd
+        nix::unistd::close(read_fd).unwrap();
+
+        // write fd should be writable
+        assert!(is_writable(write_fd).unwrap());
+
+        // the read fd is closed, so writing should return EPIPE
+        assert_eq!(
+            nix::unistd::write(write_fd, &[1, 2, 3]),
+            Err(nix::errno::Errno::EPIPE)
+        );
+
+        // write fd should be writable
+        assert!(is_writable(write_fd).unwrap());
+    });
+
+    Ok(())
+}
+
+fn test_write_after_read_close_with_nonfull_buffer() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd], || {
+        // write, and then close the read fd
         test_utils::run_and_close_fds(&[read_fd], || {
             nix::unistd::write(write_fd, &[1, 2, 3]).unwrap();
         });

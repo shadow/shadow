@@ -137,7 +137,7 @@ impl SharedBuf {
 
     fn refresh_state(&mut self, event_queue: &mut EventQueue) {
         let readable = self.has_data() || self.num_writers() == 0;
-        let writable = self.space_available() > 0;
+        let writable = self.space_available() > 0 || self.num_readers() == 0;
 
         self.adjust_state(FileState::READABLE, readable, event_queue);
         self.adjust_state(FileState::WRITABLE, writable, event_queue);
