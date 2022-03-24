@@ -17,7 +17,11 @@ remap['eventfd'] = 'eventfd2' # libc eventfd() calls SYS_eventfd2
 
 # syscalls we should not generate C wrappers for
 skip = set()
-skip.add('eventfd2') # libc doesn't have an eventfd2() wrapper
+# libc doesn't have an eventfd2() wrapper
+skip.add('eventfd2')
+# `exit` has a non-trivial wrapper that calls `atexit` hooks, flushes open
+# `FILE*` objects, etc.
+skip.add('exit')
 
 # syscall wrappers that return errors directly instead of through errno.
 direct_errors = set()

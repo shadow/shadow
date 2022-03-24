@@ -142,9 +142,7 @@ INTERPOSE(execve);
 #ifdef SYS_execveat // kernel entry: num=322 func=sys_execveat
 INTERPOSE(execveat);
 #endif
-#ifdef SYS_exit // kernel entry: num=60 func=sys_exit
-INTERPOSE(exit);
-#endif
+// Skipping SYS_exit
 #ifdef SYS_exit_group // kernel entry: num=231 func=sys_exit_group
 INTERPOSE(exit_group);
 #endif
