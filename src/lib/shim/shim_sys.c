@@ -15,6 +15,7 @@
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_sys.h"
 #include "main/core/support/definitions.h" // for SIMTIME definitions
+#include "main/host/syscall_numbers.h"
 
 static EmulatedTime _shim_sys_get_time() {
     ShimShmemProcess* mem = shim_processSharedMem();
@@ -107,6 +108,30 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         default: {
             // the syscall was not handled
             return false;
+        }
+    }
+
+    uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(shim_hostSharedMem());
+    if (unblockedLimit > 0) {
+        ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
+        shimshmem_incrementUnblockedSyscallCount(host_lock);
+        uint32_t unblockedCount = shimshmem_getUnblockedSyscallCount(host_lock);
+        shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+
+        // Count the syscall and check whether we ought to yield.
+        trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
+        if (unblockedCount >= unblockedLimit) {
+            // We still want to eventually return the syscall result we just
+            // got, but first we yield control to Shadow so that it can move
+            // time forward and reschedule this thread. This syscall itself is
+            // a no-op, but the Shadow side will itself check and see that
+            // unblockedCount > unblockedLimit, as it does before executing any
+            // syscall.
+            //
+            // Since this is a Shadow syscall, it will always be passed through
+            // to Shadow instead of being executed natively.
+            trace("Reached unblocked syscall limit. Yielding.");
+            syscall(SYS_shadow_yield);
         }
     }
 

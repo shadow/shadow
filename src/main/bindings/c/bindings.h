@@ -348,6 +348,10 @@ bool config_getUseShimSyscallHandler(const struct ConfigOptions *config);
 
 int32_t config_getPreloadSpinMax(const struct ConfigOptions *config);
 
+int32_t config_getUnblockedSyscallLimit(const struct ConfigOptions *config);
+
+SimulationTime config_getUnblockedSyscallLatency(const struct ConfigOptions *config);
+
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
 SimulationTime config_getStopTime(const struct ConfigOptions *config);

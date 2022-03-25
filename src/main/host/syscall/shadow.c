@@ -139,3 +139,7 @@ SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, con
     }
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
+
+SysCallReturn syscallhandler_shadow_yield(SysCallHandler* sys, const SysCallArgs* args) {
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+}
