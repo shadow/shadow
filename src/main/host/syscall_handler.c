@@ -50,6 +50,9 @@
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
+static SimulationTime _unblockedSyscallLatency;
+ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatency)
+
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
     utility_assert(host);
@@ -262,238 +265,246 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                       sys->blockedSyscallNR, args->number);
     }
 
-    switch (args->number) {
-        HANDLE_C(accept);
-        HANDLE_C(accept4);
-        HANDLE_RUST(bind);
-        HANDLE_C(brk);
-        HANDLE_C(clock_gettime);
-        HANDLE_C(clock_nanosleep);
-        HANDLE_C(clone);
-        HANDLE_RUST(close);
-        HANDLE_C(connect);
-        HANDLE_C(creat);
-        HANDLE_RUST(dup);
-        HANDLE_RUST(dup2);
-        HANDLE_RUST(dup3);
-        HANDLE_C(epoll_create);
-        HANDLE_C(epoll_create1);
-        HANDLE_C(epoll_ctl);
-        HANDLE_C(epoll_pwait);
-        HANDLE_C(epoll_wait);
-        HANDLE_RUST(eventfd);
-        HANDLE_RUST(eventfd2);
-        HANDLE_C(execve);
-        HANDLE_C(exit_group);
-        HANDLE_C(faccessat);
-        HANDLE_C(fadvise64);
-        HANDLE_C(fallocate);
-        HANDLE_C(fchmod);
-        HANDLE_C(fchmodat);
-        HANDLE_C(fchown);
-        HANDLE_C(fchownat);
-        HANDLE_RUST(fcntl);
+    if (sys->havePendingResult) {
+        // The syscall was already completed, but we delayed the response to yield the CPU.
+        // Return that response now.
+        trace("Returning delayed result");
+        sys->havePendingResult = false;
+        scr = sys->pendingResult;
+    } else {
+        switch (args->number) {
+            HANDLE_C(accept);
+            HANDLE_C(accept4);
+            HANDLE_RUST(bind);
+            HANDLE_C(brk);
+            HANDLE_C(clock_gettime);
+            HANDLE_C(clock_nanosleep);
+            HANDLE_C(clone);
+            HANDLE_RUST(close);
+            HANDLE_C(connect);
+            HANDLE_C(creat);
+            HANDLE_RUST(dup);
+            HANDLE_RUST(dup2);
+            HANDLE_RUST(dup3);
+            HANDLE_C(epoll_create);
+            HANDLE_C(epoll_create1);
+            HANDLE_C(epoll_ctl);
+            HANDLE_C(epoll_pwait);
+            HANDLE_C(epoll_wait);
+            HANDLE_RUST(eventfd);
+            HANDLE_RUST(eventfd2);
+            HANDLE_C(execve);
+            HANDLE_C(exit_group);
+            HANDLE_C(faccessat);
+            HANDLE_C(fadvise64);
+            HANDLE_C(fallocate);
+            HANDLE_C(fchmod);
+            HANDLE_C(fchmodat);
+            HANDLE_C(fchown);
+            HANDLE_C(fchownat);
+            HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
-        // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
-        case SYS_fcntl64: {
-            _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
-            SyscallHandler* handler = sys->syscall_handler_rs;
-            sys->syscall_handler_rs = NULL;
-            args->number = SYS_fcntl;
-            scr = rustsyscallhandler_syscall(handler, sys, args);
-            args->number = SYS_fcntl64;
-            sys->syscall_handler_rs = handler;
-            _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
-        } break;
+            // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
+            case SYS_fcntl64: {
+                _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
+                SyscallHandler* handler = sys->syscall_handler_rs;
+                sys->syscall_handler_rs = NULL;
+                args->number = SYS_fcntl;
+                scr = rustsyscallhandler_syscall(handler, sys, args);
+                args->number = SYS_fcntl64;
+                sys->syscall_handler_rs = handler;
+                _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
+            } break;
 #endif
-        HANDLE_C(fdatasync);
-        HANDLE_C(fgetxattr);
-        HANDLE_C(flistxattr);
-        HANDLE_C(flock);
-        HANDLE_C(fremovexattr);
-        HANDLE_C(fsetxattr);
-        HANDLE_C(fstat);
-        HANDLE_C(fstatfs);
-        HANDLE_C(fsync);
-        HANDLE_C(ftruncate);
-        HANDLE_C(futex);
-        HANDLE_C(futimesat);
-        HANDLE_C(getdents);
-        HANDLE_C(getdents64);
-        HANDLE_RUST(getpeername);
-        HANDLE_C(getpid);
-        HANDLE_C(getppid);
-        HANDLE_C(gettid);
-        HANDLE_RUST(getrandom);
-        HANDLE_C(get_robust_list);
-        HANDLE_RUST(getsockname);
-        HANDLE_C(getsockopt);
-        HANDLE_C(gettimeofday);
-        HANDLE_RUST(ioctl);
-        HANDLE_C(kill);
-        HANDLE_C(linkat);
-        HANDLE_C(listen);
-        HANDLE_C(lseek);
-        HANDLE_C(mkdirat);
-        HANDLE_C(mknodat);
-        HANDLE_C(mmap);
+                HANDLE_C(fdatasync);
+                HANDLE_C(fgetxattr);
+                HANDLE_C(flistxattr);
+                HANDLE_C(flock);
+                HANDLE_C(fremovexattr);
+                HANDLE_C(fsetxattr);
+                HANDLE_C(fstat);
+                HANDLE_C(fstatfs);
+                HANDLE_C(fsync);
+                HANDLE_C(ftruncate);
+                HANDLE_C(futex);
+                HANDLE_C(futimesat);
+                HANDLE_C(getdents);
+                HANDLE_C(getdents64);
+                HANDLE_RUST(getpeername);
+                HANDLE_C(getpid);
+                HANDLE_C(getppid);
+                HANDLE_C(gettid);
+                HANDLE_RUST(getrandom);
+                HANDLE_C(get_robust_list);
+                HANDLE_RUST(getsockname);
+                HANDLE_C(getsockopt);
+                HANDLE_C(gettimeofday);
+                HANDLE_RUST(ioctl);
+                HANDLE_C(kill);
+                HANDLE_C(linkat);
+                HANDLE_C(listen);
+                HANDLE_C(lseek);
+                HANDLE_C(mkdirat);
+                HANDLE_C(mknodat);
+                HANDLE_C(mmap);
 #ifdef SYS_mmap2
-        HANDLE_C(mmap2);
+                HANDLE_C(mmap2);
 #endif
-        HANDLE_C(mprotect);
-        HANDLE_C(mremap);
-        HANDLE_C(munmap);
-        HANDLE_C(nanosleep);
-        HANDLE_C(newfstatat);
-        HANDLE_C(open);
-        HANDLE_C(openat);
-        HANDLE_RUST(pipe);
-        HANDLE_RUST(pipe2);
-        HANDLE_C(poll);
-        HANDLE_C(ppoll);
-        HANDLE_C(prctl);
-        HANDLE_RUST(pread64);
-        HANDLE_C(preadv);
+                HANDLE_C(mprotect);
+                HANDLE_C(mremap);
+                HANDLE_C(munmap);
+                HANDLE_C(nanosleep);
+                HANDLE_C(newfstatat);
+                HANDLE_C(open);
+                HANDLE_C(openat);
+                HANDLE_RUST(pipe);
+                HANDLE_RUST(pipe2);
+                HANDLE_C(poll);
+                HANDLE_C(ppoll);
+                HANDLE_C(prctl);
+                HANDLE_RUST(pread64);
+                HANDLE_C(preadv);
 #ifdef SYS_preadv2
-        HANDLE_C(preadv2);
+                HANDLE_C(preadv2);
 #endif
 #ifdef SYS_prlimit
-        HANDLE_C(prlimit);
+                HANDLE_C(prlimit);
 #endif
 #ifdef SYS_prlimit64
-        HANDLE_C(prlimit64);
+                HANDLE_C(prlimit64);
 #endif
-        HANDLE_C(pselect6);
-        HANDLE_RUST(pwrite64);
-        HANDLE_C(pwritev);
+                HANDLE_C(pselect6);
+                HANDLE_RUST(pwrite64);
+                HANDLE_C(pwritev);
 #ifdef SYS_pwritev2
-        HANDLE_C(pwritev2);
+                HANDLE_C(pwritev2);
 #endif
-        HANDLE_RUST(read);
-        HANDLE_C(readahead);
-        HANDLE_C(readlinkat);
-        HANDLE_C(readv);
-        HANDLE_RUST(recvfrom);
-        HANDLE_C(renameat);
-        HANDLE_C(renameat2);
-        HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
-        HANDLE_C(shadow_get_ipc_blk);
-        HANDLE_C(shadow_get_shm_blk);
-        HANDLE_C(shadow_hostname_to_addr_ipv4);
-        HANDLE_C(shadow_init_memory_manager);
-        HANDLE_C(select);
-        HANDLE_RUST(sendto);
-        HANDLE_C(setsockopt);
+                HANDLE_RUST(read);
+                HANDLE_C(readahead);
+                HANDLE_C(readlinkat);
+                HANDLE_C(readv);
+                HANDLE_RUST(recvfrom);
+                HANDLE_C(renameat);
+                HANDLE_C(renameat2);
+                HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
+                HANDLE_C(shadow_get_ipc_blk);
+                HANDLE_C(shadow_get_shm_blk);
+                HANDLE_C(shadow_hostname_to_addr_ipv4);
+                HANDLE_C(shadow_init_memory_manager);
+                HANDLE_C(shadow_yield);
+                HANDLE_C(select);
+                HANDLE_RUST(sendto);
+                HANDLE_C(setsockopt);
 #ifdef SYS_sigaction
-        // Superseded by rt_sigaction in Linux 2.2
-        UNSUPPORTED(sigaction);
+                // Superseded by rt_sigaction in Linux 2.2
+                UNSUPPORTED(sigaction);
 #endif
-        HANDLE_C(rt_sigaction);
-        HANDLE_C(sigaltstack);
+                HANDLE_C(rt_sigaction);
+                HANDLE_C(sigaltstack);
 #ifdef SYS_signal
-        // Superseded by sigaction in glibc 2.0
-        UNSUPPORTED(signal);
+                // Superseded by sigaction in glibc 2.0
+                UNSUPPORTED(signal);
 #endif
 #ifdef SYS_sigprocmask
-        // Superseded by rt_sigprocmask in Linux 2.2
-        UNSUPPORTED(sigprocmask);
+                // Superseded by rt_sigprocmask in Linux 2.2
+                UNSUPPORTED(sigprocmask);
 #endif
-        HANDLE_C(rt_sigprocmask);
-        HANDLE_C(set_robust_list);
-        HANDLE_C(set_tid_address);
-        HANDLE_C(shutdown);
-        HANDLE_RUST(socket);
-        HANDLE_RUST(socketpair);
+                HANDLE_C(rt_sigprocmask);
+                HANDLE_C(set_robust_list);
+                HANDLE_C(set_tid_address);
+                HANDLE_C(shutdown);
+                HANDLE_RUST(socket);
+                HANDLE_RUST(socketpair);
 #ifdef SYS_statx
-        HANDLE_C(statx);
+                HANDLE_C(statx);
 #endif
-        HANDLE_C(symlinkat);
-        HANDLE_C(sync_file_range);
-        HANDLE_C(syncfs);
-        HANDLE_RUST(sysinfo);
-        HANDLE_C(tgkill);
-        HANDLE_C(time);
-        HANDLE_C(timerfd_create);
-        HANDLE_C(timerfd_gettime);
-        HANDLE_C(timerfd_settime);
-        HANDLE_C(tkill);
-        HANDLE_C(uname);
-        HANDLE_C(unlinkat);
-        HANDLE_C(utimensat);
-        HANDLE_RUST(write);
-        HANDLE_C(writev);
+                HANDLE_C(symlinkat);
+                HANDLE_C(sync_file_range);
+                HANDLE_C(syncfs);
+                HANDLE_RUST(sysinfo);
+                HANDLE_C(tgkill);
+                HANDLE_C(time);
+                HANDLE_C(timerfd_create);
+                HANDLE_C(timerfd_gettime);
+                HANDLE_C(timerfd_settime);
+                HANDLE_C(tkill);
+                HANDLE_C(uname);
+                HANDLE_C(unlinkat);
+                HANDLE_C(utimensat);
+                HANDLE_RUST(write);
+                HANDLE_C(writev);
 
-        // **************************************
-        // Not handled (yet):
-        // **************************************
-        // NATIVE(chdir);
-        // NATIVE(fchdir);
-        // NATIVE(io_getevents);
-        // NATIVE(waitid);
-        // NATIVE(msync);
+                // **************************************
+                // Not handled (yet):
+                // **************************************
+                // NATIVE(chdir);
+                // NATIVE(fchdir);
+                // NATIVE(io_getevents);
+                // NATIVE(waitid);
+                // NATIVE(msync);
 
-        //// operations on pids (shadow overrides pids)
-        // NATIVE(sched_getaffinity);
-        // NATIVE(sched_setaffinity);
+                //// operations on pids (shadow overrides pids)
+                // NATIVE(sched_getaffinity);
+                // NATIVE(sched_setaffinity);
 
-        //// copying data between various types of fds
-        // NATIVE(copy_file_range);
-        // NATIVE(sendfile);
-        // NATIVE(splice);
-        // NATIVE(vmsplice);
-        // NATIVE(tee);
+                //// copying data between various types of fds
+                // NATIVE(copy_file_range);
+                // NATIVE(sendfile);
+                // NATIVE(splice);
+                // NATIVE(vmsplice);
+                // NATIVE(tee);
 
-        //// additional socket io
-        // NATIVE(recvmsg);
-        // NATIVE(sendmsg);
-        // NATIVE(recvmmsg);
-        // NATIVE(sendmmsg);
+                //// additional socket io
+                // NATIVE(recvmsg);
+                // NATIVE(sendmsg);
+                // NATIVE(recvmmsg);
+                // NATIVE(sendmmsg);
 
-        // ***************************************
-        // We think we don't need to handle these
-        // (because the plugin can natively):
-        // ***************************************
-        NATIVE(access);
-        NATIVE(arch_prctl);
-        NATIVE(chmod);
-        NATIVE(chown);
-        NATIVE(exit);
-        NATIVE(getcwd);
-        NATIVE(geteuid);
-        NATIVE(getegid);
-        NATIVE(getgid);
-        NATIVE(getresgid);
-        NATIVE(getresuid);
-        NATIVE(getrlimit);
-        NATIVE(getuid);
-        NATIVE(getxattr);
-        NATIVE(lchown);
-        NATIVE(lgetxattr);
-        NATIVE(link);
-        NATIVE(listxattr);
-        NATIVE(llistxattr);
-        NATIVE(lremovexattr);
-        NATIVE(lsetxattr);
-        NATIVE(lstat);
-        NATIVE(madvise);
-        NATIVE(mkdir);
-        NATIVE(mknod);
-        NATIVE(readlink);
-        NATIVE(removexattr);
-        NATIVE(rename);
-        NATIVE(rmdir);
-        NATIVE(rt_sigreturn);
-        NATIVE(setfsgid);
-        NATIVE(setfsuid);
-        NATIVE(setgid);
-        NATIVE(setregid);
-        NATIVE(setresgid);
-        NATIVE(setresuid);
-        NATIVE(setreuid);
-        NATIVE(setrlimit);
-        NATIVE(setuid);
-        NATIVE(setxattr);
-        NATIVE(stat);
+                // ***************************************
+                // We think we don't need to handle these
+                // (because the plugin can natively):
+                // ***************************************
+                NATIVE(access);
+                NATIVE(arch_prctl);
+                NATIVE(chmod);
+                NATIVE(chown);
+                NATIVE(exit);
+                NATIVE(getcwd);
+                NATIVE(geteuid);
+                NATIVE(getegid);
+                NATIVE(getgid);
+                NATIVE(getresgid);
+                NATIVE(getresuid);
+                NATIVE(getrlimit);
+                NATIVE(getuid);
+                NATIVE(getxattr);
+                NATIVE(lchown);
+                NATIVE(lgetxattr);
+                NATIVE(link);
+                NATIVE(listxattr);
+                NATIVE(llistxattr);
+                NATIVE(lremovexattr);
+                NATIVE(lsetxattr);
+                NATIVE(lstat);
+                NATIVE(madvise);
+                NATIVE(mkdir);
+                NATIVE(mknod);
+                NATIVE(readlink);
+                NATIVE(removexattr);
+                NATIVE(rename);
+                NATIVE(rmdir);
+                NATIVE(rt_sigreturn);
+                NATIVE(setfsgid);
+                NATIVE(setfsuid);
+                NATIVE(setgid);
+                NATIVE(setregid);
+                NATIVE(setresgid);
+                NATIVE(setresuid);
+                NATIVE(setreuid);
+                NATIVE(setrlimit);
+                NATIVE(setuid);
+                NATIVE(setxattr);
+                NATIVE(stat);
 #ifdef SYS_stat64
         NATIVE(stat64);
 #endif
@@ -522,6 +533,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             }
 
             break;
+        }
     }
 
     // If the syscall would be blocked, but there's a signal pending, fail with
@@ -550,6 +562,36 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         scr = (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINTR};
     }
 
+    if (!(scr.state == SYSCALL_DONE && syscall_rawReturnValueToErrno(scr.retval.as_i64) == 0)) {
+        // The syscall didn't complete successfully; don't write back pointers.
+        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+        process_freePtrsWithoutFlushing(sys->process);
+    }
+
+    if (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE) {
+        uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(host_getSharedMem(sys->host));
+        if (unblockedLimit > 0) {
+            uint32_t unblockedCount =
+                shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+            trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
+            if (unblockedCount >= unblockedLimit) {
+                // Block instead, but save the result so that we can return it
+                // later instead of re-executing the syscall.
+                utility_assert(!sys->havePendingResult);
+                sys->havePendingResult = true;
+                sys->pendingResult = scr;
+
+                utility_assert(scr.cond == NULL);
+                scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+                syscallcondition_setTimeout(
+                    scr.cond, sys->host,
+                    worker_getEmulatedTime() + unblockedCount * _unblockedSyscallLatency);
+                scr.state = SYSCALL_BLOCK;
+                trace("Reached unblocked syscall limit. Yielding.");
+            }
+        }
+    }
+
     if (scr.state == SYSCALL_BLOCK) {
         /* We are blocking: store the syscall number so we know
          * to expect the same syscall again when it unblocks. */
@@ -558,11 +600,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         sys->blockedSyscallNR = -1;
     }
 
-    if (!(scr.state == SYSCALL_DONE && syscall_rawReturnValueToErrno(scr.retval.as_i64) == 0)) {
-        // The syscall didn't complete successfully; don't write back pointers.
-        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
-        process_freePtrsWithoutFlushing(sys->process);
-    }
 
     return scr;
 }

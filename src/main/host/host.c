@@ -20,6 +20,7 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "lib/tsc/tsc.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
@@ -99,6 +100,9 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
+static uint32_t _unblockedSyscallLimit = 0;
+ADD_CONFIG_HANDLER(config_getUnblockedSyscallLimit, _unblockedSyscallLimit)
+
 /* this function is called by manager before the workers exist */
 Host* host_new(HostParameters* params) {
     utility_assert(params);
@@ -133,7 +137,7 @@ Host* host_new(HostParameters* params) {
          g_quark_to_string(host->params.id));
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(host_getSharedMem(host), host);
+    shimshmemhost_init(host_getSharedMem(host), host, _unblockedSyscallLimit);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;

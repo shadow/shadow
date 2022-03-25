@@ -68,6 +68,12 @@ struct _SysCallHandler {
     // A counter for individual syscalls
     Counter* syscall_counter;
 
+    // In some cases the syscallhandler comples, but we block the caller anyway
+    // to move time forward. This stores the result of the completed syscall, to
+    // be returned when the caller resumes.
+    bool havePendingResult;
+    SysCallReturn pendingResult;
+
     int referenceCount;
 
     // Since this structure is shared with Rust, we should always include the magic struct
