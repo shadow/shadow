@@ -387,6 +387,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(recvfrom);
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
+            HANDLE_C(sched_yield);
             HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
             HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);

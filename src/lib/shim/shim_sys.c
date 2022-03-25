@@ -105,6 +105,14 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             break;
         }
 
+        case SYS_sched_yield: {
+            // Do nothing. We already yield and move time forward after some
+            // number of unblocked syscalls.
+            *rv = 0;
+
+            break;
+        }
+
         default: {
             // the syscall was not handled
             return false;
