@@ -141,6 +141,10 @@ path = "select/test_select.rs"
 name = "test_sysinfo"
 path = "sysinfo/test_sysinfo.rs"
 
+[[bin]]
+name = "test_busy_wait"
+path = "regression/test_busy_wait.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.23.1"
