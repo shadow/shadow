@@ -41,14 +41,6 @@ struct _SysCallHandler {
     // For syscalls implemented in rust. Will eventually replace the C handler.
     SyscallHandler* syscall_handler_rs;
 
-    // Lock for the host's shared memory with the shim. The lock is taken at the
-    // start of processing a syscall, and released at completion.
-    //
-    // Should eventually be moved to an ephemeral object passed to the syscall
-    // handlers (e.g. ThreadContextObjs), rather than storing it here (where
-    // it's NULL when the lock isn't held).
-    ShimShmemHostLock* shimShmemHostLock;
-
     /* We use this epoll to service syscalls that need to block on the status
      * of multiple descriptors, like poll. */
     Epoll* epoll;

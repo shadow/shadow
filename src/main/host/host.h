@@ -113,4 +113,20 @@ Thread* host_getThread(Host* host, pid_t virtualTID);
 // Returns host-specific state that's kept in memory shared with the shim(s).
 ShimShmemHost* host_getSharedMem(Host* host);
 
+// Returns the lock, or NULL if the lock isn't held by Shadow.
+//
+// Generally the lock can and should be held when Shadow is running, and *not*
+// held when any of the host's managed threads are running (leaving it available
+// to be taken by the shim). While this can be a little fragile to ensure
+// properly, debug builds detect if we get it wrong (e.g. we try accessing
+// protected data without holding the lock, or the shim tries to take the lock
+// but can't).
+ShimShmemHostLock* host_getShimShmemLock(Host* host);
+
+// Take the host's shared memory lock. See `host_getShimShmemLock`.
+void host_lockShimShmemLock(Host* host);
+
+// Release the host's shared memory lock. See `host_getShimShmemLock`.
+void host_unlockShimShmemLock(Host* host);
+
 #endif /* SHD_HOST_H_ */

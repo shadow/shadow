@@ -1506,6 +1506,15 @@ extern "C" {
     pub fn host_getSharedMem(host: *mut Host) -> *mut ShimShmemHost;
 }
 extern "C" {
+    pub fn host_getShimShmemLock(host: *mut Host) -> *mut ShimShmemHostLock;
+}
+extern "C" {
+    pub fn host_lockShimShmemLock(host: *mut Host);
+}
+extern "C" {
+    pub fn host_unlockShimShmemLock(host: *mut Host);
+}
+extern "C" {
     pub fn worker_runEvent(event: *mut Event);
 }
 extern "C" {
@@ -1717,7 +1726,6 @@ pub struct _SysCallHandler {
     pub process: *mut Process,
     pub thread: *mut Thread,
     pub syscall_handler_rs: *mut SyscallHandler,
-    pub shimShmemHostLock: *mut ShimShmemHostLock,
     pub epoll: *mut Epoll,
     pub blockedSyscallNR: ::std::os::raw::c_long,
     pub perfTimer: *mut GTimer,
@@ -1732,7 +1740,7 @@ pub struct _SysCallHandler {
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        104usize,
+        96usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -1783,20 +1791,8 @@ fn bindgen_test_layout__SysCallHandler() {
         )
     );
     assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).shimShmemHostLock as *const _ as usize
-        },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(shimShmemHostLock)
-        )
-    );
-    assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).epoll as *const _ as usize },
-        40usize,
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1808,7 +1804,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).blockedSyscallNR as *const _ as usize
         },
-        48usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1818,7 +1814,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).perfTimer as *const _ as usize },
-        56usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1830,7 +1826,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsCurrent as *const _ as usize
         },
-        64usize,
+        56usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1842,7 +1838,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsTotal as *const _ as usize
         },
-        72usize,
+        64usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1852,7 +1848,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).numSyscalls as *const _ as usize },
-        80usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1862,7 +1858,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).syscall_counter as *const _ as usize },
-        88usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1872,7 +1868,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
-        96usize,
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1882,7 +1878,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
-        100usize,
+        92usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),

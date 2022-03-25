@@ -249,9 +249,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    utility_assert(!sys->shimShmemHostLock);
-    sys->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(sys->host));
-
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(sys->process);
 
     SysCallReturn scr;
@@ -546,7 +543,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // call will return a success  status  (normally,  the  number of bytes
     // transferred)."
     if (scr.state == SYSCALL_BLOCK &&
-        thread_unblockedSignalPending(sys->thread, sys->shimShmemHostLock)) {
+        thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
         SysCallCondition* condition = scr.cond;
         utility_assert(condition);
         syscallcondition_unref(condition);
@@ -566,8 +563,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
         process_freePtrsWithoutFlushing(sys->process);
     }
-
-    shimshmemhost_unlock(host_getSharedMem(sys->host), &sys->shimShmemHostLock);
 
     return scr;
 }

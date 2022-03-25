@@ -53,6 +53,14 @@ static ThreadPreload* _threadToThreadPreload(Thread* thread) {
 
 static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)thread; }
 
+static void _threadpreload_continuePlugin(ThreadPreload* thread, const ShimEvent* event) {
+    // We're about to let managed thread execute, so need to release the shared memory lock.
+    // Reacquired in _threadpreload_waitForNextEvent.
+    host_unlockShimShmemLock(thread->base.host);
+
+    shimevent_sendEventToPlugin(thread->ipc_data, event);
+}
+
 void threadpreload_free(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -224,6 +232,9 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     MAGIC_ASSERT(_threadPreloadToThread(thread));
     utility_assert(thread->ipc_data);
     shimevent_recvEventFromPlugin(thread->ipc_data, &thread->currentEvent);
+    // The managed thread has yielded control back to us. Reacquire the shared
+    // memory lock, which we released in `_threadpreload_continuePlugin`.
+    host_lockShimShmemLock(thread->base.host);
     trace("received shim_event %d", thread->currentEvent.event_id);
 }
 
@@ -249,7 +260,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 trace("sending start event code to %d on %p", thread->base.nativePid,
                       thread->ipc_data);
 
-                shimevent_sendEventToPlugin(thread->ipc_data, &thread->currentEvent);
+                _threadpreload_continuePlugin(thread, &thread->currentEvent);
                 break;
             }
             case SHD_SHIM_EVENT_STOP: {
@@ -259,12 +270,18 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 return NULL;
             }
             case SHD_SHIM_EVENT_SYSCALL: {
-                // XXX hacky. Move to a syscall handler?
+                // `exit` is tricky since it only exits the *thread*, and we don't have a way
+                // to be notified that the thread has exited. We have to "fire and forget"
+                // the command to execute the syscall natively.
                 if (thread->currentEvent.event_data.syscall.syscall_args.number == SYS_exit) {
                     // Tell thread to go ahead and make the exit syscall itself.
-                    shimevent_sendEventToPlugin(thread->ipc_data, &(ShimEvent){
-                        .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE
-                    });
+                    // We *don't* call `_threadpreload_continuePlugin` here,
+                    // since that'd release the ShimSharedMemHostLock, and we
+                    // aren't going to get a message back to know when it'd be
+                    // safe to take it again.
+                    shimevent_sendEventToPlugin(
+                        thread->ipc_data,
+                        &(ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE});
                     // Clean up the thread.
                     _threadpreload_cleanup(thread);
                     return NULL;
@@ -301,8 +318,8 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                         // stop spinning so that releases its CPU core for the next
                         // thread to be run.
                         ShimEvent block_event = {.event_id = SHD_SHIM_EVENT_BLOCK};
-                        shimevent_sendEventToPlugin(thread->ipc_data, &block_event);
-                        shimevent_recvEventFromPlugin(thread->ipc_data, &block_event);
+                        _threadpreload_continuePlugin(thread, &block_event);
+                        _threadpreload_waitForNextEvent(thread);
                     }
 
                     return result.cond;
@@ -322,11 +339,11 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
                     };
                 }
-                shimevent_sendEventToPlugin(thread->ipc_data, &shim_result);
+                _threadpreload_continuePlugin(thread, &shim_result);
                 break;
             }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
-                shimevent_sendEventToPlugin(thread->ipc_data, &thread->currentEvent);
+                _threadpreload_continuePlugin(thread, &thread->currentEvent);
                 break;
             }
             default: {
@@ -394,17 +411,12 @@ static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr chi
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new thread to use.
-    shimevent_sendEventToPlugin(thread->ipc_data, &(ShimEvent){
-        .event_id = SHD_SHIM_EVENT_ADD_THREAD_REQ,
-        .event_data.add_thread_req = {
-            .ipc_block = ipc_blk_serial,
-        }
-    });
-    {
-        ShimEvent res;
-        shimevent_recvEventFromPlugin(thread->ipc_data, &res);
-        utility_assert(res.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
-    }
+    _threadpreload_continuePlugin(thread, &(ShimEvent){.event_id = SHD_SHIM_EVENT_ADD_THREAD_REQ,
+                                                       .event_data.add_thread_req = {
+                                                           .ipc_block = ipc_blk_serial,
+                                                       }});
+    _threadpreload_waitForNextEvent(thread);
+    utility_assert(thread->currentEvent.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
     pid_t childNativeTid = thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
@@ -438,18 +450,17 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     for (int i = 0; i < 6; ++i) {
         req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
     }
-    shimevent_sendEventToPlugin(thread->ipc_data, &req);
+    _threadpreload_continuePlugin(thread, &req);
 
-    ShimEvent resp = {0};
-    shimevent_recvEventFromPlugin(thread->ipc_data, &resp);
-    if (resp.event_id == SHD_SHIM_EVENT_STOP) {
+    _threadpreload_waitForNextEvent(thread);
+    if (thread->currentEvent.event_id == SHD_SHIM_EVENT_STOP) {
         trace("Plugin exited while executing native syscall %ld", n);
         _threadpreload_cleanup(thread);
         // We have to return *something* here. Probably doesn't matter much what.
         return -ESRCH;
     }
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
-    return resp.event_data.syscall_complete.retval.as_i64;
+    utility_assert(thread->currentEvent.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+    return thread->currentEvent.event_data.syscall_complete.retval.as_i64;
 }
 
 Thread* threadpreload_new(Host* host, Process* process, gint threadID) {

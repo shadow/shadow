@@ -74,7 +74,8 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     utility_assert(timer);
     if (timer_getExpirationCount(timer) == 0) {
         // Should only happen if we were interrupted by a signal.
-        utility_assert(thread_unblockedSignalPending(sys->thread, sys->shimShmemHostLock));
+        utility_assert(
+            thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
         struct itimerspec timer_val;
         timer_getTime(timer, &timer_val);

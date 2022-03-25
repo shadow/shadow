@@ -82,6 +82,9 @@ struct _Host {
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
 
+    /* Lock protecting parts of shimSharedMemBlock. */
+    ShimShmemHostLock* shimShmemHostLock;
+
     /* random stream */
     Random* random;
 
@@ -753,4 +756,19 @@ ShimShmemHost* host_getSharedMem(Host* host) {
     MAGIC_ASSERT(host);
     utility_assert(host->shimSharedMemBlock.p);
     return host->shimSharedMemBlock.p;
+}
+
+ShimShmemHostLock* host_getShimShmemLock(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->shimShmemHostLock;
+}
+
+void host_lockShimShmemLock(Host* host) {
+    MAGIC_ASSERT(host);
+    host->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(host));
+}
+
+void host_unlockShimShmemLock(Host* host) {
+    MAGIC_ASSERT(host);
+    shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
 }
