@@ -948,7 +948,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vsprintf"
 version = "2.0.0"
-source = "git+https://github.com/sporksmith/vsprintf?rev=fa9a307e3043a972501b3157323ed8a9973ad45a#fa9a307e3043a972501b3157323ed8a9973ad45a"
+source = "git+https://github.com/shadow/vsprintf?rev=fa9a307e3043a972501b3157323ed8a9973ad45a#fa9a307e3043a972501b3157323ed8a9973ad45a"
 dependencies = [
  "cc",
  "libc",
