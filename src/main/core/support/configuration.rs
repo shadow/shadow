@@ -431,10 +431,11 @@ impl Default for ExperimentalOptions {
             use_preload_openssl_rng: Some(true),
             use_preload_openssl_crypto: Some(false),
             preload_spin_max: Some(0),
-            // Experimentally, this is high enough to trigger infrequently
+            // Experimentally, 500 is high enough to trigger infrequently
             // outside of a true "busy loop", and low enough to get out of such
-            // loops fairly quickly.
-            unblocked_syscall_limit: Some(500),
+            // loops fairly quickly. Disabled by default for now, pending further
+            // testing.
+            unblocked_syscall_limit: Some(0),
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),

@@ -3,6 +3,9 @@
 general:
   stop_time: 15s
 
+experimental:
+  unblocked_syscall_limit: 500
+
 network:
   graph:
     type: 1_gbit_switch
