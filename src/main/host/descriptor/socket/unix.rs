@@ -11,6 +11,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::utility::enum_map::{FromIndex, IntoIndex};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -182,6 +183,8 @@ impl UnixSocketFile {
             return Err(Errno::EINVAL.into());
         }
 
+        let socket_type = socket.borrow().socket_type;
+
         // get the unix address
         let addr = match addr {
             Some(nix::sys::socket::SockAddr::Unix(x)) => x,
@@ -198,14 +201,15 @@ impl UnixSocketFile {
         if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::bind(&namespace, name.to_vec(), socket).is_err() {
+            if AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket).is_err()
+            {
                 // address is in use
                 return Err(Errno::EADDRINUSE.into());
             }
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::autobind(&namespace, socket, rng).is_err() {
+            if AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng).is_err() {
                 // no autobind addresses remaining
                 return Err(Errno::EADDRINUSE.into());
             }
@@ -301,7 +305,7 @@ impl UnixSocketFile {
                 // if an abstract address
                 if let Some(name) = addr.unwrap().as_abstract() {
                     // look up the socket from the address name
-                    match self.namespace.borrow().lookup(name) {
+                    match self.namespace.borrow().lookup(self.socket_type, name) {
                         // socket was found with the given name
                         Some(recv_socket) => {
                             // store an Arc of the recv buffer
@@ -464,11 +468,41 @@ impl UnixSocketFile {
     }
 }
 
+// WARNING: don't add new enum variants without updating 'variant_count()' below
 #[derive(Copy, Clone, Debug)]
 pub enum UnixSocketType {
     Stream,
     Dgram,
     SeqPacket,
+}
+
+impl UnixSocketType {
+    /// The number of variants in this enum.
+    pub const fn variant_count() -> usize {
+        // similar idea to https://doc.rust-lang.org/core/mem/fn.variant_count.html
+        3
+    }
+}
+
+impl IntoIndex for UnixSocketType {
+    fn into_index(self) -> usize {
+        match self {
+            Self::Stream => 0,
+            Self::Dgram => 1,
+            Self::SeqPacket => 2,
+        }
+    }
+}
+
+impl FromIndex for UnixSocketType {
+    fn from_index(val: usize) -> Option<Self> {
+        match val {
+            0 => Some(Self::Stream),
+            1 => Some(Self::Dgram),
+            2 => Some(Self::SeqPacket),
+            _ => None,
+        }
+    }
 }
 
 impl TryFrom<libc::c_int> for UnixSocketType {

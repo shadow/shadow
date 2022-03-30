@@ -4,10 +4,13 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 
-use crate::host::descriptor::socket::UnixSocketFile;
+use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
 use crate::host::descriptor::FileState;
 use crate::host::descriptor::StateListenerFilter;
+use crate::utility::enum_map::EnumMap;
 use crate::utility::event_queue::Handle;
+
+type UnixSocketTypeMap<T> = EnumMap<UnixSocketType, T, { UnixSocketType::variant_count() }>;
 
 struct NamespaceEntry {
     /// The bound socket.
@@ -29,28 +32,34 @@ impl NamespaceEntry {
 }
 
 pub struct AbstractUnixNamespace {
-    address_map: HashMap<Vec<u8>, NamespaceEntry>,
+    address_map: UnixSocketTypeMap<HashMap<Vec<u8>, NamespaceEntry>>,
 }
 
 impl AbstractUnixNamespace {
     pub fn new() -> Self {
         Self {
-            address_map: HashMap::new(),
+            // initializes an empty hash map for each unix socket type
+            address_map: UnixSocketTypeMap::new(),
         }
     }
 
-    pub fn lookup(&self, name: &[u8]) -> Option<Arc<AtomicRefCell<UnixSocketFile>>> {
+    pub fn lookup(
+        &self,
+        sock_type: UnixSocketType,
+        name: &[u8],
+    ) -> Option<Arc<AtomicRefCell<UnixSocketFile>>> {
         // the unwrap() will panic if the socket was dropped without being closed, but this should
         // only be possible at the end of the simulation and there wouldn't be any reason to call
         // lookup() at that time, so a panic here would most likely indicate an issue somewhere else
         // in shadow
-        self.address_map
+        self.address_map[sock_type]
             .get(name)
             .map(|x| x.socket.upgrade().unwrap())
     }
 
     pub fn bind(
         ns_arc: &Arc<AtomicRefCell<Self>>,
+        sock_type: UnixSocketType,
         mut name: Vec<u8>,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
     ) -> Result<(), BindError> {
@@ -61,7 +70,7 @@ impl AbstractUnixNamespace {
         let name_copy = name.clone();
 
         // look up the name in the address map
-        let entry = match ns.address_map.entry(name) {
+        let entry = match ns.address_map[sock_type].entry(name) {
             std::collections::hash_map::Entry::Occupied(_) => return Err(BindError::NameInUse),
             std::collections::hash_map::Entry::Vacant(x) => x,
         };
@@ -71,7 +80,7 @@ impl AbstractUnixNamespace {
             Arc::downgrade(&ns_arc),
             &mut socket.borrow_mut(),
             move |ns| {
-                assert!(ns.unbind(&name_copy).is_ok());
+                assert!(ns.unbind(sock_type, &name_copy).is_ok());
             },
         );
 
@@ -82,6 +91,7 @@ impl AbstractUnixNamespace {
 
     pub fn autobind(
         ns_arc: &Arc<AtomicRefCell<Self>>,
+        sock_type: UnixSocketType,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
         mut rng: impl rand::Rng,
     ) -> Result<(), BindError> {
@@ -94,7 +104,7 @@ impl AbstractUnixNamespace {
         for _ in 0..10 {
             let random_name: [u8; NAME_LEN] = random_name(&mut rng);
 
-            if !ns.address_map.contains_key(&random_name[..]) {
+            if !ns.address_map[sock_type].contains_key(&random_name[..]) {
                 name = Some(random_name.to_vec());
                 break;
             }
@@ -105,7 +115,7 @@ impl AbstractUnixNamespace {
             for x in 0..CHARSET.len().pow(NAME_LEN as u32) {
                 let temp_name: [u8; NAME_LEN] = incremental_name(x);
 
-                if !ns.address_map.contains_key(&temp_name[..]) {
+                if !ns.address_map[sock_type].contains_key(&temp_name[..]) {
                     name = Some(temp_name.to_vec());
                     break;
                 }
@@ -125,11 +135,13 @@ impl AbstractUnixNamespace {
             Arc::downgrade(&ns_arc),
             &mut socket.borrow_mut(),
             move |ns| {
-                assert!(ns.unbind(&name_copy).is_ok());
+                assert!(ns.unbind(sock_type, &name_copy).is_ok());
             },
         );
 
-        if let std::collections::hash_map::Entry::Vacant(entry) = ns.address_map.entry(name) {
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            ns.address_map[sock_type].entry(name)
+        {
             entry.insert(NamespaceEntry::new(Arc::downgrade(socket), handle));
         } else {
             unreachable!();
@@ -138,10 +150,10 @@ impl AbstractUnixNamespace {
         Ok(())
     }
 
-    pub fn unbind(&mut self, name: &Vec<u8>) -> Result<(), BindError> {
+    pub fn unbind(&mut self, sock_type: UnixSocketType, name: &Vec<u8>) -> Result<(), BindError> {
         // remove the namespace entry which includes the handle, so the event listener will
         // automatically be removed from the socket
-        if self.address_map.remove(name).is_none() {
+        if self.address_map[sock_type].remove(name).is_none() {
             // didn't exist in the address map
             return Err(BindError::NameNotFound);
         }
