@@ -16,7 +16,7 @@ typedef struct _Controller Controller;
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 
-Controller* controller_new(const ConfigOptions*);
+Controller* controller_new(const ConfigOptions*, const HashSet_String*);
 void controller_free(Controller*);
 gint controller_run(Controller*);
 

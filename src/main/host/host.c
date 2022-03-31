@@ -399,7 +399,8 @@ guint64 host_getNewPacketID(Host* host) {
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
                          InterposeMethod interposeMethod, const gchar* pluginName,
-                         const gchar* pluginPath, gchar** envv, gchar** argv) {
+                         const gchar* pluginPath, gchar** envv, gchar** argv,
+                         bool pause_for_debugging) {
     MAGIC_ASSERT(host);
     {
         ShMemBlockSerialized sharedMemBlockSerial =
@@ -421,7 +422,8 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                                 pluginName,
                                 pluginPath,
                                 envv,
-                                argv);
+                                argv,
+                                pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
 }
 
