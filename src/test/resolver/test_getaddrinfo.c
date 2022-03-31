@@ -9,6 +9,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "test/test_common.h"
+
 #define STRINGIFY_ENUM_CASE(buf, e)                                            \
     case e:                                                                    \
         sprintf(buf, #e "(%d)", e);                                            \
@@ -294,7 +296,30 @@ void test_host_file() {
     };
     assert_getaddrinfo_rv_equals(
         getaddrinfo("localhost", NULL, &hints, &res), 0);
+
+    // skip this check on linux since this may return two duplicate entries depending on the hosts
+    // file: https://stackoverflow.com/a/39538935
+    if (running_in_shadow()) {
+        assert_addrinfo_equals(res, &expected_addrinfo);
+    }
+
     freeaddrinfo(res);
+}
+
+void test_ipv6() {
+    struct addrinfo hints = {
+        .ai_family = AF_INET6, .ai_socktype = SOCK_STREAM, .ai_flags = AI_PASSIVE};
+    struct addrinfo* res;
+
+    int rv = getaddrinfo(NULL, "80", &hints, &res);
+
+    if (running_in_shadow()) {
+        // shadow doesn't support IPv6
+        assert_getaddrinfo_rv_equals(rv, EAI_NONAME);
+    } else {
+        // linux should return a non-error result
+        assert_getaddrinfo_rv_equals(rv, 0);
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -304,6 +329,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/getaddrinfo/service", &test_service);
     g_test_add_func("/getaddrinfo/numeric_host", &test_numeric_host);
     g_test_add_func("/getaddrinfo/host_file", &test_host_file);
+    g_test_add_func("/getaddrinfo/ipv6", &test_ipv6);
 
     return g_test_run();
 }

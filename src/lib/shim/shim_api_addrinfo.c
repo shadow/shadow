@@ -368,7 +368,11 @@ int shim_api_getaddrinfo(const char* node, const char* service, const struct add
             }
         }
         // We've finished adding all relevant addresses.
-        return 0;
+        if (*res != NULL) {
+            return 0;
+        } else {
+            return EAI_NONAME;
+        }
     }
 
     // "`node` specifies either a numerical network address..."
