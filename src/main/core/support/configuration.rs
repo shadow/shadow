@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
+use std::str::FromStr;
 
 use clap::ArgEnum;
 use clap::Parser;
@@ -384,7 +385,7 @@ pub struct ExperimentalOptions {
     #[clap(parse(try_from_str = parse_set_log_info_flags))]
     #[clap(long, value_name = "options")]
     #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap().as_str())]
-    pub host_heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
+    pub host_heartbeat_log_info: Option<HashSet<LogInfoFlag>>,
 
     /// Amount of time between heartbeat messages for this host
     #[clap(long, value_name = "seconds")]
@@ -582,7 +583,7 @@ pub enum LogLevel {
     Trace,
 }
 
-impl std::str::FromStr for LogLevel {
+impl FromStr for LogLevel {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -613,7 +614,7 @@ pub enum InterposeMethod {
     Preload,
 }
 
-impl std::str::FromStr for InterposeMethod {
+impl FromStr for InterposeMethod {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -631,7 +632,7 @@ pub enum SchedulerPolicy {
     ThreadXHost,
 }
 
-impl std::str::FromStr for SchedulerPolicy {
+impl FromStr for SchedulerPolicy {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -673,7 +674,7 @@ impl LogInfoFlag {
     }
 }
 
-impl std::str::FromStr for LogInfoFlag {
+impl FromStr for LogInfoFlag {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -684,8 +685,8 @@ impl std::str::FromStr for LogInfoFlag {
 /// Parse a string as a set of `LogInfoFlag` values.
 fn parse_set_log_info_flags(
     s: &str,
-) -> Result<std::collections::HashSet<LogInfoFlag>, serde_yaml::Error> {
-    let flags: Result<std::collections::HashSet<LogInfoFlag>, _> =
+) -> Result<HashSet<LogInfoFlag>, serde_yaml::Error> {
+    let flags: Result<HashSet<LogInfoFlag>, _> =
         s.split(',').map(|x| x.trim().parse()).collect();
     flags
 }
@@ -698,7 +699,7 @@ pub enum QDiscMode {
     RoundRobin,
 }
 
-impl std::str::FromStr for QDiscMode {
+impl FromStr for QDiscMode {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -810,7 +811,7 @@ pub enum StraceLoggingMode {
     Deterministic,
 }
 
-impl std::str::FromStr for StraceLoggingMode {
+impl FromStr for StraceLoggingMode {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
