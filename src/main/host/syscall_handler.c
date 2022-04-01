@@ -574,6 +574,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     if (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE) {
         uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(host_getSharedMem(sys->host));
         if (unblockedLimit > 0) {
+            // Increment unblocked syscall count, but only for
+            // non-shadow-syscalls, since the latter are part of Shadow's
+            // internal plumbing; they shouldn't necessarily "consume" time.
+            if (!syscall_num_is_shadow(args->number)) {
+                shimshmem_incrementUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+            }
             uint32_t unblockedCount =
                 shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
             trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
