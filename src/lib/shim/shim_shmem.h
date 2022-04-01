@@ -37,7 +37,7 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 // parameter are still thread-safe, and internally use atomics.
 
 size_t shimshmemhost_size();
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host);
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
 
@@ -106,6 +106,15 @@ void shimshmem_setSigAltStack(const ShimShmemHostLock* host, ShimShmemThread* th
 // Returns 0 if no unblocked signal is pending.
 int shimshmem_takePendingUnblockedSignal(const ShimShmemHostLock* lock, ShimShmemProcess* process,
                                          ShimShmemThread* thread, siginfo_t* info);
+
+// Track the number of consecutive unblocked syscalls.
+void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host);
+uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host);
+void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host);
+
+// Get the configured maximum unmber of unblocked syscalls to execute before
+// yielding.
+uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host);
 
 // Handle SHD_SHIM_EVENT_CLONE_REQ
 void shim_shmemHandleClone(const ShimEvent* ev);

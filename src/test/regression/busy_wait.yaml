@@ -1,0 +1,18 @@
+# https://github.com/shadow/shadow/issues/1968
+
+general:
+  stop_time: 15s
+
+experimental:
+  unblocked_syscall_limit: 500
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: ../target/debug/test_busy_wait
+      start_time: 1s

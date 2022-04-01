@@ -395,6 +395,19 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "mode")]
     #[clap(help = EXP_HELP.get("strace_logging_mode").unwrap().as_str())]
     pub strace_logging_mode: Option<StraceLoggingMode>,
+
+    /// Number of consecutive unblocked syscalls before a thread applies
+    /// `unblocked_syscall_latency` and yields. 0 to never yield.
+    #[clap(long, value_name = "count")]
+    #[clap(help = EXP_HELP.get("unblocked_syscall_limit").unwrap().as_str())]
+    pub unblocked_syscall_limit: Option<i32>,
+
+    /// Simulated latency of an unblocked syscall. For efficiency Shadow only
+    /// actually adds this latency if and when `unblocked_syscall_limit` is
+    /// reached.
+    #[clap(long, value_name = "seconds")]
+    #[clap(help = EXP_HELP.get("unblocked_syscall_latency").unwrap().as_str())]
+    pub unblocked_syscall_latency: Option<units::Time<units::TimePrefix>>,
 }
 
 impl ExperimentalOptions {
@@ -418,6 +431,14 @@ impl Default for ExperimentalOptions {
             use_preload_openssl_rng: Some(true),
             use_preload_openssl_crypto: Some(false),
             preload_spin_max: Some(0),
+            // Experimentally, 500 is high enough to trigger infrequently
+            // outside of a true "busy loop", and low enough to get out of such
+            // loops fairly quickly. Disabled by default for now, pending further
+            // testing.
+            unblocked_syscall_limit: Some(0),
+            // 2 microseconds is a ballpark estimate of the minimal latency for
+            // context switching to the kernel and back on modern machines.
+            unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
@@ -1223,6 +1244,26 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.preload_spin_max.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUnblockedSyscallLimit(config: *const ConfigOptions) -> i32 {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.unblocked_syscall_limit.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUnblockedSyscallLatency(
+        config: *const ConfigOptions,
+    ) -> c::SimulationTime {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        match config.experimental.unblocked_syscall_latency {
+            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
+            None => 0,
+        }
     }
 
     #[no_mangle]

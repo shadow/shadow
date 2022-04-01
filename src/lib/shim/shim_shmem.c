@@ -13,6 +13,9 @@
 
 struct _ShimHostProtectedSharedMem {
     GQuark host_id;
+
+    // Number of syscalls that have executed without blocking.
+    uint32_t unblocked_syscall_count;
 };
 
 struct _ShimShmemHost {
@@ -24,6 +27,14 @@ struct _ShimShmemHost {
 
     // Guarded by `mutex`.
     ShimShmemHostLock protected;
+
+    // Number of syscalls allowed to execute before yielding.
+    // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
+    // stays a global constant; Or down into the process if we make it a
+    // per-process option.
+    //
+    // Thread Safety: immutable after initialization.
+    const uint32_t unblocked_syscall_limit;
 };
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
@@ -84,15 +95,40 @@ struct _ShimShmemThread {
 
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host) {
-    *hostMem = (ShimShmemHost){
-        .host_id = host_getID(host),
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .protected =
-            {
-                .host_id = host_getID(host),
-            },
-    };
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit) {
+    // We use `memcpy` here to allow us to initialize the const members of
+    // `hostMem`.
+    memcpy(hostMem,
+           &(ShimShmemHost){
+               .host_id = host_getID(host),
+               .mutex = PTHREAD_MUTEX_INITIALIZER,
+               .unblocked_syscall_limit = unblockedSyscallLimit,
+               .protected =
+                   {
+                       .host_id = host_getID(host),
+                   },
+           },
+           sizeof(ShimShmemHost));
+}
+
+void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host) {
+    assert(host);
+    ++host->unblocked_syscall_count;
+}
+
+uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host) {
+    assert(host);
+    return host->unblocked_syscall_count;
+}
+
+uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host) {
+    assert(host);
+    return host->unblocked_syscall_limit;
+}
+
+void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host) {
+    assert(host);
+    host->unblocked_syscall_count = 0;
 }
 
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,
