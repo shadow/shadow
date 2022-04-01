@@ -435,7 +435,7 @@ impl Default for ExperimentalOptions {
             // outside of a true "busy loop", and low enough to get out of such
             // loops fairly quickly. Disabled by default for now, pending further
             // testing.
-            unblocked_syscall_limit: Some(0),
+            unblocked_syscall_limit: Some(500),
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
