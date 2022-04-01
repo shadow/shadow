@@ -78,8 +78,8 @@ hosts:
 - [`experimental.socket_send_autotune`](#experimentalsocket_send_autotune)
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.strace_logging_mode`](#experimentalstrace_logging_mode)
-- [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscal_latency)
-- [`experimental.unblocked_syscall_limit`](#experimentalunblocked_syscal_limit)
+- [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscall_latency)
+- [`experimental.unblocked_syscall_limit`](#experimentalunblocked_syscall_limit)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
@@ -416,7 +416,7 @@ Type: Integer
 
 If non-zero, the number of consecutive unblocked syscalls that Shadow will
 allow a thread to execute before `unblocked_syscall_latency` is applied.
-Setting this to a value of 0 allows time to eventually move forward in cases
+Setting this to a non-zero value allows time to eventually move forward in cases
 where the managed thread is in a "busy loop" that executes forever until a
 timeout or some other condition is satisfied.
 
