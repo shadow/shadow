@@ -347,7 +347,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 break;
             }
             default: {
-                utility_panic("unknown event type");
+                utility_panic("unknown event type: %d");
                 break;
             }
         }
