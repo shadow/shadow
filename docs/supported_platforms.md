@@ -8,8 +8,9 @@
   + CentOS Stream 8
 
 If you are installing Shadow within a Docker container, you must increase the
-size of the container's `/dev/shm` mount by passing `--shm-size="1g"` (with a
-suitable size for your system and experiments) to `docker run`.
+size of the container's `/dev/shm` mount and disable the seccomp security
+profile. You can do this by passing `--shm-size="1024g" --security-opt
+seccomp=unconfined` to `docker run`.
 
 If you are having difficulty installing Shadow on any of these platforms, you
 may find the [continuous integration build
