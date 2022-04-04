@@ -36,7 +36,7 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: /bin/python3
+    - path: /usr/bin/python3
       args: -m http.server 80
       start_time: 3s
   # three hosts with hostnames 'client1', 'client2', and 'client3'
@@ -44,7 +44,7 @@ hosts:
     network_node_id: 0
     quantity: 3
     processes:
-    - path: /bin/curl
+    - path: /usr/bin/curl
       args: -s server
       start_time: 5s
 ```
