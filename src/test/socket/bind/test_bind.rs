@@ -65,6 +65,38 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         ),
     ];
 
+    // get the cartesian product of socket types
+    let sock_types = &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET];
+    let sock_type_combinations: Vec<(libc::c_int, libc::c_int)> = sock_types
+        .iter()
+        .map(|item_x| sock_types.iter().map(move |item_y| (*item_x, *item_y)))
+        .flatten()
+        .collect();
+
+    for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
+        for &(sock_type_1, sock_type_2) in &sock_type_combinations {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| {
+                format!(
+                    "{} <domain={},type_1={},type_2={}>",
+                    s, domain, sock_type_1, sock_type_2
+                )
+            };
+
+            // skip tests that use SOCK_SEQPACKET with INET sockets
+            if domain == libc::AF_INET && [sock_type_1, sock_type_2].contains(&libc::SOCK_SEQPACKET)
+            {
+                continue;
+            }
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_two_types_same_address"),
+                move || test_two_types_same_address(domain, sock_type_1, sock_type_2),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
+        }
+    }
+
     // tests to repeat for different socket options
     for &domain in [libc::AF_INET].iter() {
         for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
@@ -362,6 +394,63 @@ fn test_all_ports_used() -> Result<(), String> {
     }
 
     rv
+}
+
+fn test_two_types_same_address(
+    domain: libc::c_int,
+    sock_type_1: libc::c_int,
+    sock_type_2: libc::c_int,
+) -> Result<(), String> {
+    let fd_1 = unsafe { libc::socket(domain, sock_type_1, 0) };
+    let fd_2 = unsafe { libc::socket(domain, sock_type_2, 0) };
+    assert!(fd_1 >= 0);
+    assert!(fd_2 >= 0);
+
+    let (bind_addr, bind_addr_len) = match domain {
+        libc::AF_INET => (
+            SockAddr::Inet(libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: 11111u16.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            }),
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        ),
+        libc::AF_UNIX => {
+            let mut addr = libc::sockaddr_un {
+                sun_family: libc::AF_UNIX as u16,
+                sun_path: [0; 108],
+            };
+            addr.sun_path[1..5].copy_from_slice(&[23, 12, 44, 53]);
+            (SockAddr::Unix(addr), 7)
+        }
+        _ => unimplemented!(),
+    };
+
+    let args_1 = BindArguments {
+        fd: fd_1,
+        addr: Some(bind_addr),
+        addr_len: bind_addr_len,
+    };
+
+    let args_2 = BindArguments {
+        fd: fd_2,
+        addr: Some(bind_addr),
+        addr_len: bind_addr_len,
+    };
+
+    test_utils::run_and_close_fds(&[fd_1, fd_2], || {
+        let expected_errno = if sock_type_1 == sock_type_2 {
+            Some(libc::EADDRINUSE)
+        } else {
+            None
+        };
+
+        check_bind_call(&args_1, None)?;
+        check_bind_call(&args_2, expected_errno)
+    })
 }
 
 /*

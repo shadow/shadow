@@ -182,6 +182,8 @@ impl UnixSocketFile {
             return Err(Errno::EINVAL.into());
         }
 
+        let socket_type = socket.borrow().socket_type;
+
         // get the unix address
         let addr = match addr {
             Some(nix::sys::socket::SockAddr::Unix(x)) => x,
@@ -198,14 +200,15 @@ impl UnixSocketFile {
         if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::bind(&namespace, name.to_vec(), socket).is_err() {
+            if AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket).is_err()
+            {
                 // address is in use
                 return Err(Errno::EADDRINUSE.into());
             }
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::autobind(&namespace, socket, rng).is_err() {
+            if AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng).is_err() {
                 // no autobind addresses remaining
                 return Err(Errno::EADDRINUSE.into());
             }
@@ -301,7 +304,7 @@ impl UnixSocketFile {
                 // if an abstract address
                 if let Some(name) = addr.unwrap().as_abstract() {
                     // look up the socket from the address name
-                    match self.namespace.borrow().lookup(name) {
+                    match self.namespace.borrow().lookup(self.socket_type, name) {
                         // socket was found with the given name
                         Some(recv_socket) => {
                             // store an Arc of the recv buffer
@@ -464,7 +467,8 @@ impl UnixSocketFile {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+// WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum UnixSocketType {
     Stream,
     Dgram,
