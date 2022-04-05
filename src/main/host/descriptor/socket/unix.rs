@@ -11,7 +11,6 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
-use crate::utility::enum_map::{FromIndex, IntoIndex};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -468,41 +467,12 @@ impl UnixSocketFile {
     }
 }
 
-// WARNING: don't add new enum variants without updating 'variant_count()' below
-#[derive(Copy, Clone, Debug)]
+// WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum UnixSocketType {
     Stream,
     Dgram,
     SeqPacket,
-}
-
-impl UnixSocketType {
-    /// The number of variants in this enum.
-    pub const fn variant_count() -> usize {
-        // similar idea to https://doc.rust-lang.org/core/mem/fn.variant_count.html
-        3
-    }
-}
-
-impl IntoIndex for UnixSocketType {
-    fn into_index(self) -> usize {
-        match self {
-            Self::Stream => 0,
-            Self::Dgram => 1,
-            Self::SeqPacket => 2,
-        }
-    }
-}
-
-impl FromIndex for UnixSocketType {
-    fn from_index(val: usize) -> Option<Self> {
-        match val {
-            0 => Some(Self::Stream),
-            1 => Some(Self::Dgram),
-            2 => Some(Self::SeqPacket),
-            _ => None,
-        }
-    }
 }
 
 impl TryFrom<libc::c_int> for UnixSocketType {

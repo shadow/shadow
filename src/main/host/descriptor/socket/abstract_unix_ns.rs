@@ -7,10 +7,7 @@ use rand::seq::SliceRandom;
 use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
 use crate::host::descriptor::FileState;
 use crate::host::descriptor::StateListenerFilter;
-use crate::utility::enum_map::EnumMap;
 use crate::utility::event_queue::Handle;
-
-type UnixSocketTypeMap<T> = EnumMap<UnixSocketType, T, { UnixSocketType::variant_count() }>;
 
 struct NamespaceEntry {
     /// The bound socket.
@@ -32,15 +29,24 @@ impl NamespaceEntry {
 }
 
 pub struct AbstractUnixNamespace {
-    address_map: UnixSocketTypeMap<HashMap<Vec<u8>, NamespaceEntry>>,
+    address_map: HashMap<UnixSocketType, HashMap<Vec<u8>, NamespaceEntry>>,
 }
 
 impl AbstractUnixNamespace {
     pub fn new() -> Self {
-        Self {
+        let mut rv = Self {
             // initializes an empty hash map for each unix socket type
-            address_map: UnixSocketTypeMap::new(),
-        }
+            address_map: HashMap::new(),
+        };
+
+        // the namespace code will assume that there is an entry for each socket type
+        rv.address_map
+            .insert(UnixSocketType::Stream, HashMap::new());
+        rv.address_map.insert(UnixSocketType::Dgram, HashMap::new());
+        rv.address_map
+            .insert(UnixSocketType::SeqPacket, HashMap::new());
+
+        rv
     }
 
     pub fn lookup(
@@ -52,7 +58,9 @@ impl AbstractUnixNamespace {
         // only be possible at the end of the simulation and there wouldn't be any reason to call
         // lookup() at that time, so a panic here would most likely indicate an issue somewhere else
         // in shadow
-        self.address_map[sock_type]
+        self.address_map
+            .get(&sock_type)
+            .unwrap()
             .get(name)
             .map(|x| x.socket.upgrade().unwrap())
     }
@@ -70,7 +78,7 @@ impl AbstractUnixNamespace {
         let name_copy = name.clone();
 
         // look up the name in the address map
-        let entry = match ns.address_map[sock_type].entry(name) {
+        let entry = match ns.address_map.get_mut(&sock_type).unwrap().entry(name) {
             std::collections::hash_map::Entry::Occupied(_) => return Err(BindError::NameInUse),
             std::collections::hash_map::Entry::Vacant(x) => x,
         };
@@ -104,7 +112,12 @@ impl AbstractUnixNamespace {
         for _ in 0..10 {
             let random_name: [u8; NAME_LEN] = random_name(&mut rng);
 
-            if !ns.address_map[sock_type].contains_key(&random_name[..]) {
+            if !ns
+                .address_map
+                .get(&sock_type)
+                .unwrap()
+                .contains_key(&random_name[..])
+            {
                 name = Some(random_name.to_vec());
                 break;
             }
@@ -115,7 +128,12 @@ impl AbstractUnixNamespace {
             for x in 0..CHARSET.len().pow(NAME_LEN as u32) {
                 let temp_name: [u8; NAME_LEN] = incremental_name(x);
 
-                if !ns.address_map[sock_type].contains_key(&temp_name[..]) {
+                if !ns
+                    .address_map
+                    .get(&sock_type)
+                    .unwrap()
+                    .contains_key(&temp_name[..])
+                {
                     name = Some(temp_name.to_vec());
                     break;
                 }
@@ -140,7 +158,7 @@ impl AbstractUnixNamespace {
         );
 
         if let std::collections::hash_map::Entry::Vacant(entry) =
-            ns.address_map[sock_type].entry(name)
+            ns.address_map.get_mut(&sock_type).unwrap().entry(name)
         {
             entry.insert(NamespaceEntry::new(Arc::downgrade(socket), handle));
         } else {
@@ -153,7 +171,13 @@ impl AbstractUnixNamespace {
     pub fn unbind(&mut self, sock_type: UnixSocketType, name: &Vec<u8>) -> Result<(), BindError> {
         // remove the namespace entry which includes the handle, so the event listener will
         // automatically be removed from the socket
-        if self.address_map[sock_type].remove(name).is_none() {
+        if self
+            .address_map
+            .get_mut(&sock_type)
+            .unwrap()
+            .remove(name)
+            .is_none()
+        {
             // didn't exist in the address map
             return Err(BindError::NameNotFound);
         }

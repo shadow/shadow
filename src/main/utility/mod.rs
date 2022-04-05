@@ -5,7 +5,6 @@ pub mod enum_passthrough;
 pub mod byte_queue;
 pub mod childpid_watcher;
 pub mod counter;
-pub mod enum_map;
 pub mod event_queue;
 pub mod give;
 pub mod interval_map;
