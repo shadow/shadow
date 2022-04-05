@@ -67,6 +67,8 @@ typedef struct DescriptorTable DescriptorTable;
 // A wrapper for any type of file object.
 typedef struct GenericFile GenericFile;
 
+typedef struct HashSet_String HashSet_String;
+
 typedef struct HostOptions HostOptions;
 
 // Tool for assigning IP addresses to graph nodes.

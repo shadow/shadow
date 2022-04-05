@@ -149,7 +149,11 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     // scope is used to make sure we don't use 'controller' after it's freed
     let rv = {
         // allocate and initialize our main simulation driver
-        let controller = unsafe { c::controller_new(&config as *const _) };
+        let controller = unsafe {
+            // the debug-hosts value is passed here separately since in the future it will be part
+            // of the cli options, and not part of the config
+            c::controller_new(&config, config.experimental.debug_hosts.as_ref().unwrap())
+        };
         assert!(!controller.is_null());
 
         // run the simulation

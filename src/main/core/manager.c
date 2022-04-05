@@ -592,7 +592,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
 
 void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginPath,
                                   SimulationTime startTime, SimulationTime stopTime, gchar** argv,
-                                  char* environment) {
+                                  char* environment, bool pause_for_debugging) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
@@ -611,8 +611,8 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
         utility_panic("Could not get basename of plugin path");
     }
 
-    host_addApplication(
-        host, startTime, stopTime, interposeMethod, pluginName, pluginPath, envv, argv);
+    host_addApplication(host, startTime, stopTime, interposeMethod, pluginName, pluginPath, envv,
+                        argv, pause_for_debugging);
     g_free(pluginName);
 
     host_stopExecutionTimer(host);

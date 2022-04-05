@@ -32,6 +32,9 @@ struct _Controller {
     /* general options and user configuration for the simulation */
     const ConfigOptions* config;
 
+    /* set of hostnames that we want to debug managed processes for */
+    const HashSet_String* hostsToDebug;
+
     /* tracks overall wall-clock runtime */
     GTimer* runTimer;
 
@@ -80,7 +83,7 @@ struct _Controller {
 //  return FALSE;
 //}
 
-Controller* controller_new(const ConfigOptions* config) {
+Controller* controller_new(const ConfigOptions* config, const HashSet_String* hostsToDebug) {
     utility_assert(config);
 
     /* Don't do anything in this function that will cause a log message. The
@@ -92,6 +95,7 @@ Controller* controller_new(const ConfigOptions* config) {
     MAGIC_INIT(controller);
 
     controller->config = config;
+    controller->hostsToDebug = hostsToDebug;
     controller->random = random_new(config_getSeed(config));
 
     controller->minRunaheadConfig = config_getRunahead(config);
@@ -230,6 +234,7 @@ static void _controller_registerArgCallback(const char* arg, void* _argArray) {
 typedef struct _ProcessCallbackArgs {
     Controller* controller;
     const char* hostname;
+    bool debug;
 } ProcessCallbackArgs;
 
 __attribute__((warn_unused_result))
@@ -273,7 +278,8 @@ static int _controller_registerProcessCallback(const ProcessOptions* proc, void*
         }
 
         manager_addNewVirtualProcess(callbackArgs->controller->manager, callbackArgs->hostname,
-                                     plugin, startTime, stopTime, argv, environment);
+                                     plugin, startTime, stopTime, argv, environment,
+                                     callbackArgs->debug);
     }
 
     processoptions_freeString(environment);
@@ -321,6 +327,8 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         if (quantity > 1) {
             g_string_append_printf(hostnameBuffer, "%" G_GUINT64_FORMAT, i + 1);
         }
+
+        bool debugHost = hashsetstring_contains(controller->hostsToDebug, hostnameBuffer->str);
 
         // the network graph node to assign the host to
         uint graphNode = hostoptions_getNetworkNodeId(host);
@@ -399,9 +407,11 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         }
 
         /* now handle each virtual process the host will run */
-        ProcessCallbackArgs processArgs;
-        processArgs.controller = controller;
-        processArgs.hostname = hostnameBuffer->str;
+        ProcessCallbackArgs processArgs = (ProcessCallbackArgs) {
+            .controller = controller,
+            .hostname = hostnameBuffer->str,
+            .debug = debugHost,
+        };
         if (hostoptions_iterProcesses(
                 host, _controller_registerProcessCallback, (void*)&processArgs)) {
             error("Could not register processes for host %s", hostnameBuffer->str);

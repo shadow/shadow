@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
+use std::str::FromStr;
 
 use clap::ArgEnum;
 use clap::Parser;
@@ -384,7 +385,7 @@ pub struct ExperimentalOptions {
     #[clap(parse(try_from_str = parse_set_log_info_flags))]
     #[clap(long, value_name = "options")]
     #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap().as_str())]
-    pub host_heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
+    pub host_heartbeat_log_info: Option<HashSet<LogInfoFlag>>,
 
     /// Amount of time between heartbeat messages for this host
     #[clap(long, value_name = "seconds")]
@@ -408,6 +409,14 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_syscall_latency").unwrap().as_str())]
     pub unblocked_syscall_latency: Option<units::Time<units::TimePrefix>>,
+
+    /// List of hostnames to debug
+    #[clap(parse(try_from_str = parse_set_str))]
+    #[clap(long, value_name = "hostnames")]
+    // a required attribute when we move this to `CliOptions`:
+    //#[clap(default_value = "")]
+    #[clap(help = EXP_HELP.get("debug_hosts").unwrap().as_str())]
+    pub debug_hosts: Option<HashSet<String>>,
 }
 
 impl ExperimentalOptions {
@@ -458,6 +467,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
+            debug_hosts: Some(HashSet::new()),
         }
     }
 }
@@ -582,7 +592,7 @@ pub enum LogLevel {
     Trace,
 }
 
-impl std::str::FromStr for LogLevel {
+impl FromStr for LogLevel {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -613,7 +623,7 @@ pub enum InterposeMethod {
     Preload,
 }
 
-impl std::str::FromStr for InterposeMethod {
+impl FromStr for InterposeMethod {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -631,7 +641,7 @@ pub enum SchedulerPolicy {
     ThreadXHost,
 }
 
-impl std::str::FromStr for SchedulerPolicy {
+impl FromStr for SchedulerPolicy {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -673,7 +683,7 @@ impl LogInfoFlag {
     }
 }
 
-impl std::str::FromStr for LogInfoFlag {
+impl FromStr for LogInfoFlag {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -681,13 +691,24 @@ impl std::str::FromStr for LogInfoFlag {
     }
 }
 
-/// Parse a string as a set of `LogInfoFlag` values.
+/// Parse a string as a comma-delimited set of `T` values.
+fn parse_set<T>(s: &str) -> Result<HashSet<T>, <T as FromStr>::Err>
+where
+    T: std::cmp::Eq + std::hash::Hash + FromStr,
+{
+    s.split(',').map(|x| x.trim().parse()).collect()
+}
+
+/// Parse a string as a comma-delimited set of `LogInfoFlag` values.
 fn parse_set_log_info_flags(
     s: &str,
-) -> Result<std::collections::HashSet<LogInfoFlag>, serde_yaml::Error> {
-    let flags: Result<std::collections::HashSet<LogInfoFlag>, _> =
-        s.split(',').map(|x| x.trim().parse()).collect();
-    flags
+) -> Result<HashSet<LogInfoFlag>, <LogInfoFlag as FromStr>::Err> {
+    parse_set(s)
+}
+
+/// Parse a string as a comma-delimited set of `String` values.
+fn parse_set_str(s: &str) -> Result<HashSet<String>, <String as FromStr>::Err> {
+    parse_set(s)
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
@@ -698,7 +719,7 @@ pub enum QDiscMode {
     RoundRobin,
 }
 
-impl std::str::FromStr for QDiscMode {
+impl FromStr for QDiscMode {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -810,7 +831,7 @@ pub enum StraceLoggingMode {
     Deterministic,
 }
 
-impl std::str::FromStr for StraceLoggingMode {
+impl FromStr for StraceLoggingMode {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1039,6 +1060,18 @@ mod tests {
 
 mod export {
     use super::*;
+
+    #[no_mangle]
+    pub extern "C" fn hashsetstring_contains(
+        set: *const HashSet<String>,
+        hostname: *const libc::c_char,
+    ) -> bool {
+        let set = unsafe { set.as_ref() }.unwrap();
+        assert!(!hostname.is_null());
+        let hostname = unsafe { CStr::from_ptr(hostname) };
+
+        set.contains(hostname.to_str().unwrap())
+    }
 
     #[no_mangle]
     pub extern "C" fn clioptions_freeString(string: *mut libc::c_char) {

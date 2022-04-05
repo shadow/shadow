@@ -7,9 +7,11 @@ use crate::core::support::configuration::ConfigOptions;
 use crate::utility::random::Random;
 use log_bindings::Logger;
 use std::sync::Arc;
+use std::collections::HashSet;
 use atomic_refcell::AtomicRefCell;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;
+type HashSet_String = HashSet<String>;
 
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
@@ -900,6 +902,7 @@ extern "C" {
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
         argv: *mut *mut gchar,
+        pause_for_debugging: bool,
     ) -> *mut Process;
 }
 extern "C" {
@@ -1398,6 +1401,7 @@ extern "C" {
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
         argv: *mut *mut gchar,
+        pause_for_debugging: bool,
     );
 }
 extern "C" {
@@ -1674,7 +1678,10 @@ extern "C" {
     ) -> *mut LegacyDescriptor;
 }
 extern "C" {
-    pub fn controller_new(arg1: *const ConfigOptions) -> *mut Controller;
+    pub fn controller_new(
+        arg1: *const ConfigOptions,
+        arg2: *const HashSet_String,
+    ) -> *mut Controller;
 }
 extern "C" {
     pub fn controller_free(arg1: *mut Controller);

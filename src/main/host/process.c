@@ -152,6 +152,9 @@ struct _Process {
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
 
+    /* Pause shadow after launching this process, to give the user time to attach gdb */
+    bool pause_for_debugging;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -581,6 +584,12 @@ static void _process_start(Process* proc) {
     worker_setActiveProcess(NULL);
     worker_setActiveThread(NULL);
 
+    if (proc->pause_for_debugging) {
+        fprintf(stderr, "Managed process '%s' has started with PID %d. Press ENTER to continue...",
+                process_getName(proc), proc->nativePid);
+        getchar();
+    }
+
     /* call main and run until blocked */
     process_continue(proc, mainThread);
 }
@@ -769,7 +778,8 @@ static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
                      InterposeMethod interposeMethod, const gchar* hostName,
-                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv) {
+                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
+                     bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -856,6 +866,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->memoryMutRef = NULL;
     proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
+
+    proc->pause_for_debugging = pause_for_debugging;
 
     worker_count_allocation(Process);
 

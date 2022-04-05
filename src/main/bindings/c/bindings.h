@@ -62,6 +62,8 @@ typedef struct DescriptorTable DescriptorTable;
 // A wrapper for any type of file object.
 typedef struct GenericFile GenericFile;
 
+typedef struct HashSet_String HashSet_String;
+
 typedef struct HostOptions HostOptions;
 
 // Tool for assigning IP addresses to graph nodes.
@@ -293,6 +295,8 @@ void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
 void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
 
 int main_runShadow(int argc, const char *const *argv);
+
+bool hashsetstring_contains(const struct HashSet_String *set, const char *hostname);
 
 void clioptions_freeString(char *string);
 
