@@ -415,8 +415,9 @@ static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr chi
                                                        .event_data.add_thread_req = {
                                                            .ipc_block = ipc_blk_serial,
                                                        }});
-    _threadpreload_waitForNextEvent(thread, &thread->currentEvent);
-    utility_assert(thread->currentEvent.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
+    ShimEvent response = {0};
+    _threadpreload_waitForNextEvent(thread, &response);
+    utility_assert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
     pid_t childNativeTid = thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
