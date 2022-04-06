@@ -361,6 +361,45 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
     }
 }
 
+static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int optname,
+                                           PluginPtr optvalPtr, socklen_t optlen) {
+    switch (optname) {
+        case TCP_NODELAY: {
+            /* Shadow doesn't support nagle's algorithm, so shadow always behaves as if TCP_NODELAY
+             * is enabled. Some programs will fail if setsockopt(fd, SOL_TCP, TCP_NODELAY, &1,
+             * sizeof(int)) returns an error, so we treat this as a no-op for compatibility.
+             */
+            if (optlen < sizeof(int)) {
+                return -EINVAL;
+            }
+
+            int enable = 0;
+            int errcode = process_readPtr(sys->process, &enable, optvalPtr, sizeof(int));
+            if (errcode != 0) {
+                return errcode;
+            }
+
+            if (enable) {
+                // wants to enable TCP_NODELAY
+                debug("Ignoring TCP_NODELAY");
+            } else {
+                // wants to disable TCP_NODELAY
+                warning("Cannot disable TCP_NODELAY since shadow does not implement "
+                        "Nagle's algorithm.");
+                return -ENOPROTOOPT;
+            }
+
+            return 0;
+        }
+        default: {
+            warning("setsockopt on level SOL_TCP called with unsupported option %i", optname);
+            return -ENOPROTOOPT;
+        }
+    }
+
+    return 0;
+}
+
 static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
                                               int optname, PluginPtr optvalPtr,
                                               socklen_t optlen) {
@@ -1151,43 +1190,20 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
 
     errcode = 0;
     switch (level) {
-        case SOL_SOCKET: {
-            errcode = _syscallhandler_setSocketOptHelper(
-                sys, socket_desc, optname, optvalPtr, optlen);
-            break;
-        }
         case SOL_TCP: {
             if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
                 errcode = -ENOPROTOOPT;
                 break;
             }
 
-            /* Shadow doesn't support nagle's algorithm, so shadow always behaves as if TCP_NODELAY
-             * is enabled. Some programs will fail if setsockopt(fd, SOL_TCP, TCP_NODELAY, &1,
-             * sizeof(int)) returns an error, so we treat this as a no-op for compatibility.
-             */
-            if (optname == TCP_NODELAY) {
-                if (optlen < sizeof(int)) {
-                    errcode = -EINVAL;
-                    break;
-                }
-
-                int enable = 0;
-                errcode = process_readPtr(sys->process, &enable, optvalPtr, sizeof(int));
-                if (errcode == 0) {
-                    if (enable) {
-                        // wants to enable TCP_NODELAY
-                        debug("Ignoring TCP_NODELAY");
-                    } else {
-                        // wants to disable TCP_NODELAY
-                        warning("Cannot disable TCP_NODELAY since shadow does not implement "
-                                "Nagle's algorithm.");
-                        errcode = -ENOPROTOOPT;
-                    }
-                }
-                break;
-            }
-            // fall through
+            errcode =
+                _syscallhandler_setTCPOptHelper(sys, (TCP*)socket_desc, optname, optvalPtr, optlen);
+            break;
+        }
+        case SOL_SOCKET: {
+            errcode = _syscallhandler_setSocketOptHelper(
+                sys, socket_desc, optname, optvalPtr, optlen);
+            break;
         }
         default:
             warning("setsockopt called with unsupported level %i with opt %i", level, optname);
