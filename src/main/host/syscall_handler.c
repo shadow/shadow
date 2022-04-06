@@ -571,8 +571,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         process_freePtrsWithoutFlushing(sys->process);
     }
 
-    if (process_isRunning(sys->process) && scr.state == SYSCALL_DONE ||
-        scr.state == SYSCALL_NATIVE) {
+    if (process_isRunning(sys->process) &&
+        (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
         uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(host_getSharedMem(sys->host));
         if (unblockedLimit > 0) {
             // Increment unblocked syscall count, but only for
