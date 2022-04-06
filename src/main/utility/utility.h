@@ -106,6 +106,7 @@ gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
 
 gchar* utility_strvToNewStr(gchar** strv);
 
+__attribute__((__format__(__printf__, 4, 5)))
 _Noreturn void utility_handleError(const gchar* file, gint line, const gchar* funtcion,
                                    const gchar* message, ...);
 
