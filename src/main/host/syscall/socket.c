@@ -18,6 +18,8 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
+#include "main/host/descriptor/tcp_cong.h"
+#include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/udp.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -312,10 +314,32 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
 
             return 0;
         }
+        case TCP_CONGESTION: {
+            // the value of TCP_CA_NAME_MAX in linux
+            const int CONG_NAME_MAX = 16;
+
+            if (optval == NULL || optlen == NULL) {
+                return -EINVAL;
+            }
+
+            char* dest_str = optval;
+            const char* src_str = tcp_cong(tcp)->hooks->tcp_cong_name_str();
+
+            if (src_str == NULL) {
+                panic("Shadow's congestion type has no name!");
+            }
+
+            // the len value returned by linux seems to be independent from the actual string length
+            *optlen = MIN(*optlen, CONG_NAME_MAX);
+
+            if (*optlen > 0) {
+                strncpy(dest_str, src_str, *optlen);
+            }
+
+            return 0;
+        }
         default: {
-            warning(
-                "getsockopt at level SOL_TCP called with unsupported option %i",
-                optname);
+            warning("getsockopt at level SOL_TCP called with unsupported option %i", optname);
             return -ENOPROTOOPT;
         }
     }
@@ -389,6 +413,29 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
                 return -ENOPROTOOPT;
             }
 
+            return 0;
+        }
+        case TCP_CONGESTION: {
+            // the value of TCP_CA_NAME_MAX in linux
+            const int CONG_NAME_MAX = 16;
+
+            char name[CONG_NAME_MAX];
+            optlen = MIN(optlen, CONG_NAME_MAX);
+
+            int errcode = process_readPtr(sys->process, name, optvalPtr, optlen);
+            if (errcode != 0) {
+                return errcode;
+            }
+
+            if (optlen < strlen(TCP_CONG_RENO_NAME) ||
+                strncmp(name, TCP_CONG_RENO_NAME, optlen) != 0) {
+                warning("Shadow sockets only support '%s' for TCP_CONGESTION", TCP_CONG_RENO_NAME);
+                return -ENOENT;
+            }
+
+            // shadow doesn't support other congestion types, so do nothing
+            const char* current_name = tcp_cong(tcp)->hooks->tcp_cong_name_str();
+            utility_assert(current_name != NULL && strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
             return 0;
         }
         default: {

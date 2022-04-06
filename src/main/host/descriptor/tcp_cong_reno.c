@@ -10,6 +10,8 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/tcp_cong.h"
 
+const char* TCP_CONG_RENO_NAME = "reno";
+
 typedef struct CAReno_ {
 
     const TCPCongHooks *state_hooks;
@@ -166,13 +168,18 @@ static guint32 tcp_cong_reno_ssthresh_(TCP *tcp) {
     return reno->ssthresh;
 }
 
+static const char* tcp_cong_reno_name_str_() {
+    return TCP_CONG_RENO_NAME;
+}
+
 static const struct TCPCongHooks_ reno_hooks_ = {
     .tcp_cong_delete = tcp_cong_reno_delete_,
     .tcp_cong_duplicate_ack_ev = tcp_cong_reno_duplicate_ack_ev_,
     .tcp_cong_fast_recovery = tcp_cong_reno_fast_recovery_,
     .tcp_cong_new_ack_ev = tcp_cong_reno_new_ack_ev_,
     .tcp_cong_timeout_ev = tcp_cong_reno_timeout_ev_,
-    .tcp_cong_ssthresh = tcp_cong_reno_ssthresh_
+    .tcp_cong_ssthresh = tcp_cong_reno_ssthresh_,
+    .tcp_cong_name_str = tcp_cong_reno_name_str_,
 };
 
 void tcp_cong_reno_init(TCP *tcp) {
@@ -190,7 +197,8 @@ static const struct TCPCongHooks_ slow_start_hooks__ = {
     .tcp_cong_fast_recovery = NULL,
     .tcp_cong_new_ack_ev = ca_reno_slow_start_new_ack_ev_,
     .tcp_cong_timeout_ev = NULL,
-    .tcp_cong_ssthresh = NULL
+    .tcp_cong_ssthresh = NULL,
+    .tcp_cong_name_str = NULL,
 };
 
 static const struct TCPCongHooks_ fast_recovery_hooks__ = {
@@ -199,7 +207,8 @@ static const struct TCPCongHooks_ fast_recovery_hooks__ = {
     .tcp_cong_fast_recovery = NULL,
     .tcp_cong_new_ack_ev = ca_reno_fast_recovery_new_ack_ev_,
     .tcp_cong_timeout_ev = NULL,
-    .tcp_cong_ssthresh = NULL
+    .tcp_cong_ssthresh = NULL,
+    .tcp_cong_name_str = NULL,
 };
 
 /* slow start and cong avoidance have the same dupl act behavior */
@@ -209,7 +218,8 @@ static const struct TCPCongHooks_ cong_avoid_hooks__ = {
     .tcp_cong_fast_recovery = NULL,
     .tcp_cong_new_ack_ev = ca_reno_cong_avoid_new_ack_ev_,
     .tcp_cong_timeout_ev = NULL,
-    .tcp_cong_ssthresh = NULL
+    .tcp_cong_ssthresh = NULL,
+    .tcp_cong_name_str = NULL,
 };
 
 static inline const struct TCPCongHooks_ *slow_start_hooks_() {
