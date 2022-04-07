@@ -38,6 +38,9 @@ typedef struct _ShimEvent {
 
         struct {
             SysCallReg retval;
+            // Whether the syscall is eligible to be restarted. Only applicable
+            // when retval is -EINTR. See signal(7).
+            bool restartable;
         } syscall_complete;
 
         struct {

@@ -1,3 +1,4 @@
+use nix::errno::Errno;
 use std::any::TypeId;
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -501,7 +502,7 @@ where
     pub fn new(rv: &'a SyscallResult, options: FmtOptions, mem: &'a MemoryManager) -> Option<Self> {
         match &rv {
             SyscallResult::Ok(_)
-            | SyscallResult::Err(SyscallError::Errno(_))
+            | SyscallResult::Err(SyscallError::Failed(_))
             | SyscallResult::Err(SyscallError::Native) => Some(Self {
                 rv,
                 options,
@@ -509,7 +510,7 @@ where
                 _phantom: PhantomData::default(),
             }),
             // the syscall was not completed and will be re-run again later
-            SyscallResult::Err(SyscallError::Cond(_)) => None,
+            SyscallResult::Err(SyscallError::Blocked(_)) => None,
         }
     }
 }
@@ -525,18 +526,19 @@ where
                 let rv = SyscallVal::<'_, RV>::from_mem(*x, self.options, self.mem);
                 write!(f, "{}", rv)
             }
-            SyscallResult::Err(SyscallError::Errno(e)) => {
+            SyscallResult::Err(SyscallError::Failed(failed)) => {
+                let errno: Errno = failed.errno;
                 let rv = SysCallReg {
-                    as_i64: -(*e as i64),
+                    as_i64: -(errno as i64),
                 };
                 let rv = SyscallVal::<'_, RV>::from_mem(rv, self.options, self.mem);
-                write!(f, "{} ({})", rv, e)
+                write!(f, "{} ({})", rv, errno)
             }
             SyscallResult::Err(SyscallError::Native) => {
                 write!(f, "<native>")
             }
             // the constructor doesn't allow this
-            SyscallResult::Err(SyscallError::Cond(_)) => unreachable!(),
+            SyscallResult::Err(SyscallError::Blocked(_)) => unreachable!(),
         }
     }
 }

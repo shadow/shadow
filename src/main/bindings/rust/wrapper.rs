@@ -685,12 +685,13 @@ pub struct _SysCallReturn {
     pub state: SysCallReturnState,
     pub retval: SysCallReg,
     pub cond: *mut SysCallCondition,
+    pub restartable: bool,
 }
 #[test]
 fn bindgen_test_layout__SysCallReturn() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallReturn>(),
-        24usize,
+        32usize,
         concat!("Size of: ", stringify!(_SysCallReturn))
     );
     assert_eq!(
@@ -726,6 +727,16 @@ fn bindgen_test_layout__SysCallReturn() {
             stringify!(_SysCallReturn),
             "::",
             stringify!(cond)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_SysCallReturn>())).restartable as *const _ as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_SysCallReturn),
+            "::",
+            stringify!(restartable)
         )
     );
 }
@@ -1749,7 +1760,7 @@ pub struct _SysCallHandler {
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        128usize,
+        136usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -1899,7 +1910,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
-        120usize,
+        128usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1909,7 +1920,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
-        124usize,
+        132usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),

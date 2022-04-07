@@ -88,4 +88,9 @@ void descriptor_removeListener(LegacyDescriptor* descriptor, StatusListener* lis
  */
 void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc);
 
+/* Whether the descriptor's operations are restartable in conjunction with
+ * SA_RESTART. See signal(7).
+ */
+bool descriptor_supportsSaRestart(LegacyDescriptor* legacyDesc);
+
 #endif /* SHD_DESCRIPTOR_H_ */

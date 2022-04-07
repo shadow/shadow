@@ -197,7 +197,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                     worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
             }
 
-            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
+            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
         }
     }
 

@@ -988,10 +988,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             test_sigaltstack_autodisarm,
             all_envs.clone(),
         ),
+        ShadowTest::new("sa_restart", test_restart, all_envs.clone()),
+        ShadowTest::new("sa_restart all", test_restart_all, all_envs.clone()),
+        // Can't test precise behavior in Linux, since we can't reliably cause multiple
+        // signals to be delivered atomically to another thread while it's
+        // blocked in another syscall.
         ShadowTest::new(
-            "sa_restart",
-            test_restart,
-            all_envs.clone(),
+            "sa_restart first",
+            test_restart_first,
+            set![TestEnv::Shadow],
+        ),
+        ShadowTest::new(
+            "sa_restart second",
+            test_restart_second,
+            set![TestEnv::Shadow],
         ),
     ];
 

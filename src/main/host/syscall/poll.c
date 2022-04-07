@@ -153,7 +153,7 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
             }
 
             // We either use our timer as a timeout, or no timeout
-            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
+            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
         }
     }
 

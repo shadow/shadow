@@ -104,7 +104,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
                                                : timeoutSimulationTime;
         syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
     }
-    return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
+    return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = true};
 }
 
 static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,
