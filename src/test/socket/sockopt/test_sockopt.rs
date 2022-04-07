@@ -181,6 +181,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     move || test_tcp_nodelay(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_tcp_congestion"),
+                    move || test_tcp_congestion(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
             ];
 
             tests.extend(more_tests);
@@ -695,6 +700,84 @@ fn test_tcp_nodelay(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), S
             let value = u32::from_ne_bytes(get_args_2.optval.unwrap().try_into().unwrap());
             test_utils::result_assert_eq(value, 1, "Unexpected value for TCP_NODELAY")?;
         }
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the TCP_CONGESTION option.
+fn test_tcp_congestion(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_TCP;
+    let optname = libc::TCP_CONGESTION;
+
+    let get_args_1 = GetsockoptArguments::new(fd, level, optname, Some(vec![0u8; 20]));
+    let get_args_2 = GetsockoptArguments::new(fd, level, optname, Some(vec![0u8; 3]));
+    let mut set_args_1 = SetsockoptArguments::new(fd, level, optname, Some("reno".into()));
+    let mut set_args_2 = SetsockoptArguments::new(fd, level, optname, Some("ren".into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        for mut get_args in [get_args_1, get_args_2] {
+            let expected_errnos = if sock_type == libc::SOCK_STREAM {
+                vec![]
+            } else {
+                vec![libc::ENOPROTOOPT, libc::EOPNOTSUPP]
+            };
+            check_getsockopt_call(&mut get_args, &expected_errnos)?;
+
+            if sock_type != libc::SOCK_STREAM {
+                // if not a TCP socket, no need to check the results
+                continue;
+            }
+
+            let returned_str_len = get_args.optlen.unwrap() as usize;
+
+            test_utils::result_assert_eq(
+                returned_str_len,
+                std::cmp::min(get_args.optval.as_ref().unwrap().len(), 16),
+                "Returned length is unexpected",
+            )?;
+
+            let returned_str = get_args.optval.as_ref().unwrap();
+
+            // limit to the number of bytes returned by the kernel
+            let returned_str = &returned_str[..returned_str_len];
+
+            // limit to the bytes before the first nul
+            let returned_str = &returned_str[..returned_str
+                .iter()
+                .position(|&c| c == b'\0')
+                // if no nul was found, use the entire string
+                .unwrap_or(returned_str.len())];
+
+            let expected_values = [&b"reno"[..], &b"cubic"[..], &b"bbr"[..]];
+            // shorten the expected strings if necessary
+            let expected_values =
+                expected_values.map(|x| &x[..std::cmp::min(x.len(), returned_str_len)]);
+
+            test_utils::result_assert(
+                expected_values.contains(&returned_str),
+                "Unexpected value for TCP_CONGESTION",
+            )?;
+        }
+
+        // try setting a valid name
+        let expected_errnos = if sock_type == libc::SOCK_STREAM {
+            vec![]
+        } else {
+            vec![libc::ENOPROTOOPT, libc::EOPNOTSUPP]
+        };
+        check_setsockopt_call(&mut set_args_1, &expected_errnos)?;
+
+        // try setting an invalid name
+        let expected_errnos = if sock_type == libc::SOCK_STREAM {
+            vec![libc::ENOENT]
+        } else {
+            vec![libc::ENOPROTOOPT, libc::EOPNOTSUPP]
+        };
+        check_setsockopt_call(&mut set_args_2, &expected_errnos)?;
 
         Ok(())
     })

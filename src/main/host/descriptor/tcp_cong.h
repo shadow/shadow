@@ -13,6 +13,7 @@ typedef bool (*TCPCongFastRecovery)(TCP *tcp);
 typedef void (*TCPCongNewAckEv)(TCP *tcp, guint32 n);
 typedef void (*TCPCongTimeoutEv)(TCP *tcp);
 typedef guint32 (*TCPCongSSThresh)(TCP *tcp);
+typedef const char* (*TCPCongNameStr)();
 
 typedef struct TCPCongHooks_ {
     TCPCongDelete tcp_cong_delete;
@@ -21,6 +22,7 @@ typedef struct TCPCongHooks_ {
     TCPCongNewAckEv tcp_cong_new_ack_ev;
     TCPCongTimeoutEv tcp_cong_timeout_ev;
     TCPCongSSThresh tcp_cong_ssthresh;
+    TCPCongNameStr tcp_cong_name_str;
 } TCPCongHooks;
 
 typedef struct TCPCong_ {
