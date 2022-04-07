@@ -98,8 +98,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
             break;
         case DT_EPOLL:
         default:
-            warning("write() not yet implemented for descriptor type %i",
-                    (int)dType);
+            warning("read(%d) not yet implemented for descriptor type %i", fd, (int)dType);
             result = -ENOTSUP;
             break;
     }
