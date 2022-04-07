@@ -5,7 +5,7 @@ server with 3 clients, each running on different virtual hosts. If you do not
 have Python or cURL installed, you can download them through your distribution's
 package manager.
 
-**Notice:** Older versions of cURL use a spinloop that is incompatible with
+**Notice:** Older versions of cURL use a busy loop that is incompatible with
 Shadow and will cause Shadow to deadlock. Newer versions of cURL, such as the
 version provided in Ubuntu 20.04, don't have this issue. See [issue
 \#1794](https://github.com/shadow/shadow/issues/1794) for details.
