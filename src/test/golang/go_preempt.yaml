@@ -1,0 +1,17 @@
+general:
+  stop_time: 2000s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+experimental:
+  unblocked_syscall_limit: 100
+  unblocked_syscall_latency: 5 microseconds
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: ./test_go_preempt
+      environment: GOMAXPROCS=1
