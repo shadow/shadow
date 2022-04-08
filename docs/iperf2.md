@@ -31,5 +31,5 @@ rm -rf shadow.data; shadow shadow.yaml > shadow.log
 
 ## Notes
 
-1. Shadow doesn't support `setiterm()` so you must build iPerf 2 with `#define
+1. Shadow doesn't support `setitimer()` so you must build iPerf 2 with `#define
 HAVE_SETITIMER 0` set.
