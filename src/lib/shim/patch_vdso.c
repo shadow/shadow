@@ -169,8 +169,14 @@ static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnNa
     const size_t trampolineSize = 13;
 
     if (symbol->st_size < trampolineSize) {
-        warning("Symbol '%s' not large enough to inject trampoline", vdsoFnName);
-        return;
+        // We *could* just log a warning here and return without injecting the
+        // trampoline. Shim-side warnings are currently a bit hidden, though.
+        // Better to err on the size of not accidentally proceeding with a
+        // potentially invalid simulation.
+        //
+        // TODO: Revisit when https://github.com/shadow/shadow/issues/2023 is fixed.
+        panic("Can't inject %zd byte trampoline into %zd byte symbol '%s'", trampolineSize,
+              symbol->st_size, vdsoFnName);
     }
 
     uint8_t* start = (void*)parsedElf->hdr + symbol->st_value;
