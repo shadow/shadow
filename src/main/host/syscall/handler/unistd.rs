@@ -423,7 +423,8 @@ impl SyscallHandler {
         self.pipe_helper(ctx, fd_ptr, 0)
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2], /* flags */ nix::fcntl::OFlag)]
+    #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
+                  /* flags */ nix::fcntl::OFlag)]
     pub fn pipe2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd_ptr: PluginPtr = args.args[0].into();
         let flags = unsafe { args.args[1].as_u64 } as libc::c_int;

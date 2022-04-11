@@ -9,7 +9,8 @@ use nix::errno::Errno;
 use syscall_logger::log_syscall;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const libc::c_void, /* count */ libc::size_t, /* flags */ libc::c_uint)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const libc::c_void, /* count */ libc::size_t,
+                  /* flags */ libc::c_uint)]
     pub fn getrandom(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let buf_ptr: PluginPtr = args.get(0).into(); // char*
         let count: libc::size_t = args.get(1).into();
