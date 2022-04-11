@@ -164,13 +164,17 @@ static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnNa
         warning("Couldn't find symbol '%s' to override", vdsoFnName);
         return;
     }
-    // Loose upper bound on size of instructions we're writing, below.
-    if (symbol->st_size < 20) {
+
+    // Manually calculated trampoline size. Later validated in assertion.
+    const size_t trampolineSize = 13;
+
+    if (symbol->st_size < trampolineSize) {
         warning("Symbol '%s' not large enough to inject trampoline", vdsoFnName);
         return;
     }
 
-    uint8_t* current = (void*)parsedElf->hdr + symbol->st_value;
+    uint8_t* start = (void*)parsedElf->hdr + symbol->st_value;
+    uint8_t* current = start;
 
     // movabs $...,%r10
     *(current++) = 0x49;
@@ -182,6 +186,16 @@ static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnNa
     *(current++) = 0x41;
     *(current++) = 0xff;
     *(current++) = 0xe2;
+
+    // Validate trampolineSize.
+    const size_t actualTrampolineSize = (size_t)current - (size_t)start;
+    // In debug builds require equality.
+    assert(actualTrampolineSize == trampolineSize);
+    // Otherwise just ensure we didn't actually clobber another symbol.
+    if (symbol->st_size < actualTrampolineSize) {
+        panic("Accidentally wrote %zd byte trampoline into %zd byte symbol %s",
+              actualTrampolineSize, symbol->st_size, vdsoFnName);
+    }
 }
 
 void patch_vdso(void* vdsoBase) {
