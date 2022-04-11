@@ -434,7 +434,7 @@ impl Default for ExperimentalOptions {
             use_o_n_waitpid_workarounds: Some(false),
             use_explicit_block_message: Some(false),
             use_seccomp: None,
-            use_syscall_counters: Some(false),
+            use_syscall_counters: Some(true),
             use_object_counters: Some(true),
             use_preload_libc: Some(true),
             use_preload_openssl_rng: Some(true),
