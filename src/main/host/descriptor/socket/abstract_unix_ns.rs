@@ -102,7 +102,7 @@ impl AbstractUnixNamespace {
         sock_type: UnixSocketType,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
         mut rng: impl rand::Rng,
-    ) -> Result<(), BindError> {
+    ) -> Result<Vec<u8>, BindError> {
         let mut ns = ns_arc.borrow_mut();
 
         // the unused name that we will bind the socket to
@@ -157,15 +157,18 @@ impl AbstractUnixNamespace {
             },
         );
 
-        if let std::collections::hash_map::Entry::Vacant(entry) =
-            ns.address_map.get_mut(&sock_type).unwrap().entry(name)
+        if let std::collections::hash_map::Entry::Vacant(entry) = ns
+            .address_map
+            .get_mut(&sock_type)
+            .unwrap()
+            .entry(name.clone())
         {
             entry.insert(NamespaceEntry::new(Arc::downgrade(socket), handle));
         } else {
             unreachable!();
         }
 
-        Ok(())
+        Ok(name)
     }
 
     pub fn unbind(&mut self, sock_type: UnixSocketType, name: &Vec<u8>) -> Result<(), BindError> {
