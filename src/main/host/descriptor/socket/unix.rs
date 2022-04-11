@@ -197,27 +197,27 @@ impl UnixSocketFile {
         };
 
         // bind the socket
-        if let Some(name) = addr.as_abstract() {
+        let bound_addr = if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket).is_err()
-            {
+            match AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket) {
+                Ok(()) => *addr,
                 // address is in use
-                return Err(Errno::EADDRINUSE.into());
+                Err(_) => return Err(Errno::EADDRINUSE.into()),
             }
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
             let namespace = Arc::clone(&socket.borrow().namespace);
-            if AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng).is_err() {
-                // no autobind addresses remaining
-                return Err(Errno::EADDRINUSE.into());
+            match AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng) {
+                Ok(ref name) => nix::sys::socket::UnixAddr::new_abstract(name).unwrap(),
+                Err(_) => return Err(Errno::EADDRINUSE.into()),
             }
         } else {
             log::warn!("Only abstract names are currently supported for unix sockets");
             return Err(Errno::ENOTSUP.into());
-        }
+        };
 
-        socket.borrow_mut().bound_addr = Some(*addr);
+        socket.borrow_mut().bound_addr = Some(bound_addr);
 
         Ok(0.into())
     }
