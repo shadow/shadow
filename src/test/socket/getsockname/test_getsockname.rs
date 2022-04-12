@@ -99,6 +99,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     passing.clone(),
                 ),
                 test_utils::ShadowTest::new(
+                    &append_args("test_autobound_socket"),
+                    move || test_autobound_socket(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
                     &append_args("test_after_close"),
                     move || test_after_close(domain, sock_type),
                     passing.clone(),
@@ -457,6 +462,91 @@ fn test_bound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), 
         &bind_addr.as_slice()[..(bind_addr_len as usize)],
         "Incorrect addr",
     )?;
+
+    Ok(())
+}
+
+/// Test getsockname using an autobound socket.
+fn test_autobound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd >= 0);
+
+    // the "unnamed" sockaddr that we will bind to
+    let (bind_addr, bind_addr_len) = match domain {
+        libc::AF_INET => (
+            SockAddr::Inet(libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: 0u16.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            }),
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        ),
+        libc::AF_UNIX => (
+            SockAddr::Unix(libc::sockaddr_un {
+                sun_family: libc::AF_UNIX as u16,
+                sun_path: [0i8; 108],
+            }),
+            2,
+        ),
+        _ => unimplemented!(),
+    };
+
+    // bind to the sockaddr
+    let rv = unsafe { libc::bind(fd, bind_addr.as_ptr(), bind_addr_len) };
+    assert_eq!(rv, 0);
+
+    // fill the sockaddr with dummy data
+    let addr = match domain {
+        libc::AF_INET => SockAddr::dummy_init_inet(),
+        libc::AF_UNIX => SockAddr::dummy_init_unix(),
+        _ => unimplemented!(),
+    };
+
+    // getsockname() may mutate addr and addr_len
+    let mut args = GetsocknameArguments {
+        fd: fd,
+        addr: Some(addr),
+        addr_len: Some(addr.ptr_size()),
+    };
+
+    test_utils::run_and_close_fds(&[fd], || check_getsockname_call(&mut args, None))?;
+
+    let expected_addr_len = match domain {
+        libc::AF_INET => std::mem::size_of::<libc::sockaddr_in>() as u32,
+        // 2 (domain) + 1 (nul byte) + 5 (autobind address length on linux)
+        libc::AF_UNIX => 8,
+        _ => unimplemented!(),
+    };
+
+    // check that the returned length is expected
+    test_utils::result_assert_eq(
+        args.addr_len.unwrap(),
+        expected_addr_len,
+        "Unexpected addr length",
+    )?;
+
+    match domain {
+        libc::AF_INET => {
+            // check that the returned port was non-zero
+            test_utils::result_assert_ne(
+                args.addr.unwrap().as_inet().unwrap().sin_port,
+                0,
+                "Port was 0",
+            )?;
+        }
+        libc::AF_UNIX => {
+            // check that the returned name was non-empty
+            test_utils::result_assert_ne(
+                &args.addr.unwrap().as_unix().unwrap().sun_path[..5],
+                &[0, 0, 0, 0, 0],
+                "Address was [0,0,0,0,0]",
+            )?;
+        }
+        _ => unimplemented!(),
+    }
 
     Ok(())
 }
