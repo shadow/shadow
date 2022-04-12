@@ -196,8 +196,18 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
             handler_ctx.uc_link = &orig_ctx;
             handler_ctx.uc_stack.ss_sp = ss_original.ss_sp;
             handler_ctx.uc_stack.ss_size = ss_original.ss_size;
+            // We pass a pointer to the context we're swapping away from to the
+            // signal handler. This is to support signal-based user-space thread
+            // swapping such as in golang, where the handler will eventually
+            // swap back to the provided context. In particular, passing the
+            // context that we got in our own sigsys handler that intercepted
+            // the syscall *wouldn't* do the right thing, since that'd cause the
+            // scheduler to swap directly back to the managed thread's code at
+            // the point of the syscall without unwinding shadow's shim-side
+            // signal handling code.
+            ucontext_t* ctx = &orig_ctx;
             makecontext(&handler_ctx, (void (*)(void))_call_signal_handler, 4, &action, signo,
-                        &siginfo, NULL);
+                        &siginfo, ctx);
 
             // Call the handler on the configured signal stack.
             shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
@@ -209,9 +219,31 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
             // Restore the signal-stack configuration.
             shimshmem_setSigAltStack(host_lock, shim_threadSharedMem(), ss_original);
         } else {
-            // Call signal handler with host lock released, and native syscalls disabled.
+            // It's not clear what ucontext_t would be appropriate to pass here.
+            // A signal handler that ultimately swaps to the provided context
+            // should have arranged for the signal handler to use an alternate
+            // stack, so shouldn't get here.
+            //
+            // If we *do* ultimately want to pass a context corresponding to
+            // just before we call the handler, as in the sigaltstack case, we
+            // could construct one, perhaps with `makecontext`, or by raising
+            // and catching a native signal.
+            //
+            // If we want the context from the point at which the syscall was
+            // made, we could use the one passed to our sigsys handler for
+            // syscalls intercepted via seccomp. It's unclear what we'd do for
+            // syscalls that were intercepted via LD_PRELOAD instead, though.
+            //
+            // For now, pass NULL, and when we encounter a use-case tries to use
+            // the context it should crash or error, at which point we can
+            // revisit.
+            ucontext_t* ctx = NULL;
+            warning("Passing NULL ucontext_t to handler for signal %d", signo);
+
+            // Call signal handler with host lock released, and native syscalls
+            // disabled.
             shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-            _call_signal_handler(&action, signo, &siginfo, NULL);
+            _call_signal_handler(&action, signo, &siginfo, ctx);
             host_lock = shimshmemhost_lock(shim_hostSharedMem());
         }
 

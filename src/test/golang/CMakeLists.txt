@@ -66,3 +66,18 @@ add_shadow_tests(
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)
+
+add_golang_test_exe(BASENAME test_go_preempt)
+add_linux_tests(
+    BASENAME go_preempt
+    COMMAND ./test_go_preempt
+    CONFIGURATIONS extra
+    PROPERTIES
+      LABELS golang)
+add_shadow_tests(
+    BASENAME go_preempt
+    CONFIGURATIONS extra
+    # Doesn't work in ptrace-mode due to incomplete signal support.
+    SKIP_METHODS ptrace
+    PROPERTIES
+      LABELS golang)
