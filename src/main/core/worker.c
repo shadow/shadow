@@ -508,7 +508,7 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
-EmulatedTime worker_maxThreadTime(Host* host) {
+EmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_assert(host);
     EmulatedTime max = _worker_getRoundEndTime() + EMULATED_TIME_OFFSET;
 

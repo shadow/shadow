@@ -55,6 +55,10 @@ static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)t
 
 static void _threadpreload_continuePlugin(ThreadPreload* thread, const ShimEvent* event) {
     // We're about to let managed thread execute, so need to release the shared memory lock.
+    shimshmem_setMaxRunaheadTime(
+        host_getShimShmemLock(thread->base.host), worker_maxEventRunaheadTime(thread->base.host));
+    shimshmem_setEmulatedTime(host_getSharedMem(thread->base.host), worker_getEmulatedTime());
+
     // Reacquired in _threadpreload_waitForNextEvent.
     host_unlockShimShmemLock(thread->base.host);
 
@@ -236,6 +240,14 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread, ShimEv
     // memory lock, which we released in `_threadpreload_continuePlugin`.
     host_lockShimShmemLock(thread->base.host);
     trace("received shim_event %d", thread->currentEvent.event_id);
+
+    // Update time, which may have been incremented in the shim.
+    EmulatedTime shimTime = shimshmem_getEmulatedTime(host_getSharedMem(thread->base.host));
+    if (shimTime != worker_getEmulatedTime()) {
+        trace("Updating time from %ld to %ld (+%ld)", worker_getEmulatedTime(), shimTime,
+              shimTime - worker_getEmulatedTime());
+    }
+    worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(shimTime));
 }
 
 static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
