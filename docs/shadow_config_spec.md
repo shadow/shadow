@@ -401,6 +401,20 @@ uninitialized memory.
 The logs will be stored at
 `shadow.data/hosts/<hostname>/<hostname>.<procname>.<pid>.strace`.
 
+Limitations:
+
+- Syscalls handled within Shadow's preloaded "shim" library will not be logged
+  (for example `SYS_gettimeofday`).
+- Syscalls run natively will not log the syscall arguments or return value (for
+  example `SYS_getcwd`).
+- Syscalls processed within Shadow's C code will not log the syscall arguments.
+- Syscalls that are interrupted by a signal may not be logged (for example
+  `SYS_read`).
+- Syscalls that are interrupted by a signal may be logged inaccurately. For
+  example, the log may show `syscall(...) = -1 (EINTR)`, but the managed
+  process may not actually see this return value. Instead the syscall may be
+  restarted.
+
 #### `experimental.unblocked_syscall_latency`
 
 Default: "2 microseconds"  
