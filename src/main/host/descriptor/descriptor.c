@@ -321,3 +321,21 @@ void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
         epoll_clearWatchListeners((Epoll*)legacyDesc);
     }
 }
+
+bool descriptor_supportsSaRestart(LegacyDescriptor* legacyDesc) {
+    switch (legacyDesc->type) {
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            // TODO: false if a timeout has been set via setsockopt.
+            return true;
+        case DT_TIMER:
+        case DT_EPOLL:
+        case DT_FILE:
+        case DT_EVENTD: return false;
+        case DT_NONE:
+            panic("Unexpected type DT_NONE");
+            break;
+            // no default, so compiler will force all cases to be handled.
+    };
+    panic("Bad type: %d", legacyDesc->type);
+}

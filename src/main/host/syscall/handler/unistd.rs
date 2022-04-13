@@ -9,7 +9,7 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
+use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
 
@@ -286,9 +286,13 @@ impl SyscallHandler {
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
             let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
             let mut cond = SysCallCondition::new(trigger);
+            let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
 
-            return Err(SyscallError::Cond(cond));
+            return Err(SyscallError::Blocked(Blocked {
+                condition: cond,
+                restartable: supports_sa_restart,
+            }));
         }
 
         result
@@ -408,9 +412,13 @@ impl SyscallHandler {
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
             let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
             let mut cond = SysCallCondition::new(trigger);
+            let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
 
-            return Err(SyscallError::Cond(cond));
+            return Err(SyscallError::Blocked(Blocked {
+                condition: cond,
+                restartable: supports_sa_restart,
+            }));
         };
 
         result

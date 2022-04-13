@@ -205,7 +205,9 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         trace("Listening socket %i waiting for acceptable connection.", sockfd);
         Trigger trigger = (Trigger){
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK,
+                               .cond = syscallcondition_new(trigger),
+                               .restartable = descriptor_supportsSaRestart(desc)};
     } else if (errcode < 0) {
         trace("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -603,7 +605,9 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         /* We need to block until the descriptor is ready to read. */
         Trigger trigger = (Trigger){
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK,
+                               .cond = syscallcondition_new(trigger),
+                               .restartable = descriptor_supportsSaRestart(desc)};
     }
 
     /* check if they wanted to know where we got the data from */
@@ -770,7 +774,9 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             /* We need to block until the descriptor is ready to write. */
             Trigger trigger = (Trigger){
                 .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
-            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
+            return (SysCallReturn){.state = SYSCALL_BLOCK,
+                                   .cond = syscallcondition_new(trigger),
+                                   .restartable = descriptor_supportsSaRestart(desc)};
         } else {
             /* We attempted to write 0 bytes, so no need to block or return EWOULDBLOCK. */
             retval = 0;
@@ -956,8 +962,9 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
                 (Trigger){.type = TRIGGER_DESCRIPTOR,
                           .object = desc,
                           .status = STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE};
-            return (SysCallReturn){
-                .state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
+            return (SysCallReturn){.state = SYSCALL_BLOCK,
+                                   .cond = syscallcondition_new(trigger),
+                                   .restartable = descriptor_supportsSaRestart(desc)};
         } else if (_syscallhandler_wasBlocked(sys) && errcode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errcode = 0;

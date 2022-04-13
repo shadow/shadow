@@ -40,6 +40,7 @@ impl c::SysCallReturn {
                 as_i64: -(errno as i64),
             },
             cond: std::ptr::null_mut(),
+            restartable: false,
         }
     }
 
@@ -48,6 +49,7 @@ impl c::SysCallReturn {
             state: c::SysCallReturnState_SYSCALL_DONE,
             retval: c::SysCallReg { as_i64: int },
             cond: std::ptr::null_mut(),
+            restartable: false,
         }
     }
 }

@@ -65,7 +65,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
                                         req.tv_nsec * SIMTIME_ONE_NANOSECOND);
 
         /* Block the thread, unblock when the timer expires. */
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
     }
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
@@ -93,7 +93,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     }
 
     /* The syscall is now complete. */
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0, .restartable = false};
 }
 
 ///////////////////////////////////////////////////////////

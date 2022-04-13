@@ -540,12 +540,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     }
 
     // If the syscall would be blocked, but there's a signal pending, fail with
-    // EINTR instead. The shim-side code will run the signal handlers before
-    // returning EINTR to the original syscall.
+    // EINTR instead. The shim-side code will run the signal handlers and then
+    // either return the EINTR or restart the syscall (See SA_RESTART in
+    // signal(7)).
     //
-    // We do this check *after* (not before) trying the syscall so that a syscall
-    // that both becomes unblocked and gets signalled before the thread runs again
-    // is allowed to complete.
+    // We do this check *after* (not before) trying the syscall so that we don't
+    // "interrupt" a syscall that wouldn't have blocked in the first place, or
+    // that can return a "partial" result when interrupted. e.g. consider the
+    // sequence:
     //
     // * Thread is blocked on reading a file descriptor.
     // * The read becomes ready and the thread is scheduled to run.
@@ -562,7 +564,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         SysCallCondition* condition = scr.cond;
         utility_assert(condition);
         syscallcondition_unref(condition);
-        scr = (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINTR};
+        scr = (SysCallReturn){
+            .state = SYSCALL_DONE, .retval = -EINTR, .restartable = scr.restartable};
     }
 
     if (!(scr.state == SYSCALL_DONE && syscall_rawReturnValueToErrno(scr.retval.as_i64) == 0)) {

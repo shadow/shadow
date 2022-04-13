@@ -119,9 +119,12 @@ static void _call_signal_handler(const struct shd_kernel_sigaction* action, int 
     shim_swapAllowNativeSyscalls(true);
 }
 
-static void _shim_process_signals(ShimShmemHostLock* host_lock) {
+// Handle pending unblocked signals, and return whether *all* corresponding
+// signal actions had the SA_RESTART flag set.
+static bool _shim_process_signals(ShimShmemHostLock* host_lock) {
     int signo;
     siginfo_t siginfo;
+    bool restartable = true;
     while ((signo = shimshmem_takePendingUnblockedSignal(
                 host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
         shd_kernel_sigset_t blocked_signals =
@@ -166,8 +169,8 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
                                       &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
         }
-        if (action.ksa_flags & SA_RESTART) {
-            error("SA_RESTART unimplemented; ignoring.");
+        if (!(action.ksa_flags & SA_RESTART)) {
+            restartable = false;
         }
 
         const stack_t ss_original = shimshmem_getSigAltStack(host_lock, shim_threadSharedMem());
@@ -250,6 +253,7 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
         // Restore mask
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
     }
+    return restartable;
 }
 
 static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
@@ -295,8 +299,25 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
                 ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
-                _shim_process_signals(host_lock);
+                const bool allSigactionsHadSaRestart = _shim_process_signals(host_lock);
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+
+                // Check whether a blocking syscall was interrupted by a signal.
+                // Note that handlers don't usually return -EINTR directly;
+                // instead `syscall_handler_make_syscall` converts "blocked"
+                // results to -EINTR when an unblocked signal is pending.
+                if (rv.as_i64 == -EINTR) {
+                    // Syscall was interrupted by a signal. Consider restarting. See signal(7).
+                    const bool syscallSupportsSaRestart =
+                        res.event_data.syscall_complete.restartable;
+                    trace("Syscall interrupted by signals. allSigactionsHadSaRestart:%d "
+                          "syscallSupportsSaRestart:%d",
+                          allSigactionsHadSaRestart, syscallSupportsSaRestart);
+                    if (allSigactionsHadSaRestart && syscallSupportsSaRestart) {
+                        shimevent_sendEventToShadow(ipc, syscall_event);
+                        continue;
+                    }
+                }
 
                 return rv;
             }

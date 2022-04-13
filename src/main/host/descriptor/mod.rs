@@ -360,6 +360,9 @@ impl GenericFileRef<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn has_open_file(&self) -> bool
     );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
+        pub fn supports_sa_restart(&self) -> bool
+    );
 }
 
 impl GenericFileRefMut<'_> {
@@ -374,6 +377,9 @@ impl GenericFileRefMut<'_> {
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn has_open_file(&self) -> bool
+    );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
+        pub fn supports_sa_restart(&self) -> bool
     );
     enum_passthrough!(self, (val), Pipe, EventFd, Socket;
         pub fn set_has_open_file(&mut self, val: bool)
@@ -941,22 +947,31 @@ mod tests {
     use super::*;
     use crate::host::syscall::Trigger;
     use crate::host::syscall_condition::SysCallCondition;
-    use crate::host::syscall_types::SyscallError;
+    use crate::host::syscall_types::{Blocked, Failed, SyscallError};
 
     #[test]
     fn test_syscallresult_roundtrip() {
         for val in vec![
             Ok(1.into()),
-            Err(SyscallError::Errno(nix::errno::Errno::EPERM)),
-            Err(SyscallError::Cond(SysCallCondition::new(Trigger::from(
-                c::Trigger {
+            Err(nix::errno::Errno::EPERM.into()),
+            Err(SyscallError::Failed(Failed {
+                errno: nix::errno::Errno::EINTR,
+                restartable: true,
+            })),
+            Err(SyscallError::Failed(Failed {
+                errno: nix::errno::Errno::EINTR,
+                restartable: false,
+            })),
+            Err(SyscallError::Blocked(Blocked {
+                condition: SysCallCondition::new(Trigger::from(c::Trigger {
                     type_: 1,
                     object: c::TriggerObject {
                         as_pointer: std::ptr::null_mut(),
                     },
                     status: 2,
-                },
-            )))),
+                })),
+                restartable: true,
+            })),
         ]
         .drain(..)
         {
@@ -984,16 +999,19 @@ mod tests {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 retval: 1.into(),
                 cond: std::ptr::null_mut(),
+                restartable: false,
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
                 retval: 0.into(),
                 cond: condition.into_inner(),
+                restartable: true,
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
                 retval: 0.into(),
                 cond: std::ptr::null_mut(),
+                restartable: false,
             },
         ]
         .drain(..)

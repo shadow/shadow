@@ -327,9 +327,21 @@ impl<T> TypedPluginPtr<T> {
 // but it makes for fluent programming in syscall handlers using the `?` operator.
 #[derive(Debug, PartialEq, Eq)]
 pub enum SyscallError {
-    Errno(nix::errno::Errno),
-    Cond(SysCallCondition),
+    Failed(Failed),
+    Blocked(Blocked),
     Native,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Blocked {
+    pub condition: SysCallCondition,
+    pub restartable: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Failed {
+    pub errno: nix::errno::Errno,
+    pub restartable: bool,
 }
 
 pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
@@ -342,12 +354,16 @@ impl From<c::SysCallReturn> for SyscallResult {
                     r.retval.as_i64
                 }) {
                     Ok(r) => Ok(r),
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(SyscallError::Failed(Failed {
+                        errno: e.into(),
+                        restartable: r.restartable,
+                    })),
                 }
             }
             // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
-            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(unsafe {
-                SysCallCondition::consume_from_c(r.cond)
+            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Blocked(Blocked {
+                condition: unsafe { SysCallCondition::consume_from_c(r.cond) },
+                restartable: r.restartable,
             })),
             c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
             _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
@@ -362,23 +378,27 @@ impl From<SyscallResult> for c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 retval: r.into(),
                 cond: std::ptr::null_mut(),
+                restartable: false,
             },
-            Err(SyscallError::Errno(e)) => Self {
+            Err(SyscallError::Failed(failed)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 retval: c::SysCallReg {
-                    as_i64: -(e as i64),
+                    as_i64: -(failed.errno as i64),
                 },
                 cond: std::ptr::null_mut(),
+                restartable: failed.restartable,
             },
-            Err(SyscallError::Cond(c)) => Self {
+            Err(SyscallError::Blocked(blocked)) => Self {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
                 retval: c::SysCallReg { as_i64: 0 },
-                cond: c.into_inner(),
+                cond: blocked.condition.into_inner(),
+                restartable: blocked.restartable,
             },
             Err(SyscallError::Native) => Self {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
                 retval: c::SysCallReg { as_i64: 0 },
                 cond: std::ptr::null_mut(),
+                restartable: false,
             },
         }
     }
@@ -386,18 +406,24 @@ impl From<SyscallResult> for c::SysCallReturn {
 
 impl From<nix::errno::Errno> for SyscallError {
     fn from(e: nix::errno::Errno) -> Self {
-        SyscallError::Errno(e)
+        SyscallError::Failed(Failed {
+            errno: e,
+            restartable: false,
+        })
     }
 }
 
 impl From<std::io::Error> for SyscallError {
     fn from(e: std::io::Error) -> Self {
         match std::io::Error::raw_os_error(&e) {
-            Some(e) => SyscallError::Errno(nix::errno::from_i32(e)),
+            Some(e) => SyscallError::Failed(Failed {
+                errno: nix::errno::from_i32(e),
+                restartable: false,
+            }),
             None => {
                 let default = Errno::ENOTSUP;
                 warn!("Mapping error {} to {}", e, default);
-                SyscallError::Errno(default)
+                SyscallError::from(default)
             }
         }
     }

@@ -52,8 +52,16 @@ typedef struct _SysCallReturn {
     SysCallReturnState state;
     // Only valid for state SYSCALL_DONE.
     SysCallReg retval;
-    // Only valid for state SYSCALL_BLOCK
+    // Only valid for state SYSCALL_BLOCK.
     SysCallCondition* cond;
+    // True if the syscall is restartable in the case that it was interrupted by
+    // a signal. e.g. if the syscall was a `read` operation on a socket without
+    // a configured timeout. See socket(7).
+    //
+    // syscall handlers returning `state` SYSCALL_BLOCK should set this. It is
+    // also valid to *read* this field when `state` is SYSCALL_DONE and `retval`
+    // is `-EINTR` - i.e. a blocked syscall has been interrupted by a signal.
+    bool restartable;
 } SysCallReturn;
 
 #endif

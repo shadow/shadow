@@ -501,6 +501,185 @@ fn test_handled_kill_interrupts_syscall() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn test_restart() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    let blocked_thread = BlockedThread::new();
+
+    // Raise a signal. Since we used SA_RESTART and there was nothing to read
+    // yet, the target thread's `read` operation on the pipe should be
+    // transparently restarted, leaving it blocked again.
+    tkill(blocked_thread.tid, signal).unwrap();
+
+    // Give child thread a chance to run.
+    std::thread::sleep(Duration::from_millis(10));
+
+    // Now write so that the thread can finish normally.
+    unistd::write(blocked_thread.write_fd, &[0]).unwrap();
+    assert_eq!(blocked_thread.handle.join().unwrap(), Ok(1));
+
+    Ok(())
+}
+
+fn test_restart_all() -> Result<(), Box<dyn Error>> {
+    // Install 2 signal handlers, both with SA_RESTART.
+    let signal1 = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal1,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+    let signal2 = Signal::SIGUSR2;
+    unsafe {
+        signal::sigaction(
+            signal2,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    let blocked_thread = BlockedThread::new();
+
+    // Raise both signals. Since they both use SA_RESTART and there was nothing
+    // to read yet, the target thread's `read` operation on the pipe should be
+    // transparently restarted, leaving it blocked again.
+    tkill(blocked_thread.tid, signal1).unwrap();
+    tkill(blocked_thread.tid, signal2).unwrap();
+
+    // Give child thread a chance to run.
+    std::thread::sleep(Duration::from_millis(10));
+
+    // Now write so that the thread can finish normally.
+    unistd::write(blocked_thread.write_fd, &[0]).unwrap();
+    assert_eq!(blocked_thread.handle.join().unwrap(), Ok(1));
+
+    Ok(())
+}
+
+fn test_restart_first() -> Result<(), Box<dyn Error>> {
+    // Install 2 signal handlers, the lower-numbered one with SA_RESTART.
+    let signal1 = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal1,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+    let signal2 = Signal::SIGUSR2;
+    unsafe {
+        signal::sigaction(
+            signal2,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    let blocked_thread = BlockedThread::new();
+
+    // Raise both signals.
+
+    tkill(blocked_thread.tid, signal1).unwrap();
+    tkill(blocked_thread.tid, signal2).unwrap();
+
+    // In Linux we can't predict in what order the signals will be delivered, or
+    // how long after the 1st signal will the 2nd be delivered.
+    //
+    // In Shadow, both signals will atomically be pending when the thread
+    // next runs, and the lower numbered signal will be handled first. This
+    // is SIGUSR1, which has SA_RESTART set. Therefore:
+    //  * The signal with SA_RESTART is delivered, handled, and the syscall
+    //    restarted, blocking again.
+    //  * The signal without SA_RESTART is delivered, handled, and the syscall
+    //    *not* restarted, causing the syscall to return EINTR.
+    // This sequence is also valid, but not guaranteed, in Linux.
+    assert_eq!(blocked_thread.handle.join().unwrap(), Err(Errno::EINTR));
+
+    Ok(())
+}
+
+fn test_restart_second() -> Result<(), Box<dyn Error>> {
+    // Install 2 signal handlers, the higher-numbered one with SA_RESTART.
+    let signal1 = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal1,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+    let signal2 = Signal::SIGUSR2;
+    unsafe {
+        signal::sigaction(
+            signal2,
+            &signal::SigAction::new(
+                signal::SigHandler::Handler(nop_signal_handler),
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    let blocked_thread = BlockedThread::new();
+
+    // Raise both signals.
+
+    tkill(blocked_thread.tid, signal1).unwrap();
+    tkill(blocked_thread.tid, signal2).unwrap();
+
+    // In Linux we can't predict in what order the signals will be delivered, or
+    // how long after the 1st signal will the 2nd be delivered.
+    //
+    // In Shadow, both signals will atomically be pending when the thread
+    // next runs, and the lower numbered signal will be handled first. This
+    // is SIGUSR1, which doesn't have SA_RESTART set. Therefore:
+    //  * SIGUSR1, without SA_RESTART is delivered, handled, and the syscall
+    //    is set to return EINTR.
+    //  * Before the next instruction after the syscall is allowed to executed,
+    //    SIGUSR2 is delivered and handled. While it has SA_RESTART set,
+    //    it doesn't matter since the first signal already caused the syscall to
+    //    irreversibly fail.
+    //
+    // This sequence is also valid, but not guaranteed, in Linux.
+    assert_eq!(blocked_thread.handle.join().unwrap(), Err(Errno::EINTR));
+
+    Ok(())
+}
+
 // Record of having received a signal.
 #[derive(Debug)]
 struct SigaltstackRecord {
@@ -808,6 +987,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             "sigaltstack autodisarm",
             test_sigaltstack_autodisarm,
             all_envs.clone(),
+        ),
+        ShadowTest::new("sa_restart", test_restart, all_envs.clone()),
+        ShadowTest::new("sa_restart all", test_restart_all, all_envs.clone()),
+        // Can't test precise behavior in Linux, since we can't reliably cause multiple
+        // signals to be delivered atomically to another thread while it's
+        // blocked in another syscall.
+        ShadowTest::new(
+            "sa_restart first",
+            test_restart_first,
+            set![TestEnv::Shadow],
+        ),
+        ShadowTest::new(
+            "sa_restart second",
+            test_restart_second,
+            set![TestEnv::Shadow],
         ),
     ];
 

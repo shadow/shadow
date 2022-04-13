@@ -328,11 +328,13 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
-                    shim_result = (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                                              .event_data = {
-                                                  .syscall_complete = {.retval = result.retval},
+                    shim_result =
+                        (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                    .event_data = {
+                                        .syscall_complete = {.retval = result.retval,
+                                                             .restartable = result.restartable},
 
-                                              }};
+                                    }};
                 } else if (result.state == SYSCALL_NATIVE) {
                     // Tell the shim to make the syscall itself
                     shim_result = (ShimEvent){

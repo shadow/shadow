@@ -48,6 +48,10 @@ impl EventFdFile {
         self.has_open_file
     }
 
+    pub fn supports_sa_restart(&self) -> bool {
+        false
+    }
+
     pub fn set_has_open_file(&mut self, val: bool) {
         self.has_open_file = val;
     }
