@@ -18,7 +18,7 @@
 #include "main/host/syscall_numbers.h"
 
 static EmulatedTime _shim_sys_get_time() {
-    ShimShmemProcess* mem = shim_processSharedMem();
+    ShimShmemHost* mem = shim_hostSharedMem();
 
     // If that's unavailable, fail. This can happen during early init.
     if (mem == NULL) {

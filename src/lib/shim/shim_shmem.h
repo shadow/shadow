@@ -48,9 +48,9 @@ void shimshmemhost_unlock(ShimShmemHost* host, ShimShmemHostLock** protected);
 size_t shimshmemprocess_size();
 void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process);
 
-// Get and set the emulated time. TODO: move up to Host?
-EmulatedTime shimshmem_getEmulatedTime(ShimShmemProcess* processMem);
-void shimshmem_setEmulatedTime(ShimShmemProcess* processMem, EmulatedTime t);
+// Get and set the emulated time.
+EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
+void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t);
 
 // Get and set the process's pending signal set.
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,

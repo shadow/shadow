@@ -171,7 +171,7 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 }
 
 static void _process_setSharedTime(Process* proc) {
-    shimshmem_setEmulatedTime(process_getSharedMem(proc), worker_getEmulatedTime());
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
