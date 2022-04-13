@@ -76,6 +76,8 @@ const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);
+// Maximum time that the current thread may run ahead to.
+EmulatedTime worker_maxThreadTime(Host* host);
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();

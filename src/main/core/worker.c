@@ -508,6 +508,18 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
+EmulatedTime worker_maxThreadTime(Host* host) {
+    utility_assert(host);
+    SimulationTime max = _worker_getRoundEndTime();
+
+    Event* event = scheduler_peekHost(_worker_pool()->scheduler, host);
+    if (event) {
+        max = MIN(max, event_getTime(event));
+    }
+
+    return max + EMULATED_TIME_OFFSET;
+}
+
 static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
     Packet* packet = voidPacket;
     in_addr_t ip = packet_getDestinationIP(packet);

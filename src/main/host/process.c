@@ -171,7 +171,10 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 }
 
 static void _process_setSharedTime(Process* proc) {
-    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
+    EmulatedTime now = worker_getEmulatedTime();
+
+    shimshmem_setMaxEmulatedTime(host_getSharedMem(proc->host), worker_maxThreadTime(proc->host));
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), now);
 }
 
 const gchar* process_getName(Process* proc) {

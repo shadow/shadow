@@ -38,6 +38,10 @@ struct _ShimShmemHost {
 
     // Current simulation time.
     _Atomic EmulatedTime sim_time;
+
+    // Max simulation time to which sim_time may be incremented.  Moving time
+    // beyond this value requires the current thread to be rescheduled.
+    _Atomic EmulatedTime max_sim_time;
 };
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
@@ -206,11 +210,24 @@ void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process) {
 }
 
 EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem) {
+    assert(hostMem);
     return atomic_load(&hostMem->sim_time);
 }
 
 void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
+    assert(hostMem);
+    assert(t <= shimshmem_getMaxEmulatedTime(hostMem));
     atomic_store(&hostMem->sim_time, t);
+}
+
+EmulatedTime shimshmem_getMaxEmulatedTime(ShimShmemHost* hostMem) {
+    assert(hostMem);
+    return atomic_load(&hostMem->max_sim_time);
+}
+
+void shimshmem_setMaxEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
+    assert(hostMem);
+    atomic_store(&hostMem->max_sim_time, t);
 }
 
 shd_kernel_sigset_t shimshmem_getThreadPendingSignals(const ShimShmemHostLock* host,
