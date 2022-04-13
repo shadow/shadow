@@ -33,6 +33,8 @@ void scheduler_finish(Scheduler*);
 
 gboolean scheduler_push(Scheduler*, Event*, Host* sender, Host* receiver);
 Event* scheduler_pop(Scheduler*);
+// Scheduled time of next event for `host`, or 0 if there is none.
+EmulatedTime scheduler_nextHostEventTime(Scheduler*, Host* host);
 
 int scheduler_addHost(Scheduler*, Host*);
 Host* scheduler_getHost(Scheduler*, GQuark);
