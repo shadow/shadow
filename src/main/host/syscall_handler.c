@@ -50,9 +50,6 @@
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
-static SimulationTime _unblockedSyscallLatency;
-ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatency)
-
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
     utility_assert(host);
@@ -270,7 +267,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Return that response now.
         trace("Returning delayed result");
         sys->havePendingResult = false;
-        scr = sys->pendingResult;
+        utility_assert(sys->pendingResult.state != SYSCALL_BLOCK);
+        sys->blockedSyscallNR = -1;
+        return sys->pendingResult;
     } else {
         switch (args->number) {
             HANDLE_C(accept);
@@ -588,19 +587,26 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
             trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
             if (unblockedCount >= unblockedLimit) {
-                // Block instead, but save the result so that we can return it
-                // later instead of re-executing the syscall.
-                utility_assert(!sys->havePendingResult);
-                sys->havePendingResult = true;
-                sys->pendingResult = scr;
-
-                utility_assert(scr.cond == NULL);
-                scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-                syscallcondition_setTimeout(
-                    scr.cond, sys->host,
-                    worker_getEmulatedTime() + unblockedCount * _unblockedSyscallLatency);
-                scr.state = SYSCALL_BLOCK;
-                trace("Reached unblocked syscall limit. Yielding.");
+                EmulatedTime newTime =
+                    worker_getEmulatedTime() + unblockedCount * shimshmem_unblockedSyscallLatency(
+                                                                    host_getSharedMem(sys->host));
+                EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
+                if (newTime <= maxTime) {
+                    trace("Reached unblocked syscall limit. Incrementing time");
+                    shimshmem_resetUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+                    worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
+                } else {
+                    trace("Reached unblocked syscall limit. Yielding.");
+                    // Block instead, but save the result so that we can return it
+                    // later instead of re-executing the syscall.
+                    utility_assert(!sys->havePendingResult);
+                    sys->havePendingResult = true;
+                    sys->pendingResult = scr;
+                    utility_assert(scr.cond == NULL);
+                    scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+                    syscallcondition_setTimeout(scr.cond, sys->host, newTime);
+                    scr.state = SYSCALL_BLOCK;
+                }
             }
         }
     }

@@ -1564,6 +1564,9 @@ extern "C" {
     pub fn worker_isAlive() -> bool;
 }
 extern "C" {
+    pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
+}
+extern "C" {
     pub fn worker_getCurrentTime() -> SimulationTime;
 }
 extern "C" {

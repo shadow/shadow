@@ -16,6 +16,10 @@ struct _ShimHostProtectedSharedMem {
 
     // Number of syscalls that have executed without blocking.
     uint32_t unblocked_syscall_count;
+
+    // Max simulation time to which sim_time may be incremented.  Moving time
+    // beyond this value requires the current thread to be rescheduled.
+    EmulatedTime max_runahead_time;
 };
 
 struct _ShimShmemHost {
@@ -36,12 +40,16 @@ struct _ShimShmemHost {
     // Thread Safety: immutable after initialization.
     const uint32_t unblocked_syscall_limit;
 
+    // How much to move time forward for each unblocked syscall.
+    // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
+    // stays a global constant; Or down into the process if we make it a
+    // per-process option.
+    //
+    // Thread Safety: immutable after initialization.
+    const SimulationTime unblocked_syscall_latency;
+
     // Current simulation time.
     _Atomic EmulatedTime sim_time;
-
-    // Max simulation time to which sim_time may be incremented.  Moving time
-    // beyond this value requires the current thread to be rescheduled.
-    _Atomic EmulatedTime max_sim_time;
 };
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
@@ -99,7 +107,8 @@ struct _ShimShmemThread {
 
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit) {
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit,
+                        SimulationTime unblockedSyscallLatency) {
     assert(hostMem);
     // We use `memcpy` instead of struct assignment here to allow us to
     // initialize the const members of `hostMem`.
@@ -108,6 +117,7 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSy
                .host_id = host_getID(host),
                .mutex = PTHREAD_MUTEX_INITIALIZER,
                .unblocked_syscall_limit = unblockedSyscallLimit,
+               .unblocked_syscall_latency = unblockedSyscallLatency,
                .protected =
                    {
                        .host_id = host_getID(host),
@@ -134,6 +144,11 @@ uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host) {
 uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host) {
     assert(host);
     return host->unblocked_syscall_limit;
+}
+
+SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
+    assert(host);
+    return host->unblocked_syscall_latency;
 }
 
 void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host) {
@@ -216,18 +231,17 @@ EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem) {
 
 void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
     assert(hostMem);
-    assert(t <= shimshmem_getMaxEmulatedTime(hostMem));
     atomic_store(&hostMem->sim_time, t);
 }
 
-EmulatedTime shimshmem_getMaxEmulatedTime(ShimShmemHost* hostMem) {
+EmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem) {
     assert(hostMem);
-    return atomic_load(&hostMem->max_sim_time);
+    return hostMem->max_runahead_time;
 }
 
-void shimshmem_setMaxEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
+void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, EmulatedTime t) {
     assert(hostMem);
-    atomic_store(&hostMem->max_sim_time, t);
+    hostMem->max_runahead_time = t;
 }
 
 shd_kernel_sigset_t shimshmem_getThreadPendingSignals(const ShimShmemHostLock* host,

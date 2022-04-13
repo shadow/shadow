@@ -124,6 +124,11 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
         shimshmem_incrementUnblockedSyscallCount(host_lock);
         uint32_t unblockedCount = shimshmem_getUnblockedSyscallCount(host_lock);
+        // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
+        // avoid having to reacquire it below. We currently can't hold the lock
+        // over when any syscalls would be made though, since those result in a
+        // ptrace-stop returning control to shadow without giving us a chance to
+        // release the lock.
         shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
 
         // Count the syscall and check whether we ought to yield.
@@ -138,9 +143,27 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             //
             // Since this is a Shadow syscall, it will always be passed through
             // to Shadow instead of being executed natively.
-            trace("Reached unblocked syscall limit. Yielding.");
-            syscall(SYS_shadow_yield);
+
+            EmulatedTime newTime =
+                _shim_sys_get_time() +
+                unblockedCount * shimshmem_unblockedSyscallLatency(shim_hostSharedMem());
+            host_lock = shimshmemhost_lock(shim_hostSharedMem());
+            EmulatedTime maxTime = shimshmem_getMaxRunaheadTime(host_lock);
+            if (newTime <= maxTime) {
+                shimshmem_setEmulatedTime(shim_hostSharedMem(), newTime);
+                shimshmem_resetUnblockedSyscallCount(host_lock);
+                shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+                trace("Reached unblocked syscall limit. Updated time locally. (%ld ns until max)",
+                      maxTime - newTime);
+            } else {
+                shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+                trace("Reached unblocked syscall limit. Yielding. (%ld ns past max)",
+                      newTime - maxTime);
+                syscall(SYS_shadow_yield);
+            }
         }
+        // Should have been released and NULLed.
+        assert(!host_lock);
     }
 
     // the syscall was handled
