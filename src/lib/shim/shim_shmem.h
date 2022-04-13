@@ -52,6 +52,11 @@ void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process);
 EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
 void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t);
 
+// Get and set the *max* emulated time to which the current time can be incremented.
+// Moving time beyond this value requires the current thread to be rescheduled.
+EmulatedTime shimshmem_getMaxEmulatedTime(ShimShmemHost* hostMem);
+void shimshmem_setMaxEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t);
+
 // Get and set the process's pending signal set.
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,
                                                        const ShimShmemProcess* process);
