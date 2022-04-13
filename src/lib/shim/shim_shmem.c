@@ -35,6 +35,9 @@ struct _ShimShmemHost {
     //
     // Thread Safety: immutable after initialization.
     const uint32_t unblocked_syscall_limit;
+
+    // Current simulation time.
+    _Atomic EmulatedTime sim_time;
 };
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
@@ -56,9 +59,6 @@ struct _ShimProcessProtectedSharedMem {
 
 struct _ShimShmemProcess {
     GQuark host_id;
-
-    // Current simulation time.
-    _Atomic EmulatedTime sim_time;
 
     // Guarded by ShimShmemHost.mutex.
     ShimProcessProtectedSharedMem protected;
@@ -205,12 +205,12 @@ void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process) {
     };
 }
 
-EmulatedTime shimshmem_getEmulatedTime(ShimShmemProcess* processMem) {
-    return atomic_load(&processMem->sim_time);
+EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem) {
+    return atomic_load(&hostMem->sim_time);
 }
 
-void shimshmem_setEmulatedTime(ShimShmemProcess* processMem, EmulatedTime t) {
-    atomic_store(&processMem->sim_time, t);
+void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
+    atomic_store(&hostMem->sim_time, t);
 }
 
 shd_kernel_sigset_t shimshmem_getThreadPendingSignals(const ShimShmemHostLock* host,
