@@ -59,6 +59,13 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y git
+      # Work around https://github.com/actions/checkout/issues/760
+      - name: add safe.directory
+        run: git config --global --add safe.directory $PWD
+      # This must come *after* installing git, so that the checkout action
+      # uses git and creates a "real" checkout that we can later `git diff`.
+      # Otherwise it uses the GH API to just copy the contents locally, but
+      # doesn't create a .git directory.
       - uses: actions/checkout@v2
         with:
           persist-credentials: false
