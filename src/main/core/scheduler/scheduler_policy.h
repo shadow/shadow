@@ -17,6 +17,7 @@ typedef void (*SchedulerPolicyAddHostFunc)(SchedulerPolicy*, Host*, pthread_t);
 typedef GQueue* (*SchedulerPolicyGetHostsFunc)(SchedulerPolicy*);
 typedef void (*SchedulerPolicyPushFunc)(SchedulerPolicy*, Event*, Host*, Host*, SimulationTime);
 typedef Event* (*SchedulerPolicyPopFunc)(SchedulerPolicy*, SimulationTime);
+typedef Event* (*SchedulerPolicyPeekHostFunc)(SchedulerPolicy*, Host*);
 typedef SimulationTime (*SchedulerPolicyGetNextTimeFunc)(SchedulerPolicy*);
 typedef void (*SchedulerPolicyFreeFunc)(SchedulerPolicy*);
 
@@ -28,6 +29,7 @@ struct _SchedulerPolicy {
     SchedulerPolicyGetHostsFunc getAssignedHosts;
     SchedulerPolicyPushFunc push;
     SchedulerPolicyPopFunc pop;
+    SchedulerPolicyPeekHostFunc peekHost;
     SchedulerPolicyGetNextTimeFunc getNextTime;
     SchedulerPolicyFreeFunc free;
     MAGIC_DECLARE;

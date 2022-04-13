@@ -253,6 +253,17 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     return TRUE;
 }
 
+Event* scheduler_peekHost(Scheduler* scheduler, Host* host) {
+    MAGIC_ASSERT(scheduler);
+
+    /* push to a queue based on the policy */
+    if (!scheduler->policy->peekHost) {
+        /* TODO: implement for remaining schedulers or remove them. */
+        panic("scheduler_peekHost not implemented for scheduler type %d", scheduler->policy->type);
+    }
+    return scheduler->policy->peekHost(scheduler->policy, host);
+}
+
 int scheduler_addHost(Scheduler* scheduler, Host* host) {
     MAGIC_ASSERT(scheduler);
 

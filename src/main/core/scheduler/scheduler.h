@@ -33,6 +33,7 @@ void scheduler_finish(Scheduler*);
 
 gboolean scheduler_push(Scheduler*, Event*, Host* sender, Host* receiver);
 Event* scheduler_pop(Scheduler*);
+Event* scheduler_peekHost(Scheduler*, Host* host);
 
 int scheduler_addHost(Scheduler*, Host*);
 Host* scheduler_getHost(Scheduler*, GQuark);
