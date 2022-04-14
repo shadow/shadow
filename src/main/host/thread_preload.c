@@ -54,9 +54,9 @@ static ThreadPreload* _threadToThreadPreload(Thread* thread) {
 static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)thread; }
 
 static void _threadpreload_continuePlugin(ThreadPreload* thread, const ShimEvent* event) {
-    // We're about to let managed thread execute, so need to release the host lock.
+    // We're about to let managed thread execute, so need to release the shared memory lock.
     // Reacquired in _threadpreload_waitForNextEvent.
-    host_unlock(thread->base.host);
+    host_unlockShimShmemLock(thread->base.host);
 
     shimevent_sendEventToPlugin(thread->ipc_data, event);
 }
@@ -232,9 +232,9 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread, ShimEv
     MAGIC_ASSERT(_threadPreloadToThread(thread));
     utility_assert(thread->ipc_data);
     shimevent_recvEventFromPlugin(thread->ipc_data, e);
-    // The managed thread has yielded control back to us. Reacquire the host
-    // lock, which we released in `_threadpreload_continuePlugin`.
-    host_lock(thread->base.host);
+    // The managed thread has yielded control back to us. Reacquire the shared
+    // memory lock, which we released in `_threadpreload_continuePlugin`.
+    host_lockShimShmemLock(thread->base.host);
     trace("received shim_event %d", thread->currentEvent.event_id);
 }
 

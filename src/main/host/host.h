@@ -124,4 +124,10 @@ ShimShmemHost* host_getSharedMem(Host* host);
 // but can't).
 ShimShmemHostLock* host_getShimShmemLock(Host* host);
 
+// Take the host's shared memory lock. See `host_getShimShmemLock`.
+void host_lockShimShmemLock(Host* host);
+
+// Release the host's shared memory lock. See `host_getShimShmemLock`.
+void host_unlockShimShmemLock(Host* host);
+
 #endif /* SHD_HOST_H_ */

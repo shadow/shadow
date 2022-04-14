@@ -46,14 +46,9 @@
 #include "main/utility/utility.h"
 
 struct _Host {
-    /* General node lock. Nothing that belongs to the node should be touched
-     * unless holding this lock. Everything following this falls under the lock.
-     *
-     * This lock is in memory shared with the shim, and protects other parts of shared
-     * memory. It should generally be released when the shim is executing so that
-     * it can take the lock, and reacquired when control is returned to Shadow.
-     */
-    ShimShmemHostLock* shimShmemHostLock;
+    /* general node lock. nothing that belongs to the node should be touched
+     * unless holding this lock. everything following this falls under the lock. */
+    GMutex lock;
 
     HostParameters params;
 
@@ -87,6 +82,9 @@ struct _Host {
 
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
+
+    /* Lock protecting parts of shimSharedMemBlock. */
+    ShimShmemHostLock* shimShmemHostLock;
 
     /* random stream */
     Random* random;
@@ -125,6 +123,9 @@ Host* host_new(HostParameters* params) {
     utility_assert(params->hostname);
     host->params.hostname = g_strdup(params->hostname);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
+
+    /* thread-level event communication with other nodes */
+    g_mutex_init(&(host->lock));
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
@@ -290,6 +291,8 @@ void host_shutdown(Host* host) {
 
     if(host->params.pcapDir) g_free(host->params.pcapDir);
 
+    g_mutex_clear(&(host->lock));
+
     if(host->dataDirPath) {
         g_free(host->dataDirPath);
     }
@@ -327,12 +330,12 @@ void host_unref(Host* host) {
 
 void host_lock(Host* host) {
     MAGIC_ASSERT(host);
-    host->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(host));
+    g_mutex_lock(&(host->lock));
 }
 
 void host_unlock(Host* host) {
     MAGIC_ASSERT(host);
-    shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
+    g_mutex_unlock(&(host->lock));
 }
 
 #ifdef USE_PERF_TIMERS
@@ -768,4 +771,14 @@ ShimShmemHost* host_getSharedMem(Host* host) {
 ShimShmemHostLock* host_getShimShmemLock(Host* host) {
     MAGIC_ASSERT(host);
     return host->shimShmemHostLock;
+}
+
+void host_lockShimShmemLock(Host* host) {
+    MAGIC_ASSERT(host);
+    host->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(host));
+}
+
+void host_unlockShimShmemLock(Host* host) {
+    MAGIC_ASSERT(host);
+    shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
 }

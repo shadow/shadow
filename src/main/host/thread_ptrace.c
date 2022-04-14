@@ -1024,15 +1024,15 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             process_flushPtrs(thread->base.process);
 
             trace("ptrace resuming with signal %ld", thread->signalToDeliver);
-            // Allow child to start executing.  We release the host lock, which
-            // we will reacquire when the child stops again.
+            // Allow child to start executing.  We release the shared memory
+            // lock, which we will reacquire when the child stops again.
             //
             // XXX: This is currently a bit fragile - stopping and starting the
             // managed thread ideally should be refactored into helper functions
             // that also take and release the lock. Not worth it for now since
             // we plan to remove ptrace mode
             // https://github.com/shadow/shadow/issues/1945.
-            host_unlock(thread->base.host);
+            host_unlockShimShmemLock(thread->base.host);
             if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
                 utility_panic("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
                 abort();
@@ -1043,8 +1043,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
         }
         trace("waiting for next state");
         _threadptrace_nextChildState(thread);
-        // Now that the child has stopped, re-acquire the host lock.
-        host_lock(thread->base.host);
+        // Now that the child has stopped, re-acquire the shared memory lock.
+        host_lockShimShmemLock(thread->base.host);
     }
 }
 
