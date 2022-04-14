@@ -4,7 +4,10 @@
  */
 
 use test_utils::set;
+use test_utils::socket_utils;
 use test_utils::TestEnvironment as TestEnv;
+
+use nix::poll::PollFlags;
 
 struct ListenArguments {
     fd: libc::c_int,
@@ -118,6 +121,40 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 ];
 
                 tests.extend(more_tests);
+            }
+        }
+    }
+
+    for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
+        let passing = if domain != libc::AF_UNIX {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
+        for &sock_type in [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].iter() {
+            for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+                // add details to the test names to avoid duplicates
+                let append_args =
+                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+
+                // skip tests that use SOCK_SEQPACKET with INET sockets
+                if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
+                    continue;
+                }
+
+                tests.extend(vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_listening_not_readable"),
+                        move || test_listening_not_readable(domain, sock_type, flag),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_listening_not_writable"),
+                        move || test_listening_not_writable(domain, sock_type, flag),
+                        passing.clone(),
+                    ),
+                ]);
             }
         }
     }
@@ -295,6 +332,58 @@ fn test_after_close(
     };
 
     check_listen_call(&args, Some(libc::EBADF))
+}
+
+/// Test that a listening socket is not readable.
+fn test_listening_not_readable(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    socket_utils::autobind_helper(fd, domain);
+
+    let args = ListenArguments { fd: fd, backlog: 5 };
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_listen_call(&args, None)?;
+
+        let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::POLLIN)];
+        let count = nix::poll::poll(&mut poll_fds, 50).unwrap();
+
+        // should not be readable
+        assert_eq!(count, 0);
+
+        Ok(())
+    })
+}
+
+/// Test that a listening socket is not writable.
+fn test_listening_not_writable(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    socket_utils::autobind_helper(fd, domain);
+
+    let args = ListenArguments { fd: fd, backlog: 5 };
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_listen_call(&args, None)?;
+
+        let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::POLLOUT)];
+        let count = nix::poll::poll(&mut poll_fds, 50).unwrap();
+
+        // should not be writable
+        assert_eq!(count, 0);
+
+        Ok(())
+    })
 }
 
 /// Bind the fd to the address.
