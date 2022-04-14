@@ -3,6 +3,9 @@ general:
 network:
   graph:
     type: 1_gbit_switch
+experimental:
+  # This test needs precise control over when its threads run.
+  unblocked_syscall_latency: 0
 hosts:
   testnode:
     network_node_id: 0
