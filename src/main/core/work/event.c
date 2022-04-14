@@ -65,7 +65,6 @@ void event_execute(Event* event) {
     MAGIC_ASSERT(event);
 
     host_lock(event->dstHost);
-    host_lockShimShmemLock(event->dstHost);
     worker_setActiveHost(event->dstHost);
 
     /* check if we are allowed to execute or have to wait for cpu delays */
@@ -92,7 +91,6 @@ void event_execute(Event* event) {
     }
 
     worker_setActiveHost(NULL);
-    host_unlockShimShmemLock(event->dstHost);
     host_unlock(event->dstHost);
 }
 

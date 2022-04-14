@@ -1524,12 +1524,6 @@ extern "C" {
     pub fn host_getShimShmemLock(host: *mut Host) -> *mut ShimShmemHostLock;
 }
 extern "C" {
-    pub fn host_lockShimShmemLock(host: *mut Host);
-}
-extern "C" {
-    pub fn host_unlockShimShmemLock(host: *mut Host);
-}
-extern "C" {
     pub fn worker_runEvent(event: *mut Event);
 }
 extern "C" {
