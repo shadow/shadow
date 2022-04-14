@@ -308,6 +308,10 @@ void host_shutdown(Host* host) {
 
     if(host->defaultAddress) address_unref(host->defaultAddress);
     if(host->params.hostname) g_free(host->params.hostname);
+
+    utility_assert(host_getSharedMem(host));
+    shimshmemhost_destroy(host_getSharedMem(host));
+    shmemallocator_globalFree(&host->shimSharedMemBlock);
 }
 
 void host_ref(Host* host) {

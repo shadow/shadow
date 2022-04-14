@@ -336,9 +336,7 @@ static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
         // Primary condition is satisfied.
         return true;
     }
-    ShimShmemHostLock* hostLock = shimshmemhost_lock(host_getSharedMem(host));
-    bool signalPending = thread_unblockedSignalPending(cond->thread, hostLock);
-    shimshmemhost_unlock(host_getSharedMem(host), &hostLock);
+    bool signalPending = thread_unblockedSignalPending(cond->thread, host_getShimShmemLock(host));
     if (signalPending) {
         return true;
     }
