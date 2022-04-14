@@ -17,6 +17,11 @@ use crate::utility::stream_len::StreamLen;
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: usize = 212_992;
 
 pub struct UnixSocketFile {
+    /// Data and functionality that is general for all states.
+    common: UnixSocketCommon,
+}
+
+struct UnixSocketCommon {
     send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
     recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
     event_source: StateEventSource,
@@ -49,19 +54,21 @@ impl UnixSocketFile {
         let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
 
         let socket = Self {
-            send_buffer: None,
-            recv_buffer,
-            event_source: StateEventSource::new(),
-            state: FileState::ACTIVE,
-            mode,
-            status,
-            socket_type,
-            peer_addr: None,
-            bound_addr: None,
-            namespace: Arc::clone(namespace),
-            send_buffer_event_handle: None,
-            recv_buffer_event_handle: None,
-            has_open_file: false,
+            common: UnixSocketCommon {
+                send_buffer: None,
+                recv_buffer,
+                event_source: StateEventSource::new(),
+                state: FileState::ACTIVE,
+                mode,
+                status,
+                socket_type,
+                peer_addr: None,
+                bound_addr: None,
+                namespace: Arc::clone(namespace),
+                send_buffer_event_handle: None,
+                recv_buffer_event_handle: None,
+                has_open_file: false,
+            },
         };
 
         let socket = Arc::new(AtomicRefCell::new(socket));
@@ -69,7 +76,7 @@ impl UnixSocketFile {
 
         // update the socket's state when the buffer's state changes
         let weak = Arc::downgrade(&socket);
-        let recv_handle = socket_ref.recv_buffer.borrow_mut().add_listener(
+        let recv_handle = socket_ref.common.recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE,
             move |state, event_queue| {
                 // if the file hasn't been dropped
@@ -77,12 +84,12 @@ impl UnixSocketFile {
                     let mut socket = socket.borrow_mut();
 
                     // if the socket is already closed, do nothing
-                    if socket.state.contains(FileState::CLOSED) {
+                    if socket.common.state.contains(FileState::CLOSED) {
                         return;
                     }
 
                     // the socket is readable iff the buffer is readable
-                    socket.copy_state(
+                    socket.common.copy_state(
                         /* mask */ FileState::READABLE,
                         state
                             .contains(BufferState::READABLE)
@@ -94,7 +101,7 @@ impl UnixSocketFile {
             },
         );
 
-        socket_ref.recv_buffer_event_handle = Some(recv_handle);
+        socket_ref.common.recv_buffer_event_handle = Some(recv_handle);
 
         std::mem::drop(socket_ref);
 
@@ -102,19 +109,19 @@ impl UnixSocketFile {
     }
 
     pub fn get_status(&self) -> FileStatus {
-        self.status
+        self.common.status
     }
 
     pub fn set_status(&mut self, status: FileStatus) {
-        self.status = status;
+        self.common.status = status;
     }
 
     pub fn mode(&self) -> FileMode {
-        self.mode
+        self.common.mode
     }
 
     pub fn has_open_file(&self) -> bool {
-        self.has_open_file
+        self.common.has_open_file
     }
 
     pub fn supports_sa_restart(&self) -> bool {
@@ -122,11 +129,11 @@ impl UnixSocketFile {
     }
 
     pub fn set_has_open_file(&mut self, val: bool) {
-        self.has_open_file = val;
+        self.common.has_open_file = val;
     }
 
     pub fn get_bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+        self.common.bound_addr
     }
 
     pub fn set_bound_address(
@@ -134,17 +141,17 @@ impl UnixSocketFile {
         addr: Option<nix::sys::socket::UnixAddr>,
     ) -> Result<(), SyscallError> {
         // if already bound
-        if self.bound_addr.is_some() {
+        if self.common.bound_addr.is_some() {
             // TODO: not sure what should happen here
             return Err(Errno::EINVAL.into());
         }
 
-        self.bound_addr = addr;
+        self.common.bound_addr = addr;
         Ok(())
     }
 
     pub fn get_peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.peer_addr
+        self.common.peer_addr
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
@@ -152,28 +159,30 @@ impl UnixSocketFile {
     }
 
     pub fn recv_buffer(&self) -> &Arc<AtomicRefCell<SharedBuf>> {
-        &self.recv_buffer
+        &self.common.recv_buffer
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // drop the event listener handles so that we stop receiving new events
-        self.send_buffer_event_handle
+        self.common
+            .send_buffer_event_handle
             .take()
             .map(|h| h.stop_listening());
-        self.recv_buffer_event_handle
+        self.common
+            .recv_buffer_event_handle
             .take()
             .map(|h| h.stop_listening());
 
         // inform the buffer that there is one fewer writers
-        if let Some(send_buffer) = self.send_buffer.as_ref() {
+        if let Some(send_buffer) = self.common.send_buffer.as_ref() {
             send_buffer.borrow_mut().remove_writer(event_queue);
         }
 
         // no need to hold on to the send buffer anymore
-        self.send_buffer = None;
+        self.common.send_buffer = None;
 
         // set the closed flag and remove the active, readable, and writable flags
-        self.copy_state(
+        self.common.copy_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
             event_queue,
@@ -188,11 +197,11 @@ impl UnixSocketFile {
         rng: impl rand::Rng,
     ) -> SyscallResult {
         // if already bound
-        if socket.borrow().bound_addr.is_some() {
+        if socket.borrow().common.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
 
-        let socket_type = socket.borrow().socket_type;
+        let socket_type = socket.borrow().common.socket_type;
 
         // get the unix address
         let addr = match addr {
@@ -209,7 +218,7 @@ impl UnixSocketFile {
         // bind the socket
         let bound_addr = if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
-            let namespace = Arc::clone(&socket.borrow().namespace);
+            let namespace = Arc::clone(&socket.borrow().common.namespace);
             match AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket) {
                 Ok(()) => *addr,
                 // address is in use
@@ -217,7 +226,7 @@ impl UnixSocketFile {
             }
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
-            let namespace = Arc::clone(&socket.borrow().namespace);
+            let namespace = Arc::clone(&socket.borrow().common.namespace);
             match AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng) {
                 Ok(ref name) => nix::sys::socket::UnixAddr::new_abstract(name).unwrap(),
                 Err(_) => return Err(Errno::EADDRINUSE.into()),
@@ -227,7 +236,7 @@ impl UnixSocketFile {
             return Err(Errno::ENOTSUP.into());
         };
 
-        socket.borrow_mut().bound_addr = Some(bound_addr);
+        socket.borrow_mut().common.bound_addr = Some(bound_addr);
 
         Ok(0.into())
     }
@@ -272,7 +281,7 @@ impl UnixSocketFile {
         R: std::io::Read + std::io::Seek,
     {
         // if the file is not open for writing, return EBADF
-        if !self.mode.contains(FileMode::WRITE) {
+        if !self.common.mode.contains(FileMode::WRITE) {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
@@ -284,9 +293,9 @@ impl UnixSocketFile {
 
         // returns either the send buffer, or None if we should look up the send buffer from the
         // socket address
-        let send_buffer = match (&self.send_buffer, addr) {
+        let send_buffer = match (&self.common.send_buffer, addr) {
             // already connected but a destination address was given
-            (Some(send_buffer), Some(_addr)) => match self.socket_type {
+            (Some(send_buffer), Some(_addr)) => match self.common.socket_type {
                 UnixSocketType::Stream => return Err(Errno::EISCONN.into()),
                 // linux seems to ignore the destination address for connected seq packet sockets
                 UnixSocketType::SeqPacket => Some(send_buffer),
@@ -295,7 +304,7 @@ impl UnixSocketFile {
             // already connected and no destination address was given
             (Some(send_buffer), None) => Some(send_buffer),
             // not connected but a destination address was given
-            (None, Some(_addr)) => match self.socket_type {
+            (None, Some(_addr)) => match self.common.socket_type {
                 UnixSocketType::Stream => return Err(Errno::EOPNOTSUPP.into()),
                 UnixSocketType::SeqPacket => return Err(Errno::ENOTCONN.into()),
                 UnixSocketType::Dgram => None,
@@ -314,7 +323,12 @@ impl UnixSocketFile {
                 // if an abstract address
                 if let Some(name) = addr.unwrap().as_abstract() {
                     // look up the socket from the address name
-                    match self.namespace.borrow().lookup(self.socket_type, name) {
+                    match self
+                        .common
+                        .namespace
+                        .borrow()
+                        .lookup(self.common.socket_type, name)
+                    {
                         // socket was found with the given name
                         Some(recv_socket) => {
                             // store an Arc of the recv buffer
@@ -337,7 +351,7 @@ impl UnixSocketFile {
 
         let len = bytes.stream_len_bp()? as usize;
 
-        match self.socket_type {
+        match self.common.socket_type {
             UnixSocketType::Stream => send_buffer.write_stream(bytes.by_ref(), len, event_queue),
             UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
                 send_buffer.write_packet(bytes.by_ref(), len, event_queue)?;
@@ -355,11 +369,11 @@ impl UnixSocketFile {
         W: std::io::Write + std::io::Seek,
     {
         // if the file is not open for reading, return EBADF
-        if !self.mode.contains(FileMode::READ) {
+        if !self.common.mode.contains(FileMode::READ) {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let mut recv_buffer = self.recv_buffer.borrow_mut();
+        let mut recv_buffer = self.common.recv_buffer.borrow_mut();
 
         if !recv_buffer.has_data() {
             // return EWOULDBLOCK even if 'bytes' has length 0
@@ -394,15 +408,15 @@ impl UnixSocketFile {
         let mut send_buffer_ref = send_buffer.borrow_mut();
 
         // set the socket's peer address
-        assert!(socket_ref.peer_addr.is_none());
-        socket_ref.peer_addr = Some(addr);
+        assert!(socket_ref.common.peer_addr.is_none());
+        socket_ref.common.peer_addr = Some(addr);
 
         // increment the buffer's writer count
         send_buffer_ref.add_writer(event_queue);
 
         // update the socket file's state based on the buffer's state
         if send_buffer_ref.state().contains(BufferState::WRITABLE) {
-            socket_ref.state.insert(FileState::WRITABLE);
+            socket_ref.common.state.insert(FileState::WRITABLE);
         }
 
         // update the socket's state when the buffer's state changes
@@ -414,12 +428,12 @@ impl UnixSocketFile {
                     let mut socket = socket.borrow_mut();
 
                     // if the socket is already closed, do nothing
-                    if socket.state.contains(FileState::CLOSED) {
+                    if socket.common.state.contains(FileState::CLOSED) {
                         return;
                     }
 
                     // the socket is writable iff the buffer is writable
-                    socket.copy_state(
+                    socket.common.copy_state(
                         /* mask */ FileState::WRITABLE,
                         state
                             .contains(BufferState::WRITABLE)
@@ -432,8 +446,8 @@ impl UnixSocketFile {
 
         std::mem::drop(send_buffer_ref);
 
-        socket_ref.send_buffer = Some(send_buffer);
-        socket_ref.send_buffer_event_handle = Some(send_handle);
+        socket_ref.common.send_buffer = Some(send_buffer);
+        socket_ref.common.send_buffer_event_handle = Some(send_handle);
     }
 
     pub fn add_listener(
@@ -442,22 +456,25 @@ impl UnixSocketFile {
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
-        self.event_source
+        self.common
+            .event_source
             .add_listener(monitoring, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
-        self.event_source.add_legacy_listener(ptr);
+        self.common.event_source.add_legacy_listener(ptr);
     }
 
     pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
-        self.event_source.remove_legacy_listener(ptr);
+        self.common.event_source.remove_legacy_listener(ptr);
     }
 
     pub fn state(&self) -> FileState {
-        self.state
+        self.common.state
     }
+}
 
+impl UnixSocketCommon {
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
         let old_state = self.state;
 
