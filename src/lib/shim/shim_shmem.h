@@ -38,6 +38,7 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 
 size_t shimshmemhost_size();
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit);
+void shimshmemhost_destroy(ShimShmemHost* hostMem);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
 

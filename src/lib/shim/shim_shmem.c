@@ -96,8 +96,9 @@ struct _ShimShmemThread {
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit) {
-    // We use `memcpy` here to allow us to initialize the const members of
-    // `hostMem`.
+    assert(hostMem);
+    // We use `memcpy` instead of struct assignment here to allow us to
+    // initialize the const members of `hostMem`.
     memcpy(hostMem,
            &(ShimShmemHost){
                .host_id = host_getID(host),
@@ -109,6 +110,11 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSy
                    },
            },
            sizeof(ShimShmemHost));
+}
+
+void shimshmemhost_destroy(ShimShmemHost* hostMem) {
+    assert(hostMem);
+    pthread_mutex_destroy(&hostMem->mutex);
 }
 
 void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host) {
