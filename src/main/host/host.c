@@ -103,11 +103,11 @@ struct _Host {
 static bool _modelUnblockedSyscallLatencyConfig = false;
 ADD_CONFIG_HANDLER(config_getModelUnblockedSyscallLatency, _modelUnblockedSyscallLatencyConfig)
 
-static uint32_t _unblockedSyscallLimitConfig = 0;
-ADD_CONFIG_HANDLER(config_getUnblockedSyscallLimit, _unblockedSyscallLimitConfig)
-
 static SimulationTime _unblockedSyscallLatencyConfig;
 ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatencyConfig)
+
+static SimulationTime _maxUnappliedCpuLatencyConfig;
+ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
 Host* host_new(HostParameters* params) {
@@ -143,9 +143,8 @@ Host* host_new(HostParameters* params) {
          g_quark_to_string(host->params.id));
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-
     shimshmemhost_init(host_getSharedMem(host), host, _modelUnblockedSyscallLatencyConfig,
-                       _unblockedSyscallLimitConfig, _unblockedSyscallLatencyConfig);
+                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;

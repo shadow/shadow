@@ -38,7 +38,8 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 
 size_t shimshmemhost_size();
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
-                        uint32_t unblockedSyscallLimit, SimulationTime unblockedSyscallLatency);
+                        SimulationTime maxUnappliedCpuLatency,
+                        SimulationTime unblockedSyscallLatency);
 void shimshmemhost_destroy(ShimShmemHost* hostMem);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
@@ -115,16 +116,16 @@ int shimshmem_takePendingUnblockedSignal(const ShimShmemHostLock* lock, ShimShme
                                          ShimShmemThread* thread, siginfo_t* info);
 
 // Track the number of consecutive unblocked syscalls.
-void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host);
-uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host);
-void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host);
+void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, SimulationTime dt);
+SimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host);
+void shimshmem_resetUnappliedCpuLatency(ShimShmemHostLock* host);
 
 // Get whether to model latency of unblocked syscalls.
 bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host);
 
 // Get the configured maximum unmber of unblocked syscalls to execute before
 // yielding.
-uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host);
+uint32_t shimshmem_maxUnappliedCpuLatency(ShimShmemHost* host);
 
 // Get the configured latency to emulate for each unblocked syscall.
 SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host);

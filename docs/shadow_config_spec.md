@@ -71,6 +71,7 @@ hosts:
 - [`experimental.interface_buffer`](#experimentalinterface_buffer)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.interpose_method`](#experimentalinterpose_method)
+- [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler_policy`](#experimentalscheduler_policy)
@@ -80,7 +81,6 @@ hosts:
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.strace_logging_mode`](#experimentalstrace_logging_mode)
 - [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscall_latency)
-- [`experimental.unblocked_syscall_limit`](#experimentalunblocked_syscall_limit)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
@@ -347,6 +347,22 @@ Type: "ptrace" OR "preload"
 
 Which interposition method to use.
 
+#### `experimental.max_unapplied_cpu_latency`
+
+Default: "10 microseconds"  
+Type: String
+
+Max amount of execution-time latency allowed to accumulate before the clock is
+moved forward. Moving the clock forward is a potentially expensive operation, so
+larger values reduce simulation overhead, at the cost of coarser time jumps.
+
+Note also that accumulated-but-unapplied latency is discarded when a thread is
+blocked on a syscall.
+
+Ignored when
+[`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
+is false.
+
 #### `experimental.preload_spin_max`
 
 Default: 0  
@@ -431,24 +447,13 @@ Default: "2 microseconds"
 Type: String
 
 The simulated latency of an unblocked syscall. For simulation efficiency, this
-latency is only added when `unblocked_syscall_limit` is reached.
+latency is only added when `max_unapplied_cpu_latency` is reached.
 
 Ignored when
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
 
-#### `experimental.unblocked_syscall_limit`
-
-Default: 500
-Type: Integer
-
-The number of consecutive unblocked syscalls that Shadow will allow a thread to
-execute before `unblocked_syscall_latency` is applied.
-
-Ignored when
-[`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
-
 #### `experimental.use_cpu_pinning`
 
 Default: true  
