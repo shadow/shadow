@@ -100,11 +100,11 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
-static uint32_t _unblockedSyscallLimit = 0;
-ADD_CONFIG_HANDLER(config_getUnblockedSyscallLimit, _unblockedSyscallLimit)
-
 static SimulationTime _unblockedSyscallLatency;
 ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatency)
+
+static SimulationTime _maxUnappliedCpuLatency;
+ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatency)
 
 /* this function is called by manager before the workers exist */
 Host* host_new(HostParameters* params) {
@@ -140,7 +140,8 @@ Host* host_new(HostParameters* params) {
          g_quark_to_string(host->params.id));
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(host_getSharedMem(host), host, _unblockedSyscallLimit, _unblockedSyscallLatency);
+    shimshmemhost_init(
+        host_getSharedMem(host), host, _maxUnappliedCpuLatency, _unblockedSyscallLatency);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;

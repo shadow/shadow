@@ -659,7 +659,7 @@ void process_continue(Process* proc, Thread* thread) {
 
     _process_setSharedTime(proc);
 
-    shimshmem_resetUnblockedSyscallCount(host_getShimShmemLock(proc->host));
+    shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(proc->host));
     proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
     proc->plugin.isExecuting = FALSE;

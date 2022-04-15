@@ -397,11 +397,16 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("strace_logging_mode").unwrap().as_str())]
     pub strace_logging_mode: Option<StraceLoggingMode>,
 
-    /// Number of consecutive unblocked syscalls before a thread applies
-    /// `unblocked_syscall_latency` and yields. 0 to never yield.
+    /// Max amount of execution-time latency allowed to accumulate before the
+    /// clock is moved forward. Moving the clock forward is a potentially
+    /// expensive operation, so larger values reduce simulation overhead, at the
+    /// cost of coarser time jumps. Note also that accumulated-but-unapplied
+    /// latency is discarded when a thread is blocked on a syscall.
+    ///
+    /// 0 to never account for CPU latency.
     #[clap(long, value_name = "count")]
-    #[clap(help = EXP_HELP.get("unblocked_syscall_limit").unwrap().as_str())]
-    pub unblocked_syscall_limit: Option<i32>,
+    #[clap(help = EXP_HELP.get("max_unapplied_cpu_latency").unwrap().as_str())]
+    pub max_unapplied_cpu_latency: Option<units::Time<units::TimePrefix>>,
 
     /// Simulated latency of an unblocked syscall. For efficiency Shadow only
     /// actually adds this latency if and when `unblocked_syscall_limit` is
@@ -444,7 +449,7 @@ impl Default for ExperimentalOptions {
             // outside of a true "busy loop", and low enough to get out of such
             // loops fairly quickly. Disabled by default for now, pending further
             // testing.
-            unblocked_syscall_limit: Some(0),
+            max_unapplied_cpu_latency: Some(units::Time::new(0, units::TimePrefix::Micro)),
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
@@ -1280,10 +1285,14 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getUnblockedSyscallLimit(config: *const ConfigOptions) -> i32 {
+    pub extern "C" fn config_getMaxUnappliedCpuLatency(config: *const ConfigOptions) -> u64 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.unblocked_syscall_limit.unwrap()
+        match config.experimental.max_unapplied_cpu_latency {
+            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
+            None => 0,
+        }
     }
 
     #[no_mangle]

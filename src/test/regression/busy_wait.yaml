@@ -4,7 +4,7 @@ general:
   stop_time: 15s
 
 experimental:
-  unblocked_syscall_limit: 1
+  max_unapplied_cpu_latency: 1microsecond
 
 network:
   graph:

@@ -5,7 +5,7 @@ general:
 experimental:
   # needed for https://github.com/shadow/shadow/issues/1794
   # this is only included in the test, and not in the documentation example
-  unblocked_syscall_limit: 500
+  max_unapplied_cpu_latency: 1microsecond
 
 network:
   graph:

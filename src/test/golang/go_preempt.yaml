@@ -6,8 +6,7 @@ network:
     type: 1_gbit_switch
 
 experimental:
-  unblocked_syscall_limit: 100
-  unblocked_syscall_latency: 5 microseconds
+  max_unapplied_cpu_latency: 1microsecond
 
 hosts:
   host:
