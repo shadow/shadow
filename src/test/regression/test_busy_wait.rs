@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 // * older versions of Curl (https://github.com/shadow/shadow/issues/1794#issuecomment-985909442)
 fn test_wait_for_timeout() {
     let t0 = Instant::now();
-    let target = t0 + Duration::from_millis(1);
+    let target = t0 + Duration::from_micros(10);
     while Instant::now() < target {
         // wait
     }

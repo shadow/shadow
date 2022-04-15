@@ -48,6 +48,14 @@ struct _ShimShmemHost {
     // Thread Safety: immutable after initialization.
     const SimulationTime unblocked_syscall_latency;
 
+    // How much to move time forward for each unblocked vdso "syscall".
+    // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
+    // stays a global constant; Or down into the process if we make it a
+    // per-process option.
+    //
+    // Thread Safety: immutable after initialization.
+    const SimulationTime unblocked_vdso_latency;
+
     // Current simulation time.
     _Atomic EmulatedTime sim_time;
 };
@@ -108,7 +116,8 @@ struct _ShimShmemThread {
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, SimulationTime maxUnappliedCpuLatency,
-                        SimulationTime unblockedSyscallLatency) {
+                        SimulationTime unblockedSyscallLatency,
+                        SimulationTime unblockedVdsoLatency) {
     assert(hostMem);
     // We use `memcpy` instead of struct assignment here to allow us to
     // initialize the const members of `hostMem`.
@@ -118,6 +127,7 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, SimulationTime maxUn
                .mutex = PTHREAD_MUTEX_INITIALIZER,
                .max_unapplied_cpu_latency = maxUnappliedCpuLatency,
                .unblocked_syscall_latency = unblockedSyscallLatency,
+               .unblocked_vdso_latency = unblockedVdsoLatency,
                .protected =
                    {
                        .host_id = host_getID(host),
@@ -149,6 +159,11 @@ uint32_t shimshmem_maxUnappliedCpuLatency(ShimShmemHost* host) {
 SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
     assert(host);
     return host->unblocked_syscall_latency;
+}
+
+SimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host) {
+    assert(host);
+    return host->unblocked_vdso_latency;
 }
 
 void shimshmem_resetUnappliedCpuLatency(ShimShmemHostLock* host) {

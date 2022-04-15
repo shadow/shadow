@@ -103,6 +103,9 @@ struct _Host {
 static SimulationTime _unblockedSyscallLatency;
 ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatency)
 
+static SimulationTime _unblockedVdsoLatency;
+ADD_CONFIG_HANDLER(config_getUnblockedVdsoLatency, _unblockedVdsoLatency)
+
 static SimulationTime _maxUnappliedCpuLatency;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatency)
 
@@ -140,8 +143,8 @@ Host* host_new(HostParameters* params) {
          g_quark_to_string(host->params.id));
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(
-        host_getSharedMem(host), host, _maxUnappliedCpuLatency, _unblockedSyscallLatency);
+    shimshmemhost_init(host_getSharedMem(host), host, _maxUnappliedCpuLatency,
+                       _unblockedSyscallLatency, _unblockedVdsoLatency);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;

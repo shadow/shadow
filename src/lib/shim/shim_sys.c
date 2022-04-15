@@ -123,7 +123,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     if (maxUnappliedCpuLatency > 0) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
         shimshmem_incrementUnappliedCpuLatency(
-            host_lock, shimshmem_unblockedSyscallLatency(shim_hostSharedMem()));
+            host_lock, shimshmem_unblockedVdsoLatency(shim_hostSharedMem()));
         SimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
         // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
         // avoid having to reacquire it below. We currently can't hold the lock
