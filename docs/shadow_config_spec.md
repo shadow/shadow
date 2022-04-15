@@ -81,6 +81,7 @@ hosts:
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.strace_logging_mode`](#experimentalstrace_logging_mode)
 - [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscall_latency)
+- [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
@@ -453,7 +454,18 @@ Ignored when
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
 
+#### `experimental.unblocked_vdso_latency`
+
+Default: "100 nanoseconds"  
+Type: String
+
+The simulated latency of an unblocked vdso function. For simulation efficiency, this
+latency is only added when `max_unapplied_cpu_latency` is reached.
+
+Ignored when
+[`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
+
 #### `experimental.use_cpu_pinning`
 
 Default: true  

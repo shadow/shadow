@@ -356,6 +356,8 @@ uint64_t config_getMaxUnappliedCpuLatency(const struct ConfigOptions *config);
 
 SimulationTime config_getUnblockedSyscallLatency(const struct ConfigOptions *config);
 
+SimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config);
+
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
 SimulationTime config_getStopTime(const struct ConfigOptions *config);

@@ -106,6 +106,9 @@ ADD_CONFIG_HANDLER(config_getModelUnblockedSyscallLatency, _modelUnblockedSyscal
 static SimulationTime _unblockedSyscallLatencyConfig;
 ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatencyConfig)
 
+static SimulationTime _unblockedVdsoLatencyConfig;
+ADD_CONFIG_HANDLER(config_getUnblockedVdsoLatency, _unblockedVdsoLatencyConfig)
+
 static SimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
@@ -144,7 +147,8 @@ Host* host_new(HostParameters* params) {
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
     shimshmemhost_init(host_getSharedMem(host), host, _modelUnblockedSyscallLatencyConfig,
-                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig);
+                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig,
+                       _unblockedVdsoLatencyConfig);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;

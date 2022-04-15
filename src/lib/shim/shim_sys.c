@@ -30,6 +30,26 @@ static EmulatedTime _shim_sys_get_time() {
 
 uint64_t shim_sys_get_simtime_nanos() { return _shim_sys_get_time() / SIMTIME_ONE_NANOSECOND; }
 
+static SimulationTime _shim_sys_latency_for_syscall(long n) {
+    switch (n) {
+        case SYS_clock_gettime:
+        case SYS_time:
+        case SYS_gettimeofday:
+        case SYS_getcpu:
+            // This would typically be a VDSO call outside of Shadow.
+            //
+            // It might not be, if the caller directly used a `syscall`
+            // instruction or function call, but this is unusual, and charging
+            // too-little latency here shouldn't hurt much, given that its main
+            // purpose is currently to escape busy loops rather than to fully
+            // model CPU time.
+            return shimshmem_unblockedVdsoLatency(shim_hostSharedMem());
+    }
+    // This would typically *not* be a VDSO call outside of Shadow, even if
+    // Shadow does implement it in the shim.
+    return shimshmem_unblockedSyscallLatency(shim_hostSharedMem());
+}
+
 bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
@@ -122,7 +142,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
         shimshmem_incrementUnappliedCpuLatency(
-            host_lock, shimshmem_unblockedSyscallLatency(shim_hostSharedMem()));
+            host_lock, _shim_sys_latency_for_syscall(syscall_num));
         SimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
         // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
         // avoid having to reacquire it below. We currently can't hold the lock

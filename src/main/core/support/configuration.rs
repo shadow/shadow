@@ -455,6 +455,13 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("unblocked_syscall_latency").unwrap().as_str())]
     pub unblocked_syscall_latency: Option<units::Time<units::TimePrefix>>,
 
+    /// Simulated latency of a vdso "syscall". For efficiency Shadow only
+    /// actually adds this latency if and when `unblocked_syscall_limit` is
+    /// reached.
+    #[clap(long, value_name = "seconds")]
+    #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
+    pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
+
     /// List of hostnames to debug
     #[clap(hide_short_help = true)]
     #[clap(parse(try_from_str = parse_set_str))]
@@ -490,6 +497,8 @@ impl Default for ExperimentalOptions {
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
+            // Actual latencies vary from ~40 to ~400 CPU cycles. https://stackoverflow.com/a/13096917
+            unblocked_vdso_latency: Some(units::Time::new(100, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
@@ -1339,6 +1348,19 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match config.experimental.unblocked_syscall_latency {
+            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
+            None => 0,
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUnblockedVdsoLatency(
+        config: *const ConfigOptions,
+    ) -> c::SimulationTime {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        match config.experimental.unblocked_vdso_latency {
             Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
             // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
             None => 0,
