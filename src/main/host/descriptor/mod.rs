@@ -96,6 +96,7 @@ impl FileMode {
 }
 
 bitflags::bitflags! {
+    #[derive(Default)]
     pub struct FileState: libc::c_int {
         /// Has been initialized and it is now OK to unblock any plugin waiting
         /// on a particular state.

@@ -4,7 +4,7 @@ use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 
 use crate::cshadow as c;
-use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::shared_buf::{BufferHandle, BufferState, SharedBuf};
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
@@ -27,8 +27,8 @@ pub struct UnixSocketFile {
     peer_addr: Option<nix::sys::socket::UnixAddr>,
     bound_addr: Option<nix::sys::socket::UnixAddr>,
     namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
-    send_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
-    recv_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    send_buffer_event_handle: Option<BufferHandle>,
+    recv_buffer_event_handle: Option<BufferHandle>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -70,9 +70,8 @@ impl UnixSocketFile {
         // update the socket's state when the buffer's state changes
         let weak = Arc::downgrade(&socket);
         let recv_handle = socket_ref.recv_buffer.borrow_mut().add_listener(
-            FileState::READABLE,
-            StateListenerFilter::Always,
-            move |state, _changed, event_queue| {
+            BufferState::READABLE,
+            move |state, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(socket) = weak.upgrade() {
                     let mut socket = socket.borrow_mut();
@@ -83,7 +82,14 @@ impl UnixSocketFile {
                     }
 
                     // the socket is readable iff the buffer is readable
-                    socket.copy_state(FileState::READABLE, state, event_queue);
+                    socket.copy_state(
+                        /* mask */ FileState::READABLE,
+                        state
+                            .contains(BufferState::READABLE)
+                            .then(|| FileState::READABLE)
+                            .unwrap_or_default(),
+                        event_queue,
+                    );
                 }
             },
         );
@@ -395,16 +401,14 @@ impl UnixSocketFile {
         send_buffer_ref.add_writer(event_queue);
 
         // update the socket file's state based on the buffer's state
-        if send_buffer_ref.state().contains(FileState::WRITABLE) {
+        if send_buffer_ref.state().contains(BufferState::WRITABLE) {
             socket_ref.state.insert(FileState::WRITABLE);
         }
 
         // update the socket's state when the buffer's state changes
         let weak = Arc::downgrade(&socket);
-        let send_handle = send_buffer_ref.add_listener(
-            FileState::WRITABLE,
-            StateListenerFilter::Always,
-            move |state, _changed, event_queue| {
+        let send_handle =
+            send_buffer_ref.add_listener(BufferState::WRITABLE, move |state, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(socket) = weak.upgrade() {
                     let mut socket = socket.borrow_mut();
@@ -415,10 +419,16 @@ impl UnixSocketFile {
                     }
 
                     // the socket is writable iff the buffer is writable
-                    socket.copy_state(FileState::WRITABLE, state, event_queue);
+                    socket.copy_state(
+                        /* mask */ FileState::WRITABLE,
+                        state
+                            .contains(BufferState::WRITABLE)
+                            .then(|| FileState::WRITABLE)
+                            .unwrap_or_default(),
+                        event_queue,
+                    );
                 }
-            },
-        );
+            });
 
         std::mem::drop(send_buffer_ref);
 
