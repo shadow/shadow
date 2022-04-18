@@ -670,7 +670,10 @@ produce hosts with hostnames `host1` and `host2`.
 *Required*  
 Type: Array
 
-Virtual software processes that the host will run.
+Virtual software processes that the host will run. PIDs are assigned from 1000
+on each host, in the order that they appear in this process list. e.g. this
+property can be used to cleanly shut down a process by scheduling a `/bin/kill`
+process to send a shutdown signal (e.g. `SIGTERM` or `SIGINT`) at the desired time.
 
 #### `hosts.<hostname>.processes[*].args`
 
