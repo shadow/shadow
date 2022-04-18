@@ -3,7 +3,7 @@ use nix::errno::Errno;
 use std::sync::Arc;
 
 use crate::cshadow as c;
-use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::shared_buf::{BufferHandle, BufferState, SharedBuf};
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
@@ -19,7 +19,7 @@ pub struct PipeFile {
     mode: FileMode,
     status: FileStatus,
     write_mode: WriteMode,
-    buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    buffer_event_handle: Option<BufferHandle>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -251,32 +251,41 @@ impl PipeFile {
                 .add_reader(event_queue);
         }
 
-        // remove any state flags that aren't relevant to us
-        let monitoring = pipe.filter_state(FileState::READABLE | FileState::WRITABLE);
+        // buffer state changes that we want to receive events for
+        let mut monitoring = BufferState::empty();
+
+        // if the file is open for reading, watch for the buffer to become readable or have no
+        // writers
+        if pipe.mode.contains(FileMode::READ) {
+            monitoring.insert(BufferState::READABLE);
+            monitoring.insert(BufferState::NO_WRITERS);
+        }
+
+        // if the file is open for writing, watch for the buffer to become writable or have no
+        // readers
+        if pipe.mode.contains(FileMode::WRITE) {
+            monitoring.insert(BufferState::WRITABLE);
+            monitoring.insert(BufferState::NO_READERS);
+        }
 
         let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
             monitoring,
-            StateListenerFilter::Always,
-            move |state, _changed, event_queue| {
+            move |buffer_state, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
                     let mut pipe = pipe.borrow_mut();
 
-                    // if the pipe is already closed, do nothing
-                    if pipe.state.contains(FileState::CLOSED) {
-                        return;
-                    }
-
-                    pipe.copy_state(monitoring, state, event_queue);
+                    // update the pipe file's state to align with the buffer's current state
+                    pipe.align_state_to_buffer(buffer_state, event_queue);
                 }
             },
         );
 
         pipe.buffer_event_handle = Some(handle);
 
-        // update the pipe file's initial state based on the buffer's state
-        let buffer_state = pipe.buffer.as_ref().unwrap().borrow_mut().state();
-        pipe.state.insert(pipe.filter_state(buffer_state));
+        // update the pipe file's initial state to align with the buffer's current state
+        let buffer_state = pipe.buffer.as_ref().unwrap().borrow().state();
+        pipe.align_state_to_buffer(buffer_state, event_queue);
     }
 
     pub fn add_listener(
@@ -301,25 +310,42 @@ impl PipeFile {
         self.state
     }
 
-    fn filter_state(&self, mut state: FileState) -> FileState {
-        // if not open for reading, remove the readable flag
-        if !self.mode.contains(FileMode::READ) {
-            state.remove(FileState::READABLE);
+    /// Align the pipe's state to the buffer state. For example if the buffer is both `READABLE` and
+    /// `WRITABLE`, and the pipe is only open in `READ` mode, the pipe's `READABLE` state will be
+    /// set and the `WRITABLE` state will be unchanged.
+    fn align_state_to_buffer(&mut self, buffer_state: BufferState, event_queue: &mut EventQueue) {
+        let mut mask = FileState::empty();
+        let mut file_state = FileState::empty();
+
+        // if the pipe is already closed, do nothing
+        if self.state.contains(FileState::CLOSED) {
+            return;
         }
 
-        // if not open for writing, remove the writable flag
-        if !self.mode.contains(FileMode::WRITE) {
-            state.remove(FileState::WRITABLE);
+        // only update the readable state if the file is open for reading
+        if self.mode.contains(FileMode::READ) {
+            mask.insert(FileState::READABLE);
+            // file is readable if the buffer is readable or there are no writers
+            if buffer_state.intersects(BufferState::READABLE | BufferState::NO_WRITERS) {
+                file_state.insert(FileState::READABLE);
+            }
         }
 
-        state
+        // only update the writable state if the file is open for writing
+        if self.mode.contains(FileMode::WRITE) {
+            mask.insert(FileState::WRITABLE);
+            // file is writable if the buffer is writable or there are no readers
+            if buffer_state.intersects(BufferState::WRITABLE | BufferState::NO_READERS) {
+                file_state.insert(FileState::WRITABLE);
+            }
+        }
+
+        // update the file's state
+        self.copy_state(mask, file_state, event_queue);
     }
 
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
         let old_state = self.state;
-
-        // remove any flags that aren't relevant
-        let state = self.filter_state(state);
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);

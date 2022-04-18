@@ -1,17 +1,16 @@
 use nix::errno::Errno;
 
-use crate::host::descriptor::{FileState, StateEventSource, StateListenerFilter};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::byte_queue::ByteQueue;
-use crate::utility::event_queue::{EventQueue, Handle};
+use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
 pub struct SharedBuf {
     queue: ByteQueue,
     max_len: usize,
-    state: FileState,
+    state: BufferState,
     num_readers: u16,
     num_writers: u16,
-    event_source: StateEventSource,
+    event_source: EventSource<(BufferState, BufferState)>,
 }
 
 impl SharedBuf {
@@ -20,10 +19,10 @@ impl SharedBuf {
         Self {
             queue: ByteQueue::new(4096),
             max_len,
-            state: FileState::WRITABLE,
+            state: BufferState::WRITABLE | BufferState::NO_READERS | BufferState::NO_WRITERS,
             num_readers: 0,
             num_writers: 0,
-            event_source: StateEventSource::new(),
+            event_source: EventSource::new(),
         }
     }
 
@@ -95,6 +94,7 @@ impl SharedBuf {
         let written = self
             .queue
             .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
+
         self.refresh_state(event_queue);
 
         Ok(written.into())
@@ -116,6 +116,7 @@ impl SharedBuf {
         }
 
         self.queue.push_packet(bytes.by_ref(), len)?;
+
         self.refresh_state(event_queue);
 
         Ok(())
@@ -123,36 +124,53 @@ impl SharedBuf {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
-        filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+        monitoring: BufferState,
+        notify_fn: impl Fn(BufferState, &mut EventQueue) + Send + Sync + 'static,
+    ) -> BufferHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(move |(state, changed), event_queue| {
+                // true if any of the bits we're monitoring have changed
+                let flipped = monitoring.intersects(changed);
+
+                if !flipped {
+                    return;
+                }
+
+                (notify_fn)(state, event_queue)
+            })
     }
 
-    pub fn state(&self) -> FileState {
+    pub fn state(&self) -> BufferState {
         self.state
     }
 
     fn refresh_state(&mut self, event_queue: &mut EventQueue) {
-        let readable = self.has_data() || self.num_writers() == 0;
-        let writable = self.space_available() > 0 || self.num_readers() == 0;
+        let state_mask = BufferState::READABLE
+            | BufferState::WRITABLE
+            | BufferState::NO_READERS
+            | BufferState::NO_WRITERS;
 
-        self.adjust_state(FileState::READABLE, readable, event_queue);
-        self.adjust_state(FileState::WRITABLE, writable, event_queue);
+        let mut new_state = BufferState::empty();
+
+        new_state.set(BufferState::READABLE, self.has_data());
+        new_state.set(BufferState::WRITABLE, self.space_available() > 0);
+        new_state.set(BufferState::NO_READERS, self.num_readers() == 0);
+        new_state.set(BufferState::NO_WRITERS, self.num_writers() == 0);
+
+        self.copy_state(state_mask, new_state, event_queue);
     }
 
-    fn adjust_state(&mut self, state: FileState, do_set_bits: bool, event_queue: &mut EventQueue) {
+    fn copy_state(&mut self, mask: BufferState, state: BufferState, event_queue: &mut EventQueue) {
         let old_state = self.state;
 
-        // add or remove the flags
-        self.state.set(state, do_set_bits);
+        // remove the masked flags, then copy the masked flags
+        self.state.remove(mask);
+        self.state.insert(state & mask);
 
         self.handle_state_change(old_state, event_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+    fn handle_state_change(&mut self, old_state: BufferState, event_queue: &mut EventQueue) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
@@ -161,6 +179,22 @@ impl SharedBuf {
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, event_queue);
+            .notify_listeners((self.state, states_changed), event_queue);
     }
 }
+
+bitflags::bitflags! {
+    #[derive(Default)]
+    pub struct BufferState: u8 {
+        /// There is data waiting in the buffer.
+        const READABLE = 0b00000001;
+        /// There is available buffer space.
+        const WRITABLE = 0b00000010;
+        /// The buffer has no readers.
+        const NO_READERS = 0b00000100;
+        /// The buffer has no writers.
+        const NO_WRITERS = 0b00001000;
+    }
+}
+
+pub type BufferHandle = Handle<(BufferState, BufferState)>;
