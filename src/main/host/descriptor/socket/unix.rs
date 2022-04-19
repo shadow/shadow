@@ -21,24 +21,6 @@ pub struct UnixSocketFile {
     common: UnixSocketCommon,
 }
 
-struct UnixSocketCommon {
-    send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
-    recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
-    event_source: StateEventSource,
-    state: FileState,
-    mode: FileMode,
-    status: FileStatus,
-    socket_type: UnixSocketType,
-    peer_addr: Option<nix::sys::socket::UnixAddr>,
-    bound_addr: Option<nix::sys::socket::UnixAddr>,
-    namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
-    send_buffer_event_handle: Option<BufferHandle>,
-    recv_buffer_event_handle: Option<BufferHandle>,
-    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
-    // this file
-    has_open_file: bool,
-}
-
 impl UnixSocketFile {
     pub fn new(
         mode: FileMode,
@@ -472,6 +454,24 @@ impl UnixSocketFile {
     pub fn state(&self) -> FileState {
         self.common.state
     }
+}
+
+struct UnixSocketCommon {
+    send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
+    recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
+    event_source: StateEventSource,
+    state: FileState,
+    mode: FileMode,
+    status: FileStatus,
+    socket_type: UnixSocketType,
+    peer_addr: Option<nix::sys::socket::UnixAddr>,
+    bound_addr: Option<nix::sys::socket::UnixAddr>,
+    namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
+    send_buffer_event_handle: Option<BufferHandle>,
+    recv_buffer_event_handle: Option<BufferHandle>,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
 }
 
 impl UnixSocketCommon {
