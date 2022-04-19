@@ -170,8 +170,12 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
     return proc->shimSharedMemBlock.p;
 }
 
+// FIXME: still needed? Time is now updated more granularly in the Thread code
+// when xferring control to/from shim.
 static void _process_setSharedTime(Process* proc) {
-    shimshmem_setEmulatedTime(process_getSharedMem(proc), worker_getEmulatedTime());
+    shimshmem_setMaxRunaheadTime(
+        host_getShimShmemLock(proc->host), worker_maxEventRunaheadTime(proc->host));
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {

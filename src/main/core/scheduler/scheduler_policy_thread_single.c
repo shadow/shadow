@@ -67,7 +67,9 @@ static void _schedulerpolicythreadsingle_addHost(SchedulerPolicy* policy, Host* 
     }
     g_queue_push_tail(tdata->assignedHosts2, host);
 
-    /* finally, store the host-to-thread mapping */
+    /* finally, store the host-to-thread mapping. TODO: simplify, since this
+     * each scheduler instance of this type only ever has a single host. */
+    utility_assert(g_hash_table_size(data->hostToThreadMap) == 0);
     g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
@@ -106,6 +108,27 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
     priorityqueue_push(tdata->pq, event);
     tdata->nPushed++;
     g_mutex_unlock(&(tdata->lock));
+}
+
+static EmulatedTime _schedulerpolicythreadsingle_nextHostEventTime(SchedulerPolicy* policy, Host* host) {
+    MAGIC_ASSERT(policy);
+    ThreadSinglePolicyData* data = policy->data;
+
+    /* Get the data for our host */
+    ThreadSingleThreadData* tdata =
+        g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
+    utility_assert(tdata);
+
+    EmulatedTime nextEventTime = 0;
+    g_mutex_lock(&(tdata->lock));
+    Event* nextEvent = priorityqueue_peek(tdata->pq);
+    if (nextEvent) {
+        utility_assert(event_getHost(nextEvent) == host);
+        nextEventTime = event_getTime(nextEvent) + EMULATED_TIME_OFFSET;
+    }
+    g_mutex_unlock(&(tdata->lock));
+
+    return nextEventTime;
 }
 
 static Event* _schedulerpolicythreadsingle_pop(SchedulerPolicy* policy, SimulationTime barrier) {
@@ -182,6 +205,7 @@ SchedulerPolicy* schedulerpolicythreadsingle_new() {
     policy->getAssignedHosts = _schedulerpolicythreadsingle_getHosts;
     policy->push = _schedulerpolicythreadsingle_push;
     policy->pop = _schedulerpolicythreadsingle_pop;
+    policy->nextHostEventTime = _schedulerpolicythreadsingle_nextHostEventTime;
     policy->getNextTime = _schedulerpolicythreadsingle_getNextTime;
     policy->free = _schedulerpolicythreadsingle_free;
 

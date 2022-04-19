@@ -37,7 +37,8 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 // parameter are still thread-safe, and internally use atomics.
 
 size_t shimshmemhost_size();
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit);
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit,
+                        SimulationTime unblockedSyscallLatency);
 void shimshmemhost_destroy(ShimShmemHost* hostMem);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
@@ -48,9 +49,14 @@ void shimshmemhost_unlock(ShimShmemHost* host, ShimShmemHostLock** protected);
 size_t shimshmemprocess_size();
 void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process);
 
-// Get and set the emulated time. TODO: move up to Host?
-EmulatedTime shimshmem_getEmulatedTime(ShimShmemProcess* processMem);
-void shimshmem_setEmulatedTime(ShimShmemProcess* processMem, EmulatedTime t);
+// Get and set the emulated time.
+EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
+void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t);
+
+// Get and set the *max* emulated time to which the current time can be incremented.
+// Moving time beyond this value requires the current thread to be rescheduled.
+EmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem);
+void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, EmulatedTime t);
 
 // Get and set the process's pending signal set.
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,
@@ -116,6 +122,9 @@ void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host);
 // Get the configured maximum unmber of unblocked syscalls to execute before
 // yielding.
 uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host);
+
+// Get the configured latency to emulate for each unblocked syscall.
+SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host);
 
 // Handle SHD_SHIM_EVENT_CLONE_REQ
 void shim_shmemHandleClone(const ShimEvent* ev);

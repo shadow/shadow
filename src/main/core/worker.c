@@ -508,6 +508,18 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
+EmulatedTime worker_maxEventRunaheadTime(Host* host) {
+    utility_assert(host);
+    EmulatedTime max = _worker_getRoundEndTime() + EMULATED_TIME_OFFSET;
+
+    EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
+    if (nextEventTime != 0) {
+        max = MIN(max, nextEventTime);
+    }
+
+    return max;
+}
+
 static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
     Packet* packet = voidPacket;
     in_addr_t ip = packet_getDestinationIP(packet);
@@ -548,7 +560,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
-        worker_updateMinRunahead(delay);
+        worker_updateMinHostRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
@@ -620,7 +632,7 @@ guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
-void workerpool_updateMinRunahead(WorkerPool* pool, SimulationTime time) {
+void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
     manager_updateMinRunahead(pool->manager, time);
 }
 

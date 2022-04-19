@@ -211,7 +211,7 @@ impl Worker {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
-    pub fn update_min_runahead(t: Duration) {
+    pub fn update_min_host_runahead(t: Duration) {
         assert!(!t.is_zero());
 
         Worker::with(|w| {
@@ -219,7 +219,7 @@ impl Worker {
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
                 unsafe {
-                    cshadow::workerpool_updateMinRunahead(
+                    cshadow::workerpool_updateMinHostRunahead(
                         w.worker_pool,
                         SimulationTime::to_c_simtime(Some(t.into())),
                     )
@@ -359,8 +359,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateMinRunahead(t: cshadow::SimulationTime) {
-        Worker::update_min_runahead(*SimulationTime::from_c_simtime(t).unwrap());
+    pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
+        Worker::update_min_host_runahead(*SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]

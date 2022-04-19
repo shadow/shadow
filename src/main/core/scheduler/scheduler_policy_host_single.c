@@ -286,6 +286,40 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
     return NULL;
 }
 
+static EmulatedTime _schedulerpolicyhostsingle_nextHostEventTime(SchedulerPolicy* policy, Host* host) {
+    MAGIC_ASSERT(policy);
+    HostSinglePolicyData* data = policy->data;
+
+    /* figure out which hosts we should be checking */
+    HostSingleThreadData* tdata =
+        g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
+    utility_assert(tdata);
+
+    HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
+    utility_assert(qdata);
+
+    /* FIXME split  this timer? */
+#ifdef USE_PERF_TIMERS
+    /* tracking idle time spent waiting for the host queue lock */
+    g_timer_continue(tdata->popIdleTime);
+#endif
+    g_mutex_lock(&(qdata->lock));
+#ifdef USE_PERF_TIMERS
+    g_timer_stop(tdata->popIdleTime);
+#endif
+
+    EmulatedTime nextEventTime = 0;
+    Event* nextEvent = priorityqueue_peek(qdata->pq);
+    if (nextEvent) {
+        utility_assert(event_getHost(nextEvent) == host);
+        nextEventTime = event_getTime(nextEvent) + EMULATED_TIME_OFFSET;
+    }
+
+    g_mutex_unlock(&(qdata->lock));
+
+    return nextEventTime;
+}
+
 static void _schedulerpolicyhostsingle_findMinTime(Host* host, HostSingleSearchState* state) {
     HostSingleQueueData* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
     utility_assert(qdata);
@@ -345,6 +379,7 @@ SchedulerPolicy* schedulerpolicyhostsingle_new() {
     policy->getAssignedHosts = _schedulerpolicyhostsingle_getHosts;
     policy->push = _schedulerpolicyhostsingle_push;
     policy->pop = _schedulerpolicyhostsingle_pop;
+    policy->nextHostEventTime = _schedulerpolicyhostsingle_nextHostEventTime;
     policy->getNextTime = _schedulerpolicyhostsingle_getNextTime;
     policy->free = _schedulerpolicyhostsingle_free;
 
