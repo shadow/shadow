@@ -560,7 +560,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
-        worker_updateMinRunahead(delay);
+        worker_updateMinHostRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
@@ -632,7 +632,7 @@ guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
-void workerpool_updateMinRunahead(WorkerPool* pool, SimulationTime time) {
+void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
     manager_updateMinRunahead(pool->manager, time);
 }
 

@@ -487,7 +487,7 @@ void worker_setCurrentTime(SimulationTime t);
 
 SimulationTime worker_getCurrentTime(void);
 
-void worker_updateMinRunahead(SimulationTime t);
+void worker_updateMinHostRunahead(SimulationTime t);
 
 void _worker_setLastEventTime(SimulationTime t);
 

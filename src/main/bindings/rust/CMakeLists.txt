@@ -54,7 +54,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "runConfigHandlers"
         --whitelist-function "rustlogger_new"
 
-        --whitelist-function "workerpool_updateMinRunahead"
+        --whitelist-function "workerpool_updateMinHostRunahead"
 
         --whitelist-function "process_.*"
         --whitelist-function "shadow_logger_getDefault"
