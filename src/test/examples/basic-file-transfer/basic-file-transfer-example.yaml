@@ -1,11 +1,9 @@
 general:
   # stop after 10 simulated seconds
   stop_time: 10s
-
-experimental:
   # needed for https://github.com/shadow/shadow/issues/1794
   # this is only included in the test, and not in the documentation example
-  unblocked_syscall_limit: 500
+  model_unblocked_syscall_latency: true
 
 network:
   graph:

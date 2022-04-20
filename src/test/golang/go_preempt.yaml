@@ -1,13 +1,10 @@
 general:
   stop_time: 2000s
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
     type: 1_gbit_switch
-
-experimental:
-  unblocked_syscall_limit: 100
-  unblocked_syscall_latency: 5 microseconds
 
 hosts:
   host:

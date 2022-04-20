@@ -119,8 +119,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
     }
 
-    uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(shim_hostSharedMem());
-    if (unblockedLimit > 0) {
+    if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
         shimshmem_incrementUnblockedSyscallCount(host_lock);
         uint32_t unblockedCount = shimshmem_getUnblockedSyscallCount(host_lock);
@@ -132,6 +131,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
 
         // Count the syscall and check whether we ought to yield.
+        uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(shim_hostSharedMem());
         trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
         if (unblockedCount >= unblockedLimit) {
             // We still want to eventually return the syscall result we just

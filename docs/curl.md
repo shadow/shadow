@@ -5,9 +5,7 @@
 ```yaml
 general:
   stop_time: 10s
-
-experimental:
-  unblocked_syscall_limit: 500
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
@@ -38,5 +36,5 @@ rm -rf shadow.data; shadow shadow.yaml > shadow.log
 1. Older versions of cURL use a busy loop that is incompatible with Shadow and
 will cause Shadow to deadlock. Newer versions of cURL, such as the version
 provided in Ubuntu 20.04, don't have this issue. See issue #1794 for details. A
-workaround for older versions is to use the experimental
-`unblocked_syscall_limit` option.
+workaround for older versions is to use the `model_unblocked_syscall_latency`
+option.
