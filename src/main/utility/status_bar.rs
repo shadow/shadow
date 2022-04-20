@@ -136,7 +136,7 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
     }
 
     fn print_loop(state: Arc<RwLock<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
-        let mut print_interval = Duration::from_secs(30);
+        let print_interval = Duration::from_secs(60);
 
         loop {
             match stop_receiver.recv_timeout(print_interval) {
@@ -146,20 +146,10 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
                 Ok(()) => unreachable!(),
             }
 
-            // interval has an upper bound of 30 minutes
-            const MAX_INTERVAL: Duration = Duration::from_secs(30 * 60);
-
-            // exponential backoff so that long simulations don't flood stderr
-            print_interval = std::cmp::min(print_interval.saturating_mul(2), MAX_INTERVAL);
-
             // We want to write everything in as few write() syscalls as possible. Note that
             // if we were to use eprint! with a format string like "{}{}", eprint! would
             // always make at least two write() syscalls, which we wouldn't want.
-            let to_write = format!(
-                "Progress: {} (next update in {} minutes)\n",
-                *state.read().unwrap(),
-                print_interval.as_secs() / 60,
-            );
+            let to_write = format!("Progress: {}\n", *state.read().unwrap());
             std::io::stderr().write_all(to_write.as_bytes()).unwrap();
             let _ = std::io::stderr().flush();
         }
