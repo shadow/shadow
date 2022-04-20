@@ -602,6 +602,14 @@ configuration, with the field name being used as the network hostname.
 
 Shadow assigns each host to a network node in the [network graph](network_graph_overview.md).
 
+When Shadow iterates over these hosts, Shadow iterates over them in the order
+of their sorted hostnames. While this implementation detail is generally
+unimportant, it's important to note that Shadow assigns each host its own RNG.
+These host-specific RNGs are seeded from a global RNG, so the seed used for
+each host depends on the order that Shadow iterates over the hosts. This means
+that changing a hostname or adding a new host may change the seed used for the
+hosts' RNGs, and may subtly affect the simulation results.
+
 #### `hosts.<hostname>.bandwidth_down`
 
 Default: null  
