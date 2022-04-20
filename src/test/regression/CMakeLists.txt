@@ -8,6 +8,8 @@ add_shadow_tests(BASENAME flush_after_exit POST_CMD "test `cat hosts/*/*.stdout`
 add_linux_tests(BASENAME busy_wait COMMAND ../target/debug/test_busy_wait)
 add_shadow_tests(
     BASENAME busy_wait
+    # Avoid expensive trace-level logging in busy loop.
+    LOGLEVEL debug
     PROPERTIES
       # This test should be very fast when it succeeds, but will generally take
       # the full timeout to fail otherwise.
