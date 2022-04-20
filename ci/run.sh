@@ -144,8 +144,17 @@ EOF
     # Run the tests inside the image we just built
     echo "Testing $TAG"
 
-    # Start the container and copy the most recent code
-    CONTAINER_ID="$(docker create --shm-size=1g --cap-add=SYS_PTRACE --mount src=$(realpath .),target=/mnt/shadow,type=bind,readonly "$TAG" /bin/bash -c \
+    # Start the container and copy the most recent code.
+    DOCKER_CREATE_FLAGS=()
+    # Shadow needs some space allocated to /dev/shm.
+    DOCKER_CREATE_FLAGS+=("--shm-size=1g")
+    # We don't actually need the native CAPS_SYS_PTRACE capability, but when this capability
+    # is added, Docker allows syscalls that shadow needs, such as `ptrace` and `process_vm_readv`.
+    DOCKER_CREATE_FLAGS+=("--cap-add=SYS_PTRACE")
+    # Mount the source directory. This allows us to perform incremental builds in
+    # a locally modified source dir without rebuilding the docker container.
+    DOCKER_CREATE_FLAGS+=("--mount=src=$(realpath .),target=/mnt/shadow,type=bind,readonly")
+    CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
