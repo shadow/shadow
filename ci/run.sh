@@ -148,9 +148,16 @@ EOF
     DOCKER_CREATE_FLAGS=()
     # Shadow needs some space allocated to /dev/shm.
     DOCKER_CREATE_FLAGS+=("--shm-size=1g")
-    # We don't actually need the native CAPS_SYS_PTRACE capability, but when this capability
-    # is added, Docker allows syscalls that shadow needs, such as `ptrace` and `process_vm_readv`.
-    DOCKER_CREATE_FLAGS+=("--cap-add=SYS_PTRACE")
+    # Docker's default seccomp policy disables the `personality` syscall, which
+    # shadow uses to disable ASLR. This causes shadow's determinism tests to fail.
+    # https://github.com/moby/moby/issues/43011
+    # It also appears to cause a substantial (~3s) pause when the syscall fails,
+    # causing the whole test suite to take much longer, and some tests to time out.
+    #
+    # If we remove this flag we then need `--cap-add=SYS_PTRACE`, which causes
+    # Docker's seccomp policy to allow `ptrace`, `process_vm_readv`, and
+    # `process_vm_writev`.
+    DOCKER_CREATE_FLAGS+=("--security-opt=seccomp=unconfined")
     # Mount the source directory. This allows us to perform incremental builds in
     # a locally modified source dir without rebuilding the docker container.
     DOCKER_CREATE_FLAGS+=("--mount=src=$(realpath .),target=/mnt/shadow,type=bind,readonly")
