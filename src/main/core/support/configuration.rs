@@ -491,12 +491,14 @@ impl Default for ExperimentalOptions {
             use_preload_openssl_rng: Some(true),
             use_preload_openssl_crypto: Some(false),
             preload_spin_max: Some(0),
-            max_unapplied_cpu_latency: Some(units::Time::new(10, units::TimePrefix::Micro)),
-            // 2 microseconds is a ballpark estimate of the minimal latency for
+            max_unapplied_cpu_latency: Some(units::Time::new(1, units::TimePrefix::Micro)),
+            // 1-2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
-            unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
+            // Default to the lower end to minimize effect in simualations without busy loops.
+            unblocked_syscall_latency: Some(units::Time::new(1, units::TimePrefix::Micro)),
             // Actual latencies vary from ~40 to ~400 CPU cycles. https://stackoverflow.com/a/13096917
-            unblocked_vdso_latency: Some(units::Time::new(100, units::TimePrefix::Nano)),
+            // Default to the lower end to minimize effect in simualations without busy loops.
+            unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),

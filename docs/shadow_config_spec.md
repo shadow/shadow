@@ -350,7 +350,7 @@ Which interposition method to use.
 
 #### `experimental.max_unapplied_cpu_latency`
 
-Default: "10 microseconds"  
+Default: "1 microsecond"  
 Type: String
 
 Max amount of execution-time latency allowed to accumulate before the clock is
@@ -444,7 +444,7 @@ Limitations:
 
 #### `experimental.unblocked_syscall_latency`
 
-Default: "2 microseconds"  
+Default: "1 microseconds"  
 Type: String
 
 The simulated latency of an unblocked syscall. For simulation efficiency, this
@@ -456,7 +456,7 @@ is false.
 
 #### `experimental.unblocked_vdso_latency`
 
-Default: "100 nanoseconds"  
+Default: "10 nanoseconds"  
 Type: String
 
 The simulated latency of an unblocked vdso function. For simulation efficiency, this
