@@ -79,5 +79,8 @@ add_shadow_tests(
     CONFIGURATIONS extra
     # Doesn't work in ptrace-mode due to incomplete signal support.
     SKIP_METHODS ptrace
+    # Trace level logging logs quite a bit in the "busy" loop here,
+    # causing timeouts in debug builds.
+    LOGLEVEL debug
     PROPERTIES
       LABELS golang)

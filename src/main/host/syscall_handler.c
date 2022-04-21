@@ -576,24 +576,25 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(sys->host)) &&
         process_isRunning(sys->process) &&
         (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
-        // Increment unblocked syscall count, but only for
+        SimulationTime maxUnappliedCpuLatency =
+            shimshmem_maxUnappliedCpuLatency(host_getSharedMem(sys->host));
+        // Increment unblocked syscall latency, but only for
         // non-shadow-syscalls, since the latter are part of Shadow's
         // internal plumbing; they shouldn't necessarily "consume" time.
         if (!syscall_num_is_shadow(args->number)) {
-            shimshmem_incrementUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+            shimshmem_incrementUnappliedCpuLatency(
+                host_getShimShmemLock(sys->host),
+                shimshmem_unblockedSyscallLatency(host_getSharedMem(sys->host)));
         }
-        uint32_t unblockedCount =
-            shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
-        uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(host_getSharedMem(sys->host));
-        trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
-        if (unblockedCount >= unblockedLimit) {
-            EmulatedTime newTime =
-                worker_getEmulatedTime() +
-                unblockedCount * shimshmem_unblockedSyscallLatency(host_getSharedMem(sys->host));
+        const SimulationTime unappliedCpuLatency =
+            shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(sys->host));
+        trace("Unapplied CPU latency amt=%ld max=%ld", unappliedCpuLatency, maxUnappliedCpuLatency);
+        if (unappliedCpuLatency > maxUnappliedCpuLatency) {
+            EmulatedTime newTime = worker_getEmulatedTime() + unappliedCpuLatency;
             EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");
-                shimshmem_resetUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+                shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(sys->host));
                 worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
             } else {
                 trace("Reached unblocked syscall limit. Yielding.");

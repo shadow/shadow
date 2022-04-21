@@ -435,12 +435,17 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("strace_logging_mode").unwrap().as_str())]
     pub strace_logging_mode: Option<StraceLoggingMode>,
 
-    /// Number of consecutive unblocked syscalls before a thread applies
-    /// `unblocked_syscall_latency` and yields.
+    /// Max amount of execution-time latency allowed to accumulate before the
+    /// clock is moved forward. Moving the clock forward is a potentially
+    /// expensive operation, so larger values reduce simulation overhead, at the
+    /// cost of coarser time jumps. Note also that accumulated-but-unapplied
+    /// latency is discarded when a thread is blocked on a syscall.
+    ///
+    /// 0 to never account for CPU latency.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "count")]
-    #[clap(help = EXP_HELP.get("unblocked_syscall_limit").unwrap().as_str())]
-    pub unblocked_syscall_limit: Option<i32>,
+    #[clap(help = EXP_HELP.get("max_unapplied_cpu_latency").unwrap().as_str())]
+    pub max_unapplied_cpu_latency: Option<units::Time<units::TimePrefix>>,
 
     /// Simulated latency of an unblocked syscall. For efficiency Shadow only
     /// actually adds this latency if and when `unblocked_syscall_limit` is
@@ -449,6 +454,13 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_syscall_latency").unwrap().as_str())]
     pub unblocked_syscall_latency: Option<units::Time<units::TimePrefix>>,
+
+    /// Simulated latency of a vdso "syscall". For efficiency Shadow only
+    /// actually adds this latency if and when `unblocked_syscall_limit` is
+    /// reached.
+    #[clap(long, value_name = "seconds")]
+    #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
+    pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
 
     /// List of hostnames to debug
     #[clap(hide_short_help = true)]
@@ -481,13 +493,12 @@ impl Default for ExperimentalOptions {
             use_preload_openssl_rng: Some(true),
             use_preload_openssl_crypto: Some(false),
             preload_spin_max: Some(0),
-            // Experimentally, 500 is high enough to trigger infrequently
-            // outside of a true "busy loop", and low enough to get out of such
-            // loops fairly quickly.
-            unblocked_syscall_limit: Some(500),
+            max_unapplied_cpu_latency: Some(units::Time::new(10, units::TimePrefix::Micro)),
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
+            // Actual latencies vary from ~40 to ~400 CPU cycles. https://stackoverflow.com/a/13096917
+            unblocked_vdso_latency: Some(units::Time::new(100, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
@@ -1320,10 +1331,14 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getUnblockedSyscallLimit(config: *const ConfigOptions) -> i32 {
+    pub extern "C" fn config_getMaxUnappliedCpuLatency(config: *const ConfigOptions) -> u64 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.unblocked_syscall_limit.unwrap()
+        match config.experimental.max_unapplied_cpu_latency {
+            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
+            None => 0,
+        }
     }
 
     #[no_mangle]
@@ -1333,6 +1348,19 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match config.experimental.unblocked_syscall_latency {
+            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
+            None => 0,
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUnblockedVdsoLatency(
+        config: *const ConfigOptions,
+    ) -> c::SimulationTime {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        match config.experimental.unblocked_vdso_latency {
             Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
             // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
             None => 0,
