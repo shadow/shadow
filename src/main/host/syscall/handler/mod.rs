@@ -3,7 +3,7 @@ use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::CompatDescriptor;
 use crate::host::process::Process;
 use crate::host::syscall_types::SysCallArgs;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall_types::SyscallResult;
 
 use nix::errno::Errno;
 
@@ -49,7 +49,13 @@ impl SyscallHandler {
             libc::SYS_socketpair => self.socketpair(ctx, args),
             libc::SYS_sysinfo => self.sysinfo(ctx, args),
             libc::SYS_write => self.write(ctx, args),
-            _ => Err(SyscallError::from(Errno::ENOSYS)),
+            _ => {
+                // if we added a HANDLE_RUST() macro for this syscall in
+                // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
+                // warning
+                log::warn!("Rust syscall {} is not mapped", args.number);
+                Err(Errno::ENOSYS.into())
+            }
         }
     }
 
