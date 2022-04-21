@@ -272,15 +272,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         return sys->pendingResult;
     } else {
         switch (args->number) {
-            HANDLE_C(accept);
-            HANDLE_C(accept4);
+            HANDLE_RUST(accept);
+            HANDLE_RUST(accept4);
             HANDLE_RUST(bind);
             HANDLE_C(brk);
             HANDLE_C(clock_gettime);
             HANDLE_C(clock_nanosleep);
             HANDLE_C(clone);
             HANDLE_RUST(close);
-            HANDLE_C(connect);
+            HANDLE_RUST(connect);
             HANDLE_C(creat);
             HANDLE_RUST(dup);
             HANDLE_RUST(dup2);
@@ -337,12 +337,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(getrandom);
             HANDLE_C(get_robust_list);
             HANDLE_RUST(getsockname);
-            HANDLE_C(getsockopt);
+            HANDLE_RUST(getsockopt);
             HANDLE_C(gettimeofday);
             HANDLE_RUST(ioctl);
             HANDLE_C(kill);
             HANDLE_C(linkat);
-            HANDLE_C(listen);
+            HANDLE_RUST(listen);
             HANDLE_C(lseek);
             HANDLE_C(mkdirat);
             HANDLE_C(mknodat);
@@ -395,7 +395,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(shadow_yield);
             HANDLE_C(select);
             HANDLE_RUST(sendto);
-            HANDLE_C(setsockopt);
+            HANDLE_RUST(setsockopt);
 #ifdef SYS_sigaction
             // Superseded by rt_sigaction in Linux 2.2
             UNSUPPORTED(sigaction);
@@ -413,7 +413,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(rt_sigprocmask);
             HANDLE_C(set_robust_list);
             HANDLE_C(set_tid_address);
-            HANDLE_C(shutdown);
+            HANDLE_RUST(shutdown);
             HANDLE_RUST(socket);
             HANDLE_RUST(socketpair);
 #ifdef SYS_statx
