@@ -49,6 +49,7 @@ impl EventQueue {
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct HandleId(u32);
 
+#[must_use = "Stops listening when the handle is dropped"]
 /// A handle allows you to stop listening for events.
 pub struct Handle<T> {
     id: HandleId,
