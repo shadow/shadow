@@ -440,10 +440,8 @@ pub struct ExperimentalOptions {
     /// expensive operation, so larger values reduce simulation overhead, at the
     /// cost of coarser time jumps. Note also that accumulated-but-unapplied
     /// latency is discarded when a thread is blocked on a syscall.
-    ///
-    /// 0 to never account for CPU latency.
     #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "count")]
+    #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("max_unapplied_cpu_latency").unwrap().as_str())]
     pub max_unapplied_cpu_latency: Option<units::Time<units::TimePrefix>>,
 
