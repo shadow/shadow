@@ -448,6 +448,187 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
+    pub fn listen(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+        let _backlog: libc::c_int = args.get(1).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_listen(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "listen() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+                  /* addrlen */ *const libc::socklen_t)]
+    pub fn accept(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+        let _addr_ptr: PluginPtr = args.get(1).into();
+        let _addr_len_ptr: PluginPtr = args.get(2).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_accept(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "accept() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+                  /* addrlen */ *const libc::socklen_t, /* flags */ libc::c_int)]
+    pub fn accept4(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+        let _addr_ptr: PluginPtr = args.get(1).into();
+        let _addr_len_ptr: PluginPtr = args.get(2).into();
+        let _flags: libc::c_int = args.get(3).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_accept4(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "accept4() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+                  /* addrlen */ libc::socklen_t)]
+    pub fn connect(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+        let _addr_ptr: PluginPtr = args.get(1).into();
+        let _addr_len: libc::socklen_t = args.get(2).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_connect(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "connect() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
+    pub fn shutdown(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_shutdown(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "shutdown() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
                   /* type */ libc::c_int, /* protocol */ libc::c_int, /* sv */ [libc::c_int; 2])]
     pub fn socketpair(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -584,6 +765,78 @@ impl SyscallHandler {
                 Err(e.into())
             }
         }
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
+                  /* optname */ libc::c_int, /* optval */ *const libc::c_void,
+                  /* optlen */ *const libc::socklen_t)]
+    pub fn getsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_getsockopt(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "getsockopt() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
+                  /* optname */ libc::c_int, /* optval */ *const libc::c_void,
+                  /* optlen */ libc::socklen_t)]
+    pub fn setsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let fd: libc::c_int = args.get(0).into();
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = match Self::get_descriptor(ctx.process, fd)? {
+            CompatDescriptor::New(desc) => desc,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatDescriptor::Legacy(_) => {
+                return unsafe {
+                    c::syscallhandler_setsockopt(
+                        ctx.thread.csyscallhandler(),
+                        args as *const c::SysCallArgs,
+                    )
+                    .into()
+                }
+            }
+        };
+
+        // get the socket for the descriptor
+        let socket = match desc.open_file().inner_file() {
+            GenericFile::Socket(x) => x,
+            _ => return Err(Errno::ENOTSOCK.into()),
+        };
+
+        // TODO: support rust sockets
+        log::warn!(
+            "setsockopt() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
+            fd,
+            socket,
+        );
+        Err(Errno::ENOSYS.into())
     }
 }
 

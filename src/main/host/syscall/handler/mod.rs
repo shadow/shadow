@@ -26,8 +26,11 @@ impl SyscallHandler {
 
     pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         match args.number {
+            libc::SYS_accept => self.accept(ctx, args),
+            libc::SYS_accept4 => self.accept4(ctx, args),
             libc::SYS_bind => self.bind(ctx, args),
             libc::SYS_close => self.close(ctx, args),
+            libc::SYS_connect => self.connect(ctx, args),
             libc::SYS_dup => self.dup(ctx, args),
             libc::SYS_dup2 => self.dup2(ctx, args),
             libc::SYS_dup3 => self.dup3(ctx, args),
@@ -37,7 +40,9 @@ impl SyscallHandler {
             libc::SYS_getpeername => self.getpeername(ctx, args),
             libc::SYS_getrandom => self.getrandom(ctx, args),
             libc::SYS_getsockname => self.getsockname(ctx, args),
+            libc::SYS_getsockopt => self.getsockopt(ctx, args),
             libc::SYS_ioctl => self.ioctl(ctx, args),
+            libc::SYS_listen => self.listen(ctx, args),
             libc::SYS_pipe => self.pipe(ctx, args),
             libc::SYS_pipe2 => self.pipe2(ctx, args),
             libc::SYS_pread64 => self.pread64(ctx, args),
@@ -45,6 +50,8 @@ impl SyscallHandler {
             libc::SYS_read => self.read(ctx, args),
             libc::SYS_recvfrom => self.recvfrom(ctx, args),
             libc::SYS_sendto => self.sendto(ctx, args),
+            libc::SYS_setsockopt => self.setsockopt(ctx, args),
+            libc::SYS_shutdown => self.shutdown(ctx, args),
             libc::SYS_socket => self.socket(ctx, args),
             libc::SYS_socketpair => self.socketpair(ctx, args),
             libc::SYS_sysinfo => self.sysinfo(ctx, args),
