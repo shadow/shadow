@@ -144,8 +144,24 @@ EOF
     # Run the tests inside the image we just built
     echo "Testing $TAG"
 
-    # Start the container and copy the most recent code
-    CONTAINER_ID="$(docker create --shm-size=1g --cap-add=SYS_PTRACE --mount src=$(realpath .),target=/mnt/shadow,type=bind,readonly "$TAG" /bin/bash -c \
+    # Start the container and copy the most recent code.
+    DOCKER_CREATE_FLAGS=()
+    # Shadow needs some space allocated to /dev/shm.
+    DOCKER_CREATE_FLAGS+=("--shm-size=1g")
+    # Docker's default seccomp policy disables the `personality` syscall, which
+    # shadow uses to disable ASLR. This causes shadow's determinism tests to fail.
+    # https://github.com/moby/moby/issues/43011
+    # It also appears to cause a substantial (~3s) pause when the syscall fails,
+    # causing the whole test suite to take much longer, and some tests to time out.
+    #
+    # If we remove this flag we then need `--cap-add=SYS_PTRACE`, which causes
+    # Docker's seccomp policy to allow `ptrace`, `process_vm_readv`, and
+    # `process_vm_writev`.
+    DOCKER_CREATE_FLAGS+=("--security-opt=seccomp=unconfined")
+    # Mount the source directory. This allows us to perform incremental builds in
+    # a locally modified source dir without rebuilding the docker container.
+    DOCKER_CREATE_FLAGS+=("--mount=src=$(realpath .),target=/mnt/shadow,type=bind,readonly")
+    CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
