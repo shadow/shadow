@@ -234,3 +234,12 @@ impl std::fmt::Debug for SocketFileRefMut<'_> {
         )
     }
 }
+
+/// Returns a nix socket address object where only the family is set.
+pub fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::SockAddr {
+    let family = family as libc::sa_family_t;
+    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
+    addr.ss_family = family;
+    // the size of ss_family will be 2 bytes on linux
+    nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
+}
