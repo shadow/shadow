@@ -16,6 +16,8 @@ use crate::utility::stream_len::StreamLen;
 
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: usize = 212_992;
 
+/// A unix socket. The `UnixSocketFile` is the public-facing API, which forwards API calls to the
+/// inner state object.
 pub struct UnixSocketFile {
     /// Data and functionality that is general for all states.
     common: UnixSocketCommon,
@@ -148,7 +150,7 @@ impl UnixSocketFile {
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
-        self.common.close(event_queue)
+        self.protocol_state.close(&mut self.common, event_queue)
     }
 
     pub fn bind(
@@ -156,7 +158,10 @@ impl UnixSocketFile {
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
-        UnixSocketCommon::bind(socket, addr, rng)
+        let socket_ref = &mut *socket.borrow_mut();
+        socket_ref
+            .protocol_state
+            .bind(&mut socket_ref.common, socket, addr, rng)
     }
 
     pub fn read<W>(
@@ -198,7 +203,8 @@ impl UnixSocketFile {
     where
         R: std::io::Read + std::io::Seek,
     {
-        self.common.sendto(bytes, addr, event_queue)
+        self.protocol_state
+            .sendto(&mut self.common, bytes, addr, event_queue)
     }
 
     pub fn recvfrom<W>(
@@ -209,7 +215,8 @@ impl UnixSocketFile {
     where
         W: std::io::Write + std::io::Seek,
     {
-        self.common.recvfrom(bytes, event_queue)
+        self.protocol_state
+            .recvfrom(&mut self.common, bytes, event_queue)
     }
 
     pub fn ioctl(
@@ -218,7 +225,8 @@ impl UnixSocketFile {
         arg_ptr: PluginPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        self.common.ioctl(request, arg_ptr, memory_manager)
+        self.protocol_state
+            .ioctl(&mut self.common, request, arg_ptr, memory_manager)
     }
 
     pub fn connect(
@@ -227,7 +235,14 @@ impl UnixSocketFile {
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) {
-        UnixSocketCommon::connect(socket, addr, send_buffer, event_queue)
+        let socket_ref = &mut *socket.borrow_mut();
+        socket_ref.protocol_state.connect(
+            &mut socket_ref.common,
+            socket,
+            addr,
+            send_buffer,
+            event_queue,
+        )
     }
 
     pub fn add_listener(
@@ -271,8 +286,302 @@ impl ProtocolState {
             UnixSocketType::Dgram => Self::ConnLessInitial(ConnLessInitial {}),
         }
     }
+
+    fn close(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        match self {
+            Self::ConnOrientedInitial(x) => x.close(common, event_queue),
+            Self::ConnLessInitial(x) => x.close(common, event_queue),
+        }
+    }
+
+    fn bind(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        match self {
+            Self::ConnOrientedInitial(x) => x.bind(common, socket, addr, rng),
+            Self::ConnLessInitial(x) => x.bind(common, socket, addr, rng),
+        }
+    }
+
+    fn sendto<R>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: R,
+        addr: Option<nix::sys::socket::SockAddr>,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
+        match self {
+            Self::ConnOrientedInitial(x) => x.sendto(common, bytes, addr, event_queue),
+            Self::ConnLessInitial(x) => x.sendto(common, bytes, addr, event_queue),
+        }
+    }
+
+    fn recvfrom<W>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: W,
+        event_queue: &mut EventQueue,
+    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    where
+        W: std::io::Write + std::io::Seek,
+    {
+        match self {
+            Self::ConnOrientedInitial(x) => x.recvfrom(common, bytes, event_queue),
+            Self::ConnLessInitial(x) => x.recvfrom(common, bytes, event_queue),
+        }
+    }
+
+    fn ioctl(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        request: u64,
+        arg_ptr: PluginPtr,
+        memory_manager: &mut MemoryManager,
+    ) -> SyscallResult {
+        match self {
+            Self::ConnOrientedInitial(x) => x.ioctl(common, request, arg_ptr, memory_manager),
+            Self::ConnLessInitial(x) => x.ioctl(common, request, arg_ptr, memory_manager),
+        }
+    }
+
+    fn connect(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: nix::sys::socket::UnixAddr,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) {
+        match self {
+            Self::ConnOrientedInitial(x) => {
+                x.connect(common, socket, addr, send_buffer, event_queue)
+            }
+            Self::ConnLessInitial(x) => x.connect(common, socket, addr, send_buffer, event_queue),
+        }
+    }
 }
 
+/// Methods that a protocol state may wish to handle. Default implementations which return an error
+/// status are provided for many methods. Each type that implements this trait can override any of
+/// these default implementations.
+trait Protocol {
+    fn close(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        log::warn!("close() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn bind(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _addr: Option<&nix::sys::socket::SockAddr>,
+        _rng: impl rand::Rng,
+    ) -> SyscallResult {
+        log::warn!("bind() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn sendto<R>(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _bytes: R,
+        _addr: Option<nix::sys::socket::SockAddr>,
+        _event_queue: &mut EventQueue,
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
+        log::warn!("sendto() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn recvfrom<W>(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _bytes: W,
+        _event_queue: &mut EventQueue,
+    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    where
+        W: std::io::Write + std::io::Seek,
+    {
+        log::warn!(
+            "recvfrom() while in state {}",
+            std::any::type_name::<Self>()
+        );
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn ioctl(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _request: u64,
+        _arg_ptr: PluginPtr,
+        _memory_manager: &mut MemoryManager,
+    ) -> SyscallResult {
+        log::warn!("ioctl() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn connect(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _addr: nix::sys::socket::UnixAddr,
+        _send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        _event_queue: &mut EventQueue,
+    ) {
+        log::warn!("connect() while in state {}", std::any::type_name::<Self>());
+    }
+}
+
+impl Protocol for ConnOrientedInitial {
+    fn close(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        common.close(event_queue)
+    }
+
+    fn bind(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        common.bind(socket, addr, rng)
+    }
+
+    fn sendto<R>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: R,
+        addr: Option<nix::sys::socket::SockAddr>,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
+        common.sendto(bytes, addr, event_queue)
+    }
+
+    fn recvfrom<W>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: W,
+        event_queue: &mut EventQueue,
+    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    where
+        W: std::io::Write + std::io::Seek,
+    {
+        common.recvfrom(bytes, event_queue)
+    }
+
+    fn ioctl(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        request: u64,
+        arg_ptr: PluginPtr,
+        memory_manager: &mut MemoryManager,
+    ) -> SyscallResult {
+        common.ioctl(request, arg_ptr, memory_manager)
+    }
+
+    fn connect(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: nix::sys::socket::UnixAddr,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) {
+        common.connect(socket, addr, send_buffer, event_queue)
+    }
+}
+
+impl Protocol for ConnLessInitial {
+    fn close(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        common.close(event_queue)
+    }
+
+    fn bind(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        common.bind(socket, addr, rng)
+    }
+
+    fn sendto<R>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: R,
+        addr: Option<nix::sys::socket::SockAddr>,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
+        common.sendto(bytes, addr, event_queue)
+    }
+
+    fn recvfrom<W>(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        bytes: W,
+        event_queue: &mut EventQueue,
+    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    where
+        W: std::io::Write + std::io::Seek,
+    {
+        common.recvfrom(bytes, event_queue)
+    }
+
+    fn ioctl(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        request: u64,
+        arg_ptr: PluginPtr,
+        memory_manager: &mut MemoryManager,
+    ) -> SyscallResult {
+        common.ioctl(request, arg_ptr, memory_manager)
+    }
+
+    fn connect(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        addr: nix::sys::socket::UnixAddr,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) {
+        common.connect(socket, addr, send_buffer, event_queue)
+    }
+}
+
+/// Common data and functionality that is useful for all states.
 struct UnixSocketCommon {
     send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
     recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
@@ -320,16 +629,15 @@ impl UnixSocketCommon {
     }
 
     pub fn bind(
+        &mut self,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         // if already bound
-        if socket.borrow().common.bound_addr.is_some() {
+        if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
-
-        let socket_type = socket.borrow().common.socket_type;
 
         // get the unix address
         let addr = match addr {
@@ -346,13 +654,13 @@ impl UnixSocketCommon {
         // bind the socket
         let bound_addr = if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
-            let namespace = Arc::clone(&socket.borrow().common.namespace);
+            let namespace = Arc::clone(&self.namespace);
             match AbstractUnixNamespace::bind(
                 &namespace,
-                socket_type,
+                self.socket_type,
                 name.to_vec(),
                 socket,
-                &mut socket.borrow_mut().common.event_source,
+                &mut self.event_source,
             ) {
                 Ok(()) => *addr,
                 // address is in use
@@ -360,12 +668,12 @@ impl UnixSocketCommon {
             }
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
-            let namespace = Arc::clone(&socket.borrow().common.namespace);
+            let namespace = Arc::clone(&self.namespace);
             match AbstractUnixNamespace::autobind(
                 &namespace,
-                socket_type,
+                self.socket_type,
                 socket,
-                &mut socket.borrow_mut().common.event_source,
+                &mut self.event_source,
                 rng,
             ) {
                 Ok(ref name) => nix::sys::socket::UnixAddr::new_abstract(name).unwrap(),
@@ -376,7 +684,7 @@ impl UnixSocketCommon {
             return Err(Errno::ENOTSUP.into());
         };
 
-        socket.borrow_mut().common.bound_addr = Some(bound_addr);
+        self.bound_addr = Some(bound_addr);
 
         Ok(0.into())
     }
@@ -504,24 +812,24 @@ impl UnixSocketCommon {
     }
 
     pub fn connect(
+        &mut self,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
         addr: nix::sys::socket::UnixAddr,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) {
-        let socket_ref = &mut *socket.borrow_mut();
         let mut send_buffer_ref = send_buffer.borrow_mut();
 
         // set the socket's peer address
-        assert!(socket_ref.common.peer_addr.is_none());
-        socket_ref.common.peer_addr = Some(addr);
+        assert!(self.peer_addr.is_none());
+        self.peer_addr = Some(addr);
 
         // increment the buffer's writer count
         send_buffer_ref.add_writer(event_queue);
 
         // update the socket file's state based on the buffer's state
         if send_buffer_ref.state().contains(BufferState::WRITABLE) {
-            socket_ref.common.state.insert(FileState::WRITABLE);
+            self.state.insert(FileState::WRITABLE);
         }
 
         // update the socket's state when the buffer's state changes
@@ -551,8 +859,8 @@ impl UnixSocketCommon {
 
         std::mem::drop(send_buffer_ref);
 
-        socket_ref.common.send_buffer = Some(send_buffer);
-        socket_ref.common.send_buffer_event_handle = Some(send_handle);
+        self.send_buffer = Some(send_buffer);
+        self.send_buffer_event_handle = Some(send_handle);
     }
 
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
