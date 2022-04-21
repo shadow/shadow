@@ -347,7 +347,13 @@ impl UnixSocketCommon {
         let bound_addr = if let Some(name) = addr.as_abstract() {
             // if given an abstract socket address
             let namespace = Arc::clone(&socket.borrow().common.namespace);
-            match AbstractUnixNamespace::bind(&namespace, socket_type, name.to_vec(), socket) {
+            match AbstractUnixNamespace::bind(
+                &namespace,
+                socket_type,
+                name.to_vec(),
+                socket,
+                &mut socket.borrow_mut().common.event_source,
+            ) {
                 Ok(()) => *addr,
                 // address is in use
                 Err(_) => return Err(Errno::EADDRINUSE.into()),
@@ -355,7 +361,13 @@ impl UnixSocketCommon {
         } else if addr.path_len() == 0 {
             // if given an "unnamed" address
             let namespace = Arc::clone(&socket.borrow().common.namespace);
-            match AbstractUnixNamespace::autobind(&namespace, socket_type, socket, rng) {
+            match AbstractUnixNamespace::autobind(
+                &namespace,
+                socket_type,
+                socket,
+                &mut socket.borrow_mut().common.event_source,
+                rng,
+            ) {
                 Ok(ref name) => nix::sys::socket::UnixAddr::new_abstract(name).unwrap(),
                 Err(_) => return Err(Errno::EADDRINUSE.into()),
             }
