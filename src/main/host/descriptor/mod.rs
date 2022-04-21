@@ -198,7 +198,7 @@ impl LegacyListenerHelper {
 
 /// A specified event source that passes a state and the changed bits to the function, but only if
 /// the monitored bits have changed and if the change the filter is satisfied.
-struct StateEventSource {
+pub struct StateEventSource {
     inner: EventSource<(FileState, FileState)>,
     legacy_helper: LegacyListenerHelper,
 }

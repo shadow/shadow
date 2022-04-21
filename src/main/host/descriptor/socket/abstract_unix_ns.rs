@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 
 use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
 use crate::host::descriptor::FileState;
-use crate::host::descriptor::StateListenerFilter;
+use crate::host::descriptor::{StateEventSource, StateListenerFilter};
 use crate::utility::event_queue::Handle;
 
 struct NamespaceEntry {
@@ -70,6 +70,7 @@ impl AbstractUnixNamespace {
         sock_type: UnixSocketType,
         mut name: Vec<u8>,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket_event_source: &mut StateEventSource,
     ) -> Result<(), BindError> {
         // make sure we aren't wasting memory since we don't mutate the name
         name.shrink_to_fit();
@@ -84,13 +85,10 @@ impl AbstractUnixNamespace {
         };
 
         // when the socket closes, remove this entry from the namespace
-        let handle = Self::on_socket_close(
-            Arc::downgrade(&ns_arc),
-            &mut socket.borrow_mut(),
-            move |ns| {
+        let handle =
+            Self::on_socket_close(Arc::downgrade(&ns_arc), socket_event_source, move |ns| {
                 assert!(ns.unbind(sock_type, &name_copy).is_ok());
-            },
-        );
+            });
 
         entry.insert(NamespaceEntry::new(Arc::downgrade(socket), handle));
 
@@ -101,6 +99,7 @@ impl AbstractUnixNamespace {
         ns_arc: &Arc<AtomicRefCell<Self>>,
         sock_type: UnixSocketType,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket_event_source: &mut StateEventSource,
         mut rng: impl rand::Rng,
     ) -> Result<Vec<u8>, BindError> {
         let mut ns = ns_arc.borrow_mut();
@@ -149,13 +148,10 @@ impl AbstractUnixNamespace {
         let name_copy = name.clone();
 
         // when the socket closes, remove this entry from the namespace
-        let handle = Self::on_socket_close(
-            Arc::downgrade(&ns_arc),
-            &mut socket.borrow_mut(),
-            move |ns| {
+        let handle =
+            Self::on_socket_close(Arc::downgrade(&ns_arc), socket_event_source, move |ns| {
                 assert!(ns.unbind(sock_type, &name_copy).is_ok());
-            },
-        );
+            });
 
         if let std::collections::hash_map::Entry::Vacant(entry) = ns
             .address_map
@@ -191,10 +187,10 @@ impl AbstractUnixNamespace {
     /// Adds a listener to the socket which runs the callback `f` when the socket is closed.
     fn on_socket_close(
         ns: Weak<AtomicRefCell<Self>>,
-        socket: &mut UnixSocketFile,
+        event_source: &mut StateEventSource,
         f: impl Fn(&mut Self) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
-        socket.add_listener(
+        event_source.add_listener(
             FileState::CLOSED,
             StateListenerFilter::OffToOn,
             move |state, _changed, _event_queue| {
