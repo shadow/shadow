@@ -19,6 +19,8 @@ const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: usize = 212_992;
 pub struct UnixSocketFile {
     /// Data and functionality that is general for all states.
     common: UnixSocketCommon,
+    /// State-specific data and functionality.
+    protocol_state: ProtocolState,
 }
 
 impl UnixSocketFile {
@@ -51,6 +53,7 @@ impl UnixSocketFile {
                 recv_buffer_event_handle: None,
                 has_open_file: false,
             },
+            protocol_state: ProtocolState::new(socket_type),
         };
 
         let socket = Arc::new(AtomicRefCell::new(socket));
@@ -248,6 +251,25 @@ impl UnixSocketFile {
 
     pub fn state(&self) -> FileState {
         self.common.state
+    }
+}
+
+struct ConnOrientedInitial {}
+struct ConnLessInitial {}
+
+enum ProtocolState {
+    ConnOrientedInitial(ConnOrientedInitial),
+    ConnLessInitial(ConnLessInitial),
+}
+
+impl ProtocolState {
+    fn new(socket_type: UnixSocketType) -> Self {
+        match socket_type {
+            UnixSocketType::Stream | UnixSocketType::SeqPacket => {
+                Self::ConnOrientedInitial(ConnOrientedInitial {})
+            }
+            UnixSocketType::Dgram => Self::ConnLessInitial(ConnLessInitial {}),
+        }
     }
 }
 
