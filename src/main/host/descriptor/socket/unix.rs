@@ -270,20 +270,45 @@ impl UnixSocketFile {
 }
 
 struct ConnOrientedInitial {}
-struct ConnLessInitial {}
+struct ConnOrientedClosed {}
 
+struct ConnLessInitial {}
+struct ConnLessClosed {}
+
+/// The current protocol state of the unix socket. An `Option` is required for each variant so that
+/// the inner state object can be removed, transformed into a new state, and then re-added as a
+/// different variant.
 enum ProtocolState {
-    ConnOrientedInitial(ConnOrientedInitial),
-    ConnLessInitial(ConnLessInitial),
+    ConnOrientedInitial(Option<ConnOrientedInitial>),
+    ConnOrientedClosed(Option<ConnOrientedClosed>),
+    ConnLessInitial(Option<ConnLessInitial>),
+    ConnLessClosed(Option<ConnLessClosed>),
 }
+
+/// Upcast from a type to an enum variant.
+macro_rules! state_upcast {
+    ($type:ty, $parent:ident::$variant:ident) => {
+        impl From<$type> for $parent {
+            fn from(x: $type) -> Self {
+                Self::$variant(Some(x))
+            }
+        }
+    };
+}
+
+// implement upcasting for all state types
+state_upcast!(ConnOrientedInitial, ProtocolState::ConnOrientedInitial);
+state_upcast!(ConnOrientedClosed, ProtocolState::ConnOrientedClosed);
+state_upcast!(ConnLessInitial, ProtocolState::ConnLessInitial);
+state_upcast!(ConnLessClosed, ProtocolState::ConnLessClosed);
 
 impl ProtocolState {
     fn new(socket_type: UnixSocketType) -> Self {
         match socket_type {
             UnixSocketType::Stream | UnixSocketType::SeqPacket => {
-                Self::ConnOrientedInitial(ConnOrientedInitial {})
+                Self::ConnOrientedInitial(Some(ConnOrientedInitial {}))
             }
-            UnixSocketType::Dgram => Self::ConnLessInitial(ConnLessInitial {}),
+            UnixSocketType::Dgram => Self::ConnLessInitial(Some(ConnLessInitial {})),
         }
     }
 
@@ -292,10 +317,15 @@ impl ProtocolState {
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
-        match self {
-            Self::ConnOrientedInitial(x) => x.close(common, event_queue),
-            Self::ConnLessInitial(x) => x.close(common, event_queue),
-        }
+        let (new_state, rv) = match self {
+            Self::ConnOrientedInitial(x) => x.take().unwrap().close(common, event_queue),
+            Self::ConnOrientedClosed(x) => x.take().unwrap().close(common, event_queue),
+            Self::ConnLessInitial(x) => x.take().unwrap().close(common, event_queue),
+            Self::ConnLessClosed(x) => x.take().unwrap().close(common, event_queue),
+        };
+
+        *self = new_state;
+        rv
     }
 
     fn bind(
@@ -306,8 +336,10 @@ impl ProtocolState {
         rng: impl rand::Rng,
     ) -> SyscallResult {
         match self {
-            Self::ConnOrientedInitial(x) => x.bind(common, socket, addr, rng),
-            Self::ConnLessInitial(x) => x.bind(common, socket, addr, rng),
+            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+            Self::ConnLessInitial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
         }
     }
 
@@ -322,8 +354,16 @@ impl ProtocolState {
         R: std::io::Read + std::io::Seek,
     {
         match self {
-            Self::ConnOrientedInitial(x) => x.sendto(common, bytes, addr, event_queue),
-            Self::ConnLessInitial(x) => x.sendto(common, bytes, addr, event_queue),
+            Self::ConnOrientedInitial(x) => {
+                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+            }
+            Self::ConnOrientedClosed(x) => {
+                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+            }
+            Self::ConnLessInitial(x) => {
+                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+            }
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().sendto(common, bytes, addr, event_queue),
         }
     }
 
@@ -337,8 +377,12 @@ impl ProtocolState {
         W: std::io::Write + std::io::Seek,
     {
         match self {
-            Self::ConnOrientedInitial(x) => x.recvfrom(common, bytes, event_queue),
-            Self::ConnLessInitial(x) => x.recvfrom(common, bytes, event_queue),
+            Self::ConnOrientedInitial(x) => {
+                x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
+            }
+            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
+            Self::ConnLessInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
         }
     }
 
@@ -350,8 +394,26 @@ impl ProtocolState {
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match self {
-            Self::ConnOrientedInitial(x) => x.ioctl(common, request, arg_ptr, memory_manager),
-            Self::ConnLessInitial(x) => x.ioctl(common, request, arg_ptr, memory_manager),
+            Self::ConnOrientedInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .ioctl(common, request, arg_ptr, memory_manager)
+            }
+            Self::ConnOrientedClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .ioctl(common, request, arg_ptr, memory_manager)
+            }
+            Self::ConnLessInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .ioctl(common, request, arg_ptr, memory_manager)
+            }
+            Self::ConnLessClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .ioctl(common, request, arg_ptr, memory_manager)
+            }
         }
     }
 
@@ -365,9 +427,25 @@ impl ProtocolState {
     ) {
         match self {
             Self::ConnOrientedInitial(x) => {
-                x.connect(common, socket, addr, send_buffer, event_queue)
+                x.as_mut()
+                    .unwrap()
+                    .connect(common, socket, addr, send_buffer, event_queue)
             }
-            Self::ConnLessInitial(x) => x.connect(common, socket, addr, send_buffer, event_queue),
+            Self::ConnOrientedClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect(common, socket, addr, send_buffer, event_queue)
+            }
+            Self::ConnLessInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect(common, socket, addr, send_buffer, event_queue)
+            }
+            Self::ConnLessClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect(common, socket, addr, send_buffer, event_queue)
+            }
         }
     }
 }
@@ -375,14 +453,17 @@ impl ProtocolState {
 /// Methods that a protocol state may wish to handle. Default implementations which return an error
 /// status are provided for many methods. Each type that implements this trait can override any of
 /// these default implementations.
-trait Protocol {
+trait Protocol
+where
+    Self: Sized + Into<ProtocolState>,
+{
     fn close(
-        &mut self,
+        self,
         _common: &mut UnixSocketCommon,
         _event_queue: &mut EventQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!("close() while in state {}", std::any::type_name::<Self>());
-        Err(Errno::EOPNOTSUPP.into())
+        (self.into(), Err(Errno::EOPNOTSUPP.into()))
     }
 
     fn bind(
@@ -451,11 +532,12 @@ trait Protocol {
 
 impl Protocol for ConnOrientedInitial {
     fn close(
-        &mut self,
+        self,
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
-    ) -> Result<(), SyscallError> {
-        common.close(event_queue)
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        let new_state = ConnOrientedClosed {};
+        (new_state.into(), common.close(event_queue))
     }
 
     fn bind(
@@ -515,13 +597,25 @@ impl Protocol for ConnOrientedInitial {
     }
 }
 
+impl Protocol for ConnOrientedClosed {
+    fn close(
+        self,
+        _common: &mut UnixSocketCommon,
+        _event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        // why are we trying to close an already closed file? we probably want a bt here...
+        panic!("Trying to close an already closed socket");
+    }
+}
+
 impl Protocol for ConnLessInitial {
     fn close(
-        &mut self,
+        self,
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
-    ) -> Result<(), SyscallError> {
-        common.close(event_queue)
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        let new_state = ConnLessClosed {};
+        (new_state.into(), common.close(event_queue))
     }
 
     fn bind(
@@ -578,6 +672,17 @@ impl Protocol for ConnLessInitial {
         event_queue: &mut EventQueue,
     ) {
         common.connect(socket, addr, send_buffer, event_queue)
+    }
+}
+
+impl Protocol for ConnLessClosed {
+    fn close(
+        self,
+        _common: &mut UnixSocketCommon,
+        _event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        // why are we trying to close an already closed file? we probably want a bt here...
+        panic!("Trying to close an already closed socket");
     }
 }
 
