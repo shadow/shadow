@@ -30,6 +30,26 @@ static EmulatedTime _shim_sys_get_time() {
 
 uint64_t shim_sys_get_simtime_nanos() { return _shim_sys_get_time() / SIMTIME_ONE_NANOSECOND; }
 
+static SimulationTime _shim_sys_latency_for_syscall(long n) {
+    switch (n) {
+        case SYS_clock_gettime:
+        case SYS_time:
+        case SYS_gettimeofday:
+        case SYS_getcpu:
+            // This would typically be a VDSO call outside of Shadow.
+            //
+            // It might not be, if the caller directly used a `syscall`
+            // instruction or function call, but this is unusual, and charging
+            // too-little latency here shouldn't hurt much, given that its main
+            // purpose is currently to escape busy loops rather than to fully
+            // model CPU time.
+            return shimshmem_unblockedVdsoLatency(shim_hostSharedMem());
+    }
+    // This would typically *not* be a VDSO call outside of Shadow, even if
+    // Shadow does implement it in the shim.
+    return shimshmem_unblockedSyscallLatency(shim_hostSharedMem());
+}
+
 bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
@@ -121,8 +141,9 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
 
     if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
-        shimshmem_incrementUnblockedSyscallCount(host_lock);
-        uint32_t unblockedCount = shimshmem_getUnblockedSyscallCount(host_lock);
+        shimshmem_incrementUnappliedCpuLatency(
+            host_lock, _shim_sys_latency_for_syscall(syscall_num));
+        SimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
         // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
         // avoid having to reacquire it below. We currently can't hold the lock
         // over when any syscalls would be made though, since those result in a
@@ -131,9 +152,11 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
 
         // Count the syscall and check whether we ought to yield.
-        uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(shim_hostSharedMem());
-        trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
-        if (unblockedCount >= unblockedLimit) {
+        SimulationTime maxUnappliedCpuLatency =
+            shimshmem_maxUnappliedCpuLatency(shim_hostSharedMem());
+        trace("unappliedCpuLatency=%ld maxUnappliedCpuLatency=%ld", unappliedCpuLatency,
+              maxUnappliedCpuLatency);
+        if (unappliedCpuLatency > maxUnappliedCpuLatency) {
             // We still want to eventually return the syscall result we just
             // got, but first we yield control to Shadow so that it can move
             // time forward and reschedule this thread. This syscall itself is
@@ -144,20 +167,18 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             // Since this is a Shadow syscall, it will always be passed through
             // to Shadow instead of being executed natively.
 
-            EmulatedTime newTime =
-                _shim_sys_get_time() +
-                unblockedCount * shimshmem_unblockedSyscallLatency(shim_hostSharedMem());
+            EmulatedTime newTime = _shim_sys_get_time() + unappliedCpuLatency;
             host_lock = shimshmemhost_lock(shim_hostSharedMem());
             EmulatedTime maxTime = shimshmem_getMaxRunaheadTime(host_lock);
             if (newTime <= maxTime) {
                 shimshmem_setEmulatedTime(shim_hostSharedMem(), newTime);
-                shimshmem_resetUnblockedSyscallCount(host_lock);
+                shimshmem_resetUnappliedCpuLatency(host_lock);
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-                trace("Reached unblocked syscall limit. Updated time locally. (%ld ns until max)",
+                trace("Reached maxUnappliedCpuLatency. Updated time locally. (%ld ns until max)",
                       maxTime - newTime);
             } else {
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-                trace("Reached unblocked syscall limit. Yielding. (%ld ns past max)",
+                trace("Reached maxUnappliedCpuLatency. Yielding. (%ld ns past max)",
                       newTime - maxTime);
                 syscall(SYS_shadow_yield);
             }

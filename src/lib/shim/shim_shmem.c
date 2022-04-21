@@ -14,8 +14,8 @@
 struct _ShimHostProtectedSharedMem {
     GQuark host_id;
 
-    // Number of syscalls that have executed without blocking.
-    uint32_t unblocked_syscall_count;
+    // Modeled CPU latency that hasn't been applied to the clock yet.
+    SimulationTime unapplied_cpu_latency;
 
     // Max simulation time to which sim_time may be incremented.  Moving time
     // beyond this value requires the current thread to be rescheduled.
@@ -38,13 +38,13 @@ struct _ShimShmemHost {
     // Thread Safety: immutable after initialization.
     const bool model_unblocked_syscall_latency;
 
-    // Number of syscalls allowed to execute before yielding.
+    // Maximum accumulated CPU latency before updating clock.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
     // stays a global constant; Or down into the process if we make it a
     // per-process option.
     //
     // Thread Safety: immutable after initialization.
-    const uint32_t unblocked_syscall_limit;
+    const SimulationTime max_unapplied_cpu_latency;
 
     // How much to move time forward for each unblocked syscall.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
@@ -53,6 +53,14 @@ struct _ShimShmemHost {
     //
     // Thread Safety: immutable after initialization.
     const SimulationTime unblocked_syscall_latency;
+
+    // How much to move time forward for each unblocked vdso "syscall".
+    // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
+    // stays a global constant; Or down into the process if we make it a
+    // per-process option.
+    //
+    // Thread Safety: immutable after initialization.
+    const SimulationTime unblocked_vdso_latency;
 
     // Current simulation time.
     _Atomic EmulatedTime sim_time;
@@ -114,7 +122,9 @@ struct _ShimShmemThread {
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
-                        uint32_t unblockedSyscallLimit, SimulationTime unblockedSyscallLatency) {
+                        SimulationTime maxUnappliedCpuLatency,
+                        SimulationTime unblockedSyscallLatency,
+                        SimulationTime unblockedVdsoLatency) {
     assert(hostMem);
     // We use `memcpy` instead of struct assignment here to allow us to
     // initialize the const members of `hostMem`.
@@ -123,8 +133,9 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedS
                .host_id = host_getID(host),
                .mutex = PTHREAD_MUTEX_INITIALIZER,
                .model_unblocked_syscall_latency = modelUnblockedSyscallLatency,
-               .unblocked_syscall_limit = unblockedSyscallLimit,
+               .max_unapplied_cpu_latency = maxUnappliedCpuLatency,
                .unblocked_syscall_latency = unblockedSyscallLatency,
+               .unblocked_vdso_latency = unblockedVdsoLatency,
                .protected =
                    {
                        .host_id = host_getID(host),
@@ -138,14 +149,14 @@ void shimshmemhost_destroy(ShimShmemHost* hostMem) {
     pthread_mutex_destroy(&hostMem->mutex);
 }
 
-void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host) {
+void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, SimulationTime dt) {
     assert(host);
-    ++host->unblocked_syscall_count;
+    host->unapplied_cpu_latency += dt;
 }
 
-uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host) {
+SimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host) {
     assert(host);
-    return host->unblocked_syscall_count;
+    return host->unapplied_cpu_latency;
 }
 
 bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host) {
@@ -153,9 +164,9 @@ bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host) {
     return host->model_unblocked_syscall_latency;
 }
 
-uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host) {
+uint32_t shimshmem_maxUnappliedCpuLatency(ShimShmemHost* host) {
     assert(host);
-    return host->unblocked_syscall_limit;
+    return host->max_unapplied_cpu_latency;
 }
 
 SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
@@ -163,9 +174,14 @@ SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
     return host->unblocked_syscall_latency;
 }
 
-void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host) {
+SimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host) {
     assert(host);
-    host->unblocked_syscall_count = 0;
+    return host->unblocked_vdso_latency;
+}
+
+void shimshmem_resetUnappliedCpuLatency(ShimShmemHostLock* host) {
+    assert(host);
+    host->unapplied_cpu_latency = 0;
 }
 
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,
