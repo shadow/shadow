@@ -51,6 +51,7 @@ hosts:
 - [`general.data_directory`](#generaldata_directory)
 - [`general.heartbeat_interval`](#generalheartbeat_interval)
 - [`general.log_level`](#generallog_level)
+- [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 - [`general.parallelism`](#generalparallelism)
 - [`general.progress`](#generalprogress)
 - [`general.seed`](#generalseed)
@@ -154,6 +155,15 @@ Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
 
 Log level of output written on stdout. If Shadow was built in release mode, then
 messages at level 'trace' will always be dropped.
+
+#### `general.model_unblocked_syscall_latency`
+
+Default: false  
+Type: Bool
+
+Whether to model syscalls and VDSO functions that don't block as having some
+latency. This should have minimal effect on typical simulations, but can be
+helpful for programs with "busy loops" that otherwise deadlock under Shadow.
 
 #### `general.parallelism`
 
@@ -423,16 +433,21 @@ Type: String
 The simulated latency of an unblocked syscall. For simulation efficiency, this
 latency is only added when `unblocked_syscall_limit` is reached.
 
+Ignored when
+[`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
+is false.
+
 #### `experimental.unblocked_syscall_limit`
 
-Default: 0
+Default: 500
 Type: Integer
 
-If non-zero, the number of consecutive unblocked syscalls that Shadow will
-allow a thread to execute before `unblocked_syscall_latency` is applied.
-Setting this to a non-zero value allows time to eventually move forward in cases
-where the managed thread is in a "busy loop" that executes forever until a
-timeout or some other condition is satisfied.
+The number of consecutive unblocked syscalls that Shadow will allow a thread to
+execute before `unblocked_syscall_latency` is applied.
+
+Ignored when
+[`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
+is false.
 
 #### `experimental.use_cpu_pinning`
 

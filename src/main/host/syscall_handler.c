@@ -573,40 +573,39 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         process_freePtrsWithoutFlushing(sys->process);
     }
 
-    if (process_isRunning(sys->process) &&
+    if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(sys->host)) &&
+        process_isRunning(sys->process) &&
         (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
+        // Increment unblocked syscall count, but only for
+        // non-shadow-syscalls, since the latter are part of Shadow's
+        // internal plumbing; they shouldn't necessarily "consume" time.
+        if (!syscall_num_is_shadow(args->number)) {
+            shimshmem_incrementUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+        }
+        uint32_t unblockedCount =
+            shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
         uint32_t unblockedLimit = shimshmem_unblockedSyscallLimit(host_getSharedMem(sys->host));
-        if (unblockedLimit > 0) {
-            // Increment unblocked syscall count, but only for
-            // non-shadow-syscalls, since the latter are part of Shadow's
-            // internal plumbing; they shouldn't necessarily "consume" time.
-            if (!syscall_num_is_shadow(args->number)) {
-                shimshmem_incrementUnblockedSyscallCount(host_getShimShmemLock(sys->host));
-            }
-            uint32_t unblockedCount =
-                shimshmem_getUnblockedSyscallCount(host_getShimShmemLock(sys->host));
-            trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
-            if (unblockedCount >= unblockedLimit) {
-                EmulatedTime newTime =
-                    worker_getEmulatedTime() + unblockedCount * shimshmem_unblockedSyscallLatency(
-                                                                    host_getSharedMem(sys->host));
-                EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
-                if (newTime <= maxTime) {
-                    trace("Reached unblocked syscall limit. Incrementing time");
-                    shimshmem_resetUnblockedSyscallCount(host_getShimShmemLock(sys->host));
-                    worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
-                } else {
-                    trace("Reached unblocked syscall limit. Yielding.");
-                    // Block instead, but save the result so that we can return it
-                    // later instead of re-executing the syscall.
-                    utility_assert(!sys->havePendingResult);
-                    sys->havePendingResult = true;
-                    sys->pendingResult = scr;
-                    utility_assert(scr.cond == NULL);
-                    scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-                    syscallcondition_setTimeout(scr.cond, sys->host, newTime);
-                    scr.state = SYSCALL_BLOCK;
-                }
+        trace("Unblocked syscall count=%u limit=%u", unblockedCount, unblockedLimit);
+        if (unblockedCount >= unblockedLimit) {
+            EmulatedTime newTime =
+                worker_getEmulatedTime() +
+                unblockedCount * shimshmem_unblockedSyscallLatency(host_getSharedMem(sys->host));
+            EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
+            if (newTime <= maxTime) {
+                trace("Reached unblocked syscall limit. Incrementing time");
+                shimshmem_resetUnblockedSyscallCount(host_getShimShmemLock(sys->host));
+                worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
+            } else {
+                trace("Reached unblocked syscall limit. Yielding.");
+                // Block instead, but save the result so that we can return it
+                // later instead of re-executing the syscall.
+                utility_assert(!sys->havePendingResult);
+                sys->havePendingResult = true;
+                sys->pendingResult = scr;
+                utility_assert(scr.cond == NULL);
+                scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+                syscallcondition_setTimeout(scr.cond, sys->host, newTime);
+                scr.state = SYSCALL_BLOCK;
             }
         }
     }

@@ -37,8 +37,8 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 // parameter are still thread-safe, and internally use atomics.
 
 size_t shimshmemhost_size();
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit,
-                        SimulationTime unblockedSyscallLatency);
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
+                        uint32_t unblockedSyscallLimit, SimulationTime unblockedSyscallLatency);
 void shimshmemhost_destroy(ShimShmemHost* hostMem);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
@@ -118,6 +118,9 @@ int shimshmem_takePendingUnblockedSignal(const ShimShmemHostLock* lock, ShimShme
 void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host);
 uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host);
 void shimshmem_resetUnblockedSyscallCount(ShimShmemHostLock* host);
+
+// Get whether to model latency of unblocked syscalls.
+bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host);
 
 // Get the configured maximum unmber of unblocked syscalls to execute before
 // yielding.

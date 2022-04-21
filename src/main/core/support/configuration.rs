@@ -191,6 +191,15 @@ pub struct GeneralOptions {
     #[clap(help = GENERAL_HELP.get("progress").unwrap().as_str())]
     #[serde(default = "default_some_false")]
     pub progress: Option<bool>,
+
+    /// Model syscalls and VDSO functions that don't block as having some
+    /// latency. This should have minimal effect on typical simulations, but
+    /// can be helpful for programs with "busy loops" that otherwise deadlock
+    /// under Shadow.
+    #[clap(long, value_name = "bool")]
+    #[clap(help = GENERAL_HELP.get("model_unblocked_syscall_latency").unwrap().as_str())]
+    #[serde(default = "default_some_false")]
+    pub model_unblocked_syscall_latency: Option<bool>,
 }
 
 impl GeneralOptions {
@@ -427,7 +436,7 @@ pub struct ExperimentalOptions {
     pub strace_logging_mode: Option<StraceLoggingMode>,
 
     /// Number of consecutive unblocked syscalls before a thread applies
-    /// `unblocked_syscall_latency` and yields. 0 to never yield.
+    /// `unblocked_syscall_latency` and yields.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "count")]
     #[clap(help = EXP_HELP.get("unblocked_syscall_limit").unwrap().as_str())]
@@ -474,9 +483,8 @@ impl Default for ExperimentalOptions {
             preload_spin_max: Some(0),
             // Experimentally, 500 is high enough to trigger infrequently
             // outside of a true "busy loop", and low enough to get out of such
-            // loops fairly quickly. Disabled by default for now, pending further
-            // testing.
-            unblocked_syscall_limit: Some(0),
+            // loops fairly quickly.
+            unblocked_syscall_limit: Some(500),
             // 2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
             unblocked_syscall_latency: Some(units::Time::new(2, units::TimePrefix::Micro)),
@@ -1500,6 +1508,13 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.general.progress.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getModelUnblockedSyscallLatency(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.general.model_unblocked_syscall_latency.unwrap()
     }
 
     #[no_mangle]

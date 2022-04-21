@@ -5,9 +5,7 @@
 ```yaml
 general:
   stop_time: 10s
-
-experimental:
-  unblocked_syscall_limit: 500
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
@@ -44,5 +42,5 @@ disconnects. This is likely due to Shadow not supporting the `SO_REUSEADDR`
 socket option.
 
 3. iPerf 3 uses a busy loop that is incompatible with Shadow and will cause
-Shadow to deadlock. A workaround is to use the experimental
-`unblocked_syscall_limit` option.
+Shadow to deadlock. A workaround is to use the `model_unblocked_syscall_latency`
+option.

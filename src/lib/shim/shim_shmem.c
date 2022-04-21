@@ -32,6 +32,12 @@ struct _ShimShmemHost {
     // Guarded by `mutex`.
     ShimShmemHostLock protected;
 
+    // Whether to model unblocked syscalls as taking non-zero time.
+    // TODO: Move to a "ShimShmemGlobal" struct if we make one.
+    //
+    // Thread Safety: immutable after initialization.
+    const bool model_unblocked_syscall_latency;
+
     // Number of syscalls allowed to execute before yielding.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
     // stays a global constant; Or down into the process if we make it a
@@ -107,8 +113,8 @@ struct _ShimShmemThread {
 
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSyscallLimit,
-                        SimulationTime unblockedSyscallLatency) {
+void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
+                        uint32_t unblockedSyscallLimit, SimulationTime unblockedSyscallLatency) {
     assert(hostMem);
     // We use `memcpy` instead of struct assignment here to allow us to
     // initialize the const members of `hostMem`.
@@ -116,6 +122,7 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, uint32_t unblockedSy
            &(ShimShmemHost){
                .host_id = host_getID(host),
                .mutex = PTHREAD_MUTEX_INITIALIZER,
+               .model_unblocked_syscall_latency = modelUnblockedSyscallLatency,
                .unblocked_syscall_limit = unblockedSyscallLimit,
                .unblocked_syscall_latency = unblockedSyscallLatency,
                .protected =
@@ -139,6 +146,11 @@ void shimshmem_incrementUnblockedSyscallCount(ShimShmemHostLock* host) {
 uint32_t shimshmem_getUnblockedSyscallCount(ShimShmemHostLock* host) {
     assert(host);
     return host->unblocked_syscall_count;
+}
+
+bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host) {
+    assert(host);
+    return host->model_unblocked_syscall_latency;
 }
 
 uint32_t shimshmem_unblockedSyscallLimit(ShimShmemHost* host) {

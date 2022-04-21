@@ -386,6 +386,8 @@ bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
 bool config_getProgress(const struct ConfigOptions *config);
 
+bool config_getModelUnblockedSyscallLatency(const struct ConfigOptions *config);
+
 LogLevel config_getHostHeartbeatLogLevel(const struct ConfigOptions *config);
 
 LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
