@@ -448,7 +448,7 @@ pub struct ExperimentalOptions {
     pub max_unapplied_cpu_latency: Option<units::Time<units::TimePrefix>>,
 
     /// Simulated latency of an unblocked syscall. For efficiency Shadow only
-    /// actually adds this latency if and when `unblocked_syscall_limit` is
+    /// actually adds this latency if and when `max_unapplied_cpu_latency` is
     /// reached.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
@@ -456,7 +456,7 @@ pub struct ExperimentalOptions {
     pub unblocked_syscall_latency: Option<units::Time<units::TimePrefix>>,
 
     /// Simulated latency of a vdso "syscall". For efficiency Shadow only
-    /// actually adds this latency if and when `unblocked_syscall_limit` is
+    /// actually adds this latency if and when `max_unapplied_cpu_latency` is
     /// reached.
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
