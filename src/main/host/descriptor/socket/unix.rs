@@ -713,24 +713,6 @@ impl Protocol for ConnOrientedInitial {
         common.ioctl(request, arg_ptr, memory_manager)
     }
 
-    fn connect(
-        &mut self,
-        common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
-        addr: nix::sys::socket::UnixAddr,
-        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
-        event_queue: &mut EventQueue,
-    ) -> Result<(), SyscallError> {
-        assert!(self.peer_addr.is_none());
-        self.peer_addr = Some(addr);
-
-        self.send_buffer_event_handle =
-            Some(common.connect_buffer(socket, &send_buffer, event_queue));
-        self.send_buffer = Some(send_buffer);
-
-        Ok(())
-    }
-
     fn connect_unnamed(
         &mut self,
         common: &mut UnixSocketCommon,
