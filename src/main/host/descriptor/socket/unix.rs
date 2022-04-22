@@ -217,7 +217,7 @@ impl UnixSocketFile {
         addr: nix::sys::socket::UnixAddr,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) {
+    ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
         socket_ref.protocol_state.connect(
             &mut socket_ref.common,
@@ -235,39 +235,34 @@ impl UnixSocketFile {
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
         event_queue: &mut EventQueue,
     ) -> (Arc<AtomicRefCell<Self>>, Arc<AtomicRefCell<Self>>) {
-        let unnamed_sock_addr = empty_sockaddr(nix::sys::socket::AddressFamily::Unix);
-        let unnamed_sock_addr = if let nix::sys::socket::SockAddr::Unix(x) = unnamed_sock_addr {
-            x
-        } else {
-            panic!("Unexpected socket address type: {:?}", unnamed_sock_addr);
-        };
-
         let socket_1 = UnixSocketFile::new(mode, status, socket_type, namespace);
         let socket_2 = UnixSocketFile::new(mode, status, socket_type, namespace);
 
-        // bind the sockets to an unnamed address so that they can't be bound later
-        socket_1
-            .borrow_mut()
-            .protocol_state
-            .set_bound_address(unnamed_sock_addr);
-        socket_2
-            .borrow_mut()
-            .protocol_state
-            .set_bound_address(unnamed_sock_addr);
+        {
+            let socket_1_ref = &mut *socket_1.borrow_mut();
+            socket_1_ref
+                .protocol_state
+                .connect_unnamed(
+                    &mut socket_1_ref.common,
+                    &socket_1,
+                    Arc::clone(socket_2.borrow().recv_buffer()),
+                    event_queue,
+                )
+                .unwrap();
+        }
 
-        Self::connect(
-            &socket_1,
-            unnamed_sock_addr,
-            Arc::clone(socket_2.borrow().recv_buffer()),
-            event_queue,
-        );
-
-        Self::connect(
-            &socket_2,
-            unnamed_sock_addr,
-            Arc::clone(socket_1.borrow().recv_buffer()),
-            event_queue,
-        );
+        {
+            let socket_2_ref = &mut *socket_2.borrow_mut();
+            socket_2_ref
+                .protocol_state
+                .connect_unnamed(
+                    &mut socket_2_ref.common,
+                    &socket_2,
+                    Arc::clone(socket_1.borrow().recv_buffer()),
+                    event_queue,
+                )
+                .unwrap();
+        }
 
         (socket_1, socket_2)
     }
@@ -374,17 +369,6 @@ impl ProtocolState {
             Self::ConnOrientedClosed(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnLessInitial(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnLessClosed(x) => x.as_ref().unwrap().bound_address(),
-        }
-    }
-
-    /// This is specifically for socketpair. Will panic if already bound or if in a state that
-    /// doesn't support binding.
-    fn set_bound_address(&mut self, addr: nix::sys::socket::UnixAddr) {
-        match self {
-            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().set_bound_address(addr),
-            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().set_bound_address(addr),
-            Self::ConnLessInitial(x) => x.as_mut().unwrap().set_bound_address(addr),
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().set_bound_address(addr),
         }
     }
 
@@ -500,7 +484,7 @@ impl ProtocolState {
         addr: nix::sys::socket::UnixAddr,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) {
+    ) -> Result<(), SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => {
                 x.as_mut()
@@ -524,6 +508,37 @@ impl ProtocolState {
             }
         }
     }
+
+    fn connect_unnamed(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        match self {
+            Self::ConnOrientedInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect_unnamed(common, socket, send_buffer, event_queue)
+            }
+            Self::ConnOrientedClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect_unnamed(common, socket, send_buffer, event_queue)
+            }
+            Self::ConnLessInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect_unnamed(common, socket, send_buffer, event_queue)
+            }
+            Self::ConnLessClosed(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .connect_unnamed(common, socket, send_buffer, event_queue)
+            }
+        }
+    }
 }
 
 /// Methods that a protocol state may wish to handle. Default implementations which return an error
@@ -535,8 +550,6 @@ where
 {
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr>;
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr>;
-
-    fn set_bound_address(&mut self, addr: nix::sys::socket::UnixAddr);
 
     fn close(
         self,
@@ -606,8 +619,23 @@ where
         _addr: nix::sys::socket::UnixAddr,
         _send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         _event_queue: &mut EventQueue,
-    ) {
+    ) -> Result<(), SyscallError> {
         log::warn!("connect() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn connect_unnamed(
+        &mut self,
+        _common: &mut UnixSocketCommon,
+        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        _event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        log::warn!(
+            "connect_buffer() while in state {}",
+            std::any::type_name::<Self>()
+        );
+        Err(Errno::EOPNOTSUPP.into())
     }
 }
 
@@ -618,11 +646,6 @@ impl Protocol for ConnOrientedInitial {
 
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.bound_addr
-    }
-
-    fn set_bound_address(&mut self, addr: nix::sys::socket::UnixAddr) {
-        assert!(self.bound_addr.is_none());
-        self.bound_addr = Some(addr);
     }
 
     fn close(
@@ -697,12 +720,37 @@ impl Protocol for ConnOrientedInitial {
         addr: nix::sys::socket::UnixAddr,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) {
+    ) -> Result<(), SyscallError> {
         assert!(self.peer_addr.is_none());
         self.peer_addr = Some(addr);
+
         self.send_buffer_event_handle =
             Some(common.connect_buffer(socket, &send_buffer, event_queue));
         self.send_buffer = Some(send_buffer);
+
+        Ok(())
+    }
+
+    fn connect_unnamed(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        // bind the sockets to an unnamed address so that they can't be bound later
+        let unnamed_sock_addr = empty_unix_sockaddr();
+
+        assert!(self.peer_addr.is_none());
+        assert!(self.bound_addr.is_none());
+        self.peer_addr = Some(unnamed_sock_addr);
+        self.bound_addr = Some(unnamed_sock_addr);
+
+        self.send_buffer_event_handle =
+            Some(common.connect_buffer(socket, &send_buffer, event_queue));
+        self.send_buffer = Some(send_buffer);
+
+        Ok(())
     }
 }
 
@@ -713,15 +761,6 @@ impl Protocol for ConnOrientedClosed {
 
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
-    }
-
-    fn set_bound_address(&mut self, _addr: nix::sys::socket::UnixAddr) {
-        // if we reached this, we probably attempted to set the bound address from outside of
-        // UnixSocketFile::pair()
-        panic!(
-            "Cannot set bound address when in state {}",
-            std::any::type_name::<Self>()
-        )
     }
 
     fn close(
@@ -741,11 +780,6 @@ impl Protocol for ConnLessInitial {
 
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.bound_addr
-    }
-
-    fn set_bound_address(&mut self, addr: nix::sys::socket::UnixAddr) {
-        assert!(self.bound_addr.is_none());
-        self.bound_addr = Some(addr);
     }
 
     fn close(
@@ -820,12 +854,37 @@ impl Protocol for ConnLessInitial {
         addr: nix::sys::socket::UnixAddr,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) {
+    ) -> Result<(), SyscallError> {
         assert!(self.peer_addr.is_none());
         self.peer_addr = Some(addr);
+
         self.send_buffer_event_handle =
             Some(common.connect_buffer(socket, &send_buffer, event_queue));
         self.send_buffer = Some(send_buffer);
+
+        Ok(())
+    }
+
+    fn connect_unnamed(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        // bind the sockets to an unnamed address so that they can't be bound later
+        let unnamed_sock_addr = empty_unix_sockaddr();
+
+        assert!(self.peer_addr.is_none());
+        assert!(self.bound_addr.is_none());
+        self.peer_addr = Some(unnamed_sock_addr);
+        self.bound_addr = Some(unnamed_sock_addr);
+
+        self.send_buffer_event_handle =
+            Some(common.connect_buffer(socket, &send_buffer, event_queue));
+        self.send_buffer = Some(send_buffer);
+
+        Ok(())
     }
 }
 
@@ -836,15 +895,6 @@ impl Protocol for ConnLessClosed {
 
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
-    }
-
-    fn set_bound_address(&mut self, _addr: nix::sys::socket::UnixAddr) {
-        // if we reached this, we probably attempted to set the bound address from outside of
-        // UnixSocketFile::pair()
-        panic!(
-            "Cannot set bound address when in state {}",
-            std::any::type_name::<Self>()
-        )
     }
 
     fn close(
@@ -1162,5 +1212,12 @@ impl std::fmt::Display for UnixSocketTypeConversionError {
             "Invalid socket type {}; unix sockets only support SOCK_STREAM, SOCK_DGRAM, and SOCK_SEQPACKET",
             self.0
         )
+    }
+}
+
+fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
+    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
+        nix::sys::socket::SockAddr::Unix(x) => x,
+        x => panic!("Unexpected socket address type: {:?}", x),
     }
 }
