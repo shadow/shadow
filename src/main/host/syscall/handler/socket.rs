@@ -199,7 +199,12 @@ impl SyscallHandler {
             }
         };
 
-        let supported_flags = MsgFlags::MSG_DONTWAIT;
+        // MSG_NOSIGNAL is currently a no-op, since we haven't implemented the behavior
+        // it's meant to disable.
+        // TODO: Once we've implemented generating a SIGPIPE when the peer on a
+        // stream-oriented socket has closed the connection, MSG_NOSIGNAL should
+        // disable it.
+        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_NOSIGNAL;
         if flags.intersects(!supported_flags) {
             warn!("Unsupported sendto flags: {:?}", flags);
             return Err(Errno::EOPNOTSUPP.into());
