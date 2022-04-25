@@ -15,15 +15,27 @@ fn main() {
 
     let mut ip_vec = vec![];
     for ifaddr in addrs {
-        if let Some(nix::sys::socket::SockAddr::Inet(address)) = ifaddr.address {
-            let address_str = address.to_string();
-            let ip = address_str.split(":").collect::<Vec<&str>>()[0];
-            println!(
-                "found ifaddr interface {} address {}",
-                ifaddr.interface_name, ip
-            );
-            ip_vec.push(String::from(ip));
-        }
+        let address: nix::sys::socket::SockaddrStorage = match ifaddr.address {
+            Some(a) => a,
+            None => {
+                println!("Skipping non-sockaddr {:?}", ifaddr);
+                continue;
+            }
+        };
+        let address: &nix::sys::socket::SockaddrIn = match address.as_sockaddr_in() {
+            Some(a) => a,
+            None => {
+                println!("Skipping non-ipv4 address {}", address);
+                continue;
+            }
+        };
+        let address_str = address.to_string();
+        let ip = address_str.split(":").collect::<Vec<&str>>()[0];
+        println!(
+            "found ifaddr interface {} address {}",
+            ifaddr.interface_name, ip
+        );
+        ip_vec.push(String::from(ip));
     }
 
     for argument in std::env::args().skip(1) {
