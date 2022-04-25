@@ -94,32 +94,26 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <domain={:?}>", s, domain);
 
-        let passing = if domain != libc::AF_UNIX {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         tests.extend(vec![
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_fd"),
                 move || test_invalid_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_existent_fd"),
                 move || test_non_existent_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_socket_fd"),
                 move || test_non_socket_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_large_buf_udp"),
                 test_large_buf_udp,
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
         ]);
 
@@ -136,7 +130,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_not_connected"),
                 move || test_not_connected(domain, sock_type),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             )]);
         }
     }
@@ -154,7 +148,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         let passing = if method != SocketInitMethod::Unix {
             set![TestEnv::Libc, TestEnv::Shadow]
         } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+            set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
         };
 
         let sock_types = match method.domain() {
@@ -205,7 +199,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         let passing = if method != SocketInitMethod::Unix {
             set![TestEnv::Libc, TestEnv::Shadow]
         } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+            set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
         };
 
         for &flag in flags.iter() {
@@ -286,7 +280,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("test_null_addr_not_connected"),
                         move || test_null_addr_not_connected(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     )]);
                 }
             }
