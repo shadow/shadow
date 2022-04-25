@@ -844,6 +844,7 @@ dependencies = [
 name = "shadow-tests"
 version = "2.0.0"
 dependencies = [
+ "anyhow",
  "libc",
  "nix",
  "once_cell",
