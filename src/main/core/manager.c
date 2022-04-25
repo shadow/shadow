@@ -446,7 +446,6 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 
     /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
-    params->nodeSeed = _manager_nextRandomUInt(manager);
 
     Host* host = host_new(params);
     host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),

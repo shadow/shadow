@@ -292,6 +292,8 @@ static int _controller_registerProcessCallback(const ProcessOptions* proc, void*
 typedef struct RegisterHostCallbackOptions {
     Controller* controller;
     bool registerIfAddressSpecified;
+    // the common input value used in the host-specific seed calculation
+    guint randomnessForSeedCalc;
 } RegisterHostCallbackOptions;
 
 __attribute__((warn_unused_result))
@@ -349,6 +351,9 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
                 return -1;
             }
         }
+
+        // host names should be unique within the simulation due to the check in 'scheduler_addHost()'
+        params->nodeSeed = callbackOptions->randomnessForSeedCalc ^ g_str_hash(hostnameBuffer->str);
 
         params->hostname = hostnameBuffer->str;
 
@@ -432,12 +437,15 @@ __attribute__((warn_unused_result))
 static int _controller_registerHosts(Controller* controller) {
     MAGIC_ASSERT(controller);
 
+    guint randomnessForSeedCalc = random_nextU32(controller->random);
+
     RegisterHostCallbackOptions options;
 
     // register hosts that have a specific IP address
     options = (RegisterHostCallbackOptions){
         .controller = controller,
         .registerIfAddressSpecified = true,
+        .randomnessForSeedCalc = randomnessForSeedCalc,
     };
     if (config_iterHosts(controller->config, _controller_registerHostCallback, (void*)&options)) {
         error("Could not register hosts with specific IP addresses");
@@ -448,6 +456,7 @@ static int _controller_registerHosts(Controller* controller) {
     options = (RegisterHostCallbackOptions){
         .controller = controller,
         .registerIfAddressSpecified = false,
+        .randomnessForSeedCalc = randomnessForSeedCalc,
     };
     if (config_iterHosts(controller->config, _controller_registerHostCallback, (void*)&options)) {
         error("Could not register remaining hosts");
