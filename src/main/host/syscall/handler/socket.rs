@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
-use crate::host::descriptor::socket::SocketFile;
+use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
     OpenFile,
@@ -13,8 +13,6 @@ use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
-
-use std::sync::Arc;
 
 use log::*;
 use nix::errno::Errno;
@@ -680,49 +678,14 @@ impl SyscallHandler {
             descriptor_flags.insert(DescriptorFlags::CLOEXEC);
         }
 
-        let socket_1 = UnixSocketFile::new(
-            FileMode::READ | FileMode::WRITE,
-            file_flags,
-            socket_type,
-            ctx.host.abstract_unix_namespace(),
-        );
-        let socket_2 = UnixSocketFile::new(
-            FileMode::READ | FileMode::WRITE,
-            file_flags,
-            socket_type,
-            ctx.host.abstract_unix_namespace(),
-        );
-
-        // link the sockets together
-        EventQueue::queue_and_run(|event_queue| {
-            let unnamed_sock_addr = empty_sockaddr(nix::sys::socket::AddressFamily::Unix);
-            let unnamed_sock_addr = if let nix::sys::socket::SockAddr::Unix(x) = unnamed_sock_addr {
-                x
-            } else {
-                panic!("Unexpected socket address type");
-            };
-
-            UnixSocketFile::connect(
-                &socket_1,
-                unnamed_sock_addr,
-                Arc::clone(socket_2.borrow().recv_buffer()),
+        let (socket_1, socket_2) = EventQueue::queue_and_run(|event_queue| {
+            UnixSocketFile::pair(
+                FileMode::READ | FileMode::WRITE,
+                file_flags,
+                socket_type,
+                ctx.host.abstract_unix_namespace(),
                 event_queue,
-            );
-            UnixSocketFile::connect(
-                &socket_2,
-                unnamed_sock_addr,
-                Arc::clone(socket_1.borrow().recv_buffer()),
-                event_queue,
-            );
-
-            socket_1
-                .borrow_mut()
-                .set_bound_address(Some(unnamed_sock_addr))
-                .unwrap();
-            socket_2
-                .borrow_mut()
-                .set_bound_address(Some(unnamed_sock_addr))
-                .unwrap();
+            )
         });
 
         // file descriptors for the sockets
@@ -843,15 +806,6 @@ impl SyscallHandler {
         );
         Err(Errno::ENOSYS.into())
     }
-}
-
-/// Returns a nix socket address object where only the family is set.
-fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::SockAddr {
-    let family = family as libc::sa_family_t;
-    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-    addr.ss_family = family;
-    // the size of ss_family will be 2 bytes on linux
-    nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
 }
 
 /// Copy the socket address to the plugin. Will return an error if either the address or address
