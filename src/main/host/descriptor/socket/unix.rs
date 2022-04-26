@@ -136,6 +136,8 @@ impl UnixSocketFile {
         self.protocol_state.close(&mut self.common, event_queue)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn bind(
         socket: &Arc<AtomicRefCell<Self>>,
         addr: Option<&nix::sys::socket::SockAddr>,
@@ -177,6 +179,8 @@ impl UnixSocketFile {
         panic!("Called UnixSocketFile::write() on a unix socket");
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn sendto<R>(
         &mut self,
         bytes: R,
@@ -190,6 +194,8 @@ impl UnixSocketFile {
             .sendto(&mut self.common, bytes, addr, event_queue)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn recvfrom<W>(
         &mut self,
         bytes: W,
@@ -392,6 +398,8 @@ impl ProtocolState {
         rv
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -408,6 +416,8 @@ impl ProtocolState {
         }
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -435,6 +445,8 @@ impl ProtocolState {
         }
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -592,6 +604,8 @@ where
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bind(
         &mut self,
         _common: &mut UnixSocketCommon,
@@ -603,6 +617,8 @@ where
         Err(Errno::EOPNOTSUPP.into())
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         _common: &mut UnixSocketCommon,
@@ -617,6 +633,8 @@ where
         Err(Errno::EOPNOTSUPP.into())
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         _common: &mut UnixSocketCommon,
@@ -689,6 +707,8 @@ impl Protocol for ConnOrientedInitial {
         (new_state.into(), common.close(event_queue))
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -705,6 +725,8 @@ impl Protocol for ConnOrientedInitial {
         Ok(0.into())
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -726,6 +748,8 @@ impl Protocol for ConnOrientedInitial {
         }
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -780,10 +804,14 @@ impl Protocol for ConnOrientedInitial {
 }
 
 impl Protocol for ConnOrientedConnected {
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         Some(self.peer_addr)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.bound_addr
     }
@@ -800,6 +828,8 @@ impl Protocol for ConnOrientedConnected {
         (new_state.into(), common.close(event_queue))
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -813,6 +843,8 @@ impl Protocol for ConnOrientedConnected {
         common.sendto(bytes, Some(&self.send_buffer), addr, event_queue)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -837,10 +869,14 @@ impl Protocol for ConnOrientedConnected {
 }
 
 impl Protocol for ConnOrientedClosed {
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
     }
@@ -856,10 +892,14 @@ impl Protocol for ConnOrientedClosed {
 }
 
 impl Protocol for ConnLessInitial {
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.peer_addr
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         self.bound_addr
     }
@@ -878,6 +918,8 @@ impl Protocol for ConnLessInitial {
         (new_state.into(), common.close(event_queue))
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -894,6 +936,8 @@ impl Protocol for ConnLessInitial {
         Ok(0.into())
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -907,6 +951,8 @@ impl Protocol for ConnLessInitial {
         common.sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -929,6 +975,8 @@ impl Protocol for ConnLessInitial {
         common.ioctl(request, arg_ptr, memory_manager)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn connect(
         mut self,
         common: &mut UnixSocketCommon,
@@ -971,10 +1019,14 @@ impl Protocol for ConnLessInitial {
 }
 
 impl Protocol for ConnLessClosed {
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         None
     }
@@ -1021,6 +1073,8 @@ impl UnixSocketCommon {
         Ok(())
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn bind(
         &mut self,
         socket: &Arc<AtomicRefCell<UnixSocketFile>>,
@@ -1075,6 +1129,8 @@ impl UnixSocketCommon {
         Ok(bound_addr)
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn sendto<R>(
         &mut self,
         mut bytes: R,
@@ -1160,6 +1216,8 @@ impl UnixSocketCommon {
         }
     }
 
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
     pub fn recvfrom<W>(
         &mut self,
         mut bytes: W,
@@ -1299,6 +1357,8 @@ impl std::fmt::Display for UnixSocketTypeConversionError {
 
 fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
     match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::SockAddr::Unix(x) => x,
         x => panic!("Unexpected socket address type: {:?}", x),
     }
