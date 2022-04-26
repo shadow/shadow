@@ -4,6 +4,7 @@ use nix::sys::signal::Signal;
 use nix::unistd;
 use once_cell::sync::OnceCell;
 use signal_hook::low_level::channel::Channel as SignalSafeChannel;
+use std::arch::asm;
 use std::error::Error;
 use std::iter::Iterator;
 use std::os::unix::io::RawFd;
@@ -888,6 +889,75 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+static GLOBAL_STATIC: u32 = 0xdeadbeef;
+extern "C" fn change_rax_from_null_to_global_static(
+    signal: i32,
+    info: *mut libc::siginfo_t,
+    voidctx: *mut std::ffi::c_void,
+) {
+    assert_eq!(signal, signal::SIGSEGV as i32);
+
+    let info = unsafe { info.as_ref().unwrap() };
+    // Not exposed in libc crate
+    const SEGV_MAPERR: i32 = 1;
+    assert_eq!(info.si_code, SEGV_MAPERR);
+    assert!(unsafe { info.si_addr().is_null() });
+
+    let ctx = voidctx as *mut libc::ucontext_t;
+    let ctx = unsafe { ctx.as_mut().unwrap() };
+    ctx.uc_mcontext.gregs[libc::REG_RAX as usize] = &GLOBAL_STATIC as *const u32 as i64;
+}
+
+fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
+    // Ensure SIGSEGV isn't blocked.
+    let mut sigset = signal::SigSet::empty();
+    sigset.add(signal::SIGSEGV);
+    signal::sigprocmask(signal::SigmaskHow::SIG_UNBLOCK, Some(&sigset), None).unwrap();
+
+    // Install our SIGSEGV handler, which is going to mutate registers in the
+    // caller to fix the null pointer dereference below.
+    // This may seem esoteric, but this is sometimes done to implement custom
+    // memory management. Observed in OpenJDK in particular - see
+    // https://github.com/shadow/shadow/issues/2094.
+    unsafe {
+        signal::sigaction(
+            signal::SIGSEGV,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(change_rax_from_null_to_global_static),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Dereference a NULL pointer from rax. The SIGSEGV handler will rewrite rax
+    // to a valid pointer.
+    let mut addr = 0u64;
+    let mut val: u32;
+    unsafe {
+        asm!("mov {val:e}, [rax]", val = out(reg) val, inout("rax") addr);
+    }
+    assert_eq!(addr, &GLOBAL_STATIC as *const _ as u64);
+    assert_eq!(val, GLOBAL_STATIC);
+
+    // Restore default action to avoid surprising behavior in the case of an
+    // unexpected SIGSEGV later.
+    unsafe {
+        signal::sigaction(
+            signal::SIGSEGV,
+            &signal::SigAction::new(
+                signal::SigHandler::SigDfl,
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -1002,6 +1072,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             "sa_restart second",
             test_restart_second,
             set![TestEnv::Shadow],
+        ),
+        ShadowTest::new(
+            "synchronous sigsegv",
+            test_synchronous_sigsegv,
+            // FIXME: Doesn't work in Shadow's preload mode.
+            // https://github.com/shadow/shadow/issues/2091
+            set![TestEnv::Libc],
         ),
     ];
 
