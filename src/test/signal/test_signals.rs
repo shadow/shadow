@@ -917,14 +917,18 @@ fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
     // Install our SIGSEGV handler, which is going to mutate registers in the
     // caller to fix the null pointer dereference below.
     // This may seem esoteric, but this is sometimes done to implement custom
-    // memory management. Observed in OpenJDK in particular - see
-    // https://github.com/shadow/shadow/issues/2094.
+    // memory management, or to implement higher level error handling.
+    // e.g. in OpenJDK SIGSEGVs in managed code are transformed into NullPointerException.
+    // https://github.com/shadow/shadow/issues/2091#issuecomment-1111374729
     unsafe {
         signal::sigaction(
             signal::SIGSEGV,
             &signal::SigAction::new(
                 signal::SigHandler::SigAction(change_rax_from_null_to_global_static),
-                signal::SaFlags::empty(),
+                // Override the default behavior of blocking the current signal,
+                // since generating a SIGSEGV while SIGSEGV is blocked is
+                // undefined behavior.
+                signal::SaFlags::SA_NODEFER,
                 signal::SigSet::empty(),
             ),
         )
@@ -1076,9 +1080,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "synchronous sigsegv",
             test_synchronous_sigsegv,
-            // FIXME: Doesn't work in Shadow's preload mode.
-            // https://github.com/shadow/shadow/issues/2091
-            set![TestEnv::Libc],
+            all_envs.clone(),
         ),
     ];
 
