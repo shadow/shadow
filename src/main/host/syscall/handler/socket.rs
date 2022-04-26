@@ -812,6 +812,8 @@ impl SyscallHandler {
 /// length pointers are NULL. The plugin's address length will be updated to store the size of the
 /// socket address, even if greater than the provided buffer size. If the address is `None`, the
 /// plugin's address length will be set to 0.
+// https://github.com/shadow/shadow/issues/2093
+#[allow(deprecated)]
 fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: Option<nix::sys::socket::SockAddr>,
@@ -868,6 +870,8 @@ fn write_sockaddr(
 /// Reads a sockaddr pointer from the plugin. Returns `None` if the pointer is null, otherwise
 /// returns a nix `SockAddr`. The address length must be at most the size of
 /// [`nix::sys::socket::sockaddr_storage`].
+// https://github.com/shadow/shadow/issues/2093
+#[allow(deprecated)]
 fn read_sockaddr(
     mem: &MemoryManager,
     addr_ptr: PluginPtr,
@@ -1011,6 +1015,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert_eq!(corrected_addr_len, 5);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1045,6 +1051,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert_eq!(corrected_addr_len, 5);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1061,6 +1069,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1092,6 +1102,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1124,6 +1136,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 }

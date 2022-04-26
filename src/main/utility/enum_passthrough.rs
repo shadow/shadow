@@ -41,7 +41,8 @@ enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, Socket;
 ```
 **/
 macro_rules! enum_passthrough_generic {
-    ($self:ident, $args2:tt, $($variant:ident),+; $v:vis fn $name:ident <$($generics:ident),+> $args:tt $(-> $($rv:tt)+)?) => {
+    ($self:ident, $args2:tt, $($variant:ident),+; $(#[$($mac:tt)+])? $v:vis fn $name:ident <$($generics:ident),+> $args:tt $(-> $($rv:tt)+)?) => {
+        $(#[$($mac)+])?
         $v fn $name <$($generics)+> $args $(-> $($rv)+)? {
             match $self {
                 $(
@@ -62,7 +63,8 @@ enum_passthrough_into!(self, (event_queue), Pipe, Socket;
 **/
 
 macro_rules! enum_passthrough_into {
-    ($self:ident, $args2:tt, $($variant:ident),+; $v:vis fn $name:ident $args:tt $(-> $($rv:tt)+)?) => {
+    ($self:ident, $args2:tt, $($variant:ident),+; $(#[$($mac:tt)+])? $v:vis fn $name:ident $args:tt $(-> $($rv:tt)+)?) => {
+        $(#[$($mac)+])?
         $v fn $name $args $(-> $($rv)+)? {
             match $self {
                 $(
