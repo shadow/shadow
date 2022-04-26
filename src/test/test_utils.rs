@@ -272,3 +272,27 @@ pub fn running_in_shadow_ptrace() -> bool {
         _ => false,
     }
 }
+
+/// Convenience wrapper around `anyhow::ensure` that generates useful error messages.
+///
+/// Example:
+///
+/// ```
+/// let x = 2;
+/// let y = 3;
+/// ensure_ord!(x, >, y);
+/// ```
+///
+/// Will evaluate to the same error as:
+///
+/// ```
+/// anyhow!("!(3 > 2)");
+/// ```
+#[macro_export]
+macro_rules! ensure_ord {
+    ($lhs:expr, $ord:tt, $rhs:expr) => {
+        let eval_lhs = $lhs;
+        let eval_rhs = $rhs;
+        anyhow::ensure!(eval_lhs $ord eval_rhs, "!({:?} {} {:?})", eval_lhs, stringify!($ord), eval_rhs);
+    };
+}
