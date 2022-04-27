@@ -104,6 +104,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-type "ProtocolTCPFlags"
         --whitelist-var "CONFIG_PIPE_BUFFER_SIZE"
         --whitelist-var "SYSCALL_IO_BUFSIZE"
+        --whitelist-var "SHADOW_SOMAXCONN"
         --opaque-type "LegacyDescriptor"
         --opaque-type "CompatDescriptor"
         --opaque-type "OpenFile"

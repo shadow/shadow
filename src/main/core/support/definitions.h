@@ -93,6 +93,12 @@ typedef guint64 EmulatedTime;
 #define MIN_RANDOM_PORT 10000
 
 /**
+ * An upper limit to the maximum number of pending incoming connections.
+ * On a laptop: net.core.somaxconn = 4096
+ */
+#define SHADOW_SOMAXCONN 4096
+
+/**
  * We always use TCP_autotuning unless this is set to FALSE
  *
  * @todo change this to a command line option accessible via #Configuration

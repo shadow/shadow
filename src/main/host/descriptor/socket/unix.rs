@@ -218,6 +218,15 @@ impl UnixSocketFile {
             .ioctl(&mut self.common, request, arg_ptr, memory_manager)
     }
 
+    pub fn listen(
+        &mut self,
+        backlog: i32,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        self.protocol_state
+            .listen(&mut self.common, backlog, event_queue)
+    }
+
     pub fn connect(
         socket: &Arc<AtomicRefCell<Self>>,
         addr: nix::sys::socket::UnixAddr,
@@ -300,6 +309,10 @@ impl UnixSocketFile {
 struct ConnOrientedInitial {
     bound_addr: Option<nix::sys::socket::UnixAddr>,
 }
+struct ConnOrientedListening {
+    bound_addr: nix::sys::socket::UnixAddr,
+    queue_limit: u32,
+}
 struct ConnOrientedConnected {
     bound_addr: Option<nix::sys::socket::UnixAddr>,
     peer_addr: nix::sys::socket::UnixAddr,
@@ -322,6 +335,7 @@ struct ConnLessClosed {}
 /// different variant.
 enum ProtocolState {
     ConnOrientedInitial(Option<ConnOrientedInitial>),
+    ConnOrientedListening(Option<ConnOrientedListening>),
     ConnOrientedConnected(Option<ConnOrientedConnected>),
     ConnOrientedClosed(Option<ConnOrientedClosed>),
     ConnLessInitial(Option<ConnLessInitial>),
@@ -341,6 +355,7 @@ macro_rules! state_upcast {
 
 // implement upcasting for all state types
 state_upcast!(ConnOrientedInitial, ProtocolState::ConnOrientedInitial);
+state_upcast!(ConnOrientedListening, ProtocolState::ConnOrientedListening);
 state_upcast!(ConnOrientedConnected, ProtocolState::ConnOrientedConnected);
 state_upcast!(ConnOrientedClosed, ProtocolState::ConnOrientedClosed);
 state_upcast!(ConnLessInitial, ProtocolState::ConnLessInitial);
@@ -364,6 +379,7 @@ impl ProtocolState {
     fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().peer_address(),
+            Self::ConnOrientedListening(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedConnected(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedClosed(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnLessInitial(x) => x.as_ref().unwrap().peer_address(),
@@ -374,6 +390,7 @@ impl ProtocolState {
     fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().bound_address(),
+            Self::ConnOrientedListening(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedConnected(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedClosed(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnLessInitial(x) => x.as_ref().unwrap().bound_address(),
@@ -388,6 +405,7 @@ impl ProtocolState {
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => x.take().unwrap().close(common, event_queue),
+            Self::ConnOrientedListening(x) => x.take().unwrap().close(common, event_queue),
             Self::ConnOrientedConnected(x) => x.take().unwrap().close(common, event_queue),
             Self::ConnOrientedClosed(x) => x.take().unwrap().close(common, event_queue),
             Self::ConnLessInitial(x) => x.take().unwrap().close(common, event_queue),
@@ -409,6 +427,7 @@ impl ProtocolState {
     ) -> SyscallResult {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+            Self::ConnOrientedListening(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
             Self::ConnOrientedConnected(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
             Self::ConnOrientedClosed(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
             Self::ConnLessInitial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
@@ -430,6 +449,9 @@ impl ProtocolState {
     {
         match self {
             Self::ConnOrientedInitial(x) => {
+                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+            }
+            Self::ConnOrientedListening(x) => {
                 x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
             }
             Self::ConnOrientedConnected(x) => {
@@ -460,6 +482,9 @@ impl ProtocolState {
             Self::ConnOrientedInitial(x) => {
                 x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
             }
+            Self::ConnOrientedListening(x) => {
+                x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
+            }
             Self::ConnOrientedConnected(x) => {
                 x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
             }
@@ -478,6 +503,11 @@ impl ProtocolState {
     ) -> SyscallResult {
         match self {
             Self::ConnOrientedInitial(x) => {
+                x.as_mut()
+                    .unwrap()
+                    .ioctl(common, request, arg_ptr, memory_manager)
+            }
+            Self::ConnOrientedListening(x) => {
                 x.as_mut()
                     .unwrap()
                     .ioctl(common, request, arg_ptr, memory_manager)
@@ -505,6 +535,29 @@ impl ProtocolState {
         }
     }
 
+    fn listen(
+        &mut self,
+        common: &mut UnixSocketCommon,
+        backlog: i32,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        let (new_state, rv) = match self {
+            Self::ConnOrientedInitial(x) => x.take().unwrap().listen(common, backlog, event_queue),
+            Self::ConnOrientedListening(x) => {
+                x.take().unwrap().listen(common, backlog, event_queue)
+            }
+            Self::ConnOrientedConnected(x) => {
+                x.take().unwrap().listen(common, backlog, event_queue)
+            }
+            Self::ConnOrientedClosed(x) => x.take().unwrap().listen(common, backlog, event_queue),
+            Self::ConnLessInitial(x) => x.take().unwrap().listen(common, backlog, event_queue),
+            Self::ConnLessClosed(x) => x.take().unwrap().listen(common, backlog, event_queue),
+        };
+
+        *self = new_state;
+        rv
+    }
+
     fn connect(
         &mut self,
         common: &mut UnixSocketCommon,
@@ -515,6 +568,11 @@ impl ProtocolState {
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => {
+                x.take()
+                    .unwrap()
+                    .connect(common, socket, addr, send_buffer, event_queue)
+            }
+            Self::ConnOrientedListening(x) => {
                 x.take()
                     .unwrap()
                     .connect(common, socket, addr, send_buffer, event_queue)
@@ -554,6 +612,11 @@ impl ProtocolState {
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => {
+                x.take()
+                    .unwrap()
+                    .connect_unnamed(common, socket, send_buffer, event_queue)
+            }
+            Self::ConnOrientedListening(x) => {
                 x.take()
                     .unwrap()
                     .connect_unnamed(common, socket, send_buffer, event_queue)
@@ -660,6 +723,16 @@ where
     ) -> SyscallResult {
         log::warn!("ioctl() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
+    }
+
+    fn listen(
+        self,
+        _common: &mut UnixSocketCommon,
+        _backlog: i32,
+        _event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        log::warn!("listen() while in state {}", std::any::type_name::<Self>());
+        (self.into(), Err(Errno::EOPNOTSUPP.into()))
     }
 
     fn connect(
@@ -779,6 +852,28 @@ impl Protocol for ConnOrientedInitial {
         common.ioctl(request, arg_ptr, memory_manager)
     }
 
+    fn listen(
+        self,
+        common: &mut UnixSocketCommon,
+        backlog: i32,
+        _event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        // it must have already been bound
+        let bound_addr = match self.bound_addr {
+            Some(x) => x,
+            None => return (self.into(), Err(Errno::EINVAL.into())),
+        };
+
+        let new_state = ConnOrientedListening {
+            bound_addr,
+            queue_limit: backlog_to_queue_size(backlog),
+        };
+
+        assert!(!common.state.contains(FileState::READABLE));
+
+        (new_state.into(), Ok(()))
+    }
+
     fn connect_unnamed(
         self,
         common: &mut UnixSocketCommon,
@@ -795,11 +890,40 @@ impl Protocol for ConnOrientedInitial {
             // bind the socket to an unnamed address so that we don't accidentally bind it later
             bound_addr: Some(unnamed_sock_addr),
             peer_addr: unnamed_sock_addr,
-            send_buffer: send_buffer,
+            send_buffer,
             send_buffer_event_handle: handle,
         };
 
         (new_state.into(), Ok(()))
+    }
+}
+
+impl Protocol for ConnOrientedListening {
+    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+        None
+    }
+
+    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+        Some(self.bound_addr)
+    }
+
+    fn close(
+        self,
+        common: &mut UnixSocketCommon,
+        event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        let new_state = ConnOrientedClosed {};
+        (new_state.into(), common.close(event_queue))
+    }
+
+    fn listen(
+        mut self,
+        _common: &mut UnixSocketCommon,
+        backlog: i32,
+        _event_queue: &mut EventQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        self.queue_limit = backlog_to_queue_size(backlog);
+        (self.into(), Ok(()))
     }
 }
 
@@ -1318,6 +1442,19 @@ impl UnixSocketCommon {
         self.event_source
             .notify_listeners(self.state, states_changed, event_queue);
     }
+}
+
+fn backlog_to_queue_size(backlog: i32) -> u32 {
+    // linux also makes this cast, so negative backlogs wrap around to large positive backlogs
+    // https://elixir.free-electrons.com/linux/v5.11.22/source/net/unix/af_unix.c#L628
+    let backlog = backlog as u32;
+
+    // the linux '__sys_listen()' applies the somaxconn max to all protocols, including unix sockets
+    let queue_limit = std::cmp::min(backlog, c::SHADOW_SOMAXCONN.try_into().unwrap());
+
+    // linux uses a limit of one greater than the provided backlog (ex: a backlog value of 0 allows
+    // for one incoming connection at a time)
+    queue_limit.saturating_add(1)
 }
 
 // WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
