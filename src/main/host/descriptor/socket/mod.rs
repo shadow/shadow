@@ -56,11 +56,11 @@ impl SocketFile {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
     pub fn bind(
-        socket: &Self,
+        &self,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
-        match socket {
+        match self {
             Self::Unix(socket) => UnixSocketFile::bind(socket, addr, rng),
         }
     }
@@ -118,7 +118,7 @@ impl SocketFileRef<'_> {
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
         }
     }
 
@@ -126,7 +126,7 @@ impl SocketFileRef<'_> {
     #[allow(deprecated)]
     pub fn get_bound_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
         }
     }
 
@@ -188,7 +188,7 @@ impl SocketFileRefMut<'_> {
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
         }
     }
 
@@ -196,7 +196,7 @@ impl SocketFileRefMut<'_> {
     #[allow(deprecated)]
     pub fn get_bound_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
         }
     }
 

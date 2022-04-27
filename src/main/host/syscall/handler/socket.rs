@@ -390,10 +390,10 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr_to_write = match socket.borrow().get_bound_address() {
-            Some(x) => x,
-            None => empty_sockaddr(socket.borrow().address_family()),
-        };
+        let addr_to_write = socket
+            .borrow()
+            .get_bound_address()
+            .unwrap_or_else(|| empty_sockaddr(socket.borrow().address_family()));
 
         debug!("Returning socket address of {}", addr_to_write);
         write_sockaddr(
@@ -435,18 +435,18 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let peer_addr = socket.borrow().get_peer_address();
-        if let Some(addr_to_write) = peer_addr {
-            debug!("Returning peer address of {}", addr_to_write);
-            write_sockaddr(
-                ctx.process.memory_mut(),
-                Some(addr_to_write),
-                addr_ptr,
-                addr_len_ptr,
-            )?;
-        } else {
-            return Err(Errno::ENOTCONN.into());
-        }
+        let addr_to_write = match socket.borrow().get_peer_address() {
+            Some(x) => x,
+            None => return Err(Errno::ENOTCONN.into()),
+        };
+
+        debug!("Returning peer address of {}", addr_to_write);
+        write_sockaddr(
+            ctx.process.memory_mut(),
+            Some(addr_to_write),
+            addr_ptr,
+            addr_len_ptr,
+        )?;
 
         Ok(0.into())
     }

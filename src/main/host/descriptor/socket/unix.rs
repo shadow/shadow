@@ -755,7 +755,7 @@ where
         _event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!(
-            "connect_buffer() while in state {}",
+            "connect_unnamed() while in state {}",
             std::any::type_name::<Self>()
         );
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
@@ -1364,6 +1364,7 @@ impl UnixSocketCommon {
 
         let num_read = recv_buffer.read(&mut bytes, event_queue)?;
 
+        // TODO: support returning the source address
         Ok((num_read.into(), None))
     }
 
