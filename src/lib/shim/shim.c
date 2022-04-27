@@ -29,6 +29,7 @@
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_shmem.h"
+#include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
@@ -480,6 +481,7 @@ static void _shim_parent_init_rdtsc_emu() {
 static void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
     _shim_parent_init_host_shm();
     _shim_parent_init_process_shm();

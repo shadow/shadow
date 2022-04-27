@@ -15,6 +15,16 @@ static void _call_signal_handler(const struct shd_kernel_sigaction* action, int 
     shim_swapAllowNativeSyscalls(true);
 }
 
+static _Noreturn void _die_with_fatal_signal(int signo) {
+    shim_swapAllowNativeSyscalls(true);
+    // Deliver natively to terminate/drop core.
+    if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
+        panic("sigaction: %s", strerror(errno));
+    }
+    raise(signo);
+    panic("Unreachable");
+}
+
 // Handle pending unblocked signals, and return whether *all* corresponding
 // signal actions had the SA_RESTART flag set.
 bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
@@ -41,11 +51,8 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
                 case SHD_DEFAULT_ACTION_CORE:
                 case SHD_DEFAULT_ACTION_TERM: {
                     // Deliver natively to terminate/drop core.
-                    if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
-                        panic("sigaction: %s", strerror(errno));
-                    }
                     shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-                    raise(signo);
+                    _die_with_fatal_signal(signo);
                     panic("Unreachable");
                 }
                 case SHD_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
@@ -140,4 +147,54 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
     }
     return restartable;
+}
+
+void shim_handle_hardware_error_signal(int signo, siginfo_t* info, void* void_ucontext) {
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    if (oldNativeSyscallFlag) {
+        // Error was raised from shim code.
+        _die_with_fatal_signal(signo);
+        panic("Unreachable");
+    }
+    // Otherwise the error was raised from managed code, and could potentially
+    // be handled by a signal handler that it installed.
+
+    ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
+
+    shd_kernel_sigset_t pending_signals =
+        shimshmem_getThreadPendingSignals(host_lock, shim_threadSharedMem());
+    if (shd_sigismember(&pending_signals, signo)) {
+        warning("Received signal %d when it was already pending", signo);
+    } else {
+        shd_sigaddset(&pending_signals, signo);
+        shimshmem_setThreadPendingSignals(host_lock, shim_threadSharedMem(), pending_signals);
+        shimshmem_setThreadSiginfo(host_lock, shim_threadSharedMem(), signo, info);
+    }
+
+    shim_process_signals(host_lock, void_ucontext);
+    shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+}
+
+void shim_install_hardware_error_handlers() {
+    int error_signals[] = {
+        SIGSEGV, SIGILL, SIGBUS, SIGFPE,
+    };
+    for (int i = 0; i < sizeof(error_signals) / sizeof(error_signals[0]); ++i) {
+        if (sigaction(error_signals[i],
+                      &(struct sigaction){
+                          .sa_sigaction = shim_handle_hardware_error_signal,
+                          // SA_NODEFER: Don't block the current signal in the handler.
+                          // Generating one of these signals while it is blocked is
+                          // undefined behavior; the handler itself detects recursion.
+                          // SA_SIGINFO: Required because we're specifying
+                          // sa_sigaction.
+                          // SA_ONSTACK: Use the alternate signal handling stack,
+                          // to avoid interfering with userspace thread stacks.
+                          .sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK,
+                      },
+                      NULL) < 0) {
+            panic("sigaction: %s", strerror(errno));
+        }
+    }
 }
