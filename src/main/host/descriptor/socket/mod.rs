@@ -219,6 +219,10 @@ impl SocketFileRefMut<'_> {
             -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
         where W: std::io::Write + std::io::Seek
     );
+
+    enum_passthrough!(self, (backlog, event_queue), Unix;
+        pub fn listen(&mut self, backlog: i32, event_queue: &mut EventQueue) -> Result<(), SyscallError>
+    );
 }
 
 impl std::fmt::Debug for SocketFileRef<'_> {

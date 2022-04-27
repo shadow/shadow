@@ -13,6 +13,7 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;
 type HashSet_String = HashSet<String>;
 
+pub const SHADOW_SOMAXCONN: u32 = 4096;
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
 pub type size_t = ::std::os::raw::c_ulong;

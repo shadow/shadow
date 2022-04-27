@@ -454,7 +454,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
     pub fn listen(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
-        let _backlog: libc::c_int = args.get(1).into();
+        let backlog: libc::c_int = args.get(1).into();
 
         // get the descriptor, or return early if it doesn't exist
         let desc = match Self::get_descriptor(ctx.process, fd)? {
@@ -477,13 +477,9 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "listen() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        EventQueue::queue_and_run(|event_queue| socket.borrow_mut().listen(backlog, event_queue))?;
+
+        Ok(0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
