@@ -109,6 +109,9 @@ bitflags::bitflags! {
         const CLOSED = c::_Status_STATUS_DESCRIPTOR_CLOSED;
         /// A wakeup operation occurred on a futex.
         const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
+        /// A listening socket is allowing connections. Only applicable to connection-oriented unix
+        /// sockets.
+        const SOCKET_ALLOWING_CONNECT = c::_Status_STATUS_SOCKET_ALLOWING_CONNECT;
     }
 }
 

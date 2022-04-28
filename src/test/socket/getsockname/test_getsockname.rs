@@ -105,11 +105,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_bound_connected_socket"),
                     move || test_bound_connected_socket(domain, sock_type),
-                    if domain != libc::AF_UNIX {
-                        set![TestEnv::Libc, TestEnv::Shadow]
-                    } else {
-                        set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
-                    },
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
 

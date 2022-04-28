@@ -56,12 +56,24 @@ impl SocketFile {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
     pub fn bind(
-        socket: &Self,
+        &self,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
-        match socket {
+        match self {
             Self::Unix(socket) => UnixSocketFile::bind(socket, addr, rng),
+        }
+    }
+
+    // https://github.com/shadow/shadow/issues/2093
+    #[allow(deprecated)]
+    pub fn connect(
+        &self,
+        addr: &nix::sys::socket::SockAddr,
+        event_queue: &mut EventQueue,
+    ) -> Result<(), SyscallError> {
+        match self {
+            Self::Unix(socket) => UnixSocketFile::connect(socket, addr, event_queue),
         }
     }
 }
@@ -118,7 +130,7 @@ impl SocketFileRef<'_> {
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
         }
     }
 
@@ -126,7 +138,7 @@ impl SocketFileRef<'_> {
     #[allow(deprecated)]
     pub fn get_bound_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
         }
     }
 
@@ -188,7 +200,7 @@ impl SocketFileRefMut<'_> {
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
         }
     }
 
@@ -196,7 +208,7 @@ impl SocketFileRefMut<'_> {
     #[allow(deprecated)]
     pub fn get_bound_address(&self) -> Option<SockAddr> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(|x| SockAddr::Unix(x)),
+            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
         }
     }
 
@@ -223,6 +235,12 @@ impl SocketFileRefMut<'_> {
     enum_passthrough!(self, (backlog, event_queue), Unix;
         pub fn listen(&mut self, backlog: i32, event_queue: &mut EventQueue) -> Result<(), SyscallError>
     );
+
+    pub fn accept(&mut self, event_queue: &mut EventQueue) -> Result<SocketFile, SyscallError> {
+        match self {
+            Self::Unix(socket) => socket.accept(event_queue).map(SocketFile::Unix),
+        }
+    }
 }
 
 impl std::fmt::Debug for SocketFileRef<'_> {

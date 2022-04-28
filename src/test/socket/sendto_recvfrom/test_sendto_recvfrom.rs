@@ -145,12 +145,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <init_method={:?}>", s, method);
 
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
-        };
-
         let sock_types = match method.domain() {
             libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
             libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
@@ -166,22 +160,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_null_buf"),
                     move || test_null_buf(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_zero_len_buf"),
                     move || test_zero_len_buf(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_invalid_flag"),
                     move || test_invalid_flag(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_flag_dontwait"),
                     move || test_flag_dontwait(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
         }
@@ -189,19 +183,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         tests.extend(vec![test_utils::ShadowTest::new(
             &append_args("test_nonblocking_stream"),
             move || test_nonblocking_stream(method),
-            passing.clone(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         )]);
     }
 
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
 
     for &method in init_methods.iter() {
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
-        };
-
         for &flag in flags.iter() {
             let sock_types = match method.domain() {
                 libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
@@ -222,32 +210,42 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_null_addr"),
                         move || test_null_addr(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_addr_len"),
                         move || test_null_addr_len(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_both"),
                         move || test_null_both(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_nonnull_addr"),
                         move || test_nonnull_addr(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=false>"),
                         move || test_recv_addr(method, sock_type, flag, false),
-                        passing.clone(),
+                        match method {
+                            // TODO: enable in shadow once we support returning the source
+                            // address in recvfrom() for unix sockets
+                            SocketInitMethod::Unix => set![TestEnv::Libc],
+                            _ => set![TestEnv::Libc, TestEnv::Shadow],
+                        },
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=true>"),
                         move || test_recv_addr(method, sock_type, flag, true),
-                        passing.clone(),
+                        match method {
+                            // TODO: enable in shadow once we support returning the source
+                            // address in recvfrom() for unix sockets
+                            SocketInitMethod::Unix => set![TestEnv::Libc],
+                            _ => set![TestEnv::Libc, TestEnv::Shadow],
+                        },
                     ),
                 ]);
 
@@ -256,7 +254,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("test_large_buf"),
                         move || test_large_buf(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     )]);
                 }
 
@@ -266,12 +264,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_short_recv_buf_dgram"),
                             move || test_short_recv_buf_dgram(method, sock_type, flag),
-                            passing.clone(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_msg_order_dgram"),
                             move || test_msg_order_dgram(method, sock_type, flag),
-                            passing.clone(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                     ]);
                 }

@@ -85,12 +85,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         ];
 
         for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
-            let passing = if domain != libc::AF_UNIX {
-                set![TestEnv::Libc, TestEnv::Shadow]
-            } else {
-                set![TestEnv::Libc] // TODO: enable once we support connect() for unix sockets
-            };
-
             for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET].iter() {
                 // skip tests that use SOCK_SEQPACKET with INET sockets
                 if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
@@ -123,7 +117,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_null_addr"),
@@ -136,7 +130,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_null_len"),
@@ -149,7 +143,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_short_len"),
@@ -162,7 +156,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_zero_len"),
@@ -175,7 +169,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_after_close"),
@@ -188,7 +182,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         accept_flag,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_correctness <bind_client=false>"),
@@ -202,7 +196,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         /* bind_client= */ false,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_correctness <bind_client=true>"),
@@ -216,7 +210,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         /* bind_client= */ true,
                                     )
                                 },
-                                passing.clone(),
+                                set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                         ]);
                     }
