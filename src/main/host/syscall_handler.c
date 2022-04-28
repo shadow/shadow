@@ -19,7 +19,7 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"

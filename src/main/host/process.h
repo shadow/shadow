@@ -33,7 +33,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"

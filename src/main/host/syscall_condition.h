@@ -7,7 +7,7 @@
 #define SRC_MAIN_HOST_SYSCALL_CONDITION_H_
 
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/futex.h"
 #include "main/host/process.h"
 #include "main/host/status.h"

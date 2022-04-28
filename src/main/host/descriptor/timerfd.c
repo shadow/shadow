@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 
 #include <errno.h>
 #include <string.h>

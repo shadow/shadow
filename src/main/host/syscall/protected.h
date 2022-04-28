@@ -17,7 +17,7 @@
 
 #include "lib/shim/shim_shmem.h"
 #include "main/host/descriptor/epoll.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"
