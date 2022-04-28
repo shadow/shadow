@@ -790,6 +790,7 @@ pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
 pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
 pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
 pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
 pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
