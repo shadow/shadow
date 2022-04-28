@@ -39,9 +39,7 @@ bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     }
 
     struct itimerspec value = {0};
-
-    gint result = timerfd_getTime(timeout, &value);
-    utility_assert(result == 0);
+    timerfd_getTime(timeout, &value);
 
     return value.it_value.tv_sec > 0 || value.it_value.tv_nsec > 0;
 }

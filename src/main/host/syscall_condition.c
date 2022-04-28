@@ -278,7 +278,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
 
     if (cond->timeout) {
         struct itimerspec value = {0};
-        utility_assert(timerfd_getTime(cond->timeout, &value) == 0);
+        timerfd_getTime(cond->timeout, &value);
         g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
                                (unsigned long)value.it_value.tv_sec,
                                (unsigned long)value.it_value.tv_nsec);

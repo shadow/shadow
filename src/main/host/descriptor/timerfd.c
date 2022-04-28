@@ -119,18 +119,13 @@ static void _timer_getCurrentInterval(const Timer* timer, struct timespec* out) 
     }
 }
 
-gint timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value) {
+void timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timer);
-
-    if(!curr_value) {
-        return -EFAULT;
-    }
+    utility_assert(curr_value);
 
     /* returns relative time */
     _timer_getCurrentTime(&timer->timer, &(curr_value->it_value));
     _timer_getCurrentInterval(&timer->timer, &(curr_value->it_interval));
-
-    return 0;
 }
 
 static void _timerfd_disarm(TimerFd* timer) {

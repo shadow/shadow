@@ -143,24 +143,20 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     int tfd = args->args[0].as_i64;
     PluginPtr currValuePtr = args->args[1].as_ptr; // struct itimerspec*
 
-    /* Current value should be non-null. */
-    if (!currValuePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get the corresponding descriptor. */
     TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
-    if (errcode < 0) {
+    if (errcode != 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    struct itimerspec* currValue =
-        process_getWriteablePtr(sys->process, currValuePtr, sizeof(*currValue));
+    /* Get the timer value */
+    struct itimerspec currValue;
+    timerfd_getTime(timer, &currValue);
 
-    /* Service the call in the timer module. */
-    errcode = timerfd_getTime(timer, currValue);
-    if (errcode < 0) {
+    /* Write the timer value */
+    errcode = process_writePtr(sys->process, currValuePtr, &currValue, sizeof(currValue));
+    if (errcode != 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 

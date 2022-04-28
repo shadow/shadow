@@ -17,7 +17,7 @@ typedef struct _TimerFd TimerFd;
 TimerFd* timerfd_new();
 gint timerfd_setTime(TimerFd* timer, Host* host, gint flags, const struct itimerspec* new_value,
                      struct itimerspec* old_value);
-gint timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value);
+void timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value);
 ssize_t timerfd_read(TimerFd* timer, void* buf, size_t count);
 
 /* Returns the number of timer expirations that have occurred
