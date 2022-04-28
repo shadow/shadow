@@ -3,12 +3,13 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
+use test_utils::socket_utils::SockAddr;
 use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, AsPtr};
 
 struct ConnectArguments {
     fd: libc::c_int,
-    addr: Option<libc::sockaddr_in>, // if None, a null pointer should be used
+    addr: Option<SockAddr>, // if None, a null pointer should be used
     addr_len: libc::socklen_t,
 }
 
@@ -79,7 +80,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
-            let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
+            tests.extend(vec![
                 test_utils::ShadowTest::new(
                     &append_args("test_non_existent_server"),
                     move || test_non_existent_server(sock_type, flag),
@@ -134,9 +135,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     move || test_double_connect(sock_type, flag, /* change_address= */ true),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
-            ];
-
-            tests.extend(more_tests);
+            ]);
         }
     }
 
@@ -156,7 +155,7 @@ fn test_invalid_fd() -> Result<(), String> {
 
     let args = ConnectArguments {
         fd: -1,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -176,7 +175,7 @@ fn test_non_existent_fd() -> Result<(), String> {
 
     let args = ConnectArguments {
         fd: 8934,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -196,7 +195,7 @@ fn test_non_socket_fd() -> Result<(), String> {
 
     let args = ConnectArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -233,7 +232,7 @@ fn test_short_len() -> Result<(), String> {
 
     let args = ConnectArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: (std::mem::size_of_val(&addr) - 1) as u32,
     };
 
@@ -256,7 +255,7 @@ fn test_zero_len() -> Result<(), String> {
 
     let args = ConnectArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: 0u32,
     };
 
@@ -280,7 +279,7 @@ fn test_non_existent_server(sock_type: libc::c_int, flag: libc::c_int) -> Result
 
     let args = ConnectArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -311,7 +310,7 @@ fn test_port_zero(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), Strin
 
     let args = ConnectArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -347,7 +346,7 @@ fn test_after_close(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), Str
 
     let args = ConnectArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
@@ -424,7 +423,7 @@ fn test_interface(
 
     let args = ConnectArguments {
         fd: fd_client,
-        addr: Some(server_addr),
+        addr: Some(SockAddr::Inet(server_addr)),
         addr_len: std::mem::size_of_val(&server_addr) as u32,
     };
 
@@ -508,20 +507,26 @@ fn test_double_connect(
 
     let args_1 = ConnectArguments {
         fd: fd_client,
-        addr: Some(server_addr),
+        addr: Some(SockAddr::Inet(server_addr)),
         addr_len: std::mem::size_of_val(&server_addr) as u32,
     };
 
     let mut args_2 = ConnectArguments {
         fd: fd_client,
-        addr: Some(server_addr),
+        addr: Some(SockAddr::Inet(server_addr)),
         addr_len: std::mem::size_of_val(&server_addr) as u32,
     };
 
     // if we should use a different address for the second connect() call, change the port
     if change_address {
         // note the endianness of the port
-        args_2.addr.as_mut().unwrap().sin_port += 1;
+        args_2
+            .addr
+            .as_mut()
+            .unwrap()
+            .as_inet_mut()
+            .unwrap()
+            .sin_port += 1;
     }
     let args_2 = args_2;
 
@@ -540,19 +545,18 @@ fn check_connect_call(
     args: &ConnectArguments,
     expected_errno: Option<libc::c_int>,
 ) -> Result<(), String> {
-    // if the pointers will be non-null, make sure the length is not greater than the actual data size
-    // so that we don't segfault
-    if args.addr.is_some() {
-        assert!(args.addr_len as usize <= std::mem::size_of_val(&args.addr.unwrap()));
-    }
-
-    let rv = unsafe {
-        libc::connect(
-            args.fd,
-            args.addr.as_ptr() as *mut libc::sockaddr,
-            args.addr_len,
-        )
+    // get a pointer to the sockaddr and the size of the structure
+    // careful use of references here makes sure we don't copy memory, leading to stale pointers
+    let (addr_ptr, addr_max_len) = match args.addr {
+        Some(ref x) => (x.as_ptr(), x.ptr_size()),
+        None => (std::ptr::null(), 0),
     };
+
+    // if the pointer is non-null, make sure the provided size is not greater than the actual
+    // data size so that we don't segfault
+    assert!(addr_ptr.is_null() || args.addr_len <= addr_max_len);
+
+    let rv = unsafe { libc::connect(args.fd, addr_ptr, args.addr_len) };
 
     let errno = test_utils::get_errno();
 
