@@ -109,6 +109,48 @@ fn test_set_then_get() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_itimers_are_process_wide() -> anyhow::Result<()> {
+    reset()?;
+
+    let thread1_val = libc::itimerval {
+        it_value: libc::timeval {
+            tv_sec: 1,
+            tv_usec: 0,
+        },
+        it_interval: libc::timeval {
+            tv_sec: 1,
+            tv_usec: 0,
+        },
+    };
+    let thread2_val = libc::itimerval {
+        it_value: libc::timeval {
+            tv_sec: 1,
+            tv_usec: 0,
+        },
+        it_interval: libc::timeval {
+            tv_sec: 2,
+            tv_usec: 0,
+        },
+    };
+
+    setitimer(libc::ITIMER_REAL, &thread1_val)?;
+
+    let res: ITimer = std::thread::spawn(move || {
+        // Overwrites timer set in the parent thread.
+        setitimer(libc::ITIMER_REAL, &thread2_val)
+    })
+    .join()
+    .unwrap()?;
+    // setitimer should have gotten back the first timer.
+    ensure_ord!(res.interval, ==, thread1_val.it_interval.into());
+
+    // This thread should now see the timer that was set by the child thread.
+    let res: ITimer = getitimer(libc::ITIMER_REAL)?;
+    ensure_ord!(res.interval, ==, thread2_val.it_interval.into());
+
+    Ok(())
+}
+
 fn test_set_then_set() -> anyhow::Result<()> {
     reset()?;
 
@@ -298,6 +340,11 @@ fn main() -> anyhow::Result<()> {
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![
         ShadowTest::new("initially_unset", test_initially_unset, all_envs.clone()),
         ShadowTest::new("set_then_get", test_set_then_get, all_envs.clone()),
+        ShadowTest::new(
+            "itimers_are_process_wide",
+            test_itimers_are_process_wide,
+            all_envs.clone(),
+        ),
         ShadowTest::new("set_then_set", test_set_then_set, all_envs.clone()),
         ShadowTest::new("set_oneshot", test_oneshot, all_envs.clone()),
         ShadowTest::new("set_interval", test_interval, all_envs.clone()),
