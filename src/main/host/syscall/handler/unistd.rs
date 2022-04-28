@@ -284,7 +284,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -410,7 +410,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);

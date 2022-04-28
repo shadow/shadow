@@ -1,5 +1,5 @@
 use crate::cshadow as c;
-use crate::host::descriptor::{FileState, OpenFile};
+use crate::host::descriptor::{FileState, GenericFile};
 
 pub mod format;
 pub mod handler;
@@ -21,11 +21,11 @@ impl From<Trigger> for c::Trigger {
 }
 
 impl Trigger {
-    pub fn from_open_file(file: OpenFile, status: FileState) -> Self {
+    pub fn from_file(file: GenericFile, status: FileState) -> Self {
         let file_ptr = Box::into_raw(Box::new(file));
 
         Self(c::Trigger {
-            type_: c::_TriggerType_TRIGGER_OPEN_FILE,
+            type_: c::_TriggerType_TRIGGER_FILE,
             object: c::TriggerObject { as_file: file_ptr },
             status: status.into(),
         })
