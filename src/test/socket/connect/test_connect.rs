@@ -159,17 +159,24 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_connect_when_server_queue_full"),
                     move || test_connect_when_server_queue_full(domain, sock_type, flag),
-                    // TODO: enable once we support fixed-sized accept queues for inet sockets, and blocking
-                    // connect calls for unix socket
-                    set![TestEnv::Libc],
+                    if domain != libc::AF_INET {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    } else {
+                        // TODO: enable once we support fixed-sized accept queues for inet sockets
+                        set![TestEnv::Libc]
+                    },
                 )]);
             }
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_server_close_during_blocking_connect"),
                 move || test_server_close_during_blocking_connect(domain, sock_type),
-                // TODO: enable once we support blocking connect calls for unix socket
-                set![TestEnv::Libc],
+                if domain != libc::AF_INET {
+                    set![TestEnv::Libc, TestEnv::Shadow]
+                } else {
+                    // TODO: enable once we support fixed-sized accept queues for inet sockets
+                    set![TestEnv::Libc]
+                },
             )]);
         }
     }

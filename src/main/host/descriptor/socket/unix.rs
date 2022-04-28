@@ -7,12 +7,15 @@ use nix::errno::Errno;
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::{BufferHandle, BufferState, SharedBuf};
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::descriptor::socket::empty_sockaddr;
+use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
+    FileMode, FileState, FileStatus, GenericFile, StateEventSource, StateListenerFilter,
+    SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall::Trigger;
+use crate::host::syscall_condition::SysCallCondition;
+use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
@@ -335,6 +338,34 @@ struct ConnLessInitial {
     send_buffer_event_handle: Option<BufferHandle>,
 }
 struct ConnLessClosed {}
+
+impl ConnOrientedListening {
+    fn queue_is_full(&self) -> bool {
+        self.queue.len() >= self.queue_limit.try_into().unwrap()
+    }
+
+    /// Determines the file state depending on the queue size and limit. Returns a file state mask,
+    /// and the masked flags that should be updated.
+    fn calculate_file_state(&self) -> (FileState, FileState) {
+        let state_mask =
+            FileState::READABLE | FileState::WRITABLE | FileState::SOCKET_ALLOWING_CONNECT;
+
+        let mut new_state = FileState::empty();
+
+        // socket is readable if the queue is not empty
+        new_state.set(FileState::READABLE, self.queue.len() > 0);
+
+        // socket allows connections if the queue is not full
+        new_state.set(FileState::SOCKET_ALLOWING_CONNECT, !self.queue_is_full());
+
+        // Note: This can cause a thundering-herd condition where multiple blocked connect() calls
+        // are all notified at the same time, even if there isn't enough space to allow all of them.
+        // In practice this should be uncommon so we don't worry about it, and avoids requiring that
+        // the server keep a list of all connecting clients.
+
+        (state_mask, new_state)
+    }
+}
 
 /// The current protocol state of the unix socket. An `Option` is required for each variant so that
 /// the inner state object can be removed, transformed into a new state, and then re-added as a
@@ -936,7 +967,7 @@ impl Protocol for ConnOrientedInitial {
         self,
         common: &mut UnixSocketCommon,
         backlog: i32,
-        _event_queue: &mut EventQueue,
+        event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // it must have already been bound
         let bound_addr = match self.bound_addr {
@@ -950,7 +981,9 @@ impl Protocol for ConnOrientedInitial {
             queue_limit: backlog_to_queue_size(backlog),
         };
 
-        assert!(!common.state.contains(FileState::READABLE));
+        // refresh the socket's file state
+        let (file_state_mask, file_state) = new_state.calculate_file_state();
+        common.copy_state(file_state_mask, file_state, event_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -980,19 +1013,33 @@ impl Protocol for ConnOrientedInitial {
 
         // inform the server socket of the incoming connection and get the server socket's new child
         // socket
-        let server = &mut *server.borrow_mut();
-        let peer = match server.protocol_state.queue_incoming_conn(
-            &mut server.common,
+        let server_mut = &mut *server.borrow_mut();
+        let peer = match server_mut.protocol_state.queue_incoming_conn(
+            &mut server_mut.common,
             self.bound_addr,
             &common.recv_buffer,
             event_queue,
         ) {
             Ok(peer) => peer,
-            Err(IncomingConnError::QueueFull) => {
-                return (self.into(), Err(Errno::EWOULDBLOCK.into()))
-            }
             Err(IncomingConnError::NotSupported) => {
                 return (self.into(), Err(Errno::ECONNREFUSED.into()))
+            }
+            Err(IncomingConnError::QueueFull) => {
+                if common.status.contains(FileStatus::NONBLOCK) {
+                    return (self.into(), Err(Errno::EWOULDBLOCK.into()));
+                }
+
+                // block until the server has room for new connections, or is closed
+                let trigger = Trigger::from_file(
+                    GenericFile::Socket(SocketFile::Unix(Arc::clone(&server))),
+                    FileState::SOCKET_ALLOWING_CONNECT | FileState::CLOSED,
+                );
+                let blocked = Blocked {
+                    condition: SysCallCondition::new(trigger),
+                    restartable: server_mut.supports_sa_restart(),
+                };
+
+                return (self.into(), Err(SyscallError::Blocked(blocked)));
             }
         };
 
@@ -1063,11 +1110,16 @@ impl Protocol for ConnOrientedListening {
 
     fn listen(
         mut self,
-        _common: &mut UnixSocketCommon,
+        common: &mut UnixSocketCommon,
         backlog: i32,
-        _event_queue: &mut EventQueue,
+        event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         self.queue_limit = backlog_to_queue_size(backlog);
+
+        // refresh the socket's file state
+        let (file_state_mask, file_state) = self.calculate_file_state();
+        common.copy_state(file_state_mask, file_state, event_queue);
+
         (self.into(), Ok(()))
     }
 
@@ -1081,10 +1133,9 @@ impl Protocol for ConnOrientedListening {
             None => return Err(Errno::EWOULDBLOCK.into()),
         };
 
-        // socket is readable if the queue is not empty
-        let mut readable_state = FileState::empty();
-        readable_state.set(FileState::READABLE, self.queue.len() > 0);
-        common.copy_state(FileState::READABLE, readable_state, event_queue);
+        // refresh the socket's file state
+        let (file_state_mask, file_state) = self.calculate_file_state();
+        common.copy_state(file_state_mask, file_state, event_queue);
 
         Ok(child_socket)
     }
@@ -1097,8 +1148,11 @@ impl Protocol for ConnOrientedListening {
         event_queue: &mut EventQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocketFile>>, IncomingConnError> {
         if self.queue.len() >= self.queue_limit.try_into().unwrap() {
+            assert!(!common.state.contains(FileState::SOCKET_ALLOWING_CONNECT));
             return Err(IncomingConnError::QueueFull);
         }
+
+        assert!(common.state.contains(FileState::SOCKET_ALLOWING_CONNECT));
 
         let child_send_buffer = Arc::clone(child_send_buffer);
 
@@ -1130,8 +1184,9 @@ impl Protocol for ConnOrientedListening {
         // add the child socket to the accept queue
         self.queue.push_back(child_socket);
 
-        // server has at least one waiting socket, so the server is readable
-        common.copy_state(FileState::READABLE, FileState::READABLE, event_queue);
+        // refresh the server socket's file state
+        let (file_state_mask, file_state) = self.calculate_file_state();
+        common.copy_state(file_state_mask, file_state, event_queue);
 
         // return a reference to the enqueued child socket
         Ok(self.queue.back().unwrap())
@@ -1432,7 +1487,11 @@ impl UnixSocketCommon {
 
         // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
-            FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
+            FileState::CLOSED
+                | FileState::ACTIVE
+                | FileState::READABLE
+                | FileState::WRITABLE
+                | FileState::SOCKET_ALLOWING_CONNECT,
             FileState::CLOSED,
             event_queue,
         );
