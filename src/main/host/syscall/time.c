@@ -65,15 +65,15 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
     utility_assert(cond);
-    const Timer* timer = syscallcondition_getTimeout(cond);
+    const TimerFd* timer = syscallcondition_getTimeout(cond);
     utility_assert(timer);
-    if (timer_getExpirationCount(timer) == 0) {
+    if (timerfd_getExpirationCount(timer) == 0) {
         // Should only happen if we were interrupted by a signal.
         utility_assert(
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
         struct itimerspec timer_val;
-        timer_getTime(timer, &timer_val);
+        timerfd_getTime(timer, &timer_val);
         syscallcondition_cancel(cond);
 
         /* Timer hasn't expired. Presumably we were interrupted. */

@@ -24,7 +24,7 @@ struct _SysCallCondition {
     // A trigger to unblock the syscall.
     Trigger trigger;
     // Non-null if the condition will trigger upon a timeout firing.
-    Timer* timeout;
+    TimerFd* timeout;
     // The active file in the blocked syscall. This is state used when resuming a blocked syscall.
     OpenFile* activeFile;
     // Non-null if we are listening for status updates on a trigger object
@@ -89,7 +89,7 @@ void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTim
     MAGIC_ASSERT(cond);
 
     if (!cond->timeout) {
-        cond->timeout = timer_new();
+        cond->timeout = timerfd_new();
     }
 
     struct itimerspec itimerspec = {0};
@@ -97,9 +97,9 @@ void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTim
     t -= itimerspec.it_value.tv_sec * SIMTIME_ONE_SECOND;
     itimerspec.it_value.tv_nsec = t / SIMTIME_ONE_NANOSECOND;
 
-    int rv = timer_setTime(cond->timeout, host, TFD_TIMER_ABSTIME, &itimerspec, NULL);
+    int rv = timerfd_setTime(cond->timeout, host, TFD_TIMER_ABSTIME, &itimerspec, NULL);
     if (rv != 0) {
-        panic("timer_setTime: %s", strerror(-rv));
+        panic("timerfd_setTime: %s", strerror(-rv));
     }
 }
 
@@ -278,7 +278,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
 
     if (cond->timeout) {
         struct itimerspec value = {0};
-        utility_assert(timer_getTime(cond->timeout, &value) == 0);
+        utility_assert(timerfd_getTime(cond->timeout, &value) == 0);
         g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
                                (unsigned long)value.it_value.tv_sec,
                                (unsigned long)value.it_value.tv_nsec);
@@ -323,11 +323,11 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 }
 
 static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
-    Timer* timeout = syscallcondition_getTimeout(cond);
-    if (timeout && timer_getExpirationCount(timeout) > 0) {
+    TimerFd* timeout = syscallcondition_getTimeout(cond);
+    if (timeout && timerfd_getExpirationCount(timeout) > 0) {
         // Unclear what the semantics would be here if a repeating timer were
         // used.
-        utility_assert(timer_getExpirationCount(timeout) == 1);
+        utility_assert(timerfd_getExpirationCount(timeout) == 1);
 
         // Timed out.
         return true;
@@ -539,6 +539,6 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock*
     return true;
 }
 
-Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }
+TimerFd* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }
 
 OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond) { return cond->activeFile; }

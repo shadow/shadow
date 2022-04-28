@@ -86,9 +86,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
                 result = -ESPIPE;
             } else {
                 utility_assert(offset == 0);
-                result = timer_read((Timer*)desc,
-                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                    sizeNeeded);
+                result = timerfd_read((TimerFd*)desc,
+                                      process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                      sizeNeeded);
             }
             break;
         case DT_TCPSOCKET:

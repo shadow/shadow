@@ -76,7 +76,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc, Thread
 void syscallcondition_cancel(SysCallCondition* cond);
 
 /* Get the timer for the condition, or NULL if there isn't one. */
-Timer* syscallcondition_getTimeout(SysCallCondition* cond);
+TimerFd* syscallcondition_getTimeout(SysCallCondition* cond);
 
 /* Get the active file for the condition, or NULL if there isn't one. */
 OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond);

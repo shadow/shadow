@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
-                                               Timer** timer_desc_out) {
+                                               TimerFd** timer_desc_out) {
     /* Check that fd is within bounds. */
     if (tfd < 0) {
         debug("descriptor %i out of bounds", tfd);
@@ -31,7 +31,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
     /* Check if this is a virtual Shadow descriptor. */
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, tfd);
     if (desc && timer_desc_out) {
-        *timer_desc_out = (Timer*)desc;
+        *timer_desc_out = (TimerFd*)desc;
     }
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_TIMER);
@@ -66,7 +66,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     }
 
     /* Create the timer and double check that it's valid. */
-    Timer* timer = timer_new();
+    TimerFd* timer = timerfd_new();
     int tfd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)timer);
 
 #ifdef DEBUG
@@ -112,7 +112,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Get the corresponding descriptor. */
-    Timer* timer = NULL;
+    TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -130,7 +130,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Service the call in the timer module. */
-    errcode = timer_setTime(timer, sys->host, flags, &newValue, oldValue);
+    errcode = timerfd_setTime(timer, sys->host, flags, &newValue, oldValue);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -149,7 +149,7 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     }
 
     /* Get the corresponding descriptor. */
-    Timer* timer = NULL;
+    TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -159,7 +159,7 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
         process_getWriteablePtr(sys->process, currValuePtr, sizeof(*currValue));
 
     /* Service the call in the timer module. */
-    errcode = timer_getTime(timer, currValue);
+    errcode = timerfd_getTime(timer, currValue);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
