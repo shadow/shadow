@@ -917,14 +917,18 @@ fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
     // Install our SIGSEGV handler, which is going to mutate registers in the
     // caller to fix the null pointer dereference below.
     // This may seem esoteric, but this is sometimes done to implement custom
-    // memory management. Observed in OpenJDK in particular - see
-    // https://github.com/shadow/shadow/issues/2094.
+    // memory management, or to implement higher level error handling.
+    // e.g. in OpenJDK SIGSEGVs in managed code are transformed into NullPointerException.
+    // https://github.com/shadow/shadow/issues/2091#issuecomment-1111374729
     unsafe {
         signal::sigaction(
             signal::SIGSEGV,
             &signal::SigAction::new(
                 signal::SigHandler::SigAction(change_rax_from_null_to_global_static),
-                signal::SaFlags::empty(),
+                // Override the default behavior of blocking the current signal,
+                // since generating a SIGSEGV while SIGSEGV is blocked is
+                // undefined behavior.
+                signal::SaFlags::SA_NODEFER,
                 signal::SigSet::empty(),
             ),
         )
@@ -954,6 +958,113 @@ fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
         )
         .unwrap()
     };
+
+    Ok(())
+}
+
+static mut LAST_ERROR_SIGNAL: i32 = 0;
+static mut RECOVERY_POINT: *mut libc::ucontext_t = std::ptr::null_mut();
+
+extern "C" fn recover_from_hardware_error(
+    signal: i32,
+    info: *mut libc::siginfo_t,
+    voidctx: *mut std::ffi::c_void,
+) {
+    assert!(!info.is_null());
+    assert!(!voidctx.is_null());
+    // Rough approximation of how some language runtimes recover from such
+    // signals; generally it will be turned into a language exception of some
+    // kind at the recovery point.
+    unsafe { LAST_ERROR_SIGNAL = signal };
+    unsafe { libc::setcontext(RECOVERY_POINT) };
+    panic!("Unreachable");
+}
+
+fn test_hardware_error_signal<F: FnOnce() -> ()>(
+    sig: signal::Signal,
+    setcontext_and_raise_err: F,
+) -> Result<(), Box<dyn Error>> {
+    // Ensure signal isn't blocked
+    let mut sigset = signal::SigSet::empty();
+    sigset.add(sig);
+    signal::sigprocmask(signal::SigmaskHow::SIG_UNBLOCK, Some(&sigset), None)?;
+
+    // Install recovery handler
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(recover_from_hardware_error),
+                signal::SaFlags::SA_NODEFER,
+                signal::SigSet::empty(),
+            ),
+        )?
+    };
+
+    unsafe { LAST_ERROR_SIGNAL = 0 };
+    setcontext_and_raise_err();
+    assert_eq!(unsafe { LAST_ERROR_SIGNAL }, sig as i32);
+
+    // Restore default action
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigDfl,
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    Ok(())
+}
+
+fn test_hardware_error_signals() -> Result<(), Box<dyn Error>> {
+    //let signals = [Signal::SIGSEGV, Signal::SIGILL, Signal::SIGBUS, Signal::SIGFPE];
+
+    // Allocate the recovery point.
+    unsafe { RECOVERY_POINT = Box::leak(Box::<libc::ucontext_t>::new(std::mem::zeroed())) };
+
+    test_hardware_error_signal(signal::SIGSEGV, || {
+        // Set our recovery point. The handler will *jump* back to this.
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            // Already created and recovered from error.
+            return;
+        }
+        unsafe {
+            // Dereference NULL pointer
+            asm!("mov rax, [0]", out("rax") _);
+        }
+    })?;
+
+    test_hardware_error_signal(signal::SIGILL, || {
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            return;
+        }
+        unsafe {
+            // Execute illegal instruction.
+            // ud2 is guaranteed to be undefined.
+            asm!("ud2");
+        }
+    })?;
+
+    test_hardware_error_signal(signal::SIGFPE, || {
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            return;
+        }
+        unsafe {
+            // Divide by zero.
+            // Unsigned divide RDX:RAX by r/m64, with result stored in RAX ← Quotient, RDX ← Remainder.
+            asm!("div rcx", in("rcx") 0u64, inout("rdx") 0u64 => _, inout("rax") 0u64 => _);
+        }
+    })?;
+
+    // TODO: SIGBUS
 
     Ok(())
 }
@@ -1076,9 +1187,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "synchronous sigsegv",
             test_synchronous_sigsegv,
-            // FIXME: Doesn't work in Shadow's preload mode.
-            // https://github.com/shadow/shadow/issues/2091
-            set![TestEnv::Libc],
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "hardware error signals",
+            test_hardware_error_signals,
+            all_envs.clone(),
         ),
     ];
 
