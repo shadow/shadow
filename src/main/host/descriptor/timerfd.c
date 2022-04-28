@@ -35,6 +35,8 @@ struct _Timer {
     guint minValidExpireID;
 
     guint numEventsScheduled;
+
+    MAGIC_DECLARE;
 };
 
 struct _TimerFd {
@@ -73,6 +75,7 @@ static DescriptorFunctionTable _timerfdFunctions = {
 TimerFd* timerfd_new() {
     TimerFd* timer = g_new0(TimerFd, 1);
     MAGIC_INIT(timer);
+    MAGIC_INIT(&timer->timer);
 
     descriptor_init(&(timer->super), DT_TIMER, &_timerfdFunctions);
     descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
@@ -82,37 +85,37 @@ TimerFd* timerfd_new() {
     return timer;
 }
 
-static void _timerfd_getCurrentTime(const TimerFd* timer, struct timespec* out) {
+static void _timer_getCurrentTime(const Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
     utility_assert(out);
 
-    if (timer->timer.nextExpireTime == 0) {
+    if (timer->nextExpireTime == 0) {
         /* timer is disarmed */
         out->tv_sec = 0;
         out->tv_nsec = 0;
     } else {
         /* timer is armed */
         SimulationTime currentTime = worker_getCurrentSimulationTime();
-        utility_assert(currentTime <= timer->timer.nextExpireTime);
+        utility_assert(currentTime <= timer->nextExpireTime);
 
         /* always return relative value */
-        SimulationTime diff = timer->timer.nextExpireTime - currentTime;
+        SimulationTime diff = timer->nextExpireTime - currentTime;
         out->tv_sec = (time_t) (diff / SIMTIME_ONE_SECOND);
         out->tv_nsec =(glong) (diff % SIMTIME_ONE_SECOND);
     }
 }
 
-static void _timerfd_getCurrentInterval(const TimerFd* timer, struct timespec* out) {
+static void _timer_getCurrentInterval(const Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
     utility_assert(out);
 
-    if (timer->timer.expireInterval == 0) {
+    if (timer->expireInterval == 0) {
         /* timer is set to expire just once */
         out->tv_sec = 0;
         out->tv_nsec = 0;
     } else {
-        out->tv_sec = (time_t)(timer->timer.expireInterval / SIMTIME_ONE_SECOND);
-        out->tv_nsec = (glong)(timer->timer.expireInterval % SIMTIME_ONE_SECOND);
+        out->tv_sec = (time_t)(timer->expireInterval / SIMTIME_ONE_SECOND);
+        out->tv_nsec = (glong)(timer->expireInterval % SIMTIME_ONE_SECOND);
     }
 }
 
@@ -124,8 +127,8 @@ gint timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value) {
     }
 
     /* returns relative time */
-    _timerfd_getCurrentTime(timer, &(curr_value->it_value));
-    _timerfd_getCurrentInterval(timer, &(curr_value->it_interval));
+    _timer_getCurrentTime(&timer->timer, &(curr_value->it_value));
+    _timer_getCurrentInterval(&timer->timer, &(curr_value->it_interval));
 
     return 0;
 }
