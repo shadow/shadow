@@ -3,9 +3,11 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::set;
 use test_utils::socket_utils::SockAddr;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::{set, socket_utils};
+
+use std::sync::{Arc, Barrier};
 
 struct ConnectArguments {
     fd: libc::c_int,
@@ -136,6 +138,39 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
+        }
+    }
+
+    for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
+        for &sock_type in [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+
+            // skip tests that use SOCK_SEQPACKET with INET sockets
+            if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
+                continue;
+            }
+
+            for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+                // add details to the test names to avoid duplicates
+                let append_args =
+                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+
+                tests.extend(vec![test_utils::ShadowTest::new(
+                    &append_args("test_connect_when_server_queue_full"),
+                    move || test_connect_when_server_queue_full(domain, sock_type, flag),
+                    // TODO: enable once we support fixed-sized accept queues for inet sockets, and blocking
+                    // connect calls for unix socket
+                    set![TestEnv::Libc],
+                )]);
+            }
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_server_close_during_blocking_connect"),
+                move || test_server_close_during_blocking_connect(domain, sock_type),
+                // TODO: enable once we support blocking connect calls for unix socket
+                set![TestEnv::Libc],
+            )]);
         }
     }
 
@@ -539,6 +574,161 @@ fn test_double_connect(
 
         check_connect_call(&args_2, expected_errno_2)
     })
+}
+
+/// Test connect() when the server queue is full, and for blocking sockets that an accept() unblocks
+/// a blocked connect().
+fn test_connect_when_server_queue_full(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd_server = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    let fd_client = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    assert!(fd_server >= 0);
+    assert!(fd_client >= 0);
+
+    let (server_addr, server_addr_len) = socket_utils::autobind_helper(fd_server, domain);
+
+    nix::sys::socket::listen(fd_server, 0).map_err(|e| e.to_string())?;
+
+    // use a barrier to help synchronize threads
+    let first_connect_barrier = Arc::new(Barrier::new(2));
+    let first_connect_barrier_clone = Arc::clone(&first_connect_barrier);
+
+    let thread = std::thread::spawn(move || -> Result<(), String> {
+        let fd_client = unsafe { libc::socket(domain, sock_type | flag, 0) };
+        assert!(fd_client >= 0);
+
+        let args = ConnectArguments {
+            fd: fd_client,
+            addr: Some(server_addr),
+            addr_len: server_addr_len,
+        };
+
+        // the server accept queue will be full
+        let expected_errno = match (domain, flag & libc::SOCK_NONBLOCK != 0) {
+            (libc::AF_UNIX, true) => Some(libc::EAGAIN),
+            (_, true) => Some(libc::EINPROGRESS),
+            _ => None,
+        };
+
+        // first connect() was made, now we can connect()
+        first_connect_barrier_clone.wait();
+
+        let time_before_connect = std::time::Instant::now();
+
+        // second connect(); if non-blocking it should return immediately, but if blocking it should
+        // block until the accept()
+        check_connect_call(&args, expected_errno)?;
+
+        // if we expect it to have blocked, make sure it actually did block for some amount of time
+        if flag & libc::SOCK_NONBLOCK == 0 {
+            // the sleep below is for 50 ms, so we'd expect it to have blocked for at least 5 ms
+            let duration = std::time::Instant::now().duration_since(time_before_connect);
+            assert!(duration.as_millis() >= 5);
+        }
+
+        Ok(())
+    });
+
+    let args = ConnectArguments {
+        fd: fd_client,
+        addr: Some(server_addr),
+        addr_len: server_addr_len,
+    };
+
+    let expected_errno = if domain != libc::AF_UNIX && flag & libc::SOCK_NONBLOCK != 0 {
+        Some(libc::EINPROGRESS)
+    } else {
+        None
+    };
+
+    // first connect(); should return immediately
+    check_connect_call(&args, expected_errno)?;
+
+    // first connect() was made, and the accept queue should be full
+    first_connect_barrier.wait();
+
+    // sleep until the second connect() is either blocking or complete
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // accept a socket to unblock the second connect if it's blocking
+    let accepted_fd = nix::sys::socket::accept(fd_server).unwrap();
+    nix::unistd::close(accepted_fd).unwrap();
+
+    // the second connect() should be unblocked
+    thread.join().unwrap()?;
+
+    Ok(())
+}
+
+/// Test that a blocking connect() returns when the server socket is closed.
+fn test_server_close_during_blocking_connect(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
+    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd_server >= 0);
+    assert!(fd_client >= 0);
+
+    let (server_addr, server_addr_len) = socket_utils::autobind_helper(fd_server, domain);
+
+    nix::sys::socket::listen(fd_server, 0).map_err(|e| e.to_string())?;
+
+    // use a barrier to help synchronize threads
+    let first_connect_barrier = Arc::new(Barrier::new(2));
+    let first_connect_barrier_clone = Arc::clone(&first_connect_barrier);
+
+    let thread = std::thread::spawn(move || -> Result<(), String> {
+        let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+        assert!(fd_client >= 0);
+
+        let args = ConnectArguments {
+            fd: fd_client,
+            addr: Some(server_addr),
+            addr_len: server_addr_len,
+        };
+
+        // first connect() was made, now we can connect()
+        first_connect_barrier_clone.wait();
+
+        let time_before_connect = std::time::Instant::now();
+
+        // second connect(); should block until the close(fd_server)
+        check_connect_call(&args, Some(libc::ECONNREFUSED))?;
+
+        // make sure it actually did block for some amount of time
+        // the sleep below is for 50 ms, so we'd expect it to have blocked for at least 5 ms
+        let duration = std::time::Instant::now().duration_since(time_before_connect);
+        assert!(duration.as_millis() >= 5);
+
+        Ok(())
+    });
+
+    let args = ConnectArguments {
+        fd: fd_client,
+        addr: Some(server_addr),
+        addr_len: server_addr_len,
+    };
+
+    // first connect(); should return immediately
+    check_connect_call(&args, None)?;
+
+    // first connect() was made, and the accept queue should be full
+    first_connect_barrier.wait();
+
+    // sleep until the second connect() is blocking
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // close the server socket to unblock the second connect
+    nix::unistd::close(fd_server).unwrap();
+
+    // the second connect() should be unblocked
+    thread.join().unwrap()?;
+
+    Ok(())
 }
 
 fn check_connect_call(
