@@ -1,5 +1,5 @@
 general:
-  stop_time: 5
+  stop_time: 10
 network:
   graph:
     type: 1_gbit_switch

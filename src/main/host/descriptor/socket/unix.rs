@@ -44,6 +44,10 @@ impl UnixSocketFile {
         let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
         let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
 
+        // increment the buffer's reader count
+        // this is a new buffer and there are no listeners, so safe to use a temporary event queue
+        EventQueue::queue_and_run(|event_queue| recv_buffer.borrow_mut().add_reader(event_queue));
+
         let socket = Self {
             common: UnixSocketCommon {
                 recv_buffer,
@@ -65,7 +69,7 @@ impl UnixSocketFile {
         // update the socket's state when the buffer's state changes
         let weak = Arc::downgrade(&socket);
         let recv_handle = socket_ref.common.recv_buffer.borrow_mut().add_listener(
-            BufferState::READABLE,
+            BufferState::READABLE | BufferState::NO_WRITERS,
             move |state, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(socket) = weak.upgrade() {
@@ -80,7 +84,7 @@ impl UnixSocketFile {
                     socket.common.copy_state(
                         /* mask */ FileState::READABLE,
                         state
-                            .contains(BufferState::READABLE)
+                            .intersects(BufferState::READABLE | BufferState::NO_WRITERS)
                             .then(|| FileState::READABLE)
                             .unwrap_or_default(),
                         event_queue,
@@ -1485,6 +1489,9 @@ impl UnixSocketCommon {
             .take()
             .map(|h| h.stop_listening());
 
+        // inform the buffer that there is one fewer readers
+        self.recv_buffer.borrow_mut().remove_reader(event_queue);
+
         // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
             FileState::CLOSED
@@ -1631,6 +1638,17 @@ impl UnixSocketCommon {
 
         let mut send_buffer = send_buffer.borrow_mut();
 
+        // if the buffer has no readers, the destination socket is closed
+        if send_buffer.num_readers() == 0 {
+            return Err(match self.socket_type {
+                // connection-oriented socket
+                UnixSocketType::Stream | UnixSocketType::SeqPacket => nix::errno::Errno::EPIPE,
+                // connectionless socket
+                UnixSocketType::Dgram => nix::errno::Errno::ECONNREFUSED,
+            }
+            .into());
+        }
+
         let len = bytes.stream_len_bp()? as usize;
 
         match self.socket_type {
@@ -1659,7 +1677,13 @@ impl UnixSocketCommon {
 
         let mut recv_buffer = self.recv_buffer.borrow_mut();
 
-        if !recv_buffer.has_data() {
+        // the read would block if all:
+        //  1. the recv buffer has no data
+        //  2. it's a connectionless socket OR the connection-oriented destination socket is not
+        //     closed
+        if !recv_buffer.has_data()
+            && (self.socket_type == UnixSocketType::Dgram || recv_buffer.num_writers() > 0)
+        {
             // return EWOULDBLOCK even if 'bytes' has length 0
             return Err(Errno::EWOULDBLOCK.into());
         }
@@ -1701,27 +1725,30 @@ impl UnixSocketCommon {
 
         // update the socket's state when the buffer's state changes
         let weak = Arc::downgrade(&socket);
-        send_buffer_ref.add_listener(BufferState::WRITABLE, move |state, event_queue| {
-            // if the file hasn't been dropped
-            if let Some(socket) = weak.upgrade() {
-                let mut socket = socket.borrow_mut();
+        send_buffer_ref.add_listener(
+            BufferState::WRITABLE | BufferState::NO_READERS,
+            move |state, event_queue| {
+                // if the file hasn't been dropped
+                if let Some(socket) = weak.upgrade() {
+                    let mut socket = socket.borrow_mut();
 
-                // if the socket is already closed, do nothing
-                if socket.common.state.contains(FileState::CLOSED) {
-                    return;
+                    // if the socket is already closed, do nothing
+                    if socket.common.state.contains(FileState::CLOSED) {
+                        return;
+                    }
+
+                    // the socket is writable iff the buffer is writable
+                    socket.common.copy_state(
+                        /* mask */ FileState::WRITABLE,
+                        state
+                            .intersects(BufferState::WRITABLE | BufferState::NO_READERS)
+                            .then(|| FileState::WRITABLE)
+                            .unwrap_or_default(),
+                        event_queue,
+                    );
                 }
-
-                // the socket is writable iff the buffer is writable
-                socket.common.copy_state(
-                    /* mask */ FileState::WRITABLE,
-                    state
-                        .contains(BufferState::WRITABLE)
-                        .then(|| FileState::WRITABLE)
-                        .unwrap_or_default(),
-                    event_queue,
-                );
-            }
-        })
+            },
+        )
     }
 
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
