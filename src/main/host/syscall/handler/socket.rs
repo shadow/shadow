@@ -230,7 +230,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -336,7 +336,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
