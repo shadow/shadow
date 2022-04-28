@@ -72,21 +72,42 @@ impl SockAddr {
 
     pub fn as_generic(&self) -> Option<&libc::sockaddr_storage> {
         match self {
-            Self::Generic(x) => Some(&x),
+            Self::Generic(ref x) => Some(x),
+            _ => None,
+        }
+    }
+
+    pub fn as_generic_mut(&mut self) -> Option<&mut libc::sockaddr_storage> {
+        match self {
+            Self::Generic(ref mut x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_inet(&self) -> Option<&libc::sockaddr_in> {
         match self {
-            Self::Inet(x) => Some(&x),
+            Self::Inet(ref x) => Some(x),
+            _ => None,
+        }
+    }
+
+    pub fn as_inet_mut(&mut self) -> Option<&mut libc::sockaddr_in> {
+        match self {
+            Self::Inet(ref mut x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_unix(&self) -> Option<&libc::sockaddr_un> {
         match self {
-            Self::Unix(x) => Some(&x),
+            Self::Unix(ref x) => Some(x),
+            _ => None,
+        }
+    }
+
+    pub fn as_unix_mut(&mut self) -> Option<&mut libc::sockaddr_un> {
+        match self {
+            Self::Unix(ref mut x) => Some(x),
             _ => None,
         }
     }
