@@ -61,6 +61,7 @@ void timer_unref(Timer* timer) {
         }
         MAGIC_CLEAR(timer);
         g_free(timer);
+        worker_count_deallocation(Timer);
     }
 }
 
@@ -73,6 +74,7 @@ Timer* timer_new(Task* task) {
     if (task) {
         task_ref(task);
     }
+    worker_count_allocation(Timer);
     return rv;
 }
 
