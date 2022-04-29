@@ -497,7 +497,7 @@ EmulatedTime worker_getCurrentEmulatedTime(void);
 
 void worker_updateMinHostRunahead(SimulationTime t);
 
-void _worker_setLastEventTime(SimulationTime t);
+void _worker_setLastEventTime(EmulatedTime t);
 
 bool worker_isBootstrapActive(void);
 

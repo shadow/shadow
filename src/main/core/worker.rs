@@ -370,10 +370,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
-        Worker::set_last_event_time(EmulatedTime::from_abs_simtime(
-            SimulationTime::from_c_simtime(t).unwrap(),
-        ));
+    pub extern "C" fn _worker_setLastEventTime(t: cshadow::EmulatedTime) {
+        Worker::set_last_event_time(EmulatedTime::from_c_emutime(t).unwrap())
     }
 
     #[no_mangle]
