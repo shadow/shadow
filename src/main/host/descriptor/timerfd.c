@@ -291,9 +291,7 @@ gint timerfd_setTime(TimerFd* timer, Host* host, gint flags, const struct itimer
                      struct itimerspec* old_value) {
     MAGIC_ASSERT(timer);
 
-    if(!new_value) {
-        return -EFAULT;
-    }
+    utility_assert(new_value);
 
     if (!_timerfd_timeIsValid(&(new_value->it_value)) ||
         !_timerfd_timeIsValid(&(new_value->it_interval))) {
