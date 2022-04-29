@@ -87,7 +87,7 @@ struct _EpollWatch {
     EpollWatchFlags flags;
     /* The last time we reported an event on this watch.
      * This is used to ensure fairness across watches when reporting events. */
-    SimulationTime last_reported_event_time;
+    EmulatedTime last_reported_event_time;
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -635,7 +635,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             }
 
             /* Record that we are reporting the event now. */
-            watch->last_reported_event_time = worker_getCurrentSimulationTime();
+            watch->last_reported_event_time = worker_getCurrentEmulatedTime();
 
             /* event was just collected, unset the change status */
             watch->flags &= ~EWF_READCHANGED;
