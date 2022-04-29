@@ -212,6 +212,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 },
                                 set![TestEnv::Libc, TestEnv::Shadow],
                             ),
+                            test_utils::ShadowTest::new(
+                                &append_args("test_after_client_closed"),
+                                move || {
+                                    test_after_client_closed(
+                                        accept_fn,
+                                        domain,
+                                        sock_type,
+                                        sock_flag,
+                                        accept_flag,
+                                    )
+                                },
+                                set![TestEnv::Libc, TestEnv::Shadow],
+                            ),
                         ]);
                     }
                 }
@@ -855,6 +868,140 @@ fn test_correctness(
             }
             _ => unimplemented!(),
         }
+    }
+
+    Ok(())
+}
+
+/// Test accept after the client has connected and closed.
+fn test_after_client_closed(
+    accept_fn: AcceptFn,
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    sock_flag: libc::c_int,
+    accept_flag: libc::c_int,
+) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    let fd_server = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    assert!(fd_client >= 0);
+    assert!(fd_server >= 0);
+
+    let (server_addr, server_addr_len) = socket_utils::autobind_helper(fd_server, domain);
+
+    if sock_type != libc::SOCK_DGRAM {
+        // listen for connections
+        let rv = unsafe { libc::listen(fd_server, 10) };
+        assert_eq!(rv, 0);
+    }
+
+    // connect to the server address
+    let rv = unsafe { libc::connect(fd_client, server_addr.as_ptr(), server_addr_len) };
+
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
+
+    // shadow needs to run events, otherwise the accept call won't know it
+    // has an incoming connection (SYN packet)
+    // we assume that we're connected after the sleep to avoid depending on
+    // select()/poll() and getsockopt()
+    let rv = unsafe { libc::usleep(10000) };
+    assert_eq!(rv, 0);
+
+    // close the client socket
+    nix::unistd::close(fd_client).unwrap();
+
+    // shadow needs to run events
+    let rv = unsafe { libc::usleep(10000) };
+    assert_eq!(rv, 0);
+
+    let accept_addr = match domain {
+        libc::AF_INET => SockAddr::dummy_init_inet(),
+        libc::AF_UNIX => SockAddr::dummy_init_unix(),
+        _ => unimplemented!(),
+    };
+
+    // accept() may mutate addr and addr_len
+    let mut args = AcceptArguments {
+        fd: fd_server,
+        // fill the sockaddr with dummy data
+        addr: Some(accept_addr),
+        addr_len: Some(accept_addr.ptr_size()),
+        flags: accept_flag,
+    };
+
+    let expected_errno = match (domain, sock_type) {
+        (libc::AF_INET, libc::SOCK_STREAM) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET) => None,
+        (_, libc::SOCK_DGRAM) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
+    };
+
+    test_utils::run_and_close_fds(&[fd_server], || -> Result<(), String> {
+        // should still return a child socket
+        let fd = check_accept_call(&mut args, accept_fn, expected_errno)?;
+
+        if let Some(fd) = fd {
+            // let's test recv() while we're here...
+            let mut buf = [0u8; 10];
+            let num_read =
+                nix::sys::socket::recv(fd, &mut buf, nix::sys::socket::MsgFlags::empty()).unwrap();
+            // returns EOF
+            assert_eq!(num_read, 0);
+
+            let rv = unsafe { libc::close(fd) };
+            assert_eq!(rv, 0, "Could not close the fd");
+        }
+        Ok(())
+    })?;
+
+    // there was an error and the syscall didn't complete, so skip the later checks
+    if expected_errno.is_some() {
+        return Ok(());
+    }
+
+    // check that the returned length is expected
+    let expected_addr_len = match domain {
+        libc::AF_INET => std::mem::size_of::<libc::sockaddr_in>() as u32,
+        libc::AF_UNIX => 2, // domain only
+        _ => unimplemented!(),
+    };
+    test_utils::result_assert_eq(
+        args.addr_len.unwrap(),
+        expected_addr_len,
+        "Unexpected addr length",
+    )?;
+
+    // the client was not bound, so we don't know exactly what address to expect
+    match domain {
+        libc::AF_INET => {
+            // check that the returned client address is expected
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_inet().unwrap().sin_family,
+                libc::AF_INET as u16,
+                "Unexpected family",
+            )?;
+            test_utils::result_assert(
+                args.addr.unwrap().as_inet().unwrap().sin_port != 0u16.to_be(),
+                "Unexpected port",
+            )?;
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_inet().unwrap().sin_addr.s_addr,
+                libc::INADDR_LOOPBACK.to_be(),
+                "Unexpected address",
+            )?;
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_inet().unwrap().sin_zero,
+                [0; 8],
+                "Unexpected padding",
+            )?;
+        }
+        libc::AF_UNIX => {
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_family,
+                libc::AF_UNIX as u16,
+                "Unexpected family",
+            )?;
+        }
+        _ => unimplemented!(),
     }
 
     Ok(())
