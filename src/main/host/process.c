@@ -727,23 +727,19 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
 void process_schedule(Process* proc, gpointer nothing) {
     MAGIC_ASSERT(proc);
 
-    EmulatedTime now = worker_getCurrentEmulatedTime();
-
     if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
-        SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
         process_ref(proc);
         Task* startProcessTask =
             task_new(_process_runStartTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTaskWithDelay(startProcessTask, proc->host, startDelay);
+        worker_scheduleTaskAtEmulatedTime(startProcessTask, proc->host, proc->startTime);
         task_unref(startProcessTask);
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
-        SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
         process_ref(proc);
         Task* stopProcessTask =
             task_new(_process_runStopTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTaskWithDelay(stopProcessTask, proc->host, stopDelay);
+        worker_scheduleTaskAtEmulatedTime(stopProcessTask, proc->host, proc->stopTime);
         task_unref(stopProcessTask);
     }
 }
