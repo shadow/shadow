@@ -604,6 +604,6 @@ void tracker_heartbeat(Tracker* tracker, Host* host) {
     /* schedule the next heartbeat */
     tracker->lastHeartbeat = worker_getCurrentEmulatedTime();
     Task* heartbeatTask = task_new(tracker_heartbeatTask, tracker, NULL, NULL, NULL);
-    worker_scheduleTask(heartbeatTask, host, tracker->interval);
+    worker_scheduleTaskWithDelay(heartbeatTask, host, tracker->interval);
     task_unref(heartbeatTask);
 }

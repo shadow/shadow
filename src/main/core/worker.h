@@ -73,7 +73,7 @@ int worker_getAffinity();
 DNS* worker_getDNS();
 ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
-gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
+gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay);
 gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);

@@ -211,7 +211,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
     delay = MIN(delay, SIMTIME_ONE_SECOND);
 
     trace("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
-    worker_scheduleTask(task, host, delay);
+    worker_scheduleTaskWithDelay(task, host, delay);
     task_unref(task);
 
     timer->nextExpireID++;

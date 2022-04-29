@@ -126,7 +126,7 @@ _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
 static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
                                                  TaskCallbackFunc func, SimulationTime delay) {
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
-    worker_scheduleTask(refillTask, host, delay);
+    worker_scheduleTaskWithDelay(refillTask, host, delay);
     task_unref(refillTask);
     interface->isRefillPending = TRUE;
 }
@@ -593,7 +593,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             packet_ref(packet);
             Task* packetTask = task_new(_networkinterface_receivePacketTask, interface, packet,
                                         NULL, packet_unrefTaskFreeFunc);
-            worker_scheduleTask(packetTask, src, 1);
+            worker_scheduleTaskWithDelay(packetTask, src, 1);
             task_unref(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.

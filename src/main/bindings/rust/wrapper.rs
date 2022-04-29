@@ -1554,7 +1554,7 @@ extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;
 }
 extern "C" {
-    pub fn worker_scheduleTask(
+    pub fn worker_scheduleTaskWithDelay(
         task: *mut Task,
         host: *mut Host,
         nanoDelay: SimulationTime,

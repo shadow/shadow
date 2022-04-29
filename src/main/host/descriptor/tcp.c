@@ -699,7 +699,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                 delay = SIMTIME_ONE_SECOND;
             }
 
-            worker_scheduleTask(closeTask, host, delay);
+            worker_scheduleTaskWithDelay(closeTask, host, delay);
             task_unref(closeTask);
             break;
         }
@@ -1001,7 +1001,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
         descriptor_ref(tcp);
         Task* retexpTask =
             task_new(_tcp_runRetransmitTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(retexpTask, host, delay);
+        worker_scheduleTaskWithDelay(retexpTask, host, delay);
         task_unref(retexpTask);
 
         trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
@@ -2211,7 +2211,7 @@ static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
                     delay = 5*SIMTIME_ONE_MILLISECOND;
                 }
 
-                worker_scheduleTask(sendACKTask, host, delay);
+                worker_scheduleTaskWithDelay(sendACKTask, host, delay);
                 task_unref(sendACKTask);
 
                 tcp->send.delayedACKIsScheduled = TRUE;
@@ -2480,7 +2480,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
         descriptor_ref(tcp);
 
         Task* updateWindowTask = task_new(_tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(updateWindowTask, thread_getHost(thread), 1);
+        worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
         task_unref(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;

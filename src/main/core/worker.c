@@ -505,7 +505,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime 
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
-gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
+gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
     utility_assert(host);
 
