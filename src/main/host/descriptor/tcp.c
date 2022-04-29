@@ -195,7 +195,7 @@ struct _TCP {
         gboolean userDisabledSend;
         gboolean userDisabledReceive;
         gsize bytesCopied;
-        SimulationTime lastAdjustment;
+        EmulatedTime lastAdjustment;
         gsize space;
     } autotune;
 
@@ -563,7 +563,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) 
         }
     }
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    EmulatedTime now = worker_getCurrentEmulatedTime();
     if(tcp->autotune.lastAdjustment == 0) {
         tcp->autotune.lastAdjustment = now;
     } else if(tcp->timing.rttSmoothed > 0) {
