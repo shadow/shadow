@@ -104,8 +104,6 @@ void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAdd
 
 void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);
-/* Deprecated - use worker_setCurrentEmulatedTime or worker_clearCurrentTime instead */
-void worker_setCurrentSimulationTime(SimulationTime time);
 
 gboolean worker_isFiltered(LogLevel level);
 

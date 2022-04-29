@@ -595,7 +595,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");
                 shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(sys->host));
-                worker_setCurrentSimulationTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
+                worker_setCurrentEmulatedTime(newTime);
             } else {
                 trace("Reached unblocked syscall limit. Yielding.");
                 // Block instead, but save the result so that we can return it

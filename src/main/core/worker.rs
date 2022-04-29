@@ -345,15 +345,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentSimulationTime(t: cshadow::SimulationTime) {
-        if let Some(t) = SimulationTime::from_c_simtime(t) {
-            Worker::set_current_time(EmulatedTime::from_abs_simtime(t));
-        } else {
-            Worker::clear_current_time();
-        }
-    }
-
-    #[no_mangle]
     pub extern "C" fn worker_setCurrentEmulatedTime(t: cshadow::EmulatedTime) {
         Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }

@@ -457,7 +457,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    worker_setCurrentSimulationTime(event_getTime(event));
+    worker_setCurrentEmulatedTime(event_getTime(event) + EMULATED_TIME_OFFSET);
 
     /* process the local event */
     event_execute(event);
@@ -465,11 +465,11 @@ void worker_runEvent(Event* event) {
 
     /* update times */
     _worker_setLastEventTime(worker_getCurrentSimulationTime());
-    worker_setCurrentSimulationTime(SIMTIME_INVALID);
+    worker_clearCurrentTime();
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {
-    worker_setCurrentSimulationTime(time);
+    worker_setCurrentEmulatedTime(time + EMULATED_TIME_OFFSET);
 
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
@@ -480,7 +480,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     }
 
     _worker_setLastEventTime(worker_getCurrentSimulationTime());
-    worker_setCurrentSimulationTime(SIMTIME_INVALID);
+    worker_clearCurrentTime();
 
     /* cleanup is all done, send counters to manager */
     WorkerPool* pool = _worker_pool();
@@ -592,11 +592,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
 static void _worker_bootHost(Host* host, void* _unused) {
     worker_setActiveHost(host);
-    worker_setCurrentSimulationTime(0);
+    worker_setCurrentEmulatedTime(EMULATED_TIME_OFFSET);
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);
-    worker_setCurrentSimulationTime(SIMTIME_INVALID);
+    worker_clearCurrentTime();
     worker_setActiveHost(NULL);
 }
 

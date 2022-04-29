@@ -487,8 +487,6 @@ void worker_setRoundEndTime(SimulationTime t);
 
 SimulationTime _worker_getRoundEndTime(void);
 
-void worker_setCurrentSimulationTime(SimulationTime t);
-
 void worker_setCurrentEmulatedTime(EmulatedTime t);
 
 void worker_clearCurrentTime(void);

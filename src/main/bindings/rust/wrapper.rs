@@ -1622,9 +1622,6 @@ extern "C" {
     pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {
-    pub fn worker_setCurrentSimulationTime(time: SimulationTime);
-}
-extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;
 }
 extern "C" {
