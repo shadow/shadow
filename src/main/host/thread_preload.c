@@ -248,7 +248,7 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread, ShimEv
         trace("Updating time from %ld to %ld (+%ld)", worker_getCurrentEmulatedTime(), shimTime,
               shimTime - worker_getCurrentEmulatedTime());
     }
-    worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(shimTime));
+    worker_setCurrentSimulationTime(EMULATED_TIME_TO_SIMULATED_TIME(shimTime));
 }
 
 static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
