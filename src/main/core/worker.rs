@@ -359,6 +359,11 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn worker_clearCurrentTime() {
+        Worker::clear_current_time();
+    }
+
+    #[no_mangle]
     pub extern "C" fn worker_getCurrentSimulationTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }

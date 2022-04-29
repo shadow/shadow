@@ -102,8 +102,9 @@ gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID);
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress);
 void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress);
 
+void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);
-/* Deprecated - use worker_setCurrentEmulatedTime instead */
+/* Deprecated - use worker_setCurrentEmulatedTime or worker_clearCurrentTime instead */
 void worker_setCurrentSimulationTime(SimulationTime time);
 
 gboolean worker_isFiltered(LogLevel level);

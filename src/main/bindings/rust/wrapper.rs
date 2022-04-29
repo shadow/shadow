@@ -1616,6 +1616,9 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn worker_clearCurrentTime();
+}
+extern "C" {
     pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {

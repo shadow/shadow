@@ -491,6 +491,8 @@ void worker_setCurrentSimulationTime(SimulationTime t);
 
 void worker_setCurrentEmulatedTime(EmulatedTime t);
 
+void worker_clearCurrentTime(void);
+
 SimulationTime worker_getCurrentSimulationTime(void);
 
 EmulatedTime worker_getCurrentEmulatedTime(void);
