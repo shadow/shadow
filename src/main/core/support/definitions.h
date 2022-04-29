@@ -29,12 +29,6 @@ typedef guint ShadowID;
 #define SIMTIME_INVALID G_MAXUINT64
 
 /**
- * Maximum and minimum valid values.
- */
-#define SIMTIME_MAX (G_MAXUINT64-1)
-#define SIMTIME_MIN 0
-
-/**
  * Represents one nanosecond in simulation time.
  */
 #define SIMTIME_ONE_NANOSECOND G_GUINT64_CONSTANT(1)
@@ -75,16 +69,55 @@ typedef guint64 EmulatedTime;
 /**
  * The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
  * This is used to emulate to applications that we are in a recent time.
- * 
+ *
  * Duplicated as SIMULATION_START_SEC in `emulated_time.rs`.
  */
 #define EMULATED_TIME_OFFSET (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
 
 /**
+ * Represents an invalid emulation time.
+ */
+#define EMUTIME_INVALID G_MAXUINT64
+
+/**
+ * Maximum and minimum valid values.
+ */
+#define EMUTIME_MAX (G_MAXUINT64-1)
+#define EMUTIME_MIN 0
+
+/* Ensure it can be converted to EmulatedTime */
+#define SIMTIME_MAX (EMUTIME_MAX - EMULATED_TIME_OFFSET)
+#define SIMTIME_MIN 0
+
+/**
  * Conversion from emulated time to simulated time.
  */
-#define EMULATED_TIME_TO_SIMULATED_TIME(emtime)                                \
-    ((SimulationTime)((emtime)-EMULATED_TIME_OFFSET))
+static inline SimulationTime EMULATED_TIME_TO_SIMULATED_TIME(EmulatedTime emtime) {
+    if (emtime == EMUTIME_INVALID) {
+        return SIMTIME_INVALID;
+    }
+    SimulationTime rv = emtime - EMULATED_TIME_OFFSET;
+
+    // Underflow check
+    g_assert(rv < emtime);
+
+    return rv;
+}
+
+/**
+ * Conversion from emulated time to simulated time.
+ */
+static inline EmulatedTime SIMULATED_TIME_TO_EMULATED_TIME(SimulationTime simtime) {
+    if (simtime == SIMTIME_INVALID) {
+        return EMUTIME_INVALID;
+    }
+    EmulatedTime rv = simtime + EMULATED_TIME_OFFSET;
+
+    // overflow check
+    g_assert(rv > simtime);
+
+    return rv;
+}
 
 /**
  * The start of our random port range in host order, used if application doesn't

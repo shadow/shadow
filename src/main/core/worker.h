@@ -80,8 +80,7 @@ bool worker_isAlive(void);
 EmulatedTime worker_maxEventRunaheadTime(Host* host);
 
 /* Time from the  beginning of the simulation.
- * Deprecated - prefer `worker_getCurrentEmulatedTime`, and convert by
- * subtracting EMULATED_TIME_OFFSET.
+ * Deprecated - prefer `worker_getCurrentEmulatedTime`.
  */
 SimulationTime worker_getCurrentSimulationTime();
 

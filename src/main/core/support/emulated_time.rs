@@ -17,7 +17,10 @@ pub struct EmulatedTime(Duration);
 pub const UNIX_EPOCH: EmulatedTime = EmulatedTime(Duration::from_secs(0));
 
 // Duplicated from the EMULATED_TIME_OFFSET macro in definitions.h.
-const SIMULATION_START_SEC: u64 = 946684800;
+pub(super) const SIMULATION_START_SEC: u64 = 946684800;
+pub const EMUTIME_INVALID: c::EmulatedTime = u64::MAX;
+pub const EMUTIME_MAX: c::EmulatedTime = u64::MAX - 1;
+pub const EMUTIME_MIN: c::EmulatedTime = 0;
 
 /// The start time of the simulation - 00:00:00 UTC on 1 January, 2000.
 pub const SIMULATION_START: EmulatedTime = EmulatedTime(Duration::from_secs(SIMULATION_START_SEC));
@@ -25,7 +28,13 @@ pub const SIMULATION_START: EmulatedTime = EmulatedTime(Duration::from_secs(SIMU
 impl EmulatedTime {
     /// Get the instance corresponding to `val` SimulationTime units since the Unix Epoch.
     pub fn from_c_emutime(val: c::EmulatedTime) -> Option<Self> {
-        Some(Self(*SimulationTime::from_c_simtime(val)?))
+        if val == EMUTIME_INVALID {
+            None
+        } else {
+            Some(Self(Duration::from_nanos(
+                val * simulation_time::SIMTIME_ONE_NANOSECOND,
+            )))
+        }
     }
 
     /// Convert to number of SimulationTime units since the Unix Epoch.
@@ -34,7 +43,7 @@ impl EmulatedTime {
             Some(val) => SimulationTime::to_c_simtime(Some(SimulationTime::from(
                 val.duration_since(&UNIX_EPOCH),
             ))),
-            None => simulation_time::SIMTIME_INVALID,
+            None => EMUTIME_INVALID,
         }
     }
 

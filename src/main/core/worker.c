@@ -457,7 +457,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    worker_setCurrentEmulatedTime(event_getTime(event) + EMULATED_TIME_OFFSET);
+    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(event_getTime(event)));
 
     /* process the local event */
     event_execute(event);
@@ -469,7 +469,7 @@ void worker_runEvent(Event* event) {
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {
-    worker_setCurrentEmulatedTime(time + EMULATED_TIME_OFFSET);
+    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(time));
 
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
@@ -510,7 +510,7 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
 
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_assert(host);
-    EmulatedTime max = _worker_getRoundEndTime() + EMULATED_TIME_OFFSET;
+    EmulatedTime max = SIMULATED_TIME_TO_EMULATED_TIME(_worker_getRoundEndTime());
 
     EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
     if (nextEventTime != 0) {

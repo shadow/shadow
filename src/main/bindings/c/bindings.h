@@ -132,6 +132,8 @@ typedef struct SyscallHandler SyscallHandler;
 
 typedef uint64_t WatchHandle;
 
+#define EMUTIME_MIN 0
+
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 
 void bytequeue_free(struct ByteQueue *bq_ptr);

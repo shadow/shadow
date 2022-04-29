@@ -729,7 +729,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 
     EmulatedTime now = worker_getCurrentEmulatedTime();
 
-    if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
+    if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
         process_ref(proc);
         Task* startProcessTask =
@@ -738,7 +738,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         task_unref(startProcessTask);
     }
 
-    if(proc->stopTime > 0 && proc->stopTime > proc->startTime) {
+    if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
         SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
         process_ref(proc);
         Task* stopProcessTask =
@@ -805,9 +805,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 #endif
 
     utility_assert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = startTime + EMULATED_TIME_OFFSET;
-    // Convert to EmulatedTime, but keep 0 as meaning "unset"
-    proc->stopTime = (stopTime != 0) ? stopTime + EMULATED_TIME_OFFSET : stopTime;
+    proc->startTime = SIMULATED_TIME_TO_EMULATED_TIME(startTime);
+    // Convert to EmulatedTime. 0 means "unset", which we convert to EMUTIME_INVALID.
+    proc->stopTime = (stopTime == 0) ? EMUTIME_INVALID : SIMULATED_TIME_TO_EMULATED_TIME(stopTime);
 
     proc->interposeMethod = interposeMethod;
 
