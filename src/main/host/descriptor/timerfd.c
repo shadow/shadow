@@ -192,12 +192,12 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
     }
 }
 
-static void _timerfd_setCurrentInterval(TimerFd* timer, const struct timespec* config) {
+static void _timer_setCurrentInterval(Timer* timer, const struct timespec* config) {
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
     /* config time for intervals is always just a raw number of seconds and nanos */
-    timer->timer.expireInterval = _timerfd_timespecToSimTime(config, FALSE);
+    timer->expireInterval = _timerfd_timespecToSimTime(config, FALSE);
 }
 
 static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
@@ -276,7 +276,7 @@ static void _timerfd_arm(TimerFd* timer, Host* host, const struct itimerspec* co
     _timer_setCurrentTime(&timer->timer, &(config->it_value), flags);
 
     if(config->it_interval.tv_sec > 0 || config->it_interval.tv_nsec > 0) {
-        _timerfd_setCurrentInterval(timer, &(config->it_interval));
+        _timer_setCurrentInterval(&timer->timer, &(config->it_interval));
     }
 
     SimulationTime now = worker_getCurrentSimulationTime();
