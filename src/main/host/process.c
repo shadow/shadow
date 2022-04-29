@@ -115,8 +115,8 @@ struct _Process {
 #endif
 
     /* process boot and shutdown variables */
-    SimulationTime startTime;
-    SimulationTime stopTime;
+    EmulatedTime startTime;
+    EmulatedTime stopTime;
 
     /* absolute path to the process's working directory */
     char* workingDir;
@@ -347,7 +347,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
 
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
-              process_getName(proc), proc->startTime);
+              process_getName(proc), EMULATED_TIME_TO_SIMULATED_TIME(proc->startTime));
         return;
     }
 
@@ -727,7 +727,7 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
 void process_schedule(Process* proc, gpointer nothing) {
     MAGIC_ASSERT(proc);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    EmulatedTime now = worker_getCurrentEmulatedTime();
 
     if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
@@ -805,8 +805,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 #endif
 
     utility_assert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = startTime;
-    proc->stopTime = stopTime;
+    proc->startTime = startTime + EMULATED_TIME_OFFSET;
+    // Convert to EmulatedTime, but keep 0 as meaning "unset"
+    proc->stopTime = (stopTime != 0) ? stopTime + EMULATED_TIME_OFFSET : stopTime;
 
     proc->interposeMethod = interposeMethod;
 
