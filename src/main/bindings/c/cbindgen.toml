@@ -30,7 +30,7 @@ must_use = "__attribute__((warn_unused_result))"
 
 [export]
 # Avoid exporting C types back through again.
-exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread"]
+exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread", "EmulatedTime"]
 # Generate all item types, excluding enum types.
 # 
 # While the opaque items are already exported, and included here via

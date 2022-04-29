@@ -489,7 +489,9 @@ SimulationTime _worker_getRoundEndTime(void);
 
 void worker_setCurrentTime(SimulationTime t);
 
-SimulationTime worker_getCurrentTime(void);
+SimulationTime worker_getCurrentSimulationTime(void);
+
+EmulatedTime worker_getCurrentEmulatedTime(void);
 
 void worker_updateMinHostRunahead(SimulationTime t);
 

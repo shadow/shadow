@@ -88,7 +88,7 @@ static void _timer_getCurrentTime(const Timer* timer, struct timespec* out) {
         out->tv_nsec = 0;
     } else {
         /* timer is armed */
-        SimulationTime currentTime = worker_getCurrentTime();
+        SimulationTime currentTime = worker_getCurrentSimulationTime();
         utility_assert(currentTime <= timer->nextExpireTime);
 
         /* always return relative value */
@@ -164,7 +164,7 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
 
     if(flags == TFD_TIMER_ABSTIME) {
         /* config time specifies an absolute time.
@@ -204,7 +204,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
     descriptor_ref(timer);
     Task* task = task_new(_timer_expire, timer, next, descriptor_unref, NULL);
 
-    SimulationTime delay = timer->nextExpireTime - worker_getCurrentTime();
+    SimulationTime delay = timer->nextExpireTime - worker_getCurrentSimulationTime();
 
     /* if the user set a super long delay, let's call back sooner to check if they closed
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
@@ -234,7 +234,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer data) {
     /* make sure the timer has not been reset since we scheduled this expiration event */
     if(!timer->isClosed && expireID >= timer->minValidExpireID) {
         /* check if it actually expired on this callback check */
-        if(timer->nextExpireTime <= worker_getCurrentTime()) {
+        if (timer->nextExpireTime <= worker_getCurrentSimulationTime()) {
             /* if a one-time (non-periodic) timer already expired before they
              * started listening for the event with epoll, the event is reported
              * immediately on the next epoll_wait call. this behavior was
@@ -243,7 +243,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer data) {
             descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, TRUE);
 
             if(timer->expireInterval > 0) {
-                SimulationTime now = worker_getCurrentTime();
+                SimulationTime now = worker_getCurrentSimulationTime();
                 timer->nextExpireTime += timer->expireInterval;
                 if(timer->nextExpireTime < now) {
                     /* for some reason we looped the interval. expire again immediately
@@ -272,7 +272,7 @@ static void _timer_arm(Timer* timer, Host* host, const struct itimerspec* config
         _timer_setCurrentInterval(timer, &(config->it_interval));
     }
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     if(timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timer, host);
         trace("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",

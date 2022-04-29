@@ -1570,10 +1570,10 @@ extern "C" {
     pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
 }
 extern "C" {
-    pub fn worker_getCurrentTime() -> SimulationTime;
+    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
 }
 extern "C" {
-    pub fn worker_getEmulatedTime() -> EmulatedTime;
+    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
 }
 extern "C" {
     pub fn worker_isBootstrapActive() -> bool;

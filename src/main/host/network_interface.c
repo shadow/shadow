@@ -132,7 +132,7 @@ static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Ho
 }
 
 static void _networkinterface_scheduleNextRefill(NetworkInterface* interface, Host* host) {
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     SimulationTime interval = _networkinterface_getRefillInterval();
 
     /* This computes the time that the next refill should have occurred if we
@@ -188,7 +188,7 @@ static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer voidInte
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host) {
     MAGIC_ASSERT(interface);
 
-    interface->timeStartedRefillingBuckets = worker_getCurrentTime();
+    interface->timeStartedRefillingBuckets = worker_getCurrentSimulationTime();
     _networkinterface_refillTokenBucketsCB(host, interface, NULL);
 }
 
@@ -341,7 +341,7 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     utility_assert(interface->pcap != NULL);
 
     /* get the current time that the packet is being sent/received */
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     guint32 ts_sec = now / SIMTIME_ONE_SECOND;
     guint32 ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 

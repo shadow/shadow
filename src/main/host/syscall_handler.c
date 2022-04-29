@@ -590,7 +590,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(sys->host));
         trace("Unapplied CPU latency amt=%ld max=%ld", unappliedCpuLatency, maxUnappliedCpuLatency);
         if (unappliedCpuLatency > maxUnappliedCpuLatency) {
-            EmulatedTime newTime = worker_getEmulatedTime() + unappliedCpuLatency;
+            EmulatedTime newTime = worker_getCurrentEmulatedTime() + unappliedCpuLatency;
             EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");

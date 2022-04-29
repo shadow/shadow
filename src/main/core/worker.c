@@ -464,7 +464,7 @@ void worker_runEvent(Event* event) {
     event_unref(event);
 
     /* update times */
-    _worker_setLastEventTime(worker_getCurrentTime());
+    _worker_setLastEventTime(worker_getCurrentSimulationTime());
     worker_setCurrentTime(SIMTIME_INVALID);
 }
 
@@ -479,7 +479,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
         info("%u hosts are shut down", nHosts);
     }
 
-    _worker_setLastEventTime(worker_getCurrentTime());
+    _worker_setLastEventTime(worker_getCurrentSimulationTime());
     worker_setCurrentTime(SIMTIME_INVALID);
 
     /* cleanup is all done, send counters to manager */
@@ -501,7 +501,7 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
         return FALSE;
     }
 
-    SimulationTime clock_now = worker_getCurrentTime();
+    SimulationTime clock_now = worker_getCurrentSimulationTime();
     utility_assert(clock_now != SIMTIME_INVALID);
 
     Event* event = event_new_(task, clock_now + nanoDelay, host, host);
@@ -561,7 +561,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
         worker_updateMinHostRunahead(delay);
-        SimulationTime deliverTime = worker_getCurrentTime() + delay;
+        SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
 
@@ -615,13 +615,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-/* The emulated time starts at January 1st, 2000. This time should be used
- * in any places where time is returned to the application, to handle code
- * that assumes the world is in a relatively recent time. */
-EmulatedTime worker_getEmulatedTime() {
-    return (EmulatedTime)(worker_getCurrentTime() + EMULATED_TIME_OFFSET);
 }
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {

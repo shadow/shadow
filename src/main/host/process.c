@@ -175,7 +175,7 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 static void _process_setSharedTime(Process* proc) {
     shimshmem_setMaxRunaheadTime(
         host_getShimShmemLock(proc->host), worker_maxEventRunaheadTime(proc->host));
-    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getCurrentEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
@@ -727,7 +727,7 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
 void process_schedule(Process* proc, gpointer nothing) {
     MAGIC_ASSERT(proc);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
 
     if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;

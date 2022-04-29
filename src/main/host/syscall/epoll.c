@@ -194,7 +194,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             if (timeout_ms > 0) {
                 syscallcondition_setTimeout(
                     cond, sys->host,
-                    worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+                    worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
             }
 
             return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};

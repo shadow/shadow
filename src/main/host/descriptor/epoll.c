@@ -635,7 +635,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             }
 
             /* Record that we are reporting the event now. */
-            watch->last_reported_event_time = worker_getCurrentTime();
+            watch->last_reported_event_time = worker_getCurrentSimulationTime();
 
             /* event was just collected, unset the change status */
             watch->flags &= ~EWF_READCHANGED;
