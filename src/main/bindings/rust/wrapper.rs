@@ -1561,6 +1561,13 @@ extern "C" {
     ) -> gboolean;
 }
 extern "C" {
+    pub fn worker_scheduleTaskAtEmulatedTime(
+        task: *mut Task,
+        host: *mut Host,
+        t: EmulatedTime,
+    ) -> gboolean;
+}
+extern "C" {
     pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
 }
 extern "C" {

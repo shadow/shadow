@@ -493,7 +493,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
-gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
+gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t) {
     utility_assert(task);
     utility_assert(host);
 
@@ -501,11 +501,18 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
         return FALSE;
     }
 
-    SimulationTime clock_now = worker_getCurrentSimulationTime();
-    utility_assert(clock_now != SIMTIME_INVALID);
-
-    Event* event = event_new_(task, clock_now + nanoDelay, host, host);
+    Event* event = event_new_(task, EMULATED_TIME_TO_SIMULATED_TIME(t), host, host);
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
+}
+
+gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
+    utility_assert(task);
+    utility_assert(host);
+
+    EmulatedTime clock_now = worker_getCurrentEmulatedTime();
+    utility_assert(clock_now != EMUTIME_INVALID);
+
+    return worker_scheduleTaskAtEmulatedTime(task, host, clock_now + nanoDelay);
 }
 
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
