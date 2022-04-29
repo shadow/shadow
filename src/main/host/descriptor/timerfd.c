@@ -168,7 +168,7 @@ static SimulationTime _timerfd_timespecToSimTime(const struct timespec* config,
     return simNanoSecs;
 }
 
-static void _timerfd_setCurrentTime(TimerFd* timer, const struct timespec* config, gint flags) {
+static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, gint flags) {
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
@@ -178,17 +178,17 @@ static void _timerfd_setCurrentTime(TimerFd* timer, const struct timespec* confi
         /* config time specifies an absolute time.
          * the plugin only knows about emulated time, so we need to convert it
          * back to simulated time to make sure we expire at the right time. */
-        timer->timer.nextExpireTime = _timerfd_timespecToSimTime(config, TRUE);
+        timer->nextExpireTime = _timerfd_timespecToSimTime(config, TRUE);
 
         /* the man page does not specify what happens if the time
          * they gave us is in the past. on linux, the result is an
          * immediate timer expiration. */
-        if (timer->timer.nextExpireTime < now) {
-            timer->timer.nextExpireTime = now;
+        if (timer->nextExpireTime < now) {
+            timer->nextExpireTime = now;
         }
     } else {
         /* config time is relative to current time */
-        timer->timer.nextExpireTime = now + _timerfd_timespecToSimTime(config, FALSE);
+        timer->nextExpireTime = now + _timerfd_timespecToSimTime(config, FALSE);
     }
 }
 
@@ -273,7 +273,7 @@ static void _timerfd_arm(TimerFd* timer, Host* host, const struct itimerspec* co
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
-    _timerfd_setCurrentTime(timer, &(config->it_value), flags);
+    _timer_setCurrentTime(&timer->timer, &(config->it_value), flags);
 
     if(config->it_interval.tv_sec > 0 || config->it_interval.tv_nsec > 0) {
         _timerfd_setCurrentInterval(timer, &(config->it_interval));
