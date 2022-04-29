@@ -128,11 +128,16 @@ void timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value) {
     _timer_getCurrentInterval(&timer->timer, &(curr_value->it_interval));
 }
 
+static void _timer_disarm(Timer* timer) {
+    MAGIC_ASSERT(timer);
+    timer->nextExpireTime = 0;
+    timer->expireInterval = 0;
+    timer->minValidExpireID = timer->nextExpireID;
+}
+
 static void _timerfd_disarm(TimerFd* timer) {
     MAGIC_ASSERT(timer);
-    timer->timer.nextExpireTime = 0;
-    timer->timer.expireInterval = 0;
-    timer->timer.minValidExpireID = timer->timer.nextExpireID;
+    _timer_disarm(&timer->timer);
     trace("timer fd %i disarmed", timer->super.handle);
 }
 
