@@ -239,8 +239,18 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
      * callback. Instead we get a list of the keys and do lookups on those.*/
     GList* listenerList = g_hash_table_get_keys(descriptor->listeners);
 
+    // Iterate the listeners in deterministic order. It's probably better to
+    // maintain the items in a sorted structure, e.g. a ring, to make it easier
+    // or more efficient to iterate deterministically while also moving the ring
+    // entry pointer so we don't always wake up the same listener first on every
+    // iteration and possibly starve the others.
+    GList* item = NULL;
+    if (listenerList != NULL) {
+        listenerList = g_list_sort(listenerList, status_listener_compare);
+        item = g_list_first(listenerList);
+    }
+
     /* Iterate the listeners. */
-    GList* item = g_list_first(listenerList);
     while (statusesChanged && item) {
         StatusListener* listener = item->data;
 
@@ -255,7 +265,9 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
         item = g_list_next(item);
     }
 
-    g_list_free(listenerList);
+    if (listenerList != NULL) {
+        g_list_free(listenerList);
+    }
 }
 
 void descriptor_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits) {
