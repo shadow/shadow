@@ -1297,16 +1297,16 @@ pub type Packet = _Packet;
 pub type PacketTCPHeader = _PacketTCPHeader;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Futex {
-    _unused: [u8; 0],
-}
-pub type Futex = _Futex;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _FutexTable {
     _unused: [u8; 0],
 }
 pub type FutexTable = _FutexTable;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Futex {
+    _unused: [u8; 0],
+}
+pub type Futex = _Futex;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Router {
@@ -1483,6 +1483,9 @@ extern "C" {
 }
 extern "C" {
     pub fn host_unlockShimShmemLock(host: *mut Host);
+}
+extern "C" {
+    pub fn host_getNextDeterministicSequenceValue(host: *mut Host) -> guint64;
 }
 extern "C" {
     pub fn worker_runEvent(event: *mut Event);
