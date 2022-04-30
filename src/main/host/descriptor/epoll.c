@@ -174,7 +174,8 @@ static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
 static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key);
 
 static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
-                                   EpollWatchObject object, const struct epoll_event* event) {
+                                   EpollWatchObject object, const struct epoll_event* event,
+                                   Host* host) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_assert(event);
@@ -209,7 +210,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
      * The watch object already holds a ref to the descriptor so we
      * don't ref it again. */
     watch->listener = statuslistener_new(
-        (StatusCallbackFunc)_epoll_descriptorStatusChanged, epoll, NULL, key, g_free);
+        (StatusCallbackFunc)_epoll_descriptorStatusChanged, epoll, NULL, key, g_free, host);
 
     return watch;
 }
@@ -455,7 +456,7 @@ static void _getWatchObject(const CompatDescriptor* descriptor, EpollWatchTypes*
 }
 
 gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor* descriptor,
-                   const struct epoll_event* event) {
+                   const struct epoll_event* event, Host* host) {
     MAGIC_ASSERT(epoll);
 
     trace("epoll descriptor %i, operation %s, descriptor %i", epoll->super.handle,
@@ -491,7 +492,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
             }
 
             /* start watching for status changes */
-            watch = _epollwatch_new(epoll, fd, watchType, watchObject, event);
+            watch = _epollwatch_new(epoll, fd, watchType, watchObject, event, host);
             watch->flags |= EWF_WATCHING;
             gpointer new_key = _epollkey_new(key.fd, key.objectPtr);
             g_hash_table_replace(epoll->watching, new_key, watch);

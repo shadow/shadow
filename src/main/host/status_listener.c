@@ -10,6 +10,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
+#include "main/host/host.h"
 #include "main/utility/utility.h"
 
 struct _StatusListener {
@@ -29,6 +30,9 @@ struct _StatusListener {
     /* The function we call to free the callback argument. */
     StatusArgumentFreeFunc argumentFreeFunc;
 
+    /* Enables deterministic sorting of listener items. */
+    uint64_t deterministicSequenceValue;
+
     /* Memory accounting. */
     int referenceCount;
     MAGIC_DECLARE;
@@ -36,15 +40,17 @@ struct _StatusListener {
 
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc) {
+                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host) {
     StatusListener* listener = malloc(sizeof(StatusListener));
 
-    *listener = (StatusListener){.notifyFunc = notifyFunc,
-                                 .callbackObject = callbackObject,
-                                 .objectFreeFunc = objectFreeFunc,
-                                 .callbackArgument = callbackArgument,
-                                 .argumentFreeFunc = argumentFreeFunc,
-                                 .referenceCount = 1};
+    *listener =
+        (StatusListener){.notifyFunc = notifyFunc,
+                         .callbackObject = callbackObject,
+                         .objectFreeFunc = objectFreeFunc,
+                         .callbackArgument = callbackArgument,
+                         .argumentFreeFunc = argumentFreeFunc,
+                         .deterministicSequenceValue = host_getNextDeterministicSequenceValue(host),
+                         .referenceCount = 1};
 
     MAGIC_INIT(listener);
 

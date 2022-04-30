@@ -6,10 +6,11 @@
 #ifndef SRC_MAIN_HOST_STATUS_LISTENER_H_
 #define SRC_MAIN_HOST_STATUS_LISTENER_H_
 
-#include "main/host/status.h"
-
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _StatusListener StatusListener;
+
+#include "main/host/host.h"
+#include "main/host/status.h"
 
 /* Indicates when the listener should trigger a callback, i.e.,
  * when the status bits that we are monitoring flip from off to on,
@@ -34,7 +35,7 @@ typedef void (*StatusArgumentFreeFunc)(void* data);
  * used to specify which status bits this listener should monitor. */
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc);
+                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host);
 
 /* Increment the reference count for this listener. */
 void statuslistener_ref(StatusListener* listener);

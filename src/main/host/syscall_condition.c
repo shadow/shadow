@@ -432,8 +432,8 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
-                                   Thread* thread) {
+void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc, Thread* thread,
+                                   Host* host) {
     MAGIC_ASSERT(cond);
     utility_assert(proc);
     utility_assert(thread);
@@ -448,8 +448,8 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
     /* Now set up the listeners. */
     if (cond->timeout && !cond->timeoutListener) {
         /* The timer is used for timeouts. */
-        cond->timeoutListener = statuslistener_new(
-            _syscallcondition_notifyTimeoutExpired, cond, _syscallcondition_unrefcb, NULL, NULL);
+        cond->timeoutListener = statuslistener_new(_syscallcondition_notifyTimeoutExpired, cond,
+                                                   _syscallcondition_unrefcb, NULL, NULL, host);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);
@@ -465,8 +465,8 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 
     if (cond->trigger.object.as_pointer && !cond->triggerListener) {
         /* We listen for status change on the trigger object. */
-        cond->triggerListener = statuslistener_new(
-            _syscallcondition_notifyStatusChanged, cond, _syscallcondition_unrefcb, NULL, NULL);
+        cond->triggerListener = statuslistener_new(_syscallcondition_notifyStatusChanged, cond,
+                                                   _syscallcondition_unrefcb, NULL, NULL, host);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);

@@ -68,8 +68,8 @@ void syscallcondition_unref(SysCallCondition* cond);
  * be notified via process_continue() when the condition occurs. After
  * this call, the condition object will begin listening on the status of
  * the timeout and descriptor given in new(). */
-void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
-                                   Thread* thread);
+void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc, Thread* thread,
+                                   Host* host);
 
 /* Deactivate the condition by deregistering any open listeners and
  * clearing any references to the process an thread given in wait(). */
