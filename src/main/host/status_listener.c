@@ -5,6 +5,7 @@
 
 #include "main/host/status_listener.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -37,6 +38,18 @@ struct _StatusListener {
     int referenceCount;
     MAGIC_DECLARE;
 };
+
+int status_listener_compare(const void* ptr_1, const void* ptr_2) {
+    const StatusListener* listener_1 = ptr_1;
+    const StatusListener* listener_2 = ptr_2;
+
+    if (listener_1->deterministicSequenceValue == listener_2->deterministicSequenceValue) {
+        assert(listener_1 == listener_2);
+        return 0;
+    }
+
+    return (listener_1->deterministicSequenceValue < listener_2->deterministicSequenceValue) ? -1 : 1;
+}
 
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,

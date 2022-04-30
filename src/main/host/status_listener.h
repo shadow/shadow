@@ -57,4 +57,10 @@ void statuslistener_onStatusChanged(StatusListener* listener, Status currentStat
 void statuslistener_setMonitorStatus(StatusListener* listener, Status status,
                                      StatusListenerFilter filter);
 
+/* Used for sorting status listeners in GLib code. Returns -1 if the listener in
+ * ptr_1 was created before the listener in ptr_2, +1 if the listener in ptr_2
+ * was created before the listener in ptr_1, and 0 if the listener and their
+ * pointer values are equal.  */
+int status_listener_compare(const void* ptr_1, const void* ptr_2);
+
 #endif /* SRC_MAIN_HOST_STATUS_LISTENER_H_ */
