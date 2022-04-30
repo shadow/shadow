@@ -10,6 +10,10 @@ This module contains some identically-named constants defined as C macros in
 */
 
 use super::emulated_time;
+use std::time::Duration;
+
+use log::error;
+
 use crate::cshadow as c;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
@@ -49,31 +53,140 @@ impl std::convert::From<std::time::Duration> for SimulationTime {
     }
 }
 
+impl std::convert::TryFrom<libc::timespec> for SimulationTime {
+    type Error = ();
+
+    fn try_from(value: libc::timespec) -> Result<Self, Self::Error> {
+        if value.tv_sec < 0 || value.tv_nsec < 0 || value.tv_nsec > 999_999_999 {
+            return Err(());
+        }
+        let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
+        let nanos = Duration::from_nanos(value.tv_nsec.try_into().unwrap());
+        Ok(Self(secs + nanos))
+    }
+}
+
+impl std::convert::TryFrom<SimulationTime> for libc::timespec {
+    type Error = ();
+
+    fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
+        let tv_nsec = value.subsec_nanos().try_into().map_err(|_| ())?;
+        Ok(libc::timespec { tv_sec, tv_nsec })
+    }
+}
+
+impl std::convert::TryFrom<libc::timeval> for SimulationTime {
+    type Error = ();
+
+    fn try_from(value: libc::timeval) -> Result<Self, Self::Error> {
+        if value.tv_sec < 0 || value.tv_usec < 0 || value.tv_usec > 999_999 {
+            return Err(());
+        }
+        let secs = Duration::from_secs(u64::try_from(value.tv_sec).unwrap());
+        let micros = Duration::from_micros(u64::try_from(value.tv_usec).unwrap());
+        Ok(Self(secs + micros))
+    }
+}
+
+impl std::convert::TryFrom<SimulationTime> for libc::timeval {
+    type Error = ();
+
+    fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
+        let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
+        Ok(libc::timeval { tv_sec, tv_usec })
+    }
+}
+
 /// Invalid simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_INVALID: c::SimulationTime = u64::MAX;
 
 /// Maximum and minimum valid values.
+/// cbindgen:ignore
 pub const SIMTIME_MAX: c::SimulationTime =
     emulated_time::EMUTIME_MAX - (emulated_time::SIMULATION_START_SEC * SIMTIME_ONE_SECOND);
+/// cbindgen:ignore
 pub const SIMTIME_MIN: c::SimulationTime = 0;
 
 /// Represents one nanosecond in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_NANOSECOND: c::SimulationTime = 1;
 
 /// Represents one microsecond in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_MICROSECOND: c::SimulationTime = 1000;
 
 /// Represents one millisecond in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_MILLISECOND: c::SimulationTime = 1000000;
 
 /// Represents one second in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_SECOND: c::SimulationTime = 1000000000;
 
 /// Represents one minute in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_MINUTE: c::SimulationTime = 60000000000;
 
 /// Represents one hour in simulation time.
+/// cbindgen:ignore
 pub const SIMTIME_ONE_HOUR: c::SimulationTime = 3600000000000;
+
+pub mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> c::SimulationTime {
+        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> c::SimulationTime {
+        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
+    }
+
+    #[must_use]
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_to_timeval(
+        val: c::SimulationTime,
+        out: *mut libc::timeval,
+    ) -> bool {
+        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
+            s
+        } else {
+            return false;
+        };
+        let tv: libc::timeval = if let Ok(tv) = libc::timeval::try_from(simtime) {
+            tv
+        } else {
+            return false;
+        };
+        *unsafe { out.as_mut() }.unwrap() = tv;
+        true
+    }
+
+    #[must_use]
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_to_timespec(
+        val: c::SimulationTime,
+        out: *mut libc::timespec,
+    ) -> bool {
+        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
+            s
+        } else {
+            return false;
+        };
+        let ts: libc::timespec = if let Ok(ts) = libc::timespec::try_from(simtime) {
+            ts
+        } else {
+            return false;
+        };
+        *unsafe { out.as_mut() }.unwrap() = ts;
+        true
+    }
+}
 
 #[cfg(test)]
 mod tests {
