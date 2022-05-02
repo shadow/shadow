@@ -1,4 +1,4 @@
-use crate::core::support::emulated_time::{self, EmulatedTime};
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::utility::time::TimeParts;
 
@@ -180,14 +180,12 @@ pub struct ShadowStatusBarState {
 
 impl std::fmt::Display for ShadowStatusBarState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sim_current = self
-            .current
-            .duration_since(&emulated_time::SIMULATION_START);
-        let sim_end = self.end.duration_since(&emulated_time::SIMULATION_START);
+        let sim_current = self.current.duration_since(&EmulatedTime::SIMULATION_START);
+        let sim_end = self.end.duration_since(&EmulatedTime::SIMULATION_START);
         let frac = sim_current.as_millis() as f32 / sim_end.as_millis() as f32;
 
-        let sim_current = TimeParts::from_nanos(sim_current.as_nanos());
-        let sim_end = TimeParts::from_nanos(sim_end.as_nanos());
+        let sim_current = TimeParts::from_nanos(sim_current.as_nanos().into());
+        let sim_end = TimeParts::from_nanos(sim_end.as_nanos().into());
         let realtime = TimeParts::from_nanos(self.start.elapsed().as_nanos());
 
         write!(
@@ -205,7 +203,7 @@ impl ShadowStatusBarState {
     pub fn new(end: EmulatedTime) -> Self {
         Self {
             start: std::time::Instant::now(),
-            current: emulated_time::SIMULATION_START,
+            current: EmulatedTime::SIMULATION_START,
             end,
         }
     }

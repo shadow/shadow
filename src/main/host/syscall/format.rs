@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::num::NonZeroU8;
 
-use crate::core::support::emulated_time::{self, EmulatedTime};
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
     PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
@@ -552,8 +552,8 @@ pub fn write_syscall(
     args: impl Display,
     rv: impl Display,
 ) -> std::io::Result<()> {
-    let sim_time = sim_time.duration_since(&emulated_time::SIMULATION_START);
-    let sim_time = TimeParts::from_nanos(sim_time.as_nanos());
+    let sim_time = sim_time.duration_since(&EmulatedTime::SIMULATION_START);
+    let sim_time = TimeParts::from_nanos(sim_time.as_nanos().into());
     let sim_time = sim_time.fmt_hr_min_sec_milli();
 
     writeln!(

@@ -1,4 +1,4 @@
-use crate::core::support::emulated_time;
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::worker::Worker;
 use crate::host::context::ThreadContext;
 use crate::host::syscall::handler::SyscallHandler;
@@ -16,7 +16,7 @@ impl SyscallHandler {
         // Seconds are needed for uptime.
         let seconds = Worker::current_time()
             .unwrap()
-            .duration_since(&emulated_time::SIMULATION_START)
+            .duration_since(&EmulatedTime::SIMULATION_START)
             .as_secs();
 
         // Get a zeroed struct to make sure we init all fields.

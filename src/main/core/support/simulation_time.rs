@@ -1,5 +1,5 @@
 /*!
-Values for working with time in simulation units.
+Values for working with a simulated duration. Use `EmulatedTime` to represent an instant in time.
 
 In Rust, use `EmulatedTime` to represent an instant in time, or
 [`std::time::Duration`] to represent a time interval. Use `SimulationTime` only
@@ -12,51 +12,160 @@ This module contains some identically-named constants defined as C macros in
 use super::emulated_time;
 use std::time::Duration;
 
-use log::error;
-
 use crate::cshadow as c;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
-pub struct SimulationTime(std::time::Duration);
-
-impl std::ops::Deref for SimulationTime {
-    type Target = std::time::Duration;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+pub struct SimulationTime(c::SimulationTime);
 
 impl SimulationTime {
+    /// Maximum value. Currently equivalent to SIMTIME_MAX to avoid surprises
+    /// when interoperating with C, but could use Duration::MAX when the C types
+    /// go away.
+    pub const MAX: SimulationTime = SimulationTime(SIMTIME_MAX);
+    pub const ZERO: SimulationTime = SimulationTime(0);
+    pub const SECOND: SimulationTime = SimulationTime(SIMTIME_ONE_SECOND);
+    pub const MILLISECOND: SimulationTime = SimulationTime(SIMTIME_ONE_MILLISECOND);
+    pub const MICROSECOND: SimulationTime = SimulationTime(SIMTIME_ONE_MICROSECOND);
+    pub const NANOSECOND: SimulationTime = SimulationTime(SIMTIME_ONE_NANOSECOND);
+
     pub fn from_c_simtime(val: c::SimulationTime) -> Option<Self> {
         if val == SIMTIME_INVALID {
             return None;
         }
 
-        Some(Self::from(std::time::Duration::from_nanos(
-            val * SIMTIME_ONE_NANOSECOND,
-        )))
+        if val > SIMTIME_MAX {
+            return None;
+        }
+
+        Some(Self(val / SIMTIME_ONE_NANOSECOND))
     }
 
     pub fn to_c_simtime(val: Option<Self>) -> c::SimulationTime {
         if let Some(val) = val {
-            let simtime_xl = val.as_nanos() / u128::from(SIMTIME_ONE_NANOSECOND);
-            match c::SimulationTime::try_from(simtime_xl) {
-                Ok(t) => t,
-                Err(_) => {
-                    error!("{} simtime is out of range", simtime_xl);
-                    SIMTIME_INVALID
-                }
-            }
+            val.0
         } else {
             SIMTIME_INVALID
         }
     }
+
+    pub fn as_secs(&self) -> u64 {
+        self.0 / SIMTIME_ONE_SECOND
+    }
+
+    pub fn as_millis(&self) -> u64 {
+        self.0 / SIMTIME_ONE_MILLISECOND
+    }
+
+    pub fn as_micros(&self) -> u64 {
+        self.0 / SIMTIME_ONE_MICROSECOND
+    }
+
+    pub fn as_nanos(&self) -> u128 {
+        (self.0 / SIMTIME_ONE_NANOSECOND).into()
+    }
+
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        let sum = if let Some(s) = self.0.checked_add(other.0) {
+            s
+        } else {
+            return None;
+        };
+        SimulationTime::from_c_simtime(sum)
+    }
+
+    pub fn checked_mul(self, other: u64) -> Option<Self> {
+        if let Some(product) = self.0.checked_mul(other) {
+            SimulationTime::from_c_simtime(product)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_from_secs(s: u64) -> Option<Self> {
+        Self::SECOND.checked_mul(s)
+    }
+
+    pub fn from_secs(s: u64) -> Self {
+        Self::try_from_secs(s).unwrap()
+    }
+
+    pub fn try_from_millis(s: u64) -> Option<Self> {
+        Self::MILLISECOND.checked_mul(s)
+    }
+
+    pub fn from_millis(s: u64) -> Self {
+        Self::try_from_millis(s).unwrap()
+    }
+
+    pub fn try_from_micros(s: u64) -> Option<Self> {
+        Self::MICROSECOND.checked_mul(s)
+    }
+
+    pub fn from_micros(s: u64) -> Self {
+        Self::try_from_micros(s).unwrap()
+    }
+
+    pub fn try_from_nanos(s: u64) -> Option<Self> {
+        Self::NANOSECOND.checked_mul(s)
+    }
+
+    pub fn from_nanos(s: u64) -> Self {
+        Self::try_from_nanos(s).unwrap()
+    }
+
+    pub fn subsec_millis(&self) -> u32 {
+        (self.as_millis() % 1_000).try_into().unwrap()
+    }
+
+    pub fn subsec_micros(&self) -> u32 {
+        (self.as_micros() % 1_000_000).try_into().unwrap()
+    }
+
+    pub fn subsec_nanos(&self) -> u32 {
+        (self.as_nanos() % 1_000_000_000).try_into().unwrap()
+    }
 }
 
-impl std::convert::From<std::time::Duration> for SimulationTime {
-    fn from(val: std::time::Duration) -> Self {
-        Self(val)
+impl std::ops::Mul<u64> for SimulationTime {
+    type Output = SimulationTime;
+
+    fn mul(self, other: u64) -> Self::Output {
+        self.checked_mul(other).unwrap()
+    }
+}
+
+impl std::ops::Add<SimulationTime> for SimulationTime {
+    type Output = SimulationTime;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.checked_add(other).unwrap()
+    }
+}
+
+impl std::convert::TryFrom<std::time::Duration> for SimulationTime {
+    type Error = ();
+
+    fn try_from(val: std::time::Duration) -> Result<Self, Self::Error> {
+        debug_assert_eq!(SIMTIME_ONE_NANOSECOND, 1);
+        let val = val.as_nanos();
+        if val > SIMTIME_MAX.into() {
+            Err(())
+        } else {
+            Ok(Self(val.try_into().unwrap()))
+        }
+    }
+}
+
+impl std::convert::From<SimulationTime> for std::time::Duration {
+    fn from(val: SimulationTime) -> std::time::Duration {
+        debug_assert_eq!(SIMTIME_ONE_NANOSECOND, 1);
+        Duration::from_nanos(val.0)
+    }
+}
+
+impl std::convert::From<SimulationTime> for c::SimulationTime {
+    fn from(val: SimulationTime) -> c::SimulationTime {
+        val.0
     }
 }
 
@@ -69,7 +178,7 @@ impl std::convert::TryFrom<libc::timespec> for SimulationTime {
         }
         let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
         let nanos = Duration::from_nanos(value.tv_nsec.try_into().unwrap());
-        Ok(Self(secs + nanos))
+        Self::try_from(secs + nanos)
     }
 }
 
@@ -77,6 +186,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timespec {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
         let tv_nsec = value.subsec_nanos().try_into().map_err(|_| ())?;
         Ok(libc::timespec { tv_sec, tv_nsec })
@@ -90,9 +200,9 @@ impl std::convert::TryFrom<libc::timeval> for SimulationTime {
         if value.tv_sec < 0 || value.tv_usec < 0 || value.tv_usec > 999_999 {
             return Err(());
         }
-        let secs = Duration::from_secs(u64::try_from(value.tv_sec).unwrap());
-        let micros = Duration::from_micros(u64::try_from(value.tv_usec).unwrap());
-        Ok(Self(secs + micros))
+        let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
+        let micros = Duration::from_micros(value.tv_usec.try_into().unwrap());
+        Self::try_from(secs + micros)
     }
 }
 
@@ -100,6 +210,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timeval {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
         let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
         Ok(libc::timeval { tv_sec, tv_usec })
@@ -204,19 +315,30 @@ mod tests {
         let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
         let rust_time = SimulationTime::from_c_simtime(sim_time).unwrap();
 
-        assert_eq!(rust_time.as_secs(), 5 * 60);
-        assert_eq!(rust_time.as_millis(), 5 * 60 * 1_000 + 7);
+        assert_eq!(Duration::from(rust_time).as_secs(), 5 * 60);
+        assert_eq!(Duration::from(rust_time).as_millis(), 5 * 60 * 1_000 + 7);
+
+        assert_eq!(
+            SimulationTime::from_c_simtime(SIMTIME_MAX).unwrap(),
+            SimulationTime::try_from(Duration::from_nanos(
+                (SIMTIME_MAX / SIMTIME_ONE_NANOSECOND).try_into().unwrap()
+            ))
+            .unwrap()
+        );
+        assert_eq!(SimulationTime::from_c_simtime(SIMTIME_MAX + 1), None);
     }
 
     #[test]
     fn test_to_csimtime() {
-        let rust_time = SimulationTime::from(
-            5 * std::time::Duration::from_secs(60) + 7 * std::time::Duration::from_micros(1000),
-        );
+        let rust_time = SimulationTime::from_secs(5 * 60) + SimulationTime::from_millis(7);
         let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
 
         assert_eq!(SimulationTime::to_c_simtime(Some(rust_time)), sim_time);
         assert_eq!(SimulationTime::to_c_simtime(None), SIMTIME_INVALID);
+        assert_eq!(
+            SimulationTime::to_c_simtime(Some(SimulationTime::MAX)),
+            SIMTIME_MAX
+        );
     }
 
     #[test]
@@ -228,26 +350,33 @@ mod tests {
                 tv_sec: 0,
                 tv_usec: 0
             }),
-            Ok(SimulationTime::from(Duration::ZERO))
+            Ok(SimulationTime::ZERO)
         );
         assert_eq!(
             SimulationTime::try_from(timeval {
                 tv_sec: 1,
                 tv_usec: 2
             }),
-            Ok(SimulationTime::from(
-                Duration::from_secs(1) + Duration::from_micros(2)
-            ))
+            Ok(
+                SimulationTime::try_from(Duration::from_secs(1) + Duration::from_micros(2))
+                    .unwrap()
+            )
         );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
+                tv_usec: SimulationTime::MAX.subsec_micros().into(),
+            }),
+            Ok(SimulationTime::from_micros(SimulationTime::MAX.as_micros()))
+        );
+
+        // Out of range
         assert_eq!(
             SimulationTime::try_from(timeval {
                 tv_sec: libc::time_t::MAX,
                 tv_usec: 999_999
             }),
-            Ok(SimulationTime::from(
-                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
-                    + Duration::from_micros(999_999)
-            ))
+            Err(())
         );
 
         assert_eq!(
@@ -304,8 +433,7 @@ mod tests {
             SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_MICROSECOND
         );
 
-        // While the Rust SimulationTime can represent this value, the C SimulatedTime type
-        // is too small to do so.
+        // Out of range
         assert_eq!(
             unsafe {
                 simtime_from_timeval(timeval {
@@ -359,36 +487,28 @@ mod tests {
         use libc::timeval;
 
         assert_eq!(
-            timeval::try_from(SimulationTime::from(Duration::ZERO)),
+            timeval::try_from(SimulationTime::ZERO),
             Ok(timeval {
                 tv_sec: 0,
                 tv_usec: 0
             })
         );
         assert_eq!(
-            timeval::try_from(SimulationTime::from(
-                Duration::from_secs(1) + Duration::from_micros(2)
-            )),
+            timeval::try_from(
+                SimulationTime::try_from(Duration::from_secs(1) + Duration::from_micros(2))
+                    .unwrap()
+            ),
             Ok(timeval {
                 tv_sec: 1,
                 tv_usec: 2
             })
         );
         assert_eq!(
-            timeval::try_from(SimulationTime::from(
-                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
-                    + Duration::from_micros(999_999)
-            )),
+            timeval::try_from(SimulationTime::MAX),
             Ok(timeval {
-                tv_sec: libc::time_t::MAX,
-                tv_usec: 999_999
+                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
+                tv_usec: SimulationTime::MAX.subsec_micros().try_into().unwrap(),
             })
-        );
-
-        // timeval isn't big enough to hold max Duration.
-        assert_eq!(
-            timeval::try_from(SimulationTime::from(Duration::MAX)),
-            Err(())
         );
     }
 
@@ -441,26 +561,34 @@ mod tests {
                 tv_sec: 0,
                 tv_nsec: 0
             }),
-            Ok(SimulationTime::from(Duration::ZERO))
+            Ok(SimulationTime::ZERO)
         );
         assert_eq!(
             SimulationTime::try_from(timespec {
                 tv_sec: 1,
                 tv_nsec: 2
             }),
-            Ok(SimulationTime::from(
-                Duration::from_secs(1) + Duration::from_nanos(2)
-            ))
+            Ok(SimulationTime::try_from(Duration::from_secs(1) + Duration::from_nanos(2)).unwrap())
         );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: (SIMTIME_MAX / SIMTIME_ONE_SECOND).try_into().unwrap(),
+                tv_nsec: 0,
+            }),
+            Ok(
+                SimulationTime::try_from(Duration::from_secs(SIMTIME_MAX / SIMTIME_ONE_SECOND))
+                    .unwrap()
+            )
+        );
+
+        // The C SimulatedTime type is too small to represent this value.
+        // The Rust SimulationTime *could* represent it if we widen it.
         assert_eq!(
             SimulationTime::try_from(timespec {
                 tv_sec: libc::time_t::MAX,
                 tv_nsec: 999_999_999
             }),
-            Ok(SimulationTime::from(
-                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
-                    + Duration::from_nanos(999_999_999)
-            ))
+            Err(())
         );
 
         assert_eq!(
@@ -517,8 +645,7 @@ mod tests {
             SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_NANOSECOND
         );
 
-        // While the Rust SimulationTime can represent this value, the C SimulatedTime type
-        // is too small to do so.
+        // The C SimulatedTime type is too small to represent this value.
         assert_eq!(
             unsafe {
                 simtime_from_timespec(timespec {
@@ -572,36 +699,26 @@ mod tests {
         use libc::timespec;
 
         assert_eq!(
-            timespec::try_from(SimulationTime::from(Duration::ZERO)),
+            timespec::try_from(SimulationTime::ZERO),
             Ok(timespec {
                 tv_sec: 0,
                 tv_nsec: 0
             })
         );
         assert_eq!(
-            timespec::try_from(SimulationTime::from(
-                Duration::from_secs(1) + Duration::from_nanos(2)
-            )),
+            timespec::try_from(SimulationTime::from_secs(1) + SimulationTime::from_nanos(2)),
             Ok(timespec {
                 tv_sec: 1,
                 tv_nsec: 2
             })
         );
-        assert_eq!(
-            timespec::try_from(SimulationTime::from(
-                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
-                    + Duration::from_nanos(999_999_999)
-            )),
-            Ok(timespec {
-                tv_sec: libc::time_t::MAX,
-                tv_nsec: 999_999_999
-            })
-        );
 
-        // timespec isn't big enough to hold max Duration.
         assert_eq!(
-            timespec::try_from(SimulationTime::from(Duration::MAX)),
-            Err(())
+            timespec::try_from(SimulationTime::MAX),
+            Ok(timespec {
+                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
+                tv_nsec: SimulationTime::MAX.subsec_nanos().into(),
+            })
         );
     }
 
