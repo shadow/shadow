@@ -44,7 +44,7 @@
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -136,8 +136,8 @@ struct _Process {
     MemoryManager* memoryManager;
 
     /* File descriptors to handle plugin out and err streams. */
-    File* stdoutFile;
-    File* stderrFile;
+    RegularFile* stdoutFile;
+    RegularFile* stderrFile;
 
     StraceFmtMode straceLoggingMode;
     int straceFd;
@@ -468,11 +468,11 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
         "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
 }
 
-static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
+static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
     MAGIC_ASSERT(proc);
     utility_assert(fileName != NULL);
 
-    File* stdfile = file_new();
+    RegularFile* stdfile = regularfile_new();
     descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
@@ -487,8 +487,8 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
             "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
     }
 
-    int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
-                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
+    int errcode = regularfile_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
+                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
     free(cwd);
 
     if (errcode < 0) {

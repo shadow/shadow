@@ -12,7 +12,7 @@
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -72,13 +72,13 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         case DT_FILE:
             if (!doPread) {
                 utility_assert(offset == 0);
-                result = file_read((File*)desc, sys->host,
-                                   process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                   sizeNeeded);
+                result = regularfile_read((RegularFile*)desc, sys->host,
+                                          process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                          sizeNeeded);
             } else {
-                result = file_pread((File*)desc, sys->host,
-                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                    sizeNeeded, offset);
+                result = regularfile_pread(
+                    (RegularFile*)desc, sys->host,
+                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded, offset);
             }
             break;
         case DT_TIMER:
@@ -166,13 +166,13 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
         case DT_FILE:
             if (!doPwrite) {
                 utility_assert(offset == 0);
-                result = file_write((File*)desc,
-                                    process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
-                                    sizeNeeded);
+                result = regularfile_write((RegularFile*)desc,
+                                           process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                                           sizeNeeded);
             } else {
-                result = file_pwrite((File*)desc,
-                                     process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
-                                     sizeNeeded, offset);
+                result = regularfile_pwrite(
+                    (RegularFile*)desc, process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                    sizeNeeded, offset);
             }
             break;
         case DT_TIMER: result = -EINVAL; break;
@@ -232,7 +232,7 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
     }
 
     int dupError = 0;
-    File* newFile = file_dup((File*)desc, &dupError);
+    RegularFile* newFile = regularfile_dup((RegularFile*)desc, &dupError);
 
     if (newFile == NULL) {
         utility_assert(dupError < 0);

@@ -13,7 +13,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
@@ -23,7 +23,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
-                                              File** file_desc_out) {
+                                              RegularFile** file_desc_out) {
     /* Check that fd is within bounds. */
     if (filefd < 0) {
         debug("descriptor %i out of bounds", filefd);
@@ -33,7 +33,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     /* Check if this is a virtual Shadow descriptor. */
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, filefd);
     if (desc && file_desc_out) {
-        *file_desc_out = (File*)desc;
+        *file_desc_out = (RegularFile*)desc;
     }
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_FILE);
@@ -64,13 +64,13 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     }
 
     /* Create the new descriptor for this file. */
-    File* filed = file_new();
+    RegularFile* filed = regularfile_new();
     int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
 
     /* Now open the file. */
-    errcode = file_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));
+    errcode = regularfile_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));
     if (errcode < 0) {
-        /* This will remove the descriptor entry and unref/free the File. */
+        /* This will remove the descriptor entry and unref/free the RegularFile. */
         descriptor_close((LegacyDescriptor*)filed, sys->host);
         process_deregisterLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
     } else {
@@ -82,14 +82,13 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
 static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = file_fsync(file_desc)};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = regularfile_fsync(file_desc)};
 }
 
 ///////////////////////////////////////////////////////////
@@ -120,7 +119,7 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     }
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -130,7 +129,7 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = file_fstat(file_desc, buf)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fstat(file_desc, buf)};
 }
 
 SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
@@ -144,7 +143,7 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     }
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -154,7 +153,7 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     struct statfs* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = file_fstatfs(file_desc, buf)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fstatfs(file_desc, buf)};
 }
 
 SysCallReturn syscallhandler_fsync(SysCallHandler* sys,
@@ -177,7 +176,7 @@ SysCallReturn syscallhandler_fchown(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -185,8 +184,7 @@ SysCallReturn syscallhandler_fchown(SysCallHandler* sys,
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
-        .retval.as_i64 =
-            file_fchown(file_desc, args->args[1].as_u64, args->args[2].as_u64)};
+        .retval.as_i64 = regularfile_fchown(file_desc, args->args[1].as_u64, args->args[2].as_u64)};
 }
 
 SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
@@ -194,15 +192,14 @@ SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_fchmod(file_desc, args->args[1].as_u64)};
+    return (SysCallReturn){.state = SYSCALL_DONE,
+                           .retval.as_i64 = regularfile_fchmod(file_desc, args->args[1].as_u64)};
 }
 
 SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
@@ -210,16 +207,16 @@ SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = file_fallocate(
-                               file_desc, args->args[1].as_i64,
-                               args->args[2].as_u64, args->args[3].as_u64)};
+    return (SysCallReturn){
+        .state = SYSCALL_DONE,
+        .retval.as_i64 = regularfile_fallocate(
+            file_desc, args->args[1].as_i64, args->args[2].as_u64, args->args[3].as_u64)};
 }
 
 SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
@@ -227,15 +224,14 @@ SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_ftruncate(file_desc, args->args[1].as_u64)};
+    return (SysCallReturn){.state = SYSCALL_DONE,
+                           .retval.as_i64 = regularfile_ftruncate(file_desc, args->args[1].as_u64)};
 }
 
 SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
@@ -243,24 +239,7 @@ SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = file_fadvise(
-                               file_desc, args->args[1].as_u64,
-                               args->args[2].as_u64, args->args[3].as_i64)};
-}
-
-SysCallReturn syscallhandler_flock(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
-    int fd = args->args[0].as_i64;
-
-    /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -268,7 +247,23 @@ SysCallReturn syscallhandler_flock(SysCallHandler* sys,
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
-        .retval.as_i64 = file_flock(file_desc, args->args[1].as_i64)};
+        .retval.as_i64 = regularfile_fadvise(
+            file_desc, args->args[1].as_u64, args->args[2].as_u64, args->args[3].as_i64)};
+}
+
+SysCallReturn syscallhandler_flock(SysCallHandler* sys,
+                                   const SysCallArgs* args) {
+    int fd = args->args[0].as_i64;
+
+    /* Get and validate the file descriptor. */
+    RegularFile* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_flock(file_desc, args->args[1].as_i64)};
 }
 
 SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
@@ -284,7 +279,7 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
     }
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -302,7 +297,7 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
-        .retval.as_i64 = file_fsetxattr(file_desc, name, value, size, flags)};
+        .retval.as_i64 = regularfile_fsetxattr(file_desc, name, value, size, flags)};
 }
 
 SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
@@ -317,7 +312,7 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
     }
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -333,9 +328,8 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
     void* value =
         (valuePtr.val && size > 0) ? process_getWriteablePtr(sys->process, valuePtr, size) : NULL;
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_fgetxattr(file_desc, name, value, size)};
+    return (SysCallReturn){.state = SYSCALL_DONE,
+                           .retval.as_i64 = regularfile_fgetxattr(file_desc, name, value, size)};
 }
 
 SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
@@ -345,7 +339,7 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
     size_t size = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -355,8 +349,7 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
         (listPtr.val && size > 0) ? process_getWriteablePtr(sys->process, listPtr, size) : NULL;
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_flistxattr(file_desc, list, size)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_flistxattr(file_desc, list, size)};
 }
 
 SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
@@ -369,7 +362,7 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
     }
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -382,8 +375,8 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = file_fremovexattr(file_desc, name)};
+    return (SysCallReturn){
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fremovexattr(file_desc, name)};
 }
 
 SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
@@ -394,7 +387,7 @@ SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
     unsigned int flags = args->args[3].as_u64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -402,7 +395,7 @@ SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
-        .retval.as_i64 = file_sync_range(file_desc, offset, nbytes, flags)};
+        .retval.as_i64 = regularfile_sync_range(file_desc, offset, nbytes, flags)};
 }
 
 SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
@@ -412,15 +405,14 @@ SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
     size_t count = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_readahead(file_desc, offset, count)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_readahead(file_desc, offset, count)};
 }
 
 SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
@@ -430,15 +422,14 @@ SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
     int whence = args->args[2].as_i64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_lseek(file_desc, offset, whence)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_lseek(file_desc, offset, whence)};
 }
 
 SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
@@ -448,7 +439,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     unsigned int count = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -466,8 +457,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_getdents(file_desc, dirp, count)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_getdents(file_desc, dirp, count)};
 }
 
 SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
@@ -477,7 +467,7 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
     unsigned int count = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -495,6 +485,5 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = file_getdents64(file_desc, dirp, count)};
+        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_getdents64(file_desc, dirp, count)};
 }
