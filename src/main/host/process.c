@@ -802,8 +802,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     utility_assert(stopTime == 0 || stopTime > startTime);
     proc->startTime = SIMULATED_TIME_TO_EMULATED_TIME(startTime);
-    // Convert to EmulatedTime. 0 means "unset", which we convert to EMUTIME_INVALID.
-    proc->stopTime = (stopTime == 0) ? EMUTIME_INVALID : SIMULATED_TIME_TO_EMULATED_TIME(stopTime);
+    proc->stopTime = SIMULATED_TIME_TO_EMULATED_TIME(stopTime);
 
     proc->interposeMethod = interposeMethod;
 

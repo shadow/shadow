@@ -1913,8 +1913,7 @@ mod export {
 
         match proc.stop_time {
             Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
-            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            None => 0,
+            None => SIMTIME_INVALID,
         }
     }
 }
