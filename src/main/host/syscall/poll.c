@@ -38,7 +38,7 @@ static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, s
 
     if (dType == DT_FILE) {
         // Rely on the kernel to poll the OS-back file
-        int res = file_poll((File*)ldesc, pfd);
+        int res = regularfile_poll((RegularFile*)ldesc, pfd);
         if (res < 0) {
             warning("Asking the kernel to poll file %i resulted in error %i: %s", pfd->fd, -res,
                     strerror(-res));

@@ -23,11 +23,11 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int fd,
+static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* file, int fd,
                                            unsigned long request, PluginPtr argPtr) {
     int result = 0;
 
-    // TODO: we should call file_ioctl() here, but depending on the request we may need to
+    // TODO: we should call regularfile_ioctl() here, but depending on the request we may need to
     // copy in the request params first before passing them.
     switch (request) {
         case TCGETS:
@@ -248,7 +248,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     int result = 0;
     if (dtype == DT_FILE) {
-        result = _syscallhandler_ioctlFileHelper(sys, (File*)desc, fd, request, argPtr);
+        result = _syscallhandler_ioctlFileHelper(sys, (RegularFile*)desc, fd, request, argPtr);
     } else if (dtype == DT_TCPSOCKET) {
         result = _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
     } else if (dtype == DT_UDPSOCKET) {
