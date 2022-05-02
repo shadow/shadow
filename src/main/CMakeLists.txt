@@ -92,7 +92,7 @@ set(shadow_srcs
     host/status_listener.c
     host/descriptor/compat_socket.c
     host/descriptor/epoll.c
-    host/descriptor/file.c
+    host/descriptor/regular_file.c
     host/descriptor/socket.c
     host/descriptor/tcp.c
     host/descriptor/tcp_cong.c

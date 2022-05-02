@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 
 #include <errno.h>
 #include <fcntl.h>
