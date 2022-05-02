@@ -115,8 +115,8 @@ struct _Process {
 #endif
 
     /* process boot and shutdown variables */
-    SimulationTime startTime;
-    SimulationTime stopTime;
+    EmulatedTime startTime;
+    EmulatedTime stopTime;
 
     /* absolute path to the process's working directory */
     char* workingDir;
@@ -175,7 +175,7 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 static void _process_setSharedTime(Process* proc) {
     shimshmem_setMaxRunaheadTime(
         host_getShimShmemLock(proc->host), worker_maxEventRunaheadTime(proc->host));
-    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getCurrentEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
@@ -347,7 +347,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
 
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
-              process_getName(proc), proc->startTime);
+              process_getName(proc), EMULATED_TIME_TO_SIMULATED_TIME(proc->startTime));
         return;
     }
 
@@ -623,7 +623,7 @@ void process_addThread(Process* proc, Thread* thread) {
     process_ref(proc);
     Task* task = task_new(_start_thread_task, proc, thread, _start_thread_task_free_process,
                           _start_thread_task_free_thread);
-    worker_scheduleTask(task, proc->host, 0);
+    worker_scheduleTaskWithDelay(task, proc->host, 0);
     task_unref(task);
 }
 
@@ -727,23 +727,19 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
 void process_schedule(Process* proc, gpointer nothing) {
     MAGIC_ASSERT(proc);
 
-    SimulationTime now = worker_getCurrentTime();
-
-    if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
-        SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
+    if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
         process_ref(proc);
         Task* startProcessTask =
             task_new(_process_runStartTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(startProcessTask, proc->host, startDelay);
+        worker_scheduleTaskAtEmulatedTime(startProcessTask, proc->host, proc->startTime);
         task_unref(startProcessTask);
     }
 
-    if(proc->stopTime > 0 && proc->stopTime > proc->startTime) {
-        SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
+    if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
         process_ref(proc);
         Task* stopProcessTask =
             task_new(_process_runStopTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(stopProcessTask, proc->host, stopDelay);
+        worker_scheduleTaskAtEmulatedTime(stopProcessTask, proc->host, proc->stopTime);
         task_unref(stopProcessTask);
     }
 }
@@ -805,8 +801,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 #endif
 
     utility_assert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = startTime;
-    proc->stopTime = stopTime;
+    proc->startTime = SIMULATED_TIME_TO_EMULATED_TIME(startTime);
+    proc->stopTime = SIMULATED_TIME_TO_EMULATED_TIME(stopTime);
 
     proc->interposeMethod = interposeMethod;
 

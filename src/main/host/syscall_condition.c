@@ -401,7 +401,7 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
      * the state of the trigger object again. */
     Task* wakeupTask =
         task_new(_syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
-    worker_scheduleTask(
+    worker_scheduleTaskWithDelay(
         wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);

@@ -99,9 +99,9 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     SysCallCondition* cond = syscallcondition_new(trigger);
     if (timeoutVPtr.val) {
         SimulationTime timeoutSimulationTime = timeout.tv_sec * SIMTIME_ONE_SECOND + timeout.tv_nsec * SIMTIME_ONE_NANOSECOND;
-        EmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
-                                               ? timeoutSimulationTime + worker_getEmulatedTime()
-                                               : timeoutSimulationTime;
+        EmulatedTime timeoutEmulatedTime =
+            (type == TIMEOUT_RELATIVE) ? timeoutSimulationTime + worker_getCurrentEmulatedTime()
+                                       : timeoutSimulationTime;
         syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
     }
     return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = true};

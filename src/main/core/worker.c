@@ -457,19 +457,19 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    worker_setCurrentTime(event_getTime(event));
+    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(event_getTime(event)));
 
     /* process the local event */
     event_execute(event);
     event_unref(event);
 
     /* update times */
-    _worker_setLastEventTime(worker_getCurrentTime());
-    worker_setCurrentTime(SIMTIME_INVALID);
+    _worker_setLastEventTime(worker_getCurrentEmulatedTime());
+    worker_clearCurrentTime();
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {
-    worker_setCurrentTime(time);
+    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(time));
 
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
@@ -479,8 +479,8 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
         info("%u hosts are shut down", nHosts);
     }
 
-    _worker_setLastEventTime(worker_getCurrentTime());
-    worker_setCurrentTime(SIMTIME_INVALID);
+    _worker_setLastEventTime(worker_getCurrentEmulatedTime());
+    worker_clearCurrentTime();
 
     /* cleanup is all done, send counters to manager */
     WorkerPool* pool = _worker_pool();
@@ -493,7 +493,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
-gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
+gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t) {
     utility_assert(task);
     utility_assert(host);
 
@@ -501,16 +501,23 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
         return FALSE;
     }
 
-    SimulationTime clock_now = worker_getCurrentTime();
-    utility_assert(clock_now != SIMTIME_INVALID);
-
-    Event* event = event_new_(task, clock_now + nanoDelay, host, host);
+    Event* event = event_new_(task, EMULATED_TIME_TO_SIMULATED_TIME(t), host, host);
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
+}
+
+gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay) {
+    utility_assert(task);
+    utility_assert(host);
+
+    EmulatedTime clock_now = worker_getCurrentEmulatedTime();
+    utility_assert(clock_now != EMUTIME_INVALID);
+
+    return worker_scheduleTaskAtEmulatedTime(task, host, clock_now + nanoDelay);
 }
 
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_assert(host);
-    EmulatedTime max = _worker_getRoundEndTime() + EMULATED_TIME_OFFSET;
+    EmulatedTime max = SIMULATED_TIME_TO_EMULATED_TIME(_worker_getRoundEndTime());
 
     EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
     if (nextEventTime != 0) {
@@ -561,7 +568,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
         worker_updateMinHostRunahead(delay);
-        SimulationTime deliverTime = worker_getCurrentTime() + delay;
+        SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
 
@@ -592,11 +599,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
 static void _worker_bootHost(Host* host, void* _unused) {
     worker_setActiveHost(host);
-    worker_setCurrentTime(0);
+    worker_setCurrentEmulatedTime(EMULATED_TIME_OFFSET);
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);
-    worker_setCurrentTime(SIMTIME_INVALID);
+    worker_clearCurrentTime();
     worker_setActiveHost(NULL);
 }
 
@@ -615,13 +622,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-/* The emulated time starts at January 1st, 2000. This time should be used
- * in any places where time is returned to the application, to handle code
- * that assumes the world is in a relatively recent time. */
-EmulatedTime worker_getEmulatedTime() {
-    return (EmulatedTime)(worker_getCurrentTime() + EMULATED_TIME_OFFSET);
 }
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {

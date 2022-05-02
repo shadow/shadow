@@ -21,9 +21,7 @@
 
 /* make sure we return the 'emulated' time, and not the actual simulation clock
  */
-static EmulatedTime _syscallhandler_getEmulatedTime() {
-    return worker_getEmulatedTime();
-}
+static EmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
 
 static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
                                                       int flags, PluginPtr request,
@@ -61,7 +59,8 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
         syscallcondition_setTimeout(cond, sys->host,
-                                    worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
+                                    worker_getCurrentEmulatedTime() +
+                                        req.tv_sec * SIMTIME_ONE_SECOND +
                                         req.tv_nsec * SIMTIME_ONE_NANOSECOND);
 
         /* Block the thread, unblock when the timer expires. */

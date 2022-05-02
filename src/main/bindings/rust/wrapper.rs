@@ -1554,10 +1554,17 @@ extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;
 }
 extern "C" {
-    pub fn worker_scheduleTask(
+    pub fn worker_scheduleTaskWithDelay(
         task: *mut Task,
         host: *mut Host,
         nanoDelay: SimulationTime,
+    ) -> gboolean;
+}
+extern "C" {
+    pub fn worker_scheduleTaskAtEmulatedTime(
+        task: *mut Task,
+        host: *mut Host,
+        t: EmulatedTime,
     ) -> gboolean;
 }
 extern "C" {
@@ -1570,10 +1577,10 @@ extern "C" {
     pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
 }
 extern "C" {
-    pub fn worker_getCurrentTime() -> SimulationTime;
+    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
 }
 extern "C" {
-    pub fn worker_getEmulatedTime() -> EmulatedTime;
+    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
 }
 extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
@@ -1616,7 +1623,10 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn worker_setCurrentTime(time: SimulationTime);
+    pub fn worker_clearCurrentTime();
+}
+extern "C" {
+    pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;

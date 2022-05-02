@@ -312,7 +312,7 @@ static EmulatedTime _schedulerpolicyhostsingle_nextHostEventTime(SchedulerPolicy
     Event* nextEvent = priorityqueue_peek(qdata->pq);
     if (nextEvent) {
         utility_assert(event_getHost(nextEvent) == host);
-        nextEventTime = event_getTime(nextEvent) + EMULATED_TIME_OFFSET;
+        nextEventTime = SIMULATED_TIME_TO_EMULATED_TIME(event_getTime(nextEvent));
     }
 
     g_mutex_unlock(&(qdata->lock));

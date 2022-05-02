@@ -345,17 +345,23 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
-        if let Some(t) = SimulationTime::from_c_simtime(t) {
-            Worker::set_current_time(EmulatedTime::from_abs_simtime(t));
-        } else {
-            Worker::clear_current_time();
-        }
+    pub extern "C" fn worker_setCurrentEmulatedTime(t: cshadow::EmulatedTime) {
+        Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
+    pub extern "C" fn worker_clearCurrentTime() {
+        Worker::clear_current_time();
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentSimulationTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentEmulatedTime() -> cshadow::EmulatedTime {
+        EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
     #[no_mangle]
@@ -364,10 +370,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
-        Worker::set_last_event_time(EmulatedTime::from_abs_simtime(
-            SimulationTime::from_c_simtime(t).unwrap(),
-        ));
+    pub extern "C" fn _worker_setLastEventTime(t: cshadow::EmulatedTime) {
+        Worker::set_last_event_time(EmulatedTime::from_c_emutime(t).unwrap())
     }
 
     #[no_mangle]

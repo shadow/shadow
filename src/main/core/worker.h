@@ -73,14 +73,22 @@ int worker_getAffinity();
 DNS* worker_getDNS();
 ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
-gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
+gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay);
+gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);
 // Maximum time that the current event may run ahead to.
 EmulatedTime worker_maxEventRunaheadTime(Host* host);
 
-SimulationTime worker_getCurrentTime();
-EmulatedTime worker_getEmulatedTime();
+/* Time from the  beginning of the simulation.
+ * Deprecated - prefer `worker_getCurrentEmulatedTime`.
+ */
+SimulationTime worker_getCurrentSimulationTime();
+
+/* The emulated time starts at January 1st, 2000. This time should be used
+ * in any places where time is returned to the application, to handle code
+ * that assumes the world is in a relatively recent time. */
+EmulatedTime worker_getCurrentEmulatedTime();
 
 bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
@@ -94,7 +102,9 @@ gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID);
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress);
 void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress);
 
-void worker_setCurrentTime(SimulationTime time);
+void worker_clearCurrentTime();
+void worker_setCurrentEmulatedTime(EmulatedTime time);
+
 gboolean worker_isFiltered(LogLevel level);
 
 void worker_bootHosts(GQueue* hosts);

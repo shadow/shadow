@@ -195,7 +195,7 @@ struct _TCP {
         gboolean userDisabledSend;
         gboolean userDisabledReceive;
         gsize bytesCopied;
-        SimulationTime lastAdjustment;
+        EmulatedTime lastAdjustment;
         gsize space;
     } autotune;
 
@@ -563,7 +563,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) 
         }
     }
 
-    SimulationTime now = worker_getCurrentTime();
+    EmulatedTime now = worker_getCurrentEmulatedTime();
     if(tcp->autotune.lastAdjustment == 0) {
         tcp->autotune.lastAdjustment = now;
     } else if(tcp->timing.rttSmoothed > 0) {
@@ -699,7 +699,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                 delay = SIMTIME_ONE_SECOND;
             }
 
-            worker_scheduleTask(closeTask, host, delay);
+            worker_scheduleTaskWithDelay(closeTask, host, delay);
             task_unref(closeTask);
             break;
         }
@@ -1001,7 +1001,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
         descriptor_ref(tcp);
         Task* retexpTask =
             task_new(_tcp_runRetransmitTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(retexpTask, host, delay);
+        worker_scheduleTaskWithDelay(retexpTask, host, delay);
         task_unref(retexpTask);
 
         trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
@@ -1059,7 +1059,7 @@ static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
 static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, SimulationTime timestamp) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     gint rtt = (gint)((now - timestamp) / SIMTIME_ONE_MILLISECOND);
 
     if(rtt <= 0) {
@@ -1121,7 +1121,7 @@ static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
     }
 
     /* reset retransmit timer since we are resending it now */
-    _tcp_setRetransmitTimer(tcp, host, worker_getCurrentTime());
+    _tcp_setRetransmitTimer(tcp, host, worker_getCurrentSimulationTime());
 
     /* queue it for sending */
     _tcp_bufferPacketOut(tcp, packet);
@@ -1158,7 +1158,7 @@ static void _tcp_sendShutdownFin(TCP* tcp, Host* host) {
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
 
     /* update TCP header to our current advertised window and acknowledgment and timestamps */
     packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
@@ -1193,7 +1193,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
     _tcp_updateReceiveWindow(tcp);
     _tcp_updateSendWindow(tcp);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     double dtime = (double)(now) / (1.0E9);
 
     size_t num_lost_ranges =
@@ -1354,7 +1354,7 @@ static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpo
     MAGIC_ASSERT(tcp);
 
     /* a timer expired, update our timer tracking state */
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     SimulationTime* scheduledTimerExpirationPtr = priorityqueue_pop(tcp->retransmit.scheduledTimerExpirations);
     utility_assert(scheduledTimerExpirationPtr);
     g_free(scheduledTimerExpirationPtr);
@@ -1697,7 +1697,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
     trace("processing data");
 
     TCPProcessFlags flags = TCP_PF_NONE;
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     guint packetLength = packet_getPayloadLength(packet);
 
     /* it has data, check if its in the correct range */
@@ -1766,7 +1766,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Host* host, Packet* packet, PacketT
     trace("processing acks");
 
     TCPProcessFlags flags = TCP_PF_PROCESSED;
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
 
     guint32 prevAck = tcp->receive.lastAcknowledgment;
     guint32 prevWin = tcp->receive.lastWindow;
@@ -2211,7 +2211,7 @@ static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
                     delay = 5*SIMTIME_ONE_MILLISECOND;
                 }
 
-                worker_scheduleTask(sendACKTask, host, delay);
+                worker_scheduleTaskWithDelay(sendACKTask, host, delay);
                 task_unref(sendACKTask);
 
                 tcp->send.delayedACKIsScheduled = TRUE;
@@ -2480,7 +2480,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
         descriptor_ref(tcp);
 
         Task* updateWindowTask = task_new(_tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(updateWindowTask, thread_getHost(thread), 1);
+        worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
         task_unref(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;

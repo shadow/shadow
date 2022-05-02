@@ -9,6 +9,7 @@ This module contains some identically-named constants defined as C macros in
 `main/core/support/definitions.h`.
 */
 
+use super::emulated_time;
 use crate::cshadow as c;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
@@ -52,7 +53,8 @@ impl std::convert::From<std::time::Duration> for SimulationTime {
 pub const SIMTIME_INVALID: c::SimulationTime = u64::MAX;
 
 /// Maximum and minimum valid values.
-pub const SIMTIME_MAX: c::SimulationTime = u64::MAX - 1;
+pub const SIMTIME_MAX: c::SimulationTime =
+    emulated_time::EMUTIME_MAX - (emulated_time::SIMULATION_START_SEC * SIMTIME_ONE_SECOND);
 pub const SIMTIME_MIN: c::SimulationTime = 0;
 
 /// Represents one nanosecond in simulation time.

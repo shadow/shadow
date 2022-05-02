@@ -49,7 +49,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger);
 
 /* Add a timeout to the condition. At time `t`, the conditition will be triggered
  * if it hasn't already. `t` is absolute emulated time, as returned by
- * `worker_getEmulatedTime`. */
+ * `worker_getCurrentEmulatedTime`. */
 void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t);
 
 /* Add a file to the condition which can be used in the syscall handler once it becomes unblocked,

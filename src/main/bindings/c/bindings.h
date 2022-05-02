@@ -132,6 +132,8 @@ typedef struct SyscallHandler SyscallHandler;
 
 typedef uint64_t WatchHandle;
 
+#define EMUTIME_MIN 0
+
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 
 void bytequeue_free(struct ByteQueue *bq_ptr);
@@ -487,13 +489,17 @@ void worker_setRoundEndTime(SimulationTime t);
 
 SimulationTime _worker_getRoundEndTime(void);
 
-void worker_setCurrentTime(SimulationTime t);
+void worker_setCurrentEmulatedTime(EmulatedTime t);
 
-SimulationTime worker_getCurrentTime(void);
+void worker_clearCurrentTime(void);
+
+SimulationTime worker_getCurrentSimulationTime(void);
+
+EmulatedTime worker_getCurrentEmulatedTime(void);
 
 void worker_updateMinHostRunahead(SimulationTime t);
 
-void _worker_setLastEventTime(SimulationTime t);
+void _worker_setLastEventTime(EmulatedTime t);
 
 bool worker_isBootstrapActive(void);
 

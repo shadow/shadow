@@ -126,13 +126,13 @@ _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
 static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
                                                  TaskCallbackFunc func, SimulationTime delay) {
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
-    worker_scheduleTask(refillTask, host, delay);
+    worker_scheduleTaskWithDelay(refillTask, host, delay);
     task_unref(refillTask);
     interface->isRefillPending = TRUE;
 }
 
 static void _networkinterface_scheduleNextRefill(NetworkInterface* interface, Host* host) {
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     SimulationTime interval = _networkinterface_getRefillInterval();
 
     /* This computes the time that the next refill should have occurred if we
@@ -188,7 +188,7 @@ static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer voidInte
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host) {
     MAGIC_ASSERT(interface);
 
-    interface->timeStartedRefillingBuckets = worker_getCurrentTime();
+    interface->timeStartedRefillingBuckets = worker_getCurrentSimulationTime();
     _networkinterface_refillTokenBucketsCB(host, interface, NULL);
 }
 
@@ -341,7 +341,7 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     utility_assert(interface->pcap != NULL);
 
     /* get the current time that the packet is being sent/received */
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
     guint32 ts_sec = now / SIMTIME_ONE_SECOND;
     guint32 ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 
@@ -593,7 +593,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             packet_ref(packet);
             Task* packetTask = task_new(_networkinterface_receivePacketTask, interface, packet,
                                         NULL, packet_unrefTaskFreeFunc);
-            worker_scheduleTask(packetTask, src, 1);
+            worker_scheduleTaskWithDelay(packetTask, src, 1);
             task_unref(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.
