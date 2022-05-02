@@ -28,7 +28,7 @@ impl std::ops::Deref for SimulationTime {
 }
 
 impl SimulationTime {
-    pub fn from_c_simtime(val: u64) -> Option<Self> {
+    pub fn from_c_simtime(val: c::SimulationTime) -> Option<Self> {
         if val == SIMTIME_INVALID {
             return None;
         }
@@ -40,7 +40,14 @@ impl SimulationTime {
 
     pub fn to_c_simtime(val: Option<Self>) -> c::SimulationTime {
         if let Some(val) = val {
-            u64::try_from(val.as_nanos() / u128::from(SIMTIME_ONE_NANOSECOND)).unwrap()
+            let simtime_xl = val.as_nanos() / u128::from(SIMTIME_ONE_NANOSECOND);
+            match c::SimulationTime::try_from(simtime_xl) {
+                Ok(t) => t,
+                Err(_) => {
+                    error!("{} simtime is out of range", simtime_xl);
+                    SIMTIME_INVALID
+                }
+            }
         } else {
             SIMTIME_INVALID
         }
@@ -193,7 +200,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_from_sim_time() {
+    fn test_from_csimtime() {
         let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
         let rust_time = SimulationTime::from_c_simtime(sim_time).unwrap();
 
@@ -202,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_sim_time() {
+    fn test_to_csimtime() {
         let rust_time = SimulationTime::from(
             5 * std::time::Duration::from_secs(60) + 7 * std::time::Duration::from_micros(1000),
         );
@@ -210,5 +217,431 @@ mod tests {
 
         assert_eq!(SimulationTime::to_c_simtime(Some(rust_time)), sim_time);
         assert_eq!(SimulationTime::to_c_simtime(None), SIMTIME_INVALID);
+    }
+
+    #[test]
+    fn test_from_timeval() {
+        use libc::timeval;
+
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: 0,
+                tv_usec: 0
+            }),
+            Ok(SimulationTime::from(Duration::ZERO))
+        );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: 1,
+                tv_usec: 2
+            }),
+            Ok(SimulationTime::from(
+                Duration::from_secs(1) + Duration::from_micros(2)
+            ))
+        );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: libc::time_t::MAX,
+                tv_usec: 999_999
+            }),
+            Ok(SimulationTime::from(
+                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
+                    + Duration::from_micros(999_999)
+            ))
+        );
+
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: 0,
+                tv_usec: 1_000_000
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: 0,
+                tv_usec: -1
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: -1,
+                tv_usec: 0
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timeval {
+                tv_sec: -1,
+                tv_usec: -1
+            }),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn test_c_from_timeval() {
+        use export::simtime_from_timeval;
+        use libc::timeval;
+
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: 0,
+                    tv_usec: 0,
+                })
+            },
+            0
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: 1,
+                    tv_usec: 2,
+                })
+            },
+            SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_MICROSECOND
+        );
+
+        // While the Rust SimulationTime can represent this value, the C SimulatedTime type
+        // is too small to do so.
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: libc::time_t::MAX,
+                    tv_usec: 999_999,
+                })
+            },
+            SIMTIME_INVALID
+        );
+
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: 0,
+                    tv_usec: 1_000_000,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: 0,
+                    tv_usec: -1,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: -1,
+                    tv_usec: 0,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timeval(timeval {
+                    tv_sec: -1,
+                    tv_usec: -1,
+                })
+            },
+            SIMTIME_INVALID
+        );
+    }
+
+    #[test]
+    fn test_to_timeval() {
+        use libc::timeval;
+
+        assert_eq!(
+            timeval::try_from(SimulationTime::from(Duration::ZERO)),
+            Ok(timeval {
+                tv_sec: 0,
+                tv_usec: 0
+            })
+        );
+        assert_eq!(
+            timeval::try_from(SimulationTime::from(
+                Duration::from_secs(1) + Duration::from_micros(2)
+            )),
+            Ok(timeval {
+                tv_sec: 1,
+                tv_usec: 2
+            })
+        );
+        assert_eq!(
+            timeval::try_from(SimulationTime::from(
+                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
+                    + Duration::from_micros(999_999)
+            )),
+            Ok(timeval {
+                tv_sec: libc::time_t::MAX,
+                tv_usec: 999_999
+            })
+        );
+
+        // timeval isn't big enough to hold max Duration.
+        assert_eq!(
+            timeval::try_from(SimulationTime::from(Duration::MAX)),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn test_c_to_timeval() {
+        use export::simtime_to_timeval;
+        use libc::timeval;
+
+        let mut tv = unsafe { std::mem::zeroed() };
+
+        assert!(unsafe { simtime_to_timeval(0, &mut tv) });
+        assert_eq!(
+            tv,
+            timeval {
+                tv_sec: 0,
+                tv_usec: 0
+            }
+        );
+
+        assert!(unsafe {
+            simtime_to_timeval(SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_MICROSECOND, &mut tv)
+        });
+        assert_eq!(
+            tv,
+            timeval {
+                tv_sec: 1,
+                tv_usec: 2
+            }
+        );
+
+        {
+            assert!(unsafe { simtime_to_timeval(SIMTIME_MAX, &mut tv) });
+            let d = Duration::from_nanos(SIMTIME_MAX / SIMTIME_ONE_NANOSECOND);
+            assert_eq!(
+                tv,
+                timeval {
+                    tv_sec: d.as_secs().try_into().unwrap(),
+                    tv_usec: d.subsec_micros().try_into().unwrap()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn test_from_timespec() {
+        use libc::timespec;
+
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: 0
+            }),
+            Ok(SimulationTime::from(Duration::ZERO))
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 1,
+                tv_nsec: 2
+            }),
+            Ok(SimulationTime::from(
+                Duration::from_secs(1) + Duration::from_nanos(2)
+            ))
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: libc::time_t::MAX,
+                tv_nsec: 999_999_999
+            }),
+            Ok(SimulationTime::from(
+                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
+                    + Duration::from_nanos(999_999_999)
+            ))
+        );
+
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: 1_000_000_000
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: -1
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: -1,
+                tv_nsec: 0
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: -1,
+                tv_nsec: -1
+            }),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn test_c_from_timespec() {
+        use export::simtime_from_timespec;
+        use libc::timespec;
+
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: 0,
+                    tv_nsec: 0,
+                })
+            },
+            0
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: 1,
+                    tv_nsec: 2,
+                })
+            },
+            SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_NANOSECOND
+        );
+
+        // While the Rust SimulationTime can represent this value, the C SimulatedTime type
+        // is too small to do so.
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: libc::time_t::MAX,
+                    tv_nsec: 999_999_999,
+                })
+            },
+            SIMTIME_INVALID
+        );
+
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: 0,
+                    tv_nsec: 1_000_000_000,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: 0,
+                    tv_nsec: -1,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: -1,
+                    tv_nsec: 0,
+                })
+            },
+            SIMTIME_INVALID
+        );
+        assert_eq!(
+            unsafe {
+                simtime_from_timespec(timespec {
+                    tv_sec: -1,
+                    tv_nsec: -1,
+                })
+            },
+            SIMTIME_INVALID
+        );
+    }
+
+    #[test]
+    fn test_to_timespec() {
+        use libc::timespec;
+
+        assert_eq!(
+            timespec::try_from(SimulationTime::from(Duration::ZERO)),
+            Ok(timespec {
+                tv_sec: 0,
+                tv_nsec: 0
+            })
+        );
+        assert_eq!(
+            timespec::try_from(SimulationTime::from(
+                Duration::from_secs(1) + Duration::from_nanos(2)
+            )),
+            Ok(timespec {
+                tv_sec: 1,
+                tv_nsec: 2
+            })
+        );
+        assert_eq!(
+            timespec::try_from(SimulationTime::from(
+                Duration::from_secs(libc::time_t::MAX.try_into().unwrap())
+                    + Duration::from_nanos(999_999_999)
+            )),
+            Ok(timespec {
+                tv_sec: libc::time_t::MAX,
+                tv_nsec: 999_999_999
+            })
+        );
+
+        // timespec isn't big enough to hold max Duration.
+        assert_eq!(
+            timespec::try_from(SimulationTime::from(Duration::MAX)),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn test_c_to_timespec() {
+        use export::simtime_to_timespec;
+        use libc::timespec;
+
+        let mut ts = unsafe { std::mem::zeroed() };
+
+        assert!(unsafe { simtime_to_timespec(0, &mut ts) });
+        assert_eq!(
+            ts,
+            timespec {
+                tv_sec: 0,
+                tv_nsec: 0
+            }
+        );
+
+        assert!(unsafe {
+            simtime_to_timespec(SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_NANOSECOND, &mut ts)
+        });
+        assert_eq!(
+            ts,
+            timespec {
+                tv_sec: 1,
+                tv_nsec: 2
+            }
+        );
+
+        {
+            assert!(unsafe { simtime_to_timespec(SIMTIME_MAX, &mut ts) });
+            let d = Duration::from_nanos(SIMTIME_MAX / SIMTIME_ONE_NANOSECOND);
+            assert_eq!(
+                ts,
+                timespec {
+                    tv_sec: d.as_secs().try_into().unwrap(),
+                    tv_nsec: d.subsec_nanos().try_into().unwrap()
+                }
+            );
+        }
     }
 }
