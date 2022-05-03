@@ -23,7 +23,7 @@
 typedef struct _Timer Timer;
 struct _Timer {
     /* the absolute time the timer will next expire */
-    SimulationTime nextExpireTime;
+    EmulatedTime nextExpireTime;
     /* the relative periodic expiration interval */
     SimulationTime expireInterval;
     /* number of expires that happened since the timer was last set */
@@ -69,6 +69,7 @@ Timer* timer_new(Task* task) {
     Timer* rv = g_new(Timer, 1);
     *rv = (Timer){.task = task,
                   .referenceCount = 1,
+                  .nextExpireTime = EMUTIME_INVALID,
 
                   MAGIC_INITIALIZER};
     if (task) {
@@ -152,19 +153,19 @@ static void _timer_getCurrentTime(const Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
     utility_assert(out);
 
-    if (timer->nextExpireTime == 0) {
+    if (timer->nextExpireTime == EMUTIME_INVALID) {
         /* timer is disarmed */
         out->tv_sec = 0;
         out->tv_nsec = 0;
-    } else {
-        /* timer is armed */
-        SimulationTime currentTime = worker_getCurrentSimulationTime();
-        utility_assert(currentTime <= timer->nextExpireTime);
+        return;
+    }
 
-        /* always return relative value */
-        SimulationTime diff = timer->nextExpireTime - currentTime;
-        out->tv_sec = (time_t) (diff / SIMTIME_ONE_SECOND);
-        out->tv_nsec =(glong) (diff % SIMTIME_ONE_SECOND);
+    // We prevent the expire time from ever being in the past.
+    utility_assert(timer->nextExpireTime >= worker_getCurrentEmulatedTime());
+
+    SimulationTime timeLeft = timer->nextExpireTime - worker_getCurrentEmulatedTime();
+    if (!simtime_to_timespec(timeLeft, out)) {
+        panic("Couldn't convert %ld", timer->nextExpireTime);
     }
 }
 
@@ -193,7 +194,7 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
 
 static void _timer_disarm(Timer* timer) {
     MAGIC_ASSERT(timer);
-    timer->nextExpireTime = 0;
+    timer->nextExpireTime = EMUTIME_INVALID;
     timer->expireInterval = 0;
     timer->minValidExpireID = timer->nextExpireID;
 }
@@ -204,54 +205,23 @@ static void _timerfd_disarm(TimerFd* timerfd) {
     trace("timer fd %i disarmed", timerfd->super.handle);
 }
 
-static SimulationTime _timerfd_timespecToSimTime(const struct timespec* config,
-                                                 gboolean configTimeIsEmulatedTime) {
-    utility_assert(config);
-
-    SimulationTime simNanoSecs = 0;
-
-    if(configTimeIsEmulatedTime) {
-        /* the time that was passed in represents an emulated time, so we need to adjust */
-        EmulatedTime emNanoSecs = (EmulatedTime)(config->tv_sec * SIMTIME_ONE_SECOND);
-        emNanoSecs += (EmulatedTime) config->tv_nsec;
-        /* If the emulated time passed in by the plugin is before the time we use as the
-         * start of the simulation (i.e., EMULATED_TIME_OFFSET), then we use t=0 as 
-         * a proxy for "some time in the past". */
-        if(emNanoSecs >= EMULATED_TIME_OFFSET) {
-            simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
-        } else {
-            simNanoSecs = 0;
-        }
-    } else {
-        /* the config is a relative time, so we just use simtime directly */
-        simNanoSecs = (SimulationTime)(config->tv_sec * SIMTIME_ONE_SECOND);
-        simNanoSecs += (SimulationTime) config->tv_nsec;
-    }
-
-    return simNanoSecs;
-}
-
 static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, gint flags) {
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    EmulatedTime now = worker_getCurrentEmulatedTime();
 
-    if(flags == TFD_TIMER_ABSTIME) {
-        /* config time specifies an absolute time.
-         * the plugin only knows about emulated time, so we need to convert it
-         * back to simulated time to make sure we expire at the right time. */
-        timer->nextExpireTime = _timerfd_timespecToSimTime(config, TRUE);
+    SimulationTime configSimTime = simtime_from_timespec(*config);
+    utility_assert(configSimTime != SIMTIME_INVALID);
 
-        /* the man page does not specify what happens if the time
-         * they gave us is in the past. on linux, the result is an
-         * immediate timer expiration. */
-        if (timer->nextExpireTime < now) {
-            timer->nextExpireTime = now;
-        }
-    } else {
-        /* config time is relative to current time */
-        timer->nextExpireTime = now + _timerfd_timespecToSimTime(config, FALSE);
+    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMULATED_TIME_UNIX_EPOCH : now;
+    timer->nextExpireTime = base + configSimTime;
+
+    /* the man page does not specify what happens if the time
+        * they gave us is in the past. on linux, the result is an
+        * immediate timer expiration. */
+    if (timer->nextExpireTime < now) {
+        timer->nextExpireTime = now;
     }
 }
 
@@ -259,8 +229,7 @@ static void _timer_setCurrentInterval(Timer* timer, const struct timespec* confi
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
-    /* config time for intervals is always just a raw number of seconds and nanos */
-    timer->expireInterval = _timerfd_timespecToSimTime(config, FALSE);
+    timer->expireInterval = simtime_from_timespec(*config);
 }
 
 static void _timer_expire(Host* host, gpointer voidTimer, gpointer expireId);
@@ -275,7 +244,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
     timer_ref(timer);
     Task* task = task_new(_timer_expire, timer, next, _timer_unrefTaskObjectFreeFunc, NULL);
 
-    SimulationTime delay = timer->nextExpireTime - worker_getCurrentSimulationTime();
+    SimulationTime delay = timer->nextExpireTime - worker_getCurrentEmulatedTime();
 
     /* if the user set a super long delay, let's call back sooner to check if they closed
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
@@ -311,8 +280,10 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
 
     /* make sure the timer has not been reset since we scheduled this expiration event */
     if (expireID >= timer->minValidExpireID) {
+        utility_assert(timer->nextExpireTime != EMUTIME_INVALID);
+
         /* check if it actually expired on this callback check */
-        if (timer->nextExpireTime <= worker_getCurrentSimulationTime()) {
+        if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
             /* if a one-time (non-periodic) timer already expired before they
              * started listening for the event with epoll, the event is reported
              * immediately on the next epoll_wait call. this behavior was
@@ -323,7 +294,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
             }
 
             if (timer->expireInterval > 0) {
-                SimulationTime now = worker_getCurrentSimulationTime();
+                EmulatedTime now = worker_getCurrentEmulatedTime();
                 timer->nextExpireTime += timer->expireInterval;
                 if (timer->nextExpireTime < now) {
                     /* for some reason we looped the interval. expire again immediately
@@ -353,7 +324,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
         _timer_setCurrentInterval(timerfd->timer, &(config->it_interval));
     }
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    EmulatedTime now = worker_getCurrentEmulatedTime();
     if (timerfd->timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timerfd->timer, host);
         trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
