@@ -26,8 +26,11 @@ struct _Timer {
     EmulatedTime nextExpireTime;
     /* the relative periodic expiration interval */
     SimulationTime expireInterval;
-    /* number of expires that happened since the timer was last set */
-    guint64 expireCountSinceLastSet;
+    /* Number of "undelivered" expirations.
+     * Should be reset to 0 when the timer is reset, or when user-space
+     * is notified (e.g. a timerfd is read).
+     */
+    guint64 undeliveredExpirationCount;
 
     /* expire ids are used internally to cancel events that fire after
      * they have become invalid because the user reset the timer */
@@ -77,6 +80,16 @@ Timer* timer_new(Task* task) {
     }
     worker_count_allocation(Timer);
     return rv;
+}
+
+static void _timer_resetUndeliveredExpirationCount(Timer* timer) {
+    MAGIC_ASSERT(timer);
+    timer->undeliveredExpirationCount = 0;
+}
+
+static guint64 _timer_getUndeliveredExpirationCount(const Timer* timer) {
+    MAGIC_ASSERT(timer);
+    return timer->undeliveredExpirationCount;
 }
 
 static void _timer_unrefTaskObjectFreeFunc(gpointer timer) { timer_unref(timer); }
@@ -272,13 +285,9 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
         return;
     }
 
-    /* check if it actually expired on this callback check */
+    /* check if it actually expired on this callback check. */
     if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
-        /* if a one-time (non-periodic) timer already expired before they
-         * started listening for the event with epoll, the event is reported
-         * immediately on the next epoll_wait call. this behavior was
-         * verified on linux. */
-        timer->expireCountSinceLastSet++;
+        ++timer->undeliveredExpirationCount;
         if (timer->task) {
             task_execute(timer->task, host);
         }
@@ -368,7 +377,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
     _timer_disarm(timerfd->timer);
 
     /* settings were modified, reset expire count and readability */
-    timerfd->timer->expireCountSinceLastSet = 0;
+    _timer_resetUndeliveredExpirationCount(timerfd->timer);
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     /* now set the new times as requested */
@@ -386,19 +395,20 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
 ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
     MAGIC_ASSERT(timerfd);
 
-    if (timerfd->timer->expireCountSinceLastSet > 0) {
+    guint64 undeliveredExpirationCount = _timer_getUndeliveredExpirationCount(timerfd->timer);
+    if (undeliveredExpirationCount > 0) {
         /* we have something to report, make sure the buf is big enough */
         if(count < sizeof(guint64)) {
             return (ssize_t)-EINVAL;
         }
 
         trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
-              timerfd->timer->expireCountSinceLastSet, timerfd->super.handle);
+              undeliveredExpirationCount, timerfd->super.handle);
 
-        memcpy(buf, &(timerfd->timer->expireCountSinceLastSet), sizeof(guint64));
+        *(guint64*) buf = undeliveredExpirationCount;
 
         /* reset the expire count since we reported it */
-        timerfd->timer->expireCountSinceLastSet = 0;
+        _timer_resetUndeliveredExpirationCount(timerfd->timer);
         descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
         return (ssize_t) sizeof(guint64);
@@ -410,5 +420,5 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
 
 guint64 timerfd_getExpirationCount(const TimerFd* timerfd) {
     MAGIC_ASSERT(timerfd);
-    return timerfd->timer->expireCountSinceLastSet;
+    return _timer_getUndeliveredExpirationCount(timerfd->timer);
 }
