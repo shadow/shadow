@@ -226,7 +226,7 @@ impl ChildPidWatcher {
     /// use `register_pid` instead.
     ///
     /// TODO: add a vfork version when Rust supports vfork:
-    /// https://github.com/rust-lang/rust/issues/58314
+    /// <https://github.com/rust-lang/rust/issues/58314>
     pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, nix::Error> {
         unsafe { self.fork_watchable_internal(libc::SYS_fork, child_fn) }
     }
