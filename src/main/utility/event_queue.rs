@@ -1,8 +1,14 @@
+//! An event/listener framework to allow listeners to subscribe to event sources. To prevent
+//! recursive events (events which trigger new events) from leading to two listeners attempting to
+//! mutate the same state simultaneously, an event queue is used to defer new events until the
+//! current event has finished running.
+
 use atomic_refcell::AtomicRefCell;
 use log::*;
 use std::sync::{Arc, Weak};
 
 /// A queue of events (functions/closures) which when run can add their own events to the queue.
+/// This allows events to be deferred and run later.
 pub struct EventQueue(std::collections::VecDeque<Box<dyn FnOnce(&mut Self)>>);
 
 impl EventQueue {
@@ -50,7 +56,8 @@ impl EventQueue {
 struct HandleId(u32);
 
 #[must_use = "Stops listening when the handle is dropped"]
-/// A handle allows you to stop listening for events.
+/// A handle is used to stop listening for events. The listener will receive events until the handle
+/// is dropped, or [`stop_listening()`](Self::stop_listening) is called.
 pub struct Handle<T> {
     id: HandleId,
     source: Weak<AtomicRefCell<EventSourceInner<T>>>,
@@ -61,6 +68,7 @@ impl<T> Handle<T> {
         Self { id, source }
     }
 
+    /// Stop listening for new events. Equivalent to dropping the handle.
     pub fn stop_listening(self) {}
 }
 
@@ -72,6 +80,7 @@ impl<T> Drop for Handle<T> {
     }
 }
 
+/// Emits events to subscribed listeners.
 pub struct EventSource<T> {
     inner: Arc<AtomicRefCell<EventSourceInner<T>>>,
 }
@@ -83,6 +92,7 @@ impl<T: Clone + Copy + 'static> EventSource<T> {
         }
     }
 
+    /// Add a listener.
     pub fn add_listener(
         &mut self,
         notify_fn: impl Fn(T, &mut EventQueue) + Send + Sync + 'static,
@@ -91,6 +101,7 @@ impl<T: Clone + Copy + 'static> EventSource<T> {
         self.inner.borrow_mut().add_listener(inner_ref, notify_fn)
     }
 
+    /// Notify all listeners.
     pub fn notify_listeners(&mut self, message: T, event_queue: &mut EventQueue) {
         for (_, l) in &self.inner.borrow().listeners {
             let l_clone = l.clone();

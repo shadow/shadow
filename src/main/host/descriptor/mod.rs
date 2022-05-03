@@ -98,8 +98,8 @@ impl FileMode {
 bitflags::bitflags! {
     #[derive(Default)]
     pub struct FileState: libc::c_int {
-        /// Has been initialized and it is now OK to unblock any plugin waiting
-        /// on a particular state.
+        /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
+        /// state. (This is a legacy C state and should be considered deprecated.)
         const ACTIVE = c::_Status_STATUS_DESCRIPTOR_ACTIVE;
         /// Can be read, i.e. there is data waiting for user.
         const READABLE = c::_Status_STATUS_DESCRIPTOR_READABLE;
