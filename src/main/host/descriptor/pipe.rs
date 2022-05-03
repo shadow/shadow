@@ -3,7 +3,9 @@ use nix::errno::Errno;
 use std::sync::Arc;
 
 use crate::cshadow as c;
-use crate::host::descriptor::shared_buf::{BufferHandle, BufferState, SharedBuf};
+use crate::host::descriptor::shared_buf::{
+    BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
+};
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
@@ -20,6 +22,8 @@ pub struct PipeFile {
     status: FileStatus,
     write_mode: WriteMode,
     buffer_event_handle: Option<BufferHandle>,
+    reader_handle: Option<ReaderHandle>,
+    writer_handle: Option<WriterHandle>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -37,6 +41,8 @@ impl PipeFile {
             status,
             write_mode: WriteMode::Stream,
             buffer_event_handle: None,
+            reader_handle: None,
+            writer_handle: None,
             has_open_file: false,
         }
     }
@@ -70,25 +76,29 @@ impl PipeFile {
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
-        // drop the event listener handle so that we stop receiving new events
-        self.buffer_event_handle.take().unwrap().stop_listening();
-
-        // if open for writing, inform the buffer that there is one fewer writers
-        if self.mode.contains(FileMode::WRITE) {
-            self.buffer
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .remove_writer(event_queue);
+        if self.state.contains(FileState::CLOSED) {
+            log::warn!("Attempting to close an already-closed pipe");
         }
 
-        // if open for reading, inform the buffer that there is one fewer readers
-        if self.mode.contains(FileMode::READ) {
+        // drop the event listener handle so that we stop receiving new events
+        self.buffer_event_handle.take().map(|h| h.stop_listening());
+
+        // if acting as a writer, inform the buffer that there is one fewer writers
+        if let Some(writer_handle) = self.writer_handle.take() {
             self.buffer
                 .as_ref()
                 .unwrap()
                 .borrow_mut()
-                .remove_reader(event_queue);
+                .remove_writer(writer_handle, event_queue);
+        }
+
+        // if acting as a reader, inform the buffer that there is one fewer readers
+        if let Some(reader_handle) = self.reader_handle.take() {
+            self.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .remove_reader(reader_handle, event_queue);
         }
 
         // no need to hold on to the buffer anymore
@@ -236,19 +246,23 @@ impl PipeFile {
         pipe.buffer = Some(buffer);
 
         if pipe.mode.contains(FileMode::WRITE) {
-            pipe.buffer
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .add_writer(event_queue);
+            pipe.writer_handle = Some(
+                pipe.buffer
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .add_writer(event_queue),
+            );
         }
 
         if pipe.mode.contains(FileMode::READ) {
-            pipe.buffer
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .add_reader(event_queue);
+            pipe.reader_handle = Some(
+                pipe.buffer
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .add_reader(event_queue),
+            );
         }
 
         // buffer state changes that we want to receive events for
