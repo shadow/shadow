@@ -75,6 +75,11 @@ typedef guint64 EmulatedTime;
 #define EMULATED_TIME_OFFSET (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
 
 /**
+ * The Unix Epoch as EmulatedTime
+ */
+#define EMULATED_TIME_UNIX_EPOCH (0)
+
+/**
  * Represents an invalid emulation time.
  */
 #define EMUTIME_INVALID G_MAXUINT64
