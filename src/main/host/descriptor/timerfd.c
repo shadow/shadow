@@ -37,8 +37,6 @@ struct _Timer {
     guint nextExpireID;
     guint minValidExpireID;
 
-    guint numEventsScheduled;
-
     Task* task;
 
     int referenceCount;
@@ -249,7 +247,6 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
     task_unref(task);
 
     timer->nextExpireID++;
-    timer->numEventsScheduled++;
 }
 
 static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
@@ -269,8 +266,6 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
 
     guint expireID = GPOINTER_TO_UINT(voidExpireId);
     trace("timer expire check; expireID=%u minValidExpireID=%u", expireID, timer->minValidExpireID);
-
-    timer->numEventsScheduled--;
 
     /* make sure the timer has not been reset since we scheduled this expiration event */
     if (expireID < timer->minValidExpireID) {
