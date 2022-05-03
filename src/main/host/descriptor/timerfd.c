@@ -327,11 +327,9 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
         _timer_setCurrentInterval(timerfd->timer, dt);
     }
 
-    if (timerfd->timer->nextExpireTime >= now) {
-        _timer_scheduleNewExpireEvent(timerfd->timer, host);
-        trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
-              timerfd->timer->nextExpireTime - now);
-    }
+    _timer_scheduleNewExpireEvent(timerfd->timer, host);
+    trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
+          timerfd->timer->nextExpireTime - now);
 }
 
 static gboolean _timerfd_timeIsValid(const struct timespec* config) {
