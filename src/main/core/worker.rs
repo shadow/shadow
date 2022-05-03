@@ -14,7 +14,6 @@ use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -56,7 +55,7 @@ pub struct Worker {
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
-    min_latency_cache: Cell<Option<Duration>>,
+    min_latency_cache: Cell<Option<SimulationTime>>,
 
     // A counter for all syscalls made by processes freed by this worker.
     syscall_counter: Counter,
@@ -211,8 +210,8 @@ impl Worker {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
-    pub fn update_min_host_runahead(t: Duration) {
-        assert!(!t.is_zero());
+    pub fn update_min_host_runahead(t: SimulationTime) {
+        assert!(t != SimulationTime::ZERO);
 
         Worker::with(|w| {
             let min_latency_cache = w.min_latency_cache.get();
@@ -221,7 +220,7 @@ impl Worker {
                 unsafe {
                     cshadow::workerpool_updateMinHostRunahead(
                         w.worker_pool,
-                        SimulationTime::to_c_simtime(Some(t.into())),
+                        SimulationTime::to_c_simtime(Some(t)),
                     )
                 };
             }
@@ -366,7 +365,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
-        Worker::update_min_host_runahead(*SimulationTime::from_c_simtime(t).unwrap());
+        Worker::update_min_host_runahead(SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]

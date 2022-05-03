@@ -462,6 +462,18 @@ int64_t parse_bandwidth(const char *s);
 // Parses a string as a time in nanoseconds. Returns '-1' on error.
 int64_t parse_time_nanosec(const char *s);
 
+SimulationTime simtime_from_timeval(struct timeval val);
+
+SimulationTime simtime_from_timespec(struct timespec val);
+
+__attribute__((warn_unused_result))
+bool simtime_to_timeval(SimulationTime val,
+                        struct timeval *out);
+
+__attribute__((warn_unused_result))
+bool simtime_to_timespec(SimulationTime val,
+                         struct timespec *out);
+
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
                              int32_t worker_id,

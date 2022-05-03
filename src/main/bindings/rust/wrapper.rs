@@ -28,48 +28,7 @@ pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
-pub type __time_t = ::std::os::raw::c_long;
 pub type __ssize_t = ::std::os::raw::c_long;
-pub type __syscall_slong_t = ::std::os::raw::c_long;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct timespec {
-    pub tv_sec: __time_t,
-    pub tv_nsec: __syscall_slong_t,
-}
-#[test]
-fn bindgen_test_layout_timespec() {
-    assert_eq!(
-        ::std::mem::size_of::<timespec>(),
-        16usize,
-        concat!("Size of: ", stringify!(timespec))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<timespec>(),
-        8usize,
-        concat!("Alignment of ", stringify!(timespec))
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<timespec>())).tv_sec as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(timespec),
-            "::",
-            stringify!(tv_sec)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<timespec>())).tv_nsec as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(timespec),
-            "::",
-            stringify!(tv_nsec)
-        )
-    );
-}
 pub type pid_t = __pid_t;
 pub type gchar = ::std::os::raw::c_char;
 pub type gint = ::std::os::raw::c_int;
@@ -1013,13 +972,6 @@ extern "C" {
         src: PluginVirtualPtr,
         n: size_t,
     ) -> ssize_t;
-}
-extern "C" {
-    pub fn process_readTimespec(
-        proc_: *mut Process,
-        ts: *mut timespec,
-        src: PluginVirtualPtr,
-    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn process_writePtr(

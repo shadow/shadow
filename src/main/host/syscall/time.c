@@ -38,18 +38,17 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     /* Grab the arg from the syscall register. */
     struct timespec req;
-    int rv = process_readTimespec(sys->process, &req, request);
+    int rv = process_readPtr(sys->process, &req, request, sizeof(req));
     if (rv < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
-
-    /* Ensure time is non-negative. */
-    if (req.tv_sec < 0 || req.tv_nsec < 0) {
+    SimulationTime reqSimTime = simtime_from_timespec(req);
+    if (reqSimTime == SIMTIME_INVALID) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
-    if (req.tv_sec == 0 && req.tv_nsec == 0) {
+    if (reqSimTime == 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
@@ -58,10 +57,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(cond, sys->host,
-                                    worker_getCurrentEmulatedTime() +
-                                        req.tv_sec * SIMTIME_ONE_SECOND +
-                                        req.tv_nsec * SIMTIME_ONE_NANOSECOND);
+        syscallcondition_setTimeout(cond, sys->host, worker_getCurrentEmulatedTime() + reqSimTime);
 
         /* Block the thread, unblock when the timer expires. */
         return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
