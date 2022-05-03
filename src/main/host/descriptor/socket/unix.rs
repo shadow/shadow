@@ -1107,6 +1107,13 @@ impl Protocol for ConnOrientedListening {
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
+        for sock in self.queue {
+            // close all queued sockets
+            if let Err(e) = sock.borrow_mut().close(event_queue) {
+                log::warn!("Unexpected error while closing queued unix socket: {:?}", e);
+            }
+        }
+
         let new_state = ConnOrientedClosed {};
         (new_state.into(), common.close(event_queue))
     }
