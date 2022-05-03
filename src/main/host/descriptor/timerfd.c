@@ -80,12 +80,12 @@ Timer* timer_new(Task* task) {
     return rv;
 }
 
-static void _timer_resetUndeliveredExpirationCount(Timer* timer) {
+void timer_resetUndeliveredExpirationCount(Timer* timer) {
     MAGIC_ASSERT(timer);
     timer->undeliveredExpirationCount = 0;
 }
 
-static guint64 _timer_getUndeliveredExpirationCount(const Timer* timer) {
+guint64 timer_getUndeliveredExpirationCount(const Timer* timer) {
     MAGIC_ASSERT(timer);
     return timer->undeliveredExpirationCount;
 }
@@ -160,13 +160,13 @@ TimerFd* timerfd_new() {
     return timerfd;
 }
 
-static EmulatedTime _timer_getNextExpireTime(const Timer* timer) {
+EmulatedTime timer_getNextExpireTime(const Timer* timer) {
     MAGIC_ASSERT(timer);
 
     return timer->nextExpireTime;
 }
 
-static SimulationTime _timer_getInterval(const Timer* timer) {
+SimulationTime timer_getInterval(const Timer* timer) {
     MAGIC_ASSERT(timer);
 
     return timer->expireInterval;
@@ -176,7 +176,7 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timerfd);
     utility_assert(curr_value);
 
-    EmulatedTime nextExpireTime = _timer_getNextExpireTime(timerfd->timer);
+    EmulatedTime nextExpireTime = timer_getNextExpireTime(timerfd->timer);
     if (nextExpireTime == EMUTIME_INVALID) {
         /* timer is disarmed */
         curr_value->it_value = (struct timespec){
@@ -192,13 +192,13 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
         }
     }
 
-    SimulationTime interval = _timer_getInterval(timerfd->timer);
+    SimulationTime interval = timer_getInterval(timerfd->timer);
     if (!simtime_to_timespec(interval, &curr_value->it_interval)) {
         panic("Couldn't convert %ld", interval);
     }
 }
 
-static void _timer_disarm(Timer* timer) {
+void timer_disarm(Timer* timer) {
     MAGIC_ASSERT(timer);
     timer->nextExpireTime = EMUTIME_INVALID;
     timer->expireInterval = 0;
@@ -207,8 +207,8 @@ static void _timer_disarm(Timer* timer) {
 
 static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host);
 
-static void _timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
-                       SimulationTime expireInterval) {
+void timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
+               SimulationTime expireInterval) {
     MAGIC_ASSERT(timer);
 
     utility_assert(nextExpireTime != EMUTIME_INVALID);
@@ -295,7 +295,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
             _timer_scheduleNewExpireEvent(timer, host);
         } else {
             /* the timer is now disarmed */
-            _timer_disarm(timer);
+            timer_disarm(timer);
         }
     }
 }
@@ -320,7 +320,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
 
     SimulationTime interval = simtime_from_timespec(config->it_interval);
 
-    _timer_arm(timerfd->timer, host, nextExpireTime, interval);
+    timer_arm(timerfd->timer, host, nextExpireTime, interval);
 
     trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
           timerfd->timer->nextExpireTime - now);
@@ -361,13 +361,13 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
     }
 
     /* settings were modified, reset expire count and readability */
-    _timer_resetUndeliveredExpirationCount(timerfd->timer);
+    timer_resetUndeliveredExpirationCount(timerfd->timer);
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     /* now set the new times as requested */
     if (new_value->it_value.tv_sec == 0 && new_value->it_value.tv_nsec == 0) {
         /* A value of 0 disarms the timer; it_interval is ignored. */
-        _timer_disarm(timerfd->timer);
+        timer_disarm(timerfd->timer);
     } else {
         _timerfd_arm(timerfd, host, new_value, flags);
     }
@@ -378,7 +378,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
 ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
     MAGIC_ASSERT(timerfd);
 
-    guint64 undeliveredExpirationCount = _timer_getUndeliveredExpirationCount(timerfd->timer);
+    guint64 undeliveredExpirationCount = timer_getUndeliveredExpirationCount(timerfd->timer);
     if (undeliveredExpirationCount > 0) {
         /* we have something to report, make sure the buf is big enough */
         if(count < sizeof(guint64)) {
@@ -391,7 +391,7 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
         *(guint64*) buf = undeliveredExpirationCount;
 
         /* reset the expire count since we reported it */
-        _timer_resetUndeliveredExpirationCount(timerfd->timer);
+        timer_resetUndeliveredExpirationCount(timerfd->timer);
         descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
         return (ssize_t) sizeof(guint64);
@@ -403,5 +403,5 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
 
 guint64 timerfd_getExpirationCount(const TimerFd* timerfd) {
     MAGIC_ASSERT(timerfd);
-    return _timer_getUndeliveredExpirationCount(timerfd->timer);
+    return timer_getUndeliveredExpirationCount(timerfd->timer);
 }
