@@ -212,11 +212,11 @@ static void _timer_setCurrentTime(Timer* timer, EmulatedTime t) {
     timer->nextExpireTime = t;
 }
 
-static void _timer_setCurrentInterval(Timer* timer, const struct timespec* config) {
+static void _timer_setCurrentInterval(Timer* timer, SimulationTime dt) {
     MAGIC_ASSERT(timer);
-    utility_assert(config);
+    utility_assert(dt != SIMTIME_INVALID);
 
-    timer->expireInterval = simtime_from_timespec(*config);
+    timer->expireInterval = dt;
 }
 
 static void _timer_expire(Host* host, gpointer voidTimer, gpointer expireId);
@@ -320,7 +320,8 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
     _timer_setCurrentTime(timerfd->timer, nextExpireTime);
 
     if(config->it_interval.tv_sec > 0 || config->it_interval.tv_nsec > 0) {
-        _timer_setCurrentInterval(timerfd->timer, &(config->it_interval));
+        SimulationTime dt = simtime_from_timespec(config->it_interval);
+        _timer_setCurrentInterval(timerfd->timer, dt);
     }
 
     if (timerfd->timer->nextExpireTime >= now) {
