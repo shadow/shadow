@@ -210,18 +210,20 @@ static void _timer_disarm(Timer* timer) {
     timer->minValidExpireID = timer->nextExpireID;
 }
 
-static void _timer_setCurrentTime(Timer* timer, EmulatedTime t) {
-    MAGIC_ASSERT(timer);
-    utility_assert(t != EMUTIME_INVALID);
-    utility_assert(t >= worker_getCurrentEmulatedTime());
-    timer->nextExpireTime = t;
-}
+static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host);
 
-static void _timer_setCurrentInterval(Timer* timer, SimulationTime dt) {
+static void _timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
+                       SimulationTime expireInterval) {
     MAGIC_ASSERT(timer);
-    utility_assert(dt != SIMTIME_INVALID);
 
-    timer->expireInterval = dt;
+    utility_assert(nextExpireTime != EMUTIME_INVALID);
+    utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+    timer->nextExpireTime = nextExpireTime;
+
+    utility_assert(expireInterval != SIMTIME_INVALID);
+    timer->expireInterval = expireInterval;
+
+    _timer_scheduleNewExpireEvent(timer, host);
 }
 
 static void _timer_expire(Host* host, gpointer voidTimer, gpointer expireId);
@@ -320,14 +322,11 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
     if (nextExpireTime < now) {
         nextExpireTime = now;
     }
-    _timer_setCurrentTime(timerfd->timer, nextExpireTime);
 
-    if(config->it_interval.tv_sec > 0 || config->it_interval.tv_nsec > 0) {
-        SimulationTime dt = simtime_from_timespec(config->it_interval);
-        _timer_setCurrentInterval(timerfd->timer, dt);
-    }
+    SimulationTime interval = simtime_from_timespec(config->it_interval);
 
-    _timer_scheduleNewExpireEvent(timerfd->timer, host);
+    _timer_arm(timerfd->timer, host, nextExpireTime, interval);
+
     trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
           timerfd->timer->nextExpireTime - now);
 }
