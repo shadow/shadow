@@ -266,36 +266,41 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
     timer->numEventsScheduled--;
 
     /* make sure the timer has not been reset since we scheduled this expiration event */
-    if (expireID >= timer->minValidExpireID) {
-        utility_assert(timer->nextExpireTime != EMUTIME_INVALID);
+    if (expireID < timer->minValidExpireID) {
+        return;
+    }
 
-        /* check if it actually expired on this callback check */
-        if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
-            /* if a one-time (non-periodic) timer already expired before they
-             * started listening for the event with epoll, the event is reported
-             * immediately on the next epoll_wait call. this behavior was
-             * verified on linux. */
-            timer->expireCountSinceLastSet++;
-            if (timer->task) {
-                task_execute(timer->task, host);
-            }
+    utility_assert(timer->nextExpireTime != EMUTIME_INVALID);
 
-            if (timer->expireInterval > 0) {
-                EmulatedTime now = worker_getCurrentEmulatedTime();
-                timer->nextExpireTime += timer->expireInterval;
-                if (timer->nextExpireTime < now) {
-                    /* for some reason we looped the interval. expire again immediately
-                     * to keep the periodic timer going. */
-                    timer->nextExpireTime = now;
-                }
-                _timer_scheduleNewExpireEvent(timer, host);
-            } else {
-                /* the timer is now disarmed */
-                _timer_disarm(timer);
+    if (timer->nextExpireTime > worker_getCurrentEmulatedTime()) {
+        /* it didn't expire yet, check again in another second */
+        _timer_scheduleNewExpireEvent(timer, host);
+        return;
+    }
+
+    /* check if it actually expired on this callback check */
+    if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
+        /* if a one-time (non-periodic) timer already expired before they
+         * started listening for the event with epoll, the event is reported
+         * immediately on the next epoll_wait call. this behavior was
+         * verified on linux. */
+        timer->expireCountSinceLastSet++;
+        if (timer->task) {
+            task_execute(timer->task, host);
+        }
+
+        if (timer->expireInterval > 0) {
+            EmulatedTime now = worker_getCurrentEmulatedTime();
+            timer->nextExpireTime += timer->expireInterval;
+            if (timer->nextExpireTime < now) {
+                /* for some reason we looped the interval. expire again immediately
+                 * to keep the periodic timer going. */
+                timer->nextExpireTime = now;
             }
-        } else {
-            /* it didn't expire yet, check again in another second */
             _timer_scheduleNewExpireEvent(timer, host);
+        } else {
+            /* the timer is now disarmed */
+            _timer_disarm(timer);
         }
     }
 }
