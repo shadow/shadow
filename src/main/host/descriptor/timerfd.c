@@ -160,47 +160,42 @@ TimerFd* timerfd_new() {
     return timerfd;
 }
 
-static void _timer_getCurrentTime(const Timer* timer, struct timespec* out) {
+static EmulatedTime _timer_getNextExpireTime(const Timer* timer) {
     MAGIC_ASSERT(timer);
-    utility_assert(out);
 
-    if (timer->nextExpireTime == EMUTIME_INVALID) {
-        /* timer is disarmed */
-        out->tv_sec = 0;
-        out->tv_nsec = 0;
-        return;
-    }
-
-    // We prevent the expire time from ever being in the past.
-    utility_assert(timer->nextExpireTime >= worker_getCurrentEmulatedTime());
-
-    SimulationTime timeLeft = timer->nextExpireTime - worker_getCurrentEmulatedTime();
-    if (!simtime_to_timespec(timeLeft, out)) {
-        panic("Couldn't convert %ld", timer->nextExpireTime);
-    }
+    return timer->nextExpireTime;
 }
 
-static void _timer_getCurrentInterval(const Timer* timer, struct timespec* out) {
+static SimulationTime _timer_getInterval(const Timer* timer) {
     MAGIC_ASSERT(timer);
-    utility_assert(out);
 
-    if (timer->expireInterval == 0) {
-        /* timer is set to expire just once */
-        out->tv_sec = 0;
-        out->tv_nsec = 0;
-    } else {
-        out->tv_sec = (time_t)(timer->expireInterval / SIMTIME_ONE_SECOND);
-        out->tv_nsec = (glong)(timer->expireInterval % SIMTIME_ONE_SECOND);
-    }
+    return timer->expireInterval;
 }
 
 void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timerfd);
     utility_assert(curr_value);
 
-    /* returns relative time */
-    _timer_getCurrentTime(timerfd->timer, &(curr_value->it_value));
-    _timer_getCurrentInterval(timerfd->timer, &(curr_value->it_interval));
+    EmulatedTime nextExpireTime = _timer_getNextExpireTime(timerfd->timer);
+    if (nextExpireTime == EMUTIME_INVALID) {
+        /* timer is disarmed */
+        curr_value->it_value = (struct timespec){
+            .tv_sec = 0,
+            .tv_nsec = 0,
+        };
+    } else {
+        // We prevent the expire time from ever being in the past.
+        utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+        SimulationTime timeLeft = nextExpireTime - worker_getCurrentEmulatedTime();
+        if (!simtime_to_timespec(timeLeft, &curr_value->it_value)) {
+            panic("Couldn't convert %ld", nextExpireTime);
+        }
+    }
+
+    SimulationTime interval = _timer_getInterval(timerfd->timer);
+    if (!simtime_to_timespec(interval, &curr_value->it_interval)) {
+        panic("Couldn't convert %ld", interval);
+    }
 }
 
 static void _timer_disarm(Timer* timer) {
