@@ -101,7 +101,7 @@ static void _test_expired_timer_helper(int timeout_before_read) {
     /* it should have expired */
     uint64_t num_expires = 0;
     assert_nonneg_errno(read(tfd, &num_expires, sizeof(uint64_t)));
-    g_assert_cmpint(num_expires, !=, 0);
+    g_assert_cmpint(num_expires, ==, 1);
 
     epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
