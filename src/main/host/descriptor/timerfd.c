@@ -199,12 +199,6 @@ static void _timer_disarm(Timer* timer) {
     timer->minValidExpireID = timer->nextExpireID;
 }
 
-static void _timerfd_disarm(TimerFd* timerfd) {
-    MAGIC_ASSERT(timerfd);
-    _timer_disarm(timerfd->timer);
-    trace("timer fd %i disarmed", timerfd->super.handle);
-}
-
 static void _timer_setCurrentTime(Timer* timer, EmulatedTime t) {
     MAGIC_ASSERT(timer);
     utility_assert(t != EMUTIME_INVALID);
@@ -371,7 +365,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
     }
 
     /* always disarm to invalidate old expire events */
-    _timerfd_disarm(timerfd);
+    _timer_disarm(timerfd->timer);
 
     /* settings were modified, reset expire count and readability */
     timerfd->timer->expireCountSinceLastSet = 0;
