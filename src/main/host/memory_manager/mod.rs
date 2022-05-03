@@ -121,13 +121,15 @@ enum CopiedOrMapped<'a, T: Debug + Pod> {
     Mapped(&'a [T]),
 }
 
-/// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+/// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 /// allowing, e.g.:
 ///
+/// ```
 /// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref(ptr);
 /// assert_eq!(pmr.len(), 10);
 /// let x = pmr[5];
+/// ```
 pub struct ProcessMemoryRef<'a, T: Debug + Pod>(CopiedOrMapped<'a, T>);
 
 impl<'a, T: Debug + Pod> ProcessMemoryRef<'a, T> {
@@ -141,7 +143,7 @@ impl<'a, T: Debug + Pod> ProcessMemoryRef<'a, T> {
 }
 
 impl<'a> ProcessMemoryRef<'a, u8> {
-    /// Get a `cstr` from the reference. Fails with ENAMETOOLONG if there is no
+    /// Get a `cstr` from the reference. Fails with `ENAMETOOLONG` if there is no
     /// NULL byte.
     pub fn get_cstr(&self) -> Result<&std::ffi::CStr, Errno> {
         let nullpos = self.iter().position(|c| *c == 0);
@@ -177,13 +179,15 @@ enum CopiedOrMappedMut<'a, T: Debug + Pod> {
     Mapped(&'a mut [T]),
 }
 
-/// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+/// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 /// allowing, e.g.:
 ///
+/// ```
 /// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref_mut(ptr);
 /// assert_eq!(pmr.len(), 10);
 /// pmr[5] = 100;
+/// ```
 ///
 /// The object must be disposed of by calling `flush` or `noflush`.  Dropping
 /// the object without doing so will result in a panic.

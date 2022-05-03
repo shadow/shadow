@@ -103,25 +103,29 @@ typedef struct OpenFile OpenFile;
 
 typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
 
-// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref_mut(ptr);
 // assert_eq!(pmr.len(), 10);
 // pmr[5] = 100;
+// ```
 //
 // The object must be disposed of by calling `flush` or `noflush`.  Dropping
 // the object without doing so will result in a panic.
 typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 
-// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref(ptr);
 // assert_eq!(pmr.len(), 10);
 // let x = pmr[5];
+// ```
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
