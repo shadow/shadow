@@ -205,24 +205,11 @@ static void _timerfd_disarm(TimerFd* timerfd) {
     trace("timer fd %i disarmed", timerfd->super.handle);
 }
 
-static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, gint flags) {
+static void _timer_setCurrentTime(Timer* timer, EmulatedTime t) {
     MAGIC_ASSERT(timer);
-    utility_assert(config);
-
-    EmulatedTime now = worker_getCurrentEmulatedTime();
-
-    SimulationTime configSimTime = simtime_from_timespec(*config);
-    utility_assert(configSimTime != SIMTIME_INVALID);
-
-    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMULATED_TIME_UNIX_EPOCH : now;
-    timer->nextExpireTime = base + configSimTime;
-
-    /* the man page does not specify what happens if the time
-        * they gave us is in the past. on linux, the result is an
-        * immediate timer expiration. */
-    if (timer->nextExpireTime < now) {
-        timer->nextExpireTime = now;
-    }
+    utility_assert(t != EMUTIME_INVALID);
+    utility_assert(t >= worker_getCurrentEmulatedTime());
+    timer->nextExpireTime = t;
 }
 
 static void _timer_setCurrentInterval(Timer* timer, const struct timespec* config) {
@@ -318,13 +305,24 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
     MAGIC_ASSERT(timerfd);
     utility_assert(config);
 
-    _timer_setCurrentTime(timerfd->timer, &(config->it_value), flags);
+    SimulationTime configSimTime = simtime_from_timespec(config->it_value);
+    utility_assert(configSimTime != SIMTIME_INVALID);
+
+    EmulatedTime now = worker_getCurrentEmulatedTime();
+    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMULATED_TIME_UNIX_EPOCH : now;
+    EmulatedTime nextExpireTime = base + configSimTime;
+    /* the man page does not specify what happens if the time
+     * they gave us is in the past. on linux, the result is an
+     * immediate timer expiration. */
+    if (nextExpireTime < now) {
+        nextExpireTime = now;
+    }
+    _timer_setCurrentTime(timerfd->timer, nextExpireTime);
 
     if(config->it_interval.tv_sec > 0 || config->it_interval.tv_nsec > 0) {
         _timer_setCurrentInterval(timerfd->timer, &(config->it_interval));
     }
 
-    EmulatedTime now = worker_getCurrentEmulatedTime();
     if (timerfd->timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timerfd->timer, host);
         trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
