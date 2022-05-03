@@ -133,6 +133,7 @@ set(shadow_srcs
     host/thread_ptrace.c
     host/network_interface.c
     host/network_queuing_disciplines.c
+    host/timer.c
     host/tracker.c
 
     routing/payload.c
