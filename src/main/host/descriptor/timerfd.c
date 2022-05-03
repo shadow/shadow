@@ -368,19 +368,15 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
         timerfd_getTime(timerfd, old_value);
     }
 
-    /* always disarm to invalidate old expire events */
-    _timer_disarm(timerfd->timer);
-
     /* settings were modified, reset expire count and readability */
     _timer_resetUndeliveredExpirationCount(timerfd->timer);
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     /* now set the new times as requested */
-    if(new_value->it_value.tv_sec > 0 || new_value->it_value.tv_nsec > 0) {
-        /* the man page does not specify what to do if it_value says
-         * to disarm the timer, but it_interval is a valid interval.
-         * we verified on linux that intervals are only set when it_value
-         * actually requests that we arm the timer, and ignored otherwise. */
+    if (new_value->it_value.tv_sec == 0 && new_value->it_value.tv_nsec == 0) {
+        /* A value of 0 disarms the timer; it_interval is ignored. */
+        _timer_disarm(timerfd->timer);
+    } else {
         _timerfd_arm(timerfd, host, new_value, flags);
     }
 
