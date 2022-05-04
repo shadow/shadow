@@ -88,16 +88,24 @@ SimulationTime timer_getInterval(const Timer* timer) {
     return timer->expireInterval;
 }
 
+static void _timer_cancelScheduledExpirationEvents(Timer* timer) {
+    MAGIC_ASSERT(timer);
+    timer->minValidExpireID = timer->nextExpireID;
+}
+
 void timer_disarm(Timer* timer) {
     MAGIC_ASSERT(timer);
     timer->nextExpireTime = EMUTIME_INVALID;
     timer->expireInterval = 0;
-    timer->minValidExpireID = timer->nextExpireID;
+
+    _timer_cancelScheduledExpirationEvents(timer);
 }
 
 void timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
                SimulationTime expireInterval) {
     MAGIC_ASSERT(timer);
+
+    _timer_cancelScheduledExpirationEvents(timer);
 
     utility_assert(nextExpireTime != EMUTIME_INVALID);
     utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
