@@ -136,7 +136,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
                 break;
             }
             case TRIGGER_FILE: {
-                genericfile_removeListener(cond->trigger.object.as_file, cond->triggerListener);
+                file_removeListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -197,7 +197,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
                 break;
             }
             case TRIGGER_FILE: {
-                genericfile_drop(cond->trigger.object.as_file);
+                file_drop(cond->trigger.object.as_file);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -301,7 +301,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
             break;
         }
         case TRIGGER_FILE: {
-            if (genericfile_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
+            if (file_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
                 return true;
             }
             break;
@@ -487,7 +487,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                     cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
-                genericfile_addListener(cond->trigger.object.as_file, cond->triggerListener);
+                file_addListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {

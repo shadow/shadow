@@ -3,8 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
 use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
-    OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
@@ -83,7 +82,7 @@ impl SyscallHandler {
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 
-        let mut desc = Descriptor::new(OpenFile::new(GenericFile::Socket(socket)));
+        let mut desc = Descriptor::new(OpenFile::new(File::Socket(socket)));
         desc.set_flags(descriptor_flags);
 
         let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));
@@ -119,7 +118,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match file {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -183,7 +182,7 @@ impl SyscallHandler {
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         let socket = match open_file.inner_file() {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -297,7 +296,7 @@ impl SyscallHandler {
         addr_len_ptr: PluginPtr,
     ) -> SyscallResult {
         let socket = match open_file.inner_file() {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -386,7 +385,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -431,7 +430,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -473,7 +472,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -568,7 +567,7 @@ impl SyscallHandler {
         flags: libc::c_int,
     ) -> SyscallResult {
         let socket = match open_file.inner_file() {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -618,7 +617,7 @@ impl SyscallHandler {
             new_socket.borrow_mut().set_status(FileStatus::NONBLOCK);
         }
 
-        let mut new_desc = Descriptor::new(OpenFile::new(GenericFile::Socket(new_socket)));
+        let mut new_desc = Descriptor::new(OpenFile::new(File::Socket(new_socket)));
 
         if flags.contains(SockFlag::SOCK_CLOEXEC) {
             new_desc.set_flags(DescriptorFlags::CLOEXEC);
@@ -668,7 +667,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match file.inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -710,7 +709,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -780,12 +779,8 @@ impl SyscallHandler {
         });
 
         // file descriptors for the sockets
-        let mut desc_1 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
-            socket_1,
-        ))));
-        let mut desc_2 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
-            socket_2,
-        ))));
+        let mut desc_1 = Descriptor::new(OpenFile::new(File::Socket(SocketFile::Unix(socket_1))));
+        let mut desc_2 = Descriptor::new(OpenFile::new(File::Socket(SocketFile::Unix(socket_2))));
 
         // set the file descriptor flags
         desc_1.set_flags(descriptor_flags);
@@ -849,7 +844,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -885,7 +880,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 

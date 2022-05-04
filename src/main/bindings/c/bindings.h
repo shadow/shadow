@@ -60,7 +60,7 @@ typedef struct Counter Counter;
 typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
-typedef struct GenericFile GenericFile;
+typedef struct File File;
 
 typedef struct HashSet_String HashSet_String;
 
@@ -82,11 +82,10 @@ typedef struct MemoryManager MemoryManager;
 typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-// underlying file may close itself in extenuating circumstances (for example if the file has an
-// internal error).
+// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+// itself in extenuating circumstances (for example if the file has an internal error).
 //
 // **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 // `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -597,29 +596,28 @@ void openfile_removeListener(const struct OpenFile *file, StatusListener *listen
 uintptr_t openfile_getCanonicalHandle(const struct OpenFile *file);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
-// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
-// the memory will leak.
-const struct GenericFile *compatdescriptor_newRefGenericFile(const struct CompatDescriptor *descriptor);
+// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
+// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
+const struct File *compatdescriptor_newRefFile(const struct CompatDescriptor *descriptor);
 
-// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
-// calling this function.
-void genericfile_drop(const struct GenericFile *file);
+// Decrement the ref count of the `File` object. The pointer must not be used after calling
+// this function.
+void file_drop(const struct File *file);
 
-// Get the state of the `GenericFile` object.
-Status genericfile_getStatus(const struct GenericFile *file);
+// Get the state of the `File` object.
+Status file_getStatus(const struct File *file);
 
-// Add a status listener to the `GenericFile` object. This will increment the status listener's
-// ref count, and will decrement the ref count when this status listener is removed or when the
-// `GenericFile` is freed/dropped.
-void genericfile_addListener(const struct GenericFile *file, StatusListener *listener);
+// Add a status listener to the `File` object. This will increment the status listener's ref
+// count, and will decrement the ref count when this status listener is removed or when the
+// `File` is freed/dropped.
+void file_addListener(const struct File *file, StatusListener *listener);
 
-// Remove a listener from the `GenericFile` object.
-void genericfile_removeListener(const struct GenericFile *file, StatusListener *listener);
+// Remove a listener from the `File` object.
+void file_removeListener(const struct File *file, StatusListener *listener);
 
-// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
-// same underlying data if their handles are equal.
-uintptr_t genericfile_getCanonicalHandle(const struct GenericFile *file);
+// Get the canonical handle for a `File` object. Two `File` objects refer to the same
+// underlying data if their handles are equal.
+uintptr_t file_getCanonicalHandle(const struct File *file);
 
 // # Safety
 // * `thread` must point to a valid object.

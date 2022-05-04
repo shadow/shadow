@@ -65,7 +65,7 @@ typedef struct Counter Counter;
 typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
-typedef struct GenericFile GenericFile;
+typedef struct File File;
 
 typedef struct HashSet_String HashSet_String;
 
@@ -87,11 +87,10 @@ typedef struct MemoryManager MemoryManager;
 typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-// underlying file may close itself in extenuating circumstances (for example if the file has an
-// internal error).
+// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+// itself in extenuating circumstances (for example if the file has an internal error).
 //
 // **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 // `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
