@@ -601,16 +601,22 @@ impl SyscallHandler {
             }));
         }
 
+        // must not drop the new socket without closing
         let new_socket = result?;
+
         let from_addr = new_socket.borrow().get_peer_address();
 
         if !addr_ptr.is_null() {
-            write_sockaddr(
+            if let Err(e) = write_sockaddr(
                 ctx.process.memory_mut(),
                 from_addr,
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
-            )?;
+            ) {
+                EventQueue::queue_and_run(|event_queue| new_socket.borrow_mut().close(event_queue))
+                    .unwrap();
+                return Err(e);
+            }
         }
 
         if flags.contains(SockFlag::SOCK_NONBLOCK) {

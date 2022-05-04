@@ -38,13 +38,18 @@ impl SharedBuf {
         self.max_len - usize::try_from(self.queue.num_bytes()).unwrap()
     }
 
-    pub fn add_reader(&mut self, event_queue: &mut EventQueue) {
+    /// Register as a reader. The [`ReaderHandle`] must be returned to the buffer later with
+    /// [`remove_reader()`](Self::remove_reader).
+    pub fn add_reader(&mut self, event_queue: &mut EventQueue) -> ReaderHandle {
         self.num_readers += 1;
         self.refresh_state(event_queue);
+        ReaderHandle {}
     }
 
-    pub fn remove_reader(&mut self, event_queue: &mut EventQueue) {
+    pub fn remove_reader(&mut self, handle: ReaderHandle, event_queue: &mut EventQueue) {
         self.num_readers -= 1;
+        // don't run the handle's drop impl
+        std::mem::forget(handle);
         self.refresh_state(event_queue);
     }
 
@@ -52,13 +57,18 @@ impl SharedBuf {
         self.num_readers
     }
 
-    pub fn add_writer(&mut self, event_queue: &mut EventQueue) {
+    /// Register as a writer. The [`WriterHandle`] must be returned to the buffer later with
+    /// [`remove_writer()`](Self::remove_writer).
+    pub fn add_writer(&mut self, event_queue: &mut EventQueue) -> WriterHandle {
         self.num_writers += 1;
         self.refresh_state(event_queue);
+        WriterHandle {}
     }
 
-    pub fn remove_writer(&mut self, event_queue: &mut EventQueue) {
+    pub fn remove_writer(&mut self, handle: WriterHandle, event_queue: &mut EventQueue) {
         self.num_writers -= 1;
+        // don't run the handle's drop impl
+        std::mem::forget(handle);
         self.refresh_state(event_queue);
     }
 
@@ -183,6 +193,31 @@ impl SharedBuf {
     }
 }
 
+impl Drop for SharedBuf {
+    fn drop(&mut self) {
+        // don't show the following warning message if panicking
+        if std::thread::panicking() {
+            return;
+        }
+
+        // listeners waiting for `NO_READERS` or `NO_WRITERS` status changes will never be notified
+        if self.num_readers != 0 || self.num_writers != 0 {
+            log::warn!(
+                "Dropping SharedBuf while it still has {} readers and {} writers.",
+                self.num_readers,
+                self.num_writers,
+            );
+
+            // panic in debug builds since the backtrace will be helpful for debugging
+            #[cfg(debug_assertions)]
+            panic!(
+                "Dropping SharedBuf while it still has {} readers and {} writers.",
+                self.num_readers, self.num_writers,
+            );
+        }
+    }
+}
+
 bitflags::bitflags! {
     #[derive(Default)]
     pub struct BufferState: u8 {
@@ -198,3 +233,51 @@ bitflags::bitflags! {
 }
 
 pub type BufferHandle = Handle<(BufferState, BufferState)>;
+
+/// A handle that signifies that the owner is acting as a reader for the buffer. The handle must be
+/// returned to the buffer later with [`SharedBuf::remove_reader()`].
+///
+/// Handles aren't linked to specific buffers, so make sure to only return the handle to the same
+/// buffer which you acquired the handle from.
+// do not implement copy or clone
+pub struct ReaderHandle;
+
+/// See [`ReaderHandle`].
+// do not implement copy or clone
+pub struct WriterHandle;
+
+impl Drop for ReaderHandle {
+    fn drop(&mut self) {
+        // don't show the following warning message if panicking
+        if std::thread::panicking() {
+            return;
+        }
+
+        const MSG: &str = "Dropping ReaderHandle without returning it to SharedBuf. \
+                           This likely indicates a bug in Shadow.";
+
+        log::warn!("{}", MSG);
+
+        // panic in debug builds since the backtrace will be helpful for debugging
+        #[cfg(debug_assertions)]
+        panic!("{}", MSG);
+    }
+}
+
+impl Drop for WriterHandle {
+    fn drop(&mut self) {
+        // don't show the following warning message if panicking
+        if std::thread::panicking() {
+            return;
+        }
+
+        const MSG: &str = "Dropping WriterHandle without returning it to SharedBuf. \
+                           This likely indicates a bug in Shadow.";
+
+        log::warn!("{}", MSG);
+
+        // panic in debug builds since the backtrace will be helpful for debugging
+        #[cfg(debug_assertions)]
+        panic!("{}", MSG);
+    }
+}
