@@ -49,7 +49,7 @@ static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
 }
 
 static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
-                                                Socket** sock_desc_out) {
+                                                LegacySocket** sock_desc_out) {
     /* Check that fd is within bounds. */
     if (sockfd < 0) {
         debug("descriptor %i out of bounds", sockfd);
@@ -59,7 +59,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     /* Check if this is a virtual Shadow descriptor. */
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, sockfd);
     if (desc && sock_desc_out) {
-        *sock_desc_out = (Socket*)desc;
+        *sock_desc_out = (LegacySocket*)desc;
     }
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
@@ -81,7 +81,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
 static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
                                                    int sockfd,
                                                    TCP** tcp_desc_out) {
-    Socket* sock_desc = NULL;
+    LegacySocket* sock_desc = NULL;
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, &sock_desc);
 
     if (sock_desc && tcp_desc_out) {
@@ -104,7 +104,7 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
 static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
                                                    int sockfd,
                                                    UDP** udp_desc_out) {
-    Socket* sock_desc = NULL;
+    LegacySocket* sock_desc = NULL;
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, &sock_desc);
 
     if (sock_desc && udp_desc_out) {
@@ -239,9 +239,9 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = accepted_fd};
 }
 
-static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
-                                      in_addr_t addr, in_port_t port,
-                                      in_addr_t peerAddr, in_port_t peerPort) {
+static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_desc,
+                                      in_addr_t addr, in_port_t port, in_addr_t peerAddr,
+                                      in_port_t peerPort) {
 #ifdef DEBUG
     gchar* bindAddrStr = address_ipToNewString(addr);
     gchar* peerAddrStr = address_ipToNewString(peerAddr);
@@ -260,7 +260,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
     }
 
     /* Each protocol type gets its own ephemeral port mapping. */
-    ProtocolType ptype = socket_getProtocol(socket_desc);
+    ProtocolType ptype = legacysocket_getProtocol(socket_desc);
 
     /* Get a free ephemeral port if they didn't specify one. */
     if (port == 0) {
@@ -283,8 +283,8 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
     }
 
     /* connect up socket layer */
-    socket_setPeerName(socket_desc, peerAddr, peerPort);
-    socket_setSocketName(socket_desc, addr, port);
+    legacysocket_setPeerName(socket_desc, peerAddr, peerPort);
+    legacysocket_setSocketName(socket_desc, addr, port);
 
     /* set associations */
     CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
@@ -347,18 +347,18 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
     }
 }
 
-static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock, int optname,
+static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket* sock, int optname,
                                               void* optval, socklen_t* optlen) {
     switch (optname) {
         case SO_SNDBUF: {
-            int sndbuf_size = socket_getOutputBufferSize(sock);
+            int sndbuf_size = legacysocket_getOutputBufferSize(sock);
             int num_bytes = MIN(*optlen, sizeof(sndbuf_size));
             memcpy(optval, &sndbuf_size, num_bytes);
             *optlen = num_bytes;
             return 0;
         }
         case SO_RCVBUF: {
-            int rcvbuf_size = socket_getInputBufferSize(sock);
+            int rcvbuf_size = legacysocket_getInputBufferSize(sock);
             int num_bytes = MIN(*optlen, sizeof(rcvbuf_size));
             memcpy(optval, &rcvbuf_size, num_bytes);
             *optlen = num_bytes;
@@ -449,9 +449,8 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
     return 0;
 }
 
-static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
-                                              int optname, PluginPtr optvalPtr,
-                                              socklen_t optlen) {
+static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket* sock, int optname,
+                                              PluginPtr optvalPtr, socklen_t optlen) {
     if (optlen < sizeof(int)) {
         return -EINVAL;
     }
@@ -471,7 +470,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             // unnecessarily large like INT_MAX.
             newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
 
-            socket_setOutputBufferSize(sock, newsize);
+            legacysocket_setOutputBufferSize(sock, newsize);
             if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableSendBufferAutotuning((TCP*)sock);
             }
@@ -491,7 +490,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             // unnecessarily large like INT_MAX.
             newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
 
-            socket_setInputBufferSize(sock, newsize);
+            legacysocket_setInputBufferSize(sock, newsize);
             if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableReceiveBufferAutotuning((TCP*)sock);
             }
@@ -542,7 +541,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     trace("trying to recv %zu bytes on socket %i", bufSize, sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
 
@@ -638,7 +637,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     trace("trying to send %zu bytes on socket %i", bufSize, sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -690,7 +689,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         /* make sure that we have somewhere to send it */
         if (dest_ip == 0 || dest_port == 0) {
             /* its ok if they setup a default destination with connect() */
-            socket_getPeerName(socket_desc, &dest_ip, &dest_port);
+            legacysocket_getPeerName(socket_desc, &dest_ip, &dest_port);
             if (dest_ip == 0 || dest_port == 0) {
                 /* we have nowhere to send it */
                 return (SysCallReturn){
@@ -699,8 +698,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         }
 
         /* if this socket is not bound, do an implicit bind to a random port */
-        if (!socket_isBound(socket_desc)) {
-            ProtocolType ptype = socket_getProtocol(socket_desc);
+        if (!legacysocket_isBound(socket_desc)) {
+            ProtocolType ptype = legacysocket_getProtocol(socket_desc);
 
             /* We don't bind to peer ip/port since that might change later. */
             in_addr_t bindAddr =
@@ -716,8 +715,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             }
 
             /* connect up socket layer */
-            socket_setPeerName(socket_desc, 0, 0);
-            socket_setSocketName(socket_desc, bindAddr, bindPort);
+            legacysocket_setPeerName(socket_desc, 0, 0);
+            legacysocket_setSocketName(socket_desc, bindAddr, bindPort);
 
             /* set netiface->socket associations */
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
@@ -814,7 +813,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     trace("trying to bind on socket %i", sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -823,7 +822,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     utility_assert(socket_desc);
 
     /* It's an error if it is already bound. */
-    if (socket_isBound(socket_desc)) {
+    if (legacysocket_isBound(socket_desc)) {
         debug("socket descriptor %i is already bound to an address", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
@@ -868,7 +867,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     trace("trying to connect on socket %i", sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -898,7 +897,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
                 (int)addr->sa_family);
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
-    } else if (!socket_isFamilySupported(socket_desc, addr->sa_family)) {
+    } else if (!legacysocket_isFamilySupported(socket_desc, addr->sa_family)) {
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
     }
@@ -931,7 +930,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
         }
     }
 
-    if (!socket_isBound(socket_desc)) {
+    if (!legacysocket_isBound(socket_desc)) {
         /* do an implicit bind to a random ephemeral port.
          * use default interface unless the remote peer is on loopback */
         in_addr_t bindAddr = (loopbackAddr == peerAddr)
@@ -944,11 +943,11 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
                 .state = SYSCALL_DONE, .retval.as_i64 = errcode};
         }
     } else {
-        socket_setPeerName(socket_desc, peerAddr, peerPort);
+        legacysocket_setPeerName(socket_desc, peerAddr, peerPort);
     }
 
     /* Now we are ready to connect. */
-    errcode = socket_connectToPeer(socket_desc, sys->host, peerAddr, peerPort, family);
+    errcode = legacysocket_connectToPeer(socket_desc, sys->host, peerAddr, peerPort, family);
 
     LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     if (descriptor_getType(desc) == DT_TCPSOCKET &&
@@ -991,7 +990,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     trace("trying to get peer name on socket %i", sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -1021,7 +1020,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     inet_addr->sin_family = AF_INET;
 
     gboolean hasName =
-        socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+        legacysocket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
     if (!hasName) {
         debug("Socket %i has no peer name.", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
@@ -1041,7 +1040,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     trace("trying to get sock name on socket %i", sockfd);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -1058,14 +1057,14 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     inet_addr->sin_family = AF_INET;
 
     gboolean hasName =
-        socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+        legacysocket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
     /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
 
     /* If we are bound to INADDR_ANY, we should instead return the address used
      * to communicate with the connected peer (if we have one). */
     if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
         in_addr_t peerIP = 0;
-        if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
+        if (legacysocket_getPeerName(socket_desc, &peerIP, NULL) &&
             peerIP != htonl(INADDR_LOOPBACK)) {
             inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
         }
@@ -1090,7 +1089,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
           level, optname);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -1183,11 +1182,11 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     }
 
     /* We are allowed to listen but not already listening, start now. */
-    if (!socket_isBound((Socket*)tcp_desc)) {
+    if (!legacysocket_isBound((LegacySocket*)tcp_desc)) {
         /* Implicit bind: bind to all interfaces at an ephemeral port. */
         trace("Implicitly binding listener socket %i", sockfd);
-        errcode = _syscallhandler_bindHelper(
-            sys, (Socket*)tcp_desc, htonl(INADDR_ANY), 0, 0, 0);
+        errcode =
+            _syscallhandler_bindHelper(sys, (LegacySocket*)tcp_desc, htonl(INADDR_ANY), 0, 0, 0);
         if (errcode < 0) {
             return (SysCallReturn){
                 .state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -1224,7 +1223,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
           level, optname);
 
     /* Get and validate the socket. */
-    Socket* socket_desc = NULL;
+    LegacySocket* socket_desc = NULL;
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
@@ -1344,11 +1343,11 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     guint64 recvBufSize = host_getConfiguredRecvBufSize(sys->host);
     guint64 sendBufSize = host_getConfiguredSendBufSize(sys->host);
 
-    Socket* sock_desc = NULL;
+    LegacySocket* sock_desc = NULL;
     if (type_no_flags == SOCK_STREAM) {
-        sock_desc = (Socket*)tcp_new(sys->host, recvBufSize, sendBufSize);
+        sock_desc = (LegacySocket*)tcp_new(sys->host, recvBufSize, sendBufSize);
     } else {
-        sock_desc = (Socket*)udp_new(sys->host, recvBufSize, sendBufSize);
+        sock_desc = (LegacySocket*)udp_new(sys->host, recvBufSize, sendBufSize);
     }
 
     /* Now make sure it will be valid when we operate on it. */

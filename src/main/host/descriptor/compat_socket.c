@@ -20,7 +20,7 @@ static void compatsockettypes_assertValid(CompatSocketTypes type) {
     utility_panic("Invalid CompatSocket type");
 }
 
-CompatSocket compatsocket_fromLegacySocket(Socket* socket) {
+CompatSocket compatsocket_fromLegacySocket(LegacySocket* socket) {
     CompatSocket new_socket = {
         .type = CST_LEGACY_SOCKET,
         .object.as_legacy_socket = socket,
@@ -95,7 +95,7 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
 
 ProtocolType compatsocket_getProtocol(const CompatSocket* socket) {
     switch (socket->type) {
-        case CST_LEGACY_SOCKET: return socket_getProtocol(socket->object.as_legacy_socket);
+        case CST_LEGACY_SOCKET: return legacysocket_getProtocol(socket->object.as_legacy_socket);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -105,7 +105,7 @@ ProtocolType compatsocket_getProtocol(const CompatSocket* socket) {
 bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
-            return socket_getPeerName(socket->object.as_legacy_socket, ip, port);
+            return legacysocket_getPeerName(socket->object.as_legacy_socket, ip, port);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -115,7 +115,7 @@ bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port
 bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
-            return socket_getSocketName(socket->object.as_legacy_socket, ip, port);
+            return legacysocket_getSocketName(socket->object.as_legacy_socket, ip, port);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -124,7 +124,8 @@ bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_po
 
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
     switch (socket->type) {
-        case CST_LEGACY_SOCKET: return socket_peekNextOutPacket(socket->object.as_legacy_socket);
+        case CST_LEGACY_SOCKET:
+            return legacysocket_peekNextOutPacket(socket->object.as_legacy_socket);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -134,7 +135,7 @@ const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
 void compatsocket_pushInPacket(const CompatSocket* socket, Host* host, Packet* packet) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
-            return socket_pushInPacket(socket->object.as_legacy_socket, host, packet);
+            return legacysocket_pushInPacket(socket->object.as_legacy_socket, host, packet);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -143,7 +144,8 @@ void compatsocket_pushInPacket(const CompatSocket* socket, Host* host, Packet* p
 
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket, Host* host) {
     switch (socket->type) {
-        case CST_LEGACY_SOCKET: return socket_pullOutPacket(socket->object.as_legacy_socket, host);
+        case CST_LEGACY_SOCKET:
+            return legacysocket_pullOutPacket(socket->object.as_legacy_socket, host);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 

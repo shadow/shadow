@@ -23,14 +23,14 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
-static Socket* _socket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
+static LegacySocket* _legacysocket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
                    descriptor_getType(descriptor) == DT_UDPSOCKET);
-    return (Socket*)descriptor;
+    return (LegacySocket*)descriptor;
 }
 
-static void _socket_cleanup(LegacyDescriptor* descriptor) {
-    Socket* socket = _socket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_cleanup(LegacyDescriptor* descriptor) {
+    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -39,8 +39,8 @@ static void _socket_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _socket_free(LegacyDescriptor* descriptor) {
-    Socket* socket = _socket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_free(LegacyDescriptor* descriptor) {
+    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -77,8 +77,8 @@ static void _socket_free(LegacyDescriptor* descriptor) {
     socket->vtable->free((LegacyDescriptor*)socket);
 }
 
-static void _socket_close(LegacyDescriptor* descriptor, Host* host) {
-    Socket* socket = _socket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_close(LegacyDescriptor* descriptor, Host* host) {
+    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -90,28 +90,30 @@ static void _socket_close(LegacyDescriptor* descriptor, Host* host) {
     socket->vtable->close((LegacyDescriptor*)socket, host);
 }
 
-static gssize _socket_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
-                                   gsize nBytes, in_addr_t ip, in_port_t port) {
-    Socket* socket = _socket_fromLegacyDescriptor((LegacyDescriptor*)transport);
+static gssize _legacysocket_sendUserData(Transport* transport, Thread* thread,
+                                         PluginVirtualPtr buffer, gsize nBytes, in_addr_t ip,
+                                         in_port_t port) {
+    LegacySocket* socket = _legacysocket_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send((Transport*)socket, thread, buffer, nBytes, ip, port);
 }
 
-static gssize _socket_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
-                                      gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    Socket* socket = _socket_fromLegacyDescriptor((LegacyDescriptor*)transport);
+static gssize _legacysocket_receiveUserData(Transport* transport, Thread* thread,
+                                            PluginVirtualPtr buffer, gsize nBytes, in_addr_t* ip,
+                                            in_port_t* port) {
+    LegacySocket* socket = _legacysocket_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->receive((Transport*)socket, thread, buffer, nBytes, ip, port);
 }
 
 TransportFunctionTable socket_functions = {
-    _socket_close,        _socket_cleanup,         _socket_free,
-    _socket_sendUserData, _socket_receiveUserData, MAGIC_VALUE};
+    _legacysocket_close,        _legacysocket_cleanup,         _legacysocket_free,
+    _legacysocket_sendUserData, _legacysocket_receiveUserData, MAGIC_VALUE};
 
-void socket_init(Socket* socket, Host* host, SocketFunctionTable* vtable, LegacyDescriptorType type,
-                 guint receiveBufferSize, guint sendBufferSize) {
+void legacysocket_init(LegacySocket* socket, Host* host, SocketFunctionTable* vtable,
+                       LegacyDescriptorType type, guint receiveBufferSize, guint sendBufferSize) {
     utility_assert(socket && vtable);
 
     transport_init(&(socket->super), &socket_functions, type);
@@ -136,21 +138,21 @@ void socket_init(Socket* socket, Host* host, SocketFunctionTable* vtable, Legacy
     }
 }
 
-ProtocolType socket_getProtocol(Socket* socket) {
+ProtocolType legacysocket_getProtocol(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->protocol;
 }
 
 /* interface functions, implemented by subtypes */
 
-gboolean socket_isFamilySupported(Socket* socket, sa_family_t family) {
+gboolean legacysocket_isFamilySupported(LegacySocket* socket, sa_family_t family) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->isFamilySupported(socket, family);
 }
 
-gint socket_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t port,
-                          sa_family_t family) {
+gint legacysocket_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
+                                sa_family_t family) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -163,14 +165,14 @@ gint socket_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t po
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
 }
 
-void socket_pushInPacket(Socket* socket, Host* host, Packet* packet) {
+void legacysocket_pushInPacket(LegacySocket* socket, Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
     socket->vtable->process(socket, host, packet);
 }
 
-void socket_dropPacket(Socket* socket, Host* host, Packet* packet) {
+void legacysocket_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     socket->vtable->dropPacket(socket, host, packet);
@@ -178,11 +180,11 @@ void socket_dropPacket(Socket* socket, Host* host, Packet* packet) {
 
 /* functions implemented by socket */
 
-Packet* socket_pullOutPacket(Socket* socket, Host* host) {
-    return socket_removeFromOutputBuffer(socket, host);
+Packet* legacysocket_pullOutPacket(LegacySocket* socket, Host* host) {
+    return legacysocket_removeFromOutputBuffer(socket, host);
 }
 
-Packet* socket_peekNextOutPacket(const Socket* socket) {
+Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     if(!g_queue_is_empty(socket->outputControlBuffer)) {
         return g_queue_peek_head(socket->outputControlBuffer);
@@ -191,12 +193,12 @@ Packet* socket_peekNextOutPacket(const Socket* socket) {
     }
 }
 
-Packet* socket_peekNextInPacket(const Socket* socket) {
+Packet* legacysocket_peekNextInPacket(const LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return g_queue_peek_head(socket->inputBuffer);
 }
 
-gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
+gboolean legacysocket_getPeerName(LegacySocket* socket, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(socket);
 
     if(socket->peerIP == 0 || socket->peerPort == 0) {
@@ -213,7 +215,7 @@ gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     return TRUE;
 }
 
-void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
+void legacysocket_setPeerName(LegacySocket* socket, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
 
     socket->peerIP = ip;
@@ -230,11 +232,11 @@ void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
     socket->peerString = g_string_free(stringBuffer, FALSE);
 }
 
-gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
+gboolean legacysocket_getSocketName(LegacySocket* socket, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(socket);
 
     /* boundAddress could be 0 (INADDR_NONE), so just check port */
-    if(!socket_isBound(socket)) {
+    if(!legacysocket_isBound(socket)) {
         return FALSE;
     }
 
@@ -253,7 +255,7 @@ gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     return TRUE;
 }
 
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
+void legacysocket_setSocketName(LegacySocket* socket, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
 
     socket->boundAddress = ip;
@@ -274,15 +276,15 @@ void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
     socket->flags |= SF_BOUND;
 }
 
-gboolean socket_isBound(Socket* socket) {
+gboolean legacysocket_isBound(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return (socket->flags & SF_BOUND) ? TRUE : FALSE;
 }
 
-gsize socket_getInputBufferSpace(Socket* socket) {
+gsize legacysocket_getInputBufferSpace(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     utility_assert(socket->inputBufferSize >= socket->inputBufferLength);
-    gsize bufferSize = socket_getInputBufferSize(socket);
+    gsize bufferSize = legacysocket_getInputBufferSize(socket);
     if(bufferSize < socket->inputBufferLength) {
         return 0;
     } else {
@@ -290,10 +292,10 @@ gsize socket_getInputBufferSpace(Socket* socket) {
     }
 }
 
-gsize socket_getOutputBufferSpace(Socket* socket) {
+gsize legacysocket_getOutputBufferSpace(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     utility_assert(socket->outputBufferSize >= socket->outputBufferLength);
-    gsize bufferSize = socket_getOutputBufferSize(socket);
+    gsize bufferSize = legacysocket_getOutputBufferSize(socket);
     if(bufferSize < socket->outputBufferLength) {
         return 0;
     } else {
@@ -301,27 +303,27 @@ gsize socket_getOutputBufferSpace(Socket* socket) {
     }
 }
 
-gsize socket_getInputBufferLength(Socket* socket) {
+gsize legacysocket_getInputBufferLength(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->inputBufferLength;
 }
 
-gsize socket_getOutputBufferLength(Socket* socket) {
+gsize legacysocket_getOutputBufferLength(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->outputBufferLength;
 }
 
-gsize socket_getInputBufferSize(Socket* socket) {
+gsize legacysocket_getInputBufferSize(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->inputBufferSizePending > 0 ? socket->inputBufferSizePending : socket->inputBufferSize;
 }
 
-gsize socket_getOutputBufferSize(Socket* socket) {
+gsize legacysocket_getOutputBufferSize(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->outputBufferSizePending > 0 ? socket->outputBufferSizePending : socket->outputBufferSize;
 }
 
-void socket_setInputBufferSize(Socket* socket, gsize newSize) {
+void legacysocket_setInputBufferSize(LegacySocket* socket, gsize newSize) {
     MAGIC_ASSERT(socket);
     if(newSize >= socket->inputBufferLength) {
         socket->inputBufferSize = newSize;
@@ -333,7 +335,7 @@ void socket_setInputBufferSize(Socket* socket, gsize newSize) {
     }
 }
 
-void socket_setOutputBufferSize(Socket* socket, gsize newSize) {
+void legacysocket_setOutputBufferSize(LegacySocket* socket, gsize newSize) {
     MAGIC_ASSERT(socket);
     if(newSize >= socket->outputBufferLength) {
         socket->outputBufferSize = newSize;
@@ -345,12 +347,12 @@ void socket_setOutputBufferSize(Socket* socket, gsize newSize) {
     }
 }
 
-gboolean socket_addToInputBuffer(Socket* socket, Host* host, Packet* packet) {
+gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
     guint length = packet_getPayloadLength(packet);
-    if(length > socket_getInputBufferSpace(socket)) {
+    if(length > legacysocket_getInputBufferSpace(socket)) {
         return FALSE;
     }
 
@@ -376,7 +378,7 @@ gboolean socket_addToInputBuffer(Socket* socket, Host* host, Packet* packet) {
     return TRUE;
 }
 
-Packet* socket_removeFromInputBuffer(Socket* socket, Host* host) {
+Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, Host* host) {
     MAGIC_ASSERT(socket);
 
     /* see if we have any packets */
@@ -388,7 +390,7 @@ Packet* socket_removeFromInputBuffer(Socket* socket, Host* host) {
 
         /* check if we need to reduce the buffer size */
         if(socket->inputBufferSizePending > 0) {
-            socket_setInputBufferSize(socket, socket->inputBufferSizePending);
+            legacysocket_setInputBufferSize(socket, socket->inputBufferSizePending);
         }
 
         /* update the tracker input buffer stats */
@@ -408,9 +410,9 @@ Packet* socket_removeFromInputBuffer(Socket* socket, Host* host) {
     return packet;
 }
 
-gsize _socket_getOutputBufferSpaceIncludingTCP(Socket* socket) {
+gsize _legacysocket_getOutputBufferSpaceIncludingTCP(LegacySocket* socket) {
     /* get the space in the socket layer */
-    gsize space = socket_getOutputBufferSpace(socket);
+    gsize space = legacysocket_getOutputBufferSpace(socket);
 
     /* internal TCP buffers count against our space */
     gsize tcpLength = socket->protocol == PTCP ? tcp_getOutputBufferLength((TCP*)socket) : 0;
@@ -421,12 +423,12 @@ gsize _socket_getOutputBufferSpaceIncludingTCP(Socket* socket) {
     return space;
 }
 
-gboolean socket_addToOutputBuffer(Socket* socket, Host* host, Packet* packet) {
+gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
     guint length = packet_getPayloadLength(packet);
-    if(length > socket_getOutputBufferSpace(socket)) {
+    if(length > legacysocket_getOutputBufferSpace(socket)) {
         return FALSE;
     }
 
@@ -450,7 +452,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Host* host, Packet* packet) {
     }
 
     /* we just added a packet, we are no longer writable if full */
-    if(_socket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
+    if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
         descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
@@ -463,7 +465,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Host* host, Packet* packet) {
     return TRUE;
 }
 
-Packet* socket_removeFromOutputBuffer(Socket* socket, Host* host) {
+Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, Host* host) {
     MAGIC_ASSERT(socket);
 
     /* see if we have any packets */
@@ -477,7 +479,7 @@ Packet* socket_removeFromOutputBuffer(Socket* socket, Host* host) {
 
         /* check if we need to reduce the buffer size */
         if(socket->outputBufferSizePending > 0) {
-            socket_setOutputBufferSize(socket, socket->outputBufferSizePending);
+            legacysocket_setOutputBufferSize(socket, socket->outputBufferSizePending);
         }
 
         /* update the tracker input buffer stats */
@@ -489,7 +491,7 @@ Packet* socket_removeFromOutputBuffer(Socket* socket, Host* host) {
         }
 
         /* we are writable if we now have space */
-        if(_socket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
+        if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
             descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, TRUE);
         }
     }
@@ -497,16 +499,16 @@ Packet* socket_removeFromOutputBuffer(Socket* socket, Host* host) {
     return packet;
 }
 
-gboolean socket_isUnix(Socket* socket) {
+gboolean legacysocket_isUnix(LegacySocket* socket) {
     return (socket->flags & SF_UNIX) ? TRUE : FALSE;
 }
 
-void socket_setUnix(Socket* socket, gboolean isUnixSocket) {
+void legacysocket_setUnix(LegacySocket* socket, gboolean isUnixSocket) {
     MAGIC_ASSERT(socket);
     socket->flags = isUnixSocket ? (socket->flags | SF_UNIX) : (socket->flags & ~SF_UNIX);
 }
 
-void socket_setUnixPath(Socket* socket, const gchar* path, gboolean isBound) {
+void legacysocket_setUnixPath(LegacySocket* socket, const gchar* path, gboolean isBound) {
     MAGIC_ASSERT(socket);
     if(isBound) {
         socket->flags |= SF_UNIX_BOUND;
@@ -514,7 +516,7 @@ void socket_setUnixPath(Socket* socket, const gchar* path, gboolean isBound) {
     socket->unixPath = g_strdup(path);
 }
 
-gchar* socket_getUnixPath(Socket* socket) {
+gchar* legacysocket_getUnixPath(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
     return socket->unixPath;
 }

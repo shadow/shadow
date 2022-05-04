@@ -20,7 +20,7 @@ enum _CompatSocketTypes {
 };
 
 union _CompatSocketObject {
-    Socket* as_legacy_socket;
+    LegacySocket* as_legacy_socket;
 };
 
 struct _CompatSocket {
@@ -28,7 +28,7 @@ struct _CompatSocket {
     CompatSocketObject object;
 };
 
-CompatSocket compatsocket_fromLegacySocket(Socket* socket);
+CompatSocket compatsocket_fromLegacySocket(LegacySocket* socket);
 
 /* reference counting */
 CompatSocket compatsocket_refAs(const CompatSocket* socket);

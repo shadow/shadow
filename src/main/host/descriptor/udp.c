@@ -36,7 +36,7 @@ static const gchar* _udp_stateToAscii(enum UDPState state) {
 }
 
 struct _UDP {
-    Socket super;
+    LegacySocket super;
     enum UDPState state;
     enum UDPState stateLast;
 
@@ -58,13 +58,13 @@ static UDP* _udp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (UDP*)descriptor;
 }
 
-static gboolean _udp_isFamilySupported(Socket* socket, sa_family_t family) {
+static gboolean _udp_isFamilySupported(LegacySocket* socket, sa_family_t family) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
-static gint _udp_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t port,
+static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
@@ -73,28 +73,28 @@ static gint _udp_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port
     /* ip/port specifies the default destination for packets */
     if(family == AF_UNSPEC) {
         /* dissolve our existing defaults */
-        socket_setPeerName(&(udp->super), 0, 0);
+        legacysocket_setPeerName(&(udp->super), 0, 0);
         _udp_setState(udp, UDPS_CLOSED);
     } else {
         /* set new defaults */
-        socket_setPeerName(&(udp->super), ip, port);
+        legacysocket_setPeerName(&(udp->super), ip, port);
         _udp_setState(udp, UDPS_ESTABLISHED);
     }
 
     return 0;
 }
 
-static void _udp_processPacket(Socket* socket, Host* host, Packet* packet) {
+static void _udp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* UDP packet can be buffered immediately */
-    if (!socket_addToInputBuffer((Socket*)udp, host, packet)) {
+    if (!legacysocket_addToInputBuffer((LegacySocket*)udp, host, packet)) {
         packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
     }
 }
 
-static void _udp_dropPacket(Socket* socket, Host* host, Packet* packet) {
+static void _udp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
@@ -116,7 +116,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
         return -EMSGSIZE;
     }
 
-    gsize space = socket_getOutputBufferSpace(&(udp->super));
+    gsize space = legacysocket_getOutputBufferSpace(&(udp->super));
     if(space < nBytes) {
         /* not enough space to buffer the data */
         return -EWOULDBLOCK;
@@ -128,7 +128,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
 
     in_addr_t sourceIP = 0;
     in_port_t sourcePort = 0;
-    socket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
+    legacysocket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
 
     Host* host = thread_getHost(thread);
     if (sourceIP == htonl(INADDR_ANY)) {
@@ -149,7 +149,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* buffer it in the transport layer, to be sent out when possible */
-    gboolean success = socket_addToOutputBuffer((Socket*)udp, host, packet);
+    gboolean success = legacysocket_addToOutputBuffer((LegacySocket*)udp, host, packet);
 
     gsize bytes_sent = 0;
     /* counter maintenance */
@@ -174,7 +174,7 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
-    if (socket_peekNextInPacket(&(udp->super)) == NULL) {
+    if (legacysocket_peekNextInPacket(&(udp->super)) == NULL) {
         return -EWOULDBLOCK;
     }
 
@@ -182,7 +182,7 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
         return -EFAULT;
     }
 
-    const Packet* nextPacket = socket_peekNextInPacket((Socket*)udp);
+    const Packet* nextPacket = legacysocket_peekNextInPacket((LegacySocket*)udp);
     if (!nextPacket) {
         return -EWOULDBLOCK;
     }
@@ -196,7 +196,7 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
         return bytesCopied;
     }
 
-    Packet* packet = socket_removeFromInputBuffer((Socket*)udp, thread_getHost(thread));
+    Packet* packet = legacysocket_removeFromInputBuffer((LegacySocket*)udp, thread_getHost(thread));
 
     utility_assert(bytesCopied == copyLength);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
@@ -263,7 +263,7 @@ UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
-    socket_init(
+    legacysocket_init(
         &(udp->super), host, &udp_functions, DT_UDPSOCKET, receiveBufferSize, sendBufferSize);
 
     udp->state = UDPS_CLOSED;
