@@ -158,7 +158,7 @@ impl Process {
 
 mod export {
     use super::*;
-    use crate::host::descriptor::OwnedLegacyDescriptor;
+    use crate::host::descriptor::CountedLegacyDescriptorRef;
 
     /// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
     /// access it after.
@@ -233,7 +233,7 @@ mod export {
         assert!(!desc.is_null());
 
         unsafe { cshadow::descriptor_setOwnerProcess(desc, proc.cprocess) };
-        let desc = CompatDescriptor::Legacy(OwnedLegacyDescriptor::new(desc));
+        let desc = CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(desc));
 
         let fd = proc.register_descriptor(desc);
         fd.try_into().unwrap()
