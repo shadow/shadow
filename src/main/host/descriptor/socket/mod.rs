@@ -18,32 +18,32 @@ pub mod abstract_unix_ns;
 pub mod unix;
 
 #[derive(Clone)]
-pub enum SocketFile {
+pub enum Socket {
     Unix(Arc<AtomicRefCell<UnixSocket>>),
 }
 
-impl SocketFile {
-    pub fn borrow(&self) -> SocketFileRef {
+impl Socket {
+    pub fn borrow(&self) -> SocketRef {
         match self {
-            Self::Unix(ref f) => SocketFileRef::Unix(f.borrow()),
+            Self::Unix(ref f) => SocketRef::Unix(f.borrow()),
         }
     }
 
-    pub fn try_borrow(&self) -> Result<SocketFileRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<SocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Unix(ref f) => SocketFileRef::Unix(f.try_borrow()?),
+            Self::Unix(ref f) => SocketRef::Unix(f.try_borrow()?),
         })
     }
 
-    pub fn borrow_mut(&self) -> SocketFileRefMut {
+    pub fn borrow_mut(&self) -> SocketRefMut {
         match self {
-            Self::Unix(ref f) => SocketFileRefMut::Unix(f.borrow_mut()),
+            Self::Unix(ref f) => SocketRefMut::Unix(f.borrow_mut()),
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<SocketFileRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<SocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Unix(ref f) => SocketFileRefMut::Unix(f.try_borrow_mut()?),
+            Self::Unix(ref f) => SocketRefMut::Unix(f.try_borrow_mut()?),
         })
     }
 
@@ -78,7 +78,7 @@ impl SocketFile {
     }
 }
 
-impl std::fmt::Debug for SocketFile {
+impl std::fmt::Debug for Socket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unix(_) => write!(f, "Unix")?,
@@ -97,16 +97,16 @@ impl std::fmt::Debug for SocketFile {
     }
 }
 
-pub enum SocketFileRef<'a> {
+pub enum SocketRef<'a> {
     Unix(atomic_refcell::AtomicRef<'a, UnixSocket>),
 }
 
-pub enum SocketFileRefMut<'a> {
+pub enum SocketRefMut<'a> {
     Unix(atomic_refcell::AtomicRefMut<'a, UnixSocket>),
 }
 
 // file functions
-impl SocketFileRef<'_> {
+impl SocketRef<'_> {
     enum_passthrough!(self, (), Unix;
         pub fn state(&self) -> FileState
     );
@@ -125,7 +125,7 @@ impl SocketFileRef<'_> {
 }
 
 // socket-specific functions
-impl SocketFileRef<'_> {
+impl SocketRef<'_> {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
@@ -148,7 +148,7 @@ impl SocketFileRef<'_> {
 }
 
 // file functions
-impl SocketFileRefMut<'_> {
+impl SocketRefMut<'_> {
     enum_passthrough!(self, (), Unix;
         pub fn state(&self) -> FileState
     );
@@ -195,7 +195,7 @@ impl SocketFileRefMut<'_> {
 }
 
 // socket-specific functions
-impl SocketFileRefMut<'_> {
+impl SocketRefMut<'_> {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
     pub fn get_peer_address(&self) -> Option<SockAddr> {
@@ -236,14 +236,14 @@ impl SocketFileRefMut<'_> {
         pub fn listen(&mut self, backlog: i32, event_queue: &mut EventQueue) -> Result<(), SyscallError>
     );
 
-    pub fn accept(&mut self, event_queue: &mut EventQueue) -> Result<SocketFile, SyscallError> {
+    pub fn accept(&mut self, event_queue: &mut EventQueue) -> Result<Socket, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.accept(event_queue).map(SocketFile::Unix),
+            Self::Unix(socket) => socket.accept(event_queue).map(Socket::Unix),
         }
     }
 }
 
-impl std::fmt::Debug for SocketFileRef<'_> {
+impl std::fmt::Debug for SocketRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unix(_) => write!(f, "Unix")?,
@@ -258,7 +258,7 @@ impl std::fmt::Debug for SocketFileRef<'_> {
     }
 }
 
-impl std::fmt::Debug for SocketFileRefMut<'_> {
+impl std::fmt::Debug for SocketRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unix(_) => write!(f, "Unix")?,

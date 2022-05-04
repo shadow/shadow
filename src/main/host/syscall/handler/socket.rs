@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
-use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
+use crate::host::descriptor::socket::{empty_sockaddr, Socket};
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
@@ -72,7 +72,7 @@ impl SyscallHandler {
                     return Err(Errno::EPROTONOSUPPORT.into());
                 }
 
-                SocketFile::Unix(UnixSocket::new(
+                Socket::Unix(UnixSocket::new(
                     FileMode::READ | FileMode::WRITE,
                     file_flags,
                     socket_type,
@@ -126,7 +126,7 @@ impl SyscallHandler {
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
-        SocketFile::bind(socket, addr.as_ref(), ctx.host.random())
+        Socket::bind(socket, addr.as_ref(), ctx.host.random())
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
@@ -679,9 +679,8 @@ impl SyscallHandler {
 
         let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
 
-        let mut rv = EventQueue::queue_and_run(|event_queue| {
-            SocketFile::connect(socket, &addr, event_queue)
-        });
+        let mut rv =
+            EventQueue::queue_and_run(|event_queue| Socket::connect(socket, &addr, event_queue));
 
         // if we will block
         if let Err(SyscallError::Blocked(ref mut blocked)) = rv {
@@ -785,8 +784,8 @@ impl SyscallHandler {
         });
 
         // file descriptors for the sockets
-        let mut desc_1 = Descriptor::new(OpenFile::new(File::Socket(SocketFile::Unix(socket_1))));
-        let mut desc_2 = Descriptor::new(OpenFile::new(File::Socket(SocketFile::Unix(socket_2))));
+        let mut desc_1 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_1))));
+        let mut desc_2 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_2))));
 
         // set the file descriptor flags
         desc_1.set_flags(descriptor_flags);

@@ -9,7 +9,7 @@ use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
+use crate::host::descriptor::socket::{empty_sockaddr, Socket};
 use crate::host::descriptor::{
     File, FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
@@ -1044,7 +1044,7 @@ impl Protocol for ConnOrientedInitial {
 
                 // block until the server has room for new connections, or is closed
                 let trigger = Trigger::from_file(
-                    File::Socket(SocketFile::Unix(Arc::clone(&server))),
+                    File::Socket(Socket::Unix(Arc::clone(&server))),
                     FileState::SOCKET_ALLOWING_CONNECT | FileState::CLOSED,
                 );
                 let blocked = Blocked {
