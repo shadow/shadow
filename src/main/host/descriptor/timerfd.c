@@ -184,8 +184,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
         timerfd_getTime(timerfd, old_value);
     }
 
-    /* settings were modified, reset expire count and readability */
-    timer_resetUndeliveredExpirationCount(timerfd->timer);
+    /* settings were modified, reset readability */
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     /* now set the new times as requested */
@@ -202,23 +201,22 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
 ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
     MAGIC_ASSERT(timerfd);
 
-    guint64 undeliveredExpirationCount = timer_getUndeliveredExpirationCount(timerfd->timer);
-    if (undeliveredExpirationCount > 0) {
+    guint64 expirationCount = timer_consumeExpirationCount(timerfd->timer);
+    if (expirationCount > 0) {
         /* we have something to report, make sure the buf is big enough */
-        if(count < sizeof(guint64)) {
+        if (count < sizeof(guint64)) {
             return (ssize_t)-EINVAL;
         }
 
-        trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
-              undeliveredExpirationCount, timerfd->super.handle);
+        trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d", expirationCount,
+              timerfd->super.handle);
 
-        *(guint64*) buf = undeliveredExpirationCount;
+        *(guint64*)buf = expirationCount;
 
-        /* reset the expire count since we reported it */
-        timer_resetUndeliveredExpirationCount(timerfd->timer);
+        /* reset readability */
         descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
-        return (ssize_t) sizeof(guint64);
+        return (ssize_t)sizeof(guint64);
     } else {
         /* the timer has not yet expired, try again later */
         return (ssize_t)-EWOULDBLOCK;
@@ -227,5 +225,5 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
 
 guint64 timerfd_getExpirationCount(const TimerFd* timerfd) {
     MAGIC_ASSERT(timerfd);
-    return timer_getUndeliveredExpirationCount(timerfd->timer);
+    return timer_getExpirationCount(timerfd->timer);
 }

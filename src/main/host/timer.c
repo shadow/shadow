@@ -13,7 +13,7 @@ struct _Timer {
      * Should be reset to 0 when the timer is reset, or when user-space
      * is notified (e.g. a timerfd is read).
      */
-    guint64 undeliveredExpirationCount;
+    guint64 expirationCount;
 
     /* expire ids are used internally to cancel events that fire after
      * they have become invalid because the user reset the timer */
@@ -66,14 +66,16 @@ Timer* timer_new(Task* task) {
     return rv;
 }
 
-void timer_resetUndeliveredExpirationCount(Timer* timer) {
+guint64 timer_consumeExpirationCount(Timer* timer) {
     MAGIC_ASSERT(timer);
-    timer->undeliveredExpirationCount = 0;
+    guint64 rv = timer->expirationCount;
+    timer->expirationCount = 0;
+    return rv;
 }
 
-guint64 timer_getUndeliveredExpirationCount(const Timer* timer) {
+guint64 timer_getExpirationCount(const Timer* timer) {
     MAGIC_ASSERT(timer);
-    return timer->undeliveredExpirationCount;
+    return timer->expirationCount;
 }
 
 EmulatedTime timer_getNextExpireTime(const Timer* timer) {
@@ -97,10 +99,7 @@ void timer_disarm(Timer* timer) {
     MAGIC_ASSERT(timer);
     timer->nextExpireTime = EMUTIME_INVALID;
     timer->expireInterval = 0;
-
-    // Does *not* reset undeliveredExpirationCount.
-    // e.g. after a one-shot timer has expired, the timer is disarmed, but still
-    // has a record of the expiration.
+    timer->expirationCount = 0;
 
     _timer_cancelScheduledExpirationEvents(timer);
 }
@@ -109,7 +108,7 @@ void timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
                SimulationTime expireInterval) {
     MAGIC_ASSERT(timer);
 
-    _timer_cancelScheduledExpirationEvents(timer);
+    timer_disarm(timer);
 
     utility_assert(nextExpireTime != EMUTIME_INVALID);
     utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
@@ -117,8 +116,6 @@ void timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
 
     utility_assert(expireInterval != SIMTIME_INVALID);
     timer->expireInterval = expireInterval;
-
-    timer->undeliveredExpirationCount = 0;
 
     _timer_scheduleNewExpireEvent(timer, host);
 }
@@ -170,7 +167,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
 
     /* check if it actually expired on this callback check. */
     if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
-        ++timer->undeliveredExpirationCount;
+        ++timer->expirationCount;
         if (timer->task) {
             task_execute(timer->task, host);
         }
@@ -184,9 +181,6 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
                 timer->nextExpireTime = now;
             }
             _timer_scheduleNewExpireEvent(timer, host);
-        } else {
-            /* the timer is now disarmed */
-            timer_disarm(timer);
         }
     }
 }
