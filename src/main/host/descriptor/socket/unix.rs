@@ -22,16 +22,16 @@ use crate::utility::stream_len::StreamLen;
 
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: usize = 212_992;
 
-/// A unix socket. The `UnixSocketFile` is the public-facing API, which forwards API calls to the
-/// inner state object.
-pub struct UnixSocketFile {
+/// A unix socket. The `UnixSocket` is the public-facing API, which forwards API calls to the inner
+/// state object.
+pub struct UnixSocket {
     /// Data and functionality that is general for all states.
     common: UnixSocketCommon,
     /// State-specific data and functionality.
     protocol_state: ProtocolState,
 }
 
-impl UnixSocketFile {
+impl UnixSocket {
     pub fn new(
         mode: FileMode,
         status: FileStatus,
@@ -171,10 +171,10 @@ impl UnixSocketFile {
     where
         W: std::io::Write + std::io::Seek,
     {
-        // we could call UnixSocketFile::recvfrom() here, but for now we expect that there are no
-        // code paths that would call UnixSocketFile::read() since the read() syscall handler should
-        // have called UnixSocketFile::recvfrom() instead
-        panic!("Called UnixSocketFile::read() on a unix socket.");
+        // we could call UnixSocket::recvfrom() here, but for now we expect that there are no code
+        // paths that would call UnixSocket::read() since the read() syscall handler should have
+        // called UnixSocket::recvfrom() instead
+        panic!("Called UnixSocket::read() on a unix socket.");
     }
 
     pub fn write<R>(
@@ -186,10 +186,10 @@ impl UnixSocketFile {
     where
         R: std::io::Read + std::io::Seek,
     {
-        // we could call UnixSocketFile::sendto() here, but for now we expect that there are no code
-        // paths that would call UnixSocketFile::write() since the write() syscall handler should
-        // have called UnixSocketFile::sendto() instead
-        panic!("Called UnixSocketFile::write() on a unix socket");
+        // we could call UnixSocket::sendto() here, but for now we expect that there are no code
+        // paths that would call UnixSocket::write() since the write() syscall handler should have
+        // called UnixSocket::sendto() instead
+        panic!("Called UnixSocket::write() on a unix socket");
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -256,7 +256,7 @@ impl UnixSocketFile {
     pub fn accept(
         &mut self,
         event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         self.protocol_state.accept(&mut self.common, event_queue)
     }
 
@@ -267,8 +267,8 @@ impl UnixSocketFile {
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
         event_queue: &mut EventQueue,
     ) -> (Arc<AtomicRefCell<Self>>, Arc<AtomicRefCell<Self>>) {
-        let socket_1 = UnixSocketFile::new(mode, status, socket_type, namespace);
-        let socket_2 = UnixSocketFile::new(mode, status, socket_type, namespace);
+        let socket_1 = UnixSocket::new(mode, status, socket_type, namespace);
+        let socket_2 = UnixSocket::new(mode, status, socket_type, namespace);
 
         {
             let socket_1_ref = &mut *socket_1.borrow_mut();
@@ -328,7 +328,7 @@ struct ConnOrientedInitial {
 }
 struct ConnOrientedListening {
     bound_addr: nix::sys::socket::UnixAddr,
-    queue: VecDeque<Arc<AtomicRefCell<UnixSocketFile>>>,
+    queue: VecDeque<Arc<AtomicRefCell<UnixSocket>>>,
     queue_limit: u32,
 }
 struct ConnOrientedConnected {
@@ -471,7 +471,7 @@ impl ProtocolState {
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
@@ -613,7 +613,7 @@ impl ProtocolState {
     fn connect(
         &mut self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
@@ -643,7 +643,7 @@ impl ProtocolState {
     fn connect_unnamed(
         &mut self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
@@ -688,7 +688,7 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().accept(common, event_queue),
             Self::ConnOrientedListening(x) => x.as_mut().unwrap().accept(common, event_queue),
@@ -706,7 +706,7 @@ impl ProtocolState {
         from_address: Option<nix::sys::socket::UnixAddr>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) -> Result<&Arc<AtomicRefCell<UnixSocketFile>>, IncomingConnError> {
+    ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
@@ -772,7 +772,7 @@ where
     fn bind(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _addr: Option<&nix::sys::socket::SockAddr>,
         _rng: impl rand::Rng,
     ) -> SyscallResult {
@@ -840,7 +840,7 @@ where
     fn connect(
         self,
         _common: &mut UnixSocketCommon,
-        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _addr: &nix::sys::socket::SockAddr,
         _event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -851,7 +851,7 @@ where
     fn connect_unnamed(
         self,
         _common: &mut UnixSocketCommon,
-        _socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         _event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -866,7 +866,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
@@ -877,7 +877,7 @@ where
         _from_address: Option<nix::sys::socket::UnixAddr>,
         _child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         _event_queue: &mut EventQueue,
-    ) -> Result<&Arc<AtomicRefCell<UnixSocketFile>>, IncomingConnError> {
+    ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         log::warn!(
             "queue_incoming_conn() while in state {}",
             std::any::type_name::<Self>()
@@ -909,7 +909,7 @@ impl Protocol for ConnOrientedInitial {
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
@@ -1006,7 +1006,7 @@ impl Protocol for ConnOrientedInitial {
     fn connect(
         self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -1077,7 +1077,7 @@ impl Protocol for ConnOrientedInitial {
     fn connect_unnamed(
         self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -1105,7 +1105,7 @@ impl Protocol for ConnOrientedInitial {
         &mut self,
         _common: &mut UnixSocketCommon,
         _event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
     }
@@ -1155,7 +1155,7 @@ impl Protocol for ConnOrientedListening {
         &mut self,
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         let child_socket = match self.queue.pop_front() {
             Some(x) => x,
             None => return Err(Errno::EWOULDBLOCK.into()),
@@ -1174,7 +1174,7 @@ impl Protocol for ConnOrientedListening {
         from_address: Option<nix::sys::socket::UnixAddr>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
-    ) -> Result<&Arc<AtomicRefCell<UnixSocketFile>>, IncomingConnError> {
+    ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         if self.queue.len() >= self.queue_limit.try_into().unwrap() {
             assert!(!common.state.contains(FileState::SOCKET_ALLOWING_CONNECT));
             return Err(IncomingConnError::QueueFull);
@@ -1184,7 +1184,7 @@ impl Protocol for ConnOrientedListening {
 
         let child_send_buffer = Arc::clone(child_send_buffer);
 
-        let child_socket = UnixSocketFile::new(
+        let child_socket = UnixSocket::new(
             FileMode::READ | FileMode::WRITE,
             // copy the parent's status
             common.status,
@@ -1295,7 +1295,7 @@ impl Protocol for ConnOrientedConnected {
         &mut self,
         _common: &mut UnixSocketCommon,
         _event_queue: &mut EventQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocketFile>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
     }
@@ -1360,7 +1360,7 @@ impl Protocol for ConnLessInitial {
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
@@ -1417,7 +1417,7 @@ impl Protocol for ConnLessInitial {
     fn connect(
         self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -1464,7 +1464,7 @@ impl Protocol for ConnLessInitial {
     fn connect_unnamed(
         self,
         common: &mut UnixSocketCommon,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         send_buffer: Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
@@ -1568,7 +1568,7 @@ impl UnixSocketCommon {
     #[allow(deprecated)]
     pub fn bind(
         &mut self,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&nix::sys::socket::SockAddr>,
         rng: impl rand::Rng,
     ) -> Result<nix::sys::socket::UnixAddr, SyscallError> {
@@ -1767,7 +1767,7 @@ impl UnixSocketCommon {
 
     pub fn connect_buffer(
         &mut self,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> BufferHandle {
@@ -1839,7 +1839,7 @@ fn lookup_address(
     namespace: &AbstractUnixNamespace,
     socket_type: UnixSocketType,
     addr: &nix::sys::socket::UnixAddr,
-) -> Option<Arc<AtomicRefCell<UnixSocketFile>>> {
+) -> Option<Arc<AtomicRefCell<UnixSocket>>> {
     // if an abstract address
     if let Some(name) = addr.as_abstract() {
         // look up the socket from the address name

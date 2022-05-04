@@ -8,7 +8,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::EventQueue;
 
-use unix::UnixSocketFile;
+use unix::UnixSocket;
 
 // https://github.com/shadow/shadow/issues/2093
 #[allow(deprecated)]
@@ -19,7 +19,7 @@ pub mod unix;
 
 #[derive(Clone)]
 pub enum SocketFile {
-    Unix(Arc<AtomicRefCell<UnixSocketFile>>),
+    Unix(Arc<AtomicRefCell<UnixSocket>>),
 }
 
 impl SocketFile {
@@ -61,7 +61,7 @@ impl SocketFile {
         rng: impl rand::Rng,
     ) -> SyscallResult {
         match self {
-            Self::Unix(socket) => UnixSocketFile::bind(socket, addr, rng),
+            Self::Unix(socket) => UnixSocket::bind(socket, addr, rng),
         }
     }
 
@@ -73,7 +73,7 @@ impl SocketFile {
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
         match self {
-            Self::Unix(socket) => UnixSocketFile::connect(socket, addr, event_queue),
+            Self::Unix(socket) => UnixSocket::connect(socket, addr, event_queue),
         }
     }
 }
@@ -98,11 +98,11 @@ impl std::fmt::Debug for SocketFile {
 }
 
 pub enum SocketFileRef<'a> {
-    Unix(atomic_refcell::AtomicRef<'a, UnixSocketFile>),
+    Unix(atomic_refcell::AtomicRef<'a, UnixSocket>),
 }
 
 pub enum SocketFileRefMut<'a> {
-    Unix(atomic_refcell::AtomicRefMut<'a, UnixSocketFile>),
+    Unix(atomic_refcell::AtomicRefMut<'a, UnixSocket>),
 }
 
 // file functions
