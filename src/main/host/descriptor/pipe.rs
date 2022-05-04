@@ -14,7 +14,7 @@ use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
-pub struct PipeFile {
+pub struct Pipe {
     buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
     event_source: StateEventSource,
     state: FileState,
@@ -29,9 +29,9 @@ pub struct PipeFile {
     has_open_file: bool,
 }
 
-impl PipeFile {
-    /// Create a new [`PipeFile`]. The new pipe must be initialized using
-    /// [`PipeFile::connect_to_buffer`] before any of its methods are called.
+impl Pipe {
+    /// Create a new [`Pipe`]. The new pipe must be initialized using [`Pipe::connect_to_buffer`]
+    /// before any of its methods are called.
     pub fn new(mode: FileMode, status: FileStatus) -> Self {
         Self {
             buffer: None,
