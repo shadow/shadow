@@ -3,8 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
-    OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
@@ -254,7 +253,7 @@ impl SyscallHandler {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
-        if let GenericFile::Socket(..) = generic_file {
+        if let File::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
@@ -388,7 +387,7 @@ impl SyscallHandler {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
-        if let GenericFile::Socket(..) = generic_file {
+        if let File::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
@@ -491,8 +490,8 @@ impl SyscallHandler {
         });
 
         // file descriptors for the read and write file objects
-        let mut reader_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(reader)));
-        let mut writer_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(writer)));
+        let mut reader_desc = Descriptor::new(OpenFile::new(File::Pipe(reader)));
+        let mut writer_desc = Descriptor::new(OpenFile::new(File::Pipe(writer)));
 
         // set the file descriptor flags
         reader_desc.set_flags(descriptor_flags);

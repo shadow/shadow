@@ -266,46 +266,46 @@ impl StateEventSource {
 
 /// A wrapper for any type of file object.
 #[derive(Clone)]
-pub enum GenericFile {
+pub enum File {
     Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
     EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
     Socket(SocketFile),
 }
 
-// will not compile if `GenericFile` is not Send + Sync
-impl IsSend for GenericFile {}
-impl IsSync for GenericFile {}
+// will not compile if `File` is not Send + Sync
+impl IsSend for File {}
+impl IsSync for File {}
 
-impl GenericFile {
-    pub fn borrow(&self) -> GenericFileRef {
+impl File {
+    pub fn borrow(&self) -> FileRef {
         match self {
-            Self::Pipe(ref f) => GenericFileRef::Pipe(f.borrow()),
-            Self::EventFd(ref f) => GenericFileRef::EventFd(f.borrow()),
-            Self::Socket(ref f) => GenericFileRef::Socket(f.borrow()),
+            Self::Pipe(ref f) => FileRef::Pipe(f.borrow()),
+            Self::EventFd(ref f) => FileRef::EventFd(f.borrow()),
+            Self::Socket(ref f) => FileRef::Socket(f.borrow()),
         }
     }
 
-    pub fn try_borrow(&self) -> Result<GenericFileRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<FileRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Pipe(ref f) => GenericFileRef::Pipe(f.try_borrow()?),
-            Self::EventFd(ref f) => GenericFileRef::EventFd(f.try_borrow()?),
-            Self::Socket(ref f) => GenericFileRef::Socket(f.try_borrow()?),
+            Self::Pipe(ref f) => FileRef::Pipe(f.try_borrow()?),
+            Self::EventFd(ref f) => FileRef::EventFd(f.try_borrow()?),
+            Self::Socket(ref f) => FileRef::Socket(f.try_borrow()?),
         })
     }
 
-    pub fn borrow_mut(&self) -> GenericFileRefMut {
+    pub fn borrow_mut(&self) -> FileRefMut {
         match self {
-            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.borrow_mut()),
-            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.borrow_mut()),
-            Self::Socket(ref f) => GenericFileRefMut::Socket(f.borrow_mut()),
+            Self::Pipe(ref f) => FileRefMut::Pipe(f.borrow_mut()),
+            Self::EventFd(ref f) => FileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(ref f) => FileRefMut::Socket(f.borrow_mut()),
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<GenericFileRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<FileRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.try_borrow_mut()?),
-            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.try_borrow_mut()?),
-            Self::Socket(ref f) => GenericFileRefMut::Socket(f.try_borrow_mut()?),
+            Self::Pipe(ref f) => FileRefMut::Pipe(f.try_borrow_mut()?),
+            Self::EventFd(ref f) => FileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(ref f) => FileRefMut::Socket(f.try_borrow_mut()?),
         })
     }
 
@@ -318,7 +318,7 @@ impl GenericFile {
     }
 }
 
-impl std::fmt::Debug for GenericFile {
+impl std::fmt::Debug for File {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -339,19 +339,19 @@ impl std::fmt::Debug for GenericFile {
     }
 }
 
-pub enum GenericFileRef<'a> {
+pub enum FileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
     Socket(SocketFileRef<'a>),
 }
 
-pub enum GenericFileRefMut<'a> {
+pub enum FileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
     Socket(SocketFileRefMut<'a>),
 }
 
-impl GenericFileRef<'_> {
+impl FileRef<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -369,7 +369,7 @@ impl GenericFileRef<'_> {
     );
 }
 
-impl GenericFileRefMut<'_> {
+impl FileRefMut<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -415,7 +415,7 @@ impl GenericFileRefMut<'_> {
     );
 }
 
-impl std::fmt::Debug for GenericFileRef<'_> {
+impl std::fmt::Debug for FileRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -432,7 +432,7 @@ impl std::fmt::Debug for GenericFileRef<'_> {
     }
 }
 
-impl std::fmt::Debug for GenericFileRefMut<'_> {
+impl std::fmt::Debug for FileRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -450,11 +450,10 @@ impl std::fmt::Debug for GenericFileRefMut<'_> {
 }
 
 /// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-/// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-/// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-/// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-/// underlying file may close itself in extenuating circumstances (for example if the file has an
-/// internal error).
+/// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+/// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+/// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+/// itself in extenuating circumstances (for example if the file has an internal error).
 ///
 /// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 /// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -472,7 +471,7 @@ impl IsSend for OpenFile {}
 impl IsSync for OpenFile {}
 
 impl OpenFile {
-    pub fn new(file: GenericFile) -> Self {
+    pub fn new(file: File) -> Self {
         {
             let mut file = file.borrow_mut();
 
@@ -504,13 +503,13 @@ impl OpenFile {
         }
     }
 
-    pub fn inner_file(&self) -> &GenericFile {
+    pub fn inner_file(&self) -> &File {
         &self.inner.file.as_ref().unwrap()
     }
 
-    /// Will close the inner `GenericFile` object if this is the last `OpenFile` for that
-    /// `GenericFile`. This behaviour is the same as simply dropping this `OpenFile` object, but
-    /// allows you to pass an event queue and get the return value of the close operation.
+    /// Will close the inner `File` object if this is the last `OpenFile` for that `File`. This
+    /// behaviour is the same as simply dropping this `OpenFile` object, but allows you to pass an
+    /// event queue and get the return value of the close operation.
     pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
         let OpenFile { inner } = self;
 
@@ -537,7 +536,7 @@ impl OpenFile {
 
 #[derive(Clone, Debug)]
 struct OpenFileInner {
-    file: Option<GenericFile>,
+    file: Option<File>,
 }
 
 impl OpenFileInner {
@@ -868,13 +867,12 @@ mod export {
     }
 
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-    /// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
-    /// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
-    /// the memory will leak.
+    /// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
+    /// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_newRefGenericFile(
+    pub extern "C" fn compatdescriptor_newRefFile(
         descriptor: *const CompatDescriptor,
-    ) -> *const GenericFile {
+    ) -> *const File {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -885,18 +883,18 @@ mod export {
         }
     }
 
-    /// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
-    /// calling this function.
+    /// Decrement the ref count of the `File` object. The pointer must not be used after calling
+    /// this function.
     #[no_mangle]
-    pub extern "C" fn genericfile_drop(file: *const GenericFile) {
+    pub extern "C" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
-        unsafe { Box::from_raw(file as *mut GenericFile) };
+        unsafe { Box::from_raw(file as *mut File) };
     }
 
-    /// Get the state of the `GenericFile` object.
+    /// Get the state of the `File` object.
     #[no_mangle]
-    pub extern "C" fn genericfile_getStatus(file: *const GenericFile) -> c::Status {
+    pub extern "C" fn file_getStatus(file: *const File) -> c::Status {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -904,14 +902,11 @@ mod export {
         file.borrow().state().into()
     }
 
-    /// Add a status listener to the `GenericFile` object. This will increment the status listener's
-    /// ref count, and will decrement the ref count when this status listener is removed or when the
-    /// `GenericFile` is freed/dropped.
+    /// Add a status listener to the `File` object. This will increment the status listener's ref
+    /// count, and will decrement the ref count when this status listener is removed or when the
+    /// `File` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn genericfile_addListener(
-        file: *const GenericFile,
-        listener: *mut c::StatusListener,
-    ) {
+    pub extern "C" fn file_addListener(file: *const File, listener: *mut c::StatusListener) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
@@ -920,12 +915,9 @@ mod export {
         file.borrow_mut().add_legacy_listener(listener);
     }
 
-    /// Remove a listener from the `GenericFile` object.
+    /// Remove a listener from the `File` object.
     #[no_mangle]
-    pub extern "C" fn genericfile_removeListener(
-        file: *const GenericFile,
-        listener: *mut c::StatusListener,
-    ) {
+    pub extern "C" fn file_removeListener(file: *const File, listener: *mut c::StatusListener) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
@@ -934,10 +926,10 @@ mod export {
         file.borrow_mut().remove_legacy_listener(listener);
     }
 
-    /// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
-    /// same underlying data if their handles are equal.
+    /// Get the canonical handle for a `File` object. Two `File` objects refer to the same
+    /// underlying data if their handles are equal.
     #[no_mangle]
-    pub extern "C" fn genericfile_getCanonicalHandle(file: *const GenericFile) -> libc::uintptr_t {
+    pub extern "C" fn file_getCanonicalHandle(file: *const File) -> libc::uintptr_t {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
