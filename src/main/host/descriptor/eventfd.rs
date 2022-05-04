@@ -9,7 +9,7 @@ use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
-pub struct EventFdFile {
+pub struct EventFd {
     counter: u64,
     is_semaphore_mode: bool,
     event_source: StateEventSource,
@@ -20,7 +20,7 @@ pub struct EventFdFile {
     has_open_file: bool,
 }
 
-impl EventFdFile {
+impl EventFd {
     pub fn new(init_value: u64, is_semaphore_mode: bool, status: FileStatus) -> Self {
         Self {
             counter: init_value,

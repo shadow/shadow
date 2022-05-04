@@ -4,21 +4,21 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 
-use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
+use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::FileState;
 use crate::host::descriptor::{StateEventSource, StateListenerFilter};
 use crate::utility::event_queue::Handle;
 
 struct NamespaceEntry {
     /// The bound socket.
-    socket: Weak<AtomicRefCell<UnixSocketFile>>,
+    socket: Weak<AtomicRefCell<UnixSocket>>,
     /// The event listener handle, which removes the listener when dropped.
     _handle: Handle<(FileState, FileState)>,
 }
 
 impl NamespaceEntry {
     pub fn new(
-        socket: Weak<AtomicRefCell<UnixSocketFile>>,
+        socket: Weak<AtomicRefCell<UnixSocket>>,
         handle: Handle<(FileState, FileState)>,
     ) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl AbstractUnixNamespace {
         &self,
         sock_type: UnixSocketType,
         name: &[u8],
-    ) -> Option<Arc<AtomicRefCell<UnixSocketFile>>> {
+    ) -> Option<Arc<AtomicRefCell<UnixSocket>>> {
         // the unwrap() will panic if the socket was dropped without being closed, but this should
         // only be possible at the end of the simulation and there wouldn't be any reason to call
         // lookup() at that time, so a panic here would most likely indicate an issue somewhere else
@@ -69,7 +69,7 @@ impl AbstractUnixNamespace {
         ns_arc: &Arc<AtomicRefCell<Self>>,
         sock_type: UnixSocketType,
         mut name: Vec<u8>,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         socket_event_source: &mut StateEventSource,
     ) -> Result<(), BindError> {
         // make sure we aren't wasting memory since we don't mutate the name
@@ -98,7 +98,7 @@ impl AbstractUnixNamespace {
     pub fn autobind(
         ns_arc: &Arc<AtomicRefCell<Self>>,
         sock_type: UnixSocketType,
-        socket: &Arc<AtomicRefCell<UnixSocketFile>>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
         socket_event_source: &mut StateEventSource,
         mut rng: impl rand::Rng,
     ) -> Result<Vec<u8>, BindError> {

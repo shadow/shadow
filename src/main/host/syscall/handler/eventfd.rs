@@ -69,7 +69,7 @@ impl SyscallHandler {
             semaphore_mode = true;
         }
 
-        let file = eventfd::EventFdFile::new(init_val as u64, semaphore_mode, file_flags);
+        let file = eventfd::EventFd::new(init_val as u64, semaphore_mode, file_flags);
         let file = Arc::new(AtomicRefCell::new(file));
 
         let mut desc = Descriptor::new(OpenFile::new(File::EventFd(file)));

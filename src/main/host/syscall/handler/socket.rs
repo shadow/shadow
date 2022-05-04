@@ -1,6 +1,6 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
+use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{empty_sockaddr, SocketFile};
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
@@ -72,7 +72,7 @@ impl SyscallHandler {
                     return Err(Errno::EPROTONOSUPPORT.into());
                 }
 
-                SocketFile::Unix(UnixSocketFile::new(
+                SocketFile::Unix(UnixSocket::new(
                     FileMode::READ | FileMode::WRITE,
                     file_flags,
                     socket_type,
@@ -775,7 +775,7 @@ impl SyscallHandler {
         }
 
         let (socket_1, socket_2) = EventQueue::queue_and_run(|event_queue| {
-            UnixSocketFile::pair(
+            UnixSocket::pair(
                 FileMode::READ | FileMode::WRITE,
                 file_flags,
                 socket_type,

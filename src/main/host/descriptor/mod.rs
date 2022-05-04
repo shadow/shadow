@@ -267,8 +267,8 @@ impl StateEventSource {
 /// A wrapper for any type of file object.
 #[derive(Clone)]
 pub enum File {
-    Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
-    EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
+    Pipe(Arc<AtomicRefCell<pipe::Pipe>>),
+    EventFd(Arc<AtomicRefCell<eventfd::EventFd>>),
     Socket(SocketFile),
 }
 
@@ -340,14 +340,14 @@ impl std::fmt::Debug for File {
 }
 
 pub enum FileRef<'a> {
-    Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
-    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
+    Pipe(atomic_refcell::AtomicRef<'a, pipe::Pipe>),
+    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
     Socket(SocketFileRef<'a>),
 }
 
 pub enum FileRefMut<'a> {
-    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
-    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
+    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::Pipe>),
+    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
     Socket(SocketFileRefMut<'a>),
 }
 

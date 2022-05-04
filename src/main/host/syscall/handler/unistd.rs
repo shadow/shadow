@@ -476,17 +476,17 @@ impl SyscallHandler {
         let buffer = Arc::new(AtomicRefCell::new(buffer));
 
         // reference-counted file object for read end of the pipe
-        let reader = pipe::PipeFile::new(FileMode::READ, file_flags);
+        let reader = pipe::Pipe::new(FileMode::READ, file_flags);
         let reader = Arc::new(AtomicRefCell::new(reader));
 
         // reference-counted file object for write end of the pipe
-        let writer = pipe::PipeFile::new(FileMode::WRITE, file_flags);
+        let writer = pipe::Pipe::new(FileMode::WRITE, file_flags);
         let writer = Arc::new(AtomicRefCell::new(writer));
 
         // set the file objects to listen for events on the buffer
         EventQueue::queue_and_run(|event_queue| {
-            pipe::PipeFile::connect_to_buffer(&reader, Arc::clone(&buffer), event_queue);
-            pipe::PipeFile::connect_to_buffer(&writer, Arc::clone(&buffer), event_queue);
+            pipe::Pipe::connect_to_buffer(&reader, Arc::clone(&buffer), event_queue);
+            pipe::Pipe::connect_to_buffer(&writer, Arc::clone(&buffer), event_queue);
         });
 
         // file descriptors for the read and write file objects
