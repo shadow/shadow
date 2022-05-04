@@ -268,7 +268,7 @@ impl StateEventSource {
 #[derive(Clone)]
 pub enum File {
     Pipe(Arc<AtomicRefCell<pipe::Pipe>>),
-    EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
+    EventFd(Arc<AtomicRefCell<eventfd::EventFd>>),
     Socket(SocketFile),
 }
 
@@ -341,13 +341,13 @@ impl std::fmt::Debug for File {
 
 pub enum FileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::Pipe>),
-    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
+    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
     Socket(SocketFileRef<'a>),
 }
 
 pub enum FileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::Pipe>),
-    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
+    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
     Socket(SocketFileRefMut<'a>),
 }
 
