@@ -154,7 +154,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int lenout = socket_getInputBufferLength((Socket*)udp);
+            int lenout = legacysocket_getInputBufferLength((LegacySocket*)udp);
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
@@ -168,7 +168,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int lenout = socket_getOutputBufferLength((Socket*)udp);
+            int lenout = legacysocket_getOutputBufferLength((LegacySocket*)udp);
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {

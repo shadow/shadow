@@ -114,7 +114,7 @@ struct _TCPServer {
 static void _tcp_logCongestionInfo(TCP* tcp);
 
 struct _TCP {
-    Socket super;
+    LegacySocket super;
 
     enum TCPState state;
     enum TCPState stateLast;
@@ -275,14 +275,14 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
     child->parent = parent;
 
     child->state = TCPCS_INCOMPLETE;
-    socket_setPeerName(&(tcp->super), peerIP, peerPort);
+    legacysocket_setPeerName(&(tcp->super), peerIP, peerPort);
 
     /* the child is bound to the parent server's address, because all packets
      * coming from the child should appear to be coming from the server itself */
     in_addr_t parentAddress;
     in_port_t parentPort;
-    socket_getSocketName(&(parent->super), &parentAddress, &parentPort);
-    socket_setSocketName(&(tcp->super), parentAddress, parentPort);
+    legacysocket_getSocketName(&(parent->super), &parentAddress, &parentPort);
+    legacysocket_setSocketName(&(tcp->super), parentAddress, parentPort);
 
     /* we have the same name and peer as the parent, but we do not associate
      * on the interface. the parent will receive packets and multiplex to us. */
@@ -347,19 +347,19 @@ void tcp_clearAllChildrenIfServer(TCP* tcp) {
 static in_addr_t tcp_getIP(TCP* tcp) {
     in_addr_t ip = 0;
     if(tcp->server) {
-        if(socket_isBound(&(tcp->super))) {
-            socket_getSocketName(&(tcp->super), &ip, NULL);
+        if(legacysocket_isBound(&(tcp->super))) {
+            legacysocket_getSocketName(&(tcp->super), &ip, NULL);
         } else {
             ip = tcp->server->lastIP;
         }
     } else if(tcp->child) {
-        if(socket_isBound(&(tcp->child->parent->super))) {
-            socket_getSocketName(&(tcp->child->parent->super), &ip, NULL);
+        if(legacysocket_isBound(&(tcp->child->parent->super))) {
+            legacysocket_getSocketName(&(tcp->child->parent->super), &ip, NULL);
         } else {
             ip = tcp->child->parent->server->lastIP;
         }
     } else {
-        socket_getSocketName(&(tcp->super), &ip, NULL);
+        legacysocket_getSocketName(&(tcp->super), &ip, NULL);
     }
     return ip;
 }
@@ -480,16 +480,16 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
 
     if(sourceIP == destinationIP) {
         /* 16 MiB as max */
-        gsize inSize = socket_getInputBufferSize(&(tcp->super));
-        gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+        gsize inSize = legacysocket_getInputBufferSize(&(tcp->super));
+        gsize outSize = legacysocket_getOutputBufferSize(&(tcp->super));
 
         /* localhost always gets adjusted unless user explicitly set a set */
         if(!tcp->autotune.userDisabledReceive) {
-            socket_setInputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_RMEM_MAX);
+            legacysocket_setInputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_RMEM_MAX);
             trace("set loopback receive buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_RMEM_MAX);
         }
         if(!tcp->autotune.userDisabledSend) {
-            socket_setOutputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_WMEM_MAX);
+            legacysocket_setOutputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_WMEM_MAX);
             trace("set loopback send buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_WMEM_MAX);
         }
 
@@ -533,15 +533,16 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
     /* check to see if the node should set buffer sizes via autotuning, or
      * they were specified by configuration or parameters in XML */
     if (!tcp->autotune.userDisabledReceive && host_autotuneReceiveBuffer(host)) {
-        socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
+        legacysocket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
     }
     if (!tcp->autotune.userDisabledSend && host_autotuneSendBuffer(host)) {
         tcp->super.outputBufferSize = sendbuf_size;
-        socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
+        legacysocket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
 
     debug("set network buffer sizes: send %" G_GSIZE_FORMAT " receive %" G_GSIZE_FORMAT,
-          socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
+          legacysocket_getOutputBufferSize(&(tcp->super)),
+          legacysocket_getInputBufferSize(&(tcp->super)));
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) {
@@ -551,13 +552,13 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) 
     gsize space = 2 * tcp->autotune.bytesCopied;
     space = MAX(space, tcp->autotune.space);
 
-    gsize currentSize = socket_getInputBufferSize(&tcp->super);
+    gsize currentSize = legacysocket_getInputBufferSize(&tcp->super);
     if(space > currentSize) {
         tcp->autotune.space = space;
 
         gsize newSize = (gsize)MIN(space, _tcp_computeMaxRMEM(tcp, host));
         if(newSize > currentSize) {
-            socket_setInputBufferSize(&tcp->super, newSize);
+            legacysocket_setInputBufferSize(&tcp->super, newSize);
             trace("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                     currentSize, newSize);
         }
@@ -594,9 +595,9 @@ static void _tcp_autotuneSendBuffer(TCP* tcp, Host* host) {
 
     gsize newSize = (gsize)MIN((gsize)(sndmem * 2 * demanded), _tcp_computeMaxWMEM(tcp, host));
 
-    gsize currentSize = socket_getOutputBufferSize(&tcp->super);
+    gsize currentSize = legacysocket_getOutputBufferSize(&tcp->super);
     if(newSize > currentSize) {
-        socket_setOutputBufferSize(&tcp->super, newSize);
+        legacysocket_setOutputBufferSize(&tcp->super, newSize);
         trace("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                 currentSize, newSize);
     }
@@ -725,7 +726,7 @@ gsize tcp_getOutputBufferLength(TCP* tcp) {
 /* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
 gsize tcp_getInputBufferLength(TCP* tcp) {
     MAGIC_ASSERT(tcp);
-    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
+    return legacysocket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
 }
 
 /* returns the total number of bytes that we have not yet sent out into the network */
@@ -737,7 +738,8 @@ gsize tcp_getNotSentBytes(TCP* tcp) {
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for throttled and retransmission buffer */
-    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp_getOutputBufferLength(tcp));
+    gssize s =
+        (gssize)(legacysocket_getOutputBufferSpace(&(tcp->super)) - tcp_getOutputBufferLength(tcp));
     gsize space = (gsize) MAX(0, s);
     return space;
 }
@@ -745,7 +747,8 @@ static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for unordered input buffer */
-    gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
+    gssize space =
+        (gssize)(legacysocket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
     return MAX(0, space);
 }
 
@@ -788,7 +791,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
     /* the receive window is how much we are willing to accept to our input buffer.
      * unordered input packets should count against buffer space, so use the _tcp version. */
     //gsize space = _tcp_getBufferSpaceIn(tcp); // causes throughput problems
-    gsize space = socket_getInputBufferSpace(&(tcp->super));
+    gsize space = legacysocket_getInputBufferSpace(&(tcp->super));
     gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP - CONFIG_HEADER_SIZE_ETH);
     tcp->receive.window = nPackets;
 
@@ -798,7 +801,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
          * for the client to drain the input buffer to further open the window.
          * otherwise, we may get into a deadlock situation where we never accept
          * any packets and the client never reads. */
-        utility_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
+        utility_assert(!(legacysocket_getInputBufferLength(&(tcp->super)) == 0));
         debug("%s <-> %s: receive window is 0, we have space for %" G_GSIZE_FORMAT
               " bytes in the input buffer",
               tcp->super.boundString, tcp->super.peerString, space);
@@ -1245,7 +1248,8 @@ static void _tcp_flush(TCP* tcp, Host* host) {
             gboolean fitsInWindow = (header->sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
             /* we cant send it if we dont have enough space */
-            gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
+            gboolean fitsInBuffer =
+                (length <= legacysocket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
 
             if(!fitsInBuffer || !fitsInWindow) {
                 _rswlog(tcp, "Can't retransmit %d, inWindow=%d, inBuffer=%d\n", header->sequence, fitsInWindow, fitsInBuffer);
@@ -1264,7 +1268,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
         /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
         /* socket will queue it ASAP */
-        gboolean success = socket_addToOutputBuffer(&(tcp->super), host, packet);
+        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), host, packet);
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
 
@@ -1283,7 +1287,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
         _rswlog(tcp, "I just received packet %d\n", header->sequence);
         if(header->sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
-            gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), host, packet);
+            gboolean fitInBuffer = legacysocket_addToInputBuffer(&(tcp->super), host, packet);
 
             if(fitInBuffer) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
@@ -1305,10 +1309,10 @@ static void _tcp_flush(TCP* tcp, Host* host) {
 
     /* update the tracker input/output buffer stats */
     Tracker* tracker = host_getTracker(host);
-    Socket* socket = (Socket* )tcp;
+    LegacySocket* socket = (LegacySocket*)tcp;
     LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-    gsize inSize = socket_getInputBufferSize(&(tcp->super));
-    gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+    gsize inSize = legacysocket_getInputBufferSize(&(tcp->super));
+    gsize outSize = legacysocket_getOutputBufferSize(&(tcp->super));
     if (tracker != NULL) {
         tracker_updateSocketInputBuffer(
             tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
@@ -1405,7 +1409,7 @@ static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpo
     _tcp_flush(tcp, host);
 }
 
-static gboolean _tcp_isFamilySupported(Socket* socket, sa_family_t family) {
+static gboolean _tcp_isFamilySupported(LegacySocket* socket, sa_family_t family) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
     return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
@@ -1554,7 +1558,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
 
-static gint _tcp_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t port,
+static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
@@ -1606,7 +1610,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     /* if there are no pending connection ready to accept, dont block waiting */
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
-        utility_assert(socket_getInputBufferLength(&tcp->super) == 0);
+        utility_assert(legacysocket_getInputBufferLength(&tcp->super) == 0);
         descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
         return -EWOULDBLOCK;
     }
@@ -1855,10 +1859,10 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Host* host, Packet* packet, PacketT
 }
 
 static void _tcp_logCongestionInfo(TCP* tcp) {
-    gsize outSize = socket_getOutputBufferSize(&tcp->super);
-    gsize outLength = socket_getOutputBufferLength(&tcp->super);
-    gsize inSize = socket_getInputBufferSize(&tcp->super);
-    gsize inLength = socket_getInputBufferLength(&tcp->super);
+    gsize outSize = legacysocket_getOutputBufferSize(&tcp->super);
+    gsize outLength = legacysocket_getOutputBufferLength(&tcp->super);
+    gsize inSize = legacysocket_getInputBufferSize(&tcp->super);
+    gsize inLength = legacysocket_getInputBufferLength(&tcp->super);
     double ploss = (double)tcp->info.retransmitCount / tcp->send.packetsSent;
 
     debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
@@ -1884,7 +1888,7 @@ static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer user
 }
 
 /* return TRUE if the packet should be retransmitted */
-static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
+static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -2229,7 +2233,7 @@ static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
     trace("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
-static void _tcp_dropPacket(Socket* socket, Host* host, Packet* packet) {
+static void _tcp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -2347,8 +2351,8 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     gsize offset = 0;
     gsize copyLength = 0;
 
-    if ((socket_getInputBufferLength(&tcp->super) == 0) && (tcp->partialUserDataPacket == NULL) &&
-        !(tcp->error & TCPE_RECEIVE_EOF)) {
+    if ((legacysocket_getInputBufferLength(&tcp->super) == 0) &&
+        (tcp->partialUserDataPacket == NULL) && !(tcp->error & TCPE_RECEIVE_EOF)) {
         // there is no data, and we have not received an EOF
         return -EWOULDBLOCK;
     }
@@ -2396,7 +2400,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
 
         /* get the next buffered packet - we'll always need it.
          * this could mark the socket as unreadable if this is its last packet.*/
-        const Packet* nextPacket = socket_peekNextInPacket((Socket*)tcp);
+        const Packet* nextPacket = legacysocket_peekNextInPacket((LegacySocket*)tcp);
         if (!nextPacket) {
             /* no more packets or partial packets */
             break;
@@ -2418,7 +2422,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
         remaining -= bytesCopied;
         offset += bytesCopied;
 
-        Packet* packet = socket_removeFromInputBuffer((Socket*)tcp, host);
+        Packet* packet = legacysocket_removeFromInputBuffer((LegacySocket*)tcp, host);
 
         if(bytesCopied < packetLength) {
             /* we were only able to read part of this packet */
@@ -2435,7 +2439,8 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     bool more_readable_data = false;
 
     /* now we update readability of the socket */
-    if((socket_getInputBufferLength(&(tcp->super)) > 0) || (tcp->partialUserDataPacket != NULL)) {
+    if ((legacysocket_getInputBufferLength(&(tcp->super)) > 0) ||
+        (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
         descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
         more_readable_data = true;
@@ -2639,7 +2644,7 @@ TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 
-    socket_init(
+    legacysocket_init(
         &(tcp->super), host, &tcp_functions, DT_TCPSOCKET, receiveBufferSize, sendBufferSize);
 
     const ConfigOptions* config = worker_getConfig();

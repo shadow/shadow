@@ -9,7 +9,7 @@ use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 use crate::utility::{IsSend, IsSync, SyncSendPointer};
 
-use socket::{SocketFile, SocketFileRef, SocketFileRefMut};
+use socket::{Socket, SocketRef, SocketRefMut};
 
 pub mod descriptor_table;
 pub mod eventfd;
@@ -269,7 +269,7 @@ impl StateEventSource {
 pub enum File {
     Pipe(Arc<AtomicRefCell<pipe::Pipe>>),
     EventFd(Arc<AtomicRefCell<eventfd::EventFd>>),
-    Socket(SocketFile),
+    Socket(Socket),
 }
 
 // will not compile if `File` is not Send + Sync
@@ -342,13 +342,13 @@ impl std::fmt::Debug for File {
 pub enum FileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::Pipe>),
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
-    Socket(SocketFileRef<'a>),
+    Socket(SocketRef<'a>),
 }
 
 pub enum FileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::Pipe>),
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
-    Socket(SocketFileRefMut<'a>),
+    Socket(SocketRefMut<'a>),
 }
 
 impl FileRef<'_> {

@@ -24,8 +24,9 @@ add_custom_command(OUTPUT wrapper.rs
         # until we do.
         --blacklist-type "_?GQueue"
         # Needs GQueue
+        --blacklist-type "_?LegacySocket.*"
         --blacklist-type "_?Socket.*"
-        # Needs Socket
+        # Needs LegacySocket
         --blacklist-type "_?CompatSocket.*"
 
         # Uses atomics, which bindgen doesn't translate correctly.
