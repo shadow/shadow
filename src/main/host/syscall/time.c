@@ -63,23 +63,21 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
         return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
     }
 
-    SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
-    utility_assert(cond);
-    const TimerFd* timer = syscallcondition_getTimeout(cond);
-    utility_assert(timer);
-    if (timerfd_getExpirationCount(timer) == 0) {
+    if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
         utility_assert(
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
-        struct itimerspec timer_val;
-        timerfd_getTime(timer, &timer_val);
-        syscallcondition_cancel(cond);
-
-        /* Timer hasn't expired. Presumably we were interrupted. */
         if (remainder.val) {
-            int rv = process_writePtr(
-                sys->process, remainder, &timer_val.it_value, sizeof(timer_val.it_value));
+            EmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
+            utility_assert(nextExpireTime != EMUTIME_INVALID);
+            utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+            SimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
+            struct timespec timer_val = {0};
+            if (!simtime_to_timespec(remainingTime, &timer_val)) {
+                panic("Couldn't convert %lu", remainingTime);
+            }
+            int rv = process_writePtr(sys->process, remainder, &timer_val, sizeof(timer_val));
             if (rv != 0) {
                 return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
             }

@@ -19,12 +19,12 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
-const TimerFd* _syscallhandler_getTimeout(const SysCallHandler* sys) {
+EmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
     if (!cond) {
-        return NULL;
+        return EMUTIME_INVALID;
     }
 
     return syscallcondition_getTimeout(cond);
@@ -32,29 +32,14 @@ const TimerFd* _syscallhandler_getTimeout(const SysCallHandler* sys) {
 
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
-
-    const TimerFd* timeout = _syscallhandler_getTimeout(sys);
-    if (!timeout) {
-        return false;
-    }
-
-    struct itimerspec value = {0};
-    timerfd_getTime(timeout, &value);
-
-    return value.it_value.tv_sec > 0 || value.it_value.tv_nsec > 0;
+    return _syscallhandler_getTimeout(sys) != EMUTIME_INVALID;
 }
 
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    const TimerFd* timeout = _syscallhandler_getTimeout(sys);
-    if (!timeout) {
-        return false;
-    }
-
-    /* Note that the timer is "readable" if it has a positive
-     * expiration count; this call does not adjust the status. */
-    return timerfd_getExpirationCount(timeout) > 0;
+    EmulatedTime timeout = _syscallhandler_getTimeout(sys);
+    return timeout != EMUTIME_INVALID && worker_getCurrentEmulatedTime() >= timeout;
 }
 
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys) { return sys->blockedSyscallNR >= 0; }
