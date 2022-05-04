@@ -336,8 +336,8 @@ struct ConnOrientedConnected {
     peer_addr: nix::sys::socket::UnixAddr,
     send_buffer: Arc<AtomicRefCell<SharedBuf>>,
     writer_handle: WriterHandle,
-    #[allow(dead_code)]
-    send_buffer_handle: BufferHandle,
+    // this handle is never accessed, but we store it because of its drop impl
+    _send_buffer_handle: BufferHandle,
 }
 struct ConnOrientedClosed {}
 
@@ -346,8 +346,8 @@ struct ConnLessInitial {
     peer_addr: Option<nix::sys::socket::UnixAddr>,
     send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
     writer_handle: Option<WriterHandle>,
-    #[allow(dead_code)]
-    send_buffer_handle: Option<BufferHandle>,
+    // this handle is never accessed, but we store it because of its drop impl
+    _send_buffer_handle: Option<BufferHandle>,
 }
 struct ConnLessClosed {}
 
@@ -421,7 +421,7 @@ impl ProtocolState {
                 peer_addr: None,
                 send_buffer: None,
                 writer_handle: None,
-                send_buffer_handle: None,
+                _send_buffer_handle: None,
             })),
         }
     }
@@ -1067,7 +1067,7 @@ impl Protocol for ConnOrientedInitial {
             bound_addr: self.bound_addr,
             peer_addr: addr.clone(),
             send_buffer,
-            send_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
             writer_handle,
         };
 
@@ -1094,7 +1094,7 @@ impl Protocol for ConnOrientedInitial {
             bound_addr: Some(unnamed_sock_addr),
             peer_addr: unnamed_sock_addr,
             send_buffer,
-            send_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
             writer_handle,
         };
 
@@ -1206,7 +1206,7 @@ impl Protocol for ConnOrientedListening {
             bound_addr: Some(self.bound_addr.clone()),
             peer_addr: from_address.unwrap_or_else(|| empty_unix_sockaddr()),
             send_buffer: child_send_buffer,
-            send_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
             writer_handle,
         };
 
@@ -1454,7 +1454,7 @@ impl Protocol for ConnLessInitial {
             peer_addr: Some(addr.clone()),
             send_buffer: Some(new_send_buffer),
             writer_handle: Some(writer_handle),
-            send_buffer_handle: Some(send_buffer_handle),
+            _send_buffer_handle: Some(send_buffer_handle),
             ..self
         };
 
@@ -1484,7 +1484,7 @@ impl Protocol for ConnLessInitial {
             peer_addr: Some(unnamed_sock_addr),
             send_buffer: Some(send_buffer),
             writer_handle: Some(writer_handle),
-            send_buffer_handle: Some(send_buffer_handle),
+            _send_buffer_handle: Some(send_buffer_handle),
             ..self
         };
 
