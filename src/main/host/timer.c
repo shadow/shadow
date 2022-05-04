@@ -98,6 +98,10 @@ void timer_disarm(Timer* timer) {
     timer->nextExpireTime = EMUTIME_INVALID;
     timer->expireInterval = 0;
 
+    // Does *not* reset undeliveredExpirationCount.
+    // e.g. after a one-shot timer has expired, the timer is disarmed, but still
+    // has a record of the expiration.
+
     _timer_cancelScheduledExpirationEvents(timer);
 }
 
@@ -113,6 +117,8 @@ void timer_arm(Timer* timer, Host* host, EmulatedTime nextExpireTime,
 
     utility_assert(expireInterval != SIMTIME_INVALID);
     timer->expireInterval = expireInterval;
+
+    timer->undeliveredExpirationCount = 0;
 
     _timer_scheduleNewExpireEvent(timer, host);
 }
