@@ -115,7 +115,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         if (epev.events) {
-            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, cdesc, &epev);
+            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, cdesc, &epev, sys->host);
         }
     }
 }

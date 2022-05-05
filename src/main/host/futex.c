@@ -74,8 +74,18 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
     // in the status changed callback.
     GList* listenerList = g_hash_table_get_keys(futex->listeners);
 
-    // Iterate the listeners and perform the requested number of wakeups if we can.
-    GList* item = g_list_first(listenerList);
+    // Iterate the listeners in deterministic order and perform the requested
+    // number of wakeups if we can. It's probably better to maintain the items
+    // in a sorted structure, e.g. a ring, to make it easier / more efficient to
+    // iterate deterministically while also moving the ring entry pointer so we
+    // don't always wake up the same listener first on every iteration and
+    // possibly starve the others.
+    GList* item = NULL;
+    if(listenerList != NULL) {
+        listenerList = g_list_sort(listenerList, status_listener_compare);
+        item = g_list_first(listenerList);
+    }
+
     unsigned int numWoken = 0;
 
     while (item && (numWoken < numWakeups)) {
@@ -102,7 +112,9 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
         item = g_list_next(item);
     }
 
-    g_list_free(listenerList);
+    if(listenerList != NULL) {
+        g_list_free(listenerList);
+    }
     return numWoken;
 }
 

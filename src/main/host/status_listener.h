@@ -6,10 +6,11 @@
 #ifndef SRC_MAIN_HOST_STATUS_LISTENER_H_
 #define SRC_MAIN_HOST_STATUS_LISTENER_H_
 
-#include "main/host/status.h"
-
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _StatusListener StatusListener;
+
+#include "main/host/host.h"
+#include "main/host/status.h"
 
 /* Indicates when the listener should trigger a callback, i.e.,
  * when the status bits that we are monitoring flip from off to on,
@@ -34,7 +35,7 @@ typedef void (*StatusArgumentFreeFunc)(void* data);
  * used to specify which status bits this listener should monitor. */
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc);
+                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host);
 
 /* Increment the reference count for this listener. */
 void statuslistener_ref(StatusListener* listener);
@@ -55,5 +56,11 @@ void statuslistener_onStatusChanged(StatusListener* listener, Status currentStat
  * to be invoked. */
 void statuslistener_setMonitorStatus(StatusListener* listener, Status status,
                                      StatusListenerFilter filter);
+
+/* Used for sorting status listeners in GLib code. Returns -1 if the listener in
+ * ptr_1 was created before the listener in ptr_2, +1 if the listener in ptr_2
+ * was created before the listener in ptr_1, and 0 if the listener and their
+ * pointer values are equal.  */
+int status_listener_compare(const void* ptr_1, const void* ptr_2);
 
 #endif /* SRC_MAIN_HOST_STATUS_LISTENER_H_ */

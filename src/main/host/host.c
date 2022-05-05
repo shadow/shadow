@@ -71,6 +71,9 @@ struct _Host {
     guint64 eventIDCounter;
     guint64 packetIDCounter;
 
+    /* Enables us to sort objects deterministically based on their creation order. */
+    guint64 determinismSequenceCounter;
+
     /* map abstract socket addresses to unix sockets */
     Arc_AtomicRefCell_AbstractUnixNamespace* abstractUnixNamespace;
 
@@ -792,4 +795,9 @@ void host_lockShimShmemLock(Host* host) {
 void host_unlockShimShmemLock(Host* host) {
     MAGIC_ASSERT(host);
     shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
+}
+
+guint64 host_getNextDeterministicSequenceValue(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->determinismSequenceCounter++;
 }

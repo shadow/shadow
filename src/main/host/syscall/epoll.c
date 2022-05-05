@@ -125,7 +125,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event);
+    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event, sys->host);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }

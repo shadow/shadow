@@ -130,4 +130,10 @@ void host_lockShimShmemLock(Host* host);
 // Release the host's shared memory lock. See `host_getShimShmemLock`.
 void host_unlockShimShmemLock(Host* host);
 
+// Returns the next value and increments our monotonically increasing
+// determinism sequence counter. The resulting values can be sorted to
+// established a deterministic ordering, which can be useful when iterating
+// items that are otherwise inconsistently ordered (e.g. hash table iterators).
+guint64 host_getNextDeterministicSequenceValue(Host* host);
+
 #endif /* SHD_HOST_H_ */
