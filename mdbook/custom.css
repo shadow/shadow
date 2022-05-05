@@ -7,3 +7,13 @@
 .chapter li div {
     cursor: not-allowed;
 }
+
+@media (prefers-color-scheme: dark) {
+    /* mdbook doesn't tell us whether it's using a dark theme or not, so we'll
+     * use the 'prefers-color-theme' as a guess at which theme the user is
+     * using */
+    img.color-adapting-image,
+    figure.color-adapting-image img {
+        filter: invert(85%) hue-rotate(180deg);
+    }
+}
