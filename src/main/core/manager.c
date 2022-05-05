@@ -454,7 +454,7 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     return scheduler_addHost(manager->scheduler, host);
 }
 
-static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
+static gchar** _manager_generateEnvv(Manager* manager, Host* host, InterposeMethod interposeMethod,
                                      const gchar* environment) {
     MAGIC_ASSERT(manager);
 
@@ -470,7 +470,11 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     }
 
     {
-        char* level_string = g_strdup_printf("%d", config_getLogLevel(manager->config));
+        LogLevel level = host_getLogLevel(host);
+        if (level == LOGLEVEL_UNSET) {
+            level = config_getLogLevel(manager->config);
+        }
+        char* level_string = g_strdup_printf("%d", level);
         envv = g_environ_setenv(envv, "SHADOW_LOG_LEVEL", level_string, TRUE);
         g_free(level_string);
     }
@@ -599,10 +603,11 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
 
     InterposeMethod interposeMethod = config_getInterposeMethod(manager->config);
 
-    /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _manager_generateEnvv(manager, interposeMethod, environment);
-
     Host* host = scheduler_getHost(manager->scheduler, hostID);
+
+    /* ownership is passed to the host/process below, so we don't free these */
+    gchar** envv = _manager_generateEnvv(manager, host, interposeMethod, environment);
+
     host_continueExecutionTimer(host);
 
     gchar* pluginName = g_path_get_basename(pluginPath);
