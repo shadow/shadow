@@ -2663,7 +2663,8 @@ TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     /* 0 is saved for representing control packets */
     guint32 initialSequenceNumber = 1;
 
-    tcp->send.unacked = initialSequenceNumber;
+    // the first packet (the SYN packet) has a sequence number of 0
+    tcp->send.unacked = 0;
     tcp->send.next = initialSequenceNumber;
     tcp->send.end = initialSequenceNumber;
     tcp->send.lastAcknowledgment = initialSequenceNumber;
