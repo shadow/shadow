@@ -17,12 +17,12 @@
 
 #include "lib/shim/shim_shmem.h"
 #include "main/host/descriptor/epoll.h"
-#include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/host/timer.h"
 #include "main/utility/utility.h"
 
 typedef enum {
@@ -94,7 +94,7 @@ struct _SysCallHandler {
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);
 
-const Timer* _syscallhandler_getTimeout(const SysCallHandler* sys);
+EmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);

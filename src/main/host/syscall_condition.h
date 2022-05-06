@@ -7,12 +7,12 @@
 #define SRC_MAIN_HOST_SYSCALL_CONDITION_H_
 
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/timer.h"
 #include "main/host/futex.h"
 #include "main/host/process.h"
 #include "main/host/status.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/host/timer.h"
 
 /* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;
@@ -68,15 +68,15 @@ void syscallcondition_unref(SysCallCondition* cond);
  * be notified via process_continue() when the condition occurs. After
  * this call, the condition object will begin listening on the status of
  * the timeout and descriptor given in new(). */
-void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc, Thread* thread,
-                                   Host* host);
+void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* proc,
+                                   Thread* thread);
 
 /* Deactivate the condition by deregistering any open listeners and
  * clearing any references to the process an thread given in wait(). */
 void syscallcondition_cancel(SysCallCondition* cond);
 
-/* Get the timer for the condition, or NULL if there isn't one. */
-Timer* syscallcondition_getTimeout(SysCallCondition* cond);
+/* Get the timer for the condition, or EMUTIME_INVALID if there isn't one. */
+EmulatedTime syscallcondition_getTimeout(SysCallCondition* cond);
 
 /* Get the active file for the condition, or NULL if there isn't one. */
 OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond);

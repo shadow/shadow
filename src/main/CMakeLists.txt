@@ -97,7 +97,7 @@ set(shadow_srcs
     host/descriptor/tcp.c
     host/descriptor/tcp_cong.c
     host/descriptor/tcp_cong_reno.c
-    host/descriptor/timer.c
+    host/descriptor/timerfd.c
     host/descriptor/transport.c
     host/descriptor/udp.c
     host/affinity.c
@@ -133,6 +133,7 @@ set(shadow_srcs
     host/thread_ptrace.c
     host/network_interface.c
     host/network_queuing_disciplines.c
+    host/timer.c
     host/tracker.c
 
     routing/payload.c

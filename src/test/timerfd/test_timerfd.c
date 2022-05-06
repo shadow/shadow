@@ -50,6 +50,8 @@ static void _test_timer_helper(bool use_abs_timer) {
         assert_nonneg_errno(epoll_wait(efd, &event, 1, -1));
         uint64_t expired = 0;
         assert_nonneg_errno(read(tfd, &expired, sizeof(uint64_t)));
+        // Should be exactly 1 expiration
+        g_assert_cmpint(expired, ==, 1);
     }
 
     /* get the end time */
@@ -101,7 +103,7 @@ static void _test_expired_timer_helper(int timeout_before_read) {
     /* it should have expired */
     uint64_t num_expires = 0;
     assert_nonneg_errno(read(tfd, &num_expires, sizeof(uint64_t)));
-    g_assert_cmpint(num_expires, !=, 0);
+    g_assert_cmpint(num_expires, ==, 1);
 
     epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
@@ -153,6 +155,41 @@ static void _test_disarm_timer() {
     close(tfd);
 }
 
+static void _test_rearm_timer() {
+    int efd, tfd;
+
+    /* create new timerfd */
+    assert_nonneg_errno(tfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
+
+    /* first arm the timer to go off in 1 sec */
+    struct itimerspec t = {0};
+    t.it_value.tv_sec = 1;
+    assert_nonneg_errno(timerfd_settime(tfd, 0, &t, NULL));
+
+    /* associate this timer with an epoll efd */
+    struct epoll_event timerevent = {0};
+    timerevent.events = EPOLLIN;
+    assert_nonneg_errno(efd = epoll_create(1));
+    assert_nonneg_errno(epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent));
+
+    /* wait for 2 seconds */
+    struct epoll_event event = {0};
+    assert_nonneg_errno(epoll_wait(efd, &event, 1, 2));
+
+    /* The timer should be ready, but calling timerfd_settime should make it
+     * unready again */
+    assert_nonneg_errno(timerfd_settime(tfd, 0, &t, NULL));
+    uint64_t num_expires = 0;
+    int rv = read(tfd, &num_expires, sizeof(uint64_t));
+    g_assert_cmpint(rv, ==, -1);
+    g_assert_cmpint(errno, ==, EAGAIN);
+    g_assert_cmpint(num_expires, ==, 0);
+
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
+    close(efd);
+    close(tfd);
+}
+
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
 
@@ -161,6 +198,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/timerfd/expired_block", _test_expired_timer_block);
     g_test_add_func("/timerfd/expired_pause", _test_expired_timer_pause);
     g_test_add_func("/timerfd/disarm", _test_disarm_timer);
+    g_test_add_func("/timerfd/rearm", _test_rearm_timer);
 
     return g_test_run();
 }

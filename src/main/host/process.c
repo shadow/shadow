@@ -47,7 +47,7 @@
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall_condition.h"
