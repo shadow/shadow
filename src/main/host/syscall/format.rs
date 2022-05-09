@@ -620,3 +620,29 @@ mod export {
         result.into()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::process::Command;
+
+    #[test]
+    fn test_no_args() {
+        let args = SysCallArgs {
+            number: 100,
+            args: [0u32.into(); 6],
+        };
+
+        // 10 seconds should be long enough to keep the process alive while the following code runs
+        let mut proc = Command::new("sleep").arg(10.to_string()).spawn().unwrap();
+        let pid = nix::unistd::Pid::from_raw(proc.id().try_into().unwrap());
+
+        let mem = unsafe { MemoryManager::new(pid) };
+
+        // make sure that we can construct a `SyscallArgsFmt` with no generic types
+        let _syscall_args = <SyscallArgsFmt>::new(&args, FmtOptions::Standard, &mem);
+
+        proc.kill().unwrap();
+        proc.wait().unwrap();
+    }
+}
