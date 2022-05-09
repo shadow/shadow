@@ -161,9 +161,3 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
-
-SysCallReturn syscallhandler_sched_yield(SysCallHandler* sys, const SysCallArgs* args) {
-    // Do nothing. We already yield and reschedule after some number of
-    // unblocked syscalls.
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-}

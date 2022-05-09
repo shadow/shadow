@@ -13,6 +13,5 @@ SYSCALL_HANDLER(clock_nanosleep);
 SYSCALL_HANDLER(gettimeofday);
 SYSCALL_HANDLER(nanosleep);
 SYSCALL_HANDLER(time);
-SYSCALL_HANDLER(sched_yield);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_TIME_H_ */
