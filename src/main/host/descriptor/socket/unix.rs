@@ -42,13 +42,6 @@ impl UnixSocket {
         let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
         let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
 
-        // increment the buffer's reader count; we'll return the handle back to the buffer when
-        // we're no longer acting as a reader (when we're closed)
-        // this is a new buffer and there are no listeners, so safe to use a temporary event queue
-        let reader_handle = EventQueue::queue_and_run(|event_queue| {
-            recv_buffer.borrow_mut().add_reader(event_queue)
-        });
-
         let socket = Self {
             common: UnixSocketCommon {
                 recv_buffer,
@@ -58,7 +51,7 @@ impl UnixSocket {
                 socket_type,
                 namespace: Arc::clone(namespace),
                 recv_buffer_handle: None,
-                reader_handle: Some(reader_handle),
+                reader_handle: None,
                 has_open_file: false,
             },
             protocol_state: ProtocolState::new(socket_type),
@@ -67,34 +60,28 @@ impl UnixSocket {
         let socket = Arc::new(AtomicRefCell::new(socket));
         let mut socket_ref = socket.borrow_mut();
 
-        // update the socket's state when the buffer's state changes
-        let weak = Arc::downgrade(&socket);
-        let recv_handle = socket_ref.common.recv_buffer.borrow_mut().add_listener(
-            BufferState::READABLE | BufferState::NO_WRITERS,
-            move |state, event_queue| {
-                // if the file hasn't been dropped
-                if let Some(socket) = weak.upgrade() {
-                    let mut socket = socket.borrow_mut();
+        // this is a new buffer and there are no listeners, so safe to use a temporary event queue
+        let (recv_handle, reader_handle) = EventQueue::queue_and_run(|event_queue| {
+            let buf = Arc::clone(&socket_ref.common.recv_buffer);
 
-                    // if the socket is already closed, do nothing
-                    if socket.common.state.contains(FileState::CLOSED) {
-                        return;
-                    }
+            // increment the buffer's reader count; we'll return the handle back to the buffer when
+            // we're no longer acting as a reader (when we're closed)
+            let reader_handle = buf.borrow_mut().add_reader(event_queue);
 
-                    // the socket is readable iff the buffer is readable or has no writers
-                    socket.common.copy_state(
-                        /* mask */ FileState::READABLE,
-                        state
-                            .intersects(BufferState::READABLE | BufferState::NO_WRITERS)
-                            .then(|| FileState::READABLE)
-                            .unwrap_or_default(),
-                        event_queue,
-                    );
-                }
-            },
-        );
+            // update the socket's state when the buffer's state changes
+            let recv_handle = socket_ref.common.add_buffer_listener(
+                &socket,
+                &buf,
+                // the socket will be readable iff the buffer is readable or has no writers
+                ListenerType::Read,
+                event_queue,
+            );
+
+            (recv_handle, reader_handle)
+        });
 
         socket_ref.common.recv_buffer_handle = Some(recv_handle);
+        socket_ref.common.reader_handle = Some(reader_handle);
 
         std::mem::drop(socket_ref);
 
@@ -1053,7 +1040,15 @@ impl Protocol for ConnOrientedInitial {
 
         // our send buffer will be the peer's receive buffer
         let send_buffer = Arc::clone(peer.borrow().recv_buffer());
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            socket,
+            &send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
@@ -1079,7 +1074,15 @@ impl Protocol for ConnOrientedInitial {
         assert!(self.bound_addr.is_none());
 
         let unnamed_sock_addr = empty_unix_sockaddr();
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            socket,
+            &send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
@@ -1186,9 +1189,12 @@ impl Protocol for ConnOrientedListening {
             &common.namespace,
         );
 
-        let send_buffer_handle = child_socket.borrow_mut().common.connect_buffer(
+        // update the child's state when the buffer's state changes
+        let send_buffer_handle = child_socket.borrow_mut().common.add_buffer_listener(
             &child_socket,
             &child_send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
             event_queue,
         );
 
@@ -1449,7 +1455,14 @@ impl Protocol for ConnLessInitial {
         // get the new send buffer
         let new_send_buffer = Arc::clone(peer.borrow().recv_buffer());
 
-        let send_buffer_handle = common.connect_buffer(socket, &new_send_buffer, event_queue);
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            socket,
+            &new_send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = new_send_buffer.borrow_mut().add_writer(event_queue);
@@ -1478,7 +1491,14 @@ impl Protocol for ConnLessInitial {
         assert!(self.peer_addr.is_none());
         assert!(self.bound_addr.is_none());
 
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            socket,
+            &send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
@@ -1749,51 +1769,78 @@ impl UnixSocketCommon {
         Err(Errno::EINVAL.into())
     }
 
-    pub fn connect_buffer(
+    /// Add a listener to the buffer which keeps the socket's state in sync with the buffer's state.
+    /// If the listener type is `ListenerType::Read`, the socket will be readable iff the buffer is
+    /// readable or has no writers. If the listener type is `ListenerType::Write`, the socket will
+    /// be writable iff the buffer is writable or has no readers.
+    fn add_buffer_listener(
         &mut self,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
+        buffer: &Arc<AtomicRefCell<SharedBuf>>,
+        listener_type: ListenerType,
         event_queue: &mut EventQueue,
     ) -> BufferHandle {
-        let mut send_buffer_ref = send_buffer.borrow_mut();
+        let weak = Arc::downgrade(socket);
+        let buffer_ref = &mut buffer.borrow_mut();
 
-        // the socket is writable iff the buffer is writable or has no readers
+        let (buffer_state, socket_state) = match listener_type {
+            // the socket will be readable iff the buffer is readable or has no writers
+            ListenerType::Read => (
+                BufferState::READABLE | BufferState::NO_WRITERS,
+                FileState::READABLE,
+            ),
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write => (
+                BufferState::WRITABLE | BufferState::NO_READERS,
+                FileState::WRITABLE,
+            ),
+        };
+
+        // add the listener
+        let handle = buffer_ref.add_listener(buffer_state, move |new_buffer_state, event_queue| {
+            // if the file hasn't been dropped
+            if let Some(socket) = weak.upgrade() {
+                let mut socket = socket.borrow_mut();
+
+                // update the socket's state to align with the buffer's current state
+                socket.common.align_state_to_buffer(
+                    new_buffer_state,
+                    buffer_state,
+                    socket_state,
+                    event_queue,
+                );
+            }
+        });
+
+        // make sure we're starting in a consistent state with the buffer
+        self.align_state_to_buffer(buffer_ref.state(), buffer_state, socket_state, event_queue);
+
+        handle
+    }
+
+    /// Align the socket's state to the buffer state. For example if the buffer is both `READABLE`
+    /// and `WRITABLE`, and the socket is only open in `READ` mode, the socket's `READABLE` state
+    /// will be set and the `WRITABLE` state will be unchanged.
+    fn align_state_to_buffer(
+        &mut self,
+        new_buffer_state: BufferState,
+        buffer_state: BufferState,
+        socket_state: FileState,
+        event_queue: &mut EventQueue,
+    ) {
+        // if the socket is already closed, do nothing
+        if self.state.contains(FileState::CLOSED) {
+            return;
+        }
+
         self.copy_state(
-            /* mask */ FileState::WRITABLE,
-            send_buffer_ref
-                .state()
-                .intersects(BufferState::WRITABLE | BufferState::NO_READERS)
-                .then(|| FileState::WRITABLE)
+            /* mask */ socket_state,
+            new_buffer_state
+                .intersects(buffer_state)
+                .then(|| socket_state)
                 .unwrap_or_default(),
             event_queue,
         );
-
-        // update the socket's state when the buffer's state changes
-        let weak = Arc::downgrade(&socket);
-        send_buffer_ref.add_listener(
-            BufferState::WRITABLE | BufferState::NO_READERS,
-            move |state, event_queue| {
-                // if the file hasn't been dropped
-                if let Some(socket) = weak.upgrade() {
-                    let mut socket = socket.borrow_mut();
-
-                    // if the socket is already closed, do nothing
-                    if socket.common.state.contains(FileState::CLOSED) {
-                        return;
-                    }
-
-                    // the socket is writable iff the buffer is writable or has no readers
-                    socket.common.copy_state(
-                        /* mask */ FileState::WRITABLE,
-                        state
-                            .intersects(BufferState::WRITABLE | BufferState::NO_READERS)
-                            .then(|| FileState::WRITABLE)
-                            .unwrap_or_default(),
-                        event_queue,
-                    );
-                }
-            },
-        )
     }
 
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
@@ -1886,6 +1933,12 @@ impl std::fmt::Display for UnixSocketTypeConversionError {
 enum IncomingConnError {
     QueueFull,
     NotSupported,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ListenerType {
+    Read,
+    Write,
 }
 
 fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
