@@ -93,20 +93,10 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timerfd);
     utility_assert(curr_value);
 
-    EmulatedTime nextExpireTime = timer_getNextExpireTime(timerfd->timer);
-    if (nextExpireTime == EMUTIME_INVALID) {
-        /* timer is disarmed */
-        curr_value->it_value = (struct timespec){
-            .tv_sec = 0,
-            .tv_nsec = 0,
-        };
-    } else {
-        // We prevent the expire time from ever being in the past.
-        utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
-        SimulationTime timeLeft = nextExpireTime - worker_getCurrentEmulatedTime();
-        if (!simtime_to_timespec(timeLeft, &curr_value->it_value)) {
-            panic("Couldn't convert %ld", nextExpireTime);
-        }
+    SimulationTime remainingTime = timer_getRemainingTime(timerfd->timer);
+    utility_assert(remainingTime != SIMTIME_INVALID);
+    if (!simtime_to_timespec(remainingTime, &curr_value->it_value)) {
+        panic("Couldn't convert %ld", remainingTime);
     }
 
     SimulationTime interval = timer_getInterval(timerfd->timer);
