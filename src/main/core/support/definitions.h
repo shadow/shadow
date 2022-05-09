@@ -72,12 +72,12 @@ typedef guint64 EmulatedTime;
  *
  * Duplicated as SIMULATION_START_SEC in `emulated_time.rs`.
  */
-#define EMULATED_TIME_OFFSET (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
+#define EMUTIME_SIMULATION_START (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
 
 /**
  * The Unix Epoch as EmulatedTime
  */
-#define EMULATED_TIME_UNIX_EPOCH (0)
+#define EMUTIME_UNIX_EPOCH (0)
 
 /**
  * Represents an invalid emulation time.
@@ -91,38 +91,8 @@ typedef guint64 EmulatedTime;
 #define EMUTIME_MIN 0
 
 /* Ensure it can be converted to EmulatedTime */
-#define SIMTIME_MAX (EMUTIME_MAX - EMULATED_TIME_OFFSET)
+#define SIMTIME_MAX (EMUTIME_MAX - EMUTIME_SIMULATION_START)
 #define SIMTIME_MIN 0
-
-/**
- * Conversion from emulated time to simulated time.
- */
-static inline SimulationTime EMULATED_TIME_TO_SIMULATED_TIME(EmulatedTime emtime) {
-    if (emtime == EMUTIME_INVALID) {
-        return SIMTIME_INVALID;
-    }
-    SimulationTime rv = emtime - EMULATED_TIME_OFFSET;
-
-    // Underflow check
-    g_assert(rv < emtime);
-
-    return rv;
-}
-
-/**
- * Conversion from emulated time to simulated time.
- */
-static inline EmulatedTime SIMULATED_TIME_TO_EMULATED_TIME(SimulationTime simtime) {
-    if (simtime == SIMTIME_INVALID) {
-        return EMUTIME_INVALID;
-    }
-    EmulatedTime rv = simtime + EMULATED_TIME_OFFSET;
-
-    // overflow check
-    g_assert(rv > simtime);
-
-    return rv;
-}
 
 /**
  * The start of our random port range in host order, used if application doesn't

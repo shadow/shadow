@@ -101,6 +101,48 @@ impl std::ops::Sub<EmulatedTime> for EmulatedTime {
     }
 }
 
+pub mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn emutime_add_simtime(
+        lhs: c::EmulatedTime,
+        rhs: c::SimulationTime,
+    ) -> c::EmulatedTime {
+        let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
+            e
+        } else {
+            return EmulatedTime::to_c_emutime(None);
+        };
+        let rhs = if let Some(e) = SimulationTime::from_c_simtime(rhs) {
+            e
+        } else {
+            return EmulatedTime::to_c_emutime(None);
+        };
+        let sum = lhs.checked_add(rhs);
+        EmulatedTime::to_c_emutime(sum)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn emutime_sub_emutime(
+        lhs: c::EmulatedTime,
+        rhs: c::EmulatedTime,
+    ) -> c::SimulationTime {
+        let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
+            e
+        } else {
+            return EmulatedTime::to_c_emutime(None);
+        };
+        let rhs = if let Some(e) = EmulatedTime::from_c_emutime(rhs) {
+            e
+        } else {
+            return EmulatedTime::to_c_emutime(None);
+        };
+        let diff = lhs.checked_duration_since(&rhs);
+        SimulationTime::to_c_simtime(diff)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
