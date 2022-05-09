@@ -105,6 +105,23 @@ static void _test_expired_timer_helper(int timeout_before_read) {
     assert_nonneg_errno(read(tfd, &num_expires, sizeof(uint64_t)));
     g_assert_cmpint(num_expires, ==, 1);
 
+    /* Should have 0 time left */
+    assert_nonneg_errno(timerfd_gettime(tfd, &t));
+    g_assert_cmpint(t.it_value.tv_sec, ==, 0);
+    g_assert_cmpint(t.it_value.tv_nsec, ==, 0);
+    g_assert_cmpint(t.it_interval.tv_sec, ==, 0);
+    g_assert_cmpint(t.it_interval.tv_nsec, ==, 0);
+
+    /* After waiting a bit, should still have 0 time left.
+     * (Regression test to handle "negative" time left)
+     */
+    usleep(1);
+    assert_nonneg_errno(timerfd_gettime(tfd, &t));
+    g_assert_cmpint(t.it_value.tv_sec, ==, 0);
+    g_assert_cmpint(t.it_value.tv_nsec, ==, 0);
+    g_assert_cmpint(t.it_interval.tv_sec, ==, 0);
+    g_assert_cmpint(t.it_interval.tv_nsec, ==, 0);
+
     epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
     close(tfd);

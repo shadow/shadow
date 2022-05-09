@@ -78,10 +78,19 @@ guint64 timer_getExpirationCount(const Timer* timer) {
     return timer->expirationCount;
 }
 
-EmulatedTime timer_getNextExpireTime(const Timer* timer) {
+SimulationTime timer_getRemainingTime(const Timer* timer) {
     MAGIC_ASSERT(timer);
 
-    return timer->nextExpireTime;
+    if (timer->nextExpireTime == SIMTIME_INVALID) {
+        return 0;
+    }
+
+    EmulatedTime now = worker_getCurrentEmulatedTime();
+    if (timer->nextExpireTime < now) {
+        return 0;
+    }
+
+    return timer->nextExpireTime - now;
 }
 
 SimulationTime timer_getInterval(const Timer* timer) {
