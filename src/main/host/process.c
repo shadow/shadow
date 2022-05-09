@@ -347,7 +347,8 @@ static void _process_getAndLogReturnCode(Process* proc) {
 
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
-              process_getName(proc), EMULATED_TIME_TO_SIMULATED_TIME(proc->startTime));
+              process_getName(proc),
+              emutime_sub_emutime(proc->startTime, EMUTIME_SIMULATION_START));
         return;
     }
 
@@ -801,8 +802,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 #endif
 
     utility_assert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = SIMULATED_TIME_TO_EMULATED_TIME(startTime);
-    proc->stopTime = SIMULATED_TIME_TO_EMULATED_TIME(stopTime);
+    proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
+    proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
 
     proc->interposeMethod = interposeMethod;
 

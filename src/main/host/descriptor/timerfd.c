@@ -123,7 +123,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
     utility_assert(configSimTime != SIMTIME_INVALID);
 
     EmulatedTime now = worker_getCurrentEmulatedTime();
-    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMULATED_TIME_UNIX_EPOCH : now;
+    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMUTIME_UNIX_EPOCH : now;
     EmulatedTime nextExpireTime = base + configSimTime;
     /* the man page does not specify what happens if the time
      * they gave us is in the past. on linux, the result is an

@@ -465,6 +465,10 @@ int64_t parse_bandwidth(const char *s);
 // Parses a string as a time in nanoseconds. Returns '-1' on error.
 int64_t parse_time_nanosec(const char *s);
 
+EmulatedTime emutime_add_simtime(EmulatedTime lhs, SimulationTime rhs);
+
+SimulationTime emutime_sub_emutime(EmulatedTime lhs, EmulatedTime rhs);
+
 SimulationTime simtime_from_timeval(struct timeval val);
 
 SimulationTime simtime_from_timespec(struct timespec val);

@@ -457,7 +457,8 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(event_getTime(event)));
+    worker_setCurrentEmulatedTime(
+        emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event)));
 
     /* process the local event */
     event_execute(event);
@@ -469,7 +470,7 @@ void worker_runEvent(Event* event) {
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {
-    worker_setCurrentEmulatedTime(SIMULATED_TIME_TO_EMULATED_TIME(time));
+    worker_setCurrentEmulatedTime(emutime_add_simtime(EMUTIME_SIMULATION_START, time));
 
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
@@ -501,7 +502,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime 
         return FALSE;
     }
 
-    Event* event = event_new_(task, EMULATED_TIME_TO_SIMULATED_TIME(t), host, host);
+    Event* event = event_new_(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, host);
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
@@ -517,7 +518,7 @@ gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nan
 
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_assert(host);
-    EmulatedTime max = SIMULATED_TIME_TO_EMULATED_TIME(_worker_getRoundEndTime());
+    EmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
     EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
     if (nextEventTime != 0) {
@@ -599,7 +600,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
 static void _worker_bootHost(Host* host, void* _unused) {
     worker_setActiveHost(host);
-    worker_setCurrentEmulatedTime(EMULATED_TIME_OFFSET);
+    worker_setCurrentEmulatedTime(EMUTIME_SIMULATION_START);
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);
