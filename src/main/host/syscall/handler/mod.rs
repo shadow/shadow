@@ -48,6 +48,7 @@ impl SyscallHandler {
             libc::SYS_pipe2 => self.pipe2(ctx, args),
             libc::SYS_pread64 => self.pread64(ctx, args),
             libc::SYS_pwrite64 => self.pwrite64(ctx, args),
+            libc::SYS_rseq => self.rseq(ctx, args),
             libc::SYS_read => self.read(ctx, args),
             libc::SYS_recvfrom => self.recvfrom(ctx, args),
             libc::SYS_sched_yield => self.sched_yield(ctx, args),
