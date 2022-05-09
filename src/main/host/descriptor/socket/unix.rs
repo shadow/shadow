@@ -34,14 +34,10 @@ pub struct UnixSocket {
 
 impl UnixSocket {
     pub fn new(
-        mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
     ) -> Arc<AtomicRefCell<Self>> {
-        // must be able to both read and write to the socket
-        assert!(mode.contains(FileMode::READ) && mode.contains(FileMode::WRITE));
-
         // initialize the socket's receive buffer
         let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
         let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
@@ -58,7 +54,6 @@ impl UnixSocket {
                 recv_buffer,
                 event_source: StateEventSource::new(),
                 state: FileState::ACTIVE,
-                mode,
                 status,
                 socket_type,
                 namespace: Arc::clone(namespace),
@@ -115,7 +110,7 @@ impl UnixSocket {
     }
 
     pub fn mode(&self) -> FileMode {
-        self.common.mode
+        FileMode::READ | FileMode::WRITE
     }
 
     pub fn has_open_file(&self) -> bool {
@@ -262,14 +257,13 @@ impl UnixSocket {
     }
 
     pub fn pair(
-        mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
         event_queue: &mut EventQueue,
     ) -> (Arc<AtomicRefCell<Self>>, Arc<AtomicRefCell<Self>>) {
-        let socket_1 = UnixSocket::new(mode, status, socket_type, namespace);
-        let socket_2 = UnixSocket::new(mode, status, socket_type, namespace);
+        let socket_1 = UnixSocket::new(status, socket_type, namespace);
+        let socket_2 = UnixSocket::new(status, socket_type, namespace);
 
         {
             let socket_1_ref = &mut *socket_1.borrow_mut();
@@ -1186,7 +1180,6 @@ impl Protocol for ConnOrientedListening {
         let child_send_buffer = Arc::clone(child_send_buffer);
 
         let child_socket = UnixSocket::new(
-            FileMode::READ | FileMode::WRITE,
             // copy the parent's status
             common.status,
             common.socket_type,
@@ -1521,7 +1514,6 @@ struct UnixSocketCommon {
     recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
     event_source: StateEventSource,
     state: FileState,
-    mode: FileMode,
     status: FileStatus,
     socket_type: UnixSocketType,
     namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
@@ -1633,11 +1625,6 @@ impl UnixSocketCommon {
     where
         R: std::io::Read + std::io::Seek,
     {
-        // if the file is not open for writing, return EBADF
-        if !self.mode.contains(FileMode::WRITE) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
         let addr = match addr {
             Some(nix::sys::socket::SockAddr::Unix(x)) => Some(x),
             None => None,
@@ -1729,11 +1716,6 @@ impl UnixSocketCommon {
     where
         W: std::io::Write + std::io::Seek,
     {
-        // if the file is not open for reading, return EBADF
-        if !self.mode.contains(FileMode::READ) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
         let mut recv_buffer = self.recv_buffer.borrow_mut();
 
         // the read would block if all:
