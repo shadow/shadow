@@ -16,6 +16,7 @@ typedef struct _Event Event;
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 
+// Takes ownership of `task`.
 Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost);
 void event_ref(Event* event);
 void event_unref(Event* event);

@@ -589,7 +589,6 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         Task* packetTask = task_new(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
-        task_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);
     } else {

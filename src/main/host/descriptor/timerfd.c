@@ -81,7 +81,6 @@ TimerFd* timerfd_new() {
     descriptor_refWeak(timerfd);
     Task* task = task_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
-    task_drop(task);
 
     worker_count_allocation(TimerFd);
 

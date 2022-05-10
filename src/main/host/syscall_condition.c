@@ -385,7 +385,6 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
         wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
-    task_drop(wakeupTask);
 
     cond->wakeupScheduled = true;
 }
@@ -431,7 +430,6 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* 
             Task* task = task_new(_syscallcondition_notifyTimeoutExpired, cond, NULL,
                                   _syscallcondition_unrefcb, NULL);
             cond->timeout = timer_new(task);
-            task_drop(task);
         }
 
         timer_arm(cond->timeout, host, cond->timeoutExpiration, 0);

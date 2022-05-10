@@ -498,11 +498,8 @@ struct Task *task_new(TaskCallbackFunc callback,
                       TaskObjectFreeFunc object_free,
                       TaskArgumentFreeFunc argument_free);
 
-// Creates a new reference to the `Task`.
-struct Task *task_clone(const struct Task *task);
-
-// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
-void task_drop(struct Task *task);
+// Destroys the Task.
+void task_delete(struct Task *task);
 
 // Executes the task.
 void task_execute(struct Task *task, Host *host);

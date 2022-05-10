@@ -1,14 +1,10 @@
-use std::sync::Arc;
-
-use atomic_refcell::AtomicRefCell;
-
 use crate::{core::worker::Worker, host::host::Host};
 
 /// Mostly for interoperability with C APIs.
 /// In Rust code that doesn't need to interact with C, it may make more sense
 /// to directly use a `FnMut(&mut Host)` trait object.
 pub struct Task {
-    inner: Arc<AtomicRefCell<dyn FnMut(&mut Host)>>,
+    callback: Box<dyn FnMut(&mut Host)>,
     #[cfg(debug_assertions)]
     magic: u32,
 }
@@ -17,18 +13,17 @@ impl Task {
     #[cfg(debug_assertions)]
     const MAGIC: u32 = 0xe0408897;
 
-    pub fn new<T: 'static + FnMut(&mut Host)>(f: T) -> Self {
+    pub fn new(callback: Box<dyn FnMut(&mut Host)>) -> Self {
         Worker::increment_object_alloc_counter("Task");
         Self {
-            inner: Arc::new(AtomicRefCell::new(f)),
+            callback,
             #[cfg(debug_assertions)]
             magic: Self::MAGIC,
         }
     }
 
     pub fn execute(&mut self, host: &mut Host) {
-        let mut inner = self.inner.borrow_mut();
-        inner(host)
+        (self.callback)(host)
     }
 
     #[cfg(debug_assertions)]
@@ -45,17 +40,6 @@ impl Drop for Task {
     fn drop(&mut self) {
         Worker::increment_object_dealloc_counter("Task");
         self.drop_handle_magic();
-    }
-}
-
-impl Clone for Task {
-    fn clone(&self) -> Self {
-        Worker::increment_object_alloc_counter("Task");
-        Self {
-            inner: self.inner.clone(),
-            #[cfg(debug_assertions)]
-            magic: self.magic.clone(),
-        }
     }
 }
 
@@ -109,24 +93,13 @@ pub mod export {
             object_free,
             argument_free,
         };
-        let task = Task::new(move |host: &mut Host| objs.execute(host.chost()));
-        // It'd be nice if we could use Arc::into_raw here, avoiding a level of
-        // pointer indirection. Unfortunately that doesn't work because of the
-        // internal dynamic Trait object, making the resulting pointer non-ABI
-        // safe.
+        let task = Task::new(Box::new(move |host: &mut Host| objs.execute(host.chost())));
         Box::leak(Box::new(task))
     }
 
-    /// Creates a new reference to the `Task`.
+    /// Destroys the Task.
     #[no_mangle]
-    pub unsafe extern "C" fn task_clone(task: *const Task) -> *mut Task {
-        let task = unsafe { task.as_ref() }.unwrap();
-        Box::leak(Box::new(task.clone()))
-    }
-
-    /// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
-    #[no_mangle]
-    pub unsafe extern "C" fn task_drop(task: *mut Task) {
+    pub unsafe extern "C" fn task_delete(task: *mut Task) {
         unsafe { Box::from_raw(task) };
     }
 

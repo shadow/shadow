@@ -44,7 +44,7 @@ void timer_unref(Timer* timer) {
     utility_assert(timer->referenceCount > 0);
     if (--timer->referenceCount == 0) {
         if (timer->task) {
-            task_drop(timer->task);
+            task_delete(timer->task);
             timer->task = NULL;
         }
         MAGIC_CLEAR(timer);
@@ -55,10 +55,8 @@ void timer_unref(Timer* timer) {
 
 Timer* timer_new(Task* task) {
     Timer* rv = g_new(Timer, 1);
-    *rv = (Timer){.referenceCount = 1, .nextExpireTime = EMUTIME_INVALID, MAGIC_INITIALIZER};
-    if (task) {
-        rv->task = task_clone(task);
-    }
+    *rv = (Timer){
+        .referenceCount = 1, .task = task, .nextExpireTime = EMUTIME_INVALID, MAGIC_INITIALIZER};
     worker_count_allocation(Timer);
     return rv;
 }
@@ -144,7 +142,6 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
 
     trace("Scheduling timer expiration task for %" G_GUINT64_FORMAT " nanoseconds", delay);
     worker_scheduleTaskWithDelay(task, host, delay);
-    task_drop(task);
 
     timer->nextExpireID++;
 }
