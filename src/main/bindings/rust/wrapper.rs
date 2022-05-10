@@ -1595,6 +1595,12 @@ extern "C" {
     pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
 }
 extern "C" {
+    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
     pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
 extern "C" {

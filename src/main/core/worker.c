@@ -589,7 +589,6 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         Task* packetTask = task_new(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
-        task_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);
     } else {
@@ -665,7 +664,7 @@ gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_get
 
 void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
 
-void __worker_increment_object_alloc_counter(const char* object_name) {
+void worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;
@@ -679,7 +678,7 @@ void __worker_increment_object_alloc_counter(const char* object_name) {
     }
 }
 
-void __worker_increment_object_dealloc_counter(const char* object_name) {
+void worker_increment_object_dealloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;
