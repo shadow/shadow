@@ -81,7 +81,6 @@ set(shadow_srcs
     core/scheduler/scheduler_policy_thread_single.c
     core/support/config_handlers.c
     core/work/event.c
-    core/work/message.c
     core/work/task.c
     core/main.c
     core/controller.c
