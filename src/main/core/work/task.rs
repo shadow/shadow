@@ -10,18 +10,40 @@ use crate::host::host::Host;
 #[derive(Clone)]
 pub struct Task {
     inner: Arc<AtomicRefCell<dyn FnMut(&mut Host)>>,
+    #[cfg(debug_assertions)]
+    magic: u32,
 }
 
 impl Task {
+    #[cfg(debug_assertions)]
+    const MAGIC: u32 = 0xe0408897;
+
     pub fn new<T: 'static + FnMut(&mut Host)>(f: T) -> Self {
         Self {
             inner: Arc::new(AtomicRefCell::new(f)),
+            #[cfg(debug_assertions)]
+            magic: Self::MAGIC,
         }
     }
 
     pub fn execute(&mut self, host: &mut Host) {
         let mut inner = self.inner.borrow_mut();
         inner(host)
+    }
+
+    #[cfg(debug_assertions)]
+    fn drop_handle_magic(&mut self) {
+        debug_assert!(self.magic == Self::MAGIC);
+        unsafe { std::ptr::write_volatile(&mut self.magic, 0) };
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn drop_handle_magic(&mut self) {}
+}
+
+impl Drop for Task {
+    fn drop(&mut self) {
+        self.drop_handle_magic();
     }
 }
 
