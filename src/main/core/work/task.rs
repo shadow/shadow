@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::host::host::Host;
+use crate::{core::worker::Worker, host::host::Host};
 
 /// Mostly for interoperability with C APIs.
 /// In Rust code that doesn't need to interact with C, it may make more sense
 /// to directly use a `FnMut(&mut Host)` trait object.
-#[derive(Clone)]
 pub struct Task {
     inner: Arc<AtomicRefCell<dyn FnMut(&mut Host)>>,
     #[cfg(debug_assertions)]
@@ -19,6 +18,7 @@ impl Task {
     const MAGIC: u32 = 0xe0408897;
 
     pub fn new<T: 'static + FnMut(&mut Host)>(f: T) -> Self {
+        Worker::increment_object_alloc_counter("Task");
         Self {
             inner: Arc::new(AtomicRefCell::new(f)),
             #[cfg(debug_assertions)]
@@ -43,7 +43,19 @@ impl Task {
 
 impl Drop for Task {
     fn drop(&mut self) {
+        Worker::increment_object_dealloc_counter("Task");
         self.drop_handle_magic();
+    }
+}
+
+impl Clone for Task {
+    fn clone(&self) -> Self {
+        Worker::increment_object_alloc_counter("Task");
+        Self {
+            inner: self.inner.clone(),
+            #[cfg(debug_assertions)]
+            magic: self.magic.clone(),
+        }
     }
 }
 
