@@ -47,6 +47,11 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
+// Not defined in some older libc's.
+#ifndef SYS_rseq
+#define SYS_rseq 334
+#endif
+
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
@@ -386,7 +391,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(recvfrom);
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
-            HANDLE_C(sched_yield);
+            HANDLE_RUST(rseq);
+            HANDLE_RUST(sched_yield);
             HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
             HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
