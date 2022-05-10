@@ -116,21 +116,21 @@ Address* worker_resolveNameToAddress(const gchar* name);
 
 // Implementation for counting allocated objects. Do not use this function directly.
 // Use worker_count_allocation instead from the call site.
-void __worker_increment_object_alloc_counter(const char* object_name);
+void worker_increment_object_alloc_counter(const char* object_name);
 
 // Implementation for counting deallocated objects. Do not use this function directly.
 // Use worker_count_deallocation instead from the call site.
-void __worker_increment_object_dealloc_counter(const char* object_name);
+void worker_increment_object_dealloc_counter(const char* object_name);
 
 // Increment a counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the
 // same name, otherwise we print a warning that a memory leak was detected.
-#define worker_count_allocation(type) __worker_increment_object_alloc_counter(#type)
+#define worker_count_allocation(type) worker_increment_object_alloc_counter(#type)
 
 // Increment a counter for the deallocation of the object with the given name.
 // This should be paired with an increment of the alloc counter with the
 // same name, otherwise we print a warning that a memory leak was detected.
-#define worker_count_deallocation(type) __worker_increment_object_dealloc_counter(#type)
+#define worker_count_deallocation(type) worker_increment_object_dealloc_counter(#type)
 
 // Aggregate the given syscall counts in a worker syscall counter.
 void worker_add_syscall_counts(Counter* syscall_counts);

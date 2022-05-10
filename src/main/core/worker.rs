@@ -253,6 +253,16 @@ impl Worker {
             .ok()
             .flatten()
     }
+
+    pub fn increment_object_alloc_counter(s: &str) {
+        let s = std::ffi::CString::new(s).unwrap();
+        unsafe { cshadow::worker_increment_object_alloc_counter(s.as_ptr()) }
+    }
+
+    pub fn increment_object_dealloc_counter(s: &str) {
+        let s = std::ffi::CString::new(s).unwrap();
+        unsafe { cshadow::worker_increment_object_dealloc_counter(s.as_ptr()) }
+    }
 }
 
 mod export {
