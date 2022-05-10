@@ -133,7 +133,18 @@ typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarSta
 
 typedef struct SyscallHandler SyscallHandler;
 
+// Mostly for interoperability with C APIs.
+// In Rust code that doesn't need to interact with C, it may make more sense
+// to directly use a `FnMut(&mut Host)` trait object.
+typedef struct Task Task;
+
 typedef uint64_t WatchHandle;
+
+typedef void (*TaskCallbackFunc)(Host*, void*, void*);
+
+typedef void (*TaskObjectFreeFunc)(void*);
+
+typedef void (*TaskArgumentFreeFunc)(void*);
 
 #define EMUTIME_MIN 0
 
@@ -480,6 +491,21 @@ bool simtime_to_timeval(SimulationTime val,
 __attribute__((warn_unused_result))
 bool simtime_to_timespec(SimulationTime val,
                          struct timespec *out);
+
+struct Task *task_new(TaskCallbackFunc callback,
+                      void *object,
+                      void *argument,
+                      TaskObjectFreeFunc object_free,
+                      TaskArgumentFreeFunc argument_free);
+
+// Creates a new reference to the `Task`.
+struct Task *task_clone(const struct Task *task);
+
+// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
+void task_drop(struct Task *task);
+
+// Executes the task.
+void task_execute(struct Task *task, Host *host);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,

@@ -25,7 +25,6 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
-#include "main/core/work/task.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -590,7 +589,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         Task* packetTask = task_new(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
-        task_unref(packetTask);
+        task_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);
     } else {

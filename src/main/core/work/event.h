@@ -8,13 +8,13 @@
 
 #include <glib.h>
 
-#include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
-
 /* An event for a local virtual host, i.e.,
  * a host running on the same manager machine as the event initiator.
  * (These are packets sent between hosts on the same machine.) */
 typedef struct _Event Event;
+
+#include "main/bindings/c/bindings.h"
+#include "main/core/support/definitions.h"
 
 Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost);
 void event_ref(Event* event);
