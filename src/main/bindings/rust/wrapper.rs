@@ -106,6 +106,11 @@ pub struct Counter {
 pub struct SyscallHandler {
     _unused: [u8; 0],
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct Task {
+    _unused: [u8; 0],
+}
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 1;
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2;
@@ -444,12 +449,6 @@ pub struct _DNS {
     _unused: [u8; 0],
 }
 pub type DNS = _DNS;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Task {
-    _unused: [u8; 0],
-}
-pub type Task = _Task;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {

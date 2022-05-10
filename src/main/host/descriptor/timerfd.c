@@ -13,7 +13,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -82,7 +81,7 @@ TimerFd* timerfd_new() {
     descriptor_refWeak(timerfd);
     Task* task = task_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
-    task_unref(task);
+    task_drop(task);
 
     worker_count_allocation(TimerFd);
 

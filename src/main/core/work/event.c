@@ -31,8 +31,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
 
     event->srcHost = (Host*)srcHost;
     event->dstHost = (Host*)dstHost;
-    event->task = task;
-    task_ref(event->task);
+    event->task = task_clone(task);
     event->time = time;
     event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
@@ -42,7 +41,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
 }
 
 static void _event_free(Event* event) {
-    task_unref(event->task);
+    task_drop(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
     worker_count_deallocation(Event);

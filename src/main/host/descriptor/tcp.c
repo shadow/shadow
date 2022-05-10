@@ -21,7 +21,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
@@ -701,7 +700,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
             }
 
             worker_scheduleTaskWithDelay(closeTask, host, delay);
-            task_unref(closeTask);
+            task_drop(closeTask);
             break;
         }
         default:
@@ -1005,7 +1004,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
         Task* retexpTask =
             task_new(_tcp_runRetransmitTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(retexpTask, host, delay);
-        task_unref(retexpTask);
+        task_drop(retexpTask);
 
         trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
                 tcp->super.boundString, *expireTimePtr);
@@ -2216,7 +2215,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 }
 
                 worker_scheduleTaskWithDelay(sendACKTask, host, delay);
-                task_unref(sendACKTask);
+                task_drop(sendACKTask);
 
                 tcp->send.delayedACKIsScheduled = TRUE;
             }
@@ -2486,7 +2485,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
 
         Task* updateWindowTask = task_new(_tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
-        task_unref(updateWindowTask);
+        task_drop(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
     }

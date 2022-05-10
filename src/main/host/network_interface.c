@@ -10,7 +10,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
@@ -127,7 +126,7 @@ static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Ho
                                                  TaskCallbackFunc func, SimulationTime delay) {
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
     worker_scheduleTaskWithDelay(refillTask, host, delay);
-    task_unref(refillTask);
+    task_drop(refillTask);
     interface->isRefillPending = TRUE;
 }
 
@@ -594,7 +593,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             Task* packetTask = task_new(_networkinterface_receivePacketTask, interface, packet,
                                         NULL, packet_unrefTaskFreeFunc);
             worker_scheduleTaskWithDelay(packetTask, src, 1);
-            task_unref(packetTask);
+            task_drop(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */

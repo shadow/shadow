@@ -38,7 +38,6 @@
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
@@ -625,7 +624,7 @@ void process_addThread(Process* proc, Thread* thread) {
     Task* task = task_new(_start_thread_task, proc, thread, _start_thread_task_free_process,
                           _start_thread_task_free_thread);
     worker_scheduleTaskWithDelay(task, proc->host, 0);
-    task_unref(task);
+    task_drop(task);
 }
 
 Thread* process_getThread(Process* proc, pid_t virtualTID) {
@@ -733,7 +732,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         Task* startProcessTask =
             task_new(_process_runStartTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
         worker_scheduleTaskAtEmulatedTime(startProcessTask, proc->host, proc->startTime);
-        task_unref(startProcessTask);
+        task_drop(startProcessTask);
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
@@ -741,7 +740,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         Task* stopProcessTask =
             task_new(_process_runStopTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
         worker_scheduleTaskAtEmulatedTime(stopProcessTask, proc->host, proc->stopTime);
-        task_unref(stopProcessTask);
+        task_drop(stopProcessTask);
     }
 }
 

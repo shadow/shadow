@@ -13,7 +13,6 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -605,5 +604,5 @@ void tracker_heartbeat(Tracker* tracker, Host* host) {
     tracker->lastHeartbeat = worker_getCurrentEmulatedTime();
     Task* heartbeatTask = task_new(tracker_heartbeatTask, tracker, NULL, NULL, NULL);
     worker_scheduleTaskWithDelay(heartbeatTask, host, tracker->interval);
-    task_unref(heartbeatTask);
+    task_drop(heartbeatTask);
 }
