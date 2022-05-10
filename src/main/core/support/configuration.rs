@@ -171,8 +171,8 @@ pub struct GeneralOptions {
     /// Interval at which to print heartbeat messages
     #[clap(long, value_name = "seconds")]
     #[clap(help = GENERAL_HELP.get("heartbeat_interval").unwrap().as_str())]
-    #[serde(default = "default_some_time_1")]
-    pub heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
+    #[serde(default = "default_some_nullable_time_1")]
+    pub heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefixUpper>>>,
 
     /// Path to store simulation output
     #[clap(long, short = 'd', value_name = "path")]
@@ -184,7 +184,7 @@ pub struct GeneralOptions {
     #[clap(long, short = 'e', value_name = "path")]
     #[clap(help = GENERAL_HELP.get("template_directory").unwrap().as_str())]
     #[serde(default)]
-    pub template_directory: Option<String>,
+    pub template_directory: Option<NullableOption<String>>,
 
     /// Show the simulation progress on stderr
     #[clap(long, value_name = "bool")]
@@ -345,7 +345,7 @@ pub struct ExperimentalOptions {
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("runahead").unwrap().as_str())]
-    pub runahead: Option<units::Time<units::TimePrefix>>,
+    pub runahead: Option<NullableOption<units::Time<units::TimePrefix>>>,
 
     /// Update the minimum runahead dynamically throughout the simulation.
     #[clap(hide_short_help = true)]
@@ -427,7 +427,7 @@ pub struct ExperimentalOptions {
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
-    pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
+    pub host_heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefixUpper>>>,
 
     /// Log the syscalls for each process to individual "strace" files
     #[clap(hide_short_help = true)]
@@ -503,7 +503,10 @@ impl Default for ExperimentalOptions {
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Preload),
-            runahead: Some(units::Time::new(1, units::TimePrefix::Milli)),
+            runahead: Some(NullableOption::Value(units::Time::new(
+                1,
+                units::TimePrefix::Milli,
+            ))),
             use_dynamic_runahead: Some(false),
             scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
@@ -536,12 +539,12 @@ pub struct HostDefaultOptions {
     #[clap(long = "host-log-level", name = "host-log-level")]
     #[clap(value_name = "level")]
     #[clap(help = HOST_HELP.get("log_level").unwrap().as_str())]
-    pub log_level: Option<LogLevel>,
+    pub log_level: Option<NullableOption<LogLevel>>,
 
     /// Where to save the pcap files (relative to the host directory)
     #[clap(long, value_name = "path")]
     #[clap(help = HOST_HELP.get("pcap_directory").unwrap().as_str())]
-    pub pcap_directory: Option<String>,
+    pub pcap_directory: Option<NullableOption<String>>,
 
     /// How much data to capture per packet (header and payload) if pcap logging is enabled
     #[clap(long, value_name = "bytes")]
@@ -890,6 +893,88 @@ impl FromStr for StraceLoggingMode {
     }
 }
 
+/// This wrapper type allows cli options to specify "null" to overwrite a config file option with
+/// `None`, and is intended to be used for options where "null" is a valid option value.
+///
+/// **Warning**: This may result in unexpected behaviour when wrapping string types. For example, if
+/// this is used for a file path option, the value "null" will conflict with the valid filename
+/// "null". So if the user specifies "null" for this option, Shadow will assume it means "no value"
+/// rather than the filename "null".
+///
+/// ### Motivation
+///
+/// For configuration options, there are generally three states:
+/// - set
+/// - not set
+/// - null
+///
+/// For serde, all three states are configurable:
+/// - set: `runahead: 5ms`
+/// - not set: (no `runahead` option used in yaml)
+/// - null: `runahead: null`
+///
+/// For clap, there are only two states:
+/// - set: `--runahead 5ms`
+/// - not set: (no `--runahead` option used in command)
+///
+/// There is no way to set a "null" state for cli options with clap.
+///
+/// ### Configuration in Shadow
+///
+/// Shadow first parses the config file and cli options separately before merging them.
+///
+/// Parsing for serde:
+/// - set: `runahead: 5ms` => runahead is set to `Some(5ms)`
+/// - not set: (no `runahead` option used in yaml) => runahead is set to its default (either
+///   `Some(..)` or `None`)
+/// - null: `runahead: null` => runahead is set to `None`
+///
+/// Parsing for clap:
+/// - set: `--runahead 5ms` => runahead is set to `Some(5ms)`
+/// - not set: (no `--runahead` option used in command) => runahead is set to `None`
+///
+/// Then the options are merged such that any `Some(..)` options from the cli options will overwrite
+/// any `Some` or `None` options from the config file.
+///
+/// The issue is that no clap option can overwrite a config file option of `Some` with a value of
+/// `None`. For example if the config file specifies `runahead: 5ms`, then with clap you can only
+/// use `--runahead 2ms` to change the runahead to a `Some(2ms)` value, or you can not set
+/// `--runahead` at all to leave it as a `Some(5ms)` value. But there is no cli option to change the
+/// runahead to a `None` value.
+///
+/// This `NullableOption` type is a wrapper to allow you to specify "null" on the command line to
+/// overwrite the config file value with `None`. From the example above, you could now specify
+/// "--runahead null" to overwrite the config file value (for example `Some(5ms)`) with a `None`
+/// value.
+#[derive(Debug, Clone, Serialize, JsonSchema, Eq, PartialEq)]
+pub enum NullableOption<T> {
+    Value(T),
+    Null,
+}
+
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for NullableOption<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // always use the inner type's deserializer
+        Ok(Self::Value(T::deserialize(deserializer)?))
+    }
+}
+
+impl<T> FromStr for NullableOption<T>
+where
+    <T as FromStr>::Err: std::fmt::Debug + std::fmt::Display,
+    T: FromStr,
+{
+    type Err = T::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            // since we use serde-yaml, use "null" to match yaml's "null"
+            "null" => Ok(Self::Null),
+            x => Ok(Self::Value(FromStr::from_str(x)?)),
+        }
+    }
+}
+
 /// Helper function for serde default `ProcessArgs::Str("")` values.
 fn default_args_empty() -> ProcessArgs {
     ProcessArgs::Str("".to_string())
@@ -920,9 +1005,10 @@ fn default_some_nz_1() -> Option<NonZeroU32> {
     Some(std::num::NonZeroU32::new(1).unwrap())
 }
 
-/// Helper function for serde default `Some(1 sec)` values.
-fn default_some_time_1() -> Option<units::Time<units::TimePrefixUpper>> {
-    Some(units::Time::new(1, units::TimePrefixUpper::Sec))
+/// Helper function for serde default `Some(NullableOption::Value(1 sec))` values.
+fn default_some_nullable_time_1() -> Option<NullableOption<units::Time<units::TimePrefixUpper>>> {
+    let time = units::Time::new(1, units::TimePrefixUpper::Sec);
+    Some(NullableOption::Value(time))
 }
 
 /// Helper function for serde default `Some(LogLevel::Info)` values.
@@ -1107,6 +1193,134 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_nullable_option() {
+        // format the yaml with an optional general option
+        let yaml_fmt_fn = |option| {
+            format!(
+                r#"
+                general:
+                  stop_time: 1 min
+                  {}
+                network:
+                  graph:
+                    type: 1_gbit_switch
+                hosts:
+                  myhost:
+                    network_node_id: 0
+                    processes:
+                    - path: /bin/true
+                "#,
+                option
+            )
+        };
+
+        let time_1_sec = units::Time::new(1, units::TimePrefixUpper::Sec);
+        let time_5_sec = units::Time::new(5, units::TimePrefixUpper::Sec);
+
+        // "heartbeat_interval: null" with no cli option => None
+        let yaml = yaml_fmt_fn("heartbeat_interval: null");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions = CliOptions::try_parse_from(["shadow", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(merged.general.heartbeat_interval, None);
+
+        // "heartbeat_interval: null" with "--heartbeat-interval 5s" => 5s
+        let yaml = yaml_fmt_fn("heartbeat_interval: null");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "5s", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Value(time_5_sec))
+        );
+
+        // "heartbeat_interval: null" with "--heartbeat-interval null" => NullableOption::Null
+        let yaml = yaml_fmt_fn("heartbeat_interval: null");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "null", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Null)
+        );
+
+        // "heartbeat_interval: 5s" with no cli option => 5s
+        let yaml = yaml_fmt_fn("heartbeat_interval: 5s");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions = CliOptions::try_parse_from(["shadow", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Value(time_5_sec))
+        );
+
+        // "heartbeat_interval: 5s" with "--heartbeat-interval 5s" => 5s
+        let yaml = yaml_fmt_fn("heartbeat_interval: 5s");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "5s", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Value(time_5_sec))
+        );
+
+        // "heartbeat_interval: 5s" with "--heartbeat-interval null" => NullableOption::Null
+        let yaml = yaml_fmt_fn("heartbeat_interval: 5s");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "null", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Null)
+        );
+
+        // no config option with no cli option => 1s (default)
+        let yaml = yaml_fmt_fn("");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions = CliOptions::try_parse_from(["shadow", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Value(time_1_sec))
+        );
+
+        // no config option with "--heartbeat-interval 5s" => 5s
+        let yaml = yaml_fmt_fn("");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "5s", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Value(time_5_sec))
+        );
+
+        // no config option with "--heartbeat-interval null" => NullableOption::Null
+        let yaml = yaml_fmt_fn("");
+        let config_file: ConfigFileOptions = serde_yaml::from_str(&yaml).unwrap();
+        let cli: CliOptions =
+            CliOptions::try_parse_from(["shadow", "--heartbeat-interval", "null", "-"]).unwrap();
+
+        let merged = ConfigOptions::new(config_file, cli);
+        assert_eq!(
+            merged.general.heartbeat_interval,
+            Some(NullableOption::Null)
+        );
+    }
 }
 
 mod export {
@@ -1206,8 +1420,10 @@ mod export {
         let config = unsafe { &*config };
 
         match config.general.heartbeat_interval {
-            Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
-            None => SIMTIME_INVALID,
+            Some(NullableOption::Value(x)) => {
+                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
+            }
+            Some(NullableOption::Null) | None => SIMTIME_INVALID,
         }
     }
 
@@ -1216,9 +1432,11 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match config.experimental.runahead {
-            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
+            Some(NullableOption::Value(x)) => {
+                x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND
+            }
             // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            None => 0,
+            Some(NullableOption::Null) | None => 0,
         }
     }
 
@@ -1450,11 +1668,11 @@ mod export {
         let config = unsafe { &*config };
 
         match config.general.template_directory {
-            Some(ref x) => {
+            Some(NullableOption::Value(ref x)) => {
                 let x = tilde_expansion(x);
                 CString::into_raw(CString::new(x.to_str().unwrap()).unwrap())
             }
-            None => std::ptr::null_mut(),
+            Some(NullableOption::Null) | None => std::ptr::null_mut(),
         }
     }
 
@@ -1587,8 +1805,10 @@ mod export {
         let config = unsafe { &*config };
 
         match config.experimental.host_heartbeat_interval {
-            Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
-            None => SIMTIME_INVALID,
+            Some(NullableOption::Value(x)) => {
+                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
+            }
+            Some(NullableOption::Null) | None => SIMTIME_INVALID,
         }
     }
 
@@ -1706,8 +1926,8 @@ mod export {
         let host = unsafe { &*host };
 
         match &host.options.log_level {
-            Some(x) => x.to_c_loglevel(),
-            None => c_log::_LogLevel_LOGLEVEL_UNSET,
+            Some(NullableOption::Value(x)) => x.to_c_loglevel(),
+            Some(NullableOption::Null) | None => c_log::_LogLevel_LOGLEVEL_UNSET,
         }
     }
 
@@ -1717,11 +1937,11 @@ mod export {
         let host = unsafe { &*host };
 
         match &host.options.pcap_directory {
-            Some(pcap_dir) => {
+            Some(NullableOption::Value(pcap_dir)) => {
                 let pcap_dir = tilde_expansion(pcap_dir);
                 CString::into_raw(CString::new(pcap_dir.to_str().unwrap()).unwrap())
             }
-            None => std::ptr::null_mut(),
+            Some(NullableOption::Null) | None => std::ptr::null_mut(),
         }
     }
 
