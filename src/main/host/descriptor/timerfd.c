@@ -79,9 +79,9 @@ TimerFd* timerfd_new() {
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     descriptor_refWeak(timerfd);
-    Task* task = task_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
+    TaskRef* task = taskref_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
-    task_drop(task);
+    taskref_drop(task);
 
     worker_count_allocation(TimerFd);
 

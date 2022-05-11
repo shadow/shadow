@@ -17,21 +17,21 @@
 struct _Event {
     Host* srcHost;
     Host* dstHost;
-    Task* task;
+    TaskRef* task;
     SimulationTime time;
     guint64 srcHostEventID;
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
-Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost) {
+Event* event_new_(TaskRef* task, SimulationTime time, gpointer srcHost, gpointer dstHost) {
     utility_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);
 
     event->srcHost = (Host*)srcHost;
     event->dstHost = (Host*)dstHost;
-    event->task = task_clone(task);
+    event->task = taskref_clone(task);
     event->time = time;
     event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
@@ -41,7 +41,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
 }
 
 static void _event_free(Event* event) {
-    task_drop(event->task);
+    taskref_drop(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
     worker_count_deallocation(Event);
@@ -86,7 +86,7 @@ void event_execute(Event* event) {
     } else {
         /* cpu is not blocked, its ok to execute the event */
         host_continueExecutionTimer(event->dstHost);
-        task_execute(event->task, event->dstHost);
+        taskref_execute(event->task, event->dstHost);
         host_stopExecutionTimer(event->dstHost);
     }
 

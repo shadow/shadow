@@ -493,7 +493,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
-gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t) {
+gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t) {
     utility_assert(task);
     utility_assert(host);
 
@@ -505,7 +505,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime 
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
-gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay) {
+gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
     utility_assert(host);
 
@@ -586,10 +586,10 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        Task* packetTask = task_new(
+        TaskRef* packetTask = taskref_new(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
-        task_drop(packetTask);
+        taskref_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);
     } else {

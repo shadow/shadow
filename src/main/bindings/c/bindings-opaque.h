@@ -141,6 +141,6 @@ typedef struct SyscallHandler SyscallHandler;
 // Mostly for interoperability with C APIs.
 // In Rust code that doesn't need to interact with C, it may make more sense
 // to directly use a `FnMut(&mut Host)` trait object.
-typedef struct Task Task;
+typedef struct TaskRef TaskRef;
 
 #endif /* main_opaque_bindings_h */

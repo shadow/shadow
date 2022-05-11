@@ -108,7 +108,7 @@ pub struct SyscallHandler {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct Task {
+pub struct TaskRef {
     _unused: [u8; 0],
 }
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
@@ -1509,14 +1509,14 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_scheduleTaskWithDelay(
-        task: *mut Task,
+        task: *mut TaskRef,
         host: *mut Host,
         nanoDelay: SimulationTime,
     ) -> gboolean;
 }
 extern "C" {
     pub fn worker_scheduleTaskAtEmulatedTime(
-        task: *mut Task,
+        task: *mut TaskRef,
         host: *mut Host,
         t: EmulatedTime,
     ) -> gboolean;

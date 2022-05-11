@@ -5,7 +5,7 @@ typedef struct _Timer Timer;
 
 #include "main/bindings/c/bindings.h"
 
-Timer* timer_new(Task* task);
+Timer* timer_new(TaskRef* task);
 void timer_ref(Timer* timer);
 void timer_unref(Timer* timer);
 
