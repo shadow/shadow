@@ -82,7 +82,7 @@ pub struct Mapping {
     pub offset: usize,
     pub device_major: i32,
     pub device_minor: i32,
-    pub inode: i32,
+    pub inode: u64,
     pub path: Option<MappingPath>,
     pub deleted: bool,
 }
@@ -157,7 +157,7 @@ impl FromStr for Mapping {
             // Undocumented whether this is actually base 10; change to 16 if we find
             // counter-examples.
             inode: parse_field(caps.get(10).unwrap().as_str(), "inode", |s| {
-                i32::from_str_radix(s, 10)
+                u64::from_str_radix(s, 10)
             })?,
             path: parse_field::<_, _, Box<dyn Error>>(
                 caps.get(11).unwrap().as_str(),
@@ -359,6 +359,27 @@ mod tests {
                     .unwrap();
             assert!(mapping.deleted);
         }
+
+        // A large 64-bit inode value.
+        assert_eq!(
+            "00400000-00452000 r-xp 00000000 08:02 18446744073709551615      /usr/bin/dbus-daemon"
+                .parse::<Mapping>()
+                .unwrap(),
+            Mapping {
+                begin: 0x00400000,
+                end: 0x00452000,
+                read: true,
+                write: false,
+                execute: true,
+                sharing: Sharing::Private,
+                offset: 0,
+                device_major: 8,
+                device_minor: 2,
+                inode: 18446744073709551615,
+                path: Some(MappingPath::Path(PathBuf::from("/usr/bin/dbus-daemon"))),
+                deleted: false,
+            }
+        );
     }
 
     #[test]
