@@ -617,6 +617,10 @@ mod export {
     /// The returned handle is guaranteed to be non-zero.
     ///
     /// Panics if `pid` doesn't exist.
+    ///
+    /// SAFETY: It must be safe for `callback` to execute and manipulate `data`
+    /// from another thread. e.g. typically this means that `data` must be `Send`
+    /// and `Sync`.
     #[no_mangle]
     pub unsafe extern "C" fn childpidwatcher_watch(
         watcher: *const ChildPidWatcher,
@@ -624,7 +628,7 @@ mod export {
         callback: extern "C" fn(libc::pid_t, *mut libc::c_void),
         data: *mut libc::c_void,
     ) -> WatchHandle {
-        let data = SyncSendPointer(data);
+        let data = unsafe { SyncSendPointer::new(data) };
         unsafe { watcher.as_ref() }
             .unwrap()
             .register_callback(Pid::from_raw(pid), move |pid| {

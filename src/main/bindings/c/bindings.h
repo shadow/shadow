@@ -197,6 +197,10 @@ void childpidwatcher_unregisterPid(const struct ChildPidWatcher *watcher, int32_
 // The returned handle is guaranteed to be non-zero.
 //
 // Panics if `pid` doesn't exist.
+//
+// SAFETY: It must be safe for `callback` to execute and manipulate `data`
+// from another thread. e.g. typically this means that `data` must be `Send`
+// and `Sync`.
 WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
                                   pid_t pid,
                                   void (*callback)(pid_t, void*),
@@ -496,15 +500,13 @@ bool simtime_to_timespec(SimulationTime val,
 
 // Create a new reference-counted task.
 //
-// SAFETY: The underlying Task is assumed to be Send and Sync.
-// It is the responsibility of the provided callbacks to access
-// in a thread-safe way.
-//
-// `taskref_execute` and `taskref_drop` must only be called when the lock
-// of the `host_id` that was passed to `host_id` is held. In the (typical)
-// case where objects are only held within a single `Host`, the callbacks
-// can hence safely assume that the current thread is the only one
-// currently accessing these pointers.
+// SAFETY:
+// * `object` and `argument` must meet the requirements
+//    for `HostTreePointer::new`.
+// * Given that the host lock is held when execution of a callback
+//   starts, they must not cause `object` or `argument` to be dereferenced
+//   without the host lock held. (e.g. by releasing the host lock or exfiltrating
+//   the pointers to be dereferenced by other code that might not hold the lock).
 //
 // There must still be some coordination between the creator of the TaskRef
 // and the callers of `taskref_execute` and `taskref_drop` to ensure that
@@ -512,20 +514,39 @@ bool simtime_to_timespec(SimulationTime val,
 // (e.g. that the caller isn't holding a Rust mutable reference to one of
 // the pointers while the callback transforms the pointer into another Rust
 // reference).
-struct TaskRef *taskref_new(HostId host_id,
-                            TaskCallbackFunc callback,
+struct TaskRef *taskref_new_for_host(HostId host_id,
+                                     TaskCallbackFunc callback,
+                                     void *object,
+                                     void *argument,
+                                     TaskObjectFreeFunc object_free,
+                                     TaskArgumentFreeFunc argument_free);
+
+// Create a new reference-counted task for the current Host.
+//
+// SAFETY: see `taskref_new_for_host`
+struct TaskRef *taskref_new(TaskCallbackFunc callback,
                             void *object,
                             void *argument,
                             TaskObjectFreeFunc object_free,
                             TaskArgumentFreeFunc argument_free);
 
 // Creates a new reference to the `Task`.
+//
+// SAFETY: `task` must be a valid pointer.
 struct TaskRef *taskref_clone(const struct TaskRef *task);
 
 // Destroys this reference to the `Task`, dropping the `Task` if no references remain.
+//
+// Panics if task's Host lock isn't held.
+//
+// SAFETY: `task` must be legally dereferencable.
 void taskref_drop(struct TaskRef *task);
 
 // Executes the task.
+//
+// Panics if task's Host lock isn't held.
+//
+// SAFETY: `task` must be legally dereferencable.
 void taskref_execute(struct TaskRef *task, Host *host);
 
 // Initialize a Worker for this thread.

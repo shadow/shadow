@@ -7,6 +7,7 @@ use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::EventQueue;
+use crate::utility::HostTreePointer;
 
 use unix::UnixSocket;
 
@@ -177,7 +178,7 @@ impl SocketRefMut<'_> {
         pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Unix;
-        pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
+        pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
     enum_passthrough!(self, (ptr), Unix;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
