@@ -13,6 +13,9 @@ use crate::{
 /// to directly use a `FnMut(&mut Host)` trait object.
 pub struct TaskRef {
     inner: Arc<AtomicRefCell<dyn FnMut(&mut Host) + Send + Sync>>,
+    // Runtime memory error checking to help catch errors that C code is prone
+    // to.  Can probably drop once C interop is removed, if we don't drop this
+    // type altogether.
     #[cfg(debug_assertions)]
     magic: u32,
 }
@@ -31,24 +34,29 @@ impl TaskRef {
     }
 
     pub fn execute(&mut self, host: &mut Host) {
+        self.check_magic();
         let mut inner = self.inner.borrow_mut();
         inner(host)
     }
 
-    #[cfg(debug_assertions)]
-    fn drop_handle_magic(&mut self) {
-        debug_assert!(self.magic == Self::MAGIC);
-        unsafe { std::ptr::write_volatile(&mut self.magic, 0) };
+    fn clear_magic(&mut self) {
+        #[cfg(debug_assertions)]
+        unsafe {
+            std::ptr::write_volatile(&mut self.magic, 0)
+        };
     }
 
-    #[cfg(not(debug_assertions))]
-    fn drop_handle_magic(&mut self) {}
+    fn check_magic(&self) {
+        #[cfg(debug_assertions)]
+        debug_assert!(self.magic == Self::MAGIC);
+    }
 }
 
 impl Drop for TaskRef {
     fn drop(&mut self) {
+        self.check_magic();
+        self.clear_magic();
         Worker::increment_object_dealloc_counter("TaskRef");
-        self.drop_handle_magic();
     }
 }
 
@@ -82,6 +90,7 @@ pub mod export {
 
     /// Compatibility struct for creating a `TaskRef` from function pointers.
     struct CTask {
+        #[cfg(debug_assertions)]
         host_id: HostId,
         callback: TaskCallbackFunc,
         object: SyncSendPointer<libc::c_void>,
