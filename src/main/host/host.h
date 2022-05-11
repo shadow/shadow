@@ -15,6 +15,9 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
+typedef struct _Host Host;
+typedef GQuark HostId;
+
 #include "lib/logger/log_level.h"
 #include "lib/shim/shim_shmem.h"
 #include "lib/tsc/tsc.h"
@@ -62,7 +65,7 @@ void host_detachAllPlugins(Host* host);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);
-GQuark host_getID(Host* host);
+HostId host_getID(Host* host);
 gboolean host_isEqual(Host* a, Host* b);
 CPU* host_getCPU(Host* host);
 Tsc* host_getTsc(Host* host);

@@ -7,6 +7,7 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 
 use atomic_refcell::AtomicRefCell;
 
+#[repr(transparent)]
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct HostId(u32);
 

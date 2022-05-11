@@ -124,7 +124,7 @@ _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
 
 static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
                                                  TaskCallbackFunc func, SimulationTime delay) {
-    TaskRef* refillTask = taskref_new(func, interface, NULL, NULL, NULL);
+    TaskRef* refillTask = taskref_new(host_getID(host), func, interface, NULL, NULL, NULL);
     worker_scheduleTaskWithDelay(refillTask, host, delay);
     taskref_drop(refillTask);
     interface->isRefillPending = TRUE;
@@ -590,8 +590,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             /* packet will arrive on our own interface, so it doesn't need to
              * go through the upstream router and does not consume bandwidth. */
             packet_ref(packet);
-            TaskRef* packetTask = taskref_new(_networkinterface_receivePacketTask, interface, packet,
-                                           NULL, packet_unrefTaskFreeFunc);
+            TaskRef* packetTask = taskref_new(host_getID(src), _networkinterface_receivePacketTask,
+                                              interface, packet, NULL, packet_unrefTaskFreeFunc);
             worker_scheduleTaskWithDelay(packetTask, src, 1);
             taskref_drop(packetTask);
         } else {

@@ -586,8 +586,8 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        TaskRef* packetTask = taskref_new(
-            _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        TaskRef* packetTask = taskref_new(dstID, _worker_runDeliverPacketTask, packetCopy, NULL,
+                                          (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         taskref_drop(packetTask);
 

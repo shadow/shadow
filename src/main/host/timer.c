@@ -134,7 +134,8 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
 
     /* ref the timer storage in the callback event */
     timer_ref(timer);
-    TaskRef* task = taskref_new(_timer_expire, timer, next, _timer_unrefTaskObjectFreeFunc, NULL);
+    TaskRef* task = taskref_new(
+        host_getID(host), _timer_expire, timer, next, _timer_unrefTaskObjectFreeFunc, NULL);
 
     SimulationTime delay = timer->nextExpireTime - worker_getCurrentEmulatedTime();
 

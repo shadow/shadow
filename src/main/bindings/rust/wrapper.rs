@@ -455,6 +455,7 @@ pub struct _Event {
     _unused: [u8; 0],
 }
 pub type Event = _Event;
+pub type HostId = GQuark;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _ShimShmemHost {
@@ -741,6 +742,7 @@ fn bindgen_test_layout__ShMemBlock() {
     );
 }
 pub type ShMemBlock = _ShMemBlock;
+pub type LegacyDescriptor = [u64; 7usize];
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
@@ -753,7 +755,6 @@ pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-pub type LegacyDescriptor = [u64; 7usize];
 pub type DescriptorCloseFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
 pub type DescriptorCleanupFunc =
@@ -1379,7 +1380,7 @@ extern "C" {
     pub fn host_compare(a: gconstpointer, b: gconstpointer, user_data: gpointer) -> gint;
 }
 extern "C" {
-    pub fn host_getID(host: *mut Host) -> GQuark;
+    pub fn host_getID(host: *mut Host) -> HostId;
 }
 extern "C" {
     pub fn host_isEqual(a: *mut Host, b: *mut Host) -> gboolean;

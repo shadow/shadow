@@ -71,7 +71,7 @@ static DescriptorFunctionTable _timerfdFunctions = {
 
 static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
 
-TimerFd* timerfd_new() {
+TimerFd* timerfd_new(HostId hostId) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
     MAGIC_INIT(timerfd);
 
@@ -79,7 +79,7 @@ TimerFd* timerfd_new() {
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     descriptor_refWeak(timerfd);
-    TaskRef* task = taskref_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
+    TaskRef* task = taskref_new(hostId, _timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
     taskref_drop(task);
 

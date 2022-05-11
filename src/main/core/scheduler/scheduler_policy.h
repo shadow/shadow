@@ -6,12 +6,12 @@
 #ifndef SHD_SCHEDULER_POLICY_H_
 #define SHD_SCHEDULER_POLICY_H_
 
+typedef struct _SchedulerPolicy SchedulerPolicy;
+
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/work/event.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
-
-typedef struct _SchedulerPolicy SchedulerPolicy;
 
 typedef void (*SchedulerPolicyAddHostFunc)(SchedulerPolicy*, Host*, pthread_t);
 typedef GQueue* (*SchedulerPolicyGetHostsFunc)(SchedulerPolicy*);
