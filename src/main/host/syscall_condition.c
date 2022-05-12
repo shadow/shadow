@@ -379,13 +379,13 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    Task* wakeupTask =
-        task_new(_syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
+    TaskRef* wakeupTask = taskref_new(thread_getHostId(cond->thread), _syscallcondition_trigger,
+                                      cond, NULL, _syscallcondition_unrefcb, NULL);
     worker_scheduleTaskWithDelay(
         wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
-    task_unref(wakeupTask);
+    taskref_drop(wakeupTask);
 
     cond->wakeupScheduled = true;
 }
@@ -428,10 +428,11 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* 
     if (cond->timeoutExpiration != EMUTIME_INVALID) {
         if (!cond->timeout) {
             syscallcondition_ref(cond);
-            Task* task = task_new(_syscallcondition_notifyTimeoutExpired, cond, NULL,
-                                  _syscallcondition_unrefcb, NULL);
+            TaskRef* task =
+                taskref_new(thread_getHostId(cond->thread), _syscallcondition_notifyTimeoutExpired,
+                            cond, NULL, _syscallcondition_unrefcb, NULL);
             cond->timeout = timer_new(task);
-            task_unref(task);
+            taskref_drop(task);
         }
 
         timer_arm(cond->timeout, host, cond->timeoutExpiration, 0);

@@ -10,7 +10,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
@@ -125,9 +124,9 @@ _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
 
 static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
                                                  TaskCallbackFunc func, SimulationTime delay) {
-    Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
+    TaskRef* refillTask = taskref_new(host_getID(host), func, interface, NULL, NULL, NULL);
     worker_scheduleTaskWithDelay(refillTask, host, delay);
-    task_unref(refillTask);
+    taskref_drop(refillTask);
     interface->isRefillPending = TRUE;
 }
 
@@ -591,10 +590,10 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             /* packet will arrive on our own interface, so it doesn't need to
              * go through the upstream router and does not consume bandwidth. */
             packet_ref(packet);
-            Task* packetTask = task_new(_networkinterface_receivePacketTask, interface, packet,
-                                        NULL, packet_unrefTaskFreeFunc);
+            TaskRef* packetTask = taskref_new(host_getID(src), _networkinterface_receivePacketTask,
+                                              interface, packet, NULL, packet_unrefTaskFreeFunc);
             worker_scheduleTaskWithDelay(packetTask, src, 1);
-            task_unref(packetTask);
+            taskref_drop(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */

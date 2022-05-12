@@ -29,6 +29,8 @@
 #include <unistd.h>
 #include <wchar.h>
 
+typedef struct _Process Process;
+
 #include "lib/shim/shim_shmem.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"

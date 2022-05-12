@@ -13,7 +13,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -72,7 +71,7 @@ static DescriptorFunctionTable _timerfdFunctions = {
 
 static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
 
-TimerFd* timerfd_new() {
+TimerFd* timerfd_new(HostId hostId) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
     MAGIC_INIT(timerfd);
 
@@ -80,9 +79,9 @@ TimerFd* timerfd_new() {
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     descriptor_refWeak(timerfd);
-    Task* task = task_new(_timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
+    TaskRef* task = taskref_new(hostId, _timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
-    task_unref(task);
+    taskref_drop(task);
 
     worker_count_allocation(TimerFd);
 

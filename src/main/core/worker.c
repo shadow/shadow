@@ -25,7 +25,6 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
-#include "main/core/work/task.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -494,7 +493,7 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
-gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t) {
+gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t) {
     utility_assert(task);
     utility_assert(host);
 
@@ -506,7 +505,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime 
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
-gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay) {
+gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
     utility_assert(host);
 
@@ -587,10 +586,10 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        Task* packetTask = task_new(
-            _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        TaskRef* packetTask = taskref_new(dstID, _worker_runDeliverPacketTask, packetCopy, NULL,
+                                          (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
-        task_unref(packetTask);
+        taskref_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);
     } else {
@@ -666,7 +665,7 @@ gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_get
 
 void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
 
-void __worker_increment_object_alloc_counter(const char* object_name) {
+void worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;
@@ -680,7 +679,7 @@ void __worker_increment_object_alloc_counter(const char* object_name) {
     }
 }
 
-void __worker_increment_object_dealloc_counter(const char* object_name) {
+void worker_increment_object_dealloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;

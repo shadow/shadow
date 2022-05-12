@@ -1,11 +1,11 @@
 #ifndef MAIN_HOST_TIMER_H
 #define MAIN_HOST_TIMER_H
 
-#include "main/core/work/task.h"
-
 typedef struct _Timer Timer;
 
-Timer* timer_new(Task* task);
+#include "main/bindings/c/bindings.h"
+
+Timer* timer_new(TaskRef* task);
 void timer_ref(Timer* timer);
 void timer_unref(Timer* timer);
 

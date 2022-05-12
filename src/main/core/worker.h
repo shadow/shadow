@@ -20,7 +20,6 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/host/host.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
@@ -73,8 +72,8 @@ int worker_getAffinity();
 DNS* worker_getDNS();
 ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
-gboolean worker_scheduleTaskWithDelay(Task* task, Host* host, SimulationTime nanoDelay);
-gboolean worker_scheduleTaskAtEmulatedTime(Task* task, Host* host, EmulatedTime t);
+gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay);
+gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);
 // Maximum time that the current event may run ahead to.
@@ -117,21 +116,21 @@ Address* worker_resolveNameToAddress(const gchar* name);
 
 // Implementation for counting allocated objects. Do not use this function directly.
 // Use worker_count_allocation instead from the call site.
-void __worker_increment_object_alloc_counter(const char* object_name);
+void worker_increment_object_alloc_counter(const char* object_name);
 
 // Implementation for counting deallocated objects. Do not use this function directly.
 // Use worker_count_deallocation instead from the call site.
-void __worker_increment_object_dealloc_counter(const char* object_name);
+void worker_increment_object_dealloc_counter(const char* object_name);
 
 // Increment a counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the
 // same name, otherwise we print a warning that a memory leak was detected.
-#define worker_count_allocation(type) __worker_increment_object_alloc_counter(#type)
+#define worker_count_allocation(type) worker_increment_object_alloc_counter(#type)
 
 // Increment a counter for the deallocation of the object with the given name.
 // This should be paired with an increment of the alloc counter with the
 // same name, otherwise we print a warning that a memory leak was detected.
-#define worker_count_deallocation(type) __worker_increment_object_dealloc_counter(#type)
+#define worker_count_deallocation(type) worker_increment_object_dealloc_counter(#type)
 
 // Aggregate the given syscall counts in a worker syscall counter.
 void worker_add_syscall_counts(Counter* syscall_counts);

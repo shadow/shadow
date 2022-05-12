@@ -20,7 +20,7 @@ struct _Timer {
     guint nextExpireID;
     guint minValidExpireID;
 
-    Task* task;
+    TaskRef* task;
 
     int referenceCount;
 
@@ -44,7 +44,7 @@ void timer_unref(Timer* timer) {
     utility_assert(timer->referenceCount > 0);
     if (--timer->referenceCount == 0) {
         if (timer->task) {
-            task_unref(timer->task);
+            taskref_drop(timer->task);
             timer->task = NULL;
         }
         MAGIC_CLEAR(timer);
@@ -53,14 +53,11 @@ void timer_unref(Timer* timer) {
     }
 }
 
-Timer* timer_new(Task* task) {
+Timer* timer_new(TaskRef* task) {
     Timer* rv = g_new(Timer, 1);
-    *rv = (Timer){.task = task,
-                  .referenceCount = 1,
-                  .nextExpireTime = EMUTIME_INVALID,
-                  MAGIC_INITIALIZER};
+    *rv = (Timer){.referenceCount = 1, .nextExpireTime = EMUTIME_INVALID, MAGIC_INITIALIZER};
     if (task) {
-        task_ref(task);
+        rv->task = taskref_clone(task);
     }
     worker_count_allocation(Timer);
     return rv;
@@ -137,7 +134,8 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
 
     /* ref the timer storage in the callback event */
     timer_ref(timer);
-    Task* task = task_new(_timer_expire, timer, next, _timer_unrefTaskObjectFreeFunc, NULL);
+    TaskRef* task = taskref_new(
+        host_getID(host), _timer_expire, timer, next, _timer_unrefTaskObjectFreeFunc, NULL);
 
     SimulationTime delay = timer->nextExpireTime - worker_getCurrentEmulatedTime();
 
@@ -147,7 +145,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
 
     trace("Scheduling timer expiration task for %" G_GUINT64_FORMAT " nanoseconds", delay);
     worker_scheduleTaskWithDelay(task, host, delay);
-    task_unref(task);
+    taskref_drop(task);
 
     timer->nextExpireID++;
 }
@@ -178,7 +176,7 @@ static void _timer_expire(Host* host, gpointer voidTimer, gpointer voidExpireId)
     if (timer->nextExpireTime <= worker_getCurrentEmulatedTime()) {
         ++timer->expirationCount;
         if (timer->task) {
-            task_execute(timer->task, host);
+            taskref_execute(timer->task, host);
         }
 
         if (timer->expireInterval > 0) {

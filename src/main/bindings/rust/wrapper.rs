@@ -106,6 +106,11 @@ pub struct Counter {
 pub struct SyscallHandler {
     _unused: [u8; 0],
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TaskRef {
+    _unused: [u8; 0],
+}
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 1;
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2;
@@ -446,16 +451,11 @@ pub struct _DNS {
 pub type DNS = _DNS;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Task {
-    _unused: [u8; 0],
-}
-pub type Task = _Task;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _Event {
     _unused: [u8; 0],
 }
 pub type Event = _Event;
+pub type HostId = GQuark;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _ShimShmemHost {
@@ -742,6 +742,7 @@ fn bindgen_test_layout__ShMemBlock() {
     );
 }
 pub type ShMemBlock = _ShMemBlock;
+pub type LegacyDescriptor = [u64; 7usize];
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
@@ -754,7 +755,6 @@ pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-pub type LegacyDescriptor = [u64; 7usize];
 pub type DescriptorCloseFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
 pub type DescriptorCleanupFunc =
@@ -1380,7 +1380,7 @@ extern "C" {
     pub fn host_compare(a: gconstpointer, b: gconstpointer, user_data: gpointer) -> gint;
 }
 extern "C" {
-    pub fn host_getID(host: *mut Host) -> GQuark;
+    pub fn host_getID(host: *mut Host) -> HostId;
 }
 extern "C" {
     pub fn host_isEqual(a: *mut Host, b: *mut Host) -> gboolean;
@@ -1510,14 +1510,14 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_scheduleTaskWithDelay(
-        task: *mut Task,
+        task: *mut TaskRef,
         host: *mut Host,
         nanoDelay: SimulationTime,
     ) -> gboolean;
 }
 extern "C" {
     pub fn worker_scheduleTaskAtEmulatedTime(
-        task: *mut Task,
+        task: *mut TaskRef,
         host: *mut Host,
         t: EmulatedTime,
     ) -> gboolean;
@@ -1594,6 +1594,12 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
 }
 extern "C" {
     pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);

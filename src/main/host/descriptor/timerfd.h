@@ -9,12 +9,13 @@
 #include <glib.h>
 #include <sys/types.h>
 
-#include "main/core/support/definitions.h"
-
 typedef struct _TimerFd TimerFd;
 
+#include "main/bindings/c/bindings.h"
+#include "main/core/support/definitions.h"
+
 /* free this with descriptor_free() */
-TimerFd* timerfd_new();
+TimerFd* timerfd_new(HostId hostId);
 gint timerfd_setTime(TimerFd* timer, Host* host, gint flags, const struct itimerspec* new_value,
                      struct itimerspec* old_value);
 void timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value);

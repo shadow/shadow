@@ -21,7 +21,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
@@ -691,8 +690,8 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
             descriptor_ref(tcp);
-            Task* closeTask =
-                task_new(_tcp_runCloseTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
+            TaskRef* closeTask = taskref_new(
+                host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
             SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
             /* if a child of a server initiated the close, close more quickly */
@@ -701,7 +700,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
             }
 
             worker_scheduleTaskWithDelay(closeTask, host, delay);
-            task_unref(closeTask);
+            taskref_drop(closeTask);
             break;
         }
         default:
@@ -1002,10 +1001,10 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
 
     if(success) {
         descriptor_ref(tcp);
-        Task* retexpTask =
-            task_new(_tcp_runRetransmitTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
+        TaskRef* retexpTask = taskref_new(host_getID(host), _tcp_runRetransmitTimerExpiredTask, tcp,
+                                          NULL, descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(retexpTask, host, delay);
-        task_unref(retexpTask);
+        taskref_drop(retexpTask);
 
         trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
                 tcp->super.boundString, *expireTimePtr);
@@ -2199,8 +2198,8 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
-                Task* sendACKTask =
-                    task_new(_tcp_sendACKTaskCallback, tcp, NULL, descriptor_unref, NULL);
+                TaskRef* sendACKTask = taskref_new(
+                    host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, descriptor_unref, NULL);
                 /* taks holds a ref to tcp */
                 descriptor_ref(tcp);
 
@@ -2216,7 +2215,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 }
 
                 worker_scheduleTaskWithDelay(sendACKTask, host, delay);
-                task_unref(sendACKTask);
+                taskref_drop(sendACKTask);
 
                 tcp->send.delayedACKIsScheduled = TRUE;
             }
@@ -2484,9 +2483,10 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
          * make sure we don't send multiple events when read is called many times per instant */
         descriptor_ref(tcp);
 
-        Task* updateWindowTask = task_new(_tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
+        TaskRef* updateWindowTask =
+            taskref_new(host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
-        task_unref(updateWindowTask);
+        taskref_drop(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
     }

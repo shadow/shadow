@@ -133,7 +133,20 @@ typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarSta
 
 typedef struct SyscallHandler SyscallHandler;
 
+// Mostly for interoperability with C APIs.
+// In Rust code that doesn't need to interact with C, it may make more sense
+// to directly use a `FnMut(&mut Host)` trait object.
+typedef struct TaskRef TaskRef;
+
 typedef uint64_t WatchHandle;
+
+typedef uint32_t HostId;
+
+typedef void (*TaskCallbackFunc)(Host*, void*, void*);
+
+typedef void (*TaskObjectFreeFunc)(void*);
+
+typedef void (*TaskArgumentFreeFunc)(void*);
 
 #define EMUTIME_MIN 0
 
@@ -480,6 +493,40 @@ bool simtime_to_timeval(SimulationTime val,
 __attribute__((warn_unused_result))
 bool simtime_to_timespec(SimulationTime val,
                          struct timespec *out);
+
+// Create a new reference-counted task.
+//
+// SAFETY: The underlying Task is assumed to be Send and Sync.
+// It is the responsibility of the provided callbacks to access
+// in a thread-safe way.
+//
+// `taskref_execute` and `taskref_drop` must only be called when the lock
+// of the `host_id` that was passed to `host_id` is held. In the (typical)
+// case where objects are only held within a single `Host`, the callbacks
+// can hence safely assume that the current thread is the only one
+// currently accessing these pointers.
+//
+// There must still be some coordination between the creator of the TaskRef
+// and the callers of `taskref_execute` and `taskref_drop` to ensure that
+// the callbacks don't conflict with other accesses in the same thread
+// (e.g. that the caller isn't holding a Rust mutable reference to one of
+// the pointers while the callback transforms the pointer into another Rust
+// reference).
+struct TaskRef *taskref_new(HostId host_id,
+                            TaskCallbackFunc callback,
+                            void *object,
+                            void *argument,
+                            TaskObjectFreeFunc object_free,
+                            TaskArgumentFreeFunc argument_free);
+
+// Creates a new reference to the `Task`.
+struct TaskRef *taskref_clone(const struct TaskRef *task);
+
+// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
+void taskref_drop(struct TaskRef *task);
+
+// Executes the task.
+void taskref_execute(struct TaskRef *task, Host *host);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
