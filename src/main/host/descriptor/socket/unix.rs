@@ -1660,24 +1660,16 @@ impl UnixSocketCommon {
         let send_buffer = match send_buffer {
             Some(x) => x,
             None => {
-                // if an abstract address
-                if let Some(name) = addr.unwrap().as_abstract() {
-                    // look up the socket from the address name
-                    match self.namespace.borrow().lookup(self.socket_type, name) {
-                        // socket was found with the given name
-                        Some(recv_socket) => {
-                            // store an Arc of the recv buffer
-                            _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
-                            &_buf_arc_storage
-                        }
-                        // no socket has the given name
-                        None => return Err(Errno::ECONNREFUSED.into()),
+                // look up the socket from the address name
+                match lookup_address(&self.namespace.borrow(), self.socket_type, &addr.unwrap()) {
+                    // socket was found with the given name
+                    Some(recv_socket) => {
+                        // store an Arc of the recv buffer
+                        _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
+                        &_buf_arc_storage
                     }
-                } else {
-                    log::warn!(
-                        "Sending to pathname addresses from unix sockets is not yet supported"
-                    );
-                    return Err(Errno::ECONNREFUSED.into());
+                    // no socket has the given name
+                    None => return Err(Errno::ECONNREFUSED.into()),
                 }
             }
         };
