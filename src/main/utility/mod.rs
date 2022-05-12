@@ -44,3 +44,62 @@ pub trait IsSend: Send {}
 
 /// A trait we can use as a compile-time check to make sure that an object is Sync.
 pub trait IsSync: Sync {}
+
+/// Runtime memory error checking to help catch errors that C code is prone
+/// to. Can probably drop once C interop is removed.
+///
+/// Prefer to place `Magic` struct fields as the *first* field.  This causes the
+/// `Magic` field to be dropped first when dropping the enclosing struct, which
+/// validates that the `Magic` is valid before running `Drop` implementations of
+/// the other fields.
+///
+/// The MAGIC parameter should ideally be unique for each type. Consider e.g.
+/// `python3 -c 'import random; print(random.randint(0, 2**32))'`
+#[derive(Debug)]
+pub struct Magic<const MAGIC: u32> {
+    #[cfg(debug_assertions)]
+    magic: u32,
+}
+
+impl<const MAGIC: u32> Magic<MAGIC> {
+    pub fn new() -> Self {
+        Self {
+            #[cfg(debug_assertions)]
+            magic: MAGIC,
+        }
+    }
+
+    pub fn debug_check(&self) {
+        #[cfg(debug_assertions)]
+        {
+            if unsafe { std::ptr::read_volatile(&self.magic) } != MAGIC {
+                // Do not pass Go; do not collect $200... and do not run Drop
+                // implementations etc. after learning that Rust's soundness
+                // requirements have likely been violated.
+                std::process::abort();
+            }
+            // Ensure no other operations are performed on the object before validating.
+            std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+}
+
+impl<const MAGIC: u32> Drop for Magic<MAGIC> {
+    fn drop(&mut self) {
+        self.debug_check();
+        #[cfg(debug_assertions)]
+        unsafe {
+            std::ptr::write_volatile(&mut self.magic, 0)
+        };
+    }
+}
+
+impl<const MAGIC: u32> Clone for Magic<MAGIC> {
+    fn clone(&self) -> Self {
+        self.debug_check();
+        Self {
+            #[cfg(debug_assertions)]
+            magic: self.magic.clone(),
+        }
+    }
+}

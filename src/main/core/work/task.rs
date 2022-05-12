@@ -5,57 +5,35 @@ use atomic_refcell::AtomicRefCell;
 use crate::{
     core::worker::Worker,
     host::host::Host,
-    utility::{IsSend, IsSync},
+    utility::{IsSend, IsSync, Magic},
 };
 
 /// Mostly for interoperability with C APIs.
 /// In Rust code that doesn't need to interact with C, it may make more sense
 /// to directly use a `FnMut(&mut Host)` trait object.
 pub struct TaskRef {
+    magic: Magic<0xe0408897>,
     inner: Arc<AtomicRefCell<dyn FnMut(&mut Host) + Send + Sync>>,
-    // Runtime memory error checking to help catch errors that C code is prone
-    // to.  Can probably drop once C interop is removed, if we don't drop this
-    // type altogether.
-    #[cfg(debug_assertions)]
-    magic: u32,
 }
 
 impl TaskRef {
-    #[cfg(debug_assertions)]
-    const MAGIC: u32 = 0xe0408897;
-
     pub fn new<T: 'static + FnMut(&mut Host) + Send + Sync>(f: T) -> Self {
         Worker::increment_object_alloc_counter("TaskRef");
         Self {
             inner: Arc::new(AtomicRefCell::new(f)),
-            #[cfg(debug_assertions)]
-            magic: Self::MAGIC,
+            magic: Magic::new(),
         }
     }
 
     pub fn execute(&mut self, host: &mut Host) {
-        self.check_magic();
+        self.magic.debug_check();
         let mut inner = self.inner.borrow_mut();
         inner(host)
-    }
-
-    fn clear_magic(&mut self) {
-        #[cfg(debug_assertions)]
-        unsafe {
-            std::ptr::write_volatile(&mut self.magic, 0)
-        };
-    }
-
-    fn check_magic(&self) {
-        #[cfg(debug_assertions)]
-        debug_assert!(self.magic == Self::MAGIC);
     }
 }
 
 impl Drop for TaskRef {
     fn drop(&mut self) {
-        self.check_magic();
-        self.clear_magic();
         Worker::increment_object_dealloc_counter("TaskRef");
     }
 }
@@ -65,7 +43,6 @@ impl Clone for TaskRef {
         Worker::increment_object_alloc_counter("TaskRef");
         Self {
             inner: self.inner.clone(),
-            #[cfg(debug_assertions)]
             magic: self.magic.clone(),
         }
     }
