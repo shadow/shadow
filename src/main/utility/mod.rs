@@ -1,3 +1,5 @@
+use crate::core::worker::Worker;
+
 // defines macros, so must be included first
 #[macro_use]
 pub mod enum_passthrough;
@@ -101,5 +103,31 @@ impl<const MAGIC: u32> Clone for Magic<MAGIC> {
             #[cfg(debug_assertions)]
             magic: self.magic.clone(),
         }
+    }
+}
+
+/// Helper for tracking the number of allocated objects.
+#[derive(Debug)]
+pub struct ObjectCounter {
+    name: &'static str,
+}
+
+impl ObjectCounter {
+    pub fn new(name: &'static str) -> Self {
+        Worker::increment_object_alloc_counter(name);
+        Self { name }
+    }
+}
+
+impl Drop for ObjectCounter {
+    fn drop(&mut self) {
+        Worker::increment_object_dealloc_counter(self.name);
+    }
+}
+
+impl Clone for ObjectCounter {
+    fn clone(&self) -> Self {
+        Worker::increment_object_alloc_counter(self.name);
+        Self { name: self.name }
     }
 }
