@@ -1,0 +1,39 @@
+# Regression test for https://github.com/shadow/shadow/issues/2152
+general:
+  stop_time: 3s
+  # needed for https://github.com/shadow/shadow/issues/1794
+  model_unblocked_syscall_latency: true
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          label "node at 192.168.0.1"
+          host_bandwidth_down "100 Mbit"
+          host_bandwidth_up "100 Mbit"
+        ]
+        edge [
+          source 0
+          target 0
+          label "self loop"
+          latency "2 s"
+          jitter "0 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/python3
+      args: -m http.server 80
+      start_time: 1s
+  client:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/curl
+      args: -s server
+      start_time: 2s
