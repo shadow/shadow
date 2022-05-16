@@ -2,6 +2,16 @@ add_shadow_tests(BASENAME signal_resched)
 add_shadow_tests(BASENAME exit_after_signal_sched)
 add_shadow_tests(BASENAME small_stop_time CHECK_RETVAL FALSE)
 
+# Regression test for https://github.com/shadow/shadow/issues/2152
+add_shadow_tests(
+    BASENAME packet_after_simulation_end
+    # Processes still running at the end.
+    CHECK_RETVAL FALSE
+    PROPERTIES
+      # Requires curl and python
+      CONFIGURATIONS extra
+    )
+
 add_executable(test_flush_after_exit test_flush_after_exit.c)
 add_linux_tests(BASENAME flush_after_exit COMMAND bash -c "test `./test_flush_after_exit` == 'Hello'")
 add_shadow_tests(BASENAME flush_after_exit POST_CMD "test `cat hosts/*/*.stdout` = 'Hello'")
