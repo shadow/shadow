@@ -244,8 +244,10 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     SimulationTime eventTime = event_getTime(event);
     if (eventTime >= scheduler->endTime) {
         if (sender == receiver) {
+            warning("Event scheduled for %ld, after end time %ld; freeing", eventTime, scheduler->endTime);
             event_unref(event);
         } else {
+            warning("Event scheduled for %ld, after end time %ld; scheduling for dst host to free", eventTime, scheduler->endTime);
             // event may be unsafe to dereference on the current host.
             // Let the receiver do it.
             HostId receiverId = host_getID(receiver);
