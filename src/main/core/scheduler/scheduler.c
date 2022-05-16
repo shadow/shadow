@@ -228,19 +228,34 @@ void scheduler_unref(Scheduler* scheduler) {
     }
 }
 
+static void _scheduler_unref_event(Host* host, void* voidEvent, void* unused) {
+    Event* event = voidEvent;
+    event_unref(event);
+}
+
 gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* receiver) {
     MAGIC_ASSERT(scheduler);
-
-    SimulationTime eventTime = event_getTime(event);
-    if(eventTime >= scheduler->endTime) {
-        event_unref(event);
-        return FALSE;
-    }
 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
     utility_assert(receiver);
     utility_assert(receiver == event_getHost(event));
+
+    SimulationTime eventTime = event_getTime(event);
+    if (eventTime >= scheduler->endTime) {
+        if (sender == receiver) {
+            event_unref(event);
+        } else {
+            // event may be unsafe to dereference on the current host.
+            // Let the receiver do it.
+            HostId receiverId = host_getID(receiver);
+            TaskRef* unref_task =
+                taskref_new(receiverId, _scheduler_unref_event, event, NULL, NULL, NULL);
+            worker_scheduleTaskWithDelay(unref_task, receiver, 0);
+            taskref_drop(unref_task);
+        }
+        return FALSE;
+    }
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
