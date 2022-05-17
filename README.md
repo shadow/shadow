@@ -5,7 +5,7 @@
 
 ## Quickstart
 
-Build, test, and install Shadow into `~/.local`:
+After installing the [dependencies](https://shadow.github.io/docs/guide/install_dependencies.html): build, test, and install Shadow into `~/.local`:
 
 ```
 $ ./setup build --clean --test
