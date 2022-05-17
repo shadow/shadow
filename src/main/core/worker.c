@@ -586,8 +586,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        TaskRef* packetTask = taskref_new_for_host(dstID, _worker_runDeliverPacketTask, packetCopy,
-                                                   NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        /* Safe to use the "unbound" constructor here, since there are no other references
+         * to `packetCopy`.
+         */
+        TaskRef* packetTask = taskref_new_unbound(
+            _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         taskref_drop(packetTask);
 

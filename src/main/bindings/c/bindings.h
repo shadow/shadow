@@ -498,7 +498,9 @@ __attribute__((warn_unused_result))
 bool simtime_to_timespec(SimulationTime val,
                          struct timespec *out);
 
-// Create a new reference-counted task.
+// Create a new reference-counted task that can only be executed on the
+// given host. The callbacks can safely assume that they will only be called
+// with the lock for the specified host held.
 //
 // SAFETY:
 // * `object` and `argument` must meet the requirements
@@ -514,21 +516,31 @@ bool simtime_to_timespec(SimulationTime val,
 // (e.g. that the caller isn't holding a Rust mutable reference to one of
 // the pointers while the callback transforms the pointer into another Rust
 // reference).
-struct TaskRef *taskref_new_for_host(HostId host_id,
-                                     TaskCallbackFunc callback,
-                                     void *object,
-                                     void *argument,
-                                     TaskObjectFreeFunc object_free,
-                                     TaskArgumentFreeFunc argument_free);
+struct TaskRef *taskref_new_bound(HostId host_id,
+                                  TaskCallbackFunc callback,
+                                  void *object,
+                                  void *argument,
+                                  TaskObjectFreeFunc object_free,
+                                  TaskArgumentFreeFunc argument_free);
 
-// Create a new reference-counted task for the current Host.
+// Create a new reference-counted task that may be executed on any Host.
 //
-// SAFETY: see `taskref_new_for_host`
-struct TaskRef *taskref_new(TaskCallbackFunc callback,
-                            void *object,
-                            void *argument,
-                            TaskObjectFreeFunc object_free,
-                            TaskArgumentFreeFunc argument_free);
+// SAFETY:
+// * The callbacks must be safe to call with `object` and `argument`
+//   with *any* Host. (e.g. even if task is expected to execute on another Host,
+//   must be safe to execute or free the Task from the current Host.)
+//
+// There must still be some coordination between the creator of the TaskRef
+// and the callers of `taskref_execute` and `taskref_drop` to ensure that
+// the callbacks don't conflict with other accesses in the same thread
+// (e.g. that the caller isn't holding a Rust mutable reference to one of
+// the pointers while the callback transforms the pointer into another Rust
+// reference).
+struct TaskRef *taskref_new_unbound(TaskCallbackFunc callback,
+                                    void *object,
+                                    void *argument,
+                                    TaskObjectFreeFunc object_free,
+                                    TaskArgumentFreeFunc argument_free);
 
 // Creates a new reference to the `Task`.
 //

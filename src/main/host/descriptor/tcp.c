@@ -690,7 +690,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
             descriptor_ref(tcp);
-            TaskRef* closeTask = taskref_new_for_host(
+            TaskRef* closeTask = taskref_new_bound(
                 host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
             SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
@@ -1003,8 +1003,8 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
     if(success) {
         descriptor_ref(tcp);
         TaskRef* retexpTask =
-            taskref_new_for_host(host_getID(host), _tcp_runRetransmitTimerExpiredTask, tcp, NULL,
-                                 descriptor_unref, NULL);
+            taskref_new_bound(host_getID(host), _tcp_runRetransmitTimerExpiredTask, tcp, NULL,
+                              descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(retexpTask, host, delay);
         taskref_drop(retexpTask);
 
@@ -2194,7 +2194,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
-                TaskRef* sendACKTask = taskref_new_for_host(
+                TaskRef* sendACKTask = taskref_new_bound(
                     host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, descriptor_unref, NULL);
                 /* taks holds a ref to tcp */
                 descriptor_ref(tcp);
@@ -2479,7 +2479,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
          * make sure we don't send multiple events when read is called many times per instant */
         descriptor_ref(tcp);
 
-        TaskRef* updateWindowTask = taskref_new_for_host(
+        TaskRef* updateWindowTask = taskref_new_bound(
             host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
         taskref_drop(updateWindowTask);
