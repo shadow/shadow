@@ -722,56 +722,6 @@ static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     }
 }
 
-static void _manager_checkResourceUsage(Manager* manager) {
-    if (manager->checkFdUsage) {
-        unsigned long fd_count = 0;
-        DIR* dirp = opendir("/proc/self/fd");
-        if (dirp != NULL) {
-            struct dirent* entry = NULL;
-            while ((entry = readdir(dirp)) != NULL) {
-                fd_count++;
-            }
-        } else {
-            warning("Unable to open '/proc/self/fd': %s", g_strerror(errno));
-            manager->checkFdUsage = false;
-            return;
-        }
-
-        struct rlimit fd_lim;
-        if (getrlimit(RLIMIT_NOFILE, &fd_lim) != 0) {
-            warning("Unable to get fd limit: %s", g_strerror(errno));
-            manager->checkFdUsage = false;
-            return;
-        }
-
-        if (fd_count > (fd_lim.rlim_cur * 90 / 100)) {
-            warning("Using more than 90%% (%ld/%ld) of available file descriptors", fd_count,
-                    fd_lim.rlim_cur);
-            manager->checkFdUsage = false;
-        }
-    }
-
-    if (manager->checkMemUsage) {
-        long page_size = sysconf(_SC_PAGESIZE);
-        long avl_pages = sysconf(_SC_AVPHYS_PAGES);
-
-        if (page_size < 0 || avl_pages < 0) {
-            warning("Could not get memory usage information");
-            manager->checkMemUsage = false;
-            return;
-        }
-
-        // assume that the product will fit in 64 bits
-        uint64_t avl_mem = (uint64_t)page_size * avl_pages;
-
-        // if less than 500 MiB available
-        if (avl_mem < (500 * 1024 * 1024)) {
-            warning("Only %" PRIu64 " MiB of memory available", avl_mem / 1024 / 1024);
-            manager->checkMemUsage = false;
-        }
-    }
-}
-
 void manager_run(Manager* manager) {
     MAGIC_ASSERT(manager);
     /* we are the main thread, we manage the execution window updates while the
@@ -788,13 +738,6 @@ void manager_run(Manager* manager) {
 
         /* do some idle processing here if needed */
         _manager_heartbeat(manager, windowStart);
-
-        /* check resource usage every 30 seconds */
-        time_t current_time = time(NULL);
-        if (current_time != (time_t)-1 && current_time > (manager->timeOfLastUsageCheck + 30)) {
-            _manager_checkResourceUsage(manager);
-            manager->timeOfLastUsageCheck = current_time;
-        }
 
         /* wait for the workers to finish processing nodes before we update the
          * execution window
