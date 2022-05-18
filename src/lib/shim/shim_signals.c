@@ -18,7 +18,9 @@ static void _call_signal_handler(const struct shd_kernel_sigaction* action, int 
 static _Noreturn void _die_with_fatal_signal(int signo) {
     shim_swapAllowNativeSyscalls(true);
     // Deliver natively to terminate/drop core.
-    if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
+    if (signo == SIGKILL) {
+        // No need to restore default action, and trying to do so would fail.
+    } else if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
         panic("sigaction: %s", strerror(errno));
     }
     raise(signo);
