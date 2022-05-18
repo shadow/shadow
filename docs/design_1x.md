@@ -154,13 +154,13 @@ that spawn threads [can be found here][cset-rpth-slides]. Checkout [Google
 Scholar](https://scholar.google.com/scholar?oi=bibs&hl=en&cites=12341442653770148265)
 for research publications that cite Shadow.
 
-<!--<iframe width="420" height="315" src="http://www.youtube-nocookie.com/embed/Tb7m8OdpD8A" frameborder="0" allowfullscreen></iframe>-->
+<!--<iframe width="420" height="315" src="https://www.youtube-nocookie.com/embed/Tb7m8OdpD8A" frameborder="0" allowfullscreen></iframe>-->
 
 [tor]: https://www.torproject.org/
 [tormetrics]: https://metrics.torproject.org/
 [torsource]: https://gitweb.torproject.org/tor.git
 [wiki-scallion]: https://github.com/shadow/shadow-plugin-tor/wiki
 [wiki-custom-plugin]: https://github.com/shadow/shadow/wiki/2-Simulation-Execution-and-Analysis#shadow-plug-ins
-[youtube-shadow-design]: http://youtu.be/Tb7m8OdpD8A
-[cset-rpth-slides]: http://www.robgjansen.com/talks/shadowbitcoin-cset-20150810.pdf
+[youtube-shadow-design]: https://youtu.be/Tb7m8OdpD8A
+[cset-rpth-slides]: https://www.robgjansen.com/talks/shadowbitcoin-cset-20150810.pdf
 [gnu-pth]: https://www.gnu.org/software/pth/

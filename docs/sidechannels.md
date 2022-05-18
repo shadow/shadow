@@ -17,9 +17,9 @@ The Speculative Store Bypass attack allows malicious code to read data it
 otherwise wouldn't be able to, e.g. due to software sandboxing such as in a
 javascript engine.  For a high-level overview of this attack and mitigations,
 see:
-https://www.redhat.com/en/blog/speculative-store-bypass-explained-what-it-how-it-works.
+<https://www.redhat.com/en/blog/speculative-store-bypass-explained-what-it-how-it-works>.
 For a more technical overview, see 
-https://software.intel.com/content/dam/develop/external/us/en/documents/336996-speculative-execution-side-channel-mitigations.pdf.
+<https://software.intel.com/content/dam/develop/external/us/en/documents/336996-speculative-execution-side-channel-mitigations.pdf>.
 
 We have observed the mitigation for this vulnerability to add roughly a [30%
 performance overhead](https://github.com/shadow/shadow/issues/1489#issuecomment-871445482) to Shadow simulations. Because process isolation is
@@ -53,7 +53,7 @@ running on the system that relies on the default behavior without explicitly
 opting in via `prctl`, so use some caution. For more discussion on this
 parameter, see this discussion on the kernel mailing list about whether the
 kernel default ought to be changed from `seccomp` to `prctl`:
-https://lore.kernel.org/lkml/20201104215702.GG24993@redhat.com/
+<https://lore.kernel.org/lkml/20201104215702.GG24993@redhat.com/>
 
 ## Other mitigations
 

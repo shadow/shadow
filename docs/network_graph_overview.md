@@ -83,7 +83,7 @@ artifact](https://tmodel-ccs2018.github.io/data/shadow/network/atlas-lossless.20
 and more details about the measurement methodology is available on [the research
 artifacts site](https://tmodel-ccs2018.github.io).
 
-Note: [the scripts we used to create the graph](http://github.com/shadow/atlas)
+Note: [the scripts we used to create the graph](https://github.com/shadow/atlas)
 are also available, but are not recommended for general use. The scripts require
 advanced knowledge of RIPE Atlas and also require that you possess RIPE Atlas
 credits to conduct the measurements needed to create a new graph. We recommend
@@ -91,5 +91,5 @@ using our existing graph linked above instead, which we may periodically update.
 
 ## Creating Your Own Graph
 
-The python module [networkx](http://networkx.github.io/) can be used to create
+The python module [networkx](https://networkx.github.io/) can be used to create
 and manipulate more complicated graphs.

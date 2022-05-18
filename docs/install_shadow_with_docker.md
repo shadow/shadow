@@ -1,6 +1,6 @@
 # Run from the Dockerfile
 
-1. Install docker from https://docs.docker.com/engine/install/.
+1. Install docker from <https://docs.docker.com/engine/install/>.
 2. Build container:
 ```
 git clone https://github.com/shadow/shadow.git
