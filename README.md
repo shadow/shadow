@@ -80,16 +80,16 @@ fairly well-supported and we are eager to continue extending support for it.
 ## More Information
 
 Homepage:
-- https://shadow.github.io
+- <https://shadow.github.io>
 
-Detailed Documentation:
+Documentation:
 - [User documentation](https://shadow.github.io/docs/guide)
 - [Developer documentation](https://shadow.github.io/docs/rust)
 
 Community Support:
-- https://github.com/shadow/shadow/discussions
+- <https://github.com/shadow/shadow/discussions>
 
 Bug Reports:
-- https://github.com/shadow/shadow/issues
+- <https://github.com/shadow/shadow/issues>
 
 <!--- ANCHOR_END: body (for mdbook) -->

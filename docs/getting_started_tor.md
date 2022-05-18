@@ -1,4 +1,4 @@
-# Getting Started Tor
+# Simple Tor Network Example
 
 _We recommend getting started with the [basic file
 transfer](getting_started_basic.md) and [traffic
