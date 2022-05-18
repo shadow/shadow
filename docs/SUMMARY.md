@@ -9,7 +9,6 @@
     - [Dependencies](install_dependencies.md)
     - [Shadow](install_shadow.md)
     - [System Configuration](system_configuration.md)
-    - [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
 - [Usage Guide]()
     - [Overview](run_shadow_overview.md)
     - [Running Your First Simulations]()
@@ -40,6 +39,7 @@
     - [Debugging and profiling](developer_guide.md)
     - [Continous integration tests](ci.md)
     - [Maintainer playbook](maintainer_playbook.md)
+    - [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
 
 # The Shadow Project
 

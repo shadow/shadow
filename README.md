@@ -82,7 +82,7 @@ fairly well-supported and we are eager to continue extending support for it.
 Homepage:
 - <https://shadow.github.io>
 
-Detailed Documentation:
+Documentation:
 - [User documentation](https://shadow.github.io/docs/guide)
 - [Developer documentation](https://shadow.github.io/docs/rust)
 

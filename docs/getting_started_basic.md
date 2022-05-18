@@ -1,4 +1,4 @@
-# Getting Started Basic
+# Basic File Transfer Example
 
 Here we present a basic example that simulates the network traffic of an HTTP
 server with 3 clients, each running on different virtual hosts. If you do not
@@ -51,12 +51,12 @@ hosts:
 
 ## Running the Simulation
 
-Shadow stores simulation data to the `shadow.data` directory by default. We
+Shadow stores simulation data to the `shadow.data/` directory by default. We
 first remove this directory if it already exists, and then run Shadow.
 
 ```bash
 # delete any existing simulation data
-rm -rf shadow.data
+rm -rf shadow.data/
 shadow shadow.yaml > shadow.log
 ```
 
@@ -64,22 +64,22 @@ This small Shadow simulation should complete almost immediately.
 
 ## Viewing the Simulation Output
 
-Shadow will write simulation output to the data directory (in this example we'll
-assume the default directory of `shadow.data`). Each host has its own directory
-under `shadow.data/hosts`. For example:
+Shadow will write simulation output to the data directory `shadow.data/`. Each
+host has its own directory under `shadow.data/hosts/`. For example:
 
 ```bash
-$ ls -l shadow.data/hosts
+$ ls -l shadow.data/hosts/
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client1
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client2
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client3
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 server
 ```
 
-Each host directory contains the output for each process running on that host. For example:
+Each host directory contains the output for each process running on that host.
+For example:
 
 ```bash
-$ ls -l shadow.data/hosts/client1
+$ ls -l shadow.data/hosts/client1/
 -rw-rw-r-- 1 user user   1 Jun  2 16:54 client1.curl.1000.exitcode
 -rw-rw-r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.shimlog
 -rw-r--r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.stderr

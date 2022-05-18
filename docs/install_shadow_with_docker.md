@@ -1,5 +1,8 @@
 # Run from the Dockerfile
 
+**Note:** You do not need to follow these steps to run Shadow within Docker.
+These steps are an experimental method for creating a Shadow image.
+
 1. Install docker from <https://docs.docker.com/engine/install/>.
 2. Build container:
 ```
