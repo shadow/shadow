@@ -5,11 +5,6 @@ server with 3 clients, each running on different virtual hosts. If you do not
 have Python or cURL installed, you can download them through your distribution's
 package manager.
 
-**Notice:** Older versions of cURL use a busy loop that is incompatible with
-Shadow and will cause Shadow to deadlock. Newer versions of cURL, such as the
-version provided in Ubuntu 20.04, don't have this issue. See [issue
-\#1794](https://github.com/shadow/shadow/issues/1794) for details.
-
 ## Configuring the Simulation
 
 Each client uses cURL to make an HTTP request to a basic Python HTTP server.
@@ -24,6 +19,10 @@ uses a built-in network graph for simplicity.
 general:
   # stop after 10 simulated seconds
   stop_time: 10s
+  # old versions of cURL use a busy loop, so to avoid spinning in this busy
+  # loop indefinitely, we add a system call latency to advance the simulated
+  # time when running non-blocking system calls
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
