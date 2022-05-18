@@ -19,6 +19,7 @@ use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
+use crate::utility::HostTreePointer;
 
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: usize = 212_992;
 
@@ -310,7 +311,7 @@ impl UnixSocket {
             .add_listener(monitoring, filter, notify_fn)
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
         self.common.event_source.add_legacy_listener(ptr);
     }
 

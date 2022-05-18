@@ -79,7 +79,8 @@ TimerFd* timerfd_new(HostId hostId) {
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     descriptor_refWeak(timerfd);
-    TaskRef* task = taskref_new(hostId, _timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
+    TaskRef* task =
+        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
     taskref_drop(task);
 

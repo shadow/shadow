@@ -1,5 +1,3 @@
-use crate::core::worker::Worker;
-
 // defines macros, so must be included first
 #[macro_use]
 pub mod enum_passthrough;
@@ -21,23 +19,71 @@ pub mod stream_len;
 pub mod syscall;
 pub mod time;
 
+use crate::{core::worker::Worker, host::host::HostId};
+
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.
 #[derive(Clone, Copy, Debug)]
-pub struct SyncSendPointer<T>(pub *mut T);
+pub struct SyncSendPointer<T>(*mut T);
 
 unsafe impl<T> Send for SyncSendPointer<T> {}
 unsafe impl<T> Sync for SyncSendPointer<T> {}
 
 impl<T> SyncSendPointer<T> {
-    /// Get the pointer.
+    /// SAFETY: The object pointed to by `ptr` must actually be `Send` and
+    /// `Sync`, or else not subsequently used in contexts where it matters.
+    pub unsafe fn new(ptr: *mut T) -> Self {
+        Self(ptr)
+    }
+
     pub fn ptr(&self) -> *mut T {
         self.0
     }
+}
 
-    /// Get a mutable reference to the pointer.
-    pub fn ptr_ref(&mut self) -> &mut *mut T {
-        &mut self.0
+/// A pointer to an object that is safe to dereference from any thread,
+/// *if* the Host lock for the specified host is held.
+#[derive(Clone, Copy, Debug)]
+pub struct HostTreePointer<T> {
+    host_id: HostId,
+    ptr: *mut T,
+}
+
+unsafe impl<T> Send for HostTreePointer<T> {}
+unsafe impl<T> Sync for HostTreePointer<T> {}
+
+impl<T> HostTreePointer<T> {
+    /// Create a pointer that may only be accessed when the lock for `host_id`
+    /// is held.
+    pub fn new_for_host(host_id: HostId, ptr: *mut T) -> Self {
+        Self { host_id, ptr }
+    }
+
+    /// Create a pointer that may only be accessed when the lock for the current host
+    /// is held.
+    pub fn new(ptr: *mut T) -> Self {
+        let host_id = Worker::with_active_host_info(|i| i.id);
+        Self::new_for_host(host_id.unwrap(), ptr)
+    }
+
+    /// Get the pointer.
+    ///
+    /// Panics if the configured host lock is not held.
+    ///
+    /// SAFETY: Pointer must only be dereferenced with the Host lock held, in
+    /// addition to the normal safety requirements for dereferencing a pointer.
+    pub unsafe fn ptr(&self) -> *mut T {
+        // While a caller might conceivably get the pointer without the lock
+        // held but only dereference after it actually is held, better to be
+        // conservative here and try to catch mistakes.
+        //
+        // This function is still `unsafe` since it's now the caller's
+        // responsibility to not release the lock and *then* dereference the
+        // pointer.
+        Worker::with_active_host_info(|i| {
+            assert_eq!(self.host_id, i.id);
+        });
+        self.ptr
     }
 }
 

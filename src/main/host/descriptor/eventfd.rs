@@ -8,6 +8,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
+use crate::utility::HostTreePointer;
 
 pub struct EventFd {
     counter: u64,
@@ -184,7 +185,7 @@ impl EventFd {
             .add_listener(monitoring, filter, notify_fn)
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
         self.event_source.add_legacy_listener(ptr);
     }
 

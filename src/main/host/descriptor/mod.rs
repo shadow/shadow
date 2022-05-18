@@ -7,7 +7,7 @@ use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
-use crate::utility::{IsSend, IsSync, SyncSendPointer};
+use crate::utility::{HostTreePointer, IsSend, IsSync};
 
 use socket::{Socket, SocketRef, SocketRefMut};
 
@@ -138,17 +138,21 @@ pub enum StateListenerFilter {
 
 /// A wrapper for a `*mut c::StatusListener` that increments its ref count when created,
 /// and decrements when dropped.
-struct LegacyListener(SyncSendPointer<c::StatusListener>);
+struct LegacyListener(HostTreePointer<c::StatusListener>);
 
 impl LegacyListener {
-    fn new(ptr: *mut c::StatusListener) -> Self {
-        assert!(!ptr.is_null());
-        unsafe { c::statuslistener_ref(ptr) };
-        Self(SyncSendPointer(ptr))
+    fn new(ptr: HostTreePointer<c::StatusListener>) -> Self {
+        assert!(!unsafe { ptr.ptr().is_null() });
+        unsafe { c::statuslistener_ref(ptr.ptr()) };
+        Self(ptr)
     }
+}
 
-    fn ptr(&self) -> *mut c::StatusListener {
-        self.0.ptr()
+impl std::ops::Deref for LegacyListener {
+    type Target = HostTreePointer<c::StatusListener>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -172,13 +176,16 @@ impl LegacyListenerHelper {
 
     fn add_listener(
         &mut self,
-        ptr: *mut c::StatusListener,
+        ptr: HostTreePointer<c::StatusListener>,
         event_source: &mut EventSource<(FileState, FileState)>,
     ) {
-        assert!(!ptr.is_null());
+        assert!(!unsafe { ptr.ptr() }.is_null());
 
         // if it's already listening, don't add a second time
-        if self.handle_map.contains_key(&(ptr as usize)) {
+        if self
+            .handle_map
+            .contains_key(&(unsafe { ptr.ptr() } as usize))
+        {
             return;
         }
 
@@ -190,7 +197,8 @@ impl LegacyListenerHelper {
         });
 
         // use a usize as the key so we don't accidentally deref the pointer
-        self.handle_map.insert(ptr as usize, handle);
+        self.handle_map
+            .insert(unsafe { ptr.ptr() } as usize, handle);
     }
 
     fn remove_listener(&mut self, ptr: *mut c::StatusListener) {
@@ -246,7 +254,7 @@ impl StateEventSource {
             })
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
         self.legacy_helper.add_listener(ptr, &mut self.inner);
     }
 
@@ -398,7 +406,7 @@ impl FileRefMut<'_> {
         pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
-        pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
+        pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
@@ -644,17 +652,18 @@ impl Descriptor {
 /// Represents a counted reference to a legacy descriptor object. Will decrement the descriptor's
 /// ref count when dropped.
 #[derive(Debug)]
-pub struct CountedLegacyDescriptorRef(SyncSendPointer<c::LegacyDescriptor>);
+pub struct CountedLegacyDescriptorRef(HostTreePointer<c::LegacyDescriptor>);
 
 impl CountedLegacyDescriptorRef {
     /// Does not increment the legacy descriptor's ref count, but will decrement the ref count
     /// when dropped.
-    pub fn new(ptr: *mut c::LegacyDescriptor) -> Self {
-        Self(SyncSendPointer(ptr))
+    pub fn new(ptr: HostTreePointer<c::LegacyDescriptor>) -> Self {
+        Self(ptr)
     }
 
-    pub fn ptr(&self) -> *mut c::LegacyDescriptor {
-        self.0.ptr()
+    /// SAFETY: See `HostTreePointer::ptr`.
+    pub unsafe fn ptr(&self) -> *mut c::LegacyDescriptor {
+        unsafe { self.0.ptr() }
     }
 }
 
@@ -735,13 +744,14 @@ mod export {
     /// does not increment its ref count, but will decrement the ref count when this compat
     /// descriptor is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_fromLegacy(
+    pub unsafe extern "C" fn compatdescriptor_fromLegacy(
         legacy_descriptor: *mut c::LegacyDescriptor,
     ) -> *mut CompatDescriptor {
         assert!(!legacy_descriptor.is_null());
 
-        let descriptor =
-            CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(legacy_descriptor));
+        let descriptor = CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(
+            HostTreePointer::new(legacy_descriptor),
+        ));
         CompatDescriptor::into_raw(Box::new(descriptor))
     }
 
@@ -757,7 +767,7 @@ mod export {
         let descriptor = unsafe { &*descriptor };
 
         if let CompatDescriptor::Legacy(d) = descriptor {
-            d.ptr()
+            unsafe { d.ptr() }
         } else {
             std::ptr::null_mut()
         }
@@ -828,7 +838,7 @@ mod export {
     /// ref count, and will decrement the ref count when this status listener is removed or when the
     /// `OpenFile` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn openfile_addListener(
+    pub unsafe extern "C" fn openfile_addListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
     ) {
@@ -837,7 +847,9 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.inner_file().borrow_mut().add_legacy_listener(listener);
+        file.inner_file()
+            .borrow_mut()
+            .add_legacy_listener(HostTreePointer::new(listener));
     }
 
     /// Remove a listener from the `OpenFile` object.
@@ -907,13 +919,14 @@ mod export {
     /// count, and will decrement the ref count when this status listener is removed or when the
     /// `File` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn file_addListener(file: *const File, listener: *mut c::StatusListener) {
+    pub unsafe extern "C" fn file_addListener(file: *const File, listener: *mut c::StatusListener) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
         let file = unsafe { &*file };
 
-        file.borrow_mut().add_legacy_listener(listener);
+        file.borrow_mut()
+            .add_legacy_listener(HostTreePointer::new(listener));
     }
 
     /// Remove a listener from the `File` object.
