@@ -15,6 +15,7 @@ CONTAINERS=(
     debian:11-slim
     fedora:34
     fedora:35
+    fedora:36
     quay.io/centos/centos:stream8
     )
 

@@ -44,8 +44,10 @@ jobs:
           # EOL ~August 2022 https://wiki.debian.org/DebianReleases
           - 'debian:10-slim'
           - 'debian:11-slim'
+          # EOL June 7 2022 https://endoflife.date/fedora
           - 'fedora:34'
           - 'fedora:35'
+          - 'fedora:36'
           # EOL May 2024 https://www.centos.org/centos-stream/
           - 'quay.io/centos/centos:stream8'
         cc: ['gcc', 'clang']
