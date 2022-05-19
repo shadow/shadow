@@ -56,6 +56,12 @@ Examples of representing our community include using an official e-mail address,
 posting via an official social media account, or acting as an appointed
 representative at an online or offline event.
 
+This Code of Conduct also applies to unacceptable behavior occurring outside
+the scope of community spaces when such behavior has the potential to adversely
+affect the safety and well-being of community members. As members of the Shadow
+community, we support and follow this Code while we are working on Shadow, and
+take care not to undermine it in the rest of our time.
+
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
@@ -118,6 +124,10 @@ This Code of Conduct is adapted from the [Contributor Covenant][homepage],
 version 2.1, available at
 [https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
 
+This Code of Conduct uses some language from the [Tor Project Code of
+Conduct][Tor Project CoC], which is shared under a CC-BY-SA 4.0 International
+license.
+
 Community Impact Guidelines were inspired by
 [Mozilla's code of conduct enforcement ladder][Mozilla CoC].
 
@@ -127,6 +137,7 @@ For answers to common questions about this code of conduct, see the FAQ at
 
 [homepage]: https://www.contributor-covenant.org
 [v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Tor Project CoC]: https://gitweb.torproject.org/community/policies.git/plain/code_of_conduct.txt
 [Mozilla CoC]: https://github.com/mozilla/diversity
 [FAQ]: https://www.contributor-covenant.org/faq
 [translations]: https://www.contributor-covenant.org/translations
