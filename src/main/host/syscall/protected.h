@@ -22,7 +22,6 @@
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
-#include "main/host/timer.h"
 #include "main/utility/utility.h"
 
 typedef enum {

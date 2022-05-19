@@ -143,4 +143,6 @@ typedef struct SyscallHandler SyscallHandler;
 // to directly use a `Fn(&mut Host)` trait object.
 typedef struct TaskRef TaskRef;
 
+typedef struct Timer Timer;
+
 #endif /* main_opaque_bindings_h */

@@ -138,6 +138,8 @@ typedef struct SyscallHandler SyscallHandler;
 // to directly use a `Fn(&mut Host)` trait object.
 typedef struct TaskRef TaskRef;
 
+typedef struct Timer Timer;
+
 typedef uint64_t WatchHandle;
 
 typedef uint32_t HostId;
@@ -845,6 +847,30 @@ void rustsyscallhandler_free(struct SyscallHandler *handler_ptr);
 SysCallReturn rustsyscallhandler_syscall(struct SyscallHandler *sys,
                                          SysCallHandler *csys,
                                          const SysCallArgs *args);
+
+// Create a new Timer that synchronously executes `task` on expiration.
+// `task` should not call mutable methods of the enclosing `Timer`; if it needs
+// to do so it should schedule a new task to do so.
+struct Timer *timer_new(const struct TaskRef *task);
+
+void timer_drop(struct Timer *timer);
+
+uint64_t timer_getExpirationCount(const struct Timer *timer);
+
+uint64_t timer_consumeExpirationCount(struct Timer *timer);
+
+// Returns the remaining time until the next expiration. Returns 0 if the
+// timer isn't armed.
+SimulationTime timer_getRemainingTime(const struct Timer *timer);
+
+SimulationTime timer_getInterval(const struct Timer *timer);
+
+void timer_arm(struct Timer *timer,
+               Host *host,
+               EmulatedTime nextExpireTime,
+               SimulationTime expireInterval);
+
+void timer_disarm(struct Timer *timer);
 
 struct NetworkGraph *networkgraph_load(const struct ConfigOptions *config);
 

@@ -12,7 +12,6 @@
 #include "main/host/status.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
-#include "main/host/timer.h"
 
 /* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;

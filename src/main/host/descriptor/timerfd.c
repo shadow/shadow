@@ -17,7 +17,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
-#include "main/host/timer.h"
 #include "main/utility/utility.h"
 
 struct _TimerFd {
@@ -46,7 +45,7 @@ static void _timerfd_free(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(timerfd);
     descriptor_clear((LegacyDescriptor*)timerfd);
     if (timerfd->timer) {
-        timer_unref(timerfd->timer);
+        timer_drop(timerfd->timer);
         timerfd->timer = NULL;
     }
     MAGIC_CLEAR(timerfd);
@@ -61,7 +60,7 @@ static void _timerfd_cleanup(LegacyDescriptor* descriptor) {
     if (timerfd->timer) {
         // Break circular reference; the timer has a task with a reference to
         // this descriptor.
-        timer_unref(timerfd->timer);
+        timer_drop(timerfd->timer);
         timerfd->timer = NULL;
     }
 }
