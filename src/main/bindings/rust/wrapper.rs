@@ -5,6 +5,7 @@ use crate::host::descriptor::File;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::memory_manager::MemoryManager;
 use crate::core::support::configuration::ConfigOptions;
+use crate::core::work::task::TaskRef;
 use crate::utility::random::Random;
 use log_bindings::Logger;
 use std::sync::Arc;
@@ -104,11 +105,6 @@ pub struct Counter {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct SyscallHandler {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct TaskRef {
     _unused: [u8; 0],
 }
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
