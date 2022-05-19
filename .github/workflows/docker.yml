@@ -13,7 +13,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-18.04
 
     steps:
     - uses: actions/checkout@v2
