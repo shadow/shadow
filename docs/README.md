@@ -1,52 +1,8 @@
 # The Shadow Simulator Documentation
 
-The docs contain important information about installing and using the Shadow
-discrete-event network simulator. Please [open an
-issue](https://github.com/shadow/shadow/issues) if you notice something out of
-date, or [open a pull request](https://github.com/shadow/shadow/pulls) if you
-can fix it.
+1. [Online docs (recommended)](https://shadow.github.io/docs/guide/)
+2. [Offline docs](SUMMARY.md)
 
- * The Shadow simulator
-   * [Design Overview](design_2x.md)
-     * [Non-goal: Security](security.md)
-   * Installation Guide
-     * [Supported Platforms](supported_platforms.md)
-     * [Dependencies](install_dependencies.md)
-     * [Shadow](install_shadow.md)
-     * [System Configuration](system_configuration.md)
-   * Usage Guide
-     * [Overview](run_shadow_overview.md)
-     * Running Your First Simulations
-       * [Basic File Transfer](getting_started_basic.md)
-       * [Traffic Generation](getting_started_tgen.md)
-       * [Simple Tor Network](getting_started_tor.md)
-     * Understanding Shadow Output
-       * [Format of the Log Messages](log_format.md)
-       * [Parsing Statistics from the Logs](parsing_shadow_logs.md)
-     * Configuring Your Own Simulation
-       * [Shadow Config Overview](shadow_config_overview.md)
-       * [Shadow Config Specification](shadow_config_spec.md)
-     * Configuring Your Own Network
-       * [Network Graph Overview](network_graph_overview.md)
-       * [Network Graph Specification](network_graph_spec.md)
-     * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
-     * Performance Tuning
-       * [Disabling Side-channel Mitigations](sidechannels.md)
-       * [Parallel Simulations](parallel_sims.md)
-     * Application and Library-Specific Notes
-       * [libopenblas](libopenblas.md)
-       * [cURL](curl.md)
-       * [Nginx](nginx.md)
-       * [iPerf 2](iperf2.md)
-       * [iPerf 3](iperf3.md)
-   * Developer Guide
-     * [Coding](coding.md)
-     * [Debugging and profiling](developer_guide.md)
-     * [Continous integration tests](ci.md)
-     * [Maintainer playbook](maintainer_playbook.md)
-     * [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
- * The Shadow project
-   * [Contributing](contributing.md)
-     * [Coding style](coding_style.md)
-     * [Pull requests](pull_requests.md)
-   * [NSF Sponsorship](nsf_sponsorship.md)
+Please [open an issue](https://github.com/shadow/shadow/issues) if you notice
+something out of date, or [open a pull
+request](https://github.com/shadow/shadow/pulls) if you can fix it.
