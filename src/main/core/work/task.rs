@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use atomic_refcell::AtomicRefCell;
-
 use crate::{
     host::host::Host,
     utility::{IsSend, IsSync, Magic, ObjectCounter},
@@ -9,27 +7,26 @@ use crate::{
 
 /// Mostly for interoperability with C APIs.
 /// In Rust code that doesn't need to interact with C, it may make more sense
-/// to directly use a `FnMut(&mut Host)` trait object.
+/// to directly use a `Fn(&mut Host)` trait object.
 #[derive(Clone)]
 pub struct TaskRef {
     magic: Magic<0xe0408897>,
     _counter: ObjectCounter,
-    inner: Arc<AtomicRefCell<dyn FnMut(&mut Host) + Send + Sync>>,
+    inner: Arc<dyn Fn(&mut Host) + Send + Sync>,
 }
 
 impl TaskRef {
-    pub fn new<T: 'static + FnMut(&mut Host) + Send + Sync>(f: T) -> Self {
+    pub fn new<T: 'static + Fn(&mut Host) + Send + Sync>(f: T) -> Self {
         Self {
-            inner: Arc::new(AtomicRefCell::new(f)),
+            inner: Arc::new(f),
             magic: Magic::new(),
             _counter: ObjectCounter::new("TaskRef"),
         }
     }
 
-    pub fn execute(&mut self, host: &mut Host) {
+    pub fn execute(&self, host: &mut Host) {
         self.magic.debug_check();
-        let mut inner = self.inner.borrow_mut();
-        inner(host)
+        (self.inner)(host)
     }
 }
 
@@ -38,9 +35,6 @@ impl IsSync for TaskRef {}
 
 pub mod export {
     use super::*;
-
-    #[cfg(debug_assertions)]
-    use crate::core::worker::Worker;
 
     use crate::{
         cshadow,
