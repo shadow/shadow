@@ -12,6 +12,16 @@ add_shadow_tests(
       CONFIGURATIONS extra
     )
 
+# Regression test for https://github.com/shadow/shadow/issues/2151
+add_shadow_tests(
+  BASENAME sigkill_self
+  # Command should die with signal 9, giving exitcode 128+9=137
+  POST_CMD "test `cat hosts/*/*.exitcode` -eq 137"
+  # Shadow should return failure
+  EXPECT_ERROR TRUE
+  # ptrace doesn't support signals well enough
+  SKIP_METHODS ptrace)
+
 add_executable(test_flush_after_exit test_flush_after_exit.c)
 add_linux_tests(BASENAME flush_after_exit COMMAND bash -c "test `./test_flush_after_exit` == 'Hello'")
 add_shadow_tests(BASENAME flush_after_exit POST_CMD "test `cat hosts/*/*.stdout` = 'Hello'")

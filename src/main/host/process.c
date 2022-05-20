@@ -127,6 +127,7 @@ struct _Process {
 
     gint returnCode;
     gboolean didLogReturnCode;
+    gboolean killedByShadow;
 
     // int thread_id -> Thread*.
     GHashTable* threads;
@@ -315,9 +316,11 @@ static void _process_handleProcessExit(Process* proc) {
     _process_check(proc);
 }
 
-static void _process_terminate_threads(Process* proc) {
-    trace("Terminating threads");
+static void _process_terminate(Process* proc) {
+    trace("Terminating");
     if (process_isRunning(proc)) {
+        proc->killedByShadow = true;
+
         if (kill(proc->nativePid, SIGKILL)) {
             warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
         }
@@ -374,16 +377,30 @@ static void _process_getAndLogReturnCode(Process* proc) {
 
     // don't change the formatting of this string since some integration tests depend on it
     GString* mainResultString = g_string_new(NULL);
-    g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
-                    ((proc->returnCode == 0) ? "success" : "error"), proc->returnCode,
-                    process_getName(proc));
+    g_string_printf(mainResultString, "process '%s'", process_getName(proc));
+    if (proc->killedByShadow) {
+        g_string_append_printf(mainResultString, " killed by Shadow");
+    } else {
+        g_string_append_printf(mainResultString, " exited with code %d", proc->returnCode);
+        if (proc->returnCode == 0) {
+            g_string_append_printf(mainResultString, " (success)");
+        } else {
+            g_string_append_printf(mainResultString, " (error)");
+        }
+    }
 
     gchar* fileName = _process_outputFileName(proc, "exitcode");
     FILE* exitcodeFile = fopen(fileName, "we");
     g_free(fileName);
 
     if (exitcodeFile != NULL) {
-        fprintf(exitcodeFile, "%d", proc->returnCode);
+        if (proc->killedByShadow) {
+            // Process never died during the simulation; shadow chose to kill it;
+            // typically because the simulation end time was reached.
+            // Write out an empty exitcode file.
+        } else {
+            fprintf(exitcodeFile, "%d", proc->returnCode);
+        }
         fclose(exitcodeFile);
     } else {
         warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
@@ -392,7 +409,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
     // if there was no error or was intentionally killed
     // TODO: once we've implemented clean shutdown via SIGTERM,
     //       treat death by SIGKILL as a plugin error
-    if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
+    if (proc->returnCode == 0 || proc->killedByShadow) {
         info("%s", mainResultString->str);
     } else {
         warning("%s", mainResultString->str);
@@ -698,7 +715,7 @@ void process_stop(Process* proc) {
 #endif
 
     proc->plugin.isExecuting = TRUE;
-    _process_terminate_threads(proc);
+    _process_terminate(proc);
     proc->plugin.isExecuting = FALSE;
 
 #ifdef USE_PERF_TIMERS
@@ -879,7 +896,7 @@ static void _process_free(Process* proc) {
     process_freePtrsWithoutFlushing(proc);
     g_array_free(proc->memoryRefs, false);
 
-    _process_terminate_threads(proc);
+    _process_terminate(proc);
     if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
