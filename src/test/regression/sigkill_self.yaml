@@ -1,0 +1,13 @@
+# Regression test for https://github.com/shadow/shadow/issues/2151
+general:
+  stop_time: 3s
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: /bin/kill
+      args: -KILL 1000
+      start_time: 1s
