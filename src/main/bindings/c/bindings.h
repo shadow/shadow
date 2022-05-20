@@ -60,7 +60,7 @@ typedef struct Counter Counter;
 typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
-typedef struct GenericFile GenericFile;
+typedef struct File File;
 
 typedef struct HashSet_String HashSet_String;
 
@@ -82,11 +82,10 @@ typedef struct MemoryManager MemoryManager;
 typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-// underlying file may close itself in extenuating circumstances (for example if the file has an
-// internal error).
+// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+// itself in extenuating circumstances (for example if the file has an internal error).
 //
 // **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 // `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -98,25 +97,29 @@ typedef struct OpenFile OpenFile;
 
 typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
 
-// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref_mut(ptr);
 // assert_eq!(pmr.len(), 10);
 // pmr[5] = 100;
+// ```
 //
 // The object must be disposed of by calling `flush` or `noflush`.  Dropping
 // the object without doing so will result in a panic.
 typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 
-// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref(ptr);
 // assert_eq!(pmr.len(), 10);
 // let x = pmr[5];
+// ```
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
@@ -130,7 +133,22 @@ typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarSta
 
 typedef struct SyscallHandler SyscallHandler;
 
+// Mostly for interoperability with C APIs.
+// In Rust code that doesn't need to interact with C, it may make more sense
+// to directly use a `FnMut(&mut Host)` trait object.
+typedef struct TaskRef TaskRef;
+
 typedef uint64_t WatchHandle;
+
+typedef uint32_t HostId;
+
+typedef void (*TaskCallbackFunc)(Host*, void*, void*);
+
+typedef void (*TaskObjectFreeFunc)(void*);
+
+typedef void (*TaskArgumentFreeFunc)(void*);
+
+#define EMUTIME_MIN 0
 
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 
@@ -179,6 +197,10 @@ void childpidwatcher_unregisterPid(const struct ChildPidWatcher *watcher, int32_
 // The returned handle is guaranteed to be non-zero.
 //
 // Panics if `pid` doesn't exist.
+//
+// SAFETY: It must be safe for `callback` to execute and manipulate `data`
+// from another thread. e.g. typically this means that `data` must be `Send`
+// and `Sync`.
 WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
                                   pid_t pid,
                                   void (*callback)(pid_t, void*),
@@ -460,6 +482,85 @@ int64_t parse_bandwidth(const char *s);
 // Parses a string as a time in nanoseconds. Returns '-1' on error.
 int64_t parse_time_nanosec(const char *s);
 
+EmulatedTime emutime_add_simtime(EmulatedTime lhs, SimulationTime rhs);
+
+SimulationTime emutime_sub_emutime(EmulatedTime lhs, EmulatedTime rhs);
+
+SimulationTime simtime_from_timeval(struct timeval val);
+
+SimulationTime simtime_from_timespec(struct timespec val);
+
+__attribute__((warn_unused_result))
+bool simtime_to_timeval(SimulationTime val,
+                        struct timeval *out);
+
+__attribute__((warn_unused_result))
+bool simtime_to_timespec(SimulationTime val,
+                         struct timespec *out);
+
+// Create a new reference-counted task that can only be executed on the
+// given host. The callbacks can safely assume that they will only be called
+// with the lock for the specified host held.
+//
+// SAFETY:
+// * `object` and `argument` must meet the requirements
+//    for `HostTreePointer::new`.
+// * Given that the host lock is held when execution of a callback
+//   starts, they must not cause `object` or `argument` to be dereferenced
+//   without the host lock held. (e.g. by releasing the host lock or exfiltrating
+//   the pointers to be dereferenced by other code that might not hold the lock).
+//
+// There must still be some coordination between the creator of the TaskRef
+// and the callers of `taskref_execute` and `taskref_drop` to ensure that
+// the callbacks don't conflict with other accesses in the same thread
+// (e.g. that the caller isn't holding a Rust mutable reference to one of
+// the pointers while the callback transforms the pointer into another Rust
+// reference).
+struct TaskRef *taskref_new_bound(HostId host_id,
+                                  TaskCallbackFunc callback,
+                                  void *object,
+                                  void *argument,
+                                  TaskObjectFreeFunc object_free,
+                                  TaskArgumentFreeFunc argument_free);
+
+// Create a new reference-counted task that may be executed on any Host.
+//
+// SAFETY:
+// * The callbacks must be safe to call with `object` and `argument`
+//   with *any* Host. (e.g. even if task is expected to execute on another Host,
+//   must be safe to execute or free the Task from the current Host.)
+//
+// There must still be some coordination between the creator of the TaskRef
+// and the callers of `taskref_execute` and `taskref_drop` to ensure that
+// the callbacks don't conflict with other accesses in the same thread
+// (e.g. that the caller isn't holding a Rust mutable reference to one of
+// the pointers while the callback transforms the pointer into another Rust
+// reference).
+struct TaskRef *taskref_new_unbound(TaskCallbackFunc callback,
+                                    void *object,
+                                    void *argument,
+                                    TaskObjectFreeFunc object_free,
+                                    TaskArgumentFreeFunc argument_free);
+
+// Creates a new reference to the `Task`.
+//
+// SAFETY: `task` must be a valid pointer.
+struct TaskRef *taskref_clone(const struct TaskRef *task);
+
+// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
+//
+// Panics if task's Host lock isn't held.
+//
+// SAFETY: `task` must be legally dereferencable.
+void taskref_drop(struct TaskRef *task);
+
+// Executes the task.
+//
+// Panics if task's Host lock isn't held.
+//
+// SAFETY: `task` must be legally dereferencable.
+void taskref_execute(struct TaskRef *task, Host *host);
+
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
                              int32_t worker_id,
@@ -487,13 +588,17 @@ void worker_setRoundEndTime(SimulationTime t);
 
 SimulationTime _worker_getRoundEndTime(void);
 
-void worker_setCurrentTime(SimulationTime t);
+void worker_setCurrentEmulatedTime(EmulatedTime t);
 
-SimulationTime worker_getCurrentTime(void);
+void worker_clearCurrentTime(void);
+
+SimulationTime worker_getCurrentSimulationTime(void);
+
+EmulatedTime worker_getCurrentEmulatedTime(void);
 
 void worker_updateMinHostRunahead(SimulationTime t);
 
-void _worker_setLastEventTime(SimulationTime t);
+void _worker_setLastEventTime(EmulatedTime t);
 
 bool worker_isBootstrapActive(void);
 
@@ -575,29 +680,28 @@ void openfile_removeListener(const struct OpenFile *file, StatusListener *listen
 uintptr_t openfile_getCanonicalHandle(const struct OpenFile *file);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
-// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
-// the memory will leak.
-const struct GenericFile *compatdescriptor_newRefGenericFile(const struct CompatDescriptor *descriptor);
+// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
+// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
+const struct File *compatdescriptor_newRefFile(const struct CompatDescriptor *descriptor);
 
-// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
-// calling this function.
-void genericfile_drop(const struct GenericFile *file);
+// Decrement the ref count of the `File` object. The pointer must not be used after calling
+// this function.
+void file_drop(const struct File *file);
 
-// Get the state of the `GenericFile` object.
-Status genericfile_getStatus(const struct GenericFile *file);
+// Get the state of the `File` object.
+Status file_getStatus(const struct File *file);
 
-// Add a status listener to the `GenericFile` object. This will increment the status listener's
-// ref count, and will decrement the ref count when this status listener is removed or when the
-// `GenericFile` is freed/dropped.
-void genericfile_addListener(const struct GenericFile *file, StatusListener *listener);
+// Add a status listener to the `File` object. This will increment the status listener's ref
+// count, and will decrement the ref count when this status listener is removed or when the
+// `File` is freed/dropped.
+void file_addListener(const struct File *file, StatusListener *listener);
 
-// Remove a listener from the `GenericFile` object.
-void genericfile_removeListener(const struct GenericFile *file, StatusListener *listener);
+// Remove a listener from the `File` object.
+void file_removeListener(const struct File *file, StatusListener *listener);
 
-// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
-// same underlying data if their handles are equal.
-uintptr_t genericfile_getCanonicalHandle(const struct GenericFile *file);
+// Get the canonical handle for a `File` object. Two `File` objects refer to the same
+// underlying data if their handles are equal.
+uintptr_t file_getCanonicalHandle(const struct File *file);
 
 // # Safety
 // * `thread` must point to a valid object.

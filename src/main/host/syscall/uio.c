@@ -11,7 +11,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
@@ -121,12 +121,13 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
 #ifdef SYS_preadv2
-        result = file_preadv2((File*)desc, sys->host, buffersv, iovlen, offset, flags);
+        result =
+            regularfile_preadv2((RegularFile*)desc, sys->host, buffersv, iovlen, offset, flags);
 #else
         if (flags) {
             warning("Ignoring flags");
         }
-        result = file_preadv((File*)desc, sys->host, buffersv, iovlen, offset);
+        result = regularfile_preadv((RegularFile*)desc, sys->host, buffersv, iovlen, offset);
 #endif
 
         free(buffersv);
@@ -235,12 +236,12 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
 #ifdef SYS_pwritev2
-        result = file_pwritev2((File*)desc, buffersv, iovlen, offset, flags);
+        result = regularfile_pwritev2((RegularFile*)desc, buffersv, iovlen, offset, flags);
 #else
         if (flags) {
             warning("Ignoring flags");
         }
-        result = file_pwritev((File*)desc, buffersv, iovlen, offset);
+        result = regularfile_pwritev((RegularFile*)desc, buffersv, iovlen, offset);
 #endif
 
         free(buffersv);

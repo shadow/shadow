@@ -4,6 +4,7 @@ use nix::sys::signal::Signal;
 use nix::unistd;
 use once_cell::sync::OnceCell;
 use signal_hook::low_level::channel::Channel as SignalSafeChannel;
+use std::arch::asm;
 use std::error::Error;
 use std::iter::Iterator;
 use std::os::unix::io::RawFd;
@@ -888,6 +889,186 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+static GLOBAL_STATIC: u32 = 0xdeadbeef;
+extern "C" fn change_rax_from_null_to_global_static(
+    signal: i32,
+    info: *mut libc::siginfo_t,
+    voidctx: *mut std::ffi::c_void,
+) {
+    assert_eq!(signal, signal::SIGSEGV as i32);
+
+    let info = unsafe { info.as_ref().unwrap() };
+    // Not exposed in libc crate
+    const SEGV_MAPERR: i32 = 1;
+    assert_eq!(info.si_code, SEGV_MAPERR);
+    assert!(unsafe { info.si_addr().is_null() });
+
+    let ctx = voidctx as *mut libc::ucontext_t;
+    let ctx = unsafe { ctx.as_mut().unwrap() };
+    ctx.uc_mcontext.gregs[libc::REG_RAX as usize] = &GLOBAL_STATIC as *const u32 as i64;
+}
+
+fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
+    // Ensure SIGSEGV isn't blocked.
+    let mut sigset = signal::SigSet::empty();
+    sigset.add(signal::SIGSEGV);
+    signal::sigprocmask(signal::SigmaskHow::SIG_UNBLOCK, Some(&sigset), None).unwrap();
+
+    // Install our SIGSEGV handler, which is going to mutate registers in the
+    // caller to fix the null pointer dereference below.
+    // This may seem esoteric, but this is sometimes done to implement custom
+    // memory management, or to implement higher level error handling.
+    // e.g. in OpenJDK SIGSEGVs in managed code are transformed into NullPointerException.
+    // https://github.com/shadow/shadow/issues/2091#issuecomment-1111374729
+    unsafe {
+        signal::sigaction(
+            signal::SIGSEGV,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(change_rax_from_null_to_global_static),
+                // Override the default behavior of blocking the current signal,
+                // since generating a SIGSEGV while SIGSEGV is blocked is
+                // undefined behavior.
+                signal::SaFlags::SA_NODEFER,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Dereference a NULL pointer from rax. The SIGSEGV handler will rewrite rax
+    // to a valid pointer.
+    let mut addr = 0u64;
+    let mut val: u32;
+    unsafe {
+        asm!("mov {val:e}, [rax]", val = out(reg) val, inout("rax") addr);
+    }
+    assert_eq!(addr, &GLOBAL_STATIC as *const _ as u64);
+    assert_eq!(val, GLOBAL_STATIC);
+
+    // Restore default action to avoid surprising behavior in the case of an
+    // unexpected SIGSEGV later.
+    unsafe {
+        signal::sigaction(
+            signal::SIGSEGV,
+            &signal::SigAction::new(
+                signal::SigHandler::SigDfl,
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    Ok(())
+}
+
+static mut LAST_ERROR_SIGNAL: i32 = 0;
+static mut RECOVERY_POINT: *mut libc::ucontext_t = std::ptr::null_mut();
+
+extern "C" fn recover_from_hardware_error(
+    signal: i32,
+    info: *mut libc::siginfo_t,
+    voidctx: *mut std::ffi::c_void,
+) {
+    assert!(!info.is_null());
+    assert!(!voidctx.is_null());
+    // Rough approximation of how some language runtimes recover from such
+    // signals; generally it will be turned into a language exception of some
+    // kind at the recovery point.
+    unsafe { LAST_ERROR_SIGNAL = signal };
+    unsafe { libc::setcontext(RECOVERY_POINT) };
+    panic!("Unreachable");
+}
+
+fn test_hardware_error_signal<F: FnOnce() -> ()>(
+    sig: signal::Signal,
+    setcontext_and_raise_err: F,
+) -> Result<(), Box<dyn Error>> {
+    // Ensure signal isn't blocked
+    let mut sigset = signal::SigSet::empty();
+    sigset.add(sig);
+    signal::sigprocmask(signal::SigmaskHow::SIG_UNBLOCK, Some(&sigset), None)?;
+
+    // Install recovery handler
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(recover_from_hardware_error),
+                signal::SaFlags::SA_NODEFER,
+                signal::SigSet::empty(),
+            ),
+        )?
+    };
+
+    unsafe { LAST_ERROR_SIGNAL = 0 };
+    setcontext_and_raise_err();
+    assert_eq!(unsafe { LAST_ERROR_SIGNAL }, sig as i32);
+
+    // Restore default action
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigDfl,
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    Ok(())
+}
+
+fn test_hardware_error_signals() -> Result<(), Box<dyn Error>> {
+    //let signals = [Signal::SIGSEGV, Signal::SIGILL, Signal::SIGBUS, Signal::SIGFPE];
+
+    // Allocate the recovery point.
+    unsafe { RECOVERY_POINT = Box::leak(Box::<libc::ucontext_t>::new(std::mem::zeroed())) };
+
+    test_hardware_error_signal(signal::SIGSEGV, || {
+        // Set our recovery point. The handler will *jump* back to this.
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            // Already created and recovered from error.
+            return;
+        }
+        unsafe {
+            // Dereference NULL pointer
+            asm!("mov rax, [0]", out("rax") _);
+        }
+    })?;
+
+    test_hardware_error_signal(signal::SIGILL, || {
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            return;
+        }
+        unsafe {
+            // Execute illegal instruction.
+            // ud2 is guaranteed to be undefined.
+            asm!("ud2");
+        }
+    })?;
+
+    test_hardware_error_signal(signal::SIGFPE, || {
+        unsafe { libc::getcontext(RECOVERY_POINT) };
+        if unsafe { LAST_ERROR_SIGNAL } != 0 {
+            return;
+        }
+        unsafe {
+            // Divide by zero.
+            // Unsigned divide RDX:RAX by r/m64, with result stored in RAX ← Quotient, RDX ← Remainder.
+            asm!("div rcx", in("rcx") 0u64, inout("rdx") 0u64 => _, inout("rax") 0u64 => _);
+        }
+    })?;
+
+    // TODO: SIGBUS
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -1002,6 +1183,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             "sa_restart second",
             test_restart_second,
             set![TestEnv::Shadow],
+        ),
+        ShadowTest::new(
+            "synchronous sigsegv",
+            test_synchronous_sigsegv,
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "hardware error signals",
+            test_hardware_error_signals,
+            all_envs.clone(),
         ),
     ];
 

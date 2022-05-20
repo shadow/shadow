@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::num::NonZeroU8;
 
-use crate::core::support::emulated_time::{self, EmulatedTime};
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
     PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
@@ -552,8 +552,8 @@ pub fn write_syscall(
     args: impl Display,
     rv: impl Display,
 ) -> std::io::Result<()> {
-    let sim_time = sim_time.duration_since(&emulated_time::SIMULATION_START);
-    let sim_time = TimeParts::from_nanos(sim_time.as_nanos());
+    let sim_time = sim_time.duration_since(&EmulatedTime::SIMULATION_START);
+    let sim_time = TimeParts::from_nanos(sim_time.as_nanos().into());
     let sim_time = sim_time.fmt_hr_min_sec_milli();
 
     writeln!(
@@ -618,5 +618,31 @@ mod export {
 
         // need to return the result, otherwise the drop impl will free the condition pointer
         result.into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::process::Command;
+
+    #[test]
+    fn test_no_args() {
+        let args = SysCallArgs {
+            number: 100,
+            args: [0u32.into(); 6],
+        };
+
+        // 10 seconds should be long enough to keep the process alive while the following code runs
+        let mut proc = Command::new("sleep").arg(10.to_string()).spawn().unwrap();
+        let pid = nix::unistd::Pid::from_raw(proc.id().try_into().unwrap());
+
+        let mem = unsafe { MemoryManager::new(pid) };
+
+        // make sure that we can construct a `SyscallArgsFmt` with no generic types
+        let _syscall_args = <SyscallArgsFmt>::new(&args, FmtOptions::Standard, &mem);
+
+        proc.kill().unwrap();
+        proc.wait().unwrap();
     }
 }

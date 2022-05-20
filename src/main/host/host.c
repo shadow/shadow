@@ -27,10 +27,10 @@
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/descriptor/udp.h"
 #include "main/host/futex_table.h"
@@ -70,6 +70,9 @@ struct _Host {
     guint processIDCounter;
     guint64 eventIDCounter;
     guint64 packetIDCounter;
+
+    /* Enables us to sort objects deterministically based on their creation order. */
+    guint64 determinismSequenceCounter;
 
     /* map abstract socket addresses to unix sockets */
     Arc_AtomicRefCell_AbstractUnixNamespace* abstractUnixNamespace;
@@ -792,4 +795,9 @@ void host_lockShimShmemLock(Host* host) {
 void host_unlockShimShmemLock(Host* host) {
     MAGIC_ASSERT(host);
     shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
+}
+
+guint64 host_getNextDeterministicSequenceValue(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->determinismSequenceCounter++;
 }

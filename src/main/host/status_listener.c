@@ -5,11 +5,13 @@
 
 #include "main/host/status_listener.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
+#include "main/host/host.h"
 #include "main/utility/utility.h"
 
 struct _StatusListener {
@@ -29,22 +31,39 @@ struct _StatusListener {
     /* The function we call to free the callback argument. */
     StatusArgumentFreeFunc argumentFreeFunc;
 
+    /* Enables deterministic sorting of listener items. */
+    uint64_t deterministicSequenceValue;
+
     /* Memory accounting. */
     int referenceCount;
     MAGIC_DECLARE;
 };
 
+int status_listener_compare(const void* ptr_1, const void* ptr_2) {
+    const StatusListener* listener_1 = ptr_1;
+    const StatusListener* listener_2 = ptr_2;
+
+    if (listener_1->deterministicSequenceValue == listener_2->deterministicSequenceValue) {
+        assert(listener_1 == listener_2);
+        return 0;
+    }
+
+    return (listener_1->deterministicSequenceValue < listener_2->deterministicSequenceValue) ? -1 : 1;
+}
+
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc) {
+                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host) {
     StatusListener* listener = malloc(sizeof(StatusListener));
 
-    *listener = (StatusListener){.notifyFunc = notifyFunc,
-                                 .callbackObject = callbackObject,
-                                 .objectFreeFunc = objectFreeFunc,
-                                 .callbackArgument = callbackArgument,
-                                 .argumentFreeFunc = argumentFreeFunc,
-                                 .referenceCount = 1};
+    *listener =
+        (StatusListener){.notifyFunc = notifyFunc,
+                         .callbackObject = callbackObject,
+                         .objectFreeFunc = objectFreeFunc,
+                         .callbackArgument = callbackArgument,
+                         .argumentFreeFunc = argumentFreeFunc,
+                         .deterministicSequenceValue = host_getNextDeterministicSequenceValue(host),
+                         .referenceCount = 1};
 
     MAGIC_INIT(listener);
 

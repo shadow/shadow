@@ -22,6 +22,9 @@ enum _Status {
     STATUS_DESCRIPTOR_CLOSED = 1 << 3,
     /* a wakeup operation occurred on a futex */
     STATUS_FUTEX_WAKEUP = 1 << 4,
+    /* a listening socket is allowing connections; only applicable to connection-oriented unix
+     * sockets */
+    STATUS_SOCKET_ALLOWING_CONNECT = 1 << 5,
 };
 
 #endif // SRC_MAIN_HOST_STATUS_H

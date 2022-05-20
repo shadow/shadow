@@ -5,19 +5,15 @@
 
 use test_utils::set;
 use test_utils::socket_utils;
+use test_utils::socket_utils::SockAddr;
 use test_utils::TestEnvironment as TestEnv;
 
 use nix::poll::PollFlags;
+use nix::sys::socket::sockopt;
 
 struct ListenArguments {
     fd: libc::c_int,
     backlog: libc::c_int,
-}
-
-#[derive(Debug, Copy, Clone)]
-struct BindAddress {
-    address: libc::in_addr_t,
-    port: libc::in_port_t,
 }
 
 fn main() -> Result<(), String> {
@@ -71,91 +67,137 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         ),
     ];
 
-    // optionally bind to an address before listening
-    let bind_addresses = [
-        None,
-        Some(BindAddress {
-            address: libc::INADDR_LOOPBACK.to_be(),
-            port: 0u16.to_be(),
-        }),
-        Some(BindAddress {
-            address: libc::INADDR_ANY.to_be(),
-            port: 0u16.to_be(),
-        }),
-    ];
-
     // tests to repeat for different socket options
-    for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
-        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
-            for &bind in bind_addresses.iter() {
-                // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <type={},flag={},bind={:?}>", s, sock_type, flag, bind);
+    for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
+        // optionally bind to an address before listening
+        let bind_addresses = match domain {
+            libc::AF_INET => vec![
+                None,
+                Some(SockAddr::Inet(libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 0u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        s_addr: libc::INADDR_LOOPBACK.to_be(),
+                    },
+                    sin_zero: [1; 8],
+                })),
+                Some(SockAddr::Inet(libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 0u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        s_addr: libc::INADDR_ANY.to_be(),
+                    },
+                    sin_zero: [1; 8],
+                })),
+            ],
+            libc::AF_UNIX => vec![
+                None,
+                Some(SockAddr::Unix(libc::sockaddr_un {
+                    sun_family: libc::AF_UNIX as u16,
+                    sun_path: [0i8; 108],
+                })),
+            ],
+            _ => unimplemented!(),
+        };
 
-                let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
-                    test_utils::ShadowTest::new(
-                        &append_args("test_zero_backlog"),
-                        move || test_zero_backlog(sock_type, flag, bind),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                    test_utils::ShadowTest::new(
-                        &append_args("test_negative_backlog"),
-                        move || test_negative_backlog(sock_type, flag, bind),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                    test_utils::ShadowTest::new(
-                        &append_args("test_large_backlog"),
-                        move || test_large_backlog(sock_type, flag, bind),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                    test_utils::ShadowTest::new(
-                        &append_args("test_listen_twice"),
-                        move || test_listen_twice(sock_type, flag, bind),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                    test_utils::ShadowTest::new(
-                        &append_args("test_after_close"),
-                        move || test_after_close(sock_type, flag, bind),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                ];
-
-                tests.extend(more_tests);
+        for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET].iter() {
+            // skip tests that use SOCK_SEQPACKET with INET sockets
+            if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
+                continue;
             }
+
+            for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+                for &bind in bind_addresses.iter() {
+                    // add details to the test names to avoid duplicates
+                    let append_args = |s| {
+                        format!(
+                            "{} <domain={},type={},flag={},bind={:?}>",
+                            s, domain, sock_type, flag, bind
+                        )
+                    };
+
+                    tests.extend(vec![
+                        test_utils::ShadowTest::new(
+                            &append_args("test_zero_backlog"),
+                            move || test_zero_backlog(domain, sock_type, flag, bind),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_negative_backlog"),
+                            move || test_negative_backlog(domain, sock_type, flag, bind),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_large_backlog"),
+                            move || test_large_backlog(domain, sock_type, flag, bind),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_listen_twice"),
+                            move || test_listen_twice(domain, sock_type, flag, bind),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_after_close"),
+                            move || test_after_close(domain, sock_type, flag, bind),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                    ]);
+                }
+            }
+
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_negative_backlog_connect"),
+                move || test_negative_backlog_connect(domain, sock_type),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
         }
     }
 
     for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
-        let passing = if domain != libc::AF_UNIX {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         for &sock_type in [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+
+            // skip tests that use SOCK_SEQPACKET with INET sockets
+            if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
+                continue;
+            }
+
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
                 let append_args =
                     |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
 
-                // skip tests that use SOCK_SEQPACKET with INET sockets
-                if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
-                    continue;
-                }
-
                 tests.extend(vec![
                     test_utils::ShadowTest::new(
                         &append_args("test_listening_not_readable"),
                         move || test_listening_not_readable(domain, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_listening_not_writable"),
                         move || test_listening_not_writable(domain, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                 ]);
             }
+
+            tests.extend(vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_backlog_size"),
+                    move || test_backlog_size(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_reduced_backlog"),
+                    move || test_reduced_backlog(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+            ]);
         }
     }
 
@@ -201,11 +243,12 @@ fn test_invalid_sock_type() -> Result<(), String> {
 
 /// Test listen using a backlog of 0.
 fn test_zero_backlog(
+    domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
-    bind: Option<BindAddress>,
+    bind: Option<SockAddr>,
 ) -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
     if let Some(address) = bind {
@@ -214,10 +257,12 @@ fn test_zero_backlog(
 
     let args = ListenArguments { fd: fd, backlog: 0 };
 
-    let expected_errno = if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
-        None
-    } else {
-        Some(libc::EOPNOTSUPP)
+    let expected_errno = match (domain, sock_type, bind) {
+        (libc::AF_INET, libc::SOCK_STREAM, _) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, Some(_)) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, None) => Some(libc::EINVAL),
+        (_, libc::SOCK_DGRAM, _) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
     };
 
     test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
@@ -225,11 +270,12 @@ fn test_zero_backlog(
 
 /// Test listen using a backlog of -1.
 fn test_negative_backlog(
+    domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
-    bind: Option<BindAddress>,
+    bind: Option<SockAddr>,
 ) -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
     if let Some(address) = bind {
@@ -241,22 +287,78 @@ fn test_negative_backlog(
         backlog: -1,
     };
 
-    let expected_errno = if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
-        None
-    } else {
-        Some(libc::EOPNOTSUPP)
+    let expected_errno = match (domain, sock_type, bind) {
+        (libc::AF_INET, libc::SOCK_STREAM, _) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, Some(_)) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, None) => Some(libc::EINVAL),
+        (_, libc::SOCK_DGRAM, _) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
     };
 
     test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
 }
 
+/// Test connecting to a listening socket with a backlog of -1.
+fn test_negative_backlog_connect(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd >= 0);
+
+    let (bind_address, bind_len) = socket_utils::autobind_helper(fd, domain);
+
+    let args = ListenArguments {
+        fd: fd,
+        backlog: -1,
+    };
+
+    let expected_errno = match (domain, sock_type) {
+        (libc::AF_INET, libc::SOCK_STREAM) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET) => None,
+        (_, libc::SOCK_DGRAM) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
+    };
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_listen_call(&args, expected_errno)?;
+
+        if expected_errno.is_some() {
+            return Ok(());
+        }
+
+        let num_clients = 10;
+
+        let client_fds: Vec<_> =
+            std::iter::repeat_with(|| unsafe { libc::socket(domain, sock_type, 0) })
+                .take(num_clients)
+                // make sure the fds are valid
+                .map(|x| (x >= 0).then(|| x))
+                .collect::<Option<_>>()
+                .unwrap();
+
+        // check that all clients connect successfully
+        for client_fd in &client_fds {
+            let rv = unsafe { libc::connect(*client_fd, bind_address.as_ptr(), bind_len) };
+            assert_eq!(rv, 0);
+        }
+
+        for client_fd in &client_fds {
+            nix::unistd::close(*client_fd).unwrap();
+        }
+
+        Ok(())
+    })
+}
+
 /// Test listen using a backlog of INT_MAX.
 fn test_large_backlog(
+    domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
-    bind: Option<BindAddress>,
+    bind: Option<SockAddr>,
 ) -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
     if let Some(address) = bind {
@@ -268,10 +370,12 @@ fn test_large_backlog(
         backlog: libc::INT_MAX,
     };
 
-    let expected_errno = if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
-        None
-    } else {
-        Some(libc::EOPNOTSUPP)
+    let expected_errno = match (domain, sock_type, bind) {
+        (libc::AF_INET, libc::SOCK_STREAM, _) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, Some(_)) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, None) => Some(libc::EINVAL),
+        (_, libc::SOCK_DGRAM, _) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
     };
 
     test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
@@ -279,11 +383,12 @@ fn test_large_backlog(
 
 /// Test calling listen twice for the same socket.
 fn test_listen_twice(
+    domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
-    bind: Option<BindAddress>,
+    bind: Option<SockAddr>,
 ) -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
     if let Some(address) = bind {
@@ -297,10 +402,12 @@ fn test_listen_twice(
 
     let args2 = ListenArguments { fd: fd, backlog: 0 };
 
-    let expected_errno = if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
-        None
-    } else {
-        Some(libc::EOPNOTSUPP)
+    let expected_errno = match (domain, sock_type, bind) {
+        (libc::AF_INET, libc::SOCK_STREAM, _) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, Some(_)) => None,
+        (libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_SEQPACKET, None) => Some(libc::EINVAL),
+        (_, libc::SOCK_DGRAM, _) => Some(libc::EOPNOTSUPP),
+        _ => unimplemented!(),
     };
 
     test_utils::run_and_close_fds(&[fd], || {
@@ -311,11 +418,12 @@ fn test_listen_twice(
 
 /// Test listen after closing the socket.
 fn test_after_close(
+    domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
-    bind: Option<BindAddress>,
+    bind: Option<SockAddr>,
 ) -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
     if let Some(address) = bind {
@@ -386,23 +494,227 @@ fn test_listening_not_writable(
     })
 }
 
+/// Test connecting and accepting sockets with different listen() backlog values.
+fn test_backlog_size(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    // try different backlog values
+    for backlog in &[0, 1, 8, 16, 17, 18, 19, 30] {
+        let server_fd = unsafe { libc::socket(domain, sock_type, 0) };
+        assert!(server_fd >= 0);
+
+        // bind the server socket
+        let (addr, addr_len) = test_utils::socket_utils::autobind_helper(server_fd, domain);
+
+        // initialize the server socket
+        let rv = unsafe { libc::listen(server_fd, *backlog) };
+        assert_eq!(rv, 0);
+
+        // get enough sockets to fill the accept queue
+        let client_fds: Vec<_> =
+            std::iter::repeat_with(|| unsafe { libc::socket(domain, sock_type, 0) })
+                // linux will support backlog+1 incoming connections
+                .take(*backlog as usize + 1)
+                // make sure the fds are valid
+                .map(|x| (x >= 0).then(|| x))
+                .collect::<Option<_>>()
+                .unwrap();
+
+        // connect all of the clients to the server
+        for client_fd in &client_fds {
+            // a blocking connect
+            let rv = unsafe { libc::connect(*client_fd, addr.as_ptr(), addr_len) };
+            assert_eq!(rv, 0);
+        }
+
+        // get one additional socket that should fail to connect
+        let client_fd_extra = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+        assert!(client_fd_extra >= 0);
+
+        // a non-blocking connect; should always return an error
+        match domain {
+            libc::AF_INET => {
+                // should always return EINPROGRESS, even if there was room in the accept queue
+                let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+                assert_eq!(rv, -1);
+                assert_eq!(test_utils::get_errno(), libc::EINPROGRESS);
+
+                // wait for the connection to complete; should timeout
+                let mut poll_fds = [nix::poll::PollFd::new(client_fd_extra, PollFlags::POLLOUT)];
+                let count = nix::poll::poll(&mut poll_fds, 100).unwrap();
+                assert_eq!(count, 0);
+
+                // wait for the connection to complete; should timeout again
+                let mut poll_fds = [nix::poll::PollFd::new(client_fd_extra, PollFlags::POLLOUT)];
+                let count = nix::poll::poll(&mut poll_fds, 100).unwrap();
+                assert_eq!(count, 0);
+            }
+            libc::AF_UNIX => {
+                // unix sockets will return EAGAIN; they don't continue trying to connect like INET
+                // sockets do
+                let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+                assert_eq!(rv, -1);
+                assert_eq!(test_utils::get_errno(), libc::EAGAIN);
+            }
+            _ => unimplemented!(),
+        }
+
+        // accept a connection on the server to free up a space in the accept queue
+        let accepted_fd =
+            unsafe { libc::accept(server_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
+        assert!(accepted_fd >= 0);
+
+        // the connection should now be successful
+        match domain {
+            libc::AF_INET => {
+                // wait for the existing connection to complete; should complete successfully
+                let mut poll_fds = [nix::poll::PollFd::new(client_fd_extra, PollFlags::POLLOUT)];
+                let count = nix::poll::poll(&mut poll_fds, 2000).unwrap();
+                assert_eq!(count, 1);
+                assert!(poll_fds[0].revents().unwrap().contains(PollFlags::POLLOUT));
+            }
+            libc::AF_UNIX => {
+                // try connecting again; should complete successfully
+                let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+                assert_eq!(rv, 0);
+            }
+            _ => unimplemented!(),
+        }
+
+        // check that there was no socket error
+        // connect(2):
+        // > After select(2) indicates writability, use getsockopt(2) to read the SO_ERROR
+        // > option at level SOL_SOCKET to determine whether connect() completed successfully
+        // > (SO_ERROR is zero) or unsuccessfully (SO_ERROR is one of the usual error codes
+        // > listed here, explaining the reason for the failure)
+
+        // TODO: always run once shadow supports getsockopt() for unix sockets
+        if !test_utils::running_in_shadow() || domain != libc::AF_UNIX {
+            let error =
+                nix::sys::socket::getsockopt(client_fd_extra, sockopt::SocketError).unwrap();
+            assert_eq!(error, 0);
+        }
+
+        // close all of the sockets
+        for client_fd in &client_fds {
+            nix::unistd::close(*client_fd).unwrap();
+        }
+        nix::unistd::close(client_fd_extra).unwrap();
+        nix::unistd::close(accepted_fd).unwrap();
+        nix::unistd::close(server_fd).unwrap();
+    }
+
+    Ok(())
+}
+
+/// Test connecting and accepting sockets after the listen() backlog has been lowered.
+fn test_reduced_backlog(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let server_fd = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(server_fd >= 0);
+
+    const INITIAL_BACKLOG: usize = 10;
+    const NUM_CLIENTS: usize = 5;
+    const NEW_BACKLOG: usize = 2;
+
+    // the new backlog should be lower than the number of clients we plan to connect;
+    // a listening socket with a backlog 'x' can queue 'x+1' sockets
+    assert!(NEW_BACKLOG + 1 < NUM_CLIENTS);
+
+    // bind the server socket
+    let (addr, addr_len) = test_utils::socket_utils::autobind_helper(server_fd, domain);
+
+    // initialize the server socket
+    let rv = unsafe { libc::listen(server_fd, INITIAL_BACKLOG as i32) };
+    assert_eq!(rv, 0);
+
+    // get enough sockets to partially fill the accept queue
+    let client_fds: Vec<_> =
+        std::iter::repeat_with(|| unsafe { libc::socket(domain, sock_type, 0) })
+            // linux will support backlog+1 incoming connections
+            .take(NUM_CLIENTS)
+            // make sure the fds are valid
+            .map(|x| (x >= 0).then(|| x))
+            .collect::<Option<_>>()
+            .unwrap();
+
+    // connect all of the clients to the server
+    for client_fd in &client_fds {
+        // a blocking connect
+        let rv = unsafe { libc::connect(*client_fd, addr.as_ptr(), addr_len) };
+        assert_eq!(rv, 0);
+    }
+
+    // reduce the backlog
+    let rv = unsafe { libc::listen(server_fd, NEW_BACKLOG as i32) };
+    assert_eq!(rv, 0);
+
+    // get one additional socket that should fail to connect
+    let client_fd_extra = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(client_fd_extra >= 0);
+
+    // try to connect; should fail
+    match domain {
+        libc::AF_INET => {
+            // should always return EINPROGRESS, even if there was room in the accept queue
+            let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+            assert_eq!(rv, -1);
+            assert_eq!(test_utils::get_errno(), libc::EINPROGRESS);
+
+            // wait for the connection to complete; should timeout since the accept queue is full
+            let mut poll_fds = [nix::poll::PollFd::new(client_fd_extra, PollFlags::POLLOUT)];
+            let count = nix::poll::poll(&mut poll_fds, 100).unwrap();
+            assert_eq!(count, 0);
+        }
+        libc::AF_UNIX => {
+            // unix sockets will return EAGAIN; they don't continue trying to connect like INET
+            // sockets do
+            let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+            assert_eq!(rv, -1);
+            assert_eq!(test_utils::get_errno(), libc::EAGAIN);
+        }
+        _ => unimplemented!(),
+    }
+
+    let num_clients_to_accept = match domain {
+        // should be able to accept the original clients and the extra client
+        libc::AF_INET => NUM_CLIENTS + 1,
+        // should be able to accept the original clients (the extra client is not still connecting)
+        libc::AF_UNIX => NUM_CLIENTS,
+        _ => unimplemented!(),
+    };
+
+    // accept clients
+    for _ in 0..num_clients_to_accept {
+        let accepted_fd =
+            unsafe { libc::accept(server_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
+        assert!(accepted_fd >= 0);
+        nix::unistd::close(accepted_fd).unwrap();
+    }
+
+    // the unix socket never connected, so try again; should be successful
+    if domain == libc::AF_UNIX {
+        let rv = unsafe { libc::connect(client_fd_extra, addr.as_ptr(), addr_len) };
+        assert_eq!(rv, 0);
+
+        // can accept this connection
+        let accepted_fd =
+            unsafe { libc::accept(server_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
+        assert!(accepted_fd >= 0);
+        nix::unistd::close(accepted_fd).unwrap();
+    }
+
+    // close all of the sockets
+    for client_fd in &client_fds {
+        nix::unistd::close(*client_fd).unwrap();
+    }
+    nix::unistd::close(client_fd_extra).unwrap();
+    nix::unistd::close(server_fd).unwrap();
+
+    Ok(())
+}
+
 /// Bind the fd to the address.
-fn bind_fd(fd: libc::c_int, bind: BindAddress) {
-    let addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: bind.port,
-        sin_addr: libc::in_addr {
-            s_addr: bind.address,
-        },
-        sin_zero: [0; 8],
-    };
-    let rv = unsafe {
-        libc::bind(
-            fd,
-            &addr as *const libc::sockaddr_in as *const libc::sockaddr,
-            std::mem::size_of_val(&addr) as u32,
-        )
-    };
+fn bind_fd(fd: libc::c_int, bind: SockAddr) {
+    let (addr, addr_len) = (bind.as_ptr(), bind.ptr_size());
+    let rv = unsafe { libc::bind(fd, addr, addr_len) };
     assert_eq!(rv, 0);
 }
 

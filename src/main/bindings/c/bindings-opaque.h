@@ -65,7 +65,7 @@ typedef struct Counter Counter;
 typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
-typedef struct GenericFile GenericFile;
+typedef struct File File;
 
 typedef struct HashSet_String HashSet_String;
 
@@ -87,11 +87,10 @@ typedef struct MemoryManager MemoryManager;
 typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-// underlying file may close itself in extenuating circumstances (for example if the file has an
-// internal error).
+// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+// itself in extenuating circumstances (for example if the file has an internal error).
 //
 // **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 // `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -103,25 +102,29 @@ typedef struct OpenFile OpenFile;
 
 typedef struct PcapWriter_BufWriter_File PcapWriter_BufWriter_File;
 
-// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref_mut(ptr);
 // assert_eq!(pmr.len(), 10);
 // pmr[5] = 100;
+// ```
 //
 // The object must be disposed of by calling `flush` or `noflush`.  Dropping
 // the object without doing so will result in a panic.
 typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 
-// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 // allowing, e.g.:
 //
+// ```
 // let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 // let pmr = memory_manager.memory_ref(ptr);
 // assert_eq!(pmr.len(), 10);
 // let x = pmr[5];
+// ```
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
@@ -134,5 +137,10 @@ typedef struct RoutingInfo_u32 RoutingInfo_u32;
 typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
 
 typedef struct SyscallHandler SyscallHandler;
+
+// Mostly for interoperability with C APIs.
+// In Rust code that doesn't need to interact with C, it may make more sense
+// to directly use a `FnMut(&mut Host)` trait object.
+typedef struct TaskRef TaskRef;
 
 #endif /* main_opaque_bindings_h */

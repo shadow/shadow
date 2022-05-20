@@ -350,7 +350,7 @@ Which interposition method to use.
 
 #### `experimental.max_unapplied_cpu_latency`
 
-Default: "10 microseconds"  
+Default: "1 microsecond"  
 Type: String
 
 Max amount of execution-time latency allowed to accumulate before the clock is
@@ -444,7 +444,7 @@ Limitations:
 
 #### `experimental.unblocked_syscall_latency`
 
-Default: "2 microseconds"  
+Default: "1 microseconds"  
 Type: String
 
 The simulated latency of an unblocked syscall. For simulation efficiency, this
@@ -456,7 +456,7 @@ is false.
 
 #### `experimental.unblocked_vdso_latency`
 
-Default: "100 nanoseconds"  
+Default: "10 nanoseconds"  
 Type: String
 
 The simulated latency of an unblocked vdso function. For simulation efficiency, this
@@ -634,13 +634,10 @@ configuration, with the field name being used as the network hostname.
 
 Shadow assigns each host to a network node in the [network graph](network_graph_overview.md).
 
-When Shadow iterates over these hosts, Shadow iterates over them in the order
-of their sorted hostnames. While this implementation detail is generally
-unimportant, it's important to note that Shadow assigns each host its own RNG.
-These host-specific RNGs are seeded from a global RNG, so the seed used for
-each host depends on the order that Shadow iterates over the hosts. This means
-that changing a hostname or adding a new host may change the seed used for the
-hosts' RNGs, and may subtly affect the simulation results.
+In Shadow, each host is given an RNG whose seed is derived from the global seed
+([`general.seed`](#generalseed)) and the hostname. This means that changing a
+host's name will change that host's RNG seed, subtly affecting the simulation
+results.
 
 #### `hosts.<hostname>.bandwidth_down`
 

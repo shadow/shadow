@@ -13,7 +13,6 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -76,7 +75,7 @@ struct _Tracker {
 
     GHashTable* socketStats;
 
-    SimulationTime lastHeartbeat;
+    EmulatedTime lastHeartbeat;
 
     MAGIC_DECLARE;
 };
@@ -602,8 +601,9 @@ void tracker_heartbeat(Tracker* tracker, Host* host) {
     }
 
     /* schedule the next heartbeat */
-    tracker->lastHeartbeat = worker_getCurrentTime();
-    Task* heartbeatTask = task_new(tracker_heartbeatTask, tracker, NULL, NULL, NULL);
-    worker_scheduleTask(heartbeatTask, host, tracker->interval);
-    task_unref(heartbeatTask);
+    tracker->lastHeartbeat = worker_getCurrentEmulatedTime();
+    TaskRef* heartbeatTask =
+        taskref_new_bound(host_getID(host), tracker_heartbeatTask, tracker, NULL, NULL, NULL);
+    worker_scheduleTaskWithDelay(heartbeatTask, host, tracker->interval);
+    taskref_drop(heartbeatTask);
 }

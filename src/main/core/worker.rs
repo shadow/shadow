@@ -14,7 +14,6 @@ use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -56,7 +55,7 @@ pub struct Worker {
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
-    min_latency_cache: Cell<Option<Duration>>,
+    min_latency_cache: Cell<Option<SimulationTime>>,
 
     // A counter for all syscalls made by processes freed by this worker.
     syscall_counter: Counter,
@@ -211,8 +210,8 @@ impl Worker {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
-    pub fn update_min_host_runahead(t: Duration) {
-        assert!(!t.is_zero());
+    pub fn update_min_host_runahead(t: SimulationTime) {
+        assert!(t != SimulationTime::ZERO);
 
         Worker::with(|w| {
             let min_latency_cache = w.min_latency_cache.get();
@@ -221,7 +220,7 @@ impl Worker {
                 unsafe {
                     cshadow::workerpool_updateMinHostRunahead(
                         w.worker_pool,
-                        SimulationTime::to_c_simtime(Some(t.into())),
+                        SimulationTime::to_c_simtime(Some(t)),
                     )
                 };
             }
@@ -253,6 +252,16 @@ impl Worker {
             .try_with(|w| w.get().map(|w| f(&mut w.borrow_mut())))
             .ok()
             .flatten()
+    }
+
+    pub fn increment_object_alloc_counter(s: &str) {
+        let s = std::ffi::CString::new(s).unwrap();
+        unsafe { cshadow::worker_increment_object_alloc_counter(s.as_ptr()) }
+    }
+
+    pub fn increment_object_dealloc_counter(s: &str) {
+        let s = std::ffi::CString::new(s).unwrap();
+        unsafe { cshadow::worker_increment_object_dealloc_counter(s.as_ptr()) }
     }
 }
 
@@ -345,29 +354,33 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
-        if let Some(t) = SimulationTime::from_c_simtime(t) {
-            Worker::set_current_time(EmulatedTime::from_abs_simtime(t));
-        } else {
-            Worker::clear_current_time();
-        }
+    pub extern "C" fn worker_setCurrentEmulatedTime(t: cshadow::EmulatedTime) {
+        Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
+    pub extern "C" fn worker_clearCurrentTime() {
+        Worker::clear_current_time();
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentSimulationTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
-        Worker::update_min_host_runahead(*SimulationTime::from_c_simtime(t).unwrap());
+    pub extern "C" fn worker_getCurrentEmulatedTime() -> cshadow::EmulatedTime {
+        EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
     #[no_mangle]
-    pub extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
-        Worker::set_last_event_time(EmulatedTime::from_abs_simtime(
-            SimulationTime::from_c_simtime(t).unwrap(),
-        ));
+    pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
+        Worker::update_min_host_runahead(SimulationTime::from_c_simtime(t).unwrap());
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _worker_setLastEventTime(t: cshadow::EmulatedTime) {
+        Worker::set_last_event_time(EmulatedTime::from_c_emutime(t).unwrap())
     }
 
     #[no_mangle]

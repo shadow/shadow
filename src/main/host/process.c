@@ -38,16 +38,15 @@
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall_condition.h"
@@ -115,8 +114,8 @@ struct _Process {
 #endif
 
     /* process boot and shutdown variables */
-    SimulationTime startTime;
-    SimulationTime stopTime;
+    EmulatedTime startTime;
+    EmulatedTime stopTime;
 
     /* absolute path to the process's working directory */
     char* workingDir;
@@ -136,8 +135,8 @@ struct _Process {
     MemoryManager* memoryManager;
 
     /* File descriptors to handle plugin out and err streams. */
-    File* stdoutFile;
-    File* stderrFile;
+    RegularFile* stdoutFile;
+    RegularFile* stderrFile;
 
     StraceFmtMode straceLoggingMode;
     int straceFd;
@@ -175,7 +174,7 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 static void _process_setSharedTime(Process* proc) {
     shimshmem_setMaxRunaheadTime(
         host_getShimShmemLock(proc->host), worker_maxEventRunaheadTime(proc->host));
-    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getEmulatedTime());
+    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getCurrentEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
@@ -347,7 +346,8 @@ static void _process_getAndLogReturnCode(Process* proc) {
 
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
-              process_getName(proc), proc->startTime);
+              process_getName(proc),
+              emutime_sub_emutime(proc->startTime, EMUTIME_SIMULATION_START));
         return;
     }
 
@@ -468,11 +468,11 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
         "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
 }
 
-static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
+static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
     MAGIC_ASSERT(proc);
     utility_assert(fileName != NULL);
 
-    File* stdfile = file_new();
+    RegularFile* stdfile = regularfile_new();
     descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
@@ -487,8 +487,8 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
             "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
     }
 
-    int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
-                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
+    int errcode = regularfile_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
+                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
     free(cwd);
 
     if (errcode < 0) {
@@ -621,10 +621,11 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    Task* task = task_new(_start_thread_task, proc, thread, _start_thread_task_free_process,
-                          _start_thread_task_free_thread);
-    worker_scheduleTask(task, proc->host, 0);
-    task_unref(task);
+    TaskRef* task =
+        taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
+                          _start_thread_task_free_process, _start_thread_task_free_thread);
+    worker_scheduleTaskWithDelay(task, proc->host, 0);
+    taskref_drop(task);
 }
 
 Thread* process_getThread(Process* proc, pid_t virtualTID) {
@@ -727,24 +728,22 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
 void process_schedule(Process* proc, gpointer nothing) {
     MAGIC_ASSERT(proc);
 
-    SimulationTime now = worker_getCurrentTime();
-
-    if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
-        SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
+    if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
         process_ref(proc);
-        Task* startProcessTask =
-            task_new(_process_runStartTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(startProcessTask, proc->host, startDelay);
-        task_unref(startProcessTask);
+        TaskRef* startProcessTask =
+            taskref_new_bound(host_getID(proc->host), _process_runStartTask, proc, NULL,
+                              (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTaskAtEmulatedTime(startProcessTask, proc->host, proc->startTime);
+        taskref_drop(startProcessTask);
     }
 
-    if(proc->stopTime > 0 && proc->stopTime > proc->startTime) {
-        SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
+    if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
         process_ref(proc);
-        Task* stopProcessTask =
-            task_new(_process_runStopTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(stopProcessTask, proc->host, stopDelay);
-        task_unref(stopProcessTask);
+        TaskRef* stopProcessTask =
+            taskref_new_bound(host_getID(proc->host), _process_runStopTask, proc, NULL,
+                              (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTaskAtEmulatedTime(stopProcessTask, proc->host, proc->stopTime);
+        taskref_drop(stopProcessTask);
     }
 }
 
@@ -805,8 +804,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 #endif
 
     utility_assert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = startTime;
-    proc->stopTime = stopTime;
+    proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
+    proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
 
     proc->interposeMethod = interposeMethod;
 
@@ -1087,27 +1086,6 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
     utility_assert(!proc->memoryMutRef);
 
     return memorymanager_readString(proc->memoryManager, src, str, n);
-}
-
-int process_readTimespec(Process* proc, struct timespec* dst, PluginVirtualPtr src) {
-    MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_assert(!proc->memoryMutRef);
-
-    int rv = memorymanager_readPtr(proc->memoryManager, dst, src, sizeof(*dst));
-    if (rv != 0) {
-        warning("Couldn't read timespec at address %p", (void*)src.val);
-        return rv;
-    }
-
-    if (dst->tv_nsec < 0 || dst->tv_nsec < 0 || dst->tv_nsec > 999999999) {
-        warning(
-            "Invalid timespec %ld.%09ld at address %p", dst->tv_sec, dst->tv_nsec, (void*)src.val);
-        return -EINVAL;
-    }
-
-    return 0;
 }
 
 // Returns a writable pointer corresponding to the named region. The initial

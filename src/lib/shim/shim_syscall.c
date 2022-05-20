@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
-#include <ucontext.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
@@ -11,6 +10,7 @@
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_shmem.h"
+#include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall/kernel_types.h"
@@ -108,154 +108,6 @@ long shim_native_syscall(long n, ...) {
     return rv;
 }
 
-static void _call_signal_handler(const struct shd_kernel_sigaction* action, int signo,
-                                 siginfo_t* siginfo, ucontext_t* ucontext) {
-    shim_swapAllowNativeSyscalls(false);
-    if (action->ksa_flags & SA_SIGINFO) {
-        action->ksa_sigaction(signo, siginfo, ucontext);
-    } else {
-        action->ksa_handler(signo);
-    }
-    shim_swapAllowNativeSyscalls(true);
-}
-
-// Handle pending unblocked signals, and return whether *all* corresponding
-// signal actions had the SA_RESTART flag set.
-static bool _shim_process_signals(ShimShmemHostLock* host_lock) {
-    int signo;
-    siginfo_t siginfo;
-    bool restartable = true;
-    while ((signo = shimshmem_takePendingUnblockedSignal(
-                host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
-        shd_kernel_sigset_t blocked_signals =
-            shimshmem_getBlockedSignals(host_lock, shim_threadSharedMem());
-
-        struct shd_kernel_sigaction action =
-            shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
-
-        if (action.ksa_handler == SIG_IGN) {
-            continue;
-        }
-
-        if (action.ksa_handler == SIG_DFL) {
-            switch (shd_defaultAction(signo)) {
-                case SHD_DEFAULT_ACTION_IGN:
-                    // Ignore
-                    continue;
-                case SHD_DEFAULT_ACTION_CORE:
-                case SHD_DEFAULT_ACTION_TERM: {
-                    // Deliver natively to terminate/drop core.
-                    if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
-                        panic("sigaction: %s", strerror(errno));
-                    }
-                    shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-                    raise(signo);
-                    panic("Unreachable");
-                }
-                case SHD_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
-                case SHD_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
-            };
-            panic("Unreachable");
-        }
-
-        trace("Handling signo %d", signo);
-
-        shd_kernel_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
-        if (!(action.ksa_flags & SA_NODEFER)) {
-            // Block another instance of the same signal.
-            shd_sigaddset(&handler_mask, signo);
-        }
-        if (action.ksa_flags & SA_RESETHAND) {
-            shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
-        }
-        if (!(action.ksa_flags & SA_RESTART)) {
-            restartable = false;
-        }
-
-        const stack_t ss_original = shimshmem_getSigAltStack(host_lock, shim_threadSharedMem());
-        if (action.ksa_flags & SA_ONSTACK && !(ss_original.ss_flags & SS_DISABLE)) {
-            // Call handler on the configured signal stack.
-
-            if (ss_original.ss_flags & SS_ONSTACK) {
-                // Documentation is unclear what should happen, but switching to
-                // the already-in-use stack would almost certainly go badly.
-                panic("Alternate stack already in use.")
-            }
-
-            // Update the signal-stack configuration while the handler is being run.
-            stack_t ss_during_handler;
-            if (ss_original.ss_flags & SS_AUTODISARM) {
-                ss_during_handler = (stack_t){.ss_flags = SS_DISABLE};
-            } else {
-                ss_during_handler = ss_original;
-                ss_during_handler.ss_flags |= SS_ONSTACK;
-            }
-            shimshmem_setSigAltStack(host_lock, shim_threadSharedMem(), ss_during_handler);
-
-            // Set up a context that uses the configured signal stack.
-            ucontext_t orig_ctx = {0}, handler_ctx = {0};
-            getcontext(&handler_ctx);
-            handler_ctx.uc_link = &orig_ctx;
-            handler_ctx.uc_stack.ss_sp = ss_original.ss_sp;
-            handler_ctx.uc_stack.ss_size = ss_original.ss_size;
-            // We pass a pointer to the context we're swapping away from to the
-            // signal handler. This is to support signal-based user-space thread
-            // swapping such as in golang, where the handler will eventually
-            // swap back to the provided context. In particular, passing the
-            // context that we got in our own sigsys handler that intercepted
-            // the syscall *wouldn't* do the right thing, since that'd cause the
-            // scheduler to swap directly back to the managed thread's code at
-            // the point of the syscall without unwinding shadow's shim-side
-            // signal handling code.
-            ucontext_t* ctx = &orig_ctx;
-            makecontext(&handler_ctx, (void (*)(void))_call_signal_handler, 4, &action, signo,
-                        &siginfo, ctx);
-
-            // Call the handler on the configured signal stack.
-            shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-            if (swapcontext(&orig_ctx, &handler_ctx) != 0) {
-                panic("swapcontext: %s", strerror(errno));
-            }
-            host_lock = shimshmemhost_lock(shim_hostSharedMem());
-
-            // Restore the signal-stack configuration.
-            shimshmem_setSigAltStack(host_lock, shim_threadSharedMem(), ss_original);
-        } else {
-            // It's not clear what ucontext_t would be appropriate to pass here.
-            // A signal handler that ultimately swaps to the provided context
-            // should have arranged for the signal handler to use an alternate
-            // stack, so shouldn't get here.
-            //
-            // If we *do* ultimately want to pass a context corresponding to
-            // just before we call the handler, as in the sigaltstack case, we
-            // could construct one, perhaps with `makecontext`, or by raising
-            // and catching a native signal.
-            //
-            // If we want the context from the point at which the syscall was
-            // made, we could use the one passed to our sigsys handler for
-            // syscalls intercepted via seccomp. It's unclear what we'd do for
-            // syscalls that were intercepted via LD_PRELOAD instead, though.
-            //
-            // For now, pass NULL, and when we encounter a use-case tries to use
-            // the context it should crash or error, at which point we can
-            // revisit.
-            ucontext_t* ctx = NULL;
-            warning("Passing NULL ucontext_t to handler for signal %d", signo);
-
-            // Call signal handler with host lock released, and native syscalls
-            // disabled.
-            shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-            _call_signal_handler(&action, signo, &siginfo, ctx);
-            host_lock = shimshmemhost_lock(shim_hostSharedMem());
-        }
-
-        // Restore mask
-        shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
-    }
-    return restartable;
-}
-
 static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
@@ -299,7 +151,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
                 ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
-                const bool allSigactionsHadSaRestart = _shim_process_signals(host_lock);
+                const bool allSigactionsHadSaRestart = shim_process_signals(host_lock, NULL);
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
 
                 // Check whether a blocking syscall was interrupted by a signal.

@@ -5,11 +5,13 @@ simulations (more than about 1000 processes).
 
 ## Number of Open Files
 
-There is a default linux system limit on the number of open files. If each
-process in your Shadow virtual host opens many file or socket descriptors (if
-you have many hosts, this is very likely to happen), you'll likely want to
-increase the limit so you application doesn't start getting errors when calling
-`open()` or `socket()`.
+There is a default Linux system limit on the total number of open files. Since
+Shadow opens files from within its own process space and not from within the
+managed processes, both the system limit and the per-process limit must be
+greater than the combined total number of files opened by all managed
+processes. If each managed process in your simulation opens many files, you'll
+likely want to increase the limit so that your application doesn't receive
+`EMFILE` errors when calling `open()`.
 
 ### System-wide Limits
 
@@ -162,8 +164,8 @@ rjansen hard nproc unlimited
 
 ## For more information
 
-https://www.kernel.org/doc/Documentation/sysctl/fs.txt  
-https://www.kernel.org/doc/Documentation/sysctl/vm.txt
+<https://www.kernel.org/doc/Documentation/sysctl/fs.txt>  
+<https://www.kernel.org/doc/Documentation/sysctl/vm.txt>
 
 ```bash
 man proc

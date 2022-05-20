@@ -19,7 +19,10 @@ env:
 
 jobs:
   shadow:
-    runs-on: ubuntu-latest
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-18.04
     container:
       image: ${{ matrix.container }}
       # the default shm-size for ubuntu:18.04, but with the size increased from
@@ -36,6 +39,8 @@ jobs:
           - 'ubuntu:20.04'
           # End of standard support: July 2022 https://wiki.ubuntu.com/Releases
           - 'ubuntu:21.10'
+          # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
+          - 'ubuntu:22.04'
           # EOL ~August 2022 https://wiki.debian.org/DebianReleases
           - 'debian:10-slim'
           - 'debian:11-slim'
@@ -66,6 +71,11 @@ jobs:
         uses: actions/checkout@v2
         with:
           persist-credentials: false
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Get month
         id: get-month

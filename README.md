@@ -3,8 +3,17 @@
 [![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:main+event:push)
 [![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:main+event:push)
 
-[Documentation](https://shadow.github.io/docs/guide)  
-[Examples](https://shadow.github.io/docs/guide/getting_started_basic.html)
+## Quickstart
+
+After installing the [dependencies](https://shadow.github.io/docs/guide/install_dependencies.html): build, test, and install Shadow into `~/.local`:
+
+```
+$ ./setup build --clean --test
+$ ./setup test
+$ ./setup install
+```
+
+Read the [usage guide](https://shadow.github.io/docs/guide) or get started with some [example simulations](https://shadow.github.io/docs/guide/getting_started_basic.html).
 
 <!--- ANCHOR: body (for mdbook) -->
 
@@ -68,28 +77,19 @@ That being said, we are particularly motivated to run large-scale [Tor
 Network](https://www.torproject.org) simulations. This use-case is already
 fairly well-supported and we are eager to continue extending support for it.
 
-## Quickstart
-
-Build, test, and install Shadow into `~/.local`:
-```
-$ ./setup build --clean --test
-$ ./setup test
-$ ./setup install
-```
-
 ## More Information
 
 Homepage:
-- https://shadow.github.io
+- <https://shadow.github.io>
 
-Detailed Documentation:
+Documentation:
 - [User documentation](https://shadow.github.io/docs/guide)
 - [Developer documentation](https://shadow.github.io/docs/rust)
 
 Community Support:
-- https://github.com/shadow/shadow/discussions
+- <https://github.com/shadow/shadow/discussions>
 
 Bug Reports:
-- https://github.com/shadow/shadow/issues
+- <https://github.com/shadow/shadow/issues>
 
 <!--- ANCHOR_END: body (for mdbook) -->

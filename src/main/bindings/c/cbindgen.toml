@@ -30,7 +30,7 @@ must_use = "__attribute__((warn_unused_result))"
 
 [export]
 # Avoid exporting C types back through again.
-exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread"]
+exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread", "EmulatedTime", "SimulationTime"]
 # Generate all item types, excluding enum types.
 # 
 # While the opaque items are already exported, and included here via
@@ -38,3 +38,7 @@ exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Hos
 # re-export them again here. i.e. it appears to not actually parse the headers
 # included in the `includes` list.
 item_types = ["constants", "globals", "structs", "unions", "typedefs", "opaque", "functions"]
+
+[export.rename]
+"timeval" = "struct timeval"
+"timespec" = "struct timespec"

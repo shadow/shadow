@@ -1,7 +1,7 @@
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileStatus, GenericFile, OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::SysCallArgs;
@@ -69,10 +69,10 @@ impl SyscallHandler {
             semaphore_mode = true;
         }
 
-        let file = eventfd::EventFdFile::new(init_val as u64, semaphore_mode, file_flags);
+        let file = eventfd::EventFd::new(init_val as u64, semaphore_mode, file_flags);
         let file = Arc::new(AtomicRefCell::new(file));
 
-        let mut desc = Descriptor::new(OpenFile::new(GenericFile::EventFd(file)));
+        let mut desc = Descriptor::new(OpenFile::new(File::EventFd(file)));
         desc.set_flags(descriptor_flags);
 
         let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));

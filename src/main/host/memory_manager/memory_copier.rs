@@ -122,14 +122,12 @@ impl MemoryCopier {
                 len: src.len(),
             })
             .collect();
-        let dsts: Vec<_> = dsts
+        let mut dsts: Vec<_> = dsts
             .iter_mut()
-            .map(|dst: &mut &mut [u8]| -> nix::sys::uio::IoVec<&mut [u8]> {
-                nix::sys::uio::IoVec::from_mut_slice(*dst)
-            })
+            .map(|dst: &mut &mut [u8]| -> std::io::IoSliceMut { std::io::IoSliceMut::new(dst) })
             .collect();
 
-        unsafe { self.readv_iovecs(&dsts, &srcs) }
+        unsafe { self.readv_iovecs(&mut dsts, &srcs) }
     }
 
     // Low level helper for reading directly from `srcs` to `dsts`.
@@ -138,7 +136,7 @@ impl MemoryCopier {
     /// SAFETY: A mutable reference to the process memory must not exist.
     unsafe fn readv_iovecs(
         &self,
-        dsts: &[nix::sys::uio::IoVec<&mut [u8]>],
+        dsts: &mut [std::io::IoSliceMut],
         srcs: &[nix::sys::uio::RemoteIoVec],
     ) -> Result<usize, Errno> {
         trace!(
@@ -147,7 +145,7 @@ impl MemoryCopier {
         );
         trace!(
             "Reading to dsts of len {}",
-            dsts.iter().map(|d| d.as_slice().len()).sum::<usize>()
+            dsts.iter().map(|d| d.len()).sum::<usize>()
         );
 
         // While the documentation for process_vm_readv says to use the pid, in
@@ -178,7 +176,7 @@ impl MemoryCopier {
 
         let towrite = src.len();
         trace!("write_ptr writing {} bytes", towrite);
-        let local = [nix::sys::uio::IoVec::from_slice(src)];
+        let local = [std::io::IoSlice::new(src)];
         let remote = [nix::sys::uio::RemoteIoVec {
             base: usize::from(dst.ptr()),
             len: towrite,

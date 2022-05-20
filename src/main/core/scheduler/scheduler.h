@@ -9,13 +9,13 @@
 
 #include <glib.h>
 
+typedef struct _Scheduler Scheduler;
+
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/host/host.h"
-
-typedef struct _Scheduler Scheduler;
 
 Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
                          guint nWorkers, guint schedulerSeed,

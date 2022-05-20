@@ -11,7 +11,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/udp.h"
@@ -23,11 +23,11 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int fd,
+static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* file, int fd,
                                            unsigned long request, PluginPtr argPtr) {
     int result = 0;
 
-    // TODO: we should call file_ioctl() here, but depending on the request we may need to
+    // TODO: we should call regularfile_ioctl() here, but depending on the request we may need to
     // copy in the request params first before passing them.
     switch (request) {
         case TCGETS:
@@ -154,7 +154,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int lenout = socket_getInputBufferLength((Socket*)udp);
+            int lenout = legacysocket_getInputBufferLength((LegacySocket*)udp);
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
@@ -168,7 +168,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int lenout = socket_getOutputBufferLength((Socket*)udp);
+            int lenout = legacysocket_getOutputBufferLength((LegacySocket*)udp);
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
@@ -248,7 +248,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     int result = 0;
     if (dtype == DT_FILE) {
-        result = _syscallhandler_ioctlFileHelper(sys, (File*)desc, fd, request, argPtr);
+        result = _syscallhandler_ioctlFileHelper(sys, (RegularFile*)desc, fd, request, argPtr);
     } else if (dtype == DT_TCPSOCKET) {
         result = _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
     } else if (dtype == DT_UDPSOCKET) {

@@ -71,12 +71,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     let domains = [libc::AF_INET, libc::AF_UNIX];
 
     for &domain in domains.iter() {
-        let passing = if domain != libc::AF_UNIX {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         let sock_types = match domain {
             libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
             libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
@@ -91,12 +85,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_unbound_socket"),
                     move || test_unbound_socket(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_bound_socket"),
                     move || test_bound_socket(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_autobound_socket"),
@@ -106,12 +100,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_after_close"),
                     move || test_after_close(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_bound_connected_socket"),
                     move || test_bound_connected_socket(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
 
@@ -119,7 +113,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_implicit_bind"),
                     move || test_implicit_bind(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 )]);
             }
         }
@@ -132,12 +126,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     ];
 
     for &method in init_methods.iter() {
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         let sock_types = match method.domain() {
             libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
             libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
@@ -153,17 +141,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_null_addr"),
                     move || test_null_addr(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_null_len"),
                     move || test_null_len(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_zero_len"),
                     move || test_zero_len(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
         }

@@ -13,7 +13,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/epoll.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/status.h"
 #include "main/host/syscall/protected.h"
@@ -38,7 +38,7 @@ static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, s
 
     if (dType == DT_FILE) {
         // Rely on the kernel to poll the OS-back file
-        int res = file_poll((File*)ldesc, pfd);
+        int res = regularfile_poll((RegularFile*)ldesc, pfd);
         if (res < 0) {
             warning("Asking the kernel to poll file %i resulted in error %i: %s", pfd->fd, -res,
                     strerror(-res));
@@ -115,7 +115,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         if (epev.events) {
-            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, cdesc, &epev);
+            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, cdesc, &epev, sys->host);
         }
     }
 }
@@ -147,7 +147,7 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, sys->host,
-                                            worker_getEmulatedTime() +
+                                            worker_getCurrentEmulatedTime() +
                                                 timeout->tv_sec * SIMTIME_ONE_SECOND +
                                                 timeout->tv_nsec * SIMTIME_ONE_NANOSECOND);
             }

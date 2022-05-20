@@ -7,7 +7,6 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
-#include <sys/timerfd.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
@@ -18,19 +17,20 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/host/thread.h"
+#include "main/host/timer.h"
 #include "main/utility/utility.h"
 
 struct _SysCallCondition {
     // A trigger to unblock the syscall.
     Trigger trigger;
-    // Non-null if the condition will trigger upon a timeout firing.
+    // Time at which the condition will expire, or EMUTIME_INVALID if no timeout.
+    EmulatedTime timeoutExpiration;
+    // Timeout object waiting for timeoutExpiration.
     Timer* timeout;
     // The active file in the blocked syscall. This is state used when resuming a blocked syscall.
     OpenFile* activeFile;
     // Non-null if we are listening for status updates on a trigger object
     StatusListener* triggerListener;
-    // Non-null if we are listening for status updates on the timeout
-    StatusListener* timeoutListener;
     // The process waiting for the condition
     Process* proc;
     // The thread waiting for the condition
@@ -43,16 +43,17 @@ struct _SysCallCondition {
     MAGIC_DECLARE;
 };
 
+static void _syscallcondition_unrefcb(void* cond_ptr);
+static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* arg);
+
 SysCallCondition* syscallcondition_new(Trigger trigger) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
-    *cond = (SysCallCondition){
-        .timeout = NULL, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
-
-    /* We now hold refs to these objects. */
-    if (cond->timeout) {
-        descriptor_ref(cond->timeout);
-    }
+    *cond = (SysCallCondition){.timeoutExpiration = EMUTIME_INVALID,
+                               .timeout = NULL,
+                               .trigger = trigger,
+                               .referenceCount = 1,
+                               MAGIC_INITIALIZER};
 
     worker_count_allocation(SysCallCondition);
 
@@ -62,7 +63,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
                 descriptor_ref(cond->trigger.object.as_descriptor);
                 return cond;
             }
-            case TRIGGER_OPEN_FILE: {
+            case TRIGGER_FILE: {
                 /* The file represents an Arc, so the reference count is fine;
                  * Just need to remember to drop it later.
                  */
@@ -88,19 +89,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
 void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t) {
     MAGIC_ASSERT(cond);
 
-    if (!cond->timeout) {
-        cond->timeout = timer_new();
-    }
-
-    struct itimerspec itimerspec = {0};
-    itimerspec.it_value.tv_sec = t / SIMTIME_ONE_SECOND;
-    t -= itimerspec.it_value.tv_sec * SIMTIME_ONE_SECOND;
-    itimerspec.it_value.tv_nsec = t / SIMTIME_ONE_NANOSECOND;
-
-    int rv = timer_setTime(cond->timeout, host, TFD_TIMER_ABSTIME, &itimerspec, NULL);
-    if (rv != 0) {
-        panic("timer_setTime: %s", strerror(-rv));
-    }
+    cond->timeoutExpiration = t;
 }
 
 void syscallcondition_setActiveFile(SysCallCondition* cond, OpenFile* file) {
@@ -116,16 +105,10 @@ void syscallcondition_setActiveFile(SysCallCondition* cond, OpenFile* file) {
 static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
 
-    /* Destroy the listeners, which will also unref and free cond. */
-    if (cond->timeout && cond->timeoutListener) {
-        descriptor_removeListener(
-            (LegacyDescriptor*)cond->timeout, cond->timeoutListener);
-        statuslistener_setMonitorStatus(cond->timeoutListener, STATUS_NONE, SLF_NEVER);
-    }
-
-    if (cond->timeoutListener) {
-        statuslistener_unref(cond->timeoutListener);
-        cond->timeoutListener = NULL;
+    if (cond->timeout) {
+        timer_disarm(cond->timeout);
+        timer_unref(cond->timeout);
+        cond->timeout = NULL;
     }
 
     if (cond->trigger.object.as_pointer && cond->triggerListener) {
@@ -135,8 +118,8 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
                     cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
-            case TRIGGER_OPEN_FILE: {
-                openfile_removeListener(cond->trigger.object.as_file, cond->triggerListener);
+            case TRIGGER_FILE: {
+                file_removeListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -182,7 +165,9 @@ static void _syscallcondition_free(SysCallCondition* cond) {
     _syscallcondition_cleanupProc(cond);
 
     if (cond->timeout) {
-        descriptor_unref(cond->timeout);
+        timer_disarm(cond->timeout);
+        timer_unref(cond->timeout);
+        cond->timeout = NULL;
     }
 
     if (cond->activeFile) {
@@ -196,8 +181,8 @@ static void _syscallcondition_free(SysCallCondition* cond) {
                 descriptor_unref(cond->trigger.object.as_descriptor);
                 break;
             }
-            case TRIGGER_OPEN_FILE: {
-                openfile_drop(cond->trigger.object.as_file);
+            case TRIGGER_FILE: {
+                file_drop(cond->trigger.object.as_file);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -251,19 +236,19 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
             case TRIGGER_DESCRIPTOR: {
                 g_string_append_printf(string, "status on descriptor %d%s",
                                        descriptor_getHandle(cond->trigger.object.as_descriptor),
-                                       cond->timeout ? " and " : "");
+                                       cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }
-            case TRIGGER_OPEN_FILE: {
-                g_string_append_printf(string, "status on open file %p%s",
+            case TRIGGER_FILE: {
+                g_string_append_printf(string, "status on file %p%s",
                                        (void*)cond->trigger.object.as_file,
-                                       cond->timeout ? " and " : "");
+                                       cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }
             case TRIGGER_FUTEX: {
                 g_string_append_printf(string, "status on futex %p%s",
                                        (void*)futex_getAddress(cond->trigger.object.as_futex).val,
-                                       cond->timeout ? " and " : "");
+                                       cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }
             case TRIGGER_NONE: {
@@ -276,12 +261,12 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
         }
     }
 
-    if (cond->timeout) {
-        struct itimerspec value = {0};
-        utility_assert(timer_getTime(cond->timeout, &value) == 0);
-        g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
-                               (unsigned long)value.it_value.tv_sec,
-                               (unsigned long)value.it_value.tv_nsec);
+    if (cond->timeoutExpiration != EMUTIME_INVALID) {
+        utility_assert(cond->timeoutExpiration >= worker_getCurrentEmulatedTime());
+        SimulationTime remainingTime = cond->timeoutExpiration - worker_getCurrentEmulatedTime();
+        g_string_append_printf(string, "a timeout with %lu.%09lu seconds remaining",
+                               remainingTime / SIMTIME_ONE_SECOND,
+                               (remainingTime % SIMTIME_ONE_SECOND) / SIMTIME_ONE_NANOSECOND);
     }
 
     trace("%s", string->str);
@@ -300,8 +285,8 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
             }
             break;
         }
-        case TRIGGER_OPEN_FILE: {
-            if (openfile_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
+        case TRIGGER_FILE: {
+            if (file_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
                 return true;
             }
             break;
@@ -323,12 +308,8 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 }
 
 static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
-    Timer* timeout = syscallcondition_getTimeout(cond);
-    if (timeout && timer_getExpirationCount(timeout) > 0) {
-        // Unclear what the semantics would be here if a repeating timer were
-        // used.
-        utility_assert(timer_getExpirationCount(timeout) == 1);
-
+    if (cond->timeoutExpiration != EMUTIME_INVALID &&
+        cond->timeoutExpiration >= worker_getCurrentEmulatedTime()) {
         // Timed out.
         return true;
     }
@@ -359,7 +340,6 @@ static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
     if (!cond->proc || !cond->thread) {
         utility_assert(!cond->proc);
         utility_assert(!cond->thread);
-        utility_assert(!cond->timeoutListener);
         utility_assert(!cond->triggerListener);
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "ignored (already cleaned up)");
@@ -399,13 +379,14 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    Task* wakeupTask =
-        task_new(_syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
-    worker_scheduleTask(
+    TaskRef* wakeupTask =
+        taskref_new_bound(thread_getHostId(cond->thread), _syscallcondition_trigger, cond, NULL,
+                          _syscallcondition_unrefcb, NULL);
+    worker_scheduleTaskWithDelay(
         wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
-    task_unref(wakeupTask);
+    taskref_drop(wakeupTask);
 
     cond->wakeupScheduled = true;
 }
@@ -421,7 +402,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
+static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
     MAGIC_ASSERT(cond);
 
@@ -432,7 +413,7 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
+void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* proc,
                                    Thread* thread) {
     MAGIC_ASSERT(cond);
     utility_assert(proc);
@@ -445,28 +426,24 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
     cond->thread = thread;
     thread_ref(thread);
 
-    /* Now set up the listeners. */
-    if (cond->timeout && !cond->timeoutListener) {
-        /* The timer is used for timeouts. */
-        cond->timeoutListener = statuslistener_new(
-            _syscallcondition_notifyTimeoutExpired, cond, _syscallcondition_unrefcb, NULL, NULL);
+    if (cond->timeoutExpiration != EMUTIME_INVALID) {
+        if (!cond->timeout) {
+            syscallcondition_ref(cond);
+            TaskRef* task = taskref_new_bound(thread_getHostId(cond->thread),
+                                              _syscallcondition_notifyTimeoutExpired, cond, NULL,
+                                              _syscallcondition_unrefcb, NULL);
+            cond->timeout = timer_new(task);
+            taskref_drop(task);
+        }
 
-        /* The listener holds refs to the thread condition. */
-        syscallcondition_ref(cond);
-
-        /* The timer is readable when it expires */
-        statuslistener_setMonitorStatus(
-            cond->timeoutListener, STATUS_DESCRIPTOR_READABLE, SLF_OFF_TO_ON);
-
-        /* Attach the listener to the timer. */
-        descriptor_addListener(
-            (LegacyDescriptor*)cond->timeout, cond->timeoutListener);
+        timer_arm(cond->timeout, host, cond->timeoutExpiration, 0);
     }
 
+    /* Now set up the listeners. */
     if (cond->trigger.object.as_pointer && !cond->triggerListener) {
         /* We listen for status change on the trigger object. */
-        cond->triggerListener = statuslistener_new(
-            _syscallcondition_notifyStatusChanged, cond, _syscallcondition_unrefcb, NULL, NULL);
+        cond->triggerListener = statuslistener_new(_syscallcondition_notifyStatusChanged, cond,
+                                                   _syscallcondition_unrefcb, NULL, NULL, host);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);
@@ -481,13 +458,13 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                 descriptor_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
-            case TRIGGER_OPEN_FILE: {
+            case TRIGGER_FILE: {
                 /* Monitor the requested status when it transitions from off to on. */
                 statuslistener_setMonitorStatus(
                     cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
-                openfile_addListener(cond->trigger.object.as_file, cond->triggerListener);
+                file_addListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {
@@ -539,6 +516,6 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock*
     return true;
 }
 
-Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }
+EmulatedTime syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeoutExpiration; }
 
 OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond) { return cond->activeFile; }

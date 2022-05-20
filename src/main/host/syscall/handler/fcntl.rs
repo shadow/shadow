@@ -1,6 +1,6 @@
 use crate::cshadow;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, GenericFile};
+use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
 use nix::errno::Errno;
@@ -126,7 +126,7 @@ impl SyscallHandler {
             libc::F_GETPIPE_SZ =>
             {
                 #[allow(irrefutable_let_patterns)]
-                if let GenericFile::Pipe(pipe) = desc.open_file().inner_file() {
+                if let File::Pipe(pipe) = desc.open_file().inner_file() {
                     SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
                 } else {
                     return Err(Errno::EINVAL.into());

@@ -1,10 +1,9 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::socket::unix::{UnixSocketFile, UnixSocketType};
-use crate::host::descriptor::socket::SocketFile;
+use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
+use crate::host::descriptor::socket::{empty_sockaddr, Socket};
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
-    OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
@@ -14,11 +13,9 @@ use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
 
-use std::sync::Arc;
-
 use log::*;
 use nix::errno::Errno;
-use nix::sys::socket::MsgFlags;
+use nix::sys::socket::{MsgFlags, SockFlag};
 
 use syscall_logger::log_syscall;
 
@@ -75,7 +72,7 @@ impl SyscallHandler {
                     return Err(Errno::EPROTONOSUPPORT.into());
                 }
 
-                SocketFile::Unix(UnixSocketFile::new(
+                Socket::Unix(UnixSocket::new(
                     FileMode::READ | FileMode::WRITE,
                     file_flags,
                     socket_type,
@@ -85,7 +82,7 @@ impl SyscallHandler {
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 
-        let mut desc = Descriptor::new(OpenFile::new(GenericFile::Socket(socket)));
+        let mut desc = Descriptor::new(OpenFile::new(File::Socket(socket)));
         desc.set_flags(descriptor_flags);
 
         let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));
@@ -121,7 +118,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match file {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -129,7 +126,7 @@ impl SyscallHandler {
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
-        SocketFile::bind(socket, addr.as_ref(), ctx.host.random())
+        Socket::bind(socket, addr.as_ref(), ctx.host.random())
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
@@ -185,7 +182,7 @@ impl SyscallHandler {
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         let socket = match open_file.inner_file() {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -199,7 +196,12 @@ impl SyscallHandler {
             }
         };
 
-        let supported_flags = MsgFlags::MSG_DONTWAIT;
+        // MSG_NOSIGNAL is currently a no-op, since we haven't implemented the behavior
+        // it's meant to disable.
+        // TODO: Once we've implemented generating a SIGPIPE when the peer on a
+        // stream-oriented socket has closed the connection, MSG_NOSIGNAL should
+        // disable it.
+        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_NOSIGNAL;
         if flags.intersects(!supported_flags) {
             warn!("Unsupported sendto flags: {:?}", flags);
             return Err(Errno::EOPNOTSUPP.into());
@@ -227,7 +229,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -294,7 +296,7 @@ impl SyscallHandler {
         addr_len_ptr: PluginPtr,
     ) -> SyscallResult {
         let socket = match open_file.inner_file() {
-            GenericFile::Socket(ref x) => x,
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -333,7 +335,7 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -383,14 +385,14 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr_to_write = match socket.borrow().get_bound_address() {
-            Some(x) => x,
-            None => empty_sockaddr(socket.borrow().address_family()),
-        };
+        let addr_to_write = socket
+            .borrow()
+            .get_bound_address()
+            .unwrap_or_else(|| empty_sockaddr(socket.borrow().address_family()));
 
         debug!("Returning socket address of {}", addr_to_write);
         write_sockaddr(
@@ -428,22 +430,22 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let peer_addr = socket.borrow().get_peer_address();
-        if let Some(addr_to_write) = peer_addr {
-            debug!("Returning peer address of {}", addr_to_write);
-            write_sockaddr(
-                ctx.process.memory_mut(),
-                Some(addr_to_write),
-                addr_ptr,
-                addr_len_ptr,
-            )?;
-        } else {
-            return Err(Errno::ENOTCONN.into());
-        }
+        let addr_to_write = match socket.borrow().get_peer_address() {
+            Some(x) => x,
+            None => return Err(Errno::ENOTCONN.into()),
+        };
+
+        debug!("Returning peer address of {}", addr_to_write);
+        write_sockaddr(
+            ctx.process.memory_mut(),
+            Some(addr_to_write),
+            addr_ptr,
+            addr_len_ptr,
+        )?;
 
         Ok(0.into())
     }
@@ -451,7 +453,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
     pub fn listen(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
-        let _backlog: libc::c_int = args.get(1).into();
+        let backlog: libc::c_int = args.get(1).into();
 
         // get the descriptor, or return early if it doesn't exist
         let desc = match Self::get_descriptor(ctx.process, fd)? {
@@ -470,129 +472,225 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "listen() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        EventQueue::queue_and_run(|event_queue| socket.borrow_mut().listen(backlog, event_queue))?;
+
+        Ok(0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
     pub fn accept(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
-        let _addr_ptr: PluginPtr = args.get(1).into();
-        let _addr_len_ptr: PluginPtr = args.get(2).into();
+        let addr_ptr: PluginPtr = args.get(1).into();
+        let addr_len_ptr: PluginPtr = args.get(2).into();
 
-        // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_accept(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_accept(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
                 }
-            }
+            },
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
-        };
-
-        // TODO: support rust sockets
-        log::warn!(
-            "accept() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t, /* flags */ libc::c_int)]
     pub fn accept4(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
-        let _addr_ptr: PluginPtr = args.get(1).into();
-        let _addr_len_ptr: PluginPtr = args.get(2).into();
-        let _flags: libc::c_int = args.get(3).into();
+        let addr_ptr: PluginPtr = args.get(1).into();
+        let addr_len_ptr: PluginPtr = args.get(2).into();
+        let flags: libc::c_int = args.get(3).into();
 
-        // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_accept4(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_accept4(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
                 }
-            }
+            },
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
+    }
+
+    fn accept_helper(
+        &self,
+        ctx: &mut ThreadContext,
+        open_file: OpenFile,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+        flags: libc::c_int,
+    ) -> SyscallResult {
+        let socket = match open_file.inner_file() {
+            File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "accept4() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        // get the accept flags
+        let flags = match SockFlag::from_bits(flags) {
+            Some(x) => x,
+            None => {
+                // linux doesn't return an error if there are unexpected flags
+                warn!("Invalid recvfrom flags: {}", flags);
+                SockFlag::from_bits_truncate(flags)
+            }
+        };
+
+        let result =
+            EventQueue::queue_and_run(|event_queue| socket.borrow_mut().accept(event_queue));
+
+        let file_status = socket.borrow().get_status();
+
+        // if the syscall would block and it's a blocking descriptor
+        if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())
+            && !file_status.contains(FileStatus::NONBLOCK)
+        {
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
+            let mut cond = SysCallCondition::new(trigger);
+            let supports_sa_restart = socket.borrow().supports_sa_restart();
+            cond.set_active_file(open_file);
+
+            return Err(SyscallError::Blocked(Blocked {
+                condition: cond,
+                restartable: supports_sa_restart,
+            }));
+        }
+
+        // must not drop the new socket without closing
+        let new_socket = result?;
+
+        let from_addr = new_socket.borrow().get_peer_address();
+
+        if !addr_ptr.is_null() {
+            if let Err(e) = write_sockaddr(
+                ctx.process.memory_mut(),
+                from_addr,
+                addr_ptr,
+                TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
+            ) {
+                EventQueue::queue_and_run(|event_queue| new_socket.borrow_mut().close(event_queue))
+                    .unwrap();
+                return Err(e);
+            }
+        }
+
+        if flags.contains(SockFlag::SOCK_NONBLOCK) {
+            new_socket.borrow_mut().set_status(FileStatus::NONBLOCK);
+        }
+
+        let mut new_desc = Descriptor::new(OpenFile::new(File::Socket(new_socket)));
+
+        if flags.contains(SockFlag::SOCK_CLOEXEC) {
+            new_desc.set_flags(DescriptorFlags::CLOEXEC);
+        }
+
+        let new_fd = ctx
+            .process
+            .register_descriptor(CompatDescriptor::New(new_desc));
+
+        Ok(new_fd.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ libc::socklen_t)]
     pub fn connect(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
-        let _addr_ptr: PluginPtr = args.get(1).into();
-        let _addr_len: libc::socklen_t = args.get(2).into();
+        let addr_ptr: PluginPtr = args.get(1).into();
+        let addr_len: libc::socklen_t = args.get(2).into();
 
-        // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_connect(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .map(|x| x.active_file().cloned())
+            .flatten();
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => match Self::get_descriptor(ctx.process, fd)? {
+                CompatDescriptor::New(desc) => desc.open_file().clone(),
+                // if it's a legacy descriptor, use the C syscall handler instead
+                CompatDescriptor::Legacy(_) => {
+                    return unsafe {
+                        c::syscallhandler_connect(
+                            ctx.thread.csyscallhandler(),
+                            args as *const SysCallArgs,
+                        )
+                        .into()
+                    };
                 }
-            }
+            },
         };
 
         // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+        let socket = match file.inner_file() {
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "connect() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
+
+        let mut rv =
+            EventQueue::queue_and_run(|event_queue| Socket::connect(socket, &addr, event_queue));
+
+        // if we will block
+        if let Err(SyscallError::Blocked(ref mut blocked)) = rv {
+            // make sure the file does not close before the blocking syscall completes
+            blocked.condition.set_active_file(file);
+        }
+
+        rv?;
+
+        Ok(0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
@@ -616,7 +714,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -675,58 +773,19 @@ impl SyscallHandler {
             descriptor_flags.insert(DescriptorFlags::CLOEXEC);
         }
 
-        let socket_1 = UnixSocketFile::new(
-            FileMode::READ | FileMode::WRITE,
-            file_flags,
-            socket_type,
-            ctx.host.abstract_unix_namespace(),
-        );
-        let socket_2 = UnixSocketFile::new(
-            FileMode::READ | FileMode::WRITE,
-            file_flags,
-            socket_type,
-            ctx.host.abstract_unix_namespace(),
-        );
-
-        // link the sockets together
-        EventQueue::queue_and_run(|event_queue| {
-            let unnamed_sock_addr = empty_sockaddr(nix::sys::socket::AddressFamily::Unix);
-            let unnamed_sock_addr = if let nix::sys::socket::SockAddr::Unix(x) = unnamed_sock_addr {
-                x
-            } else {
-                panic!("Unexpected socket address type");
-            };
-
-            UnixSocketFile::connect(
-                &socket_1,
-                unnamed_sock_addr,
-                Arc::clone(socket_2.borrow().recv_buffer()),
+        let (socket_1, socket_2) = EventQueue::queue_and_run(|event_queue| {
+            UnixSocket::pair(
+                FileMode::READ | FileMode::WRITE,
+                file_flags,
+                socket_type,
+                ctx.host.abstract_unix_namespace(),
                 event_queue,
-            );
-            UnixSocketFile::connect(
-                &socket_2,
-                unnamed_sock_addr,
-                Arc::clone(socket_1.borrow().recv_buffer()),
-                event_queue,
-            );
-
-            socket_1
-                .borrow_mut()
-                .set_bound_address(Some(unnamed_sock_addr))
-                .unwrap();
-            socket_2
-                .borrow_mut()
-                .set_bound_address(Some(unnamed_sock_addr))
-                .unwrap();
+            )
         });
 
         // file descriptors for the sockets
-        let mut desc_1 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
-            socket_1,
-        ))));
-        let mut desc_2 = Descriptor::new(OpenFile::new(GenericFile::Socket(SocketFile::Unix(
-            socket_2,
-        ))));
+        let mut desc_1 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_1))));
+        let mut desc_2 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_2))));
 
         // set the file descriptor flags
         desc_1.set_flags(descriptor_flags);
@@ -790,7 +849,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -826,7 +885,7 @@ impl SyscallHandler {
 
         // get the socket for the descriptor
         let socket = match desc.open_file().inner_file() {
-            GenericFile::Socket(x) => x,
+            File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
@@ -840,19 +899,12 @@ impl SyscallHandler {
     }
 }
 
-/// Returns a nix socket address object where only the family is set.
-fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::SockAddr {
-    let family = family as libc::sa_family_t;
-    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-    addr.ss_family = family;
-    // the size of ss_family will be 2 bytes on linux
-    nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
-}
-
 /// Copy the socket address to the plugin. Will return an error if either the address or address
 /// length pointers are NULL. The plugin's address length will be updated to store the size of the
 /// socket address, even if greater than the provided buffer size. If the address is `None`, the
 /// plugin's address length will be set to 0.
+// https://github.com/shadow/shadow/issues/2093
+#[allow(deprecated)]
 fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: Option<nix::sys::socket::SockAddr>,
@@ -909,6 +961,8 @@ fn write_sockaddr(
 /// Reads a sockaddr pointer from the plugin. Returns `None` if the pointer is null, otherwise
 /// returns a nix `SockAddr`. The address length must be at most the size of
 /// [`nix::sys::socket::sockaddr_storage`].
+// https://github.com/shadow/shadow/issues/2093
+#[allow(deprecated)]
 fn read_sockaddr(
     mem: &MemoryManager,
     addr_ptr: PluginPtr,
@@ -1052,6 +1106,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert_eq!(corrected_addr_len, 5);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1086,6 +1142,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert_eq!(corrected_addr_len, 5);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1102,6 +1160,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1133,6 +1193,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 
@@ -1165,6 +1227,8 @@ mod tests {
         let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
         assert!(corrected_addr_len <= addr_len);
 
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
         nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
     }
 }

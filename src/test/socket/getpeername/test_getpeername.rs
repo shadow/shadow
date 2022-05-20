@@ -74,18 +74,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <domain={:?}>", s, domain);
 
-        let passing = if domain != libc::AF_UNIX {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         // only inet/inet6 dgram sockets can be connected to a non-existent address
         if [libc::AF_INET, libc::AF_INET6].contains(&domain) {
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_connected_dgram_socket"),
                 move || test_connected_dgram_socket(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             )]);
         }
 
@@ -103,17 +97,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_non_connected_fd"),
                     move || test_non_connected_fd(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_unbound_socket"),
                     move || test_unbound_socket(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_bound_socket"),
                     move || test_bound_socket(domain, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
 
@@ -123,17 +117,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_listening_socket"),
                         move || test_listening_socket(domain, sock_type),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_connected_before_accepted"),
                         move || test_connected_before_accepted(domain, sock_type),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_sockname_peername"),
                         move || test_sockname_peername(domain, sock_type),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                 ]);
             }
@@ -147,12 +141,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     ];
 
     for &method in init_methods.iter() {
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         let sock_types = match method.domain() {
             libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
             libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
@@ -168,37 +156,37 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_null_addr"),
                     move || test_null_addr(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_null_len"),
                     move || test_null_len(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_zero_len"),
                     move || test_zero_len(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_after_close"),
                     move || test_after_close(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_connected_socket"),
                     move || test_connected_socket(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_peer_socket <bind_client=false>"),
                     move || test_peer_socket(method, sock_type, false),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_peer_socket <bind_client=true>"),
                     move || test_peer_socket(method, sock_type, true),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
         }

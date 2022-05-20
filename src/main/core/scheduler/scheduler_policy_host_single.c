@@ -312,7 +312,8 @@ static EmulatedTime _schedulerpolicyhostsingle_nextHostEventTime(SchedulerPolicy
     Event* nextEvent = priorityqueue_peek(qdata->pq);
     if (nextEvent) {
         utility_assert(event_getHost(nextEvent) == host);
-        nextEventTime = event_getTime(nextEvent) + EMULATED_TIME_OFFSET;
+        nextEventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(nextEvent));
+        utility_assert(nextEventTime != EMUTIME_INVALID);
     }
 
     g_mutex_unlock(&(qdata->lock));

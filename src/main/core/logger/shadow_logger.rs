@@ -1,4 +1,4 @@
-use crate::core::support::emulated_time::{self, EmulatedTime};
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::worker::Worker;
 use crate::host::host::HostInfo;
 use crate::utility::time::TimeParts;
@@ -186,7 +186,7 @@ impl ShadowLogger {
             }
             write!(stdout, " [{}:{}]", record.thread_id, record.thread_name)?;
             if let Some(emu_time) = record.emu_time {
-                let sim_time = emu_time.duration_since(&emulated_time::SIMULATION_START);
+                let sim_time = emu_time.duration_since(&EmulatedTime::SIMULATION_START);
                 let parts = TimeParts::from_nanos(sim_time.as_nanos());
                 write!(
                     stdout,

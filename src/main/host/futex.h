@@ -10,11 +10,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "main/host/status_listener.h"
-#include "main/host/syscall_types.h"
-
 // Opaque futex object.
 typedef struct _Futex Futex;
+
+#include "main/host/status_listener.h"
+#include "main/host/syscall_types.h"
 
 // Create a new futex object using the unique address as the futex word.
 Futex* futex_new(PluginPhysicalPtr word);

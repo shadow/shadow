@@ -81,8 +81,6 @@ set(shadow_srcs
     core/scheduler/scheduler_policy_thread_single.c
     core/support/config_handlers.c
     core/work/event.c
-    core/work/message.c
-    core/work/task.c
     core/main.c
     core/controller.c
     core/manager.c
@@ -92,12 +90,12 @@ set(shadow_srcs
     host/status_listener.c
     host/descriptor/compat_socket.c
     host/descriptor/epoll.c
-    host/descriptor/file.c
+    host/descriptor/regular_file.c
     host/descriptor/socket.c
     host/descriptor/tcp.c
     host/descriptor/tcp_cong.c
     host/descriptor/tcp_cong_reno.c
-    host/descriptor/timer.c
+    host/descriptor/timerfd.c
     host/descriptor/transport.c
     host/descriptor/udp.c
     host/affinity.c
@@ -133,6 +131,7 @@ set(shadow_srcs
     host/thread_ptrace.c
     host/network_interface.c
     host/network_queuing_disciplines.c
+    host/timer.c
     host/tracker.c
 
     routing/payload.c

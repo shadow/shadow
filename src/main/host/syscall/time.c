@@ -21,9 +21,7 @@
 
 /* make sure we return the 'emulated' time, and not the actual simulation clock
  */
-static EmulatedTime _syscallhandler_getEmulatedTime() {
-    return worker_getEmulatedTime();
-}
+static EmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
 
 static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
                                                       int flags, PluginPtr request,
@@ -40,18 +38,17 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     /* Grab the arg from the syscall register. */
     struct timespec req;
-    int rv = process_readTimespec(sys->process, &req, request);
+    int rv = process_readPtr(sys->process, &req, request, sizeof(req));
     if (rv < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
-
-    /* Ensure time is non-negative. */
-    if (req.tv_sec < 0 || req.tv_nsec < 0) {
+    SimulationTime reqSimTime = simtime_from_timespec(req);
+    if (reqSimTime == SIMTIME_INVALID) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
-    if (req.tv_sec == 0 && req.tv_nsec == 0) {
+    if (reqSimTime == 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
@@ -60,31 +57,27 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(cond, sys->host,
-                                    worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
-                                        req.tv_nsec * SIMTIME_ONE_NANOSECOND);
+        syscallcondition_setTimeout(cond, sys->host, worker_getCurrentEmulatedTime() + reqSimTime);
 
         /* Block the thread, unblock when the timer expires. */
         return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
     }
 
-    SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
-    utility_assert(cond);
-    const Timer* timer = syscallcondition_getTimeout(cond);
-    utility_assert(timer);
-    if (timer_getExpirationCount(timer) == 0) {
+    if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
         utility_assert(
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
-        struct itimerspec timer_val;
-        timer_getTime(timer, &timer_val);
-        syscallcondition_cancel(cond);
-
-        /* Timer hasn't expired. Presumably we were interrupted. */
         if (remainder.val) {
-            int rv = process_writePtr(
-                sys->process, remainder, &timer_val.it_value, sizeof(timer_val.it_value));
+            EmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
+            utility_assert(nextExpireTime != EMUTIME_INVALID);
+            utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+            SimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
+            struct timespec timer_val = {0};
+            if (!simtime_to_timespec(remainingTime, &timer_val)) {
+                panic("Couldn't convert %lu", remainingTime);
+            }
+            int rv = process_writePtr(sys->process, remainder, &timer_val, sizeof(timer_val));
             if (rv != 0) {
                 return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
             }
@@ -166,11 +159,5 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
         tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-}
-
-SysCallReturn syscallhandler_sched_yield(SysCallHandler* sys, const SysCallArgs* args) {
-    // Do nothing. We already yield and reschedule after some number of
-    // unblocked syscalls.
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

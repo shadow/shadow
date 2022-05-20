@@ -12,7 +12,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
@@ -23,10 +23,8 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
-                                                  size_t len, int prot,
-                                                  int flags,
-                                                  File** file_desc_out) {
+static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd, size_t len, int prot,
+                                                  int flags, RegularFile** file_desc_out) {
     /* At least one of these values is required according to man page. */
 #ifndef MAP_SHARED_VALIDATE
 #define MAP_SHARED_VALIDATE 0x03
@@ -62,7 +60,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 
         /* Success. We know we have a file type descriptor. */
         if (file_desc_out) {
-            *file_desc_out = (File*)desc;
+            *file_desc_out = (RegularFile*)desc;
         }
     }
 
@@ -104,7 +102,8 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 
     // Make sure the path is accessible
     if (path && access(path, F_OK) == 0) {
-        trace("File %d (linux file %d) is persistent in procfs at %s", file_fd, osfile_fd, path);
+        trace("RegularFile %d (linux file %d) is persistent in procfs at %s", file_fd, osfile_fd,
+              path);
         return path;
     }
 
@@ -113,7 +112,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
     return NULL;
 }
 
-static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
+static int _syscallhandler_openPluginFile(SysCallHandler* sys, RegularFile* file) {
     utility_assert(file);
 
     int fd = descriptor_getHandle((LegacyDescriptor*)file);
@@ -124,9 +123,9 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
      * /etc/localtime etc. in the plugin via mmap */
 
     // The file is in the shadow process, and we want to open it in the plugin.
-    char* mmap_path = _file_createPersistentMMapPath(fd, file_getOSBackedFD(file));
+    char* mmap_path = _file_createPersistentMMapPath(fd, regularfile_getOSBackedFD(file));
     if (mmap_path == NULL) {
-        trace("File %i has a NULL path.", fd);
+        trace("RegularFile %i has a NULL path.", fd);
         return -1;
     }
 
@@ -150,26 +149,26 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     process_flushPtrs(sys->process);
 
     /* Attempt to open the file in the plugin with the same flags as what the
-     * shadow File object has. */
+     * shadow RegularFile object has. */
 
     /* From man 2 open */
     const int creationFlags =
         O_CLOEXEC | O_CREAT | O_DIRECTORY | O_EXCL | O_NOCTTY | O_NOFOLLOW | O_TMPFILE | O_TRUNC;
 
     /* Get original flags that were used to open the file. */
-    int flags = file_getFlagsAtOpen(file);
+    int flags = regularfile_getFlagsAtOpen(file);
     /* Use only the file creation flags, except O_CLOEXEC. */
     flags &= (creationFlags & ~O_CLOEXEC);
     /* Add any file access mode and file status flags that shadow doesn't implement. */
-    flags |= (fcntl(file_getOSBackedFD(file), F_GETFL) & ~SHADOW_FLAG_MASK);
+    flags |= (fcntl(regularfile_getOSBackedFD(file), F_GETFL) & ~SHADOW_FLAG_MASK);
     /* Add any flags that shadow implements. */
-    flags |= file_getShadowFlags(file);
+    flags |= regularfile_getShadowFlags(file);
     /* Be careful not to try re-creating or truncating it. */
     flags &= ~(O_CREAT | O_EXCL | O_TMPFILE | O_TRUNC);
 
     /* Instruct the plugin to open the file at the path we sent. */
-    int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
-                                      flags, file_getModeAtOpen(file));
+    int result = thread_nativeSyscall(
+        sys->thread, SYS_open, pluginBufPtr.val, flags, regularfile_getModeAtOpen(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
         trace("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
@@ -202,7 +201,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
 
     /* First check the input args to see if we can avoid doing the less
      * efficient shadow-plugin cross-process mmap procedure. */
-    File* file_desc = NULL;
+    RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateMmapArgsHelper(
         sys, fd, len, prot, flags, &file_desc);
     if (errcode) {

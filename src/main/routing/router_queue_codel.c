@@ -121,7 +121,7 @@ static gboolean _routerqueuecodel_enqueue(QueueManagerCoDel* queueManager, Packe
 
         CoDelEntry* entry = g_new0(CoDelEntry, 1);
         entry->packet = packet;
-        entry->enqueueTS = worker_getCurrentTime();
+        entry->enqueueTS = worker_getCurrentSimulationTime();
         g_queue_push_tail(queueManager->entries, entry);
 
         guint64 length = _routerqueuecodel_getPacketLength(packet);
@@ -208,7 +208,7 @@ static SimulationTime _routerqueuecodel_controlLaw(guint count, SimulationTime t
 static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
     utility_assert(queueManager);
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentSimulationTime();
 
     gboolean okToDrop = FALSE;
     Packet* packet = _routerqueuecodel_dequeueHelper(queueManager, now, &okToDrop);

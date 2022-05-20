@@ -28,11 +28,16 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
                                                      TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
     // Check if a timeout was given in the syscall args.
-    struct timespec timeout = {0};
+    SimulationTime timeoutSimTime = SIMTIME_INVALID;
     if (timeoutVPtr.val) {
-        int rv = process_readTimespec(sys->process, &timeout, timeoutVPtr);
+        struct timespec ts = {0};
+        int rv = process_readPtr(sys->process, &ts, timeoutVPtr, sizeof(ts));
         if (rv < 0) {
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+        }
+        timeoutSimTime = simtime_from_timespec(ts);
+        if (timeoutSimTime == SIMTIME_INVALID) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
         }
     }
 
@@ -64,7 +69,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         int result = 0;
 
         // We already blocked on wait, so this is either a timeout or wakeup
-        if (timeoutVPtr.val && _syscallhandler_didListenTimeoutExpire(sys)) {
+        if (timeoutSimTime != SIMTIME_INVALID && _syscallhandler_didListenTimeoutExpire(sys)) {
             // Timeout while waiting for a wakeup
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
@@ -93,15 +98,15 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     }
 
     // Now we need to block until another thread does a wake on the futex.
-    trace("Futex blocking for wakeup %s timeout", timeoutVPtr.val ? "with" : "without");
+    trace("Futex blocking for wakeup %s timeout",
+          timeoutSimTime != SIMTIME_INVALID ? "with" : "without");
     Trigger trigger =
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
     SysCallCondition* cond = syscallcondition_new(trigger);
-    if (timeoutVPtr.val) {
-        SimulationTime timeoutSimulationTime = timeout.tv_sec * SIMTIME_ONE_SECOND + timeout.tv_nsec * SIMTIME_ONE_NANOSECOND;
+    if (timeoutSimTime != SIMTIME_INVALID) {
         EmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
-                                               ? timeoutSimulationTime + worker_getEmulatedTime()
-                                               : timeoutSimulationTime;
+                                               ? timeoutSimTime + worker_getCurrentEmulatedTime()
+                                               : timeoutSimTime;
         syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
     }
     return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = true};

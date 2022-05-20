@@ -19,7 +19,7 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
@@ -46,6 +46,11 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
+
+// Not defined in some older libc's.
+#ifndef SYS_rseq
+#define SYS_rseq 334
+#endif
 
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
@@ -386,7 +391,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(recvfrom);
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
-            HANDLE_C(sched_yield);
+            HANDLE_RUST(rseq);
+            HANDLE_RUST(sched_yield);
             HANDLE_C(shadow_set_ptrace_allow_native_syscalls);
             HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
@@ -590,12 +596,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(sys->host));
         trace("Unapplied CPU latency amt=%ld max=%ld", unappliedCpuLatency, maxUnappliedCpuLatency);
         if (unappliedCpuLatency > maxUnappliedCpuLatency) {
-            EmulatedTime newTime = worker_getEmulatedTime() + unappliedCpuLatency;
+            EmulatedTime newTime = worker_getCurrentEmulatedTime() + unappliedCpuLatency;
             EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");
                 shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(sys->host));
-                worker_setCurrentTime(EMULATED_TIME_TO_SIMULATED_TIME(newTime));
+                worker_setCurrentEmulatedTime(newTime);
             } else {
                 trace("Reached unblocked syscall limit. Yielding.");
                 // Block instead, but save the result so that we can return it

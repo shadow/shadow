@@ -11,7 +11,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
-                                               Timer** timer_desc_out) {
+                                               TimerFd** timer_desc_out) {
     /* Check that fd is within bounds. */
     if (tfd < 0) {
         debug("descriptor %i out of bounds", tfd);
@@ -31,7 +31,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
     /* Check if this is a virtual Shadow descriptor. */
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, tfd);
     if (desc && timer_desc_out) {
-        *timer_desc_out = (Timer*)desc;
+        *timer_desc_out = (TimerFd*)desc;
     }
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_TIMER);
@@ -66,7 +66,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     }
 
     /* Create the timer and double check that it's valid. */
-    Timer* timer = timer_new();
+    TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
     int tfd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)timer);
 
 #ifdef DEBUG
@@ -98,11 +98,6 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     PluginPtr newValuePtr = args->args[2].as_ptr; // const struct itimerspec*
     PluginPtr oldValuePtr = args->args[3].as_ptr; // struct itimerspec*
 
-    /* New value should be non-null. */
-    if (!newValuePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Check for valid flags. */
 #ifndef TFD_TIMER_CANCEL_ON_SET
 #define TFD_TIMER_CANCEL_ON_SET 0
@@ -112,7 +107,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Get the corresponding descriptor. */
-    Timer* timer = NULL;
+    TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -123,16 +118,19 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     };
 
-    /* Old value is allowed to be null. */
-    struct itimerspec* oldValue = NULL;
-    if (oldValuePtr.val) {
-        oldValue = process_getWriteablePtr(sys->process, oldValuePtr, sizeof(*oldValue));
-    }
-
     /* Service the call in the timer module. */
-    errcode = timer_setTime(timer, sys->host, flags, &newValue, oldValue);
+    struct itimerspec oldValue;
+    errcode = timerfd_setTime(timer, sys->host, flags, &newValue, &oldValue);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    /* Old value is allowed to be null. */
+    if (oldValuePtr.val) {
+        errcode = process_writePtr(sys->process, oldValuePtr, &oldValue, sizeof(oldValue));
+        if (errcode < 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        }
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
@@ -143,24 +141,20 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     int tfd = args->args[0].as_i64;
     PluginPtr currValuePtr = args->args[1].as_ptr; // struct itimerspec*
 
-    /* Current value should be non-null. */
-    if (!currValuePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get the corresponding descriptor. */
-    Timer* timer = NULL;
+    TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
-    if (errcode < 0) {
+    if (errcode != 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    struct itimerspec* currValue =
-        process_getWriteablePtr(sys->process, currValuePtr, sizeof(*currValue));
+    /* Get the timer value */
+    struct itimerspec currValue;
+    timerfd_getTime(timer, &currValue);
 
-    /* Service the call in the timer module. */
-    errcode = timer_getTime(timer, currValue);
-    if (errcode < 0) {
+    /* Write the timer value */
+    errcode = process_writePtr(sys->process, currValuePtr, &currValue, sizeof(currValue));
+    if (errcode != 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 

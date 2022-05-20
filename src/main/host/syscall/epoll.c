@@ -125,7 +125,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event);
+    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event, sys->host);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
@@ -194,7 +194,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             if (timeout_ms > 0) {
                 syscallcondition_setTimeout(
                     cond, sys->host,
-                    worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+                    worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
             }
 
             return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};

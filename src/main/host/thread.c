@@ -120,7 +120,7 @@ void thread_resume(Thread* thread) {
     // Wait on new condition.
     thread->cond = cond;
     if (thread->cond) {
-        syscallcondition_waitNonblock(thread->cond, thread->process, thread);
+        syscallcondition_waitNonblock(thread->cond, thread->host, thread->process, thread);
     }
 }
 

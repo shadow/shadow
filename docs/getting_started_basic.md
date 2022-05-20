@@ -1,14 +1,9 @@
-# Getting Started Basic
+# Basic File Transfer Example
 
 Here we present a basic example that simulates the network traffic of an HTTP
 server with 3 clients, each running on different virtual hosts. If you do not
 have Python or cURL installed, you can download them through your distribution's
 package manager.
-
-**Notice:** Older versions of cURL use a busy loop that is incompatible with
-Shadow and will cause Shadow to deadlock. Newer versions of cURL, such as the
-version provided in Ubuntu 20.04, don't have this issue. See [issue
-\#1794](https://github.com/shadow/shadow/issues/1794) for details.
 
 ## Configuring the Simulation
 
@@ -24,6 +19,10 @@ uses a built-in network graph for simplicity.
 general:
   # stop after 10 simulated seconds
   stop_time: 10s
+  # old versions of cURL use a busy loop, so to avoid spinning in this busy
+  # loop indefinitely, we add a system call latency to advance the simulated
+  # time when running non-blocking system calls
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
@@ -51,12 +50,12 @@ hosts:
 
 ## Running the Simulation
 
-Shadow stores simulation data to the `shadow.data` directory by default. We
+Shadow stores simulation data to the `shadow.data/` directory by default. We
 first remove this directory if it already exists, and then run Shadow.
 
 ```bash
 # delete any existing simulation data
-rm -rf shadow.data
+rm -rf shadow.data/
 shadow shadow.yaml > shadow.log
 ```
 
@@ -64,22 +63,22 @@ This small Shadow simulation should complete almost immediately.
 
 ## Viewing the Simulation Output
 
-Shadow will write simulation output to the data directory (in this example we'll
-assume the default directory of `shadow.data`). Each host has its own directory
-under `shadow.data/hosts`. For example:
+Shadow will write simulation output to the data directory `shadow.data/`. Each
+host has its own directory under `shadow.data/hosts/`. For example:
 
 ```bash
-$ ls -l shadow.data/hosts
+$ ls -l shadow.data/hosts/
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client1
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client2
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 client3
 drwxrwxr-x 2 user user 4096 Jun  2 16:54 server
 ```
 
-Each host directory contains the output for each process running on that host. For example:
+Each host directory contains the output for each process running on that host.
+For example:
 
 ```bash
-$ ls -l shadow.data/hosts/client1
+$ ls -l shadow.data/hosts/client1/
 -rw-rw-r-- 1 user user   1 Jun  2 16:54 client1.curl.1000.exitcode
 -rw-rw-r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.shimlog
 -rw-r--r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.stderr

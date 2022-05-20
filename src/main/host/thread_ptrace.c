@@ -443,7 +443,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                 uint64_t rax, rdx;
                 uint64_t rip = thread->regs.value.rip;
                 Tsc_emulateRdtsc(host_getTsc(thread->base.host), &rax, &rdx, &rip,
-                                 worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                                 worker_getCurrentSimulationTime() / SIMTIME_ONE_NANOSECOND);
                 thread->regs.value.rdx = rdx;
                 thread->regs.value.rax = rax;
                 thread->regs.value.rip = rip;
@@ -455,7 +455,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                 uint64_t rax, rdx, rcx;
                 uint64_t rip = thread->regs.value.rip;
                 Tsc_emulateRdtscp(host_getTsc(thread->base.host), &rax, &rdx, &rcx, &rip,
-                                  worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                                  worker_getCurrentSimulationTime() / SIMTIME_ONE_NANOSECOND);
                 thread->regs.value.rdx = rdx;
                 thread->regs.value.rax = rax;
                 thread->regs.value.rcx = rcx;

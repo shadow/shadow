@@ -8,9 +8,6 @@
 
 #include <glib.h>
 
-#include "main/host/status.h"
-#include "main/utility/utility.h"
-
 typedef enum _LegacyDescriptorType LegacyDescriptorType;
 enum _LegacyDescriptorType {
     DT_NONE,
@@ -24,6 +21,10 @@ enum _LegacyDescriptorType {
 
 typedef struct _LegacyDescriptor LegacyDescriptor;
 typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
+
+#include "main/core/support/definitions.h"
+#include "main/host/status.h"
+#include "main/utility/utility.h"
 
 /* required functions */
 typedef void (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);

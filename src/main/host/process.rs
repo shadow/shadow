@@ -158,7 +158,7 @@ impl Process {
 
 mod export {
     use super::*;
-    use crate::host::descriptor::OwnedLegacyDescriptor;
+    use crate::{host::descriptor::CountedLegacyDescriptorRef, utility::HostTreePointer};
 
     /// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
     /// access it after.
@@ -225,7 +225,7 @@ mod export {
     /// Register a `LegacyDescriptor`. This takes ownership of the descriptor and you must
     /// increment the ref count if you are to hold a reference to this descriptor.
     #[no_mangle]
-    pub extern "C" fn process_registerLegacyDescriptor(
+    pub unsafe extern "C" fn process_registerLegacyDescriptor(
         proc: *mut cshadow::Process,
         desc: *mut cshadow::LegacyDescriptor,
     ) -> libc::c_int {
@@ -233,7 +233,8 @@ mod export {
         assert!(!desc.is_null());
 
         unsafe { cshadow::descriptor_setOwnerProcess(desc, proc.cprocess) };
-        let desc = CompatDescriptor::Legacy(OwnedLegacyDescriptor::new(desc));
+        let desc =
+            CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(HostTreePointer::new(desc)));
 
         let fd = proc.register_descriptor(desc);
         fd.try_into().unwrap()
@@ -242,7 +243,7 @@ mod export {
     /// Unlike the deregister method for the `CompatDescriptor`, you do not need to manually
     /// unref the LegacyDescriptor as it's done automatically.
     #[no_mangle]
-    pub extern "C" fn process_deregisterLegacyDescriptor(
+    pub unsafe extern "C" fn process_deregisterLegacyDescriptor(
         proc: *mut cshadow::Process,
         desc: *mut cshadow::LegacyDescriptor,
     ) {
@@ -266,7 +267,7 @@ mod export {
 
         match proc.deregister_descriptor(handle.try_into().unwrap()) {
             Some(CompatDescriptor::Legacy(removed_desc)) => {
-                if removed_desc.ptr() != desc {
+                if unsafe { removed_desc.ptr() } != desc {
                     panic!("Deregistered the wrong descriptor with handle {}", handle);
                 }
             }
@@ -284,7 +285,7 @@ mod export {
 
     /// Get a temporary reference to a legacy descriptor.
     #[no_mangle]
-    pub extern "C" fn process_getRegisteredLegacyDescriptor(
+    pub unsafe extern "C" fn process_getRegisteredLegacyDescriptor(
         proc: *mut cshadow::Process,
         handle: libc::c_int,
     ) -> *mut cshadow::LegacyDescriptor {
@@ -299,7 +300,7 @@ mod export {
         };
 
         match proc.get_descriptor(handle) {
-            Some(CompatDescriptor::Legacy(desc)) => desc.ptr(),
+            Some(CompatDescriptor::Legacy(desc)) => unsafe { desc.ptr() },
             Some(_) => {
                 log::warn!("A descriptor exists for fd={}, but it is not a legacy descriptor. Returning NULL.",
                            handle);

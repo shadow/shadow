@@ -29,11 +29,13 @@
 #include <unistd.h>
 #include <wchar.h>
 
+typedef struct _Process Process;
+
 #include "lib/shim/shim_shmem.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/timer.h"
+#include "main/host/descriptor/timerfd.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
@@ -128,14 +130,6 @@ int process_getReadableString(Process* process, PluginPtr plugin_src, size_t n, 
 // -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
 // -EFAULT if the string extends beyond the accessible address space.
 ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n);
-
-// Convenience function to read and validate a timespec.
-//
-// Returns:
-// 0 on success.
-// -EFAULT if `src` couldn't be read.
-// -EINVAL if `src` didn't contain a valid timespec.
-int process_readTimespec(Process* proc, struct timespec* ts, PluginVirtualPtr src);
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.

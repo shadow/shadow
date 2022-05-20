@@ -8,7 +8,9 @@ use std::hash::Hasher;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use test_utils::socket_utils::{autobind_helper, socket_init_helper, SockAddr, SocketInitMethod};
+use test_utils::socket_utils::{
+    autobind_helper, connect_to_peername, socket_init_helper, SockAddr, SocketInitMethod,
+};
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, AsMutPtr};
 
@@ -94,32 +96,26 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <domain={:?}>", s, domain);
 
-        let passing = if domain != libc::AF_UNIX {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         tests.extend(vec![
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_fd"),
                 move || test_invalid_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_existent_fd"),
                 move || test_non_existent_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_socket_fd"),
                 move || test_non_socket_fd(domain),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_large_buf_udp"),
                 test_large_buf_udp,
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
         ]);
 
@@ -136,7 +132,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_not_connected"),
                 move || test_not_connected(domain, sock_type),
-                passing.clone(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             )]);
         }
     }
@@ -150,12 +146,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &method in init_methods.iter() {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <init_method={:?}>", s, method);
-
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
 
         let sock_types = match method.domain() {
             libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
@@ -172,22 +162,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_null_buf"),
                     move || test_null_buf(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_zero_len_buf"),
                     move || test_zero_len_buf(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_invalid_flag"),
                     move || test_invalid_flag(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_flag_dontwait"),
                     move || test_flag_dontwait(method, sock_type),
-                    passing.clone(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
         }
@@ -195,19 +185,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         tests.extend(vec![test_utils::ShadowTest::new(
             &append_args("test_nonblocking_stream"),
             move || test_nonblocking_stream(method),
-            passing.clone(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         )]);
     }
 
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
 
     for &method in init_methods.iter() {
-        let passing = if method != SocketInitMethod::Unix {
-            set![TestEnv::Libc, TestEnv::Shadow]
-        } else {
-            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
-        };
-
         for &flag in flags.iter() {
             let sock_types = match method.domain() {
                 libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
@@ -228,42 +212,76 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_null_addr"),
                         move || test_null_addr(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_addr_len"),
                         move || test_null_addr_len(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_both"),
                         move || test_null_both(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_nonnull_addr"),
                         move || test_nonnull_addr(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=false>"),
                         move || test_recv_addr(method, sock_type, flag, false),
-                        passing.clone(),
+                        match method {
+                            // TODO: enable in shadow once we support returning the source
+                            // address in recvfrom() for unix sockets
+                            SocketInitMethod::Unix => set![TestEnv::Libc],
+                            _ => set![TestEnv::Libc, TestEnv::Shadow],
+                        },
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=true>"),
                         move || test_recv_addr(method, sock_type, flag, true),
-                        passing.clone(),
+                        match method {
+                            // TODO: enable in shadow once we support returning the source
+                            // address in recvfrom() for unix sockets
+                            SocketInitMethod::Unix => set![TestEnv::Libc],
+                            _ => set![TestEnv::Libc, TestEnv::Shadow],
+                        },
                     ),
                 ]);
 
                 // if non-blocking
                 if flag & libc::SOCK_NONBLOCK != 0 {
-                    tests.extend(vec![test_utils::ShadowTest::new(
-                        &append_args("test_large_buf"),
-                        move || test_large_buf(method, sock_type, flag),
-                        passing.clone(),
-                    )]);
+                    tests.extend(vec![
+                        test_utils::ShadowTest::new(
+                            &append_args("test_large_buf"),
+                            move || test_large_buf(method, sock_type, flag),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_after_peer_close_empty_buf"),
+                            move || test_after_peer_close_empty_buf(method, sock_type, flag),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_after_peer_close_nonempty_buf"),
+                            move || test_after_peer_close_nonempty_buf(method, sock_type, flag),
+                            // TODO: doesn't pass in shadow for inet or unix sockets
+                            set![TestEnv::Libc],
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_recvfrom_econnrefused_after_sendto"),
+                            move || {
+                                test_recvfrom_econnrefused_after_sendto(method, sock_type, flag)
+                            },
+                            match method.domain() {
+                                // TODO: enable if shadow ever supports ICMP
+                                libc::AF_INET => set![TestEnv::Libc],
+                                _ => set![TestEnv::Libc, TestEnv::Shadow],
+                            },
+                        ),
+                    ]);
                 }
 
                 // if a message-based socket
@@ -272,12 +290,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_short_recv_buf_dgram"),
                             move || test_short_recv_buf_dgram(method, sock_type, flag),
-                            passing.clone(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_msg_order_dgram"),
                             move || test_msg_order_dgram(method, sock_type, flag),
-                            passing.clone(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                     ]);
                 }
@@ -286,7 +304,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("test_null_addr_not_connected"),
                         move || test_null_addr_not_connected(method, sock_type, flag),
-                        passing.clone(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     )]);
                 }
             }
@@ -983,6 +1001,154 @@ fn test_recv_addr(
             }
         }
 
+        Ok(())
+    })
+}
+
+/// Test sendto()/recvfrom() on a socket after its peer has been closed, with no buffered data.
+fn test_after_peer_close_empty_buf(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
+
+    nix::unistd::close(fd_peer).unwrap();
+
+    // shadow needs to run events
+    assert_eq!(unsafe { libc::usleep(10000) }, 0);
+
+    test_utils::run_and_close_fds(&[fd_client], || {
+        let expected_errnos = match sock_type {
+            // connectionless sockets
+            libc::SOCK_DGRAM => &[libc::EAGAIN][..],
+            // connection-oriented sockets
+            _ => &[][..],
+        };
+
+        // read 3 bytes using a null sockaddr and a null sockaddr length
+        // connection-oriented sockets will return EOF
+        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        if expected_errnos.is_empty() {
+            // if there was no error, should have returned EOF
+            assert_eq!(0, rv);
+        }
+
+        let expected_errnos = match (init_method.domain(), sock_type) {
+            // connectionless unix sockets
+            (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::ECONNREFUSED][..],
+            // connection-oriented unix sockets
+            (libc::AF_UNIX, _) => &[libc::EPIPE][..],
+            // non-unix sockets
+            _ => &[][..],
+        };
+
+        // send 3 bytes; unix sockets will return an error
+        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+
+        Ok(())
+    })
+}
+
+/// Test sendto()/recvfrom() on a socket after its peer has been closed, with some buffered data.
+fn test_after_peer_close_nonempty_buf(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ true);
+
+    // if it's a non-socketpair dgram socket, connect the peer back to the client
+    if init_method != SocketInitMethod::UnixSocketpair && sock_type == libc::SOCK_DGRAM {
+        assert_eq!(0, connect_to_peername(fd_peer, fd_client));
+    }
+
+    // send 2 bytes in each direction
+    simple_sendto_helper(fd_client, &vec![1u8, 2], &[], true)?;
+    simple_sendto_helper(fd_peer, &vec![1u8, 2], &[], true)?;
+
+    nix::unistd::close(fd_peer).unwrap();
+
+    // shadow needs to run events
+    assert_eq!(unsafe { libc::usleep(10000) }, 0);
+
+    test_utils::run_and_close_fds(&[fd_client], || {
+        let expected_errnos = match sock_type {
+            // only seqpacket sockets return an error for some reason
+            libc::SOCK_SEQPACKET => &[libc::ECONNRESET][..],
+            _ => &[][..],
+        };
+
+        // read 3 bytes using a null sockaddr and a null sockaddr length
+        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        if expected_errnos.is_empty() {
+            // if there was no error, should have returned EOF
+            assert_eq!(2, rv);
+        }
+
+        let expected_errnos = match (init_method.domain(), sock_type) {
+            // connectionless unix sockets
+            (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::ECONNREFUSED][..],
+            // connection-oriented unix sockets
+            (libc::AF_UNIX, _) => &[libc::EPIPE][..],
+            // connection-oriented inet socket
+            (libc::AF_INET, libc::SOCK_STREAM) => &[libc::ECONNRESET][..],
+            _ => &[][..],
+        };
+
+        // send 3 bytes; unix and tcp sockets will return an error
+        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+
+        Ok(())
+    })
+}
+
+/// Test that recvfrom() on an inet dgram socket returns ECONNREFUSED if a previous sendto() failed.
+fn test_recvfrom_econnrefused_after_sendto(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
+
+    nix::unistd::close(fd_peer).unwrap();
+
+    // shadow needs to run events
+    assert_eq!(unsafe { libc::usleep(10000) }, 0);
+
+    test_utils::run_and_close_fds(&[fd_client], || {
+        let expected_errnos = match (init_method.domain(), sock_type) {
+            // connectionless unix sockets
+            (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::ECONNREFUSED][..],
+            // connection-oriented unix sockets
+            (libc::AF_UNIX, _) => &[libc::EPIPE][..],
+            // non-unix sockets
+            _ => &[][..],
+        };
+
+        // send 3 bytes; unix sockets will return an error
+        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+
+        let expected_errnos = match (init_method.domain(), sock_type) {
+            // connectionless unix sockets
+            (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::EAGAIN][..],
+            // connectionless inet sockets
+            (libc::AF_INET, libc::SOCK_DGRAM) => &[libc::ECONNREFUSED][..],
+            // connection-oriented sockets
+            _ => &[][..],
+        };
+
+        // read 3 bytes using a null sockaddr and a null sockaddr length
+        // connection-oriented sockets will return EOF
+        // inet dgram (udp) socket will return ECONNREFUSED due to the previous sendto()
+        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        if expected_errnos.is_empty() {
+            // if there was no error, should have returned EOF
+            assert_eq!(0, rv);
+        }
         Ok(())
     })
 }

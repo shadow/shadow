@@ -3,8 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, GenericFile,
-    OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
@@ -254,7 +253,7 @@ impl SyscallHandler {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
-        if let GenericFile::Socket(..) = generic_file {
+        if let File::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
@@ -284,7 +283,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::READABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -388,7 +387,7 @@ impl SyscallHandler {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
-        if let GenericFile::Socket(..) = generic_file {
+        if let File::Socket(..) = generic_file {
             if offset != 0 {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
@@ -410,7 +409,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_open_file(open_file.clone(), FileState::WRITABLE);
+            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
             let mut cond = SysCallCondition::new(trigger);
             let supports_sa_restart = generic_file.borrow().supports_sa_restart();
             cond.set_active_file(open_file);
@@ -477,22 +476,22 @@ impl SyscallHandler {
         let buffer = Arc::new(AtomicRefCell::new(buffer));
 
         // reference-counted file object for read end of the pipe
-        let reader = pipe::PipeFile::new(FileMode::READ, file_flags);
+        let reader = pipe::Pipe::new(FileMode::READ, file_flags);
         let reader = Arc::new(AtomicRefCell::new(reader));
 
         // reference-counted file object for write end of the pipe
-        let writer = pipe::PipeFile::new(FileMode::WRITE, file_flags);
+        let writer = pipe::Pipe::new(FileMode::WRITE, file_flags);
         let writer = Arc::new(AtomicRefCell::new(writer));
 
         // set the file objects to listen for events on the buffer
         EventQueue::queue_and_run(|event_queue| {
-            pipe::PipeFile::connect_to_buffer(&reader, Arc::clone(&buffer), event_queue);
-            pipe::PipeFile::connect_to_buffer(&writer, Arc::clone(&buffer), event_queue);
+            pipe::Pipe::connect_to_buffer(&reader, Arc::clone(&buffer), event_queue);
+            pipe::Pipe::connect_to_buffer(&writer, Arc::clone(&buffer), event_queue);
         });
 
         // file descriptors for the read and write file objects
-        let mut reader_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(reader)));
-        let mut writer_desc = Descriptor::new(OpenFile::new(GenericFile::Pipe(writer)));
+        let mut reader_desc = Descriptor::new(OpenFile::new(File::Pipe(reader)));
+        let mut writer_desc = Descriptor::new(OpenFile::new(File::Pipe(writer)));
 
         // set the file descriptor flags
         reader_desc.set_flags(descriptor_flags);

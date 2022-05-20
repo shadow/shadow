@@ -8,8 +8,9 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
+use crate::utility::HostTreePointer;
 
-pub struct EventFdFile {
+pub struct EventFd {
     counter: u64,
     is_semaphore_mode: bool,
     event_source: StateEventSource,
@@ -20,7 +21,7 @@ pub struct EventFdFile {
     has_open_file: bool,
 }
 
-impl EventFdFile {
+impl EventFd {
     pub fn new(init_value: u64, is_semaphore_mode: bool, status: FileStatus) -> Self {
         Self {
             counter: init_value,
@@ -184,7 +185,7 @@ impl EventFdFile {
             .add_listener(monitoring, filter, notify_fn)
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
         self.event_source.add_legacy_listener(ptr);
     }
 

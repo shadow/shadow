@@ -29,12 +29,6 @@ typedef guint ShadowID;
 #define SIMTIME_INVALID G_MAXUINT64
 
 /**
- * Maximum and minimum valid values.
- */
-#define SIMTIME_MAX (G_MAXUINT64-1)
-#define SIMTIME_MIN 0
-
-/**
  * Represents one nanosecond in simulation time.
  */
 #define SIMTIME_ONE_NANOSECOND G_GUINT64_CONSTANT(1)
@@ -75,22 +69,42 @@ typedef guint64 EmulatedTime;
 /**
  * The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
  * This is used to emulate to applications that we are in a recent time.
- * 
+ *
  * Duplicated as SIMULATION_START_SEC in `emulated_time.rs`.
  */
-#define EMULATED_TIME_OFFSET (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
+#define EMUTIME_SIMULATION_START (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
 
 /**
- * Conversion from emulated time to simulated time.
+ * The Unix Epoch as EmulatedTime
  */
-#define EMULATED_TIME_TO_SIMULATED_TIME(emtime)                                \
-    ((SimulationTime)((emtime)-EMULATED_TIME_OFFSET))
+#define EMUTIME_UNIX_EPOCH (0)
+
+/**
+ * Represents an invalid emulation time.
+ */
+#define EMUTIME_INVALID G_MAXUINT64
+
+/**
+ * Maximum and minimum valid values.
+ */
+#define EMUTIME_MAX (G_MAXUINT64-1)
+#define EMUTIME_MIN 0
+
+/* Ensure it can be converted to EmulatedTime */
+#define SIMTIME_MAX (EMUTIME_MAX - EMUTIME_SIMULATION_START)
+#define SIMTIME_MIN 0
 
 /**
  * The start of our random port range in host order, used if application doesn't
  * specify the port it wants to bind to, and for client connections.
  */
 #define MIN_RANDOM_PORT 10000
+
+/**
+ * An upper limit to the maximum number of pending incoming connections.
+ * On a laptop: net.core.somaxconn = 4096
+ */
+#define SHADOW_SOMAXCONN 4096
 
 /**
  * We always use TCP_autotuning unless this is set to FALSE

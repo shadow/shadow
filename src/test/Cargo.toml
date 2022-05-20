@@ -149,9 +149,14 @@ path = "sysinfo/test_sysinfo.rs"
 name = "test_busy_wait"
 path = "regression/test_busy_wait.rs"
 
+[[bin]]
+name = "test_itimer"
+path = "itimer/test_itimer.rs"
+
 [dependencies]
+anyhow = { version = "1.0.57", features = ["backtrace"] }
 libc = "0.2"
-nix = "0.23.1"
+nix = "0.24.1"
 rand = { version="0.8.5", features=["small_rng"] }
 signal-hook = "0.3.2"
 once_cell = "1.10.0"

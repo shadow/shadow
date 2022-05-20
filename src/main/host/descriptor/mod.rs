@@ -7,9 +7,9 @@ use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
-use crate::utility::{IsSend, IsSync, SyncSendPointer};
+use crate::utility::{HostTreePointer, IsSend, IsSync};
 
-use socket::{SocketFile, SocketFileRef, SocketFileRefMut};
+use socket::{Socket, SocketRef, SocketRefMut};
 
 pub mod descriptor_table;
 pub mod eventfd;
@@ -98,8 +98,8 @@ impl FileMode {
 bitflags::bitflags! {
     #[derive(Default)]
     pub struct FileState: libc::c_int {
-        /// Has been initialized and it is now OK to unblock any plugin waiting
-        /// on a particular state.
+        /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
+        /// state. (This is a legacy C state and should be considered deprecated.)
         const ACTIVE = c::_Status_STATUS_DESCRIPTOR_ACTIVE;
         /// Can be read, i.e. there is data waiting for user.
         const READABLE = c::_Status_STATUS_DESCRIPTOR_READABLE;
@@ -109,6 +109,9 @@ bitflags::bitflags! {
         const CLOSED = c::_Status_STATUS_DESCRIPTOR_CLOSED;
         /// A wakeup operation occurred on a futex.
         const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
+        /// A listening socket is allowing connections. Only applicable to connection-oriented unix
+        /// sockets.
+        const SOCKET_ALLOWING_CONNECT = c::_Status_STATUS_SOCKET_ALLOWING_CONNECT;
     }
 }
 
@@ -135,17 +138,21 @@ pub enum StateListenerFilter {
 
 /// A wrapper for a `*mut c::StatusListener` that increments its ref count when created,
 /// and decrements when dropped.
-struct LegacyListener(SyncSendPointer<c::StatusListener>);
+struct LegacyListener(HostTreePointer<c::StatusListener>);
 
 impl LegacyListener {
-    fn new(ptr: *mut c::StatusListener) -> Self {
-        assert!(!ptr.is_null());
-        unsafe { c::statuslistener_ref(ptr) };
-        Self(SyncSendPointer(ptr))
+    fn new(ptr: HostTreePointer<c::StatusListener>) -> Self {
+        assert!(!unsafe { ptr.ptr().is_null() });
+        unsafe { c::statuslistener_ref(ptr.ptr()) };
+        Self(ptr)
     }
+}
 
-    fn ptr(&self) -> *mut c::StatusListener {
-        self.0.ptr()
+impl std::ops::Deref for LegacyListener {
+    type Target = HostTreePointer<c::StatusListener>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -169,13 +176,16 @@ impl LegacyListenerHelper {
 
     fn add_listener(
         &mut self,
-        ptr: *mut c::StatusListener,
+        ptr: HostTreePointer<c::StatusListener>,
         event_source: &mut EventSource<(FileState, FileState)>,
     ) {
-        assert!(!ptr.is_null());
+        assert!(!unsafe { ptr.ptr() }.is_null());
 
         // if it's already listening, don't add a second time
-        if self.handle_map.contains_key(&(ptr as usize)) {
+        if self
+            .handle_map
+            .contains_key(&(unsafe { ptr.ptr() } as usize))
+        {
             return;
         }
 
@@ -187,7 +197,8 @@ impl LegacyListenerHelper {
         });
 
         // use a usize as the key so we don't accidentally deref the pointer
-        self.handle_map.insert(ptr as usize, handle);
+        self.handle_map
+            .insert(unsafe { ptr.ptr() } as usize, handle);
     }
 
     fn remove_listener(&mut self, ptr: *mut c::StatusListener) {
@@ -243,7 +254,7 @@ impl StateEventSource {
             })
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
         self.legacy_helper.add_listener(ptr, &mut self.inner);
     }
 
@@ -263,46 +274,46 @@ impl StateEventSource {
 
 /// A wrapper for any type of file object.
 #[derive(Clone)]
-pub enum GenericFile {
-    Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
-    EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
-    Socket(SocketFile),
+pub enum File {
+    Pipe(Arc<AtomicRefCell<pipe::Pipe>>),
+    EventFd(Arc<AtomicRefCell<eventfd::EventFd>>),
+    Socket(Socket),
 }
 
-// will not compile if `GenericFile` is not Send + Sync
-impl IsSend for GenericFile {}
-impl IsSync for GenericFile {}
+// will not compile if `File` is not Send + Sync
+impl IsSend for File {}
+impl IsSync for File {}
 
-impl GenericFile {
-    pub fn borrow(&self) -> GenericFileRef {
+impl File {
+    pub fn borrow(&self) -> FileRef {
         match self {
-            Self::Pipe(ref f) => GenericFileRef::Pipe(f.borrow()),
-            Self::EventFd(ref f) => GenericFileRef::EventFd(f.borrow()),
-            Self::Socket(ref f) => GenericFileRef::Socket(f.borrow()),
+            Self::Pipe(ref f) => FileRef::Pipe(f.borrow()),
+            Self::EventFd(ref f) => FileRef::EventFd(f.borrow()),
+            Self::Socket(ref f) => FileRef::Socket(f.borrow()),
         }
     }
 
-    pub fn try_borrow(&self) -> Result<GenericFileRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<FileRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Pipe(ref f) => GenericFileRef::Pipe(f.try_borrow()?),
-            Self::EventFd(ref f) => GenericFileRef::EventFd(f.try_borrow()?),
-            Self::Socket(ref f) => GenericFileRef::Socket(f.try_borrow()?),
+            Self::Pipe(ref f) => FileRef::Pipe(f.try_borrow()?),
+            Self::EventFd(ref f) => FileRef::EventFd(f.try_borrow()?),
+            Self::Socket(ref f) => FileRef::Socket(f.try_borrow()?),
         })
     }
 
-    pub fn borrow_mut(&self) -> GenericFileRefMut {
+    pub fn borrow_mut(&self) -> FileRefMut {
         match self {
-            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.borrow_mut()),
-            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.borrow_mut()),
-            Self::Socket(ref f) => GenericFileRefMut::Socket(f.borrow_mut()),
+            Self::Pipe(ref f) => FileRefMut::Pipe(f.borrow_mut()),
+            Self::EventFd(ref f) => FileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(ref f) => FileRefMut::Socket(f.borrow_mut()),
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<GenericFileRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<FileRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Pipe(ref f) => GenericFileRefMut::Pipe(f.try_borrow_mut()?),
-            Self::EventFd(ref f) => GenericFileRefMut::EventFd(f.try_borrow_mut()?),
-            Self::Socket(ref f) => GenericFileRefMut::Socket(f.try_borrow_mut()?),
+            Self::Pipe(ref f) => FileRefMut::Pipe(f.try_borrow_mut()?),
+            Self::EventFd(ref f) => FileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(ref f) => FileRefMut::Socket(f.try_borrow_mut()?),
         })
     }
 
@@ -315,7 +326,7 @@ impl GenericFile {
     }
 }
 
-impl std::fmt::Debug for GenericFile {
+impl std::fmt::Debug for File {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -336,19 +347,19 @@ impl std::fmt::Debug for GenericFile {
     }
 }
 
-pub enum GenericFileRef<'a> {
-    Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
-    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
-    Socket(SocketFileRef<'a>),
+pub enum FileRef<'a> {
+    Pipe(atomic_refcell::AtomicRef<'a, pipe::Pipe>),
+    EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
+    Socket(SocketRef<'a>),
 }
 
-pub enum GenericFileRefMut<'a> {
-    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
-    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
-    Socket(SocketFileRefMut<'a>),
+pub enum FileRefMut<'a> {
+    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::Pipe>),
+    EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
+    Socket(SocketRefMut<'a>),
 }
 
-impl GenericFileRef<'_> {
+impl FileRef<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -366,7 +377,7 @@ impl GenericFileRef<'_> {
     );
 }
 
-impl GenericFileRefMut<'_> {
+impl FileRefMut<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
@@ -395,7 +406,7 @@ impl GenericFileRefMut<'_> {
         pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
-        pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
+        pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
@@ -412,7 +423,7 @@ impl GenericFileRefMut<'_> {
     );
 }
 
-impl std::fmt::Debug for GenericFileRef<'_> {
+impl std::fmt::Debug for FileRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -429,7 +440,7 @@ impl std::fmt::Debug for GenericFileRef<'_> {
     }
 }
 
-impl std::fmt::Debug for GenericFileRefMut<'_> {
+impl std::fmt::Debug for FileRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
@@ -447,11 +458,10 @@ impl std::fmt::Debug for GenericFileRefMut<'_> {
 }
 
 /// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-/// to a `GenericFile`. Once there are no more `OpenFile` objects for a given `GenericFile`, the
-/// `GenericFile` will be closed. Typically this means that holding an `OpenFile` will ensure that
-/// the file remains open (the file's status will not become `FileStatus::CLOSED`), but the
-/// underlying file may close itself in extenuating circumstances (for example if the file has an
-/// internal error).
+/// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+/// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
+/// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+/// itself in extenuating circumstances (for example if the file has an internal error).
 ///
 /// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 /// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -469,7 +479,7 @@ impl IsSend for OpenFile {}
 impl IsSync for OpenFile {}
 
 impl OpenFile {
-    pub fn new(file: GenericFile) -> Self {
+    pub fn new(file: File) -> Self {
         {
             let mut file = file.borrow_mut();
 
@@ -501,13 +511,13 @@ impl OpenFile {
         }
     }
 
-    pub fn inner_file(&self) -> &GenericFile {
+    pub fn inner_file(&self) -> &File {
         &self.inner.file.as_ref().unwrap()
     }
 
-    /// Will close the inner `GenericFile` object if this is the last `OpenFile` for that
-    /// `GenericFile`. This behaviour is the same as simply dropping this `OpenFile` object, but
-    /// allows you to pass an event queue and get the return value of the close operation.
+    /// Will close the inner `File` object if this is the last `OpenFile` for that `File`. This
+    /// behaviour is the same as simply dropping this `OpenFile` object, but allows you to pass an
+    /// event queue and get the return value of the close operation.
     pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
         let OpenFile { inner } = self;
 
@@ -534,7 +544,7 @@ impl OpenFile {
 
 #[derive(Clone, Debug)]
 struct OpenFileInner {
-    file: Option<GenericFile>,
+    file: Option<File>,
 }
 
 impl OpenFileInner {
@@ -639,24 +649,25 @@ impl Descriptor {
     }
 }
 
-/// Represents an owned reference to a legacy descriptor object. Will decrement the descriptor's ref
-/// count when dropped.
+/// Represents a counted reference to a legacy descriptor object. Will decrement the descriptor's
+/// ref count when dropped.
 #[derive(Debug)]
-pub struct OwnedLegacyDescriptor(SyncSendPointer<c::LegacyDescriptor>);
+pub struct CountedLegacyDescriptorRef(HostTreePointer<c::LegacyDescriptor>);
 
-impl OwnedLegacyDescriptor {
+impl CountedLegacyDescriptorRef {
     /// Does not increment the legacy descriptor's ref count, but will decrement the ref count
     /// when dropped.
-    pub fn new(ptr: *mut c::LegacyDescriptor) -> Self {
-        Self(SyncSendPointer(ptr))
+    pub fn new(ptr: HostTreePointer<c::LegacyDescriptor>) -> Self {
+        Self(ptr)
     }
 
-    pub fn ptr(&self) -> *mut c::LegacyDescriptor {
-        self.0.ptr()
+    /// SAFETY: See `HostTreePointer::ptr`.
+    pub unsafe fn ptr(&self) -> *mut c::LegacyDescriptor {
+        unsafe { self.0.ptr() }
     }
 }
 
-impl Drop for OwnedLegacyDescriptor {
+impl Drop for CountedLegacyDescriptorRef {
     fn drop(&mut self) {
         // unref the legacy descriptor object
         unsafe { c::descriptor_unref(self.0.ptr() as *mut core::ffi::c_void) };
@@ -667,7 +678,7 @@ impl Drop for OwnedLegacyDescriptor {
 #[derive(Debug)]
 pub enum CompatDescriptor {
     New(Descriptor),
-    Legacy(OwnedLegacyDescriptor),
+    Legacy(CountedLegacyDescriptorRef),
 }
 
 // will not compile if `CompatDescriptor` is not Send + Sync
@@ -733,12 +744,14 @@ mod export {
     /// does not increment its ref count, but will decrement the ref count when this compat
     /// descriptor is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_fromLegacy(
+    pub unsafe extern "C" fn compatdescriptor_fromLegacy(
         legacy_descriptor: *mut c::LegacyDescriptor,
     ) -> *mut CompatDescriptor {
         assert!(!legacy_descriptor.is_null());
 
-        let descriptor = CompatDescriptor::Legacy(OwnedLegacyDescriptor::new(legacy_descriptor));
+        let descriptor = CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(
+            HostTreePointer::new(legacy_descriptor),
+        ));
         CompatDescriptor::into_raw(Box::new(descriptor))
     }
 
@@ -754,7 +767,7 @@ mod export {
         let descriptor = unsafe { &*descriptor };
 
         if let CompatDescriptor::Legacy(d) = descriptor {
-            d.ptr()
+            unsafe { d.ptr() }
         } else {
             std::ptr::null_mut()
         }
@@ -825,7 +838,7 @@ mod export {
     /// ref count, and will decrement the ref count when this status listener is removed or when the
     /// `OpenFile` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn openfile_addListener(
+    pub unsafe extern "C" fn openfile_addListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
     ) {
@@ -834,7 +847,9 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.inner_file().borrow_mut().add_legacy_listener(listener);
+        file.inner_file()
+            .borrow_mut()
+            .add_legacy_listener(HostTreePointer::new(listener));
     }
 
     /// Remove a listener from the `OpenFile` object.
@@ -865,13 +880,12 @@ mod export {
     }
 
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
-    /// `GenericFile` object. Otherwise returns NULL. The `GenericFile` object's ref count is
-    /// incremented, so the pointer must always later be passed to `genericfile_drop()`, otherwise
-    /// the memory will leak.
+    /// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
+    /// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_newRefGenericFile(
+    pub extern "C" fn compatdescriptor_newRefFile(
         descriptor: *const CompatDescriptor,
-    ) -> *const GenericFile {
+    ) -> *const File {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -882,18 +896,18 @@ mod export {
         }
     }
 
-    /// Decrement the ref count of the `GenericFile` object. The pointer must not be used after
-    /// calling this function.
+    /// Decrement the ref count of the `File` object. The pointer must not be used after calling
+    /// this function.
     #[no_mangle]
-    pub extern "C" fn genericfile_drop(file: *const GenericFile) {
+    pub extern "C" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
-        unsafe { Box::from_raw(file as *mut GenericFile) };
+        unsafe { Box::from_raw(file as *mut File) };
     }
 
-    /// Get the state of the `GenericFile` object.
+    /// Get the state of the `File` object.
     #[no_mangle]
-    pub extern "C" fn genericfile_getStatus(file: *const GenericFile) -> c::Status {
+    pub extern "C" fn file_getStatus(file: *const File) -> c::Status {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -901,28 +915,23 @@ mod export {
         file.borrow().state().into()
     }
 
-    /// Add a status listener to the `GenericFile` object. This will increment the status listener's
-    /// ref count, and will decrement the ref count when this status listener is removed or when the
-    /// `GenericFile` is freed/dropped.
+    /// Add a status listener to the `File` object. This will increment the status listener's ref
+    /// count, and will decrement the ref count when this status listener is removed or when the
+    /// `File` is freed/dropped.
     #[no_mangle]
-    pub extern "C" fn genericfile_addListener(
-        file: *const GenericFile,
-        listener: *mut c::StatusListener,
-    ) {
+    pub unsafe extern "C" fn file_addListener(file: *const File, listener: *mut c::StatusListener) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
         let file = unsafe { &*file };
 
-        file.borrow_mut().add_legacy_listener(listener);
+        file.borrow_mut()
+            .add_legacy_listener(HostTreePointer::new(listener));
     }
 
-    /// Remove a listener from the `GenericFile` object.
+    /// Remove a listener from the `File` object.
     #[no_mangle]
-    pub extern "C" fn genericfile_removeListener(
-        file: *const GenericFile,
-        listener: *mut c::StatusListener,
-    ) {
+    pub extern "C" fn file_removeListener(file: *const File, listener: *mut c::StatusListener) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
@@ -931,10 +940,10 @@ mod export {
         file.borrow_mut().remove_legacy_listener(listener);
     }
 
-    /// Get the canonical handle for a `GenericFile` object. Two `GenericFile` objects refer to the
-    /// same underlying data if their handles are equal.
+    /// Get the canonical handle for a `File` object. Two `File` objects refer to the same
+    /// underlying data if their handles are equal.
     #[no_mangle]
-    pub extern "C" fn genericfile_getCanonicalHandle(file: *const GenericFile) -> libc::uintptr_t {
+    pub extern "C" fn file_getCanonicalHandle(file: *const File) -> libc::uintptr_t {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
