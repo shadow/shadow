@@ -1,6 +1,6 @@
 use nix::errno::Errno;
 
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall_types::SyscallError;
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
@@ -35,7 +35,7 @@ impl SharedBuf {
     }
 
     pub fn space_available(&self) -> usize {
-        self.max_len - usize::try_from(self.queue.num_bytes()).unwrap()
+        self.max_len - self.queue.num_bytes()
     }
 
     /// Register as a reader. The [`ReaderHandle`] must be returned to the buffer later with
@@ -80,11 +80,11 @@ impl SharedBuf {
         &mut self,
         bytes: W,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> Result<usize, SyscallError> {
         let (num, _chunk_type) = self.queue.pop(bytes)?;
         self.refresh_state(event_queue);
 
-        Ok(num.into())
+        Ok(num)
     }
 
     pub fn write_stream<R: std::io::Read>(
@@ -92,9 +92,9 @@ impl SharedBuf {
         bytes: R,
         len: usize,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> Result<usize, SyscallError> {
         if len == 0 {
-            return Ok(0.into());
+            return Ok(0);
         }
 
         if self.space_available() == 0 {
@@ -107,7 +107,7 @@ impl SharedBuf {
 
         self.refresh_state(event_queue);
 
-        Ok(written.into())
+        Ok(written)
     }
 
     pub fn write_packet<R: std::io::Read>(

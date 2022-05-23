@@ -1258,7 +1258,9 @@ impl Protocol for ConnOrientedConnected {
     where
         R: std::io::Read + std::io::Seek,
     {
-        common.sendto(bytes, Some(&self.send_buffer), addr, event_queue)
+        Ok(common
+            .sendto(bytes, Some(&self.send_buffer), addr, event_queue)?
+            .into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1272,7 +1274,8 @@ impl Protocol for ConnOrientedConnected {
     where
         W: std::io::Write + std::io::Seek,
     {
-        common.recvfrom(bytes, event_queue)
+        let (num, addr) = common.recvfrom(bytes, event_queue)?;
+        Ok((num.into(), addr))
     }
 
     fn ioctl(
@@ -1379,7 +1382,9 @@ impl Protocol for ConnLessInitial {
     where
         R: std::io::Read + std::io::Seek,
     {
-        common.sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)
+        Ok(common
+            .sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)?
+            .into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1393,7 +1398,8 @@ impl Protocol for ConnLessInitial {
     where
         W: std::io::Write + std::io::Seek,
     {
-        common.recvfrom(bytes, event_queue)
+        let (num, addr) = common.recvfrom(bytes, event_queue)?;
+        Ok((num.into(), addr))
     }
 
     fn ioctl(
@@ -1621,7 +1627,7 @@ impl UnixSocketCommon {
         send_buffer: Option<&Arc<AtomicRefCell<SharedBuf>>>,
         addr: Option<nix::sys::socket::SockAddr>,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult
+    ) -> Result<usize, SyscallError>
     where
         R: std::io::Read + std::io::Seek,
     {
@@ -1693,7 +1699,7 @@ impl UnixSocketCommon {
             UnixSocketType::Stream => send_buffer.write_stream(bytes.by_ref(), len, event_queue),
             UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
                 send_buffer.write_packet(bytes.by_ref(), len, event_queue)?;
-                Ok(len.into())
+                Ok(len)
             }
         }
     }
@@ -1704,7 +1710,7 @@ impl UnixSocketCommon {
         &mut self,
         mut bytes: W,
         event_queue: &mut EventQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(usize, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -1724,7 +1730,7 @@ impl UnixSocketCommon {
         let num_read = recv_buffer.read(&mut bytes, event_queue)?;
 
         // TODO: support returning the source address
-        Ok((num_read.into(), None))
+        Ok((num_read, None))
     }
 
     pub fn ioctl(

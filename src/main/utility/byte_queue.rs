@@ -24,7 +24,7 @@ pub struct ByteQueue {
     /// A pre-allocated buffer that can be used for new bytes.
     unused_buffer: Option<BytesMut>,
     /// The number of bytes in the queue.
-    length: u64,
+    length: usize,
     /// The size of newly allocated chunks when storing stream data.
     default_chunk_capacity: usize,
     #[cfg(test)]
@@ -46,7 +46,7 @@ impl ByteQueue {
 
     /// The number of bytes in the queue. If the queue has 0 bytes, it does not mean that the queue
     /// is empty since there may be 0-length packets in the queue.
-    pub fn num_bytes(&self) -> u64 {
+    pub fn num_bytes(&self) -> usize {
         self.length
     }
 
@@ -71,7 +71,7 @@ impl ByteQueue {
     }
 
     /// Push stream data onto the queue. The data may be merged into the previous stream chunk.
-    pub fn push_stream<R: Read>(&mut self, mut src: R) -> std::io::Result<u64> {
+    pub fn push_stream<R: Read>(&mut self, mut src: R) -> std::io::Result<usize> {
         let mut total_copied = 0;
 
         loop {
@@ -86,7 +86,7 @@ impl ByteQueue {
             let copied = src.read(&mut unused)?;
             let bytes = unused.split_to(copied);
 
-            total_copied += u64::try_from(bytes.len()).unwrap();
+            total_copied += bytes.len();
 
             if unused.len() != 0 {
                 // restore the remaining unused buffer
@@ -112,7 +112,7 @@ impl ByteQueue {
                         bytes = last_chunk.try_unsplit(bytes.take().unwrap()).err();
                         if bytes.is_none() {
                             // we were successful, so increase the queue's length manually
-                            self.length += u64::try_from(len).unwrap();
+                            self.length += len;
                         }
                     }
                 }
@@ -160,9 +160,9 @@ impl ByteQueue {
     }
 
     /// Push a chunk of stream or packet data onto the queue.
-    pub fn push_chunk(&mut self, data: impl Into<BytesWrapper>, chunk_type: ChunkType) -> u64 {
+    pub fn push_chunk(&mut self, data: impl Into<BytesWrapper>, chunk_type: ChunkType) -> usize {
         let data = data.into();
-        let len = u64::try_from(data.len()).unwrap();
+        let len = data.len();
         self.length += len;
         self.bytes.push_back(ByteChunk::new(data, chunk_type));
         len
@@ -172,7 +172,7 @@ impl ByteQueue {
     /// all data from the queue, you must call this method until the returned chunk type is `None`.
     /// Zero-length packets may be returned. If packet data is returned but `dst` did not have
     /// enough space, the remaining bytes in the packet will be dropped.
-    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(u64, Option<ChunkType>)> {
+    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(usize, Option<ChunkType>)> {
         // peek the front to see what kind of data is next
         match self.bytes.front() {
             Some(x) => match x.chunk_type {
@@ -183,7 +183,7 @@ impl ByteQueue {
         }
     }
 
-    fn pop_stream<W: Write>(&mut self, mut dst: W) -> std::io::Result<u64> {
+    fn pop_stream<W: Write>(&mut self, mut dst: W) -> std::io::Result<usize> {
         let mut total_copied = 0;
         assert_ne!(
             self.bytes.len(),
@@ -220,7 +220,7 @@ impl ByteQueue {
                 break;
             }
 
-            let copied = u64::try_from(copied).unwrap();
+            let copied = copied;
             self.length -= copied;
             total_copied += copied;
 
@@ -232,7 +232,7 @@ impl ByteQueue {
         Ok(total_copied)
     }
 
-    fn pop_packet<W: Write>(&mut self, mut dst: W) -> std::io::Result<u64> {
+    fn pop_packet<W: Write>(&mut self, mut dst: W) -> std::io::Result<usize> {
         let mut chunk = self
             .bytes
             .pop_front()
@@ -241,9 +241,9 @@ impl ByteQueue {
         let bytes = &mut chunk.data;
 
         // decrease the length now in case we return early
-        self.length -= u64::try_from(bytes.len()).unwrap();
+        self.length -= bytes.len();
 
-        let mut total_copied = 0u64;
+        let mut total_copied = 0;
 
         loop {
             let copied = match dst.write(bytes.as_ref()) {
@@ -266,7 +266,7 @@ impl ByteQueue {
                 break;
             }
 
-            total_copied += u64::try_from(copied).unwrap();
+            total_copied += copied;
         }
 
         Ok(total_copied)
@@ -292,7 +292,7 @@ impl ByteQueue {
             ChunkType::Packet => self.bytes.pop_front().unwrap().data,
         };
 
-        self.length -= u64::try_from(bytes.len()).unwrap();
+        self.length -= bytes.len();
 
         Some((bytes.into(), chunk_type))
     }
@@ -305,10 +305,7 @@ impl std::ops::Drop for ByteQueue {
         // check that the length is consistent with the number of remaining bytes
         assert_eq!(
             self.num_bytes(),
-            self.bytes
-                .iter()
-                .map(|x| u64::try_from(x.data.len()).unwrap())
-                .sum::<u64>()
+            self.bytes.iter().map(|x| x.data.len()).sum::<usize>()
         );
     }
 }
@@ -406,7 +403,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn bytequeue_numBytes(bq: *mut ByteQueue) -> u64 {
+    pub extern "C" fn bytequeue_numBytes(bq: *mut ByteQueue) -> usize {
         assert!(!bq.is_null());
         let bq = unsafe { &mut *bq };
         bq.num_bytes()
@@ -456,7 +453,7 @@ mod export {
         let bq = unsafe { &mut *bq };
         let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
         let (count, _chunk_type) = bq.pop(dst).unwrap();
-        count.try_into().unwrap()
+        count
     }
 }
 
