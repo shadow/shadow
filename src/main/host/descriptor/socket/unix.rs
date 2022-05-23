@@ -1274,8 +1274,10 @@ impl Protocol for ConnOrientedConnected {
     where
         W: std::io::Write + std::io::Seek,
     {
-        let (num, addr) = common.recvfrom(bytes, event_queue)?;
-        Ok((num.into(), addr))
+        let (num_copied, _num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+
+        // TODO: support returning the source address
+        Ok((num_copied.into(), None))
     }
 
     fn ioctl(
@@ -1398,8 +1400,10 @@ impl Protocol for ConnLessInitial {
     where
         W: std::io::Write + std::io::Seek,
     {
-        let (num, addr) = common.recvfrom(bytes, event_queue)?;
-        Ok((num.into(), addr))
+        let (num_copied, _num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+
+        // TODO: support returning the source address
+        Ok((num_copied.into(), None))
     }
 
     fn ioctl(
@@ -1710,7 +1714,7 @@ impl UnixSocketCommon {
         &mut self,
         mut bytes: W,
         event_queue: &mut EventQueue,
-    ) -> Result<(usize, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(usize, usize), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -1727,10 +1731,9 @@ impl UnixSocketCommon {
             return Err(Errno::EWOULDBLOCK.into());
         }
 
-        let num_read = recv_buffer.read(&mut bytes, event_queue)?;
+        let (num_copied, num_removed_from_buf) = recv_buffer.read(&mut bytes, event_queue)?;
 
-        // TODO: support returning the source address
-        Ok((num_read, None))
+        Ok((num_copied, num_removed_from_buf))
     }
 
     pub fn ioctl(

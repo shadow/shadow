@@ -171,15 +171,23 @@ impl ByteQueue {
     /// Pop data from the queue. Only a single type of data will be popped per invocation. To read
     /// all data from the queue, you must call this method until the returned chunk type is `None`.
     /// Zero-length packets may be returned. If packet data is returned but `dst` did not have
-    /// enough space, the remaining bytes in the packet will be dropped.
-    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(usize, Option<ChunkType>)> {
+    /// enough space, the remaining bytes in the packet will be dropped. Returns a tuple containing
+    /// the number of bytes copied, the number of bytes removed from the queue (including dropped
+    /// bytes), and the chunk type.
+    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(usize, usize, Option<ChunkType>)> {
         // peek the front to see what kind of data is next
         match self.bytes.front() {
             Some(x) => match x.chunk_type {
-                ChunkType::Stream => Ok((self.pop_stream(dst)?, Some(ChunkType::Stream))),
-                ChunkType::Packet => Ok((self.pop_packet(dst)?, Some(ChunkType::Packet))),
+                ChunkType::Stream => {
+                    let num_copied = self.pop_stream(dst)?;
+                    Ok((num_copied, num_copied, Some(ChunkType::Stream)))
+                }
+                ChunkType::Packet => {
+                    let (num_copied, num_removed_from_buf) = self.pop_packet(dst)?;
+                    Ok((num_copied, num_removed_from_buf, Some(ChunkType::Packet)))
+                }
             },
-            None => Ok((0, None)),
+            None => Ok((0, 0, None)),
         }
     }
 
@@ -232,7 +240,7 @@ impl ByteQueue {
         Ok(total_copied)
     }
 
-    fn pop_packet<W: Write>(&mut self, mut dst: W) -> std::io::Result<usize> {
+    fn pop_packet<W: Write>(&mut self, mut dst: W) -> std::io::Result<(usize, usize)> {
         let mut chunk = self
             .bytes
             .pop_front()
@@ -240,8 +248,10 @@ impl ByteQueue {
         assert_eq!(chunk.chunk_type, ChunkType::Packet);
         let bytes = &mut chunk.data;
 
+        let packet_len = bytes.len();
+
         // decrease the length now in case we return early
-        self.length -= bytes.len();
+        self.length = self.length.checked_sub(packet_len).unwrap();
 
         let mut total_copied = 0;
 
@@ -269,7 +279,7 @@ impl ByteQueue {
             total_copied += copied;
         }
 
-        Ok(total_copied)
+        Ok((total_copied, packet_len))
     }
 
     /// Pop a single chunk of data from the queue. The `size_hint` argument is used to limit the
@@ -452,7 +462,7 @@ mod export {
         assert!(!dst.is_null());
         let bq = unsafe { &mut *bq };
         let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
-        let (count, _chunk_type) = bq.pop(dst).unwrap();
+        let (count, _, _chunk_type) = bq.pop(dst).unwrap();
         count
     }
 }
@@ -531,13 +541,22 @@ mod tests {
 
         let mut buf = [0; 20];
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut buf[..]).unwrap(),
+            (3, 3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [1, 2, 3]);
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut buf[..]).unwrap(),
+            (3, 3, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..3], [4, 5, 6]);
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut buf[..]).unwrap(),
+            (3, 3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [7, 8, 9]);
 
         assert!(!bq.has_bytes());
@@ -564,22 +583,40 @@ mod tests {
 
         let mut buf = [0; 20];
 
-        assert_eq!(bq.pop(&mut buf[..3]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut buf[..3]).unwrap(),
+            (3, 3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [1, 2, 3]);
 
-        assert_eq!(bq.pop(&mut buf[..5]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut buf[..5]).unwrap(),
+            (3, 3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [4, 5, 6]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (4, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut buf[..4]).unwrap(),
+            (4, 8, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..4], [7, 8, 9, 10]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut buf[..4]).unwrap(),
+            (3, 3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [15, 16, 17]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (4, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut buf[..4]).unwrap(),
+            (4, 6, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..4], [100, 101, 102, 103]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut buf[..4]).unwrap(),
+            (0, 0, Some(ChunkType::Packet))
+        );
 
         assert_eq!(bq.pop_chunk(4), Some(([18][..].into(), ChunkType::Stream)));
 
@@ -589,7 +626,7 @@ mod tests {
         );
 
         assert_eq!(bq.pop_chunk(8), None);
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, None));
+        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, 0, None));
         assert!(!bq.has_bytes());
     }
 

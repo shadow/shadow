@@ -134,7 +134,7 @@ impl Pipe {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let num_copied = self
+        let (num_copied, _num_removed_from_buf) = self
             .buffer
             .as_ref()
             .unwrap()

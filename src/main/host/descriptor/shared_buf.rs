@@ -80,11 +80,11 @@ impl SharedBuf {
         &mut self,
         bytes: W,
         event_queue: &mut EventQueue,
-    ) -> Result<usize, SyscallError> {
-        let (num, _chunk_type) = self.queue.pop(bytes)?;
+    ) -> Result<(usize, usize), SyscallError> {
+        let (num_copied, num_removed_from_buf, _chunk_type) = self.queue.pop(bytes)?;
         self.refresh_state(event_queue);
 
-        Ok(num)
+        Ok((num_copied, num_removed_from_buf))
     }
 
     pub fn write_stream<R: std::io::Read>(
