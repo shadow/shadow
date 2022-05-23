@@ -17,7 +17,6 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/host/thread.h"
-#include "main/host/timer.h"
 #include "main/utility/utility.h"
 
 struct _SysCallCondition {
@@ -107,7 +106,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
 
     if (cond->timeout) {
         timer_disarm(cond->timeout);
-        timer_unref(cond->timeout);
+        timer_drop(cond->timeout);
         cond->timeout = NULL;
     }
 
@@ -166,7 +165,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
 
     if (cond->timeout) {
         timer_disarm(cond->timeout);
-        timer_unref(cond->timeout);
+        timer_drop(cond->timeout);
         cond->timeout = NULL;
     }
 

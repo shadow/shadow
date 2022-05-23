@@ -7,3 +7,4 @@ pub mod syscall;
 pub mod syscall_condition;
 pub mod syscall_types;
 pub mod thread;
+pub mod timer;
