@@ -87,12 +87,22 @@ impl UnixSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn get_bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.protocol_state.bound_address()
+    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        // return the bound address if set, otherwise return an empty unix sockaddr
+        Ok(Some(
+            self.protocol_state
+                .bound_address()?
+                .unwrap_or_else(|| empty_unix_sockaddr()),
+        ))
     }
 
-    pub fn get_peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.protocol_state.peer_address()
+    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        // return the peer address if set, otherwise return an empty unix sockaddr
+        Ok(Some(
+            self.protocol_state
+                .peer_address()?
+                .unwrap_or_else(|| empty_unix_sockaddr()),
+        ))
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
@@ -290,7 +300,7 @@ struct ConnOrientedListening {
 }
 struct ConnOrientedConnected {
     bound_addr: Option<nix::sys::socket::UnixAddr>,
-    peer_addr: nix::sys::socket::UnixAddr,
+    peer_addr: Option<nix::sys::socket::UnixAddr>,
     peer: Arc<AtomicRefCell<UnixSocket>>,
     reader_handle: ReaderHandle,
     writer_handle: WriterHandle,
@@ -418,7 +428,7 @@ impl ProtocolState {
         }
     }
 
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().peer_address(),
@@ -429,7 +439,7 @@ impl ProtocolState {
         }
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().bound_address(),
@@ -754,8 +764,8 @@ trait Protocol
 where
     Self: Sized + Into<ProtocolState>,
 {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr>;
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr>;
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
 
     fn close(
         self,
@@ -887,12 +897,12 @@ where
 }
 
 impl Protocol for ConnOrientedInitial {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1086,7 +1096,7 @@ impl Protocol for ConnOrientedInitial {
 
         let new_state = ConnOrientedConnected {
             bound_addr: self.bound_addr,
-            peer_addr: addr.clone(),
+            peer_addr: Some(addr.clone()),
             peer: Arc::clone(peer),
             reader_handle,
             writer_handle,
@@ -1105,8 +1115,6 @@ impl Protocol for ConnOrientedInitial {
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         assert!(self.bound_addr.is_none());
-
-        let unnamed_sock_addr = empty_unix_sockaddr();
 
         let send_buffer_handle;
         let writer_handle;
@@ -1141,9 +1149,8 @@ impl Protocol for ConnOrientedInitial {
         let reader_handle = common.recv_buffer.borrow_mut().add_reader(event_queue);
 
         let new_state = ConnOrientedConnected {
-            // bind the socket to an unnamed address so that we don't accidentally bind it later
-            bound_addr: Some(unnamed_sock_addr),
-            peer_addr: unnamed_sock_addr,
+            bound_addr: None,
+            peer_addr: None,
             peer,
             reader_handle,
             writer_handle,
@@ -1165,12 +1172,12 @@ impl Protocol for ConnOrientedInitial {
 }
 
 impl Protocol for ConnOrientedListening {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        Some(self.bound_addr)
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(Some(self.bound_addr))
     }
 
     fn close(
@@ -1272,7 +1279,7 @@ impl Protocol for ConnOrientedListening {
         let new_child_state = ConnOrientedConnected {
             // use the parent's bind address
             bound_addr: Some(self.bound_addr.clone()),
-            peer_addr: from_address.unwrap_or_else(|| empty_unix_sockaddr()),
+            peer_addr: from_address,
             peer: Arc::clone(peer),
             reader_handle,
             writer_handle,
@@ -1298,14 +1305,14 @@ impl Protocol for ConnOrientedListening {
 impl Protocol for ConnOrientedConnected {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        Some(self.peer_addr)
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.peer_addr)
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1387,14 +1394,14 @@ impl Protocol for ConnOrientedConnected {
 impl Protocol for ConnOrientedClosed {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::EBADFD.into())
     }
 
     fn close(
@@ -1410,14 +1417,17 @@ impl Protocol for ConnOrientedClosed {
 impl Protocol for ConnLessInitial {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.peer_addr
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        match self.peer {
+            Some(_) => Ok(self.peer_addr),
+            None => Err(Errno::ENOTCONN.into()),
+        }
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1567,9 +1577,6 @@ impl Protocol for ConnLessInitial {
         peer: Arc<AtomicRefCell<UnixSocket>>,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
-        // bind the socket to an unnamed address so that it can't be bound later
-        let unnamed_sock_addr = empty_unix_sockaddr();
-
         assert!(self.peer_addr.is_none());
         assert!(self.bound_addr.is_none());
 
@@ -1594,8 +1601,8 @@ impl Protocol for ConnLessInitial {
         }
 
         let new_state = Self {
-            bound_addr: Some(unnamed_sock_addr),
-            peer_addr: Some(unnamed_sock_addr),
+            bound_addr: None,
+            peer_addr: None,
             peer: Some(peer),
             writer_handle: Some(writer_handle),
             _send_buffer_handle: Some(send_buffer_handle),
@@ -1609,14 +1616,14 @@ impl Protocol for ConnLessInitial {
 impl Protocol for ConnLessClosed {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(None)
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(None)
     }
 
     fn close(
@@ -1971,6 +1978,15 @@ fn backlog_to_queue_size(backlog: i32) -> u32 {
     queue_limit.saturating_add(1)
 }
 
+fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
+    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
+        nix::sys::socket::SockAddr::Unix(x) => x,
+        x => panic!("Unexpected socket address type: {:?}", x),
+    }
+}
+
 // WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum UnixSocketType {
@@ -2016,13 +2032,4 @@ enum IncomingConnError {
 enum ListenerType {
     Read,
     Write,
-}
-
-fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
-    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::SockAddr::Unix(x) => x,
-        x => panic!("Unexpected socket address type: {:?}", x),
-    }
 }

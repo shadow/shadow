@@ -129,17 +129,17 @@ impl SocketRef<'_> {
 impl SocketRef<'_> {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    pub fn get_peer_address(&self) -> Option<SockAddr> {
+    pub fn getpeername(&self) -> Result<Option<SockAddr>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
+            Self::Unix(socket) => socket.getpeername().map(|x| x.map(SockAddr::Unix)),
         }
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    pub fn get_bound_address(&self) -> Option<SockAddr> {
+    pub fn getsockname(&self) -> Result<Option<SockAddr>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
+            Self::Unix(socket) => socket.getsockname().map(|x| x.map(SockAddr::Unix)),
         }
     }
 
@@ -199,17 +199,17 @@ impl SocketRefMut<'_> {
 impl SocketRefMut<'_> {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    pub fn get_peer_address(&self) -> Option<SockAddr> {
+    pub fn getpeername(&self) -> Result<Option<SockAddr>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.get_peer_address().map(SockAddr::Unix),
+            Self::Unix(socket) => socket.getpeername().map(|x| x.map(SockAddr::Unix)),
         }
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    pub fn get_bound_address(&self) -> Option<SockAddr> {
+    pub fn getsockname(&self) -> Result<Option<SockAddr>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.get_bound_address().map(SockAddr::Unix),
+            Self::Unix(socket) => socket.getsockname().map(|x| x.map(SockAddr::Unix)),
         }
     }
 

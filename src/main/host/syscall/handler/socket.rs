@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
-use crate::host::descriptor::socket::{empty_sockaddr, Socket};
+use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
@@ -388,15 +388,17 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr_to_write = socket
-            .borrow()
-            .get_bound_address()
-            .unwrap_or_else(|| empty_sockaddr(socket.borrow().address_family()));
+        // linux will return an EFAULT before other errors
+        if addr_ptr.is_null() || addr_len_ptr.is_null() {
+            return Err(Errno::EFAULT.into());
+        }
 
-        debug!("Returning socket address of {}", addr_to_write);
+        let addr_to_write = socket.borrow().getsockname()?;
+
+        debug!("Returning socket address of {:?}", addr_to_write);
         write_sockaddr(
             ctx.process.memory_mut(),
-            Some(addr_to_write),
+            addr_to_write,
             addr_ptr,
             addr_len_ptr,
         )?;
@@ -433,15 +435,17 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        let addr_to_write = match socket.borrow().get_peer_address() {
-            Some(x) => x,
-            None => return Err(Errno::ENOTCONN.into()),
-        };
+        // linux will return an EFAULT before other errors like ENOTCONN
+        if addr_ptr.is_null() || addr_len_ptr.is_null() {
+            return Err(Errno::EFAULT.into());
+        }
 
-        debug!("Returning peer address of {}", addr_to_write);
+        let addr_to_write = socket.borrow().getpeername()?;
+
+        debug!("Returning peer address of {:?}", addr_to_write);
         write_sockaddr(
             ctx.process.memory_mut(),
-            Some(addr_to_write),
+            addr_to_write,
             addr_ptr,
             addr_len_ptr,
         )?;
@@ -603,7 +607,7 @@ impl SyscallHandler {
         // must not drop the new socket without closing
         let new_socket = result?;
 
-        let from_addr = new_socket.borrow().get_peer_address();
+        let from_addr = new_socket.borrow().getpeername().unwrap();
 
         if !addr_ptr.is_null() {
             if let Err(e) = write_sockaddr(
