@@ -3,7 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{empty_sockaddr, Socket};
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
@@ -73,7 +73,6 @@ impl SyscallHandler {
                 }
 
                 Socket::Unix(UnixSocket::new(
-                    FileMode::READ | FileMode::WRITE,
                     file_flags,
                     socket_type,
                     ctx.host.abstract_unix_namespace(),
@@ -775,7 +774,6 @@ impl SyscallHandler {
 
         let (socket_1, socket_2) = EventQueue::queue_and_run(|event_queue| {
             UnixSocket::pair(
-                FileMode::READ | FileMode::WRITE,
                 file_flags,
                 socket_type,
                 ctx.host.abstract_unix_namespace(),

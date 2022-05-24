@@ -134,7 +134,7 @@ impl Pipe {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let num_read = self
+        let (num_copied, _num_removed_from_buf) = self
             .buffer
             .as_ref()
             .unwrap()
@@ -145,13 +145,13 @@ impl Pipe {
         //  1. we could not read any bytes
         //  2. we were asked to read >0 bytes
         //  3. there are open descriptors that refer to the write end of the pipe
-        if usize::from(num_read) == 0
+        if num_copied == 0
             && bytes.stream_len_bp()? != 0
             && self.buffer.as_ref().unwrap().borrow().num_writers() > 0
         {
             Err(Errno::EWOULDBLOCK.into())
         } else {
-            Ok(num_read.into())
+            Ok(num_copied.into())
         }
     }
 
@@ -195,7 +195,9 @@ impl Pipe {
         let len = bytes.stream_len_bp()? as usize;
 
         match self.write_mode {
-            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), len, event_queue),
+            WriteMode::Stream => Ok(buffer
+                .write_stream(bytes.by_ref(), len, event_queue)?
+                .into()),
             WriteMode::Packet => {
                 let mut num_written = 0;
 

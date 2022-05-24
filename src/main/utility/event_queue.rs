@@ -17,6 +17,14 @@ impl EventQueue {
         Self(std::collections::VecDeque::new())
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Add an event to the queue.
     pub fn add(&mut self, f: impl FnOnce(&mut Self) + 'static) {
         self.0.push_back(Box::new(f));
@@ -49,6 +57,25 @@ impl EventQueue {
         let rv = (f)(&mut event_queue);
         event_queue.run();
         rv
+    }
+}
+
+impl std::ops::Drop for EventQueue {
+    fn drop(&mut self) {
+        // don't show the following warning message if panicking
+        if std::thread::panicking() {
+            return;
+        }
+
+        if !self.is_empty() {
+            const MSG: &str = "Dropping EventQueue while it still has events pending.";
+
+            log::warn!("{}", MSG);
+
+            // panic in debug builds since the backtrace will be helpful for debugging
+            #[cfg(debug_assertions)]
+            panic!("{}", MSG);
+        }
     }
 }
 

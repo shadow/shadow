@@ -9,6 +9,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::io::Write;
 
+use nix::poll::PollFlags;
+
 pub mod socket_utils;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -271,6 +273,31 @@ pub fn running_in_shadow_ptrace() -> bool {
         Ok(val) => val == "PTRACE",
         _ => false,
     }
+}
+
+/// Returns `true` if the `POLLIN` flag is set.
+pub fn is_readable(fd: libc::c_int, timeout_ms: i32) -> nix::Result<bool> {
+    let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::POLLIN)];
+    let count = nix::poll::poll(&mut poll_fds, timeout_ms)?;
+
+    Ok(count > 0 && poll_fds[0].revents().unwrap().contains(PollFlags::POLLIN))
+}
+
+/// Returns `true` if the `POLLOUT` flag is set.
+pub fn is_writable(fd: libc::c_int, timeout_ms: i32) -> nix::Result<bool> {
+    let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::POLLOUT)];
+    let count = nix::poll::poll(&mut poll_fds, timeout_ms)?;
+
+    Ok(count > 0 && poll_fds[0].revents().unwrap().contains(PollFlags::POLLOUT))
+}
+
+/// Returns the poll event flags (the result of `poll()` with `PollFlags::all()` flags set). The
+/// flags will be empty if the timeout occurred.
+pub fn poll_status(fd: libc::c_int, timeout_ms: i32) -> nix::Result<PollFlags> {
+    let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::all())];
+    let _count = nix::poll::poll(&mut poll_fds, timeout_ms)?;
+
+    Ok(poll_fds[0].revents().unwrap_or(PollFlags::empty()))
 }
 
 /// Convenience wrapper around `anyhow::ensure` that generates useful error messages.

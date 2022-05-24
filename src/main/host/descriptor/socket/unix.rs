@@ -34,14 +34,10 @@ pub struct UnixSocket {
 
 impl UnixSocket {
     pub fn new(
-        mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
     ) -> Arc<AtomicRefCell<Self>> {
-        // must be able to both read and write to the socket
-        assert!(mode.contains(FileMode::READ) && mode.contains(FileMode::WRITE));
-
         // initialize the socket's receive buffer
         let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
         let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
@@ -58,7 +54,6 @@ impl UnixSocket {
                 recv_buffer,
                 event_source: StateEventSource::new(),
                 state: FileState::ACTIVE,
-                mode,
                 status,
                 socket_type,
                 namespace: Arc::clone(namespace),
@@ -115,7 +110,7 @@ impl UnixSocket {
     }
 
     pub fn mode(&self) -> FileMode {
-        self.common.mode
+        FileMode::READ | FileMode::WRITE
     }
 
     pub fn has_open_file(&self) -> bool {
@@ -262,14 +257,13 @@ impl UnixSocket {
     }
 
     pub fn pair(
-        mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
         event_queue: &mut EventQueue,
     ) -> (Arc<AtomicRefCell<Self>>, Arc<AtomicRefCell<Self>>) {
-        let socket_1 = UnixSocket::new(mode, status, socket_type, namespace);
-        let socket_2 = UnixSocket::new(mode, status, socket_type, namespace);
+        let socket_1 = UnixSocket::new(status, socket_type, namespace);
+        let socket_2 = UnixSocket::new(status, socket_type, namespace);
 
         {
             let socket_1_ref = &mut *socket_1.borrow_mut();
@@ -1186,7 +1180,6 @@ impl Protocol for ConnOrientedListening {
         let child_send_buffer = Arc::clone(child_send_buffer);
 
         let child_socket = UnixSocket::new(
-            FileMode::READ | FileMode::WRITE,
             // copy the parent's status
             common.status,
             common.socket_type,
@@ -1265,7 +1258,9 @@ impl Protocol for ConnOrientedConnected {
     where
         R: std::io::Read + std::io::Seek,
     {
-        common.sendto(bytes, Some(&self.send_buffer), addr, event_queue)
+        Ok(common
+            .sendto(bytes, Some(&self.send_buffer), addr, event_queue)?
+            .into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1279,7 +1274,10 @@ impl Protocol for ConnOrientedConnected {
     where
         W: std::io::Write + std::io::Seek,
     {
-        common.recvfrom(bytes, event_queue)
+        let (num_copied, _num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+
+        // TODO: support returning the source address
+        Ok((num_copied.into(), None))
     }
 
     fn ioctl(
@@ -1386,7 +1384,9 @@ impl Protocol for ConnLessInitial {
     where
         R: std::io::Read + std::io::Seek,
     {
-        common.sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)
+        Ok(common
+            .sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)?
+            .into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1400,7 +1400,10 @@ impl Protocol for ConnLessInitial {
     where
         W: std::io::Write + std::io::Seek,
     {
-        common.recvfrom(bytes, event_queue)
+        let (num_copied, _num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+
+        // TODO: support returning the source address
+        Ok((num_copied.into(), None))
     }
 
     fn ioctl(
@@ -1521,7 +1524,6 @@ struct UnixSocketCommon {
     recv_buffer: Arc<AtomicRefCell<SharedBuf>>,
     event_source: StateEventSource,
     state: FileState,
-    mode: FileMode,
     status: FileStatus,
     socket_type: UnixSocketType,
     namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
@@ -1629,15 +1631,10 @@ impl UnixSocketCommon {
         send_buffer: Option<&Arc<AtomicRefCell<SharedBuf>>>,
         addr: Option<nix::sys::socket::SockAddr>,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult
+    ) -> Result<usize, SyscallError>
     where
         R: std::io::Read + std::io::Seek,
     {
-        // if the file is not open for writing, return EBADF
-        if !self.mode.contains(FileMode::WRITE) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
         let addr = match addr {
             Some(nix::sys::socket::SockAddr::Unix(x)) => Some(x),
             None => None,
@@ -1673,24 +1670,16 @@ impl UnixSocketCommon {
         let send_buffer = match send_buffer {
             Some(x) => x,
             None => {
-                // if an abstract address
-                if let Some(name) = addr.unwrap().as_abstract() {
-                    // look up the socket from the address name
-                    match self.namespace.borrow().lookup(self.socket_type, name) {
-                        // socket was found with the given name
-                        Some(recv_socket) => {
-                            // store an Arc of the recv buffer
-                            _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
-                            &_buf_arc_storage
-                        }
-                        // no socket has the given name
-                        None => return Err(Errno::ECONNREFUSED.into()),
+                // look up the socket from the address name
+                match lookup_address(&self.namespace.borrow(), self.socket_type, &addr.unwrap()) {
+                    // socket was found with the given name
+                    Some(recv_socket) => {
+                        // store an Arc of the recv buffer
+                        _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
+                        &_buf_arc_storage
                     }
-                } else {
-                    log::warn!(
-                        "Sending to pathname addresses from unix sockets is not yet supported"
-                    );
-                    return Err(Errno::ECONNREFUSED.into());
+                    // no socket has the given name
+                    None => return Err(Errno::ECONNREFUSED.into()),
                 }
             }
         };
@@ -1714,7 +1703,7 @@ impl UnixSocketCommon {
             UnixSocketType::Stream => send_buffer.write_stream(bytes.by_ref(), len, event_queue),
             UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
                 send_buffer.write_packet(bytes.by_ref(), len, event_queue)?;
-                Ok(len.into())
+                Ok(len)
             }
         }
     }
@@ -1725,15 +1714,10 @@ impl UnixSocketCommon {
         &mut self,
         mut bytes: W,
         event_queue: &mut EventQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(usize, usize), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
-        // if the file is not open for reading, return EBADF
-        if !self.mode.contains(FileMode::READ) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
         let mut recv_buffer = self.recv_buffer.borrow_mut();
 
         // the read would block if all:
@@ -1747,10 +1731,9 @@ impl UnixSocketCommon {
             return Err(Errno::EWOULDBLOCK.into());
         }
 
-        let num_read = recv_buffer.read(&mut bytes, event_queue)?;
+        let (num_copied, num_removed_from_buf) = recv_buffer.read(&mut bytes, event_queue)?;
 
-        // TODO: support returning the source address
-        Ok((num_read.into(), None))
+        Ok((num_copied, num_removed_from_buf))
     }
 
     pub fn ioctl(
