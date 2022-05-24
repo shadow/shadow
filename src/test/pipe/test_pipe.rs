@@ -8,7 +8,7 @@ use test_utils::TestEnvironment as TestEnv;
 
 use std::time::Duration;
 
-use nix::sys::time::TimeValLike;
+use nix::poll::PollFlags;
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?
@@ -439,8 +439,17 @@ fn test_read_after_write_close_with_empty_buffer() -> Result<(), String> {
             );
         });
 
-        // read fd should be readable
-        assert!(is_readable(read_fd).unwrap());
+        // read fd should be POLLHUP
+        assert_eq!(
+            test_utils::poll_status(read_fd, 0).unwrap(),
+            // shadow doesn't support POLLHUP
+            // https://github.com/shadow/shadow/issues/2181
+            if test_utils::running_in_shadow() {
+                PollFlags::POLLIN
+            } else {
+                PollFlags::POLLHUP
+            }
+        );
 
         // the write fd is closed, so reading should return 0
         assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
@@ -475,13 +484,22 @@ fn test_read_after_write_close_with_nonempty_buffer() -> Result<(), String> {
         });
 
         // read fd should be readable
-        assert!(is_readable(read_fd).unwrap());
+        assert!(test_utils::is_readable(read_fd, 0).unwrap());
 
         // the write fd is closed, but there are still bytes remaining
         assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 3);
 
-        // read fd should be readable
-        assert!(is_readable(read_fd).unwrap());
+        // read fd should be POLLHUP
+        assert_eq!(
+            test_utils::poll_status(read_fd, 0).unwrap(),
+            // shadow doesn't support POLLHUP
+            // https://github.com/shadow/shadow/issues/2181
+            if test_utils::running_in_shadow() {
+                PollFlags::POLLIN
+            } else {
+                PollFlags::POLLHUP
+            }
+        );
 
         // the write fd is closed, so reading should return 0
         assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
@@ -514,13 +532,22 @@ fn test_write_after_read_close_with_full_buffer() -> Result<(), String> {
         }
 
         // write fd should not be writable
-        assert!(!is_writable(write_fd).unwrap());
+        assert!(!test_utils::is_writable(write_fd, 0).unwrap());
 
         // close the read fd
         nix::unistd::close(read_fd).unwrap();
 
-        // write fd should be writable
-        assert!(is_writable(write_fd).unwrap());
+        // write fd should be POLLERR
+        assert_eq!(
+            test_utils::poll_status(write_fd, 0).unwrap(),
+            // shadow doesn't support POLLERR
+            // https://github.com/shadow/shadow/issues/2181
+            if test_utils::running_in_shadow() {
+                PollFlags::POLLOUT
+            } else {
+                PollFlags::POLLERR
+            }
+        );
 
         // the read fd is closed, so writing should return EPIPE
         assert_eq!(
@@ -528,8 +555,17 @@ fn test_write_after_read_close_with_full_buffer() -> Result<(), String> {
             Err(nix::errno::Errno::EPIPE)
         );
 
-        // write fd should be writable
-        assert!(is_writable(write_fd).unwrap());
+        // write fd should be POLLERR
+        assert_eq!(
+            test_utils::poll_status(write_fd, 0).unwrap(),
+            // shadow doesn't support POLLERR
+            // https://github.com/shadow/shadow/issues/2181
+            if test_utils::running_in_shadow() {
+                PollFlags::POLLOUT
+            } else {
+                PollFlags::POLLERR
+            }
+        );
     });
 
     Ok(())
@@ -554,7 +590,7 @@ fn test_write_after_read_close_with_nonfull_buffer() -> Result<(), String> {
         });
 
         // write fd should be writable
-        assert!(is_writable(write_fd).unwrap());
+        assert!(test_utils::is_writable(write_fd, 0).unwrap());
 
         // the read fd is closed, so writing should return EPIPE
         assert_eq!(
@@ -563,7 +599,7 @@ fn test_write_after_read_close_with_nonfull_buffer() -> Result<(), String> {
         );
 
         // write fd should be writable
-        assert!(is_writable(write_fd).unwrap());
+        assert!(test_utils::is_writable(write_fd, 0).unwrap());
     });
 
     Ok(())
@@ -1055,36 +1091,4 @@ fn test_close_during_blocking_write() -> Result<(), String> {
     thread_handle.join().unwrap();
 
     Ok(())
-}
-
-fn is_readable(fd: libc::c_int) -> nix::Result<bool> {
-    let mut read_set = nix::sys::select::FdSet::new();
-    read_set.insert(fd);
-
-    let count = nix::sys::select::select(
-        None,
-        Some(&mut read_set),
-        None,
-        None,
-        // don't block
-        Some(&mut nix::sys::time::TimeVal::seconds(0)),
-    )?;
-
-    Ok(count == 1)
-}
-
-fn is_writable(fd: libc::c_int) -> nix::Result<bool> {
-    let mut write_set = nix::sys::select::FdSet::new();
-    write_set.insert(fd);
-
-    let count = nix::sys::select::select(
-        None,
-        None,
-        Some(&mut write_set),
-        None,
-        // don't block
-        Some(&mut nix::sys::time::TimeVal::seconds(0)),
-    )?;
-
-    Ok(count == 1)
 }
