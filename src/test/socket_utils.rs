@@ -261,7 +261,7 @@ pub fn dgram_connect_helper(fd_client: libc::c_int, addr: SockAddr, addr_len: li
 
     // connect to the server address
     let rv = unsafe { libc::connect(fd_client, addr_ptr, addr_len) };
-    assert!(rv == 0);
+    assert_eq!(rv, 0);
 }
 
 /// A helper function to autobind the socket to some unused address. Returns the address.

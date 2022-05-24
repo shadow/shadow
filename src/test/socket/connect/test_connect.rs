@@ -3,9 +3,10 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
 use test_utils::socket_utils::SockAddr;
+use test_utils::socket_utils::{self, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, socket_utils};
 
 use std::sync::{Arc, Barrier};
 
@@ -142,14 +143,36 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     }
 
     for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
-        for &sock_type in [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].iter() {
+        let sock_types = match domain {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+                // add details to the test names to avoid duplicates
+                let append_args =
+                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+
+                tests.extend(vec![test_utils::ShadowTest::new(
+                    &append_args("test_af_unspec"),
+                    move || test_af_unspec(domain, sock_type, flag),
+                    // TODO: shadow doesn't support AF_UNSPEC for inet or unix sockets
+                    set![TestEnv::Libc],
+                )]);
+            }
+        }
+
+        let sock_types = match domain {
+            libc::AF_INET => &[libc::SOCK_STREAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
-
-            // skip tests that use SOCK_SEQPACKET with INET sockets
-            if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
-                continue;
-            }
 
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
@@ -174,6 +197,39 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc]
                 },
             )]);
+        }
+    }
+
+    let init_methods = [
+        SocketInitMethod::Inet,
+        SocketInitMethod::Unix,
+        SocketInitMethod::UnixSocketpair,
+    ];
+
+    for &method in init_methods.iter() {
+        let sock_types = match method.domain() {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+                // add details to the test names to avoid duplicates
+                let append_args = |s| {
+                    format!(
+                        "{} <init_method={:?},type={},flag={}>",
+                        s, method, sock_type, flag
+                    )
+                };
+
+                tests.extend(vec![test_utils::ShadowTest::new(
+                    &append_args("test_af_unspec_after_connect"),
+                    move || test_af_unspec_after_connect(method, sock_type, flag),
+                    // TODO: shadow doesn't support AF_UNSPEC for inet or unix sockets
+                    set![TestEnv::Libc],
+                )]);
+            }
         }
     }
 
@@ -664,6 +720,66 @@ fn test_connect_when_server_queue_full(
     thread.join().unwrap()?;
 
     Ok(())
+}
+
+fn test_af_unspec(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    let mut addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    addr.ss_family = libc::AF_UNSPEC as u16;
+    let addr = SockAddr::Generic(addr);
+
+    let args = ConnectArguments {
+        fd,
+        addr: Some(addr),
+        addr_len: 2,
+    };
+
+    let expected_errno = match (domain, sock_type) {
+        (_, libc::SOCK_DGRAM) => None,
+        (libc::AF_UNIX, _) => Some(libc::EINVAL),
+        _ => None,
+    };
+
+    test_utils::run_and_close_fds(&[fd], || check_connect_call(&args, expected_errno))
+}
+
+fn test_af_unspec_after_connect(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flags: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_utils::socket_init_helper(
+        init_method,
+        sock_type,
+        flags,
+        /* bind_client = */ false,
+    );
+
+    let mut addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    addr.ss_family = libc::AF_UNSPEC as u16;
+    let addr = SockAddr::Generic(addr);
+
+    let args = ConnectArguments {
+        fd: fd_client,
+        addr: Some(addr),
+        addr_len: 2,
+    };
+
+    let expected_errno = match (init_method.domain(), sock_type) {
+        (_, libc::SOCK_DGRAM) => None,
+        (libc::AF_UNIX, _) => Some(libc::EINVAL),
+        _ => None,
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        check_connect_call(&args, expected_errno)
+    })
 }
 
 /// Test that a blocking connect() returns when the server socket is closed.

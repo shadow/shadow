@@ -124,11 +124,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         move || test_connected_before_accepted(domain, sock_type),
                         set![TestEnv::Libc, TestEnv::Shadow],
                     ),
-                    test_utils::ShadowTest::new(
-                        &append_args("test_sockname_peername"),
-                        move || test_sockname_peername(domain, sock_type),
-                        set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
                 ]);
             }
         }
@@ -174,8 +169,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
-                    &append_args("test_connected_socket"),
-                    move || test_connected_socket(method, sock_type),
+                    &append_args("test_connected_socket <close_peer=false>"),
+                    move || test_connected_socket(method, sock_type, false),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_connected_socket <close_peer=true>"),
+                    move || test_connected_socket(method, sock_type, true),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
@@ -189,6 +189,15 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
+
+            // if a connection-based socket
+            if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
+                tests.extend(vec![test_utils::ShadowTest::new(
+                    &append_args("test_sockname_peername"),
+                    move || test_sockname_peername(method, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                )]);
+            }
         }
     }
 
@@ -625,9 +634,18 @@ fn test_connected_before_accepted(
 }
 
 /// Test getpeername using a socket connected on loopback.
-fn test_connected_socket(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+fn test_connected_socket(
+    method: SocketInitMethod,
+    sock_type: libc::c_int,
+    close_peer: bool,
+) -> Result<(), String> {
     let (fd_client, fd_peer) =
         socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
+
+    // test getpeername() after the peer has been closed
+    if close_peer {
+        nix::unistd::close(fd_peer).unwrap();
+    }
 
     // fill the sockaddr with dummy data
     let addr = match method.domain() {
@@ -644,9 +662,14 @@ fn test_connected_socket(method: SocketInitMethod, sock_type: libc::c_int) -> Re
         addr_len: Some(addr.ptr_size()),
     };
 
-    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
-        check_getpeername_call(&mut args, None)
-    })?;
+    let to_close = if close_peer {
+        // already closed peer earlier
+        vec![fd_client]
+    } else {
+        vec![fd_client, fd_peer]
+    };
+
+    test_utils::run_and_close_fds(&to_close, || check_getpeername_call(&mut args, None))?;
 
     // check the returned address
     match method {
@@ -847,28 +870,35 @@ fn test_peer_socket(
 }
 
 /// Test that getpeername and getsockname return the same results for connection-oriented sockets.
-fn test_sockname_peername(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
-    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+fn test_sockname_peername(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    if method != SocketInitMethod::UnixSocketpair {
+        let fd_client = unsafe { libc::socket(method.domain(), sock_type, 0) };
+        let fd_server = unsafe { libc::socket(method.domain(), sock_type, 0) };
+        assert!(fd_client >= 0);
+        assert!(fd_server >= 0);
 
-    // bind the server socket to some unused address
-    let (server_addr, server_addr_len) = autobind_helper(fd_server, domain);
+        // bind the server socket to some unused address
+        let (server_addr, server_addr_len) = autobind_helper(fd_server, method.domain());
 
-    // connect the client to the server and get the accepted socket
-    let fd_peer = stream_connect_helper(
-        fd_client,
-        fd_server,
-        server_addr,
-        server_addr_len,
-        /* flags= */ 0,
-    );
+        // connect the client to the server and get the accepted socket
+        let fd_peer = stream_connect_helper(
+            fd_client,
+            fd_server,
+            server_addr,
+            server_addr_len,
+            /* flags= */ 0,
+        );
 
-    // compare getsockname on the first argument to getpeername on the second
-    compare_sockname_peername(fd_client, fd_peer)?;
-    compare_sockname_peername(fd_peer, fd_client)?;
-    compare_sockname_peername(fd_server, fd_client)?;
+        // compare getsockname on the first argument to getpeername on the second
+        compare_sockname_peername(fd_client, fd_peer)?;
+        compare_sockname_peername(fd_peer, fd_client)?;
+        compare_sockname_peername(fd_server, fd_client)?;
+    } else {
+        let (fd_client, fd_peer) = socket_init_helper(method, method.domain(), sock_type, false);
+
+        compare_sockname_peername(fd_client, fd_peer)?;
+        compare_sockname_peername(fd_peer, fd_client)?;
+    }
 
     Ok(())
 }
