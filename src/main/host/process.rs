@@ -6,6 +6,7 @@ use crate::cshadow;
 use crate::host::descriptor::CompatDescriptor;
 use crate::host::syscall::format::{FmtOptions, StraceFmtMode};
 
+use super::timer::Timer;
 use super::{host::HostId, memory_manager::MemoryManager};
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -153,6 +154,16 @@ impl Process {
 
     pub fn raw_mut(&mut self) -> *mut cshadow::Process {
         self.cprocess
+    }
+
+    pub fn realtime_timer(&self) -> &Timer {
+        let timer = unsafe { cshadow::process_getRealtimeTimer(self.cprocess) };
+        unsafe { timer.as_ref().unwrap() }
+    }
+
+    pub fn realtime_timer_mut(&mut self) -> &mut Timer {
+        let timer = unsafe { cshadow::process_getRealtimeTimer(self.cprocess) };
+        unsafe { timer.as_mut().unwrap() }
     }
 }
 

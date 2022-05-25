@@ -335,6 +335,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(futimesat);
             HANDLE_C(getdents);
             HANDLE_C(getdents64);
+            HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
             HANDLE_C(getpid);
             HANDLE_C(getppid);
@@ -418,6 +419,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #endif
             HANDLE_C(rt_sigprocmask);
             HANDLE_C(set_robust_list);
+            HANDLE_RUST(setitimer);
             HANDLE_C(set_tid_address);
             HANDLE_RUST(shutdown);
             HANDLE_RUST(socket);
