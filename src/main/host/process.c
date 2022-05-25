@@ -49,6 +49,7 @@
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
@@ -1217,7 +1218,7 @@ void process_parseArgStrFree(char** argv, char* error) {
     }
 }
 
-void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
+static void _process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
     GHashTableIter iter;
     gpointer key, value;
     g_hash_table_iter_init(&iter, process->threads);
@@ -1236,4 +1237,68 @@ void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, 
             break;
         }
     }
+}
+
+void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
+    MAGIC_ASSERT(process);
+    utility_assert(siginfo->si_signo >= 0);
+    utility_assert(siginfo->si_signo <= SHD_SIGRT_MAX);
+    utility_assert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
+
+    if (siginfo->si_signo == 0) {
+        return;
+    }
+
+    if (!shimipc_getUseSeccomp()) {
+        // ~legacy ptrace path. Send a real signal to the process.
+        if (!currentRunningThread) {
+            error("Sending a signal to a process in ptrace-mode is unimplemented. Signal %d to "
+                  "process %d lost.",
+                  siginfo->si_signo, process->processID);
+        } else {
+            long res = thread_nativeSyscall(
+                currentRunningThread, SYS_kill, process->nativePid, siginfo->si_signo);
+            if (res != 0) {
+                error("Sending signal to process: %s", strerror(-res));
+            }
+        }
+        return;
+    }
+
+    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
+        host_getShimShmemLock(process->host), process_getSharedMem(process), siginfo->si_signo);
+    if (action.ksa_handler == SIG_IGN ||
+        (action.ksa_handler == SIG_DFL &&
+         shd_defaultAction(siginfo->si_signo) == SHD_DEFAULT_ACTION_IGN)) {
+        // Don't deliver an ignored signal.
+        return;
+    }
+
+    shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
+        host_getShimShmemLock(process->host), process_getSharedMem(process));
+
+    if (shd_sigismember(&pending_signals, siginfo->si_signo)) {
+        // Signal is already pending. From signal(7):In the case where a standard signal is already
+        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
+        // overwritten on arrival of subsequent instances of the same signal.
+        return;
+    }
+
+    shd_sigaddset(&pending_signals, siginfo->si_signo);
+    shimshmem_setProcessPendingSignals(
+        host_getShimShmemLock(process->host), process_getSharedMem(process), pending_signals);
+    shimshmem_setProcessSiginfo(host_getShimShmemLock(process->host), process_getSharedMem(process),
+                                siginfo->si_signo, siginfo);
+
+    if (currentRunningThread != NULL && thread_getProcess(currentRunningThread) == process) {
+        shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
+            host_getShimShmemLock(process->host), thread_sharedMem(currentRunningThread));
+        if (!shd_sigismember(&blocked_signals, siginfo->si_signo)) {
+            // Target process is this process, and current thread hasn't blocked
+            // the signal.  It will be delivered to this thread when it resumes.
+            return;
+        }
+    }
+
+    _process_interruptWithSignal(process, host_getShimShmemLock(process->host), siginfo->si_signo);
 }

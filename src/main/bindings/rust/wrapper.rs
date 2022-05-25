@@ -28,7 +28,9 @@ pub type __int32_t = ::std::os::raw::c_int;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
+pub type __uid_t = ::std::os::raw::c_uint;
 pub type __pid_t = ::std::os::raw::c_int;
+pub type __clock_t = ::std::os::raw::c_long;
 pub type __ssize_t = ::std::os::raw::c_long;
 pub type pid_t = __pid_t;
 pub type gchar = ::std::os::raw::c_char;
@@ -69,6 +71,790 @@ fn bindgen_test_layout___sigset_t() {
     );
 }
 pub type sigset_t = __sigset_t;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union sigval {
+    pub sival_int: ::std::os::raw::c_int,
+    pub sival_ptr: *mut ::std::os::raw::c_void,
+}
+#[test]
+fn bindgen_test_layout_sigval() {
+    assert_eq!(
+        ::std::mem::size_of::<sigval>(),
+        8usize,
+        concat!("Size of: ", stringify!(sigval))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<sigval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(sigval))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<sigval>())).sival_int as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigval),
+            "::",
+            stringify!(sival_int)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<sigval>())).sival_ptr as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigval),
+            "::",
+            stringify!(sival_ptr)
+        )
+    );
+}
+pub type __sigval_t = sigval;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct siginfo_t {
+    pub si_signo: ::std::os::raw::c_int,
+    pub si_errno: ::std::os::raw::c_int,
+    pub si_code: ::std::os::raw::c_int,
+    pub __pad0: ::std::os::raw::c_int,
+    pub _sifields: siginfo_t__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union siginfo_t__bindgen_ty_1 {
+    pub _pad: [::std::os::raw::c_int; 28usize],
+    pub _kill: siginfo_t__bindgen_ty_1__bindgen_ty_1,
+    pub _timer: siginfo_t__bindgen_ty_1__bindgen_ty_2,
+    pub _rt: siginfo_t__bindgen_ty_1__bindgen_ty_3,
+    pub _sigchld: siginfo_t__bindgen_ty_1__bindgen_ty_4,
+    pub _sigfault: siginfo_t__bindgen_ty_1__bindgen_ty_5,
+    pub _sigpoll: siginfo_t__bindgen_ty_1__bindgen_ty_6,
+    pub _sigsys: siginfo_t__bindgen_ty_1__bindgen_ty_7,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_1 {
+    pub si_pid: __pid_t,
+    pub si_uid: __uid_t,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_1() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_1>(),
+        8usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_1>(),
+        4usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_1>())).si_pid as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(si_pid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_1>())).si_uid as *const _
+                as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(si_uid)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_2 {
+    pub si_tid: ::std::os::raw::c_int,
+    pub si_overrun: ::std::os::raw::c_int,
+    pub si_sigval: __sigval_t,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_2() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_2>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_2>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_tid as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(si_tid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_overrun as *const _
+                as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(si_overrun)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_sigval as *const _
+                as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(si_sigval)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_3 {
+    pub si_pid: __pid_t,
+    pub si_uid: __uid_t,
+    pub si_sigval: __sigval_t,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_3() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_3>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_3>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_pid as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+            "::",
+            stringify!(si_pid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_uid as *const _
+                as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+            "::",
+            stringify!(si_uid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_sigval as *const _
+                as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+            "::",
+            stringify!(si_sigval)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_4 {
+    pub si_pid: __pid_t,
+    pub si_uid: __uid_t,
+    pub si_status: ::std::os::raw::c_int,
+    pub si_utime: __clock_t,
+    pub si_stime: __clock_t,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_4() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_4>(),
+        32usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_4>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_pid as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+            "::",
+            stringify!(si_pid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_uid as *const _
+                as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+            "::",
+            stringify!(si_uid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_status as *const _
+                as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+            "::",
+            stringify!(si_status)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_utime as *const _
+                as usize
+        },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+            "::",
+            stringify!(si_utime)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_stime as *const _
+                as usize
+        },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+            "::",
+            stringify!(si_stime)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_5 {
+    pub si_addr: *mut ::std::os::raw::c_void,
+    pub si_addr_lsb: ::std::os::raw::c_short,
+    pub _bounds: siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1 {
+    pub _addr_bnd: siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+    pub _pkey: __uint32_t,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1 {
+    pub _lower: *mut ::std::os::raw::c_void,
+    pub _upper: *mut ::std::os::raw::c_void,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<
+                siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+            >()))
+            ._lower as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(_lower)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<
+                siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+            >()))
+            ._upper as *const _ as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(_upper)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>()))
+                ._addr_bnd as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
+            "::",
+            stringify!(_addr_bnd)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>()))._pkey
+                as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
+            "::",
+            stringify!(_pkey)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5>(),
+        32usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_5>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>())).si_addr as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+            "::",
+            stringify!(si_addr)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>())).si_addr_lsb
+                as *const _ as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+            "::",
+            stringify!(si_addr_lsb)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>()))._bounds as *const _
+                as usize
+        },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+            "::",
+            stringify!(_bounds)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_6 {
+    pub si_band: ::std::os::raw::c_long,
+    pub si_fd: ::std::os::raw::c_int,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_6() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_6>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_6>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_6>())).si_band as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
+            "::",
+            stringify!(si_band)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_6>())).si_fd as *const _
+                as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
+            "::",
+            stringify!(si_fd)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct siginfo_t__bindgen_ty_1__bindgen_ty_7 {
+    pub _call_addr: *mut ::std::os::raw::c_void,
+    pub _syscall: ::std::os::raw::c_int,
+    pub _arch: ::std::os::raw::c_uint,
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_7() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1__bindgen_ty_7>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1__bindgen_ty_7>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._call_addr as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+            "::",
+            stringify!(_call_addr)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._syscall as *const _
+                as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+            "::",
+            stringify!(_syscall)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._arch as *const _
+                as usize
+        },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+            "::",
+            stringify!(_arch)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_siginfo_t__bindgen_ty_1() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t__bindgen_ty_1>(),
+        112usize,
+        concat!("Size of: ", stringify!(siginfo_t__bindgen_ty_1))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t__bindgen_ty_1>(),
+        8usize,
+        concat!("Alignment of ", stringify!(siginfo_t__bindgen_ty_1))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._pad as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_pad)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._kill as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_kill)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._timer as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_timer)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._rt as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_rt)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigchld as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_sigchld)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigfault as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_sigfault)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigpoll as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_sigpoll)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigsys as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t__bindgen_ty_1),
+            "::",
+            stringify!(_sigsys)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_siginfo_t() {
+    assert_eq!(
+        ::std::mem::size_of::<siginfo_t>(),
+        128usize,
+        concat!("Size of: ", stringify!(siginfo_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<siginfo_t>(),
+        8usize,
+        concat!("Alignment of ", stringify!(siginfo_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_signo as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t),
+            "::",
+            stringify!(si_signo)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_errno as *const _ as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t),
+            "::",
+            stringify!(si_errno)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_code as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t),
+            "::",
+            stringify!(si_code)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t>())).__pad0 as *const _ as usize },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t),
+            "::",
+            stringify!(__pad0)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<siginfo_t>()))._sifields as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(siginfo_t),
+            "::",
+            stringify!(_sifields)
+        )
+    );
+}
 pub type GList = [u64; 3usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1034,10 +1820,10 @@ extern "C" {
     pub fn process_getSharedMem(proc_: *mut Process) -> *mut ShimShmemProcess;
 }
 extern "C" {
-    pub fn process_interruptWithSignal(
+    pub fn process_signal(
         process: *mut Process,
-        hostLock: *mut ShimShmemHostLock,
-        signo: ::std::os::raw::c_int,
+        currentRunningThread: *mut Thread,
+        siginfo: *const siginfo_t,
     );
 }
 #[repr(C)]
