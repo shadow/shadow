@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
@@ -38,67 +38,29 @@ impl UnixSocket {
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
     ) -> Arc<AtomicRefCell<Self>> {
-        // initialize the socket's receive buffer
-        let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
-        let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
+        Arc::new_cyclic(|weak| {
+            // initialize the socket's receive buffer
+            let recv_buffer = SharedBuf::new(UNIX_SOCKET_DEFAULT_BUFFER_SIZE);
+            let recv_buffer = Arc::new(AtomicRefCell::new(recv_buffer));
 
-        // increment the buffer's reader count; we'll return the handle back to the buffer when
-        // we're no longer acting as a reader (when we're closed)
-        // this is a new buffer and there are no listeners, so safe to use a temporary event queue
-        let reader_handle = EventQueue::queue_and_run(|event_queue| {
-            recv_buffer.borrow_mut().add_reader(event_queue)
-        });
-
-        let socket = Self {
-            common: UnixSocketCommon {
+            let mut common = UnixSocketCommon {
                 recv_buffer,
                 event_source: StateEventSource::new(),
                 state: FileState::ACTIVE,
                 status,
                 socket_type,
                 namespace: Arc::clone(namespace),
-                recv_buffer_handle: None,
-                reader_handle: Some(reader_handle),
                 has_open_file: false,
-            },
-            protocol_state: ProtocolState::new(socket_type),
-        };
+            };
 
-        let socket = Arc::new(AtomicRefCell::new(socket));
-        let mut socket_ref = socket.borrow_mut();
+            // may generate new events
+            let protocol_state = ProtocolState::new(socket_type, &mut common, weak);
 
-        // update the socket's state when the buffer's state changes
-        let weak = Arc::downgrade(&socket);
-        let recv_handle = socket_ref.common.recv_buffer.borrow_mut().add_listener(
-            BufferState::READABLE | BufferState::NO_WRITERS,
-            move |state, event_queue| {
-                // if the file hasn't been dropped
-                if let Some(socket) = weak.upgrade() {
-                    let mut socket = socket.borrow_mut();
-
-                    // if the socket is already closed, do nothing
-                    if socket.common.state.contains(FileState::CLOSED) {
-                        return;
-                    }
-
-                    // the socket is readable iff the buffer is readable or has no writers
-                    socket.common.copy_state(
-                        /* mask */ FileState::READABLE,
-                        state
-                            .intersects(BufferState::READABLE | BufferState::NO_WRITERS)
-                            .then(|| FileState::READABLE)
-                            .unwrap_or_default(),
-                        event_queue,
-                    );
-                }
-            },
-        );
-
-        socket_ref.common.recv_buffer_handle = Some(recv_handle);
-
-        std::mem::drop(socket_ref);
-
-        socket
+            AtomicRefCell::new(Self {
+                common,
+                protocol_state,
+            })
+        })
     }
 
     pub fn get_status(&self) -> FileStatus {
@@ -125,12 +87,22 @@ impl UnixSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn get_bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.protocol_state.bound_address()
+    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        // return the bound address if set, otherwise return an empty unix sockaddr
+        Ok(Some(
+            self.protocol_state
+                .bound_address()?
+                .unwrap_or_else(|| empty_unix_sockaddr()),
+        ))
     }
 
-    pub fn get_peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.protocol_state.peer_address()
+    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        // return the peer address if set, otherwise return an empty unix sockaddr
+        Ok(Some(
+            self.protocol_state
+                .peer_address()?
+                .unwrap_or_else(|| empty_unix_sockaddr()),
+        ))
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
@@ -272,7 +244,7 @@ impl UnixSocket {
                 .connect_unnamed(
                     &mut socket_1_ref.common,
                     &socket_1,
-                    Arc::clone(socket_2.borrow().recv_buffer()),
+                    Arc::clone(&socket_2),
                     event_queue,
                 )
                 .unwrap();
@@ -285,7 +257,7 @@ impl UnixSocket {
                 .connect_unnamed(
                     &mut socket_2_ref.common,
                     &socket_2,
-                    Arc::clone(socket_1.borrow().recv_buffer()),
+                    Arc::clone(&socket_1),
                     event_queue,
                 )
                 .unwrap();
@@ -328,10 +300,12 @@ struct ConnOrientedListening {
 }
 struct ConnOrientedConnected {
     bound_addr: Option<nix::sys::socket::UnixAddr>,
-    peer_addr: nix::sys::socket::UnixAddr,
-    send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+    peer_addr: Option<nix::sys::socket::UnixAddr>,
+    peer: Arc<AtomicRefCell<UnixSocket>>,
+    reader_handle: ReaderHandle,
     writer_handle: WriterHandle,
-    // this handle is never accessed, but we store it because of its drop impl
+    // these handles are never accessed, but we store them because of their drop impls
+    _recv_buffer_handle: BufferHandle,
     _send_buffer_handle: BufferHandle,
 }
 struct ConnOrientedClosed {}
@@ -339,9 +313,11 @@ struct ConnOrientedClosed {}
 struct ConnLessInitial {
     bound_addr: Option<nix::sys::socket::UnixAddr>,
     peer_addr: Option<nix::sys::socket::UnixAddr>,
-    send_buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
+    peer: Option<Arc<AtomicRefCell<UnixSocket>>>,
+    reader_handle: ReaderHandle,
     writer_handle: Option<WriterHandle>,
-    // this handle is never accessed, but we store it because of its drop impl
+    // these handles are never accessed, but we store them because of their drop impls
+    _recv_buffer_handle: BufferHandle,
     _send_buffer_handle: Option<BufferHandle>,
 }
 struct ConnLessClosed {}
@@ -406,22 +382,53 @@ state_upcast!(ConnLessInitial, ProtocolState::ConnLessInitial);
 state_upcast!(ConnLessClosed, ProtocolState::ConnLessClosed);
 
 impl ProtocolState {
-    fn new(socket_type: UnixSocketType) -> Self {
+    fn new(
+        socket_type: UnixSocketType,
+        common: &mut UnixSocketCommon,
+        socket: &Weak<AtomicRefCell<UnixSocket>>,
+    ) -> Self {
         match socket_type {
             UnixSocketType::Stream | UnixSocketType::SeqPacket => {
                 Self::ConnOrientedInitial(Some(ConnOrientedInitial { bound_addr: None }))
             }
-            UnixSocketType::Dgram => Self::ConnLessInitial(Some(ConnLessInitial {
-                bound_addr: None,
-                peer_addr: None,
-                send_buffer: None,
-                writer_handle: None,
-                _send_buffer_handle: None,
-            })),
+            UnixSocketType::Dgram => {
+                // this is a new socket and there are no listeners, so safe to use a temporary event queue
+                let mut event_queue = EventQueue::new();
+
+                // dgram unix sockets are immediately able to receive data, so initialize the
+                // receive buffer
+
+                // increment the buffer's reader count
+                let reader_handle = common.recv_buffer.borrow_mut().add_reader(&mut event_queue);
+
+                // update the socket's state when the buffer's state changes
+                let recv_buffer_handle = common.add_buffer_listener(
+                    Weak::clone(socket),
+                    &Arc::clone(&common.recv_buffer),
+                    // the socket will be readable iff the buffer is readable or has no writers
+                    ListenerType::Read,
+                    &mut event_queue,
+                );
+
+                // make sure no events were generated since if there were events to run, they would
+                // probably not run correctly if the socket's Arc is not fully created yet (as in
+                // the case of `Arc::new_cyclic`)
+                assert!(event_queue.is_empty());
+
+                Self::ConnLessInitial(Some(ConnLessInitial {
+                    bound_addr: None,
+                    peer_addr: None,
+                    peer: None,
+                    reader_handle,
+                    writer_handle: None,
+                    _recv_buffer_handle: recv_buffer_handle,
+                    _send_buffer_handle: None,
+                }))
+            }
         }
     }
 
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().peer_address(),
@@ -432,7 +439,7 @@ impl ProtocolState {
         }
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().bound_address(),
@@ -639,39 +646,39 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        peer: Arc<AtomicRefCell<UnixSocket>>,
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
             Self::ConnOrientedListening(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
             Self::ConnOrientedConnected(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
             Self::ConnOrientedClosed(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
             Self::ConnLessInitial(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
             Self::ConnLessClosed(x) => {
                 x.take()
                     .unwrap()
-                    .connect_unnamed(common, socket, send_buffer, event_queue)
+                    .connect_unnamed(common, socket, peer, event_queue)
             }
         };
 
@@ -699,6 +706,7 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         from_address: Option<nix::sys::socket::UnixAddr>,
+        peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
@@ -706,36 +714,42 @@ impl ProtocolState {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
             Self::ConnOrientedListening(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
             Self::ConnOrientedConnected(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
             Self::ConnOrientedClosed(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
             Self::ConnLessInitial(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
             Self::ConnLessClosed(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
+                peer,
                 child_send_buffer,
                 event_queue,
             ),
@@ -750,8 +764,8 @@ trait Protocol
 where
     Self: Sized + Into<ProtocolState>,
 {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr>;
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr>;
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
 
     fn close(
         self,
@@ -847,7 +861,7 @@ where
         self,
         _common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
-        _send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        _peer: Arc<AtomicRefCell<UnixSocket>>,
         _event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!(
@@ -870,6 +884,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _from_address: Option<nix::sys::socket::UnixAddr>,
+        _peer: &Arc<AtomicRefCell<UnixSocket>>,
         _child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         _event_queue: &mut EventQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
@@ -882,12 +897,12 @@ where
 }
 
 impl Protocol for ConnOrientedInitial {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1025,6 +1040,7 @@ impl Protocol for ConnOrientedInitial {
         let peer = match server_mut.protocol_state.queue_incoming_conn(
             &mut server_mut.common,
             self.bound_addr,
+            socket,
             &common.recv_buffer,
             event_queue,
         ) {
@@ -1053,17 +1069,39 @@ impl Protocol for ConnOrientedInitial {
 
         // our send buffer will be the peer's receive buffer
         let send_buffer = Arc::clone(peer.borrow().recv_buffer());
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            Arc::downgrade(socket),
+            &send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
 
+        // update the socket's state when the buffer's state changes
+        let recv_buffer_handle = common.add_buffer_listener(
+            Arc::downgrade(socket),
+            &Arc::clone(&common.recv_buffer),
+            // the socket will be readable iff the buffer is readable or has no writers
+            ListenerType::Read,
+            event_queue,
+        );
+
+        // increment the buffer's reader count
+        let reader_handle = common.recv_buffer.borrow_mut().add_reader(event_queue);
+
         let new_state = ConnOrientedConnected {
             bound_addr: self.bound_addr,
-            peer_addr: addr.clone(),
-            send_buffer,
-            _send_buffer_handle: send_buffer_handle,
+            peer_addr: Some(addr.clone()),
+            peer: Arc::clone(peer),
+            reader_handle,
             writer_handle,
+            _recv_buffer_handle: recv_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
         };
 
         (new_state.into(), Ok(()))
@@ -1073,24 +1111,51 @@ impl Protocol for ConnOrientedInitial {
         self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        peer: Arc<AtomicRefCell<UnixSocket>>,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         assert!(self.bound_addr.is_none());
 
-        let unnamed_sock_addr = empty_unix_sockaddr();
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+        let send_buffer_handle;
+        let writer_handle;
 
-        // increment the buffer's writer count
-        let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+        {
+            let peer_ref = peer.borrow();
+            let send_buffer = peer_ref.recv_buffer();
+
+            // update the socket's state when the buffer's state changes
+            send_buffer_handle = common.add_buffer_listener(
+                Arc::downgrade(socket),
+                &send_buffer,
+                // the socket will be writable iff the buffer is writable or has no readers
+                ListenerType::Write,
+                event_queue,
+            );
+
+            // increment the buffer's writer count
+            writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+        }
+
+        // update the socket's state when the buffer's state changes
+        let recv_buffer_handle = common.add_buffer_listener(
+            Arc::downgrade(socket),
+            &Arc::clone(&common.recv_buffer),
+            // the socket will be readable iff the buffer is readable or has no writers
+            ListenerType::Read,
+            event_queue,
+        );
+
+        // increment the buffer's reader count
+        let reader_handle = common.recv_buffer.borrow_mut().add_reader(event_queue);
 
         let new_state = ConnOrientedConnected {
-            // bind the socket to an unnamed address so that we don't accidentally bind it later
-            bound_addr: Some(unnamed_sock_addr),
-            peer_addr: unnamed_sock_addr,
-            send_buffer,
-            _send_buffer_handle: send_buffer_handle,
+            bound_addr: None,
+            peer_addr: None,
+            peer,
+            reader_handle,
             writer_handle,
+            _recv_buffer_handle: recv_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
         };
 
         (new_state.into(), Ok(()))
@@ -1107,12 +1172,12 @@ impl Protocol for ConnOrientedInitial {
 }
 
 impl Protocol for ConnOrientedListening {
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        Some(self.bound_addr)
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(Some(self.bound_addr))
     }
 
     fn close(
@@ -1167,6 +1232,7 @@ impl Protocol for ConnOrientedListening {
         &mut self,
         common: &mut UnixSocketCommon,
         from_address: Option<nix::sys::socket::UnixAddr>,
+        peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         event_queue: &mut EventQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
@@ -1177,8 +1243,6 @@ impl Protocol for ConnOrientedListening {
 
         assert!(common.state.contains(FileState::SOCKET_ALLOWING_CONNECT));
 
-        let child_send_buffer = Arc::clone(child_send_buffer);
-
         let child_socket = UnixSocket::new(
             // copy the parent's status
             common.status,
@@ -1186,22 +1250,41 @@ impl Protocol for ConnOrientedListening {
             &common.namespace,
         );
 
-        let send_buffer_handle = child_socket.borrow_mut().common.connect_buffer(
-            &child_socket,
+        let child_recv_buffer = Arc::clone(&child_socket.borrow_mut().common.recv_buffer);
+
+        // update the child's state when the buffer's state changes
+        let send_buffer_handle = child_socket.borrow_mut().common.add_buffer_listener(
+            Arc::downgrade(&child_socket),
             &child_send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
             event_queue,
         );
 
         // increment the buffer's writer count
         let writer_handle = child_send_buffer.borrow_mut().add_writer(event_queue);
 
+        // update the child's state when the buffer's state changes
+        let recv_buffer_handle = child_socket.borrow_mut().common.add_buffer_listener(
+            Arc::downgrade(&child_socket),
+            &child_recv_buffer,
+            // the socket will be readable iff the buffer is readable or has no writers
+            ListenerType::Read,
+            event_queue,
+        );
+
+        // increment the buffer's reader count
+        let reader_handle = child_recv_buffer.borrow_mut().add_reader(event_queue);
+
         let new_child_state = ConnOrientedConnected {
             // use the parent's bind address
             bound_addr: Some(self.bound_addr.clone()),
-            peer_addr: from_address.unwrap_or_else(|| empty_unix_sockaddr()),
-            send_buffer: child_send_buffer,
-            _send_buffer_handle: send_buffer_handle,
+            peer_addr: from_address,
+            peer: Arc::clone(peer),
+            reader_handle,
             writer_handle,
+            _recv_buffer_handle: recv_buffer_handle,
+            _send_buffer_handle: send_buffer_handle,
         };
 
         // update the child socket's state
@@ -1222,14 +1305,14 @@ impl Protocol for ConnOrientedListening {
 impl Protocol for ConnOrientedConnected {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        Some(self.peer_addr)
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.peer_addr)
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1237,8 +1320,16 @@ impl Protocol for ConnOrientedConnected {
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
+        // inform the buffer that there is one fewer readers
+        common
+            .recv_buffer
+            .borrow_mut()
+            .remove_reader(self.reader_handle, event_queue);
+
         // inform the buffer that there is one fewer writers
-        self.send_buffer
+        self.peer
+            .borrow()
+            .recv_buffer()
             .borrow_mut()
             .remove_writer(self.writer_handle, event_queue);
 
@@ -1259,7 +1350,7 @@ impl Protocol for ConnOrientedConnected {
         R: std::io::Read + std::io::Seek,
     {
         Ok(common
-            .sendto(bytes, Some(&self.send_buffer), addr, event_queue)?
+            .sendto(bytes, Some(&self.peer), addr, event_queue)?
             .into())
     }
 
@@ -1303,14 +1394,14 @@ impl Protocol for ConnOrientedConnected {
 impl Protocol for ConnOrientedClosed {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::ENOTCONN.into())
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Err(Errno::EBADFD.into())
     }
 
     fn close(
@@ -1326,14 +1417,17 @@ impl Protocol for ConnOrientedClosed {
 impl Protocol for ConnLessInitial {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.peer_addr
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        match self.peer {
+            Some(_) => Ok(self.peer_addr),
+            None => Err(Errno::ENOTCONN.into()),
+        }
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        self.bound_addr
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(self.bound_addr)
     }
 
     fn close(
@@ -1341,11 +1435,16 @@ impl Protocol for ConnLessInitial {
         common: &mut UnixSocketCommon,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
+        // inform the buffer that there is one fewer readers
+        common
+            .recv_buffer
+            .borrow_mut()
+            .remove_reader(self.reader_handle, event_queue);
+
         // inform the buffer that there is one fewer writers
-        if let (Some(send_buffer), Some(writer_handle)) =
-            (self.send_buffer.as_ref(), self.writer_handle)
-        {
-            send_buffer
+        if let (Some(peer), Some(writer_handle)) = (self.peer, self.writer_handle) {
+            peer.borrow()
+                .recv_buffer()
                 .borrow_mut()
                 .remove_writer(writer_handle, event_queue);
         }
@@ -1385,7 +1484,7 @@ impl Protocol for ConnLessInitial {
         R: std::io::Read + std::io::Seek,
     {
         Ok(common
-            .sendto(bytes, self.send_buffer.as_ref(), addr, event_queue)?
+            .sendto(bytes, self.peer.as_ref(), addr, event_queue)?
             .into())
     }
 
@@ -1438,10 +1537,9 @@ impl Protocol for ConnLessInitial {
         };
 
         // inform any existing buffer that there is one fewer writers
-        if let (Some(old_send_buffer), Some(writer_handle)) =
-            (self.send_buffer.as_ref(), self.writer_handle)
-        {
-            old_send_buffer
+        if let (Some(peer), Some(writer_handle)) = (self.peer, self.writer_handle) {
+            peer.borrow()
+                .recv_buffer()
                 .borrow_mut()
                 .remove_writer(writer_handle, event_queue);
         }
@@ -1449,14 +1547,21 @@ impl Protocol for ConnLessInitial {
         // get the new send buffer
         let new_send_buffer = Arc::clone(peer.borrow().recv_buffer());
 
-        let send_buffer_handle = common.connect_buffer(socket, &new_send_buffer, event_queue);
+        // update the socket's state when the buffer's state changes
+        let send_buffer_handle = common.add_buffer_listener(
+            Arc::downgrade(socket),
+            &new_send_buffer,
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write,
+            event_queue,
+        );
 
         // increment the buffer's writer count
         let writer_handle = new_send_buffer.borrow_mut().add_writer(event_queue);
 
         let new_state = Self {
             peer_addr: Some(addr.clone()),
-            send_buffer: Some(new_send_buffer),
+            peer: Some(peer),
             writer_handle: Some(writer_handle),
             _send_buffer_handle: Some(send_buffer_handle),
             ..self
@@ -1469,24 +1574,36 @@ impl Protocol for ConnLessInitial {
         self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        send_buffer: Arc<AtomicRefCell<SharedBuf>>,
+        peer: Arc<AtomicRefCell<UnixSocket>>,
         event_queue: &mut EventQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
-        // bind the socket to an unnamed address so that it can't be bound later
-        let unnamed_sock_addr = empty_unix_sockaddr();
-
         assert!(self.peer_addr.is_none());
         assert!(self.bound_addr.is_none());
 
-        let send_buffer_handle = common.connect_buffer(socket, &send_buffer, event_queue);
+        let send_buffer_handle;
+        let writer_handle;
 
-        // increment the buffer's writer count
-        let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+        {
+            let peer_ref = peer.borrow();
+            let send_buffer = peer_ref.recv_buffer();
+
+            // update the socket's state when the buffer's state changes
+            send_buffer_handle = common.add_buffer_listener(
+                Arc::downgrade(socket),
+                &send_buffer,
+                // the socket will be writable iff the buffer is writable or has no readers
+                ListenerType::Write,
+                event_queue,
+            );
+
+            // increment the buffer's writer count
+            writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+        }
 
         let new_state = Self {
-            bound_addr: Some(unnamed_sock_addr),
-            peer_addr: Some(unnamed_sock_addr),
-            send_buffer: Some(send_buffer),
+            bound_addr: None,
+            peer_addr: None,
+            peer: Some(peer),
             writer_handle: Some(writer_handle),
             _send_buffer_handle: Some(send_buffer_handle),
             ..self
@@ -1499,14 +1616,14 @@ impl Protocol for ConnLessInitial {
 impl Protocol for ConnLessClosed {
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn peer_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(None)
     }
 
     // https://github.com/shadow/shadow/issues/2093
     #[allow(deprecated)]
-    fn bound_address(&self) -> Option<nix::sys::socket::UnixAddr> {
-        None
+    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+        Ok(None)
     }
 
     fn close(
@@ -1527,10 +1644,6 @@ struct UnixSocketCommon {
     status: FileStatus,
     socket_type: UnixSocketType,
     namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
-    // listener handle for recv buffer events
-    recv_buffer_handle: Option<BufferHandle>,
-    // a handle that signifies we're acting as a reader for the recv buffer
-    reader_handle: Option<ReaderHandle>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -1540,17 +1653,6 @@ impl UnixSocketCommon {
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         if self.state.contains(FileState::CLOSED) {
             log::warn!("Attempting to close an already-closed unix socket");
-        }
-
-        // drop the event listener handle so that we stop receiving new events
-        self.recv_buffer_handle.take().map(|h| h.stop_listening());
-
-        // inform the buffer that there is one fewer readers
-        if let Some(reader_handle) = self.reader_handle.take() {
-            // return the handle back to the buffer
-            self.recv_buffer
-                .borrow_mut()
-                .remove_reader(reader_handle, event_queue);
         }
 
         // set the closed flag and remove the active, readable, and writable flags
@@ -1628,7 +1730,7 @@ impl UnixSocketCommon {
     pub fn sendto<R>(
         &mut self,
         mut bytes: R,
-        send_buffer: Option<&Arc<AtomicRefCell<SharedBuf>>>,
+        peer: Option<&Arc<AtomicRefCell<UnixSocket>>>,
         addr: Option<nix::sys::socket::SockAddr>,
         event_queue: &mut EventQueue,
     ) -> Result<usize, SyscallError>
@@ -1640,6 +1742,9 @@ impl UnixSocketCommon {
             None => None,
             _ => return Err(Errno::EINVAL.into()),
         };
+
+        let peer_ref = peer.map(|x| x.borrow());
+        let send_buffer = peer_ref.as_ref().map(|x| x.recv_buffer());
 
         // returns either the send buffer, or None if we should look up the send buffer from the
         // socket address
@@ -1749,51 +1854,77 @@ impl UnixSocketCommon {
         Err(Errno::EINVAL.into())
     }
 
-    pub fn connect_buffer(
+    /// Add a listener to the buffer which keeps the socket's state in sync with the buffer's state.
+    /// If the listener type is `ListenerType::Read`, the socket will be readable iff the buffer is
+    /// readable or has no writers. If the listener type is `ListenerType::Write`, the socket will
+    /// be writable iff the buffer is writable or has no readers.
+    fn add_buffer_listener(
         &mut self,
-        socket: &Arc<AtomicRefCell<UnixSocket>>,
-        send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
+        socket_weak: Weak<AtomicRefCell<UnixSocket>>,
+        buffer: &Arc<AtomicRefCell<SharedBuf>>,
+        listener_type: ListenerType,
         event_queue: &mut EventQueue,
     ) -> BufferHandle {
-        let mut send_buffer_ref = send_buffer.borrow_mut();
+        let buffer_ref = &mut buffer.borrow_mut();
 
-        // the socket is writable iff the buffer is writable or has no readers
+        let (buffer_state, socket_state) = match listener_type {
+            // the socket will be readable iff the buffer is readable or has no writers
+            ListenerType::Read => (
+                BufferState::READABLE | BufferState::NO_WRITERS,
+                FileState::READABLE,
+            ),
+            // the socket will be writable iff the buffer is writable or has no readers
+            ListenerType::Write => (
+                BufferState::WRITABLE | BufferState::NO_READERS,
+                FileState::WRITABLE,
+            ),
+        };
+
+        // add the listener
+        let handle = buffer_ref.add_listener(buffer_state, move |new_buffer_state, event_queue| {
+            // if the socket hasn't been dropped
+            if let Some(socket) = socket_weak.upgrade() {
+                let mut socket = socket.borrow_mut();
+
+                // update the socket's state to align with the buffer's current state
+                socket.common.align_state_to_buffer(
+                    new_buffer_state,
+                    buffer_state,
+                    socket_state,
+                    event_queue,
+                );
+            }
+        });
+
+        // make sure we're starting in a consistent state with the buffer
+        self.align_state_to_buffer(buffer_ref.state(), buffer_state, socket_state, event_queue);
+
+        handle
+    }
+
+    /// Align the socket's state to the buffer state. For example if the buffer is both `READABLE`
+    /// and `WRITABLE`, and the socket is only open in `READ` mode, the socket's `READABLE` state
+    /// will be set and the `WRITABLE` state will be unchanged.
+    fn align_state_to_buffer(
+        &mut self,
+        new_buffer_state: BufferState,
+        buffer_state: BufferState,
+        socket_state: FileState,
+        event_queue: &mut EventQueue,
+    ) {
+        // if the socket is already closed, do nothing
+        if self.state.contains(FileState::CLOSED) {
+            return;
+        }
+
         self.copy_state(
-            /* mask */ FileState::WRITABLE,
-            send_buffer_ref
-                .state()
-                .intersects(BufferState::WRITABLE | BufferState::NO_READERS)
-                .then(|| FileState::WRITABLE)
+            /* mask */ socket_state,
+            new_buffer_state
+                .intersects(buffer_state)
+                .then(|| socket_state)
                 .unwrap_or_default(),
             event_queue,
         );
-
-        // update the socket's state when the buffer's state changes
-        let weak = Arc::downgrade(&socket);
-        send_buffer_ref.add_listener(
-            BufferState::WRITABLE | BufferState::NO_READERS,
-            move |state, event_queue| {
-                // if the file hasn't been dropped
-                if let Some(socket) = weak.upgrade() {
-                    let mut socket = socket.borrow_mut();
-
-                    // if the socket is already closed, do nothing
-                    if socket.common.state.contains(FileState::CLOSED) {
-                        return;
-                    }
-
-                    // the socket is writable iff the buffer is writable or has no readers
-                    socket.common.copy_state(
-                        /* mask */ FileState::WRITABLE,
-                        state
-                            .intersects(BufferState::WRITABLE | BufferState::NO_READERS)
-                            .then(|| FileState::WRITABLE)
-                            .unwrap_or_default(),
-                        event_queue,
-                    );
-                }
-            },
-        )
     }
 
     fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
@@ -1847,6 +1978,15 @@ fn backlog_to_queue_size(backlog: i32) -> u32 {
     queue_limit.saturating_add(1)
 }
 
+fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
+    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
+        // https://github.com/shadow/shadow/issues/2093
+        #[allow(deprecated)]
+        nix::sys::socket::SockAddr::Unix(x) => x,
+        x => panic!("Unexpected socket address type: {:?}", x),
+    }
+}
+
 // WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum UnixSocketType {
@@ -1888,11 +2028,8 @@ enum IncomingConnError {
     NotSupported,
 }
 
-fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
-    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::SockAddr::Unix(x) => x,
-        x => panic!("Unexpected socket address type: {:?}", x),
-    }
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ListenerType {
+    Read,
+    Write,
 }
