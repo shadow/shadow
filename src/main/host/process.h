@@ -191,4 +191,7 @@ ShimShmemProcess* process_getSharedMem(Process* proc);
 // handler), and NULL otherwise (e.g. when called from a timer expiration event).
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo);
 
+// Access the process's realtime timer; e.g. corresponding to ITIMER_REAL.
+Timer* process_getRealtimeTimer(Process* process);
+
 #endif /* SHD_PROCESS_H_ */

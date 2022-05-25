@@ -153,12 +153,19 @@ struct _Process {
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
 
+    /* ITIMER_REAL, as manipulated by `getitimer` and `setitimer`.
+     */
+    Timer* itimerReal;
+
     /* Pause shadow after launching this process, to give the user time to attach gdb */
     bool pause_for_debugging;
 
     gint referenceCount;
     MAGIC_DECLARE;
 };
+
+static void _unref_process_cb(gpointer data);
+static void _unref_thread_cb(gpointer data);
 
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
@@ -315,6 +322,13 @@ static void _process_handleProcessExit(Process* proc) {
     }
 
     _process_check(proc);
+
+    // Drop the timer now, so that it stops running, and so that it breaks its
+    // circular reference to the process.
+    if (proc->itimerReal) {
+        timer_drop(proc->itimerReal);
+        proc->itimerReal = NULL;
+    }
 }
 
 static void _process_terminate(Process* proc) {
@@ -622,12 +636,12 @@ static void _start_thread_task(Host* host, gpointer callbackObject, gpointer cal
     process_continue(process, thread);
 }
 
-static void _start_thread_task_free_process(gpointer data) {
+static void _unref_process_cb(gpointer data) {
     Process* process = data;
     process_unref(process);
 }
 
-static void _start_thread_task_free_thread(gpointer data) {
+static void _unref_thread_cb(gpointer data) {
     Thread* thread = data;
     thread_unref(thread);
 }
@@ -639,9 +653,8 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    TaskRef* task =
-        taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
-                          _start_thread_task_free_process, _start_thread_task_free_thread);
+    TaskRef* task = taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
+                                      _unref_process_cb, _unref_thread_cb);
     worker_scheduleTaskWithDelay(task, proc->host, 0);
     taskref_drop(task);
 }
@@ -793,6 +806,19 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
+static void _process_itimer_real_expiration(Host* host, void* voidProcess, void* _unused) {
+    Process* process = voidProcess;
+    MAGIC_ASSERT(process);
+
+    int overrun = timer_getExpirationCount(process->itimerReal);
+    siginfo_t siginfo = {
+        .si_signo = SIGALRM,
+        .si_code = SI_TIMER,
+        .si_overrun = overrun,
+    };
+    process_signal(process, NULL, &siginfo);
+}
+
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
                      InterposeMethod interposeMethod, const gchar* hostName,
                      const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
@@ -886,6 +912,13 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->pause_for_debugging = pause_for_debugging;
 
+    process_ref(proc);
+    TaskRef* task = taskref_new_bound(
+        host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
+    proc->itimerReal = timer_new(task);
+    // timer_new clones the task; we don't need our own reference anymore.
+    taskref_drop(task);
+
     worker_count_allocation(Process);
 
     return proc;
@@ -948,6 +981,11 @@ static void _process_free(Process* proc) {
     /* And we no longer need to access the host. */
     if (proc->host) {
         host_unref(proc->host);
+    }
+
+    if (proc->itimerReal) {
+        timer_drop(proc->itimerReal);
+        proc->itimerReal = NULL;
     }
 
     shmemallocator_globalFree(&proc->shimSharedMemBlock);
@@ -1301,4 +1339,9 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
     }
 
     _process_interruptWithSignal(process, host_getShimShmemLock(process->host), siginfo->si_signo);
+}
+
+Timer* process_getRealtimeTimer(Process* process) {
+    MAGIC_ASSERT(process);
+    return process->itimerReal;
 }

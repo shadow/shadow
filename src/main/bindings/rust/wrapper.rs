@@ -4,6 +4,7 @@ use crate::host::descriptor::OpenFile;
 use crate::host::descriptor::File;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::timer::Timer;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::work::task::TaskRef;
 use crate::utility::random::Random;
@@ -1825,6 +1826,9 @@ extern "C" {
         currentRunningThread: *mut Thread,
         siginfo: *const siginfo_t,
     );
+}
+extern "C" {
+    pub fn process_getRealtimeTimer(process: *mut Process) -> *mut Timer;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
