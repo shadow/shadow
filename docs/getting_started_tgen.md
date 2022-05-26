@@ -1,9 +1,8 @@
 # Traffic Generation Example
 
 _We recommend getting started with the [basic file
-transfer](getting_started_basic.md) before running this example, because it
-contains some basics about running Shadow simulations that are not covered
-here._
+transfer](getting_started_basic.md) before running this example. It contains
+some basics about running Shadow simulations that are not covered here._
 
 During Shadow simulations, it is often useful to generate background traffic
 flows between your simulated hosts. This example uses the [TGen traffic
@@ -152,21 +151,20 @@ port `server:8888`, and that we download and upload `1 MiB` 10 times, pausing 1,
 ### Running the Simulation
 
 With the above three files saved in the same directory, you can start a
-simulation. Shadow stores simulation data to the `shadow.data` directory by
+simulation. Shadow stores simulation data to the `shadow.data/` directory by
 default. We first remove this directory if it already exists, and then run
 Shadow. This example may take a few minutes.
 
 ```bash
 # delete any existing simulation data
-rm -rf shadow.data
+rm -rf shadow.data/
 shadow shadow.yaml > shadow.log
 ```
 
 ### Simulation Output
 
-Shadow will write simulation output to the data directory (in this example we'll
-assume the default directory of `shadow.data`). Each host has its own directory
-under `shadow.data/hosts`.
+Shadow will write simulation output to the data directory `shadow.data/`. Each
+host has its own directory under `shadow.data/hosts/`.
 
 In the TGen process output, lines containing `stream-success` represent
 completed downloads and contain useful timing statistics. From these lines we

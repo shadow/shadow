@@ -36,14 +36,15 @@ After running `./setup install`, you can find the list of installed files in
 
 ## Setup Notes
 
-  + All build output is generated out-of-source, by default to the `./build`
-    directory.
+  + All build output is generated to the `./build` directory.
   + Use `./setup build --help` to see all build options; some useful build
     options are:  
-    + `-g` or `--debug` to build Shadow with debugging symbols
+    + `-g` or `--debug` to build Shadow with debugging symbols and additional
+      runtime checks. This option will significantly reduce the simulator
+      performance.
     + `--include` and `--library` if you installed any dependencies in
       non-standard locations or somewhere other than `~/.local`.
-    + `--prefix` if you want to install Shadow somewhere besides `~/.local`
+    + `--prefix` if you want to install Shadow somewhere besides `~/.local`.
   + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and
     `make` directly is also possible, but unsupported. For example:
 
