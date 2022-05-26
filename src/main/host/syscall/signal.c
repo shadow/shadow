@@ -44,59 +44,15 @@ static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys, Process*
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
     }
 
-    if (sig == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
+    siginfo_t siginfo = {
+        .si_signo = sig,
+        .si_errno = 0,
+        .si_code = SI_USER,
+        .si_pid = process_getProcessID(sys->process),
+        .si_uid = 0,
+    };
 
-    if (!shimipc_getUseSeccomp()) {
-        // ~legacy ptrace path. Send a real signal to the process.
-        pid_t nativePid = process_getNativePid(process);
-        long res = thread_nativeSyscall(sys->thread, SYS_kill, nativePid, sig);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
-    }
-
-    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
-        host_getShimShmemLock(sys->host), process_getSharedMem(process), sig);
-    if (action.ksa_handler == SIG_IGN ||
-        (action.ksa_handler == SIG_DFL && shd_defaultAction(sig) == SHD_DEFAULT_ACTION_IGN)) {
-        // Don't deliver ignored an signal.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
-
-    shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
-        host_getShimShmemLock(sys->host), process_getSharedMem(process));
-
-    if (shd_sigismember(&pending_signals, sig)) {
-        // Signal is already pending. From signal(7):In the case where a standard signal is already
-        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
-        // overwritten on arrival of subsequent instances of the same signal.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
-
-    shd_sigaddset(&pending_signals, sig);
-    shimshmem_setProcessPendingSignals(
-        host_getShimShmemLock(sys->host), process_getSharedMem(process), pending_signals);
-    shimshmem_setProcessSiginfo(host_getShimShmemLock(sys->host), process_getSharedMem(process),
-                                sig,
-                                &(siginfo_t){
-                                    .si_signo = sig,
-                                    .si_errno = 0,
-                                    .si_code = SI_USER,
-                                    .si_pid = process_getProcessID(sys->process),
-                                    .si_uid = 0,
-                                });
-
-    if (process == sys->process) {
-        shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
-            host_getShimShmemLock(sys->host), thread_sharedMem(sys->thread));
-        if (!shd_sigismember(&blocked_signals, sig)) {
-            // Target process is this process, and this thread hasn't blocked
-            // the signal.  It will be delivered to this thread.
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-        }
-    }
-
-    process_interruptWithSignal(process, host_getShimShmemLock(sys->host), sig);
+    process_signal(process, sys->thread, &siginfo);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

@@ -49,6 +49,7 @@
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
@@ -152,12 +153,19 @@ struct _Process {
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
 
+    /* ITIMER_REAL, as manipulated by `getitimer` and `setitimer`.
+     */
+    Timer* itimerReal;
+
     /* Pause shadow after launching this process, to give the user time to attach gdb */
     bool pause_for_debugging;
 
     gint referenceCount;
     MAGIC_DECLARE;
 };
+
+static void _unref_process_cb(gpointer data);
+static void _unref_thread_cb(gpointer data);
 
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
@@ -314,6 +322,13 @@ static void _process_handleProcessExit(Process* proc) {
     }
 
     _process_check(proc);
+
+    // Drop the timer now, so that it stops running, and so that it breaks its
+    // circular reference to the process.
+    if (proc->itimerReal) {
+        timer_drop(proc->itimerReal);
+        proc->itimerReal = NULL;
+    }
 }
 
 static void _process_terminate(Process* proc) {
@@ -621,12 +636,12 @@ static void _start_thread_task(Host* host, gpointer callbackObject, gpointer cal
     process_continue(process, thread);
 }
 
-static void _start_thread_task_free_process(gpointer data) {
+static void _unref_process_cb(gpointer data) {
     Process* process = data;
     process_unref(process);
 }
 
-static void _start_thread_task_free_thread(gpointer data) {
+static void _unref_thread_cb(gpointer data) {
     Thread* thread = data;
     thread_unref(thread);
 }
@@ -638,9 +653,8 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    TaskRef* task =
-        taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
-                          _start_thread_task_free_process, _start_thread_task_free_thread);
+    TaskRef* task = taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
+                                      _unref_process_cb, _unref_thread_cb);
     worker_scheduleTaskWithDelay(task, proc->host, 0);
     taskref_drop(task);
 }
@@ -792,6 +806,19 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
+static void _process_itimer_real_expiration(Host* host, void* voidProcess, void* _unused) {
+    Process* process = voidProcess;
+    MAGIC_ASSERT(process);
+
+    int overrun = timer_getExpirationCount(process->itimerReal);
+    siginfo_t siginfo = {
+        .si_signo = SIGALRM,
+        .si_code = SI_TIMER,
+        .si_overrun = overrun,
+    };
+    process_signal(process, NULL, &siginfo);
+}
+
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
                      InterposeMethod interposeMethod, const gchar* hostName,
                      const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
@@ -885,6 +912,13 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->pause_for_debugging = pause_for_debugging;
 
+    process_ref(proc);
+    TaskRef* task = taskref_new_bound(
+        host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
+    proc->itimerReal = timer_new(task);
+    // timer_new clones the task; we don't need our own reference anymore.
+    taskref_drop(task);
+
     worker_count_allocation(Process);
 
     return proc;
@@ -947,6 +981,11 @@ static void _process_free(Process* proc) {
     /* And we no longer need to access the host. */
     if (proc->host) {
         host_unref(proc->host);
+    }
+
+    if (proc->itimerReal) {
+        timer_drop(proc->itimerReal);
+        proc->itimerReal = NULL;
     }
 
     shmemallocator_globalFree(&proc->shimSharedMemBlock);
@@ -1217,7 +1256,7 @@ void process_parseArgStrFree(char** argv, char* error) {
     }
 }
 
-void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
+static void _process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
     GHashTableIter iter;
     gpointer key, value;
     g_hash_table_iter_init(&iter, process->threads);
@@ -1236,4 +1275,73 @@ void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, 
             break;
         }
     }
+}
+
+void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
+    MAGIC_ASSERT(process);
+    utility_assert(siginfo->si_signo >= 0);
+    utility_assert(siginfo->si_signo <= SHD_SIGRT_MAX);
+    utility_assert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
+
+    if (siginfo->si_signo == 0) {
+        return;
+    }
+
+    if (!shimipc_getUseSeccomp()) {
+        // ~legacy ptrace path. Send a real signal to the process.
+        if (!currentRunningThread) {
+            error("Sending a signal to a process in ptrace-mode is unimplemented. Signal %d to "
+                  "process %d lost.",
+                  siginfo->si_signo, process->processID);
+        } else {
+            long res = thread_nativeSyscall(
+                currentRunningThread, SYS_kill, process->nativePid, siginfo->si_signo);
+            if (res != 0) {
+                error("Sending signal to process: %s", strerror(-res));
+            }
+        }
+        return;
+    }
+
+    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
+        host_getShimShmemLock(process->host), process_getSharedMem(process), siginfo->si_signo);
+    if (action.ksa_handler == SIG_IGN ||
+        (action.ksa_handler == SIG_DFL &&
+         shd_defaultAction(siginfo->si_signo) == SHD_DEFAULT_ACTION_IGN)) {
+        // Don't deliver an ignored signal.
+        return;
+    }
+
+    shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
+        host_getShimShmemLock(process->host), process_getSharedMem(process));
+
+    if (shd_sigismember(&pending_signals, siginfo->si_signo)) {
+        // Signal is already pending. From signal(7):In the case where a standard signal is already
+        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
+        // overwritten on arrival of subsequent instances of the same signal.
+        return;
+    }
+
+    shd_sigaddset(&pending_signals, siginfo->si_signo);
+    shimshmem_setProcessPendingSignals(
+        host_getShimShmemLock(process->host), process_getSharedMem(process), pending_signals);
+    shimshmem_setProcessSiginfo(host_getShimShmemLock(process->host), process_getSharedMem(process),
+                                siginfo->si_signo, siginfo);
+
+    if (currentRunningThread != NULL && thread_getProcess(currentRunningThread) == process) {
+        shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
+            host_getShimShmemLock(process->host), thread_sharedMem(currentRunningThread));
+        if (!shd_sigismember(&blocked_signals, siginfo->si_signo)) {
+            // Target process is this process, and current thread hasn't blocked
+            // the signal.  It will be delivered to this thread when it resumes.
+            return;
+        }
+    }
+
+    _process_interruptWithSignal(process, host_getShimShmemLock(process->host), siginfo->si_signo);
+}
+
+Timer* process_getRealtimeTimer(Process* process) {
+    MAGIC_ASSERT(process);
+    return process->itimerReal;
 }

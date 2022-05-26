@@ -308,6 +308,28 @@ fn test_interval_zero() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_leave_running() -> anyhow::Result<()> {
+    reset()?;
+
+    // 100 ms
+    let it_value = libc::timeval {
+        tv_sec: 1,
+        tv_usec: 0,
+    };
+    let it_interval = libc::timeval {
+        tv_sec: 1,
+        tv_usec: 0,
+    };
+    setitimer(
+        libc::ITIMER_REAL,
+        &libc::itimerval {
+            it_value,
+            it_interval,
+        },
+    )?;
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     // Install a SIGALRM handler that counts how many times it's been received.
     unsafe {
@@ -349,6 +371,10 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new("set_oneshot", test_oneshot, all_envs.clone()),
         ShadowTest::new("set_interval", test_interval, all_envs.clone()),
         ShadowTest::new("set_interval_zero", test_interval_zero, all_envs.clone()),
+        // Must be last.
+        // Validate proper cleanup for a timer that's still running when the
+        // process exits.
+        ShadowTest::new("leave_running", test_leave_running, all_envs.clone()),
     ];
 
     if filter_shadow_passing {

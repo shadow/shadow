@@ -186,9 +186,12 @@ void process_parseArgStrFree(char** argv, char* error);
 // Process state kept in memory shared with the managed process's shim.
 ShimShmemProcess* process_getSharedMem(Process* proc);
 
-// Wake up one thread that has `signo` unblocked. This is intended for syscall
-// handlers that generate process-directed signals (e.g. `kill`). The caller
-// should have already set the signal as pending via ShimShmemProcess.
-void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo);
+// Send the signal described in `siginfo` to `process`. `currentRunningThread`
+// should be set if there is one (e.g. if this is being called from a syscall
+// handler), and NULL otherwise (e.g. when called from a timer expiration event).
+void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo);
+
+// Access the process's realtime timer; e.g. corresponding to ITIMER_REAL.
+Timer* process_getRealtimeTimer(Process* process);
 
 #endif /* SHD_PROCESS_H_ */

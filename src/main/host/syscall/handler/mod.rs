@@ -14,6 +14,7 @@ mod random;
 mod sched;
 mod socket;
 mod sysinfo;
+mod time;
 mod unistd;
 
 pub struct SyscallHandler {
@@ -38,6 +39,7 @@ impl SyscallHandler {
             libc::SYS_eventfd => self.eventfd(ctx, args),
             libc::SYS_eventfd2 => self.eventfd2(ctx, args),
             libc::SYS_fcntl => self.fcntl(ctx, args),
+            libc::SYS_getitimer => self.getitimer(ctx, args),
             libc::SYS_getpeername => self.getpeername(ctx, args),
             libc::SYS_getrandom => self.getrandom(ctx, args),
             libc::SYS_getsockname => self.getsockname(ctx, args),
@@ -53,6 +55,7 @@ impl SyscallHandler {
             libc::SYS_recvfrom => self.recvfrom(ctx, args),
             libc::SYS_sched_yield => self.sched_yield(ctx, args),
             libc::SYS_sendto => self.sendto(ctx, args),
+            libc::SYS_setitimer => self.setitimer(ctx, args),
             libc::SYS_setsockopt => self.setsockopt(ctx, args),
             libc::SYS_shutdown => self.shutdown(ctx, args),
             libc::SYS_socket => self.socket(ctx, args),
