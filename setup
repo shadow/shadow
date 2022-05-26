@@ -14,113 +14,119 @@ from datetime import datetime
 import logging
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
-BUILD_PREFIX="./build"
-INSTALL_PREFIX=os.path.expanduser("~/.local")
+BUILD_PREFIX = "./build"
+INSTALL_PREFIX = os.path.expanduser("~/.local")
+HELP_STR = "Show this help message and exit."
 
 def main():
     parser_main = argparse.ArgumentParser(
-        description='Utility to help setup the Shadow simulator',
+        description='Utility to help set up the Shadow simulator',
+        add_help=False,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_main.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=HELP_STR)
 
-    # setup our commands
+    # set up our commands
     subparsers_main = parser_main.add_subparsers(
-        help='run a subcommand (for help use <subcommand> --help)')
+        help='Run a subcommand (for help use <subcommand> --help).')
 
     # configure build subcommand
     parser_build = subparsers_main.add_parser('build',
-        help='configure and build Shadow',
+        add_help=False,
+        help='Configure and build Shadow.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_build.set_defaults(func=build,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_build.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=HELP_STR)
 
     # add building options
     parser_build.add_argument('-p', '--prefix',
-        help="configure PATH as Shadow root installation directory",
+        help="Configure PATH as Shadow root installation directory",
         metavar="PATH",
         action="store", dest="prefix",
         default=INSTALL_PREFIX)
 
     parser_build.add_argument('-i', '--include',
-        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
+        help="Append PATH to the list of paths searched for headers. Useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
         default=[])
 
     parser_build.add_argument('-l', '--library',
-        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
+        help="Append PATH to the list of paths searched for libraries. Useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
         default=[])
 
     parser_build.add_argument('-c', '--clean',
-        help="force a full rebuild of Shadow by removing build cache",
+        help="Force a full rebuild of Shadow by removing the build cache directory.",
         action="store_true", dest="do_force_rebuild",
         default=False)
 
     parser_build.add_argument('-g', '--debug',
-        help="build in extra memory checks and debugging symbols when running Shadow",
+        help="Build in extra memory checks and debugging symbols when running Shadow. Simulator performance will be significantly reduced.",
         action="store_true", dest="do_debug",
         default=False)
 
     parser_build.add_argument('-C', '--coverage',
-        help="enable profiling data for code coverage reporting",
+        help="Enable profiling data for code coverage reporting.",
         action="store_true", dest="do_coverage",
         default=False)
 
     parser_build.add_argument('--use-perf-timers',
-        help="compile in timers for tracking the run time of various internal operations",
+        help="Compile in timers for tracking the run time of various internal operations.",
         action="store_true", dest="do_use_perf_timers",
         default=False)
 
     parser_build.add_argument('-v', '--verbose',
-        help="print verbose output from the compiler",
+        help="Print verbose output from the compiler.",
         action="store_true", dest="do_verbose",
         default=False)
 
     parser_build.add_argument('-j', '--jobs',
-        help="number of jobs to run simultaneously during the build",
+        help="Number of jobs to run simultaneously during the build.",
         metavar="N", type=int,
         action="store", dest="njobs",
         default=multiprocessing.cpu_count())
 
     parser_build.add_argument('-o', '--profile',
-        help="build in gprof profiling information when running Shadow",
+        help="Build in gprof profiling information when running Shadow.",
         action="store_true", dest="do_profile",
         default=False)
 
     parser_build.add_argument('-t', '--test',
-        help="build tests",
+        help="Build tests.",
         action="store_true", dest="do_test",
         default=False)
 
     parser_build.add_argument('--extra',
-        help="build extra tests (Requires additional dependencies)",
+        help="Build extra tests (requires additional dependencies).",
         action="store_true", dest="do_extra_test",
         default=False)
 
     parser_build.add_argument('--werror',
-        help="turn compiler warnings into errors",
+        help="Turn compiler warnings into errors.",
         action="store_true", dest="do_werror",
         default=False)
 
     # configure test subcommand
-    parser_test = subparsers_main.add_parser('test', help='run Shadow tests',
+    parser_test = subparsers_main.add_parser('test', add_help=False, help='Run Shadow tests.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_test.set_defaults(func=test,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_test.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=HELP_STR)
 
     parser_test.add_argument('testname_regex',
-        help="run only the tests that match this regex", metavar="testname-regex", nargs="?")
+        help="Run only the tests that match this regex.", metavar="testname-regex", nargs="?")
 
     parser_test.add_argument('-j', '--jobs',
-        help="number of tests to run simultaneously during testing",
+        help="Number of tests to run simultaneously during testing.",
         metavar="N", type=int,
         action="store", dest="njobs",
         # use a minimum of 4 jobs by default
         default=max(4, multiprocessing.cpu_count()))
 
     parser_test.add_argument('-r', '--rerun-failed',
-        help="Run only the tests that failed previously",
+        help="Run only the tests that failed previously.",
         action="store_true", dest="rerun_failed",
         default=False)
 
@@ -128,26 +134,27 @@ def main():
     # exceptions as needed (using e.g. `set_tests_properties(slow_test_name
     # PROPERTIES TIMEOUT 30)`
     parser_test.add_argument('-t', '--timeout',
-        help="default test timeout, in seconds",
+        help="Default test timeout, in seconds.",
         metavar="s", type=int,
         action="store", dest="timeout",
         default=20)
 
     parser_test.add_argument('-v', '--verbose',
-        help="print verbose test output",
+        help="Print verbose test output.",
         action="store_true", dest="do_verbose",
         default=False)
 
     parser_test.add_argument('--extra',
-        help="run extra tests (Requires building with --extra)",
+        help="Run extra tests (requires building with --extra).",
         action="store_true", dest="do_extra_test",
         default=False)
 
     # configure install subcommand
-    parser_install = subparsers_main.add_parser('install', help='install Shadow',
+    parser_install = subparsers_main.add_parser('install', add_help=False, help='Install Shadow.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_install.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=HELP_STR)
 
     # parse arguments after '--' separately
     argv = sys.argv[1:]
@@ -161,7 +168,7 @@ def main():
     # run chosen command
     r = args.func(args, remaining)
 
-    logging.debug("setup is returning code '{0}'".format(r))
+    logging.debug("Setup is returning code '{0}'".format(r))
     sys.exit(r)
 
 def build(args, remaining):
