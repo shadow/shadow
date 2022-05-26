@@ -1009,6 +1009,13 @@ fn read_sockaddr(
         )?;
     }
 
+    // nix will panic if given an AF_UNSPEC sockaddr, so we'll just return an error and log a
+    // warning
+    if addr.ss_family == libc::AF_UNSPEC as u16 {
+        log::warn!("Addresses with a family of AF_UNSPEC are unsupported");
+        return Err(Errno::EINVAL.into());
+    }
+
     // apply a nix bug workaround that may shorten the addr length
     let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
     assert!(corrected_addr_len <= addr_len);

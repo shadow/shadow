@@ -3,13 +3,17 @@
  * See LICENSE for licensing information
  */
 
+use std::collections::VecDeque;
 use std::hash::Hasher;
+use std::os::unix::io::AsRawFd;
 
+use nix::sys::socket::MsgFlags;
 use rand::RngCore;
 use rand::SeedableRng;
 
 use test_utils::socket_utils::{
-    autobind_helper, connect_to_peername, socket_init_helper, SockAddr, SocketInitMethod,
+    autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper, SockAddr,
+    SocketInitMethod,
 };
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, AsMutPtr};
@@ -117,6 +121,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_large_buf_udp,
                 set![TestEnv::Libc, TestEnv::Shadow],
             ),
+            test_utils::ShadowTest::new(
+                &append_args("test_send_after_dgram_peer_close"),
+                move || test_send_after_dgram_peer_close(domain),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            ),
         ]);
 
         let sock_types = match domain {
@@ -189,6 +198,20 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         )]);
     }
 
+    for &method in &[SocketInitMethod::Unix, SocketInitMethod::UnixSocketpair] {
+        for &sock_type in &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET] {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{} <init_method={:?}, sock_type={}>", s, method, sock_type);
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_unix_buffer_full"),
+                move || test_unix_buffer_full(method, sock_type),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
+        }
+    }
+
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
 
     for &method in init_methods.iter() {
@@ -232,22 +255,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=false>"),
                         move || test_recv_addr(method, sock_type, flag, false),
-                        match method {
-                            // TODO: enable in shadow once we support returning the source
-                            // address in recvfrom() for unix sockets
-                            SocketInitMethod::Unix => set![TestEnv::Libc],
-                            _ => set![TestEnv::Libc, TestEnv::Shadow],
-                        },
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_recv_addr <bind_client=true>"),
                         move || test_recv_addr(method, sock_type, flag, true),
-                        match method {
-                            // TODO: enable in shadow once we support returning the source
-                            // address in recvfrom() for unix sockets
-                            SocketInitMethod::Unix => set![TestEnv::Libc],
-                            _ => set![TestEnv::Libc, TestEnv::Shadow],
-                        },
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                 ]);
 
@@ -310,6 +323,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             }
         }
     }
+
+    tests.extend(vec![test_utils::ShadowTest::new(
+        "test_unix_dgram_multiple_senders",
+        test_unix_dgram_multiple_senders,
+        set![TestEnv::Libc, TestEnv::Shadow],
+    )]);
 
     tests
 }
@@ -541,18 +560,22 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
 
     test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         // try to read 10 bytes; an EAGAIN error expected
+        assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
         simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], true)?;
 
         // send 10 bytes; no errors expected
+        assert!(test_utils::is_writable(fd_client, 0).unwrap());
         simple_sendto_helper(fd_client, &vec![1u8; 10], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
         // read 10 bytes into a 20 byte buffer; no errors expected
+        assert!(test_utils::is_readable(fd_peer, 0).unwrap());
         simple_recvfrom_helper(fd_peer, &mut vec![0u8; 20], &[], false)?;
 
         // try to read 10 bytes; an EAGAIN error expected
+        assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
         simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], false)?;
 
         let mut send_hash = std::collections::hash_map::DefaultHasher::new();
@@ -568,6 +591,8 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
         loop {
             send_rng.fill_bytes(&mut send_buf);
 
+            let was_writable = test_utils::is_writable(fd_client, 0).unwrap();
+
             let rv = unsafe {
                 libc::sendto(
                     fd_client,
@@ -581,11 +606,18 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
             let errno = test_utils::get_errno();
 
             // return value should never be 0
-            test_utils::result_assert(rv != 0, "rv is 0")?;
+            test_utils::result_assert(rv != 0, "sendto rv is 0")?;
 
             if rv == -1 {
                 test_utils::result_assert_eq(errno, libc::EAGAIN, "Unexpected errno")?;
+                assert!(!was_writable);
                 break;
+            }
+
+            // for some reason this isn't always true on Linux
+            if test_utils::running_in_shadow() {
+                // if we successfully sent bytes, we'd expect that the socket was writable
+                assert!(was_writable);
             }
 
             send_hash.write(&send_buf[..(rv as usize)]);
@@ -599,6 +631,8 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
         // read bytes until an EAGAIN error
         let mut bytes_read = 0;
         loop {
+            let was_readable = test_utils::is_readable(fd_peer, 0).unwrap();
+
             let rv = unsafe {
                 libc::recvfrom(
                     fd_peer,
@@ -612,10 +646,11 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
             let errno = test_utils::get_errno();
 
             // return value of 0 means EOF
-            test_utils::result_assert(rv != 0, "rv is EOF")?;
+            test_utils::result_assert(rv != 0, "recvfrom rv is EOF")?;
 
             if rv == -1 {
                 test_utils::result_assert_eq(errno, libc::EAGAIN, "Unexpected errno")?;
+                assert!(!was_readable);
                 if bytes_read < bytes_sent {
                     // This can happen when running natively.
                     println!(
@@ -627,6 +662,9 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
                 }
                 break;
             }
+
+            // if we successfully received bytes, we'd expect that the socket was readable
+            assert!(was_readable);
 
             recv_hash.write(&recv_buf[..(rv as usize)]);
 
@@ -1285,6 +1323,260 @@ fn test_large_buf_udp() -> Result<(), String> {
 
         test_utils::result_assert_eq(received_bytes, 65_507, "Unexpected number of bytes read")
     })
+}
+
+/// Test connecting a dgram socket to a bound socket, closing the bound socket, creating a new
+/// socket and binding it to that same bind address, and then writing to the connected socket.
+fn test_send_after_dgram_peer_close(domain: libc::c_int) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    let fd_peer = unsafe { libc::socket(domain, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd_client >= 0);
+    assert!(fd_peer >= 0);
+
+    // bind the peer socket to some unused address
+    let (peer_addr, peer_addr_len) = autobind_helper(fd_peer, domain);
+    // connect the client to the peer
+    dgram_connect_helper(fd_client, peer_addr, peer_addr_len);
+
+    // close the original peer
+    nix::unistd::close(fd_peer).unwrap();
+
+    // a new socket that will be given the same address as the original peer
+    let fd_new_peer = unsafe { libc::socket(domain, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd_new_peer >= 0);
+
+    // bind the new socket to the old peer address
+    {
+        let rv = unsafe { libc::bind(fd_new_peer, peer_addr.as_ptr(), peer_addr_len) };
+        assert_eq!(rv, 0);
+    }
+
+    test_utils::run_and_close_fds(&[fd_client, fd_new_peer], || {
+        let expected_err = match domain {
+            // even though there is a new socket bound to the same peer address, the unix socket
+            // will not send new messages to it
+            libc::AF_UNIX => &[libc::ECONNREFUSED][..],
+            _ => &[],
+        };
+
+        simple_sendto_helper(fd_client, &vec![1u8; 100], expected_err, true)?;
+
+        // shadow needs to run events
+        assert_eq!(unsafe { libc::usleep(10_000) }, 0);
+
+        let expected_err = match domain {
+            // since the unix socket send was unsuccessful, the recv will be as well
+            libc::AF_UNIX => &[libc::EWOULDBLOCK][..],
+            // non-unix sockets will successfully read the message on the new peer
+            _ => &[],
+        };
+
+        simple_recvfrom_helper(fd_new_peer, &mut vec![0u8; 100], &expected_err, true)?;
+
+        Ok(())
+    })
+}
+
+/// Test reading and writing from/to unix sockets when their buffers are full.
+fn test_unix_buffer_full(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    const BUF_SIZE: usize = 10_000;
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        let send_buf = vec![0u8; BUF_SIZE];
+        let mut recv_buf = vec![0u8; BUF_SIZE];
+
+        // fill up buffer (might not be completely full for dgram sockets)
+        loop {
+            let was_writable = test_utils::is_writable(fd_client, 0).unwrap();
+            let rv = nix::sys::socket::send(fd_client, &send_buf, MsgFlags::empty());
+            if rv == Err(nix::errno::Errno::EAGAIN) {
+                if sock_type == libc::SOCK_STREAM {
+                    // dgram sockets may have space available, but not enough for this specific
+                    // packet, so may have been writable
+                    assert!(!was_writable);
+                }
+
+                break;
+            }
+
+            if sock_type == libc::SOCK_STREAM {
+                assert!(rv.unwrap() <= BUF_SIZE);
+            } else {
+                assert_eq!(rv.unwrap(), BUF_SIZE);
+            }
+
+            if test_utils::running_in_shadow() {
+                // for some reason this isn't always true on Linux
+                assert!(was_writable);
+            }
+        }
+
+        // read one packet/chunk
+        assert!(test_utils::is_readable(fd_server, 0).unwrap());
+        let rv = nix::sys::socket::recv(fd_server, &mut recv_buf, MsgFlags::empty()).unwrap();
+        assert_eq!(rv, BUF_SIZE);
+
+        // write one packet/chunk
+        if test_utils::running_in_shadow() {
+            // for some reason this isn't always true on Linux
+            assert!(test_utils::is_writable(fd_client, 0).unwrap());
+        }
+        let rv = nix::sys::socket::send(fd_client, &send_buf, MsgFlags::empty()).unwrap();
+        assert_eq!(rv, BUF_SIZE);
+
+        // write one packet/chunk, but will fail
+        if sock_type == libc::SOCK_STREAM {
+            // dgram sockets may have space available, but not enough for this specific
+            // packet, so may have been writable
+            assert!(!test_utils::is_writable(fd_client, 0).unwrap());
+        }
+        let rv = nix::sys::socket::send(fd_client, &send_buf, MsgFlags::empty());
+        assert_eq!(rv, Err(nix::errno::Errno::EAGAIN));
+
+        // fill up buffer (one byte at a time for dgram sockets)
+        loop {
+            let was_writable = test_utils::is_writable(fd_client, 0).unwrap();
+            let rv = nix::sys::socket::send(fd_client, &[0u8], MsgFlags::empty());
+            if rv == Err(nix::errno::Errno::EAGAIN) {
+                // the buffer is completely full (for both stream and dgram sockets)
+                assert!(!was_writable);
+                break;
+            }
+
+            assert_eq!(rv.unwrap(), 1);
+            assert!(was_writable);
+        }
+
+        // reads one byte for stream sockets, or one BUF_SIZE packet for dgram sockets
+        assert!(test_utils::is_readable(fd_server, 0).unwrap());
+        let rv = nix::sys::socket::recv(fd_server, &mut [0u8], MsgFlags::empty()).unwrap();
+        assert_eq!(rv, 1);
+
+        // reads one byte for stream sockets, or one BUF_SIZE packet for dgram sockets
+        assert!(test_utils::is_readable(fd_server, 0).unwrap());
+        let rv = nix::sys::socket::recv(fd_server, &mut [0u8], MsgFlags::empty()).unwrap();
+        assert_eq!(rv, 1);
+
+        // this fails in linux for some reason
+        if test_utils::running_in_shadow() {
+            // write one byte
+            assert!(test_utils::is_writable(fd_client, 0).unwrap());
+            let rv = nix::sys::socket::send(fd_client, &[0u8], MsgFlags::empty()).unwrap();
+            assert_eq!(rv, 1);
+
+            // write one byte
+            assert!(test_utils::is_writable(fd_client, 0).unwrap());
+            let rv = nix::sys::socket::send(fd_client, &[0u8], MsgFlags::empty()).unwrap();
+            assert_eq!(rv, 1);
+
+            // attempt to write one byte
+            if sock_type == libc::SOCK_STREAM {
+                // will fail
+                assert!(!test_utils::is_writable(fd_client, 0).unwrap());
+                let rv = nix::sys::socket::send(fd_client, &[0u8], MsgFlags::empty());
+                assert_eq!(rv, Err(nix::errno::Errno::EAGAIN));
+            } else {
+                // will succeed
+                assert!(test_utils::is_writable(fd_client, 0).unwrap());
+                let rv = nix::sys::socket::send(fd_client, &[0u8], MsgFlags::empty()).unwrap();
+                assert_eq!(rv, 1);
+            }
+        }
+
+        Ok(())
+    })
+}
+
+/// Test the behaviour of unix dgram sockets when there are multiple senders.
+fn test_unix_dgram_multiple_senders() -> Result<(), String> {
+    // a single destination socket
+    let dst_fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    assert!(dst_fd >= 0);
+
+    let (addr, addr_len) = autobind_helper(dst_fd, libc::AF_UNIX);
+
+    // get 10 source sockets
+    let src_fds: Vec<_> = std::iter::repeat_with(|| unsafe {
+        libc::socket(libc::AF_UNIX, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0)
+    })
+    .take(10)
+    // make sure the fds are valid
+    .map(|x| (x >= 0).then(|| x))
+    .collect::<Option<_>>()
+    .unwrap();
+
+    // connect all of the clients to the destination
+    for src_fd in &src_fds {
+        dgram_connect_helper(*src_fd, addr, addr_len)
+    }
+
+    let send_buf = vec![0u8; 1000];
+
+    // list of (src_fd, bytes_written)
+    let mut packets_written: VecDeque<(libc::c_int, usize)> = VecDeque::new();
+
+    // loop over source sockets until one of them fails to write
+    for x in 0.. {
+        let src_fd = src_fds[x % src_fds.len()];
+
+        // write one packet
+        let n = match nix::unistd::write(src_fd, &send_buf) {
+            Ok(n) => n,
+            // if any socket can't write, then we're done writing
+            Err(nix::errno::Errno::EWOULDBLOCK) => break,
+            Err(e) => panic!("unexpected write() errno {:?}", e),
+        };
+
+        packets_written.push_back((src_fd, n));
+    }
+
+    // loop until we can't read any more packets
+    loop {
+        let mut recv_buf = vec![0u8; send_buf.len()];
+
+        // read one packet
+        let n = match nix::unistd::read(dst_fd, &mut recv_buf) {
+            Ok(n) => n,
+            Err(nix::errno::Errno::EWOULDBLOCK) => break,
+            Err(e) => panic!("unexpected write() errno {:?}", e),
+        };
+
+        // check that the packet length is as expected
+        let (src_fd, len) = packets_written.pop_front().unwrap();
+        assert_eq!(len, n);
+
+        // make sure at least one source socket is now writable
+        let mut poll_fds: Vec<_> = src_fds
+            .iter()
+            .map(|fd| nix::poll::PollFd::new(*fd, nix::poll::PollFlags::POLLOUT))
+            .collect();
+        assert_ne!(nix::poll::poll(&mut poll_fds, 0).unwrap(), 0);
+
+        // make sure the socket that wrote the packet is now one of the writable sockets
+        let mut ready_fds = poll_fds
+            .iter()
+            .filter(|x| x.revents().unwrap().contains(nix::poll::PollFlags::POLLOUT))
+            .map(|x| x.as_raw_fd());
+        assert!(ready_fds.find(|x| *x == src_fd).is_some());
+    }
+
+    for src_fd in &src_fds {
+        nix::unistd::close(*src_fd).unwrap();
+    }
+
+    nix::unistd::close(dst_fd).unwrap();
+
+    Ok(())
 }
 
 /// A helper function to call sendto() and recvfrom() with valid values
