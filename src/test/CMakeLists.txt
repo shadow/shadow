@@ -174,7 +174,6 @@ endmacro()
 
 ## add the test directories
 # FIXME uncomment these as we get them working in Phantom.
-# FIXME add_subdirectory(dynlink)
 # FIXME add_subdirectory(preload)
 
 add_subdirectory(bindc)
