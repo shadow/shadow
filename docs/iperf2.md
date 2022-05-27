@@ -14,13 +14,13 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: iperf2-code/src/iperf
+    - path: /usr/bin/iperf
       args: -s
       start_time: 0s
   client:
     network_node_id: 0
     processes:
-    - path: iperf2-code/src/iperf
+    - path: /usr/bin/iperf
       args: -c server -t 5
       start_time: 2s
 ```
@@ -31,5 +31,7 @@ rm -rf shadow.data; shadow shadow.yaml > shadow.log
 
 ## Notes
 
-1. Shadow doesn't support `setitimer()` so you must build iPerf 2 with `#define
-HAVE_SETITIMER 0` set.
+1. You must use an iPerf 2 version >= `2.1.1`. Older versions of iPerf have a
+[no-syscall busy loop][busy-loop] that is incompatible with Shadow.
+
+[busy-loop]: https://sourceforge.net/p/iperf2/code/ci/41bfc67a9d2c654c360953575ee5160ee4d798e7/tree/src/Reporter.c#l506
