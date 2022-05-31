@@ -10,6 +10,7 @@
     - [System Configuration](system_configuration.md)
 - [Usage Guide]()
     - [Overview](run_shadow_overview.md)
+        - [Stability Guarantees](semver.md)
         - [Non-goal: Security](security.md)
     - [Running Your First Simulations]()
         - [Basic File Transfer](getting_started_basic.md)
