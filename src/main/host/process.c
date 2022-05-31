@@ -622,13 +622,22 @@ static void _process_start(Process* proc) {
 
     if (proc->pause_for_debugging) {
         // will block until logger output has been flushed
-        // there is a race condition where other threads may log between the fprintf() and getchar()
+        // there is a race condition where other threads may log between the fprintf() and raise()
         // below, but it should be rare
         logger_flush(logger_getDefault());
 
-        fprintf(stderr, "Managed process '%s' has started with PID %d. Press ENTER to continue...",
+        // print with hopefully a single syscall to avoid splitting these messages (fprintf should
+        // not buffer stderr output)
+        fprintf(stderr,
+                "** Pausing with SIGTSTP to enable debugger attachment to managed process '%s' "
+                "(pid %d)\n"
+                "** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background "
+                "this task and then typing \"fg\".\n"
+                "** (If you wish to kill Shadow, type \"kill %%%%\" instead.)\n"
+                "** If running Shadow under GDB, resume Shadow by typing \"signal SIGCONT\".\n",
                 process_getName(proc), proc->nativePid);
-        getchar();
+
+        raise(SIGTSTP);
     }
 
     /* call main and run until blocked */
