@@ -1,5 +1,12 @@
 # Compatibility Notes
 
+- [libopenblas](#libopenblas)
+- [cURL](#curl)
+- [Nginx](#nginx)
+- [iPerf 2](#iperf-2)
+- [iPerf 3](#iperf-3)
+- [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
+
 ## libopenblas
 
 libopenblas is a fairly low-level library, and can get pulled in transitively
