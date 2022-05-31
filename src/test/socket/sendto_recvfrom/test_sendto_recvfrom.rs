@@ -11,6 +11,7 @@ use nix::sys::socket::MsgFlags;
 use rand::RngCore;
 use rand::SeedableRng;
 
+use test_utils::running_in_shadow;
 use test_utils::socket_utils::{
     autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper, SockAddr,
     SocketInitMethod,
@@ -1560,7 +1561,14 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
             .iter()
             .map(|fd| nix::poll::PollFd::new(*fd, nix::poll::PollFlags::POLLOUT))
             .collect();
-        assert_ne!(nix::poll::poll(&mut poll_fds, 0).unwrap(), 0);
+        if nix::poll::poll(&mut poll_fds, 0).unwrap() == 0 {
+            if running_in_shadow() {
+                panic!("Expected at least one writable socket");
+            }
+            // This happens in Linux sometimes, but we don't understand why.
+            // https://github.com/shadow/shadow/issues/2195
+            continue;
+        }
 
         // make sure the socket that wrote the packet is now one of the writable sockets
         let mut ready_fds = poll_fds
