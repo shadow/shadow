@@ -156,6 +156,36 @@ static void _futex_wait_bitset_timeout_test() {
     g_assert_cmpfloat(delta, >=, -.1);
 }
 
+void nop_signal_handler(int signo) {}
+
+static void _futex_wait_intr_test() {
+    assert_nonneg_errno(sigaction(SIGALRM,
+                                  &(struct sigaction){
+                                      .sa_handler = nop_signal_handler,
+                                  },
+                                  NULL));
+
+    int intr_s = 1;
+    assert_nonneg_errno(
+        setitimer(ITIMER_REAL, &(struct itimerval){.it_value = {.tv_sec = intr_s}}, NULL));
+
+    struct timespec t0;
+    if (clock_gettime(CLOCK_MONOTONIC, &t0) < 0) {
+        panic("clock_gettime: %s", strerror(errno));
+    }
+    int futex = 0;
+    long rv = syscall(SYS_futex, &futex, FUTEX_WAIT, futex, /*timeout*/ NULL);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(EINTR);
+    struct timespec t1;
+    if (clock_gettime(CLOCK_MONOTONIC, &t1) < 0) {
+        panic("clock_gettime: %s", strerror(errno));
+    }
+    double delta = timespec_to_double(&t1) - timespec_to_double(&t0) - intr_s;
+    g_assert_cmpfloat(delta, <=, 0.1);
+    g_assert_cmpfloat(delta, >=, -0.1);
+}
+
 typedef struct {
     atomic_bool child_started;
     atomic_bool child_finished;
@@ -371,6 +401,10 @@ int main(int argc, char** argv) {
     g_test_set_nonfatal_assertions();
 
     g_test_add_func("/futex/wait", _futex_wait_test);
+    if (!running_in_shadow_ptrace()) {
+        // ptrace-mode doesn't have the signal support needed for this test.
+        g_test_add_func("/futex/wait_intr", _futex_wait_intr_test);
+    }
     g_test_add_func("/futex/wait_stale", _futex_wait_stale_test);
     g_test_add_func("/futex/wake_nobody", _futex_wake_nobody_test);
     g_test_add_func("/futex/wake_stress", _futex_stress_test);
