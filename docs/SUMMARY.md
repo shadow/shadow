@@ -3,7 +3,6 @@
 [The Shadow Simulator](shadow.md)
 
 - [Design Overview](design_2x.md)
-    - [Non-goal: Security](security.md)
 - [Installation Guide]()
     - [Supported Platforms](supported_platforms.md)
     - [Dependencies](install_dependencies.md)
@@ -11,6 +10,7 @@
     - [System Configuration](system_configuration.md)
 - [Usage Guide]()
     - [Overview](run_shadow_overview.md)
+        - [Non-goal: Security](security.md)
     - [Running Your First Simulations]()
         - [Basic File Transfer](getting_started_basic.md)
         - [Traffic Generation](getting_started_tgen.md)
