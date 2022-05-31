@@ -390,7 +390,6 @@ static void _process_getAndLogReturnCode(Process* proc) {
         }
     }
 
-    // don't change the formatting of this string since some integration tests depend on it
     GString* mainResultString = g_string_new(NULL);
     g_string_printf(mainResultString, "process '%s'", process_getName(proc));
     if (proc->killedByShadow) {
