@@ -1,5 +1,12 @@
 # Compatibility Notes
 
+- [libopenblas](#libopenblas)
+- [cURL](#curl)
+- [Nginx](#nginx)
+- [iPerf 2](#iperf-2)
+- [iPerf 3](#iperf-3)
+- [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
+
 ## libopenblas
 
 libopenblas is a fairly low-level library, and can get pulled in transitively
@@ -244,3 +251,94 @@ socket option.
 3. iPerf 3 uses a busy loop that is incompatible with Shadow and will cause
 Shadow to deadlock. A workaround is to use the `model_unblocked_syscall_latency`
 option.
+
+## etcd (distributed key-value store)
+
+### Example
+
+Example for etcd version 3.5.x.
+
+```yaml
+general:
+  stop_time: 30s
+  model_unblocked_syscall_latency: true
+
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        node [
+          id 0
+          host_bandwidth_down "20 Mbit"
+          host_bandwidth_up "20 Mbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "150 ms"
+          packet_loss 0.01
+        ]
+      ]
+
+hosts:
+  server1:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/etcd
+      args:
+        --name server1
+        --log-outputs=stdout
+        --initial-cluster-token etcd-cluster-1
+        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
+        --listen-client-urls http://0.0.0.0:2379
+        --advertise-client-urls http://server1:2379
+        --listen-peer-urls http://0.0.0.0:2380
+        --initial-advertise-peer-urls http://server1:2380
+    - path: /usr/bin/etcdctl
+      args: put my-key my-value
+      start_time: 10s
+  server2:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/etcd
+      args:
+        --name server2
+        --log-outputs=stdout
+        --initial-cluster-token etcd-cluster-1
+        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
+        --listen-client-urls http://0.0.0.0:2379
+        --advertise-client-urls http://server2:2379
+        --listen-peer-urls http://0.0.0.0:2380
+        --initial-advertise-peer-urls http://server2:2380
+    - path: /usr/bin/etcdctl
+      args: get my-key
+      start_time: 12s
+  server3:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/etcd
+      args:
+        --name server3
+        --log-outputs=stdout
+        --initial-cluster-token etcd-cluster-1
+        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
+        --listen-client-urls http://0.0.0.0:2379
+        --advertise-client-urls http://server3:2379
+        --listen-peer-urls http://0.0.0.0:2380
+        --initial-advertise-peer-urls http://server3:2380
+    - path: /usr/bin/etcdctl
+      args: get my-key
+      start_time: 12s
+```
+
+```bash
+rm -rf shadow.data; shadow shadow.yaml > shadow.log
+```
+
+### Notes
+
+1. The etcd binary must not be statically linked. You can build a dynamically
+linked version by replacing `CGO_ENABLED=0` with `CGO_ENABLED=1` in etcd's
+`build.sh` script. The etcd packages included in the Debian and Ubuntu APT
+repositories are dynamically linked, so they can be used directly.
