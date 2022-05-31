@@ -1,7 +1,7 @@
 include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
-add_executable(test-epoll test_epoll.c)
+add_executable(test-epoll test_epoll.c ../test_common.c)
 add_linux_tests(BASENAME epoll COMMAND test-epoll)
 add_shadow_tests(BASENAME epoll)
 
