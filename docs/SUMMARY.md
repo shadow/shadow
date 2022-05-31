@@ -27,7 +27,7 @@
     - [Performance Tuning]()
         - [Disabling Side-channel Mitigations](sidechannels.md)
         - [Parallel Simulations](parallel_sims.md)
-    - [Application and Library-Specific Notes](application-notes.md)
+    - [Compatibility Notes](compatibility_notes.md)
     - [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
 - [Developer Guide]()
     - [Coding](coding.md)
