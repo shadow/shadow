@@ -621,6 +621,11 @@ static void _process_start(Process* proc) {
     worker_setActiveThread(NULL);
 
     if (proc->pause_for_debugging) {
+        // will block until logger output has been flushed
+        // there is a race condition where other threads may log between the fprintf() and getchar()
+        // below, but it should be rare
+        logger_flush(logger_getDefault());
+
         fprintf(stderr, "Managed process '%s' has started with PID %d. Press ENTER to continue...",
                 process_getName(proc), proc->nativePid);
         getchar();
