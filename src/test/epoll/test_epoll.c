@@ -11,9 +11,12 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 /* Tolerance needed for epoll_wait() because the non-shadow
@@ -47,6 +50,7 @@ static void _test_epoll_wait_noevents_timeout(int timeout_millis) {
      * otherwise it should return after timeout milliseconds */
     g_timer_start(timer);
     int epoll_result = epoll_wait(epoll_fd, &event, 1, timeout_millis);
+
     gdouble elapsed_seconds = g_timer_elapsed(timer, NULL);
 
     /* epoll_wait() returns the # of ready events, or -1 on error. */
@@ -68,6 +72,58 @@ static void _test_epoll_wait() {
     /* test no timeout (immediate return), and 300 millis. */
     _test_epoll_wait_noevents_timeout(0);
     _test_epoll_wait_noevents_timeout(300);
+}
+
+static void _nop_signal_handler(int signo) {}
+
+static void _test_epoll_wait_intr() {
+    int timeout_millis = 1000;
+    int interrupt_millis = 500;
+
+    // Arrange to be interrupted by a signal
+    struct sigaction old_action;
+    assert_nonneg_errno(sigaction(SIGALRM,
+                                  &(struct sigaction){
+                                      .sa_handler = _nop_signal_handler,
+                                  },
+                                  &old_action));
+    sigset_t sigset, old_sigset;
+    assert_nonneg_errno(sigemptyset(&sigset));
+    assert_nonneg_errno(sigaddset(&sigset, SIGUSR1));
+    assert_nonneg_errno(sigprocmask(SIG_UNBLOCK, &sigset, &old_sigset));
+
+    // Arrange to be interrupted by SIGALRM
+    assert_nonneg_errno(setitimer(
+        ITIMER_REAL, &(struct itimerval){.it_value = {.tv_usec = interrupt_millis * 1000}}, NULL));
+
+    int epoll_fd = epoll_create1(0);
+    assert_true_errno(epoll_fd > 0);
+
+    GTimer* timer = g_timer_new();
+    struct epoll_event event = {0};
+
+    g_timer_start(timer);
+    int epoll_result = epoll_wait(epoll_fd, &event, 1, timeout_millis);
+
+    /* epoll_wait() returns the # of ready events, or -1 on error. */
+    g_assert_cmpint(epoll_result, ==, -1);
+    assert_errno_is(EINTR);
+
+    gdouble elapsed_seconds = g_timer_elapsed(timer, NULL);
+
+    int close_result = close(epoll_fd);
+    assert_true_errno(close_result == 0);
+
+    /* Cleanup. */
+    g_timer_destroy(timer);
+
+    /* Now make sure the correct amount of time passed */
+    double interrupt_seconds = (double)interrupt_millis / 1000.0F;
+    g_assert_cmpfloat(elapsed_seconds, >=, interrupt_seconds);
+    g_assert_cmpfloat(elapsed_seconds, <, interrupt_seconds + TOLERANCE_SECONDS);
+
+    assert_nonneg_errno(sigprocmask(SIG_SETMASK, &old_sigset, NULL));
+    assert_nonneg_errno(sigaction(SIGALRM, &old_action, NULL));
 }
 
 static int _test_fd_write(int fd) {
@@ -227,6 +283,10 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/epoll/epoll_create", _test_epoll_create);
     g_test_add_func("/epoll/epoll_create1", _test_epoll_create1);
     g_test_add_func("/epoll/epoll_wait", _test_epoll_wait);
+    if (!running_in_shadow_ptrace()) {
+        // ptrace-mode doesn't support interruption by signal.
+        g_test_add_func("/epoll/epoll_wait_intr", _test_epoll_wait_intr);
+    }
     g_test_add_func("/epoll/epoll_pipe", _test_pipe);
     g_test_add_func("/epoll/epoll_pipe_oneshot", _test_pipe_oneshot);
     g_test_add_func("/epoll/epoll_pipe_edgetrigger", _test_pipe_edgetrigger);
