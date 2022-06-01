@@ -32,6 +32,14 @@ The versions of bindgen and cbindgen you install should match the [versions
 installed in the
 CI](https://github.com/shadow/shadow/blob/main/.github/workflows/lint.yml).
 
+## Building the guide
+
+```bash
+cargo install mdbook
+(cd mdbook && mdbook build)
+firefox build/guide/index.html
+```
+
 ## Files and descriptors
 
 <img class="color-adapting-image" style="width: 100%;" src="assets/files-and-descriptors.svg">
