@@ -34,7 +34,7 @@ There are several known workarounds:
 
 * Configure libopenblas to not use threads at runtime. This can be done by
   setting the environment variable `OPENBLAS_NUM_THREADS=1`, in the process's
-  [environment](https://shadow.github.io/docs/guide/shadow_config_spec.html#hostshostnameprocessesenvironment)
+  [environment](shadow_config_spec.md#hostshostnameprocessesenvironment)
   attribute in the Shadow config. Example:
   [tor-minimal.yaml:109](https://github.com/shadow/shadow/blob/671811339934dca6cefcb43a9343578d85e74a4b/src/test/tor/minimal/tor-minimal.yaml#L109)
 
