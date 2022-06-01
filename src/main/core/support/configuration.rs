@@ -16,6 +16,8 @@ use super::simulation_time::{SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ON
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::format::StraceFmtMode;
+use crate::utility::tilde_expansion;
+
 use log_bindings as c_log;
 
 const START_HELP_TEXT: &str = "\
@@ -91,7 +93,7 @@ pub struct ConfigFileOptions {
 }
 
 /// Shadow configuration options after processing command-line and configuration file options.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ConfigOptions {
     pub general: GeneralOptions,
 
@@ -941,15 +943,25 @@ impl FromStr for StraceLoggingMode {
 /// overwrite the config file value with `None`. From the example above, you could now specify
 /// "--runahead null" to overwrite the config file value (for example `Some(5ms)`) with a `None`
 /// value.
-#[derive(Debug, Clone, Serialize, JsonSchema, Eq, PartialEq)]
+#[derive(Debug, Clone, JsonSchema, Eq, PartialEq)]
 pub enum NullableOption<T> {
     Value(T),
     Null,
 }
 
+impl<T: serde::Serialize> serde::Serialize for NullableOption<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            // use the inner type's serialize function
+            Self::Value(x) => Ok(T::serialize(x, serializer)?),
+            Self::Null => serializer.serialize_none(),
+        }
+    }
+}
+
 impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for NullableOption<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        // always use the inner type's deserializer
+        // always use the inner type's deserialize function
         Ok(Self::Value(T::deserialize(deserializer)?))
     }
 }
@@ -1046,26 +1058,6 @@ fn generate_help_strs(
         }
     }
     defaults
-}
-
-pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
-    // if the path begins with a "~"
-    if let Some(x) = path.strip_prefix('~') {
-        // get the tilde-prefix (everything before the first separator)
-        let mut parts = x.splitn(2, '/');
-        let (tilde_prefix, remainder) = (parts.next().unwrap(), parts.next().unwrap_or(""));
-        assert!(parts.next().is_none());
-        // we only support expansion for our own home directory
-        // (nothing between the "~" and the separator)
-        if tilde_prefix.is_empty() {
-            if let Ok(ref home) = std::env::var("HOME") {
-                return [home, remainder].iter().collect::<std::path::PathBuf>();
-            }
-        }
-    }
-
-    // if we don't have a tilde-prefix that we support, just return the unmodified path
-    std::path::PathBuf::from(path)
 }
 
 /// Parses a string as a list of arguments following the shell's parsing rules. This

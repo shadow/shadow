@@ -328,6 +328,13 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     /* now make sure the hosts path exists, as it may not have been in the template */
     g_mkdir_with_parents(manager->hostsPath, 0775);
 
+    /* write the config to a yaml file */
+    gchar* configFilename = g_build_filename(manager->dataPath, "processed-config.yaml", NULL);
+    if (manager_saveProcessedConfigYaml(config, configFilename) != 0) {
+        utility_panic("Could not save the processed config yaml to '%s'", configFilename);
+    }
+    g_free(configFilename);
+
     if (config_getProgress(config)) {
         if (isatty(STDERR_FILENO) == 1) {
             manager->statusLogger = statusBar_new(endTime);

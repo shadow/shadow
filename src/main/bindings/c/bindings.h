@@ -320,6 +320,8 @@ void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
 
 int main_runShadow(int argc, const char *const *argv);
 
+int manager_saveProcessedConfigYaml(const struct ConfigOptions *config, const char *filename);
+
 bool hashsetstring_contains(const struct HashSet_String *set, const char *hostname);
 
 void clioptions_freeString(char *string);

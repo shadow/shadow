@@ -177,3 +177,23 @@ impl Clone for ObjectCounter {
         Self { name: self.name }
     }
 }
+
+pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
+    // if the path begins with a "~"
+    if let Some(x) = path.strip_prefix('~') {
+        // get the tilde-prefix (everything before the first separator)
+        let mut parts = x.splitn(2, '/');
+        let (tilde_prefix, remainder) = (parts.next().unwrap(), parts.next().unwrap_or(""));
+        assert!(parts.next().is_none());
+        // we only support expansion for our own home directory
+        // (nothing between the "~" and the separator)
+        if tilde_prefix.is_empty() {
+            if let Ok(ref home) = std::env::var("HOME") {
+                return [home, remainder].iter().collect::<std::path::PathBuf>();
+            }
+        }
+    }
+
+    // if we don't have a tilde-prefix that we support, just return the unmodified path
+    std::path::PathBuf::from(path)
+}
