@@ -8,6 +8,7 @@ use crate::core::support::configuration::{
 };
 use crate::core::support::{units, units::Unit};
 use crate::routing::petgraph_wrapper::GraphWrapper;
+use crate::utility::tilde_expansion;
 
 use log::*;
 use petgraph::graph::NodeIndex;
@@ -474,11 +475,11 @@ pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, Box<dy
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: None,
             path: f,
-        })) => std::fs::read_to_string(configuration::tilde_expansion(f))?,
+        })) => std::fs::read_to_string(tilde_expansion(f))?,
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: Some(Compression::Xz),
             path: f,
-        })) => read_xz(configuration::tilde_expansion(f))?,
+        })) => read_xz(tilde_expansion(f))?,
         GraphOptions::Gml(GraphSource::Inline(s)) => s.clone(),
         GraphOptions::OneGbitSwitch => configuration::ONE_GBIT_SWITCH_GRAPH.to_string(),
     })
