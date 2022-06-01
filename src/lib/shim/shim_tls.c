@@ -2,29 +2,35 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
+#include "lib/shim/shim_syscall.h"
 
 #include <assert.h>
 #include <stdalign.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
 
 // This needs to be big enough to store all thread-local variables for a single
 // thread. We fail at runtime if this limit is exceeded.
 #define BYTES_PER_THREAD (SHIM_SIGNAL_STACK_SIZE + 1024)
-#define MAX_THREADS 100
 
 // Stores the TLS for a single thread.
 typedef struct ShimThreadLocalStorage {
     alignas(16) char _bytes[BYTES_PER_THREAD];
 } ShimThreadLocalStorage;
 
-// All TLSs. We could probably make this more dynamic if we need to.
+// The shim's TLS for the current thread. We currently only store a pointer in
+// native TLS, which is dynamically allocated when the thread starts, and leaks
+// when the thread exits.
 //
-// If we ever decide we want to more permanently just depend on native thread
-// local storage, we could make this a single `__thread ShimThreadLocalStorage`
-// and get rid of or ignore the indexes.
-static ShimThreadLocalStorage _tlss[MAX_THREADS] = {0};
-
-int shimtls_getCurrentIdx();
-int shimtls_takeNextIdx();
+// Ideally we would allocate the ShimThreadLocalStorage itself in native TLS,
+// which would remove the leak, but changing the memory protections to set up
+// the stack guard page in _shim_init_signal_stack breaks glibc's TLS allocator.
+// If we want to do this in the future maybe we can try to revert the
+// protections just before the thread exits.
+//
+// We could alternatively change `_shim_init_signal_stack` to dynamically
+// allocate its stack instead of using TLS, but that'd just move the leak there.
+static __thread ShimThreadLocalStorage* _tls = NULL;
 
 // Each ShimTlsVar is assigned an offset in the ShimThreadLocalStorage's.
 // This is the next free offset.
@@ -33,33 +39,22 @@ static size_t _nextByteOffset = 0;
 // Index into _tlss.
 static int _tlsIdx = 0;
 
-// Take an unused TLS index, which can be used for a new thread.
-int shimtls_takeNextIdx() {
-    static int next = 0;
-    if (next >= MAX_THREADS) {
-        panic("Exceeded hard-coded limit of %d threads", MAX_THREADS);
-    }
-    return next++;
-}
-
-// Use when switching threads.
-int shimtls_getCurrentIdx() {
-    // For now this is the one place we use native thread local storage.  If we
-    // do need to avoid depending on it, one possibility is to register the top
-    // of each thread's stack with this module, and then here check the current
-    // %RSP to determine which stack we're executing on. Leaving out that
-    // complexity (and log(n) lookup) until if and when we need it.
-    static __thread bool idxInitd = false;
-    static __thread int idx;
-    if (!idxInitd) {
-        idx = shimtls_takeNextIdx();
-        idxInitd = true;
-    }
-    return idx;
-}
-
 // Initialize storage and return whether it had already been initialized.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
+    if (!_tls) {
+        // We have to use raw syscalls here and avoid logging to avoid recursion.
+        long raw_rv = shim_native_syscall(SYS_mmap, NULL, sizeof(*_tls), PROT_READ | PROT_WRITE,
+                                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (raw_rv <= -1 && raw_rv >= -4095) {
+            shim_native_syscall(SYS_rt_sigaction, SIGABRT,
+                                &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL}, NULL,
+                                sizeof(shd_kernel_sigset_t));
+            pid_t mypid = (pid_t)shim_native_syscall(SYS_getpid);
+            shim_native_syscall(SYS_kill, mypid, SIGABRT);
+            panic("Unreachable");
+        }
+        _tls = (void*)raw_rv;
+    }
     if (!v->_initd) {
         v->_offset = _nextByteOffset;
         _nextByteOffset += sz;
@@ -76,5 +71,5 @@ void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
         }
         v->_initd = true;
     }
-    return &_tlss[shimtls_getCurrentIdx()]._bytes[v->_offset];
+    return &_tls->_bytes[v->_offset];
 }

@@ -1,7 +1,7 @@
 #ifndef SHIM_TLS_H_
 #define SHIM_TLS_H_
 
-// Bare bones implementation of thread-local-storage. Never makes syscalls.
+// Bare bones implementation of thread-local-storage.
 //
 // The shim relies on thread-local-storage to track data such as the per-thread
 // IPC block, whether interposition is enabled, etc. However, many of the
