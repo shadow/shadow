@@ -40,6 +40,11 @@ pub struct CliOptions {
     #[clap(long, short = 'g')]
     pub gdb: bool,
 
+    /// Pause after starting any processes on the comma-delimited list of hostnames
+    #[clap(parse(try_from_str = parse_set_str))]
+    #[clap(long, value_name = "hostnames")]
+    pub debug_hosts: Option<HashSet<String>>,
+
     /// Exit after running shared memory cleanup routine
     #[clap(long, exclusive(true))]
     pub shm_cleanup: bool,
@@ -459,15 +464,6 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
     pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
-
-    /// List of hostnames to debug
-    #[clap(hide_short_help = true)]
-    #[clap(parse(try_from_str = parse_set_str))]
-    #[clap(long, value_name = "hostnames")]
-    // a required attribute when we move this to `CliOptions`:
-    //#[clap(default_value = "")]
-    #[clap(help = EXP_HELP.get("debug_hosts").unwrap().as_str())]
-    pub debug_hosts: Option<HashSet<String>>,
 }
 
 impl ExperimentalOptions {
@@ -521,7 +517,6 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
-            debug_hosts: Some(HashSet::new()),
         }
     }
 }
