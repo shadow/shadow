@@ -41,5 +41,5 @@ To improve determinism for your simulation, Shadow preloads an auxiliary
 library, libshadow\_openssl\_rng, which override's some of openssl's RNG
 routines. This is enabled by default, but can be controlled using the
 experimental
-[use\_openssl\_rng\_preload](shadow_config_spec.html#experimentaluse_openssl_rng_preload)
+[use\_openssl\_rng\_preload](shadow_config_spec.md#experimentaluse_openssl_rng_preload)
 option.
