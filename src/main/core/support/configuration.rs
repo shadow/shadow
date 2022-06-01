@@ -93,7 +93,7 @@ pub struct ConfigFileOptions {
 }
 
 /// Shadow configuration options after processing command-line and configuration file options.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ConfigOptions {
     pub general: GeneralOptions,
 
