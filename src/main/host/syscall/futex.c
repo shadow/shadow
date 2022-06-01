@@ -73,6 +73,9 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
             // Timeout while waiting for a wakeup
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
+        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+            trace("Futex %p has been interrupted by a signal", (void*)futexPPtr.val);
+            result = -EINTR;
         } else {
             // Proper wakeup from another thread
             trace("Futex %p has been woke up", (void*)futexPPtr.val);
