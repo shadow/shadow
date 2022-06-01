@@ -941,15 +941,25 @@ impl FromStr for StraceLoggingMode {
 /// overwrite the config file value with `None`. From the example above, you could now specify
 /// "--runahead null" to overwrite the config file value (for example `Some(5ms)`) with a `None`
 /// value.
-#[derive(Debug, Clone, Serialize, JsonSchema, Eq, PartialEq)]
+#[derive(Debug, Clone, JsonSchema, Eq, PartialEq)]
 pub enum NullableOption<T> {
     Value(T),
     Null,
 }
 
+impl<T: serde::Serialize> serde::Serialize for NullableOption<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            // use the inner type's serialize function
+            Self::Value(x) => Ok(T::serialize(x, serializer)?),
+            Self::Null => serializer.serialize_none(),
+        }
+    }
+}
+
 impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for NullableOption<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        // always use the inner type's deserializer
+        // always use the inner type's deserialize function
         Ok(Self::Value(T::deserialize(deserializer)?))
     }
 }
