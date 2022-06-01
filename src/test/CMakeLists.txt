@@ -126,6 +126,28 @@ macro(add_shadow_tests)
          set(POST_CMD "true")
       endif()
 
+      if(SHADOW_TEST_CHECK_RETVAL)
+         # Validate that all processes exited with code 0.  Processes that don't
+         # exit have an empty exitcode file, which will cause this check to
+         # fail.
+         # We *don't* fail in the case that nothing matched the glob, which is
+         # why we need to explicitly check whether the file exists.
+         set(CHECK_RETVAL_CMD "
+             for f in ${SHADOW_TEST_NAME}.data/hosts/*/*.exitcode
+             do
+               # Check if glob actually matched
+               if [ ! -f $f ]\; then continue\; fi
+               # Check if the file contains 0
+               if [ \"`cat $f`\" != 0 ]
+               then
+                 echo FAIL: $f isn\\'t 0
+                 exit 1
+               fi
+            done")
+      else()
+         set(CHECK_RETVAL_CMD "true")
+      endif()
+
       set(SHADOW_TEST_COMMAND sh -c "\
          rm -rf ${SHADOW_TEST_NAME}.data \
          && ${INVERT_ERROR_CODE} ${CMAKE_BINARY_DIR}/src/main/shadow \
@@ -134,6 +156,7 @@ macro(add_shadow_tests)
          --log-level=${SHADOW_TEST_LOGLEVEL} \
          ${SHADOW_TEST_ARGS} \
          ${SHADOW_TEST_SHADOW_CONFIG} \
+         && (${CHECK_RETVAL_CMD}) \
          && (${POST_CMD}) \
          "
       )
@@ -154,10 +177,6 @@ macro(add_shadow_tests)
       # check that we didn't leak any reference-counted objects
       set(FAIL_REGEX "Memory leak detected")
 
-      # need to check the test's return code, not just shadow's (see shadow/shadow#902)
-      if(SHADOW_TEST_CHECK_RETVAL)
-         list(APPEND FAIL_REGEX "main error code '.*' for process")
-      endif()
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
 
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION ${FAIL_REGEX})
