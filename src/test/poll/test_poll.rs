@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use nix::sys::signal;
+use nix::sys::signal::Signal;
 use std::time::Duration;
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
@@ -162,6 +164,7 @@ fn test_poll_args_common(
     pfd_null: bool,
     fd_inval: bool,
     events: i16,
+    signal_time: Option<Duration>,
     timeout: Duration,
     nfds: u64,
     exp_result: libc::c_int,
@@ -197,6 +200,20 @@ fn test_poll_args_common(
 
         let instant_before = std::time::Instant::now();
 
+        unsafe {
+            signal::sigaction(
+                Signal::SIGALRM,
+                &signal::SigAction::new(
+                    test_utils::nop_sig_handler(),
+                    signal::SaFlags::empty(),
+                    signal::SigSet::empty(),
+                ),
+            )
+        }
+        .unwrap();
+        let interruptor =
+            signal_time.map(|t| test_utils::Interruptor::new(t, signal::Signal::SIGALRM));
+
         // Run the poll or ppoll system call while checking the errno
         let ready = match poll_fn {
             PollFn::Poll => test_utils::check_system_call!(
@@ -219,6 +236,9 @@ fn test_poll_args_common(
                 )?
             }
         };
+
+        // Cancel the interruptor, in case it hasn't already fired.
+        drop(interruptor);
 
         let ready_string = format!(
             "{:?} returned an unexpected result: expected {}, got {}",
@@ -254,6 +274,7 @@ fn get_poll_args_test(
     pfd_null: bool,
     fd_inval: bool,
     events: i16,
+    signal_time: Option<Duration>,
     timeout: Duration,
     nfds: u64,
     exp_result: libc::c_int,
@@ -261,8 +282,8 @@ fn get_poll_args_test(
     exp_revents: i16,
 ) -> test_utils::ShadowTest<(), String> {
     let test_name = format!(
-        "test_poll_args\n\t<fn={:?},pfd_null={},fd_inval={},events={},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={},exp_revents={}>",
-        poll_fn, pfd_null, fd_inval, events, timeout, nfds, exp_result, exp_error, exp_revents
+        "test_poll_args\n\t<fn={:?},pfd_null={},fd_inval={},events={},signal_time={:?},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={},exp_revents={}>",
+        poll_fn, pfd_null, fd_inval, events, signal_time, timeout, nfds, exp_result, exp_error, exp_revents
     );
     test_utils::ShadowTest::new(
         &test_name,
@@ -272,6 +293,7 @@ fn get_poll_args_test(
                 pfd_null,
                 fd_inval,
                 events,
+                signal_time,
                 timeout,
                 nfds,
                 exp_result,
@@ -304,40 +326,52 @@ fn main() -> Result<(), String> {
         for &pfd_null in [true, false].iter() {
             for &fd_inval in [true, false].iter() {
                 for &events in [0, libc::POLLIN, libc::POLLOUT].iter() {
-                    for &timeout in [Duration::from_millis(0), Duration::from_millis(1)].iter() {
-                        for &nfds in [0, 1, std::u64::MAX].iter() {
-                            // For the expected outcomes
-                            let mut exp_result = 0;
-                            let mut exp_error = 0;
-                            let mut exp_revents = 0;
+                    for &timeout in [Duration::from_millis(0), Duration::from_millis(100)].iter() {
+                        for &signal_time in [None, Some(Duration::from_millis(10))].iter() {
+                            for &nfds in [0, 1, std::u64::MAX].iter() {
+                                // For the expected outcomes
+                                let mut exp_result = 0;
+                                let mut exp_error = 0;
+                                let mut exp_revents = 0;
 
-                            // Encodes the linux failure logic
-                            if pfd_null && nfds == 1 {
-                                exp_result = -1;
-                                exp_error = libc::EFAULT;
-                            } else if nfds == std::u64::MAX {
-                                exp_result = -1;
-                                exp_error = libc::EINVAL;
-                            } else if fd_inval && nfds == 1 {
-                                exp_result = 1;
-                                exp_revents = libc::POLLNVAL;
-                            } else if events == libc::POLLOUT && nfds == 1 {
-                                exp_result = 1;
-                                exp_revents = libc::POLLOUT;
+                                // Encodes the linux failure logic
+                                if pfd_null && nfds == 1 {
+                                    exp_result = -1;
+                                    exp_error = libc::EFAULT;
+                                } else if nfds == std::u64::MAX {
+                                    exp_result = -1;
+                                    exp_error = libc::EINVAL;
+                                } else if fd_inval && nfds == 1 {
+                                    exp_result = 1;
+                                    exp_revents = libc::POLLNVAL;
+                                } else if events == libc::POLLOUT && nfds == 1 {
+                                    exp_result = 1;
+                                    exp_revents = libc::POLLOUT;
+                                } else if signal_time.is_some() && timeout != Duration::ZERO {
+                                    assert!(signal_time.unwrap() < timeout);
+                                    if test_utils::running_in_shadow_ptrace() {
+                                        // ptrace-mode doesn't support interrupting
+                                        // blocking syscalls with signals.
+                                        continue;
+                                    }
+                                    exp_result = -1;
+                                    exp_error = libc::EINTR;
+                                }
+
+                                // Add the test case
+                                tests.push(get_poll_args_test(
+                                    poll_fn,
+                                    pfd_null,
+                                    fd_inval,
+                                    events,
+                                    signal_time,
+                                    timeout,
+                                    nfds,
+                                    exp_result,
+                                    exp_error,
+                                    exp_revents,
+                                ));
                             }
-
-                            // Add the test case
-                            tests.push(get_poll_args_test(
-                                poll_fn,
-                                pfd_null,
-                                fd_inval,
-                                events,
-                                timeout,
-                                nfds,
-                                exp_result,
-                                exp_error,
-                                exp_revents,
-                            ));
                         }
                     }
                 }
