@@ -18,8 +18,6 @@ versions:
 - File and directory names in Shadow's data directory
   ([`general.data_directory`](shadow_config_spec.html#generaldata_directory))
   will not change.
-	- If new files are added in Shadow's data directory, they will start with
-	  the prefix `<hostname>.<process name>.<pid>`.
 - The PID numbering (the values and their order) will not change.
 - Any supported platforms will not be dropped.
 	- A platform refers to an OS distribution's libraries and software, but
@@ -29,6 +27,10 @@ versions:
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 
-- The log format and messages may change.
+- The log format and messages.
 - Experimental options may change or be removed.
 - The simulation may produce different results.
+- New files may be added in Shadow's data directory
+  ([`general.data_directory`](shadow_config_spec.html#generaldata_directory)).
+	- If new files are added in Shadow's host-data directories, they will begin
+	  with the prefix `<hostname>.<process name>.<pid>`.
