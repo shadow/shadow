@@ -6,10 +6,13 @@
 //! Utilities helpful for writing Rust integration tests.
 
 use std::collections::HashSet;
-use std::fmt;
 use std::io::Write;
+use std::sync::mpsc;
+use std::time::Duration;
+use std::{fmt, thread};
 
 use nix::poll::PollFlags;
+use nix::sys::signal;
 
 pub mod socket_utils;
 
@@ -298,6 +301,65 @@ pub fn poll_status(fd: libc::c_int, timeout_ms: i32) -> nix::Result<PollFlags> {
     let _count = nix::poll::poll(&mut poll_fds, timeout_ms)?;
 
     Ok(poll_fds[0].revents().unwrap_or(PollFlags::empty()))
+}
+
+pub struct Interruptor {
+    cancellation_sender: mpsc::Sender<()>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Interruptor {
+    /// Creates an Interruptor that will send `signo` to the current thread
+    /// after `t` has elapsed (unless cancelled in the meantime).
+    pub fn new(t: Duration, signal: signal::Signal) -> Self {
+        let (sender, receiver) = mpsc::channel();
+        let tid = nix::unistd::gettid();
+
+        let handle = thread::spawn(move || {
+            match receiver.recv_timeout(t) {
+                Ok(_) => {
+                    // Cancelled
+                    return;
+                }
+                Err(_) => {
+                    // Timed out.
+                }
+            };
+            unsafe { libc::syscall(libc::SYS_tkill, tid.as_raw(), signal as i32) };
+        });
+
+        Self {
+            cancellation_sender: sender,
+            handle: Some(handle),
+        }
+    }
+
+    /// Cancel the interruption.
+    pub fn cancel(&mut self) {
+        match self.handle.take() {
+            Some(handle) => {
+                // Send a cancellation message. Ignore failure,
+                // which will happen if the thread has already exited,
+                // closing the receiver side of the channel.
+                self.cancellation_sender.send(()).ok();
+                handle.join().unwrap();
+            }
+            // Already cancelled
+            None => (),
+        }
+    }
+}
+
+impl Drop for Interruptor {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
+extern "C" fn nop_handler(_signo: i32) {}
+
+pub fn nop_sig_handler() -> nix::sys::signal::SigHandler {
+    nix::sys::signal::SigHandler::Handler(nop_handler)
 }
 
 /// Convenience wrapper around `anyhow::ensure` that generates useful error messages.

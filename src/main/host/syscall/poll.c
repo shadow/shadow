@@ -131,8 +131,12 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
     if (num_ready == 0) {
         bool dont_block = timeout && timeout->tv_sec == 0 && timeout->tv_nsec == 0;
 
-        if (dont_block || _syscallhandler_wasBlocked(sys)) {
+        if (dont_block || _syscallhandler_didListenTimeoutExpire(sys)) {
             trace("No events are ready and poll needs to return now");
+            goto done;
+        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+            trace("Interrupted by a signal.");
+            num_ready = -EINTR;
             goto done;
         } else {
             trace("No events are ready and poll needs to block");
