@@ -4,6 +4,10 @@ If you run Shadow twice with the same seed (the `-s` or `--seed` command line
 options), then it _should_ produce deterministic results (it's a bug if it
 doesn't).
 
+If you find non-deterministic behavior in your Shadow experiment, please
+consider helping to diagnose the problem by opening a [new
+issue](https://github.com/shadow/shadow/issues/new).
+
 ## Comparing strace output (experimental)
 
 Shadow has an experimental feature for logging most system calls made by the
@@ -77,7 +81,3 @@ else
   echo -e "\033[0;32mDid not detect difference in Shadow output (Shadow may be deterministic).\033[0m"
 fi
 ```
-
-If you find non-deterministic behavior in your Shadow experiment, please
-consider helping to diagnose the problem by opening a [new
-issue](https://github.com/shadow/shadow/issues/new).
