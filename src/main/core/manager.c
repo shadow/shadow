@@ -809,7 +809,7 @@ void manager_run(Manager* manager) {
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
         if (manager->statusLogger != NULL) {
-            statusLogger_update(manager->statusLogger, windowEnd);
+            statusLogger_updateEmuTime(manager->statusLogger, windowEnd);
         }
 
         /* we are in control now, the workers are waiting for the next round */
@@ -829,7 +829,12 @@ void manager_run(Manager* manager) {
 void manager_incrementPluginError(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
+
     manager->numPluginErrors++;
+    if (manager->statusLogger != NULL) {
+        statusLogger_updateNumFailedProcesses(manager->statusLogger, manager->numPluginErrors);
+    }
+
     _manager_unlock(manager);
 }
 
