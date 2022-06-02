@@ -21,8 +21,8 @@ To be able to run a simulation you have to mount a volume with the simulation
 dependencies (configurations and binaries). This will generate a log directory
 owned by `root`.
 
-For example, the next command runs the `shadow.config.xml` simulation present in
+For example, the next command runs the `shadow.config.yaml` simulation present in
 the current path:
 ```
-docker run --shm-size="1g" --privileged --rm --log-driver=none -v $(pwd):/src/ shadow --interpose-method=ptrace -l debug shadow.config.xml
+docker run --shm-size="1g" --privileged --rm --log-driver=none -v $(pwd):/src/ shadow --interpose-method=ptrace -l debug shadow.config.yaml
 ```

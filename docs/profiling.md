@@ -11,7 +11,7 @@ related to blocking IO and barrier waits.
 ./setup build -cgo
 ./setup install
 cd resource/examples
-shadow shadow.config.xml > shadow.log
+shadow shadow.config.yaml > shadow.log
 gprof `which shadow` gmon.out > analysis.txt
 less analysis.txt
 ```
