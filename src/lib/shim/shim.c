@@ -187,6 +187,30 @@ static void _set_use_shim_syscall_handler() {
     }
 }
 
+static void** _shim_signal_stack() {
+    static ShimTlsVar stack_var = {0};
+    void** stack = shimtlsvar_ptr(&stack_var, sizeof(*stack));
+    return stack;
+}
+
+// A signal stack waiting to be freed.
+static void* free_signal_stack = NULL;
+
+void shim_freeSignalStack() {
+    // We can't free the current thread's signal stack, since
+    // we may be running on it. Instead we save the pointer, so that
+    // it can be freed later by another thread.
+
+    if (free_signal_stack != NULL) {
+        // First free the pending stack.
+        if (free_signal_stack == *_shim_signal_stack()) {
+            panic("Tried to free the current thread's signal stack twice");
+        }
+        munmap(free_signal_stack, SHIM_SIGNAL_STACK_SIZE);
+    }
+    free_signal_stack = *_shim_signal_stack();
+}
+
 // Any signal handlers that the shim itself installs should be configured to
 // use this stack, using the `SA_ONSTACK` flag in the call to `sigaction`. This
 // prevents corrupting the stack in the presence of user-space threads, such as
@@ -202,6 +226,10 @@ static void _shim_init_signal_stack() {
     if (new_stack == MAP_FAILED) {
         panic("mmap: %s", strerror(errno));
     }
+    if (*_shim_signal_stack() != NULL) {
+        panic("Allocated signal stack twice for current thread");
+    }
+    *_shim_signal_stack() = new_stack;
 
     // Set up a guard page.
     if (mprotect(new_stack, sysconf(_SC_PAGESIZE), PROT_NONE) != 0) {

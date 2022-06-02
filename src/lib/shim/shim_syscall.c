@@ -227,6 +227,11 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 long shim_emulated_syscallv(long n, va_list args) {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    if (n == SYS_exit) {
+        // This thread is exiting. Arrange for its signal stack to be freed.
+        shim_freeSignalStack();
+    }
+
     ShimEvent e = {
         .event_id = SHD_SHIM_EVENT_SYSCALL,
         .event_data.syscall.syscall_args.number = n,
