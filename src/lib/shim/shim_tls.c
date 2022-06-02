@@ -30,7 +30,7 @@ typedef struct ShimThreadLocalStorage {
 //
 // We could alternatively change `_shim_init_signal_stack` to dynamically
 // allocate its stack instead of using TLS, but that'd just move the leak there.
-static __thread ShimThreadLocalStorage* _tls = NULL;
+static __thread ShimThreadLocalStorage _tls = {0};
 
 // Each ShimTlsVar is assigned an offset in the ShimThreadLocalStorage's.
 // This is the next free offset.
@@ -41,20 +41,6 @@ static int _tlsIdx = 0;
 
 // Initialize storage and return whether it had already been initialized.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
-    if (!_tls) {
-        // We have to use raw syscalls here and avoid logging to avoid recursion.
-        long raw_rv = shim_native_syscall(SYS_mmap, NULL, sizeof(*_tls), PROT_READ | PROT_WRITE,
-                                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (raw_rv <= -1 && raw_rv >= -4095) {
-            shim_native_syscall(SYS_rt_sigaction, SIGABRT,
-                                &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL}, NULL,
-                                sizeof(shd_kernel_sigset_t));
-            pid_t mypid = (pid_t)shim_native_syscall(SYS_getpid);
-            shim_native_syscall(SYS_kill, mypid, SIGABRT);
-            panic("Unreachable");
-        }
-        _tls = (void*)raw_rv;
-    }
     if (!v->_initd) {
         v->_offset = _nextByteOffset;
         _nextByteOffset += sz;
@@ -71,5 +57,5 @@ void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
         }
         v->_initd = true;
     }
-    return &_tls->_bytes[v->_offset];
+    return &_tls._bytes[v->_offset];
 }
