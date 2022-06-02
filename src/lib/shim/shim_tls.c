@@ -11,7 +11,7 @@
 
 // This needs to be big enough to store all thread-local variables for a single
 // thread. We fail at runtime if this limit is exceeded.
-#define BYTES_PER_THREAD (SHIM_SIGNAL_STACK_SIZE + 1024)
+#define BYTES_PER_THREAD 1024
 
 // Stores the TLS for a single thread.
 typedef struct ShimThreadLocalStorage {
