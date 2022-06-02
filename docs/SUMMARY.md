@@ -33,7 +33,7 @@
 - [Developer Guide]()
     - [Coding](coding.md)
     - [Debugging and profiling](developer_guide.md)
-    - [Continous integration tests](ci.md)
+    - [Continuous integration tests](ci.md)
     - [Maintainer playbook](maintainer_playbook.md)
     - [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
 
