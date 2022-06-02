@@ -1,15 +1,5 @@
 # Profiling
 
-## Tracing Shadow using Valgrind
-
-If you want to be able to run Shadow through valgrind and the application you
-are running in Shadow uses OpenSSL (e.g. `tor`), you should configure OpenSSL
-with the additional option: `-DPURIFY`. This fixes OpenSSL so it doesn't break
-valgrind. You may also want to ensure that debugging symbols are included in the
-GLib that Shadow links to, and any library used by the plug-in. This can be
-achieved with the compiler flag `-g` when manually building a local version of
-GLib.
-
 ## Profiling with `gprof`
 
 This method only provides profiling info for the core of Shadow, not for
