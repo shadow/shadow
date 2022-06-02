@@ -78,9 +78,9 @@ We created a large network graph representing worldwide latencies and
 bandwidths as of 2018 using the [RIPE Atlas measurement platform][atlas].  The
 graph contains network bandwidths and latencies in and between major cities
 around the world, and is suitable for general usage for most types of Shadow
-simualtions. The graph is [available for download as a research
-artifact][tmodel-graph] and more details about the measurement methodology is
-available on [the research artifacts site][tmodel].
+simualtions. The graph (updated for Shadow version 2.x) is [available for
+download as a research artifact][tmodel-graph] and more details about the
+measurement methodology is available on [the research artifacts site][tmodel].
 
 Note: [the scripts we used to create the graph][atlas-scripts] are also
 available, but are not recommended for general use. The scripts require
@@ -90,7 +90,7 @@ using our existing graph linked above instead, which we may periodically
 update.
 
 [atlas]: https://atlas.ripe.net
-[tmodel-graph]: https://tmodel-ccs2018.github.io/data/shadow/network/atlas-lossless.201801.shadow113.graphml.xml.xz
+[tmodel-graph]: https://tmodel-ccs2018.github.io/data/shadow/network/atlas_v201801.shadow_v2.gml.xz
 [tmodel]: https://tmodel-ccs2018.github.io
 [atlas-scripts]: https://github.com/shadow/atlas
 
