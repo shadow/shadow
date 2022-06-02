@@ -187,6 +187,30 @@ static void _set_use_shim_syscall_handler() {
     }
 }
 
+static void** _shim_signal_stack() {
+    static ShimTlsVar stack_var = {0};
+    void** stack = shimtlsvar_ptr(&stack_var, sizeof(*stack));
+    return stack;
+}
+
+// A signal stack waiting to be freed.
+static void* free_signal_stack = NULL;
+
+void shim_freeSignalStack() {
+    // We can't free the current thread's signal stack, since
+    // we may be running on it. Instead we save the pointer, so that
+    // it can be freed later by another thread.
+
+    if (free_signal_stack != NULL) {
+        // First free the pending stack.
+        if (free_signal_stack == *_shim_signal_stack()) {
+            panic("Tried to free the current thread's signal stack twice");
+        }
+        munmap(free_signal_stack, SHIM_SIGNAL_STACK_SIZE);
+    }
+    free_signal_stack = *_shim_signal_stack();
+}
+
 // Any signal handlers that the shim itself installs should be configured to
 // use this stack, using the `SA_ONSTACK` flag in the call to `sigaction`. This
 // prevents corrupting the stack in the presence of user-space threads, such as
@@ -198,27 +222,17 @@ static void _shim_init_signal_stack() {
     // Use signed here so that we can easily detect underflow below.
     ssize_t stack_sz = SHIM_SIGNAL_STACK_SIZE;
 
-    static ShimTlsVar new_stack_var = {0};
-    void* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
-
-    // Align to page boundary.
-    const long page_size = sysconf(_SC_PAGESIZE);
-    if ((uintptr_t)new_stack % page_size) {
-        size_t padding = 0;
-        padding = page_size - ((uintptr_t)new_stack % page_size);
-        new_stack += padding;
-        stack_sz -= padding;
+    void* new_stack = mmap(NULL, stack_sz, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (new_stack == MAP_FAILED) {
+        panic("mmap: %s", strerror(errno));
     }
-
-    // Verify that we'll still have enough space left after adjusting for padding,
-    // and since we won't be able to use the guard page itself.
-    if ((stack_sz - page_size) < SHIM_SIGNAL_STACK_MIN_USABLE_SIZE) {
-        panic("Aligning stack to %zu page size leaves only %zd bytes (vs minimimum %zu)", page_size,
-              stack_sz, SHIM_SIGNAL_STACK_MIN_USABLE_SIZE);
+    if (*_shim_signal_stack() != NULL) {
+        panic("Allocated signal stack twice for current thread");
     }
+    *_shim_signal_stack() = new_stack;
 
     // Set up a guard page.
-    if (mprotect(new_stack, page_size, PROT_NONE) != 0) {
+    if (mprotect(new_stack, sysconf(_SC_PAGESIZE), PROT_NONE) != 0) {
         int err = errno;
         panic("mprotect: %s", strerror(err));
     }
