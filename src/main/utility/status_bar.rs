@@ -176,6 +176,7 @@ pub struct ShadowStatusBarState {
     start: std::time::Instant,
     current: EmulatedTime,
     end: EmulatedTime,
+    num_failed_processes: u32,
 }
 
 impl std::fmt::Display for ShadowStatusBarState {
@@ -190,11 +191,12 @@ impl std::fmt::Display for ShadowStatusBarState {
 
         write!(
             f,
-            "{}% — simulated: {}/{}, realtime: {}",
+            "{}% — simulated: {}/{}, realtime: {}, processes failed: {}",
             (frac * 100.0).round() as i8,
             sim_current.fmt_hr_min_sec(),
             sim_end.fmt_hr_min_sec(),
             realtime.fmt_hr_min_sec(),
+            self.num_failed_processes,
         )
     }
 }
@@ -205,11 +207,8 @@ impl ShadowStatusBarState {
             start: std::time::Instant::now(),
             current: EmulatedTime::SIMULATION_START,
             end,
+            num_failed_processes: 0,
         }
-    }
-
-    pub fn update(&mut self, current: EmulatedTime) {
-        self.current = current;
     }
 }
 
@@ -279,7 +278,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn statusLogger_update(
+    pub unsafe extern "C" fn statusLogger_updateEmuTime(
         status_logger: *const StatusLogger<ShadowStatusBarState>,
         current: u64,
     ) {
@@ -288,7 +287,19 @@ mod export {
         let current = EmulatedTime::from_abs_simtime(current);
 
         status_logger.mutate_state(|state| {
-            state.update(current);
+            state.current = current;
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn statusLogger_updateNumFailedProcesses(
+        status_logger: *const StatusLogger<ShadowStatusBarState>,
+        num_failed_processes: u32,
+    ) {
+        let status_logger = unsafe { status_logger.as_ref() }.unwrap();
+
+        status_logger.mutate_state(|state| {
+            state.num_failed_processes = num_failed_processes;
         });
     }
 }

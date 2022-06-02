@@ -271,8 +271,11 @@ struct StatusLogger_ShadowStatusBarState *statusPrinter_new(uint64_t end);
 
 void statusLogger_free(struct StatusLogger_ShadowStatusBarState *status_logger);
 
-void statusLogger_update(const struct StatusLogger_ShadowStatusBarState *status_logger,
-                         uint64_t current);
+void statusLogger_updateEmuTime(const struct StatusLogger_ShadowStatusBarState *status_logger,
+                                uint64_t current);
+
+void statusLogger_updateNumFailedProcesses(const struct StatusLogger_ShadowStatusBarState *status_logger,
+                                           uint32_t num_failed_processes);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
