@@ -32,16 +32,16 @@ that is searched when attempting to dynamically resolve symbols. We use the shim
 to override functions in other shared libraries (e.g., system call wrapper
 functions from libc) by supplying identically named functions with alternative
 implementations inside the shim. Note that preloading works on dynamically
-linked calls to libc system call wrappers, but not on statically linked calls
-made from inside of libc or made using a `syscall` instruction.
+linked function calls (e.g., to libc system call wrappers), but not on statically linked function calls
+(e.g. those made from inside of libc) or system calls made using a `syscall` instruction.
 
-- seccomp: System calls that are not preloadable are intercepted using the
+- seccomp: System calls that are not interceptable via preloading are intercepted using the
 kernel's seccomp facility. The shim of each managed process installs a seccomp
-filter that traps all system calls (except those made in the shim) and a handler
+filter that traps all system calls (except those made from the shim) and a handler
 function to handle the trapped system calls. This facility has a very small
 overhead because it involves running the installed filter in kernel mode, but we
 infrequently incur this overhead in practice since most system calls are
-preloadable.
+interceptable via the more efficient preloading method.
 
 ## Emulating System Calls
 
@@ -57,7 +57,7 @@ control the running state of each process.
 Shadow emulates system calls using its simulated kernel. The simulated kernel
 (re)implements (i.e., simulates) important system functionality, including: the
 passage of time; input and output operations on file, socket, pipe, timer, and
-event descriptors; packet transmissions with respect to transport layer
+event descriptors; signals; packet transmissions with respect to transport layer
 protocols such as TCP and UDP; and aspects of computer networking including
 routing, queuing, and bandwidth limits. Thus, Shadow establishes a private,
 simulated network environment that is completely isolated from the real network,
@@ -75,7 +75,7 @@ managed process into a shared memory file that is accessible by both Shadow and
 the managed process. When Shadow needs to copy data from a memory address passed
 to it by the shim, the memory manager translates the managed process's memory
 address to a shared memory address and brokers requested data copies. This
-approach minimizes the number of copies needed to transfer the buffer contents
+approach minimizes the number of data copies and system calls needed to transfer the buffer contents
 from the managed process to Shadow.
 
 ## Scheduling
@@ -113,7 +113,7 @@ in the 2022 USENIX Annual Technical Conference, 2022.
 
 ## Shadow version 1 (original)
 
-This is the original v1 design, using plugin namespaces instead of processes:
+This is the original v1 design, using plugins loaded into the Shadow process rather than independent processes:
 
 Shadow: Running Tor in a Box for Accurate and Efficient Experimentation  
 by Rob Jansen and Nicholas Hopper  
