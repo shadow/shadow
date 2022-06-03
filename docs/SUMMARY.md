@@ -12,6 +12,7 @@
     - [Overview](run_shadow_overview.md)
         - [Stability Guarantees](semver.md)
         - [Non-goal: Security](security.md)
+        - [Known limitations and workarounds](limitations.md)
     - [Running Your First Simulations]()
         - [Basic File Transfer](getting_started_basic.md)
         - [Traffic Generation](getting_started_tgen.md)
