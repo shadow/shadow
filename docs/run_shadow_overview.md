@@ -10,13 +10,3 @@ logic. Shadow's event engine supports multi-threading using the `-p` or
 `--parallelism` flags (or their corresponding [configuration file
 option](shadow_config_spec.md#generalparallelism)) to simulate multiple hosts
 in parallel.
-
-Shadow can typically run applications without modification, but there are a few
-limitations to be aware of:
-
- - Not all system calls are supported yet. Notable unsupported syscalls include
-   fork and exec.
- - Shadow does not support IPv6.
- - Applications should not use busy-waiting, including the use of busy loops
-   that rely on network events, events in other threads, or on the current
-   time.
