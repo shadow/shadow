@@ -20,10 +20,6 @@ versions:
   will not change.
 - The PID numbering (the values and their order) will not change.
 - Any supported platforms will not be dropped.
-	- A platform refers to an OS distribution's libraries and software, but
-	  specifically not the kernel. Shadow may require a newer kernel version
-      than is provided by the distribution.
-- Any supported kernel versions will not be dropped.
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 
