@@ -63,6 +63,13 @@ routing, queuing, and bandwidth limits. Thus, Shadow establishes a private,
 simulated network environment that is completely isolated from the real network,
 but is internally interoperable and entirely controllable.
 
+Care is taken to ensure that all random bytes that are needed during the
+simulation are initiated from a seeded pseudorandom source, including during the
+emulation of system calls such as `getrandom()` and when emulating reads from
+files like `/dev/*random`. This enables Shadow to produce deterministic
+simulations, i.e., running a simulation twice using the same inputs and the same
+seed should produce the same sequence of operations in the managed process.
+
 ## Managing Memory
 
 Some system calls pass dynamically allocated memory addresses (e.g., the buffer
