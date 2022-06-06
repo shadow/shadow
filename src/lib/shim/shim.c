@@ -35,9 +35,6 @@
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
-// Whether Shadow is using preload-based interposition.
-static bool _using_interpose_preload = false;
-
 // Whether Shadow is using the shim-side syscall handler optimization.
 static bool _using_shim_syscall_handler = true;
 
@@ -134,17 +131,12 @@ bool shim_interpositionEnabled() {
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
 
-// Figure out what interposition mechanism we're using, based on environment
-// variables.  This is called before disabling interposition, so should be
-// careful not to make syscalls.
-static void _set_interpose_type() {
-    // If we're not running under Shadow, return. This can be useful
-    // for testing the libc parts of the shim.
-    if (!getenv("SHADOW_SPAWNED")) {
-        return;
-    }
-    _using_interpose_preload = true;
-}
+static bool _running_in_shadow = false;
+
+// Whether we're running in Shadow. When this is false the shim mostly
+// does nothing. This can be useful e.g. for programs that are Shadow-aware
+// and link against the shim so that they can call Shadow APIs.
+static void _shim_setRunningInShadow() { _running_in_shadow = getenv("SHADOW_SPAWNED") != NULL; }
 
 static void _set_use_shim_syscall_handler() {
     const char* shim_syscall_str = getenv("SHADOW_DISABLE_SHIM_SYSCALL");
@@ -344,7 +336,7 @@ static void _shim_child_init_thread_shm() {
 }
 
 static void _shim_parent_init_ipc() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
 
     const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
     assert(ipc_blk_buf);
@@ -403,13 +395,13 @@ static void _shim_parent_init_memory_manager() {
 }
 
 static void _shim_preload_only_child_init_ipc() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
 
     *_shim_ipcDataBlk() = _startThread.childIpcBlk;
 }
 
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
@@ -429,7 +421,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 }
 
 static void _shim_ipc_wait_for_start_event() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
@@ -491,8 +483,12 @@ __attribute__((constructor)) void _shim_load() {
         // Avoid logging until we've set up the shim logger.
         logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
 
-        _set_interpose_type();
+        _shim_setRunningInShadow();
         _set_use_shim_syscall_handler();
+    }
+
+    if (!_running_in_shadow) {
+        return;
     }
 
     // Now we can use thread-local storage.
@@ -510,15 +506,11 @@ __attribute__((constructor)) void _shim_load() {
 
     static bool did_global_init = false;
     if (!did_global_init) {
-        if (_using_interpose_preload) {
-            _shim_parent_init_preload();
-        }
+        _shim_parent_init_preload();
         did_global_init = true;
         trace("Finished shim parent init");
     } else {
-        if (_using_interpose_preload) {
-            _shim_child_init_preload();
-        }
+        _shim_child_init_preload();
         trace("Finished shim child init");
     }
 }
