@@ -332,7 +332,6 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
             g_queue_push_tail(tdata->processedHosts, host);
             /* detach all ptrace attachments for this host so it can be stolen next round */
             worker_setActiveHost(host);
-            host_detachAllPlugins(host);
             worker_setActiveHost(NULL);
             tdata->runningHost = NULL;
         }

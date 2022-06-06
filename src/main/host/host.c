@@ -395,11 +395,6 @@ void host_boot(Host* host) {
     g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
 }
 
-void host_detachAllPlugins(Host* host) {
-    MAGIC_ASSERT(host);
-    g_queue_foreach(host->processes, process_detachPlugin, NULL);
-}
-
 guint host_getNewProcessID(Host* host) {
     MAGIC_ASSERT(host);
     return host->processIDCounter++;
