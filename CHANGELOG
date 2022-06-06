@@ -1,1 +1,9 @@
 A list of user-facing changes since the latest Shadow release.
+
+* We have removed ptrace-mode, and the associated experimental options
+`use-o-n-waitpid-workaround` and `--interpose-method`. ptrace-mode was an
+alternative to Shadow's current interposition mechanism that uses `LD_PRELOAD`
+and `seccomp`. This change should be transparent to most users, since it hasn't
+been the default for several releases, and was only accessible via experimental
+options. See https://github.com/shadow/shadow/issues/1945
+ 
