@@ -38,9 +38,6 @@
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
 
-// Whether Shadow is using ptrace-based interposition.
-static bool _using_interpose_ptrace = false;
-
 // Whether Shadow is using the shim-side syscall handler optimization.
 static bool _using_shim_syscall_handler = true;
 
@@ -407,7 +404,6 @@ static void _shim_parent_init_memory_manager() {
 
 static void _shim_preload_only_child_init_ipc() {
     assert(_using_interpose_preload);
-    assert(!_using_interpose_ptrace);
 
     *_shim_ipcDataBlk() = _startThread.childIpcBlk;
 }
@@ -442,19 +438,6 @@ static void _shim_ipc_wait_for_start_event() {
     assert(event.event_id == SHD_SHIM_EVENT_START);
 }
 
-static void _shim_parent_init_ptrace() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
-    patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
-    _shim_parent_init_host_shm();
-    _shim_parent_init_process_shm();
-    _shim_parent_init_logging();
-    _shim_parent_init_thread_shm();
-    _shim_parent_init_memory_manager();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-}
-
 static void _shim_parent_init_seccomp() {
     shim_seccomp_init();
 }
@@ -481,14 +464,6 @@ static void _shim_parent_init_preload() {
     if (getenv("SHADOW_USE_SECCOMP") != NULL) {
         _shim_parent_init_seccomp();
     }
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-}
-
-static void _shim_child_init_ptrace() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
-    _shim_child_init_thread_shm();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
@@ -535,17 +510,13 @@ __attribute__((constructor)) void _shim_load() {
 
     static bool did_global_init = false;
     if (!did_global_init) {
-        if (_using_interpose_ptrace) {
-            _shim_parent_init_ptrace();
-        } else if (_using_interpose_preload) {
+        if (_using_interpose_preload) {
             _shim_parent_init_preload();
         }
         did_global_init = true;
         trace("Finished shim parent init");
     } else {
-        if (_using_interpose_ptrace) {
-            _shim_child_init_ptrace();
-        } else if (_using_interpose_preload) {
+        if (_using_interpose_preload) {
             _shim_child_init_preload();
         }
         trace("Finished shim child init");
