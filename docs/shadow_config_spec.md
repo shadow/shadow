@@ -70,7 +70,6 @@ hosts:
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_buffer`](#experimentalinterface_buffer)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
-- [`experimental.interpose_method`](#experimentalinterpose_method)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
 - [`experimental.runahead`](#experimentalrunahead)
@@ -341,13 +340,6 @@ Type: "fifo" OR "roundrobin"
 
 The queueing discipline to use at the network interface.
 
-#### `experimental.interpose_method`
-
-Default: "preload"  
-Type: "ptrace" OR "preload"
-
-Which interposition method to use.
-
 #### `experimental.max_unapplied_cpu_latency`
 
 Default: "1 microsecond"  
@@ -566,7 +558,7 @@ inter-process syscall with Shadow.
 
 #### `experimental.use_seccomp`
 
-Default: true iff `experimental.interpose_method == preload`.
+Default: true
 Type: Bool
 
 Use seccomp to trap syscalls.

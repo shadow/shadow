@@ -41,9 +41,8 @@ typedef struct _Process Process;
 #include "main/host/thread.h"
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
-                     InterposeMethod interposeMethod, const gchar* hostName,
-                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
-                     bool pause_for_debugging);
+                     const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
+                     gchar** envv, gchar** argv, bool pause_for_debugging);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 
@@ -173,9 +172,6 @@ MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
 
 uint32_t process_getHostId(const Process* proc);
-
-// Returns the interpose method used by this process.
-InterposeMethod process_getInterposeMethod(Process* proc);
 
 // A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned
 // pointers must be freed using `process_parseArgStrFree()`.

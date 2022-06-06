@@ -87,9 +87,6 @@ struct _Process {
     guint processID;
     GString* processName;
 
-    /* Which InterposeMethod to use for this process's threads */
-    InterposeMethod interposeMethod;
-
     /* All of the descriptors opened by this process. */
     DescriptorTable* descTable;
 
@@ -563,15 +560,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread* mainThread = NULL;
-
-    switch (proc->interposeMethod) {
-        case INTERPOSE_METHOD_PRELOAD: mainThread = threadpreload_new(proc->host, proc, tid); break;
-    }
-
-    if (mainThread == NULL) {
-        utility_panic("Bad interposeMethod %d", proc->interposeMethod);
-    }
+    Thread* mainThread = threadpreload_new(proc->host, proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
@@ -818,9 +807,8 @@ static void _process_itimer_real_expiration(Host* host, void* voidProcess, void*
 }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
-                     InterposeMethod interposeMethod, const gchar* hostName,
-                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
-                     bool pause_for_debugging) {
+                     const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
+                     gchar** envv, gchar** argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -848,8 +836,6 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     utility_assert(stopTime == 0 || stopTime > startTime);
     proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
     proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
-
-    proc->interposeMethod = interposeMethod;
 
     if (_use_legacy_working_dir) {
         /* use Shadow's working directory */
@@ -1025,11 +1011,6 @@ uint32_t process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->host);
     return host_getID(proc->host);
-}
-
-InterposeMethod process_getInterposeMethod(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->interposeMethod;
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {

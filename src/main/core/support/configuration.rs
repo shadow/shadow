@@ -279,7 +279,7 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap().as_str())]
     pub use_explicit_block_message: Option<bool>,
 
-    /// Use seccomp to trap syscalls. Default is true for preload mode, false otherwise.
+    /// Use seccomp to trap syscalls. Default is true.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_seccomp").unwrap().as_str())]
@@ -341,12 +341,6 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_cpu_pinning").unwrap().as_str())]
     pub use_cpu_pinning: Option<bool>,
-
-    /// Which interposition method to use
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "method")]
-    #[clap(help = EXP_HELP.get("interpose_method").unwrap().as_str())]
-    pub interpose_method: Option<InterposeMethod>,
 
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(hide_short_help = true)]
@@ -500,7 +494,6 @@ impl Default for ExperimentalOptions {
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
-            interpose_method: Some(InterposeMethod::Preload),
             runahead: Some(NullableOption::Value(units::Time::new(
                 1,
                 units::TimePrefix::Milli,
@@ -660,23 +653,6 @@ impl LogLevel {
             Self::Debug => c_log::_LogLevel_LOGLEVEL_DEBUG,
             Self::Trace => c_log::_LogLevel_LOGLEVEL_TRACE,
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-#[repr(C)]
-pub enum InterposeMethod {
-    /// Use LD_PRELOAD to load a library that implements the libC interface which will
-    /// route syscalls to Shadow.
-    Preload,
-}
-
-impl FromStr for InterposeMethod {
-    type Err = serde_yaml::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_yaml::from_str(s)
     }
 }
 
@@ -1440,13 +1416,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getInterposeMethod(config: *const ConfigOptions) -> InterposeMethod {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.interpose_method.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseSchedFifo(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1473,7 +1442,7 @@ mod export {
         let config = unsafe { &*config };
         match config.experimental.use_seccomp {
             Some(b) => b,
-            None => config_getInterposeMethod(config) == InterposeMethod::Preload,
+            None => true,
         }
     }
 
