@@ -268,16 +268,6 @@ pub fn running_in_shadow() -> bool {
     }
 }
 
-pub fn running_in_shadow_ptrace() -> bool {
-    if !running_in_shadow() {
-        return false;
-    }
-    match std::env::var("SHADOW_INTERPOSE_METHOD") {
-        Ok(val) => val == "PTRACE",
-        _ => false,
-    }
-}
-
 /// Returns `true` if the `POLLIN` flag is set.
 pub fn is_readable(fd: libc::c_int, timeout_ms: i32) -> nix::Result<bool> {
     let mut poll_fds = [nix::poll::PollFd::new(fd, PollFlags::POLLIN)];

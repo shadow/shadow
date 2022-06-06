@@ -349,11 +349,6 @@ fn main() -> Result<(), String> {
                                     exp_revents = libc::POLLOUT;
                                 } else if signal_time.is_some() && timeout != Duration::ZERO {
                                     assert!(signal_time.unwrap() < timeout);
-                                    if test_utils::running_in_shadow_ptrace() {
-                                        // ptrace-mode doesn't support interrupting
-                                        // blocking syscalls with signals.
-                                        continue;
-                                    }
                                     exp_result = -1;
                                     exp_error = libc::EINTR;
                                 }

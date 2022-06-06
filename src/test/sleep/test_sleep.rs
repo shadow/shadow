@@ -5,7 +5,6 @@
 
 use nix::unistd;
 use std::time::{Duration, Instant};
-use test_utils;
 
 type SleepFn = (fn(u32) -> Option<Duration>, &'static str);
 type TimeFn = (fn() -> Duration, &'static str);
@@ -31,14 +30,7 @@ fn duration_abs_diff(t1: Duration, t0: Duration) -> Duration {
 
 fn main() {
     sleep_and_test();
-
-    if test_utils::running_in_shadow_ptrace() {
-        // See https://github.com/shadow/shadow/issues/1967
-        println!("Skipping sleep interruption tests in ptrace mode");
-    } else {
-        sleep_and_signal_test();
-    }
-
+    sleep_and_signal_test();
     println!("Success.");
 }
 

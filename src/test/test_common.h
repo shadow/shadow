@@ -16,6 +16,5 @@ int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in
 int common_connect_tcp_sockets(int server_listener_fd, int client_fd, int* server_fd_out, in_port_t server_listener_port);
 
 bool running_in_shadow();
-bool running_in_shadow_ptrace();
 
 #endif /* SRC_TEST_SHD_TEST_COMMON_H_ */

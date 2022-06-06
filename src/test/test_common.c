@@ -127,15 +127,3 @@ bool running_in_shadow() {
     // There is the same function in the Rust tests utils code
     return getenv("SHADOW_SPAWNED") != NULL;
 }
-
-bool running_in_shadow_ptrace() {
-    if (!running_in_shadow()) {
-        return false;
-    }
-
-    const char* method = getenv("SHADOW_INTERPOSE_METHOD");
-    if (method == NULL) {
-        return false;
-    }
-    return strcmp(method, "PTRACE") == 0;
-}
