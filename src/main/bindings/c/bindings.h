@@ -357,8 +357,6 @@ bool config_getUseCpuPinning(const struct ConfigOptions *config);
 
 bool config_getUseSchedFifo(const struct ConfigOptions *config);
 
-bool config_getUseOnWaitpidWorkarounds(const struct ConfigOptions *config);
-
 bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
 
 bool config_getUseSeccomp(const struct ConfigOptions *config);

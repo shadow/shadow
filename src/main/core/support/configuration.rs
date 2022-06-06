@@ -265,14 +265,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_sched_fifo").unwrap().as_str())]
     pub use_sched_fifo: Option<bool>,
 
-    /// Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
-    /// is patched to be O(1), if using one logical processor per host, or in some cases where
-    /// it'd otherwise result in excessive detaching and reattaching
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap().as_str())]
-    pub use_o_n_waitpid_workarounds: Option<bool>,
-
     /// Send message to plugin telling it to stop spinning when a syscall blocks
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
@@ -474,7 +466,6 @@ impl Default for ExperimentalOptions {
     fn default() -> Self {
         Self {
             use_sched_fifo: Some(false),
-            use_o_n_waitpid_workarounds: Some(false),
             use_explicit_block_message: Some(false),
             use_seccomp: None,
             use_syscall_counters: Some(true),
@@ -1420,13 +1411,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_sched_fifo.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseOnWaitpidWorkarounds(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_o_n_waitpid_workarounds.unwrap()
     }
 
     #[no_mangle]

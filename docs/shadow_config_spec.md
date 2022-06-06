@@ -87,7 +87,6 @@ hosts:
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
-- [`experimental.use_o_n_waitpid_workarounds`](#experimentaluse_o_n_waitpid_workarounds)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
 - [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
@@ -503,15 +502,6 @@ Type: Bool
 
 Use the MemoryManager. It can be useful to disable for debugging, but will hurt
 performance in most cases.
-
-#### `experimental.use_o_n_waitpid_workarounds`
-
-Default: false  
-Type: Bool
-
-Use performance workarounds for waitpid being O(n). Beneficial to disable if
-waitpid is patched to be O(1), if using one logical processor per host, or in
-some cases where it'd otherwise result in excessive detaching and reattaching.
 
 #### `experimental.use_object_counters`
 
