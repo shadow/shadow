@@ -567,8 +567,7 @@ Type: Integer
 
 Create N worker threads. Note though, that `general.parallelism` of them will be
 allowed to run simultaneously. If unset, will create a thread for each simulated
-Host. This is to work around limitations in ptrace, and may change in the
-future.
+Host.
 
 #### `host_defaults`
 
