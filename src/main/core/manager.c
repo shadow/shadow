@@ -486,12 +486,6 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, InterposeMeth
         g_free(level_string);
     }
 
-    switch (interposeMethod) {
-        case INTERPOSE_METHOD_PRELOAD:
-            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
-            break;
-    }
-
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
      *   - preload path of the injector

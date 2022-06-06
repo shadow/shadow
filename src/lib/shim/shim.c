@@ -146,21 +146,7 @@ static void _set_interpose_type() {
     if (!getenv("SHADOW_SPAWNED")) {
         return;
     }
-
-    const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
-    assert(interpose_method);
-    if (!strcmp(interpose_method, "PRELOAD")) {
-        // Uses library preloading to intercept syscalls.
-        _using_interpose_preload = true;
-        return;
-    }
-    if (!strcmp(interpose_method, "PTRACE")) {
-        // From the shim's point of view, behave as if it's not running under
-        // Shadow, and let all control happen via ptrace.
-        _using_interpose_ptrace = true;
-        return;
-    }
-    abort();
+    _using_interpose_preload = true;
 }
 
 static void _set_use_shim_syscall_handler() {
