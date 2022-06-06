@@ -112,9 +112,6 @@ struct _ShimThreadProtectedSharedMem {
 struct _ShimShmemThread {
     GQuark host_id;
 
-    // While true, Shadow allows syscalls to be executed natively.
-    atomic_bool ptrace_allow_native_syscalls;
-
     // Guarded by ShimShmemHost.mutex.
     ShimThreadProtectedSharedMem protected;
 };
@@ -350,14 +347,6 @@ void shimshmemthread_init(ShimShmemThread* threadMem, Thread* thread) {
                 .sigaltstack.ss_flags = SS_DISABLE,
             },
     };
-}
-
-bool shimshmem_getPtraceAllowNativeSyscalls(ShimShmemThread* thread) {
-    return atomic_load(&thread->ptrace_allow_native_syscalls);
-}
-
-void shimshmem_setPtraceAllowNativeSyscalls(ShimShmemThread* thread, bool allow) {
-    atomic_store(&thread->ptrace_allow_native_syscalls, allow);
 }
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host) {

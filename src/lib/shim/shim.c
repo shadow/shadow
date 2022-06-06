@@ -80,18 +80,6 @@ static int* _shim_allowNativeSyscallsFlag() {
     return shimtlsvar_ptr(&v, sizeof(bool));
 }
 
-static void _shim_ptrace_set_allow_native_syscalls(bool is_allowed) {
-    if (shim_threadSharedMem()) {
-        shimshmem_setPtraceAllowNativeSyscalls(shim_threadSharedMem(), is_allowed);
-        trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
-              shim_threadSharedMem);
-    } else {
-        // Ptrace will intercept the native syscall and handle this from within Shadow.
-        shim_native_syscall(SYS_shadow_set_ptrace_allow_native_syscalls, is_allowed);
-        trace("%s native-syscalls via custom syscall", is_allowed ? "allowing" : "disallowing");
-    }
-}
-
 // Held from the time of starting to initialize _startThread, to being done with
 // it. i.e. ensure we don't try to start more than one thread at once.
 //
@@ -140,9 +128,6 @@ void shim_newThreadFinish() {
 bool shim_swapAllowNativeSyscalls(bool new) {
     bool old = *_shim_allowNativeSyscallsFlag();
     *_shim_allowNativeSyscallsFlag() = new;
-    if (_using_interpose_ptrace && (new != old)) {
-        _shim_ptrace_set_allow_native_syscalls(new);
-    }
     return old;
 }
 
