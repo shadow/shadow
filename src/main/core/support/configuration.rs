@@ -667,8 +667,6 @@ impl LogLevel {
 #[serde(rename_all = "lowercase")]
 #[repr(C)]
 pub enum InterposeMethod {
-    /// Attach to child using ptrace and use it to interpose syscalls etc.
-    Ptrace,
     /// Use LD_PRELOAD to load a library that implements the libC interface which will
     /// route syscalls to Shadow.
     Preload,

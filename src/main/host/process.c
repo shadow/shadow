@@ -566,9 +566,6 @@ static void _process_start(Process* proc) {
     Thread* mainThread = NULL;
 
     switch (proc->interposeMethod) {
-        case INTERPOSE_METHOD_PTRACE:
-            mainThread = threadptraceonly_new(proc->host, proc, tid);
-            break;
         case INTERPOSE_METHOD_PRELOAD: mainThread = threadpreload_new(proc->host, proc, tid); break;
     }
 
@@ -792,19 +789,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
-    Process* proc = procptr;
-    MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_METHOD_PTRACE) {
-        GHashTableIter iter;
-        g_hash_table_iter_init(&iter, proc->threads);
-        gpointer key, value;
-        while (g_hash_table_iter_next(&iter, &key, &value)) {
-            Thread* thread = value;
-            worker_setActiveProcess(proc);
-            threadptrace_detach(thread);
-            worker_setActiveProcess(NULL);
-        }
-    }
+    // TODO: Remove
 }
 
 gboolean process_hasStarted(Process* proc) {

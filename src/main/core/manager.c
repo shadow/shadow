@@ -487,9 +487,6 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, InterposeMeth
     }
 
     switch (interposeMethod) {
-        case INTERPOSE_METHOD_PTRACE:
-            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);
-            break;
         case INTERPOSE_METHOD_PRELOAD:
             envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
             break;

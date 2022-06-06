@@ -82,24 +82,16 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
     }
 }
 
+// TODO: Remove
 SysCallReturn syscallhandler_shadow_set_ptrace_allow_native_syscalls(SysCallHandler* sys,
                                                                      const SysCallArgs* args) {
     utility_assert(sys && args);
 
     InterposeMethod imethod = process_getInterposeMethod(sys->process);
 
-    if (imethod == INTERPOSE_METHOD_PTRACE) {
-        bool is_allowed = args->args[0].as_i64;
-        trace("shadow_set_ptrace_allow_native_syscalls is_allowed=%d", is_allowed);
-
-        shimshmem_setPtraceAllowNativeSyscalls(thread_sharedMem(sys->thread), is_allowed);
-
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    } else {
-        trace("shadow_set_ptrace_allow_native_syscalls not supported for interpose method %d",
-              (int)imethod);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
+    trace("shadow_set_ptrace_allow_native_syscalls not supported for interpose method %d",
+          (int)imethod);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
 static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const SysCallArgs* args,
