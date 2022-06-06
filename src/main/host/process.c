@@ -59,8 +59,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-#include "main/host/thread_ptrace.h"
-
 // We normally attempt to serve hot-path syscalls on the shim-side to avoid a
 // more expensive inter-process syscall. This option disables the optimization.
 // This is defined here in Shadow because it breaks the shim.

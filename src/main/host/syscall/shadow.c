@@ -15,7 +15,6 @@
 #include "main/core/worker.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread_ptrace.h"
 #include "main/routing/address.h"
 #include "main/shmem/shmem_allocator.h"
 #include "main/core/support/config_handlers.h"
