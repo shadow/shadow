@@ -616,7 +616,7 @@ pub struct HostOptions {
     pub options: HostDefaultOptions,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error,
@@ -642,6 +642,18 @@ impl LogLevel {
             Self::Info => c_log::_LogLevel_LOGLEVEL_INFO,
             Self::Debug => c_log::_LogLevel_LOGLEVEL_DEBUG,
             Self::Trace => c_log::_LogLevel_LOGLEVEL_TRACE,
+        }
+    }
+}
+
+impl From<LogLevel> for log::Level {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warning => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Debug => log::Level::Debug,
+            LogLevel::Trace => log::Level::Trace,
         }
     }
 }

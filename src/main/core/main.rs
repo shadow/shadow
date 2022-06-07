@@ -6,7 +6,6 @@ use anyhow::{self, Context};
 use clap::Parser;
 use nix::sys::{personality, resource, signal};
 
-use crate::core::logger::log_wrapper::c_to_rust_log_level;
 use crate::core::logger::shadow_logger;
 use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::cshadow as c;
@@ -77,17 +76,20 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     // run any global C configuration handlers
     unsafe { c::runConfigHandlers(&config as *const ConfigOptions) };
 
-    // disable log buffering during startup so that we see every message immediately in the terminal
+    // start up the logging subsystem to handle all future messages
     shadow_logger::init().unwrap();
+    // register the C logger
+    unsafe { log_bindings::logger_setDefault(c::rustlogger_new()) };
+
+    // disable log buffering during startup so that we see every message immediately in the terminal
     shadow_logger::set_buffering_enabled(false);
 
-    // start up the logging subsystem to handle all future messages
-    let log_level = config.general.log_level.as_ref().unwrap().to_c_loglevel();
-    unsafe { log_bindings::logger_setDefault(c::rustlogger_new()) };
-    unsafe { log_bindings::logger_setLevel(log_bindings::logger_getDefault(), log_level) };
+    // set the log level
+    let log_level = config.general.log_level.unwrap();
+    let log_level: log::Level = log_level.into();
+    log::set_max_level(log_level.to_level_filter());
 
     // check if some log levels have been compiled out
-    let log_level = c_to_rust_log_level(log_level).unwrap();
     if log_level > log::STATIC_MAX_LEVEL {
         log::warn!(
             "Log level set to {}, but messages higher than {} have been compiled out",
