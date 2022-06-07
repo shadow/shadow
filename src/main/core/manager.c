@@ -206,7 +206,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
 Manager* manager_new(Controller* controller, const ConfigOptions* config, SimulationTime endTime,
-                     SimulationTime unlimBWEndTime, guint randomSeed) {
+                     guint randomSeed) {
     if (globalmanager != NULL) {
         return NULL;
     }
@@ -223,7 +223,7 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     manager->controller = controller;
     manager->config = config;
     manager->random = random_new(randomSeed);
-    manager->bootstrapEndTime = unlimBWEndTime;
+    manager->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {

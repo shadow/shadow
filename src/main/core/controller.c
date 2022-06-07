@@ -60,9 +60,6 @@ struct _Controller {
     /* the simulator should attempt to end immediately after this time */
     SimulationTime endTime;
 
-    /* if we run in unlimited bandwidth mode, this is when we go back to bw enforcement */
-    SimulationTime bootstrapEndTime;
-
     Manager* manager;
 
     MAGIC_DECLARE;
@@ -99,7 +96,6 @@ Controller* controller_new(const ConfigOptions* config, const HashSet_String* ho
     controller->isRunaheadDynamic = config_getUseDynamicRunahead(config);
 
     controller->endTime = config_getStopTime(config);
-    controller->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     g_rw_lock_init(&controller->nextMinRunaheadLock);
 
@@ -482,8 +478,8 @@ gint controller_run(Controller* controller) {
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
     guint managerSeed = random_nextU32(controller->random);
-    controller->manager = manager_new(controller, controller->config, controller->endTime,
-                                      controller->bootstrapEndTime, managerSeed);
+    controller->manager =
+        manager_new(controller, controller->config, controller->endTime, managerSeed);
 
     if (controller->manager == NULL) {
         error("Unable to create manager");
