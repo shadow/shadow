@@ -8,4 +8,4 @@ add_shadow_tests(BASENAME signal)
 
 ## More complete signal functionality.
 add_linux_tests(BASENAME signals-extra COMMAND sh -c "../target/debug/test_signals --libc-passing")
-add_shadow_tests(BASENAME signals-extra SKIP_METHODS ptrace)
+add_shadow_tests(BASENAME signals-extra)

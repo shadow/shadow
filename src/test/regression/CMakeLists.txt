@@ -19,9 +19,7 @@ add_shadow_tests(
   POST_CMD "test `cat hosts/*/*.exitcode` -eq 137"
   # Shadow should return failure
   EXPECT_ERROR TRUE
-  CHECK_RETVAL FALSE
-  # ptrace doesn't support signals well enough
-  SKIP_METHODS ptrace)
+  CHECK_RETVAL FALSE)
 
 add_executable(test_flush_after_exit test_flush_after_exit.c)
 add_linux_tests(BASENAME flush_after_exit COMMAND bash -c "test `./test_flush_after_exit` == 'Hello'")

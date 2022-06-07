@@ -70,7 +70,6 @@ hosts:
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_buffer`](#experimentalinterface_buffer)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
-- [`experimental.interpose_method`](#experimentalinterpose_method)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
 - [`experimental.runahead`](#experimentalrunahead)
@@ -88,7 +87,6 @@ hosts:
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
-- [`experimental.use_o_n_waitpid_workarounds`](#experimentaluse_o_n_waitpid_workarounds)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
 - [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
@@ -341,13 +339,6 @@ Type: "fifo" OR "roundrobin"
 
 The queueing discipline to use at the network interface.
 
-#### `experimental.interpose_method`
-
-Default: "preload"  
-Type: "ptrace" OR "preload"
-
-Which interposition method to use.
-
 #### `experimental.max_unapplied_cpu_latency`
 
 Default: "1 microsecond"  
@@ -512,15 +503,6 @@ Type: Bool
 Use the MemoryManager. It can be useful to disable for debugging, but will hurt
 performance in most cases.
 
-#### `experimental.use_o_n_waitpid_workarounds`
-
-Default: false  
-Type: Bool
-
-Use performance workarounds for waitpid being O(n). Beneficial to disable if
-waitpid is patched to be O(1), if using one logical processor per host, or in
-some cases where it'd otherwise result in excessive detaching and reattaching.
-
 #### `experimental.use_object_counters`
 
 Default: true  
@@ -566,7 +548,7 @@ inter-process syscall with Shadow.
 
 #### `experimental.use_seccomp`
 
-Default: true iff `experimental.interpose_method == preload`.
+Default: true
 Type: Bool
 
 Use seccomp to trap syscalls.
@@ -585,8 +567,7 @@ Type: Integer
 
 Create N worker threads. Note though, that `general.parallelism` of them will be
 allowed to run simultaneously. If unset, will create a thread for each simulated
-Host. This is to work around limitations in ptrace, and may change in the
-future.
+Host.
 
 #### `host_defaults`
 

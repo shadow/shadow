@@ -9,7 +9,6 @@
 #include "main/host/syscall/protected.h"
 
 // Handle the custom shadow-specific syscalls defined in syscall_numbers.h
-SYSCALL_HANDLER(shadow_set_ptrace_allow_native_syscalls);
 SYSCALL_HANDLER(shadow_get_ipc_blk);
 SYSCALL_HANDLER(shadow_get_shm_blk);
 SYSCALL_HANDLER(shadow_hostname_to_addr_ipv4);

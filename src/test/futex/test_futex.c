@@ -401,10 +401,7 @@ int main(int argc, char** argv) {
     g_test_set_nonfatal_assertions();
 
     g_test_add_func("/futex/wait", _futex_wait_test);
-    if (!running_in_shadow_ptrace()) {
-        // ptrace-mode doesn't have the signal support needed for this test.
-        g_test_add_func("/futex/wait_intr", _futex_wait_intr_test);
-    }
+    g_test_add_func("/futex/wait_intr", _futex_wait_intr_test);
     g_test_add_func("/futex/wait_stale", _futex_wait_stale_test);
     g_test_add_func("/futex/wake_nobody", _futex_wake_nobody_test);
     g_test_add_func("/futex/wake_stress", _futex_stress_test);

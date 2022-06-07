@@ -62,10 +62,10 @@ macro(add_linux_tests)
    endif()
 endmacro()
 
-## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
-## will create two tests named bind-shadow-ptrace and bind-shadow-preload
+## example: add_shadow_tests(BASENAME bind LOGLEVEL debug ARGS --pin-cpus)
+## will create a test named bind-shadow
 macro(add_shadow_tests)
-   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD;EXPECT_ERROR" "METHODS;SKIP_METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD;EXPECT_ERROR" "ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
    if(DEFINED SHADOW_TEST_UNPARSED_ARGUMENTS)
       message(FATAL_ERROR "Unrecognized arguments: ${SHADOW_TEST_UNPARSED_ARGUMENTS}")
    endif()
@@ -96,14 +96,6 @@ macro(add_shadow_tests)
       set(INVERT_ERROR_CODE "")
    endif()
 
-   if(NOT DEFINED SHADOW_TEST_METHODS)
-      set(SHADOW_TEST_METHODS ptrace preload)   
-   endif()
-
-   if(DEFINED SHADOW_TEST_SKIP_METHODS)
-      list(REMOVE_ITEM SHADOW_TEST_METHODS ${SHADOW_TEST_SKIP_METHODS})
-   endif()
-   
    # If cpu pinning is not explicitly set, we disable it so we avoid pinning
    # multiple tests that should be running in parallel to the same exact CPUs.
    if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-cpu-pinning.*")
@@ -117,77 +109,74 @@ macro(add_shadow_tests)
 
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
 
-   foreach(SHADOW_TEST_METHOD ${SHADOW_TEST_METHODS})
-      set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow-${SHADOW_TEST_METHOD})
+   set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow)
 
-      if(DEFINED SHADOW_TEST_POST_CMD)
-         set(POST_CMD "cd ${SHADOW_TEST_NAME}.data && ${SHADOW_TEST_POST_CMD}")
-      else()
-         set(POST_CMD "true")
-      endif()
+   if(DEFINED SHADOW_TEST_POST_CMD)
+      set(POST_CMD "cd ${SHADOW_TEST_NAME}.data && ${SHADOW_TEST_POST_CMD}")
+   else()
+      set(POST_CMD "true")
+   endif()
 
-      if(SHADOW_TEST_CHECK_RETVAL)
-         # Validate that all processes exited with code 0.  Processes that don't
-         # exit have an empty exitcode file, which will cause this check to
-         # fail.
-         # We *don't* fail in the case that nothing matched the glob, which is
-         # why we need to explicitly check whether the file exists.
-         set(CHECK_RETVAL_CMD "
-             for f in ${SHADOW_TEST_NAME}.data/hosts/*/*.exitcode
-             do
-               # Check if glob actually matched
-               if [ ! -f $f ]\; then continue\; fi
-               # Check if the file contains 0
-               if [ \"`cat $f`\" != 0 ]
-               then
-                 echo FAIL: $f isn\\'t 0
-                 exit 1
-               fi
-            done")
-      else()
-         set(CHECK_RETVAL_CMD "true")
-      endif()
+   if(SHADOW_TEST_CHECK_RETVAL)
+      # Validate that all processes exited with code 0.  Processes that don't
+      # exit have an empty exitcode file, which will cause this check to
+      # fail.
+      # We *don't* fail in the case that nothing matched the glob, which is
+      # why we need to explicitly check whether the file exists.
+      set(CHECK_RETVAL_CMD "
+            for f in ${SHADOW_TEST_NAME}.data/hosts/*/*.exitcode
+            do
+            # Check if glob actually matched
+            if [ ! -f $f ]\; then continue\; fi
+            # Check if the file contains 0
+            if [ \"`cat $f`\" != 0 ]
+            then
+               echo FAIL: $f isn\\'t 0
+               exit 1
+            fi
+         done")
+   else()
+      set(CHECK_RETVAL_CMD "true")
+   endif()
 
-      set(SHADOW_TEST_COMMAND sh -c "\
-         rm -rf ${SHADOW_TEST_NAME}.data \
-         && ${INVERT_ERROR_CODE} ${CMAKE_BINARY_DIR}/src/main/shadow \
-         --data-directory=${SHADOW_TEST_NAME}.data \
-         --interpose-method=${SHADOW_TEST_METHOD} \
-         --log-level=${SHADOW_TEST_LOGLEVEL} \
-         ${SHADOW_TEST_ARGS} \
-         ${SHADOW_TEST_SHADOW_CONFIG} \
-         && (${CHECK_RETVAL_CMD}) \
-         && (${POST_CMD}) \
-         "
+   set(SHADOW_TEST_COMMAND sh -c "\
+      rm -rf ${SHADOW_TEST_NAME}.data \
+      && ${INVERT_ERROR_CODE} ${CMAKE_BINARY_DIR}/src/main/shadow \
+      --data-directory=${SHADOW_TEST_NAME}.data \
+      --log-level=${SHADOW_TEST_LOGLEVEL} \
+      ${SHADOW_TEST_ARGS} \
+      ${SHADOW_TEST_SHADOW_CONFIG} \
+      && (${CHECK_RETVAL_CMD}) \
+      && (${POST_CMD}) \
+      "
+   )
+   
+   if(DEFINED SHADOW_TEST_CONFIGURATIONS)
+      add_test(
+         NAME ${SHADOW_TEST_NAME}
+         COMMAND ${SHADOW_TEST_COMMAND}
+         CONFIGURATIONS ${SHADOW_TEST_CONFIGURATIONS}
       )
-      
-      if(DEFINED SHADOW_TEST_CONFIGURATIONS)
-         add_test(
-            NAME ${SHADOW_TEST_NAME}
-            COMMAND ${SHADOW_TEST_COMMAND}
-            CONFIGURATIONS ${SHADOW_TEST_CONFIGURATIONS}
-         )
-      else()
-         add_test(
-            NAME ${SHADOW_TEST_NAME}
-            COMMAND ${SHADOW_TEST_COMMAND}
-         )
-      endif()
+   else()
+      add_test(
+         NAME ${SHADOW_TEST_NAME}
+         COMMAND ${SHADOW_TEST_COMMAND}
+      )
+   endif()
 
-      # check that we didn't leak any reference-counted objects
-      set(FAIL_REGEX "Memory leak detected")
+   # check that we didn't leak any reference-counted objects
+   set(FAIL_REGEX "Memory leak detected")
 
-      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
+   set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
 
-      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION ${FAIL_REGEX})
+   set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION ${FAIL_REGEX})
 
-      if(DEFINED SHADOW_TEST_PROPERTIES)
-         set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
-      endif()
+   if(DEFINED SHADOW_TEST_PROPERTIES)
+      set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
+   endif()
 
-      set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
-      list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})
-   endforeach()
+   set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
+   list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})
 endmacro()
 ## === end test helper macros ===
 

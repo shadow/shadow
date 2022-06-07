@@ -869,9 +869,6 @@ pub struct _Controller {
     _unused: [u8; 0],
 }
 pub type Controller = _Controller;
-pub const InterposeMethod_INTERPOSE_METHOD_PTRACE: InterposeMethod = 0;
-pub const InterposeMethod_INTERPOSE_METHOD_PRELOAD: InterposeMethod = 1;
-pub type InterposeMethod = ::std::os::raw::c_uint;
 pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
 pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
 pub type QDiscMode = ::std::os::raw::c_uint;
@@ -1652,7 +1649,6 @@ extern "C" {
         processID: guint,
         startTime: SimulationTime,
         stopTime: SimulationTime,
-        interposeMethod: InterposeMethod,
         hostName: *const gchar,
         pluginName: *const gchar,
         pluginPath: *const gchar,
@@ -1799,9 +1795,6 @@ extern "C" {
 }
 extern "C" {
     pub fn process_getHostId(proc_: *const Process) -> u32;
-}
-extern "C" {
-    pub fn process_getInterposeMethod(proc_: *mut Process) -> InterposeMethod;
 }
 extern "C" {
     pub fn process_parseArgStr(
@@ -2148,16 +2141,12 @@ extern "C" {
         host: *mut Host,
         startTime: SimulationTime,
         stopTime: SimulationTime,
-        interposeMethod: InterposeMethod,
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
         argv: *mut *mut gchar,
         pause_for_debugging: bool,
     );
-}
-extern "C" {
-    pub fn host_detachAllPlugins(host: *mut Host);
 }
 extern "C" {
     pub fn host_freeAllApplications(host: *mut Host);

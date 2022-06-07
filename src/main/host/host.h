@@ -58,10 +58,8 @@ guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         InterposeMethod interposeMethod, const gchar* pluginName,
-                         const gchar* pluginPath, gchar** envv, gchar** argv,
-                         bool pause_for_debugging);
-void host_detachAllPlugins(Host* host);
+                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         gchar** argv, bool pause_for_debugging);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

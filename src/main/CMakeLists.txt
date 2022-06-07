@@ -128,7 +128,6 @@ set(shadow_srcs
     host/host.c
     host/syscall_condition.c
     host/thread_preload.c
-    host/thread_ptrace.c
     host/network_interface.c
     host/network_queuing_disciplines.c
     host/tracker.c
@@ -144,7 +143,6 @@ set(shadow_srcs
 
     utility/async_priority_queue.c
     utility/count_down_latch.c
-    utility/fork_proxy.c
     utility/priority_queue.c
     utility/tagged_ptr.c
     utility/utility.c

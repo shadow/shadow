@@ -24,5 +24,5 @@ owned by `root`.
 For example, the next command runs the `shadow.config.yaml` simulation present in
 the current path:
 ```
-docker run --shm-size="1g" --privileged --rm --log-driver=none -v $(pwd):/src/ shadow --interpose-method=ptrace -l debug shadow.config.yaml
+docker run --shm-size="1g" --privileged --rm --log-driver=none -v $(pwd):/src/ shadow -l debug shadow.config.yaml
 ```

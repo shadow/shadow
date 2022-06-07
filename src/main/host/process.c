@@ -59,8 +59,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-#include "main/host/thread_ptrace.h"
-
 // We normally attempt to serve hot-path syscalls on the shim-side to avoid a
 // more expensive inter-process syscall. This option disables the optimization.
 // This is defined here in Shadow because it breaks the shim.
@@ -86,9 +84,6 @@ struct _Process {
     /* unique id of the program that this process should run */
     guint processID;
     GString* processName;
-
-    /* Which InterposeMethod to use for this process's threads */
-    InterposeMethod interposeMethod;
 
     /* All of the descriptors opened by this process. */
     DescriptorTable* descTable;
@@ -563,18 +558,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread* mainThread = NULL;
-
-    switch (proc->interposeMethod) {
-        case INTERPOSE_METHOD_PTRACE:
-            mainThread = threadptraceonly_new(proc->host, proc, tid);
-            break;
-        case INTERPOSE_METHOD_PRELOAD: mainThread = threadpreload_new(proc->host, proc, tid); break;
-    }
-
-    if (mainThread == NULL) {
-        utility_panic("Bad interposeMethod %d", proc->interposeMethod);
-    }
+    Thread* mainThread = threadpreload_new(proc->host, proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
@@ -792,19 +776,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
-    Process* proc = procptr;
-    MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_METHOD_PTRACE) {
-        GHashTableIter iter;
-        g_hash_table_iter_init(&iter, proc->threads);
-        gpointer key, value;
-        while (g_hash_table_iter_next(&iter, &key, &value)) {
-            Thread* thread = value;
-            worker_setActiveProcess(proc);
-            threadptrace_detach(thread);
-            worker_setActiveProcess(NULL);
-        }
-    }
+    // TODO: Remove
 }
 
 gboolean process_hasStarted(Process* proc) {
@@ -833,9 +805,8 @@ static void _process_itimer_real_expiration(Host* host, void* voidProcess, void*
 }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
-                     InterposeMethod interposeMethod, const gchar* hostName,
-                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv,
-                     bool pause_for_debugging) {
+                     const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
+                     gchar** envv, gchar** argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -863,8 +834,6 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     utility_assert(stopTime == 0 || stopTime > startTime);
     proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
     proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
-
-    proc->interposeMethod = interposeMethod;
 
     if (_use_legacy_working_dir) {
         /* use Shadow's working directory */
@@ -1040,11 +1009,6 @@ uint32_t process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->host);
     return host_getID(proc->host);
-}
-
-InterposeMethod process_getInterposeMethod(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->interposeMethod;
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {

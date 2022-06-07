@@ -283,10 +283,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/epoll/epoll_create", _test_epoll_create);
     g_test_add_func("/epoll/epoll_create1", _test_epoll_create1);
     g_test_add_func("/epoll/epoll_wait", _test_epoll_wait);
-    if (!running_in_shadow_ptrace()) {
-        // ptrace-mode doesn't support interruption by signal.
-        g_test_add_func("/epoll/epoll_wait_intr", _test_epoll_wait_intr);
-    }
+    g_test_add_func("/epoll/epoll_wait_intr", _test_epoll_wait_intr);
     g_test_add_func("/epoll/epoll_pipe", _test_pipe);
     g_test_add_func("/epoll/epoll_pipe_oneshot", _test_pipe_oneshot);
     g_test_add_func("/epoll/epoll_pipe_edgetrigger", _test_pipe_edgetrigger);

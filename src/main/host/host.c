@@ -395,11 +395,6 @@ void host_boot(Host* host) {
     g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
 }
 
-void host_detachAllPlugins(Host* host) {
-    MAGIC_ASSERT(host);
-    g_queue_foreach(host->processes, process_detachPlugin, NULL);
-}
-
 guint host_getNewProcessID(Host* host) {
     MAGIC_ASSERT(host);
     return host->processIDCounter++;
@@ -416,9 +411,8 @@ guint64 host_getNewPacketID(Host* host) {
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         InterposeMethod interposeMethod, const gchar* pluginName,
-                         const gchar* pluginPath, gchar** envv, gchar** argv,
-                         bool pause_for_debugging) {
+                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         gchar** argv, bool pause_for_debugging) {
     MAGIC_ASSERT(host);
     {
         ShMemBlockSerialized sharedMemBlockSerial =
@@ -435,7 +429,6 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                                 processID,
                                 startTime,
                                 stopTime,
-                                interposeMethod,
                                 host_getName(host),
                                 pluginName,
                                 pluginPath,

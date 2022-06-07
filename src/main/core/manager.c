@@ -461,8 +461,7 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     return scheduler_addHost(manager->scheduler, host);
 }
 
-static gchar** _manager_generateEnvv(Manager* manager, Host* host, InterposeMethod interposeMethod,
-                                     const gchar* environment) {
+static gchar** _manager_generateEnvv(Manager* manager, Host* host, const gchar* environment) {
     MAGIC_ASSERT(manager);
 
     /* start with an empty environment */
@@ -484,15 +483,6 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, InterposeMeth
         char* level_string = g_strdup_printf("%d", level);
         envv = g_environ_setenv(envv, "SHADOW_LOG_LEVEL", level_string, TRUE);
         g_free(level_string);
-    }
-
-    switch (interposeMethod) {
-        case INTERPOSE_METHOD_PTRACE:
-            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);
-            break;
-        case INTERPOSE_METHOD_PRELOAD:
-            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
-            break;
     }
 
     /* insert also the plugin preload entry if one exists.
@@ -608,12 +598,10 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    InterposeMethod interposeMethod = config_getInterposeMethod(manager->config);
-
     Host* host = scheduler_getHost(manager->scheduler, hostID);
 
     /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _manager_generateEnvv(manager, host, interposeMethod, environment);
+    gchar** envv = _manager_generateEnvv(manager, host, environment);
 
     host_continueExecutionTimer(host);
 
@@ -622,8 +610,8 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
         utility_panic("Could not get basename of plugin path");
     }
 
-    host_addApplication(host, startTime, stopTime, interposeMethod, pluginName, pluginPath, envv,
-                        argv, pause_for_debugging);
+    host_addApplication(
+        host, startTime, stopTime, pluginName, pluginPath, envv, argv, pause_for_debugging);
     g_free(pluginName);
 
     host_stopExecutionTimer(host);

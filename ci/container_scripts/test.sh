@@ -7,10 +7,10 @@ FLAGS=()
 
 if [ "$BUILDTYPE" = "coverage" ]
 then
-    # Some preload tests are broken in coverage builds:
+    # Some tests are broken in coverage builds:
     # https://github.com/shadow/shadow/issues/867
     # Determinism tests are broken in coverage builds.
-    EXCLUDE="determinism.*|phold-parallel-shadow-preload"
+    EXCLUDE="determinism.*|phold-parallel-shadow"
     # Tests can take substantially longer in coverage builds.
     FLAGS+=("--timeout" "60")
 else

@@ -265,21 +265,13 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_sched_fifo").unwrap().as_str())]
     pub use_sched_fifo: Option<bool>,
 
-    /// Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
-    /// is patched to be O(1), if using one logical processor per host, or in some cases where
-    /// it'd otherwise result in excessive detaching and reattaching
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap().as_str())]
-    pub use_o_n_waitpid_workarounds: Option<bool>,
-
     /// Send message to plugin telling it to stop spinning when a syscall blocks
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap().as_str())]
     pub use_explicit_block_message: Option<bool>,
 
-    /// Use seccomp to trap syscalls. Default is true for preload mode, false otherwise.
+    /// Use seccomp to trap syscalls.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_seccomp").unwrap().as_str())]
@@ -342,12 +334,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_cpu_pinning").unwrap().as_str())]
     pub use_cpu_pinning: Option<bool>,
 
-    /// Which interposition method to use
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "method")]
-    #[clap(help = EXP_HELP.get("interpose_method").unwrap().as_str())]
-    pub interpose_method: Option<InterposeMethod>,
-
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
@@ -404,8 +390,7 @@ pub struct ExperimentalOptions {
 
     /// Create N worker threads. Note though, that `--parallelism` of them will
     /// be allowed to run simultaneously. If unset, will create a thread for
-    /// each simulated Host. This is to work around limitations in ptrace, and
-    /// may change in the future.
+    /// each simulated Host.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "N")]
     #[clap(help = EXP_HELP.get("worker_threads").unwrap().as_str())]
@@ -480,9 +465,8 @@ impl Default for ExperimentalOptions {
     fn default() -> Self {
         Self {
             use_sched_fifo: Some(false),
-            use_o_n_waitpid_workarounds: Some(false),
             use_explicit_block_message: Some(false),
-            use_seccomp: None,
+            use_seccomp: Some(true),
             use_syscall_counters: Some(true),
             use_object_counters: Some(true),
             use_preload_libc: Some(true),
@@ -500,7 +484,6 @@ impl Default for ExperimentalOptions {
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
-            interpose_method: Some(InterposeMethod::Preload),
             runahead: Some(NullableOption::Value(units::Time::new(
                 1,
                 units::TimePrefix::Milli,
@@ -660,25 +643,6 @@ impl LogLevel {
             Self::Debug => c_log::_LogLevel_LOGLEVEL_DEBUG,
             Self::Trace => c_log::_LogLevel_LOGLEVEL_TRACE,
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-#[repr(C)]
-pub enum InterposeMethod {
-    /// Attach to child using ptrace and use it to interpose syscalls etc.
-    Ptrace,
-    /// Use LD_PRELOAD to load a library that implements the libC interface which will
-    /// route syscalls to Shadow.
-    Preload,
-}
-
-impl FromStr for InterposeMethod {
-    type Err = serde_yaml::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_yaml::from_str(s)
     }
 }
 
@@ -1442,24 +1406,10 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getInterposeMethod(config: *const ConfigOptions) -> InterposeMethod {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.interpose_method.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseSchedFifo(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_sched_fifo.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseOnWaitpidWorkarounds(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_o_n_waitpid_workarounds.unwrap()
     }
 
     #[no_mangle]
@@ -1473,10 +1423,7 @@ mod export {
     pub extern "C" fn config_getUseSeccomp(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.use_seccomp {
-            Some(b) => b,
-            None => config_getInterposeMethod(config) == InterposeMethod::Preload,
-        }
+        config.experimental.use_seccomp.unwrap()
     }
 
     #[no_mangle]

@@ -35,12 +35,6 @@
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
-// Whether Shadow is using preload-based interposition.
-static bool _using_interpose_preload = false;
-
-// Whether Shadow is using ptrace-based interposition.
-static bool _using_interpose_ptrace = false;
-
 // Whether Shadow is using the shim-side syscall handler optimization.
 static bool _using_shim_syscall_handler = true;
 
@@ -78,18 +72,6 @@ ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
 static int* _shim_allowNativeSyscallsFlag() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(bool));
-}
-
-static void _shim_ptrace_set_allow_native_syscalls(bool is_allowed) {
-    if (shim_threadSharedMem()) {
-        shimshmem_setPtraceAllowNativeSyscalls(shim_threadSharedMem(), is_allowed);
-        trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
-              shim_threadSharedMem);
-    } else {
-        // Ptrace will intercept the native syscall and handle this from within Shadow.
-        shim_native_syscall(SYS_shadow_set_ptrace_allow_native_syscalls, is_allowed);
-        trace("%s native-syscalls via custom syscall", is_allowed ? "allowing" : "disallowing");
-    }
 }
 
 // Held from the time of starting to initialize _startThread, to being done with
@@ -140,9 +122,6 @@ void shim_newThreadFinish() {
 bool shim_swapAllowNativeSyscalls(bool new) {
     bool old = *_shim_allowNativeSyscallsFlag();
     *_shim_allowNativeSyscallsFlag() = new;
-    if (_using_interpose_ptrace && (new != old)) {
-        _shim_ptrace_set_allow_native_syscalls(new);
-    }
     return old;
 }
 
@@ -152,31 +131,12 @@ bool shim_interpositionEnabled() {
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
 
-// Figure out what interposition mechanism we're using, based on environment
-// variables.  This is called before disabling interposition, so should be
-// careful not to make syscalls.
-static void _set_interpose_type() {
-    // If we're not running under Shadow, return. This can be useful
-    // for testing the libc parts of the shim.
-    if (!getenv("SHADOW_SPAWNED")) {
-        return;
-    }
+static bool _running_in_shadow = false;
 
-    const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
-    assert(interpose_method);
-    if (!strcmp(interpose_method, "PRELOAD")) {
-        // Uses library preloading to intercept syscalls.
-        _using_interpose_preload = true;
-        return;
-    }
-    if (!strcmp(interpose_method, "PTRACE")) {
-        // From the shim's point of view, behave as if it's not running under
-        // Shadow, and let all control happen via ptrace.
-        _using_interpose_ptrace = true;
-        return;
-    }
-    abort();
-}
+// Whether we're running in Shadow. When this is false the shim mostly
+// does nothing. This can be useful e.g. for programs that are Shadow-aware
+// and link against the shim so that they can call Shadow APIs.
+static void _shim_setRunningInShadow() { _running_in_shadow = getenv("SHADOW_SPAWNED") != NULL; }
 
 static void _set_use_shim_syscall_handler() {
     const char* shim_syscall_str = getenv("SHADOW_DISABLE_SHIM_SYSCALL");
@@ -376,7 +336,7 @@ static void _shim_child_init_thread_shm() {
 }
 
 static void _shim_parent_init_ipc() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
 
     const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
     assert(ipc_blk_buf);
@@ -435,14 +395,13 @@ static void _shim_parent_init_memory_manager() {
 }
 
 static void _shim_preload_only_child_init_ipc() {
-    assert(_using_interpose_preload);
-    assert(!_using_interpose_ptrace);
+    assert(_running_in_shadow);
 
     *_shim_ipcDataBlk() = _startThread.childIpcBlk;
 }
 
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
@@ -462,26 +421,13 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 }
 
 static void _shim_ipc_wait_for_start_event() {
-    assert(_using_interpose_preload);
+    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-}
-
-static void _shim_parent_init_ptrace() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
-    patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
-    _shim_parent_init_host_shm();
-    _shim_parent_init_process_shm();
-    _shim_parent_init_logging();
-    _shim_parent_init_thread_shm();
-    _shim_parent_init_memory_manager();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 static void _shim_parent_init_seccomp() {
@@ -514,14 +460,6 @@ static void _shim_parent_init_preload() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-static void _shim_child_init_ptrace() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
-    _shim_child_init_thread_shm();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-}
-
 static void _shim_child_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
@@ -545,8 +483,12 @@ __attribute__((constructor)) void _shim_load() {
         // Avoid logging until we've set up the shim logger.
         logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
 
-        _set_interpose_type();
+        _shim_setRunningInShadow();
         _set_use_shim_syscall_handler();
+    }
+
+    if (!_running_in_shadow) {
+        return;
     }
 
     // Now we can use thread-local storage.
@@ -564,19 +506,11 @@ __attribute__((constructor)) void _shim_load() {
 
     static bool did_global_init = false;
     if (!did_global_init) {
-        if (_using_interpose_ptrace) {
-            _shim_parent_init_ptrace();
-        } else if (_using_interpose_preload) {
-            _shim_parent_init_preload();
-        }
+        _shim_parent_init_preload();
         did_global_init = true;
         trace("Finished shim parent init");
     } else {
-        if (_using_interpose_ptrace) {
-            _shim_child_init_ptrace();
-        } else if (_using_interpose_preload) {
-            _shim_child_init_preload();
-        }
+        _shim_child_init_preload();
         trace("Finished shim child init");
     }
 }
