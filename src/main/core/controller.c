@@ -523,21 +523,8 @@ gint controller_run(Controller* controller) {
 
     info("running simulation");
 
-    /* dont buffer log messages in trace mode */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        info("log message buffering is enabled for efficiency");
-        shadow_logger_setEnableBuffering(TRUE);
-    }
-
     /* start running each manager */
     manager_run(controller->manager);
-
-    /* only need to disable buffering if it was enabled, otherwise
-     * don't log the message as it may confuse the user. */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        info("log message buffering is disabled during cleanup");
-        shadow_logger_setEnableBuffering(FALSE);
-    }
 
     info("simulation finished, cleaning up now");
 

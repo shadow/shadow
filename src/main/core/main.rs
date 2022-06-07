@@ -157,8 +157,24 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
         let controller = unsafe { c::controller_new(&config, &debug_hosts) };
         assert!(!controller.is_null());
 
+        // enable log buffering if not at trace level
+        let buffer_log = log::max_level() < log::LevelFilter::Trace;
+
+        shadow_logger::set_buffering_enabled(buffer_log);
+        if buffer_log {
+            log::info!("Log message buffering is enabled for efficiency");
+        }
+
         // run the simulation
         let rv = unsafe { c::controller_run(controller) };
+
+        // disable log buffering
+        shadow_logger::set_buffering_enabled(false);
+        if buffer_log {
+            // only show if we disabled buffering above
+            log::info!("Log message buffering is disabled during cleanup");
+        }
+
         unsafe { c::controller_free(controller) };
         rv
     };
