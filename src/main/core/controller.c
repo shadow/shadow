@@ -35,9 +35,6 @@ struct _Controller {
     /* set of hostnames that we want to debug managed processes for */
     const HashSet_String* hostsToDebug;
 
-    /* tracks overall wall-clock runtime */
-    GTimer* runTimer;
-
     /* global random source from which all node random sources originate */
     Random* random;
 
