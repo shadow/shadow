@@ -555,7 +555,7 @@ Use seccomp to trap syscalls.
 
 #### `experimental.use_syscall_counters`
 
-Default: false  
+Default: true  
 Type: Bool
 
 Count the number of occurrences for individual syscalls.
