@@ -1557,6 +1557,7 @@ extern "C" {
 extern "C" {
     pub fn thread_run(
         thread: *mut Thread,
+        pluginPath: *mut ::std::os::raw::c_char,
         argv: *mut *mut ::std::os::raw::c_char,
         envv: *mut *mut ::std::os::raw::c_char,
         workingDir: *const ::std::os::raw::c_char,

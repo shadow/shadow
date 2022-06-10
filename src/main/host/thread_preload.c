@@ -105,6 +105,8 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
 
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[], const char* workingDir) {
+    utility_assert(file != NULL);
+
     // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
     // "leaking" into a concurrently forked child.
     int pipefd[2];
@@ -177,7 +179,8 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
     ipcData_markPluginExited(ipc);
 }
 
-pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* workingDir) {
+pid_t threadpreload_run(Thread* base, char* pluginPath, char** argv, char** envv,
+                        const char* workingDir) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -215,7 +218,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
     g_free(envStr);
     g_free(argStr);
 
-    pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv, workingDir);
+    pid_t child_pid = _threadpreload_fork_exec(thread, pluginPath, argv, myenvv, workingDir);
     childpidwatcher_watch(
         worker_getChildPidWatcher(), child_pid, _markPluginExited, thread->ipc_data);
 
