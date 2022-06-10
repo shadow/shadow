@@ -454,6 +454,9 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
 
+    guint managerCpuFreq = manager_getRawCPUFrequency(manager);
+    params->cpuFrequency = MAX(0, managerCpuFreq);
+
     Host* host = host_new(params);
     host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),
                manager_getHostsRootPath(manager));

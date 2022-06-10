@@ -298,8 +298,6 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
     MAGIC_ASSERT(controller);
     utility_assert(host);
 
-    guint managerCpuFreq = manager_getRawCPUFrequency(controller->manager);
-
     guint64 quantity = hostoptions_getQuantity(host);
     in_addr_t ipAddr = 0;
     bool ipAddrSet = (hostoptions_getIpAddr(host, &ipAddr) == 0);
@@ -350,7 +348,6 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
 
         params->hostname = hostnameBuffer->str;
 
-        params->cpuFrequency = MAX(0, managerCpuFreq);
         params->cpuThreshold = 0;
         params->cpuPrecision = 200;
 
