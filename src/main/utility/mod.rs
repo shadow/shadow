@@ -197,3 +197,43 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if we don't have a tilde-prefix that we support, just return the unmodified path
     std::path::PathBuf::from(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tilde_expansion() {
+        if let Ok(ref home) = std::env::var("HOME") {
+            assert_eq!(
+                tilde_expansion("~/test"),
+                [home, "test"].iter().collect::<std::path::PathBuf>()
+            );
+
+            assert_eq!(
+                tilde_expansion("~"),
+                [home].iter().collect::<std::path::PathBuf>()
+            );
+
+            assert_eq!(
+                tilde_expansion("~/"),
+                [home].iter().collect::<std::path::PathBuf>()
+            );
+
+            assert_eq!(
+                tilde_expansion("~someuser/test"),
+                ["~someuser", "test"].iter().collect::<std::path::PathBuf>()
+            );
+
+            assert_eq!(
+                tilde_expansion("/~/test"),
+                ["/", "~", "test"].iter().collect::<std::path::PathBuf>()
+            );
+
+            assert_eq!(
+                tilde_expansion(""),
+                [""].iter().collect::<std::path::PathBuf>()
+            );
+        }
+    }
+}

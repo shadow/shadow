@@ -1123,41 +1123,6 @@ mod tests {
     }
 
     #[test]
-    fn test_tilde_expansion() {
-        if let Ok(ref home) = std::env::var("HOME") {
-            assert_eq!(
-                tilde_expansion("~/test"),
-                [home, "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~"),
-                [home].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~/"),
-                [home].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~someuser/test"),
-                ["~someuser", "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("/~/test"),
-                ["/", "~", "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion(""),
-                [""].iter().collect::<std::path::PathBuf>()
-            );
-        }
-    }
-
-    #[test]
     fn test_nullable_option() {
         // format the yaml with an optional general option
         let yaml_fmt_fn = |option| {
