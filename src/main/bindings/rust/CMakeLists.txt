@@ -52,8 +52,10 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "main_.*"
         --whitelist-function "shmemcleanup_tryCleanup"
         --whitelist-function "controller_(new|free|run)"
+        --whitelist-function "manager_(new|free|run|addNewVirtualHost|addNewVirtualProcess)"
         --whitelist-function "runConfigHandlers"
         --whitelist-function "rustlogger_new"
+        --whitelist-function "dns_.*"
 
         --whitelist-function "workerpool_updateMinHostRunahead"
 
@@ -97,6 +99,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-type "StatusListener"
         --whitelist-type "SysCall.*"
         --whitelist-type "LegacyDescriptor"
+        --whitelist-type "Manager"
         --whitelist-type "Trigger"
         --whitelist-type "TriggerType"
         --whitelist-type "LogInfoFlags"
@@ -107,6 +110,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-var "SYSCALL_IO_BUFSIZE"
         --whitelist-var "SHADOW_SOMAXCONN"
         --opaque-type "LegacyDescriptor"
+        --opaque-type "Manager"
         --opaque-type "CompatDescriptor"
         --opaque-type "OpenFile"
         --opaque-type "File"

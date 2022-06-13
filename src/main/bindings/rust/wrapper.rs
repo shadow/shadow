@@ -1229,6 +1229,65 @@ pub struct _DNS {
     _unused: [u8; 0],
 }
 pub type DNS = _DNS;
+extern "C" {
+    pub fn dns_new() -> *mut DNS;
+}
+extern "C" {
+    pub fn dns_free(dns: *mut DNS);
+}
+extern "C" {
+    pub fn dns_register(
+        dns: *mut DNS,
+        id: GQuark,
+        name: *const gchar,
+        requestedIP: in_addr_t,
+    ) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
+}
+extern "C" {
+    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
+}
+pub type Manager = u8;
+extern "C" {
+    pub fn manager_new(
+        controller: *mut Controller,
+        config: *const ConfigOptions,
+        endTime: SimulationTime,
+        randomSeed: guint,
+    ) -> *mut Manager;
+}
+extern "C" {
+    pub fn manager_free(manager: *mut Manager) -> gint;
+}
+extern "C" {
+    pub fn manager_run(arg1: *mut Manager);
+}
+extern "C" {
+    pub fn manager_addNewVirtualHost(
+        manager: *mut Manager,
+        params: *mut HostParameters,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn manager_addNewVirtualProcess(
+        manager: *mut Manager,
+        hostName: *const gchar,
+        pluginName: *const gchar,
+        startTime: SimulationTime,
+        stopTime: SimulationTime,
+        argv: *const *const gchar,
+        environment: *const ::std::os::raw::c_char,
+        pause_for_debugging: bool,
+    );
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {
