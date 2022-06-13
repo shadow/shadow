@@ -6,6 +6,7 @@ use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::timer::Timer;
 use crate::core::support::configuration::ConfigOptions;
+use crate::core::support::configuration::QDiscMode;
 use crate::core::work::task::TaskRef;
 use crate::utility::random::Random;
 use log_bindings::Logger;
@@ -869,9 +870,6 @@ pub struct _Controller {
     _unused: [u8; 0],
 }
 pub type Controller = _Controller;
-pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
-pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
-pub type QDiscMode = ::std::os::raw::c_uint;
 pub const StraceFmtMode_STRACE_FMT_MODE_OFF: StraceFmtMode = 0;
 pub const StraceFmtMode_STRACE_FMT_MODE_STANDARD: StraceFmtMode = 1;
 pub const StraceFmtMode_STRACE_FMT_MODE_DETERMINISTIC: StraceFmtMode = 2;
@@ -943,7 +941,6 @@ pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
 pub type _LogInfoFlags = i32;
 pub type HostParameters = _HostParameters;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _HostParameters {
     pub id: GQuark,
     pub nodeSeed: guint,
