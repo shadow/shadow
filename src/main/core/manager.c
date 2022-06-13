@@ -206,7 +206,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
 Manager* manager_new(Controller* controller, const ConfigOptions* config, SimulationTime endTime,
-                     SimulationTime unlimBWEndTime, guint randomSeed) {
+                     guint randomSeed) {
     if (globalmanager != NULL) {
         return NULL;
     }
@@ -223,7 +223,7 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     manager->controller = controller;
     manager->config = config;
     manager->random = random_new(randomSeed);
-    manager->bootstrapEndTime = unlimBWEndTime;
+    manager->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
@@ -453,6 +453,9 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 
     /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
+
+    guint managerCpuFreq = manager_getRawCPUFrequency(manager);
+    params->cpuFrequency = MAX(0, managerCpuFreq);
 
     Host* host = host_new(params);
     host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),

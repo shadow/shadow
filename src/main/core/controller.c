@@ -35,9 +35,6 @@ struct _Controller {
     /* set of hostnames that we want to debug managed processes for */
     const HashSet_String* hostsToDebug;
 
-    /* tracks overall wall-clock runtime */
-    GTimer* runTimer;
-
     /* global random source from which all node random sources originate */
     Random* random;
 
@@ -62,9 +59,6 @@ struct _Controller {
     SimulationTime executeWindowEnd;
     /* the simulator should attempt to end immediately after this time */
     SimulationTime endTime;
-
-    /* if we run in unlimited bandwidth mode, this is when we go back to bw enforcement */
-    SimulationTime bootstrapEndTime;
 
     Manager* manager;
 
@@ -102,7 +96,6 @@ Controller* controller_new(const ConfigOptions* config, const HashSet_String* ho
     controller->isRunaheadDynamic = config_getUseDynamicRunahead(config);
 
     controller->endTime = config_getStopTime(config);
-    controller->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     g_rw_lock_init(&controller->nextMinRunaheadLock);
 
@@ -305,8 +298,6 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
     MAGIC_ASSERT(controller);
     utility_assert(host);
 
-    guint managerCpuFreq = manager_getRawCPUFrequency(controller->manager);
-
     guint64 quantity = hostoptions_getQuantity(host);
     in_addr_t ipAddr = 0;
     bool ipAddrSet = (hostoptions_getIpAddr(host, &ipAddr) == 0);
@@ -357,7 +348,6 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
 
         params->hostname = hostnameBuffer->str;
 
-        params->cpuFrequency = MAX(0, managerCpuFreq);
         params->cpuThreshold = 0;
         params->cpuPrecision = 200;
 
@@ -485,8 +475,8 @@ gint controller_run(Controller* controller) {
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
     guint managerSeed = random_nextU32(controller->random);
-    controller->manager = manager_new(controller, controller->config, controller->endTime,
-                                      controller->bootstrapEndTime, managerSeed);
+    controller->manager =
+        manager_new(controller, controller->config, controller->endTime, managerSeed);
 
     if (controller->manager == NULL) {
         error("Unable to create manager");
@@ -526,21 +516,8 @@ gint controller_run(Controller* controller) {
 
     info("running simulation");
 
-    /* dont buffer log messages in trace mode */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        info("log message buffering is enabled for efficiency");
-        shadow_logger_setEnableBuffering(TRUE);
-    }
-
     /* start running each manager */
     manager_run(controller->manager);
-
-    /* only need to disable buffering if it was enabled, otherwise
-     * don't log the message as it may confuse the user. */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        info("log message buffering is disabled during cleanup");
-        shadow_logger_setEnableBuffering(FALSE);
-    }
 
     info("simulation finished, cleaning up now");
 

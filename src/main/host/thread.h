@@ -22,7 +22,7 @@ typedef struct _Thread Thread;
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
-void thread_run(Thread* thread, char** argv, char** envv, const char* workingDir);
+void thread_run(Thread* thread, char* pluginPath, char** argv, char** envv, const char* workingDir);
 void thread_resume(Thread* thread);
 void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);

@@ -588,7 +588,7 @@ static void _process_start(Process* proc) {
     proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
-    thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
+    thread_run(mainThread, proc->plugin.exePath->str, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
     proc->memoryManager = memorymanager_new(proc->nativePid);
 

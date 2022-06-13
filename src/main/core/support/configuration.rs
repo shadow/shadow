@@ -616,7 +616,7 @@ pub struct HostOptions {
     pub options: HostDefaultOptions,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error,
@@ -642,6 +642,18 @@ impl LogLevel {
             Self::Info => c_log::_LogLevel_LOGLEVEL_INFO,
             Self::Debug => c_log::_LogLevel_LOGLEVEL_DEBUG,
             Self::Trace => c_log::_LogLevel_LOGLEVEL_TRACE,
+        }
+    }
+}
+
+impl From<LogLevel> for log::Level {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warning => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Debug => log::Level::Debug,
+            LogLevel::Trace => log::Level::Trace,
         }
     }
 }
@@ -1108,41 +1120,6 @@ mod tests {
         let err_str = parse_string_as_args(&arg_str).unwrap_err();
 
         assert!(!err_str.is_empty());
-    }
-
-    #[test]
-    fn test_tilde_expansion() {
-        if let Ok(ref home) = std::env::var("HOME") {
-            assert_eq!(
-                tilde_expansion("~/test"),
-                [home, "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~"),
-                [home].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~/"),
-                [home].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("~someuser/test"),
-                ["~someuser", "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("/~/test"),
-                ["/", "~", "test"].iter().collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion(""),
-                [""].iter().collect::<std::path::PathBuf>()
-            );
-        }
     }
 
     #[test]
