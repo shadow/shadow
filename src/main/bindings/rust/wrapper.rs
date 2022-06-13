@@ -947,7 +947,7 @@ pub type HostParameters = _HostParameters;
 pub struct _HostParameters {
     pub id: GQuark,
     pub nodeSeed: guint,
-    pub hostname: *mut gchar,
+    pub hostname: *const gchar,
     pub nodeId: guint,
     pub ipAddr: in_addr_t,
     pub requestedBwDownBits: guint64,
@@ -959,7 +959,7 @@ pub struct _HostParameters {
     pub heartbeatLogLevel: LogLevel,
     pub heartbeatLogInfo: LogInfoFlags,
     pub logLevel: LogLevel,
-    pub pcapDir: *mut gchar,
+    pub pcapDir: *const gchar,
     pub pcapCaptureSize: guint32,
     pub qdisc: QDiscMode,
     pub recvBufSize: guint64,
@@ -1654,7 +1654,7 @@ extern "C" {
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
-        argv: *mut *mut gchar,
+        argv: *const *const gchar,
         pause_for_debugging: bool,
     ) -> *mut Process;
 }
@@ -2145,7 +2145,7 @@ extern "C" {
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
-        argv: *mut *mut gchar,
+        argv: *const *const gchar,
         pause_for_debugging: bool,
     );
 }
@@ -2168,7 +2168,7 @@ extern "C" {
     pub fn host_getTsc(host: *mut Host) -> *mut Tsc;
 }
 extern "C" {
-    pub fn host_getName(host: *mut Host) -> *mut gchar;
+    pub fn host_getName(host: *mut Host) -> *const gchar;
 }
 extern "C" {
     pub fn host_getDefaultAddress(host: *mut Host) -> *mut Address;

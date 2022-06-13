@@ -806,7 +806,7 @@ static void _process_itimer_real_expiration(Host* host, void* voidProcess, void*
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
                      const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
-                     gchar** envv, gchar** argv, bool pause_for_debugging) {
+                     gchar** envv, const gchar* const* argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -875,7 +875,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     }
 
     /* save args and env */
-    proc->argv = g_strdupv(argv);
+    proc->argv = g_strdupv((gchar**)argv);
     proc->envv = envv;
 
     proc->descTable = descriptortable_new();

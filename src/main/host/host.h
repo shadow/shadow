@@ -59,7 +59,7 @@ guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
                          const gchar* pluginName, const gchar* pluginPath, gchar** envv,
-                         gchar** argv, bool pause_for_debugging);
+                         const gchar* const* argv, bool pause_for_debugging);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);
@@ -67,7 +67,7 @@ HostId host_getID(Host* host);
 gboolean host_isEqual(Host* a, Host* b);
 CPU* host_getCPU(Host* host);
 Tsc* host_getTsc(Host* host);
-gchar* host_getName(Host* host);
+const gchar* host_getName(Host* host);
 Address* host_getDefaultAddress(Host* host);
 in_addr_t host_getDefaultIP(Host* host);
 Random* host_getRandom(Host* host);

@@ -17,7 +17,7 @@ typedef struct _DNS DNS;
 DNS* dns_new();
 void dns_free(DNS* dns);
 
-Address* dns_register(DNS* dns, GQuark id, gchar* name, in_addr_t requestedIP);
+Address* dns_register(DNS* dns, GQuark id, const gchar* name, in_addr_t requestedIP);
 void dns_deregister(DNS* dns, Address* address);
 
 Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip);

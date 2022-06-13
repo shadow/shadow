@@ -67,9 +67,10 @@ gboolean manager_schedulerIsRunning(Manager* manager);
 void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
                            const gchar* startSymbol);
 int manager_addNewVirtualHost(Manager* manager, HostParameters* params);
-void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginName,
-                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
-                                  char* environment, bool pause_for_debugging);
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginName,
+                                  SimulationTime startTime, SimulationTime stopTime,
+                                  const gchar* const* argv, const char* environment,
+                                  bool pause_for_debugging);
 
 // Increment a global counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the

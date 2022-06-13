@@ -593,9 +593,10 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, const gchar* 
     return envv;
 }
 
-void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginPath,
-                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
-                                  char* environment, bool pause_for_debugging) {
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginPath,
+                                  SimulationTime startTime, SimulationTime stopTime,
+                                  const gchar* const* argv, const char* environment,
+                                  bool pause_for_debugging) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */

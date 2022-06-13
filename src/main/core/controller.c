@@ -271,8 +271,8 @@ static int _controller_registerProcessCallback(const ProcessOptions* proc, void*
         }
 
         manager_addNewVirtualProcess(callbackArgs->controller->manager, callbackArgs->hostname,
-                                     plugin, startTime, stopTime, argv, environment,
-                                     callbackArgs->debug);
+                                     plugin, startTime, stopTime, (const gchar* const*)argv,
+                                     environment, callbackArgs->debug);
     }
 
     processoptions_freeString(environment);
@@ -343,6 +343,9 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
             }
         }
 
+        // must free this later
+        char* pcapDir = hostoptions_getPcapDirectory(host);
+
         // host names should be unique within the simulation due to the check in 'scheduler_addHost()'
         params->nodeSeed = callbackOptions->randomnessForSeedCalc ^ g_str_hash(hostnameBuffer->str);
 
@@ -354,7 +357,7 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         params->ipAddr = ipAddr;
 
         params->logLevel = hostoptions_getLogLevel(host);
-        params->pcapDir = hostoptions_getPcapDirectory(host);
+        params->pcapDir = pcapDir;
         params->pcapCaptureSize = hostoptions_getPcapCaptureSize(host);
 
         /* some options come from the config options and not the host options */
@@ -415,7 +418,7 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
 
         /* cleanup for next pass through the loop */
         g_string_free(hostnameBuffer, TRUE);
-        hostoptions_freeString(params->pcapDir);
+        hostoptions_freeString(pcapDir);
         g_free(params);
     }
 

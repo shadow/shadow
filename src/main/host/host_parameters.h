@@ -17,7 +17,7 @@ typedef struct _HostParameters HostParameters;
 struct _HostParameters {
     GQuark id;
     guint nodeSeed;
-    gchar* hostname;
+    const gchar* hostname;
     guint nodeId;
     in_addr_t ipAddr;
     guint64 requestedBwDownBits;
@@ -29,7 +29,7 @@ struct _HostParameters {
     LogLevel heartbeatLogLevel;
     LogInfoFlags heartbeatLogInfo;
     LogLevel logLevel;
-    gchar* pcapDir;
+    const gchar* pcapDir;
     guint32 pcapCaptureSize;
     QDiscMode qdisc;
     guint64 recvBufSize;
