@@ -919,10 +919,35 @@ impl FromStr for StraceLoggingMode {
 /// overwrite the config file value with `None`. From the example above, you could now specify
 /// "--runahead null" to overwrite the config file value (for example `Some(5ms)`) with a `None`
 /// value.
-#[derive(Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, JsonSchema, Eq, PartialEq)]
 pub enum NullableOption<T> {
     Value(T),
     Null,
+}
+
+impl<T> NullableOption<T> {
+    pub fn as_ref(&self) -> NullableOption<&T> {
+        match self {
+            NullableOption::Value(ref x) => NullableOption::Value(x),
+            NullableOption::Null => NullableOption::Null,
+        }
+    }
+
+    pub fn as_mut(&mut self) -> NullableOption<&mut T> {
+        match self {
+            NullableOption::Value(ref mut x) => NullableOption::Value(x),
+            NullableOption::Null => NullableOption::Null,
+        }
+    }
+
+    /// Easier to use than `Into<Option<T>>` since `Option` has a lot of blanket `From`
+    /// implementations, requiring a lot of type annotations.
+    pub fn to_option(self) -> Option<T> {
+        match self {
+            NullableOption::Value(x) => Some(x),
+            NullableOption::Null => None,
+        }
+    }
 }
 
 impl<T: serde::Serialize> serde::Serialize for NullableOption<T> {
@@ -955,6 +980,22 @@ where
             "null" => Ok(Self::Null),
             x => Ok(Self::Value(FromStr::from_str(x)?)),
         }
+    }
+}
+
+/// A trait for `Option`-like types that can be flattened into a single `Option`.
+pub trait Flatten<T> {
+    fn flatten(self) -> Option<T>;
+    fn flatten_ref(&self) -> Option<&T>;
+}
+
+impl<T> Flatten<T> for Option<NullableOption<T>> {
+    fn flatten(self) -> Option<T> {
+        self.map(|x| x.to_option()).flatten()
+    }
+
+    fn flatten_ref(&self) -> Option<&T> {
+        self.as_ref().map(|x| x.as_ref().to_option()).flatten()
     }
 }
 
@@ -1346,26 +1387,25 @@ mod export {
     ) -> c::SimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-
-        match config.general.heartbeat_interval {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
-            }
-            Some(NullableOption::Null) | None => SIMTIME_INVALID,
-        }
+        config
+            .general
+            .heartbeat_interval
+            .flatten()
+            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
+            .unwrap_or(SIMTIME_INVALID)
     }
 
     #[no_mangle]
     pub extern "C" fn config_getRunahead(config: *const ConfigOptions) -> c::SimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.runahead {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND
-            }
+        config
+            .experimental
+            .runahead
+            .flatten()
+            .map(|x| x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND)
             // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            Some(NullableOption::Null) | None => 0,
-        }
+            .unwrap_or(0)
     }
 
     #[no_mangle]
@@ -1578,12 +1618,12 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        match config.general.template_directory {
-            Some(NullableOption::Value(ref x)) => {
+        match config.general.template_directory.flatten_ref() {
+            Some(x) => {
                 let x = tilde_expansion(x);
                 CString::into_raw(CString::new(x.to_str().unwrap()).unwrap())
             }
-            Some(NullableOption::Null) | None => std::ptr::null_mut(),
+            None => std::ptr::null_mut(),
         }
     }
 
@@ -1714,13 +1754,12 @@ mod export {
     ) -> c::SimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-
-        match config.experimental.host_heartbeat_interval {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
-            }
-            Some(NullableOption::Null) | None => SIMTIME_INVALID,
-        }
+        config
+            .experimental
+            .host_heartbeat_interval
+            .flatten()
+            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
+            .unwrap_or(SIMTIME_INVALID)
     }
 
     #[no_mangle]
@@ -1835,11 +1874,11 @@ mod export {
     pub extern "C" fn hostoptions_getLogLevel(host: *const HostOptions) -> c_log::LogLevel {
         assert!(!host.is_null());
         let host = unsafe { &*host };
-
-        match &host.options.log_level {
-            Some(NullableOption::Value(x)) => x.to_c_loglevel(),
-            Some(NullableOption::Null) | None => c_log::_LogLevel_LOGLEVEL_UNSET,
-        }
+        host.options
+            .log_level
+            .flatten()
+            .map(|x| x.to_c_loglevel())
+            .unwrap_or(c_log::_LogLevel_LOGLEVEL_UNSET)
     }
 
     #[no_mangle]
@@ -1847,12 +1886,12 @@ mod export {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
-        match &host.options.pcap_directory {
-            Some(NullableOption::Value(pcap_dir)) => {
+        match host.options.pcap_directory.flatten_ref() {
+            Some(pcap_dir) => {
                 let pcap_dir = tilde_expansion(pcap_dir);
                 CString::into_raw(CString::new(pcap_dir.to_str().unwrap()).unwrap())
             }
-            Some(NullableOption::Null) | None => std::ptr::null_mut(),
+            None => std::ptr::null_mut(),
         }
     }
 
