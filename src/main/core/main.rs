@@ -59,11 +59,9 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     // load the configuration yaml
     let file = std::fs::File::open(&config_filename)
-        .context(format!("Could not open config file {:?}", &config_filename))?;
-    let config_file: ConfigFileOptions = serde_yaml::from_reader(file).context(format!(
-        "Could not parse configuration file {:?}",
-        &config_filename
-    ))?;
+        .with_context(|| format!("Could not open config file {:?}", &config_filename))?;
+    let config_file: ConfigFileOptions = serde_yaml::from_reader(file)
+        .with_context(|| format!("Could not parse configuration file {:?}", &config_filename))?;
 
     // generate the final shadow configuration from the config file and cli options
     let config = ConfigOptions::new(config_file, options.clone());
@@ -269,8 +267,10 @@ mod export {
 
                 // print the short error
                 eprintln!("** Shadow did not complete successfully: {}", e);
+                eprintln!("**   {}", e.root_cause());
                 eprintln!("** See the log for details");
             } else {
+                // logging may not be configured yet, so print to stderr
                 eprintln!("{:?}", e);
             }
 
