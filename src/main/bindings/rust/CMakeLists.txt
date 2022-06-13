@@ -51,7 +51,6 @@ add_custom_command(OUTPUT wrapper.rs
         # used by shadow's main function
         --whitelist-function "main_.*"
         --whitelist-function "shmemcleanup_tryCleanup"
-        --whitelist-function "controller_(new|free|run)"
         --whitelist-function "manager_(new|free|run|addNewVirtualHost|addNewVirtualProcess)"
         --whitelist-function "runConfigHandlers"
         --whitelist-function "rustlogger_new"
@@ -123,6 +122,7 @@ add_custom_command(OUTPUT wrapper.rs
         --opaque-type "GList"
         --blacklist-type "Logger"
         --blacklist-type "Timer"
+        --blacklist-type "Controller"
         --blacklist-type "CompatDescriptor"
         --blacklist-type "TaskRef"
         --whitelist-type "WorkerC"
@@ -140,6 +140,7 @@ add_custom_command(OUTPUT wrapper.rs
         --raw-line "use crate::host::descriptor::descriptor_table::DescriptorTable;"
         --raw-line "use crate::host::memory_manager::MemoryManager;"
         --raw-line "use crate::host::timer::Timer;"
+        --raw-line "use crate::core::controller::Controller;"
         --raw-line "use crate::core::support::configuration::ConfigOptions;"
         --raw-line "use crate::core::support::configuration::QDiscMode;"
         --raw-line "use crate::core::work::task::TaskRef;"

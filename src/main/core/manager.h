@@ -25,15 +25,14 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "main/core/controller.h"
 #include "main/core/support/definitions.h"
 #include "main/host/host_parameters.h"
 #include "main/routing/dns.h"
 
 typedef struct _Manager Manager;
 
-Manager* manager_new(Controller* controller, const ConfigOptions* config, SimulationTime endTime,
-                     guint randomSeed);
+Manager* manager_new(const Controller* controller, const ConfigOptions* config,
+                     SimulationTime endTime, guint randomSeed);
 gint manager_free(Manager* manager);
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager);

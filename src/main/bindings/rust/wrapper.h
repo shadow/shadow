@@ -5,7 +5,6 @@
 
 // Don't forget to whitelist functions/types/vars in CMakeLists.txt
 
-#include "main/core/controller.h"
 #include "main/core/logger/log_wrapper.h"
 #include "main/core/main.h"
 #include "main/core/scheduler/scheduler_policy_type.h"

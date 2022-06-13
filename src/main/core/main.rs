@@ -6,7 +6,9 @@ use anyhow::{self, Context};
 use clap::Parser;
 use nix::sys::{personality, resource, signal};
 
+use crate::core::controller::Controller;
 use crate::core::logger::shadow_logger;
+use crate::core::sim_config::SimConfig;
 use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::cshadow as c;
 use crate::shmem::cleanup;
@@ -64,15 +66,15 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
         .with_context(|| format!("Could not parse configuration file {:?}", &config_filename))?;
 
     // generate the final shadow configuration from the config file and cli options
-    let config = ConfigOptions::new(config_file, options.clone());
+    let shadow_config = ConfigOptions::new(config_file, options.clone());
 
     if options.show_config {
-        eprintln!("{:#?}", config);
+        eprintln!("{:#?}", shadow_config);
         return Ok(());
     }
 
     // run any global C configuration handlers
-    unsafe { c::runConfigHandlers(&config as *const ConfigOptions) };
+    unsafe { c::runConfigHandlers(&shadow_config as *const ConfigOptions) };
 
     // start up the logging subsystem to handle all future messages
     shadow_logger::init().unwrap();
@@ -83,7 +85,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     shadow_logger::set_buffering_enabled(false);
 
     // set the log level
-    let log_level = config.general.log_level.unwrap();
+    let log_level = shadow_config.general.log_level.unwrap();
     let log_level: log::Level = log_level.into();
     log::set_max_level(log_level.to_level_filter());
 
@@ -102,7 +104,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // save the platform data required for CPU pinning
-    if config.experimental.use_cpu_pinning.unwrap() {
+    if shadow_config.experimental.use_cpu_pinning.unwrap() {
         if unsafe { c::affinity_initPlatformInfo() } != 0 {
             return Err(anyhow::anyhow!("Unable to initialize platform info"));
         }
@@ -114,7 +116,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     // raise number of processes/threads soft limit to hard limit
     raise_rlimit(resource::Resource::RLIMIT_NPROC).context("Could not raise proc limit")?;
 
-    if config.experimental.use_sched_fifo.unwrap() {
+    if shadow_config.experimental.use_sched_fifo.unwrap() {
         set_sched_fifo().context("Could not set real-time scheduler mode to SCHED_FIFO")?;
         log::debug!("Successfully set real-time scheduler mode to SCHED_FIFO");
     }
@@ -146,39 +148,27 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
         pause_for_gdb_attach().context("Could not pause shadow to allow gdb to attach")?;
     }
 
-    let debug_hosts = options.debug_hosts.unwrap_or_default();
+    let sim_config = SimConfig::new(&shadow_config, &options.debug_hosts.unwrap_or_default())
+        .context("Failed to initialize the simulation")?;
 
-    // scope is used to make sure we don't use 'controller' after it's freed
-    let rv = {
-        // allocate and initialize our main simulation driver
-        // config and debug_hosts must live longer than the controller
-        let controller = unsafe { c::controller_new(&config, &debug_hosts) };
-        assert!(!controller.is_null());
+    // allocate and initialize our main simulation driver
+    let controller = Controller::new(sim_config, &shadow_config);
 
-        // enable log buffering if not at trace level
-        let buffer_log = log::max_level() < log::LevelFilter::Trace;
+    // enable log buffering if not at trace level
+    let buffer_log = log::max_level() < log::LevelFilter::Trace;
+    shadow_logger::set_buffering_enabled(buffer_log);
+    if buffer_log {
+        log::info!("Log message buffering is enabled for efficiency");
+    }
 
-        shadow_logger::set_buffering_enabled(buffer_log);
-        if buffer_log {
-            log::info!("Log message buffering is enabled for efficiency");
-        }
+    // run the simulation
+    controller.run().context("Failed to run the simulation")?;
 
-        // run the simulation
-        let rv = unsafe { c::controller_run(controller) };
-
-        // disable log buffering
-        shadow_logger::set_buffering_enabled(false);
-        if buffer_log {
-            // only show if we disabled buffering above
-            log::info!("Log message buffering is disabled during cleanup");
-        }
-
-        unsafe { c::controller_free(controller) };
-        rv
-    };
-
-    if rv != 0 {
-        return Err(anyhow::anyhow!("Controller exited with code {}", rv));
+    // disable log buffering
+    shadow_logger::set_buffering_enabled(false);
+    if buffer_log {
+        // only show if we disabled buffering above
+        log::info!("Log message buffering is disabled during cleanup");
     }
 
     Ok(())
