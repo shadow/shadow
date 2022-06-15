@@ -76,7 +76,6 @@ struct _Manager {
 
     guint numPluginErrors;
 
-    gchar* cwdPath;
     gchar* dataPath;
     gchar* hostsPath;
 
@@ -261,7 +260,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->scheduler =
         scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
 
-    manager->cwdPath = g_get_current_dir();
+    gchar* cwdPath = g_get_current_dir();
 
     char* dataDirectory = config_getDataDirectory(config);
 
@@ -272,7 +271,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
 
     if (dataDirectory[0] != '/') {
         // Relative path
-        manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+        manager->dataPath = g_build_filename(cwdPath, dataDirectory, NULL);
     } else {
         // Absolute path
         manager->dataPath = g_build_filename(dataDirectory, NULL);
@@ -284,6 +283,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
         error("data directory '%s' already exists", manager->dataPath);
+        g_free(cwdPath);
         manager_free(manager);
         return NULL;
     }
@@ -291,7 +291,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     char* templateDirectory = config_getTemplateDirectory(config);
 
     if (templateDirectory != NULL) {
-        gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
+        gchar* templateDataPath = g_build_filename(cwdPath, templateDirectory, NULL);
         config_freeString(templateDirectory);
 
         debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
@@ -299,6 +299,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
             error("data template directory '%s' does not exists", templateDataPath);
             g_free(templateDataPath);
+            g_free(cwdPath);
             manager_free(manager);
             return NULL;
         }
@@ -310,8 +311,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
         g_free(templateDataPath);
     } else {
         /* provide a warning for backwards compatibility; can remove this sometime in the future */
-        gchar* compatTemplatePath =
-            g_build_filename(manager->cwdPath, "shadow.data.template", NULL);
+        gchar* compatTemplatePath = g_build_filename(cwdPath, "shadow.data.template", NULL);
         if (g_file_test(compatTemplatePath, G_FILE_TEST_EXISTS)) {
             warning("The directory 'shadow.data.template' exists, but '--data-template' was not "
                     "set. Ignore this warning if this was intentional.");
@@ -339,6 +339,8 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
 
     manager->checkFdUsage = true;
     manager->checkMemUsage = true;
+
+    g_free(cwdPath);
 
     return manager;
 }
@@ -392,9 +394,6 @@ gint manager_free(Manager* manager) {
 
     g_mutex_clear(&(manager->lock));
 
-    if (manager->cwdPath) {
-        g_free(manager->cwdPath);
-    }
     if (manager->dataPath) {
         g_free(manager->dataPath);
     }
