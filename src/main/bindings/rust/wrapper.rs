@@ -1294,6 +1294,19 @@ extern "C" {
         pause_for_debugging: bool,
     );
 }
+extern "C" {
+    pub fn manager_increment_object_alloc_counter_global(
+        object_name: *const ::std::os::raw::c_char,
+    );
+}
+extern "C" {
+    pub fn manager_increment_object_dealloc_counter_global(
+        object_name: *const ::std::os::raw::c_char,
+    );
+}
+extern "C" {
+    pub fn manager_add_syscall_counts_global(syscall_counts: *const Counter);
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {
@@ -2345,6 +2358,15 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_add_syscall_counts(syscall_counts: *const Counter);
+}
+extern "C" {
     pub fn worker_threadID() -> i32;
 }
 extern "C" {
@@ -2499,15 +2521,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
-}
-extern "C" {
-    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
 extern "C" {
     pub fn affinity_getGoodWorkerAffinity() -> ::std::os::raw::c_int;

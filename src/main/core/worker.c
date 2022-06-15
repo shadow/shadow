@@ -35,10 +35,6 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/utility.h"
 
-// Allow turning off object counting at run-time.
-static bool _use_object_counters = true;
-ADD_CONFIG_HANDLER(config_getUseObjectCounters, _use_object_counters)
-
 static void* _worker_run(void* voidWorker);
 static void _worker_freeHostProcesses(Host* host, void* _unused);
 static void _worker_shutdownHost(Host* host, void* _unused);
@@ -667,41 +663,3 @@ void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAdd
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
 void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
-
-void worker_increment_object_alloc_counter(const char* object_name) {
-    // If disabled, we never create the counter (and never send it to the manager).
-    if (!_use_object_counters) {
-        return;
-    }
-    Counter* counter = _worker_objectAllocCounter();
-    if (counter) {
-        counter_add_value(counter, object_name, 1);
-    } else {
-        // No live worker; fall back to the shared manager counter.
-        manager_increment_object_alloc_counter_global(object_name);
-    }
-}
-
-void worker_increment_object_dealloc_counter(const char* object_name) {
-    // If disabled, we never create the counter (and never send it to the manager).
-    if (!_use_object_counters) {
-        return;
-    }
-    Counter* counter = _worker_objectDeallocCounter();
-    if (counter) {
-        counter_add_value(counter, object_name, 1);
-    } else {
-        // No live worker; fall back to the shared manager counter.
-        manager_increment_object_dealloc_counter_global(object_name);
-    }
-}
-
-void worker_add_syscall_counts(Counter* syscall_counts) {
-    Counter* counter = _worker_syscallCounter();
-    if (counter) {
-        counter_add_counter(counter, syscall_counts);
-    } else {
-        // No live worker; fall back to the shared manager counter.
-        manager_add_syscall_counts_global(syscall_counts);
-    }
-}

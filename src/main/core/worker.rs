@@ -13,9 +13,12 @@ use crate::host::thread::{CThread, Thread};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use super::work::task::TaskRef;
+
+static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -285,14 +288,49 @@ impl Worker {
     }
 
     pub fn increment_object_alloc_counter(s: &str) {
-        let s = std::ffi::CString::new(s).unwrap();
-        unsafe { cshadow::worker_increment_object_alloc_counter(s.as_ptr()) }
+        if !USE_OBJECT_COUNTERS.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
+        Worker::with_mut(|w| {
+            w.object_alloc_counter.add_one(s);
+        })
+        .unwrap_or_else(|| {
+            // no live worker; fall back to the shared manager counter
+            let s = std::ffi::CString::new(s).unwrap();
+            unsafe { cshadow::manager_increment_object_alloc_counter_global(s.as_ptr()) };
+        });
     }
 
     pub fn increment_object_dealloc_counter(s: &str) {
-        let s = std::ffi::CString::new(s).unwrap();
-        unsafe { cshadow::worker_increment_object_dealloc_counter(s.as_ptr()) }
+        if !USE_OBJECT_COUNTERS.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
+        Worker::with_mut(|w| {
+            w.object_dealloc_counter.add_one(s);
+        })
+        .unwrap_or_else(|| {
+            // no live worker; fall back to the shared manager counter
+            let s = std::ffi::CString::new(s).unwrap();
+            unsafe { cshadow::manager_increment_object_dealloc_counter_global(s.as_ptr()) };
+        });
     }
+
+    pub fn worker_add_syscall_counts(syscall_counts: &Counter) {
+        Worker::with_mut(|w| {
+            w.syscall_counter.add_counter(syscall_counts);
+        })
+        .unwrap_or_else(|| {
+            // no live worker; fall back to the shared manager counter
+            unsafe { cshadow::manager_add_syscall_counts_global(syscall_counts) };
+        });
+    }
+}
+
+/// Enable object counters. Should be called near the beginning of the program.
+pub fn enable_object_counters() {
+    USE_OBJECT_COUNTERS.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
 mod export {
@@ -322,6 +360,17 @@ mod export {
             .unwrap_or(std::ptr::null_mut())
     }
 
+    /// Implementation for counting allocated objects. Do not use this function directly.
+    /// Use worker_count_allocation instead from the call site.
+    #[no_mangle]
+    pub extern "C" fn worker_increment_object_alloc_counter(object_name: *const libc::c_char) {
+        assert!(!object_name.is_null());
+
+        let s = unsafe { std::ffi::CStr::from_ptr(object_name) };
+        let s = s.to_str().unwrap();
+        Worker::increment_object_alloc_counter(s);
+    }
+
     /// Returns NULL if there is no live Worker.
     #[no_mangle]
     pub extern "C" fn _worker_objectDeallocCounter() -> *mut Counter {
@@ -329,10 +378,30 @@ mod export {
             .unwrap_or(std::ptr::null_mut())
     }
 
+    /// Implementation for counting deallocated objects. Do not use this function directly.
+    /// Use worker_count_deallocation instead from the call site.
+    #[no_mangle]
+    pub extern "C" fn worker_increment_object_dealloc_counter(object_name: *const libc::c_char) {
+        assert!(!object_name.is_null());
+
+        let s = unsafe { std::ffi::CStr::from_ptr(object_name) };
+        let s = s.to_str().unwrap();
+        Worker::increment_object_dealloc_counter(s);
+    }
+
     /// Returns NULL if there is no live Worker.
     #[no_mangle]
     pub extern "C" fn _worker_syscallCounter() -> *mut Counter {
         Worker::with_mut(|w| &mut w.syscall_counter as *mut Counter).unwrap_or(std::ptr::null_mut())
+    }
+
+    /// Aggregate the given syscall counts in a worker syscall counter.
+    #[no_mangle]
+    pub extern "C" fn worker_add_syscall_counts(syscall_counts: *const Counter) {
+        assert!(!syscall_counts.is_null());
+        let syscall_counts = unsafe { syscall_counts.as_ref() }.unwrap();
+
+        Worker::worker_add_syscall_counts(syscall_counts);
     }
 
     /// ID of the current thread's Worker. Panics if the thread has no Worker.
