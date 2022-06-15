@@ -412,6 +412,9 @@ gint manager_free(Manager* manager) {
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
     }
+    if (manager->preloadOpensslCryptoPath) {
+        g_free(manager->preloadOpensslCryptoPath);
+    }
 
     if (manager->statusLogger) {
         statusLogger_free(manager->statusLogger);
