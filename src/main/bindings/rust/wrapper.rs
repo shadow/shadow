@@ -9,6 +9,7 @@ use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::task::TaskRef;
+use crate::utility::counter::Counter;
 use crate::utility::random::Random;
 use log_bindings::Logger;
 use std::sync::Arc;
@@ -98,11 +99,6 @@ pub type StraceFmtMode = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ChildPidWatcher {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct Counter {
     _unused: [u8; 0],
 }
 #[repr(C)]
