@@ -71,9 +71,6 @@ struct _Manager {
 
     GMutex lock;
 
-    /* We will not enter plugin context when set. Used when destroying threads */
-    gboolean forceShadowContext;
-
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
@@ -350,9 +347,6 @@ gint manager_free(Manager* manager) {
     MAGIC_ASSERT(manager);
     gint returnCode = (manager->numPluginErrors > 0) ? -1 : 0;
 
-    /* we will never execute inside the plugin again */
-    manager->forceShadowContext = TRUE;
-
     if (manager->watcher) {
         childpidwatcher_free(manager->watcher);
         manager->watcher = NULL;
@@ -429,11 +423,6 @@ gint manager_free(Manager* manager) {
     globalmanager = NULL;
 
     return returnCode;
-}
-
-gboolean manager_isForced(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->forceShadowContext;
 }
 
 guint manager_getRawCPUFrequency(Manager* manager) {

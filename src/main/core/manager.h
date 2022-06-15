@@ -37,7 +37,6 @@ gint manager_free(Manager* manager);
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager);
 
-gboolean manager_isForced(Manager* manager);
 guint manager_getRawCPUFrequency(Manager* manager);
 DNS* manager_getDNS(Manager* manager);
 guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip);
