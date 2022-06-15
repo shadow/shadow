@@ -70,7 +70,6 @@ struct _Manager {
     Scheduler* scheduler;
 
     GMutex lock;
-    GMutex pluginInitLock;
 
     /* We will not enter plugin context when set. Used when destroying threads */
     gboolean forceShadowContext;
@@ -217,7 +216,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->watcher = childpidwatcher_new();
 
     g_mutex_init(&(manager->lock));
-    g_mutex_init(&(manager->pluginInitLock));
 
     manager->controller = controller;
     manager->config = config;
@@ -399,7 +397,6 @@ gint manager_free(Manager* manager) {
     }
 
     g_mutex_clear(&(manager->lock));
-    g_mutex_clear(&(manager->pluginInitLock));
 
     if (manager->cwdPath) {
         g_free(manager->cwdPath);
