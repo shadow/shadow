@@ -218,23 +218,23 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_add_counter(counter: *mut Counter, other: *mut Counter) {
+    pub extern "C" fn counter_add_counter(counter: *mut Counter, other: *const Counter) {
         assert!(!counter.is_null());
         assert!(!other.is_null());
 
         let counter = unsafe { &mut *counter };
-        let other = unsafe { &mut *other };
+        let other = unsafe { &*other };
 
         counter.add_counter(other)
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_sub_counter(counter: *mut Counter, other: *mut Counter) {
+    pub extern "C" fn counter_sub_counter(counter: *mut Counter, other: *const Counter) {
         assert!(!counter.is_null());
         assert!(!other.is_null());
 
         let counter = unsafe { &mut *counter };
-        let other = unsafe { &mut *other };
+        let other = unsafe { &*other };
 
         counter.sub_counter(other)
     }

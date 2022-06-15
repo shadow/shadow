@@ -872,7 +872,7 @@ void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_co
     _manager_add_object_counts(manager, &manager->object_counter_dealloc, dealloc_obj_counts);
 }
 
-void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
+void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
     // This is created on the fly, so that if we did not enable counting mode
@@ -884,7 +884,7 @@ void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
     _manager_unlock(manager);
 }
 
-void manager_add_syscall_counts_global(Counter* syscall_counts) {
+void manager_add_syscall_counts_global(const Counter* syscall_counts) {
     if (globalmanager) {
         manager_add_syscall_counts(globalmanager, syscall_counts);
     }

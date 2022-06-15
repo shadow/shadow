@@ -219,9 +219,9 @@ int64_t counter_add_value(struct Counter *counter, const char *id, int64_t value
 
 int64_t counter_sub_value(struct Counter *counter, const char *id, int64_t value);
 
-void counter_add_counter(struct Counter *counter, struct Counter *other);
+void counter_add_counter(struct Counter *counter, const struct Counter *other);
 
-void counter_sub_counter(struct Counter *counter, struct Counter *other);
+void counter_sub_counter(struct Counter *counter, const struct Counter *other);
 
 bool counter_equals_counter(const struct Counter *counter, const struct Counter *other);
 
