@@ -1317,6 +1317,9 @@ pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
+extern "C" {
+    pub fn utility_hashString(str_: *const ::std::os::raw::c_char) -> ::std::os::raw::c_uint;
+}
 pub type DescriptorCloseFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
 pub type DescriptorCleanupFunc =
