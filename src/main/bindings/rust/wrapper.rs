@@ -1294,16 +1294,6 @@ extern "C" {
         pause_for_debugging: bool,
     );
 }
-extern "C" {
-    pub fn manager_increment_object_alloc_counter_global(
-        object_name: *const ::std::os::raw::c_char,
-    );
-}
-extern "C" {
-    pub fn manager_increment_object_dealloc_counter_global(
-        object_name: *const ::std::os::raw::c_char,
-    );
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {
@@ -2398,6 +2388,12 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_isAlive() -> bool;
+}
+extern "C" {
+    pub fn worker_addAndClearGlobalAllocCounters(
+        alloc_counter: *mut Counter,
+        dealloc_counter: *mut Counter,
+    );
 }
 extern "C" {
     pub fn process_registerCompatDescriptor(

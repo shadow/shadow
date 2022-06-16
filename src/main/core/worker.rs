@@ -1,5 +1,7 @@
 use nix::unistd::Pid;
+use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
+use std::sync::Mutex;
 
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -19,6 +21,10 @@ use std::sync::Arc;
 use super::work::task::TaskRef;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
+
+// counters to be used when there is no worker active
+static ALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
+static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -296,9 +302,8 @@ impl Worker {
             w.object_alloc_counter.add_one(s);
         })
         .unwrap_or_else(|| {
-            // no live worker; fall back to the shared manager counter
-            let s = std::ffi::CString::new(s).unwrap();
-            unsafe { cshadow::manager_increment_object_alloc_counter_global(s.as_ptr()) };
+            // no live worker; fall back to the shared counter
+            ALLOC_COUNTER.lock().unwrap().add_one(s);
         });
     }
 
@@ -311,9 +316,8 @@ impl Worker {
             w.object_dealloc_counter.add_one(s);
         })
         .unwrap_or_else(|| {
-            // no live worker; fall back to the shared manager counter
-            let s = std::ffi::CString::new(s).unwrap();
-            unsafe { cshadow::manager_increment_object_dealloc_counter_global(s.as_ptr()) };
+            // no live worker; fall back to the shared counter
+            DEALLOC_COUNTER.lock().unwrap().add_one(s);
         });
     }
 
@@ -501,5 +505,23 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_isAlive() -> bool {
         Worker::is_alive()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_addAndClearGlobalAllocCounters(
+        alloc_counter: *mut Counter,
+        dealloc_counter: *mut Counter,
+    ) {
+        let alloc_counter = unsafe { alloc_counter.as_mut() }.unwrap();
+        let dealloc_counter = unsafe { dealloc_counter.as_mut() }.unwrap();
+
+        let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
+        let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
+
+        alloc_counter.add_counter(&global_alloc_counter);
+        dealloc_counter.add_counter(&global_dealloc_counter);
+
+        *global_alloc_counter = Counter::new();
+        *global_dealloc_counter = Counter::new();
     }
 }

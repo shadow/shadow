@@ -556,6 +556,9 @@ WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
 
+void worker_addAndClearGlobalAllocCounters(struct Counter *alloc_counter,
+                                           struct Counter *dealloc_counter);
+
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free
 // to release the reference.

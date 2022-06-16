@@ -357,6 +357,10 @@ gint manager_free(Manager* manager) {
     }
 
     if (manager->object_counter_alloc && manager->object_counter_dealloc) {
+        // add the worker's global counters
+        worker_addAndClearGlobalAllocCounters(
+            manager->object_counter_alloc, manager->object_counter_dealloc);
+
         char* str = counter_alloc_string(manager->object_counter_alloc);
         info("Global allocated object counts: %s", str);
         counter_free_string(manager->object_counter_alloc, str);
@@ -820,34 +824,6 @@ void manager_incrementPluginError(Manager* manager) {
 const gchar* manager_getHostsRootPath(Manager* manager) {
     MAGIC_ASSERT(manager);
     return manager->hostsPath;
-}
-
-static void _manager_increment_object_counts(Manager* manager, Counter** mgr_obj_counts,
-                                             const char* obj_name) {
-    _manager_lock(manager);
-    // This is created on the fly, so that if we did not enable counting mode
-    // then we don't need to create the counter object.
-    if (!*mgr_obj_counts) {
-        *mgr_obj_counts = counter_new();
-    }
-    counter_add_value(*mgr_obj_counts, obj_name, 1);
-    _manager_unlock(manager);
-}
-
-void manager_increment_object_alloc_counter_global(const char* object_name) {
-    if (globalmanager) {
-        MAGIC_ASSERT(globalmanager);
-        _manager_increment_object_counts(
-            globalmanager, &globalmanager->object_counter_alloc, object_name);
-    }
-}
-
-void manager_increment_object_dealloc_counter_global(const char* object_name) {
-    if (globalmanager) {
-        MAGIC_ASSERT(globalmanager);
-        _manager_increment_object_counts(
-            globalmanager, &globalmanager->object_counter_dealloc, object_name);
-    }
 }
 
 static void _manager_add_object_counts(Manager* manager, Counter** mgr_obj_counts,

@@ -70,16 +70,6 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
                                   const gchar* const* argv, const char* environment,
                                   bool pause_for_debugging);
 
-// Increment a global counter for the allocation of the object with the given name.
-// This should be paired with an increment of the dealloc counter with the
-// same name, otherwise we print a warning that a memory leak was detected.
-void manager_increment_object_alloc_counter_global(const char* object_name);
-
-// Increment a global ounter for the deallocation of the object with the given name.
-// This should be paired with an increment of the alloc counter with the
-// same name, otherwise we print a warning that a memory leak was detected.
-void manager_increment_object_dealloc_counter_global(const char* object_name);
-
 // Add the given allocated-object counts into a global manager counter.
 void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts);
 // Add the given deallocated-object counts into a global manager counter.
