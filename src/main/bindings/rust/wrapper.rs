@@ -1304,9 +1304,6 @@ extern "C" {
         object_name: *const ::std::os::raw::c_char,
     );
 }
-extern "C" {
-    pub fn manager_add_syscall_counts_global(syscall_counts: *const Counter);
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {

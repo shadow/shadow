@@ -884,12 +884,6 @@ void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts)
     _manager_unlock(manager);
 }
 
-void manager_add_syscall_counts_global(const Counter* syscall_counts) {
-    if (globalmanager) {
-        manager_add_syscall_counts(globalmanager, syscall_counts);
-    }
-}
-
 SimulationTime manager_getBootstrapEndTime(Manager* manager) {
     MAGIC_ASSERT(manager);
     return manager->bootstrapEndTime;

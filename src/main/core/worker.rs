@@ -322,8 +322,14 @@ impl Worker {
             w.syscall_counter.add_counter(syscall_counts);
         })
         .unwrap_or_else(|| {
-            // no live worker; fall back to the shared manager counter
-            unsafe { cshadow::manager_add_syscall_counts_global(syscall_counts) };
+            // no live worker
+            const MSG: &str = "Trying to add syscall counts when there is no worker; \
+                               throwing away syscall counts";
+            log::warn!("{}", MSG);
+
+            // panic only in debug builds
+            #[cfg(debug_assertions)]
+            panic!("{}", MSG);
         });
     }
 }
