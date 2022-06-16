@@ -86,8 +86,6 @@ struct _Manager {
     MAGIC_DECLARE;
 };
 
-static Manager* globalmanager = NULL;
-
 static void _manager_lock(Manager* manager) {
     MAGIC_ASSERT(manager);
     g_mutex_lock(&(manager->lock));
@@ -189,13 +187,8 @@ ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->wat
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed) {
-    if (globalmanager != NULL) {
-        return NULL;
-    }
-
     Manager* manager = g_new0(Manager, 1);
     MAGIC_INIT(manager);
-    globalmanager = manager;
 
     manager->watcher = childpidwatcher_new();
 
@@ -414,7 +407,6 @@ gint manager_free(Manager* manager) {
 
     MAGIC_CLEAR(manager);
     g_free(manager);
-    globalmanager = NULL;
 
     return returnCode;
 }
