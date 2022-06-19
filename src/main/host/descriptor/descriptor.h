@@ -32,7 +32,6 @@ gint descriptor_getHandle(LegacyDescriptor* descriptor);
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess);
 Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor);
 LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor);
-gint* descriptor_getHandleReference(LegacyDescriptor* descriptor);
 
 gint descriptor_getFlags(LegacyDescriptor* descriptor);
 void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags);

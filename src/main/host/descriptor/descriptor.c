@@ -180,11 +180,6 @@ Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor) {
     return descriptor->ownerProcess;
 }
 
-gint* descriptor_getHandleReference(LegacyDescriptor* descriptor) {
-    MAGIC_ASSERT(descriptor);
-    return &(descriptor->handle);
-}
-
 #ifdef DEBUG
 static gchar* _descriptor_statusToString(Status ds) {
     GString* string = g_string_new(NULL);

@@ -412,8 +412,7 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
 
     gint socketHandle = -1;
     if (socket.type == CST_LEGACY_SOCKET) {
-        socketHandle =
-            *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
+        socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
     }
 
     /* count our bandwidth usage by interface, and by socket handle if possible */
@@ -494,8 +493,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, H
 
         packet = compatsocket_pullOutPacket(&socket, host);
         if (socket.type == CST_LEGACY_SOCKET) {
-            *socketHandle =
-                *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
+            *socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
         }
 
         if (packet) {
@@ -532,8 +530,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         packet = compatsocket_pullOutPacket(&socket, host);
         if (socket.type == CST_LEGACY_SOCKET) {
-            *socketHandle =
-                *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
+            *socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
         }
 
         if (packet) {
