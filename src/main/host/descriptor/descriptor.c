@@ -155,12 +155,6 @@ void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
     descriptor->funcTable->close(descriptor, host);
 }
 
-gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data) {
-    MAGIC_ASSERT(foo);
-    MAGIC_ASSERT(bar);
-    return foo->handle > bar->handle ? +1 : foo->handle == bar->handle ? 0 : -1;
-}
-
 LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;
