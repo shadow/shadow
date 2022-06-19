@@ -99,8 +99,7 @@ int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBack
 
 static void _regularfile_closeHelper(RegularFile* file) {
     if (file && file->osfile.fd != OSFILE_INVALID) {
-        trace("On file %i, closing os-backed file %i", _regularfile_getFD(file),
-              _regularfile_getOSBackedFD(file));
+        trace("On file %p, closing os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
         close(file->osfile.fd);
         file->osfile.fd = OSFILE_INVALID;
@@ -113,8 +112,7 @@ static void _regularfile_closeHelper(RegularFile* file) {
 static void _regularfile_close(LegacyDescriptor* desc, Host* host) {
     RegularFile* file = _regularfile_descriptorToFile(desc);
 
-    trace("Closing file %i with os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("Closing file %p with os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     /* Make sure we mimic the close on the OS-backed file now. */
     _regularfile_closeHelper(file);
@@ -123,8 +121,7 @@ static void _regularfile_close(LegacyDescriptor* desc, Host* host) {
 static void _regularfile_free(LegacyDescriptor* desc) {
     RegularFile* file = _regularfile_descriptorToFile(desc);
 
-    trace("Freeing file %i with os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("Freeing file %p with os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     _regularfile_closeHelper(file);
 
@@ -325,8 +322,8 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     }
 
     if (osfd < 0) {
-        trace("RegularFile %i opening path '%s' returned %i: %s", _regularfile_getFD(file), abspath,
-              osfd, strerror(errcode));
+        trace("RegularFile %p opening path '%s' returned %i: %s", file, abspath, osfd,
+              strerror(errcode));
         if (abspath) {
             free(abspath);
         }
@@ -340,7 +337,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     file->osfile.flagsAtOpen = flags;
     file->osfile.modeAtOpen = mode;
 
-    trace("RegularFile %i opened os-backed file %i at absolute path %s", _regularfile_getFD(file),
+    trace("RegularFile %p opened os-backed file %i at absolute path %s", file,
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* The os-backed file is now ready. */
@@ -361,8 +358,8 @@ static void _regularfile_readRandomBytes(RegularFile* file, Host* host, void* bu
 
     utility_assert(host != NULL);
 
-    trace("RegularFile %i will read %zu bytes from random source for host %s",
-          _regularfile_getFD(file), numBytes, host_getName(host));
+    trace("RegularFile %p will read %zu bytes from random source for host %s", file, numBytes,
+          host_getName(host));
 
     Random* rng = host_getRandom(host);
     random_nextNBytes(rng, buf, numBytes);
@@ -390,9 +387,8 @@ ssize_t regularfile_read(RegularFile* file, Host* host, void* buf, size_t bufSiz
         return (ssize_t)bufSize;
     }
 
-    trace("RegularFile %i will read %zu bytes from os-backed file %i at path '%s'",
-          _regularfile_getFD(file), bufSize, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will read %zu bytes from os-backed file %i at path '%s'", file, bufSize,
+          _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -412,9 +408,8 @@ ssize_t regularfile_pread(RegularFile* file, Host* host, void* buf, size_t bufSi
         return (ssize_t)bufSize;
     }
 
-    trace("RegularFile %i will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
-          _regularfile_getFD(file), bufSize, _regularfile_getOSBackedFD(file), offset,
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
+          file, bufSize, _regularfile_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -434,10 +429,8 @@ ssize_t regularfile_preadv(RegularFile* file, Host* host, const struct iovec* io
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
     }
 
-    trace("RegularFile %i will preadv %d vector items from os-backed file %i at path "
-          "'%s'",
-          _regularfile_getFD(file), iovcnt, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will preadv %d vector items from os-backed file %i at path '%s'", file,
+          iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -458,10 +451,8 @@ ssize_t regularfile_preadv2(RegularFile* file, Host* host, const struct iovec* i
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
     }
 
-    trace("RegularFile %i will preadv2 %d vector items from os-backed file %i at path "
-          "'%s'",
-          _regularfile_getFD(file), iovcnt, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will preadv2 %d vector items from os-backed file %i at path '%s'", file,
+          iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -478,9 +469,8 @@ ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
         return -EBADF;
     }
 
-    trace("RegularFile %i will write %zu bytes to os-backed file %i at path '%s'",
-          _regularfile_getFD(file), bufSize, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will write %zu bytes to os-backed file %i at path '%s'", file, bufSize,
+          _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -495,9 +485,8 @@ ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, o
         return -EBADF;
     }
 
-    trace("RegularFile %i will pwrite %zu bytes to os-backed file %i offset %ld at path '%s'",
-          _regularfile_getFD(file), bufSize, _regularfile_getOSBackedFD(file), offset,
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will pwrite %zu bytes to os-backed file %i offset %ld at path '%s'", file,
+          bufSize, _regularfile_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -512,10 +501,8 @@ ssize_t regularfile_pwritev(RegularFile* file, const struct iovec* iov, int iovc
         return -EBADF;
     }
 
-    trace("RegularFile %i will pwritev %d vector items from os-backed file %i at "
-          "path '%s'",
-          _regularfile_getFD(file), iovcnt, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will pwritev %d vector items from os-backed file %i at path '%s'", file,
+          iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -532,10 +519,8 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
         return -EBADF;
     }
 
-    trace("RegularFile %i will pwritev2 %d vector items from os-backed file %i at "
-          "path '%s'",
-          _regularfile_getFD(file), iovcnt, _regularfile_getOSBackedFD(file),
-          file->osfile.absPathAtOpen);
+    trace("RegularFile %p will pwritev2 %d vector items from os-backed file %i at path '%s'", file,
+          iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -552,8 +537,7 @@ int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fstat os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fstat os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fstat(_regularfile_getOSBackedFD(file), statbuf);
     return (result < 0) ? -errno : result;
@@ -566,8 +550,7 @@ int regularfile_fstatfs(RegularFile* file, struct statfs* statbuf) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fstatfs os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fstatfs os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fstatfs(_regularfile_getOSBackedFD(file), statbuf);
     return (result < 0) ? -errno : result;
@@ -580,8 +563,7 @@ int regularfile_fsync(RegularFile* file) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fsync os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fsync os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fsync(_regularfile_getOSBackedFD(file));
     return (result < 0) ? -errno : result;
@@ -594,8 +576,7 @@ int regularfile_fchown(RegularFile* file, uid_t owner, gid_t group) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fchown os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fchown os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fchown(_regularfile_getOSBackedFD(file), owner, group);
     return (result < 0) ? -errno : result;
@@ -608,8 +589,7 @@ int regularfile_fchmod(RegularFile* file, mode_t mode) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fchmod os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fchmod os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fchmod(_regularfile_getOSBackedFD(file), mode);
     return (result < 0) ? -errno : result;
@@ -622,8 +602,7 @@ int regularfile_ftruncate(RegularFile* file, off_t length) {
         return -EBADF;
     }
 
-    trace("RegularFile %i ftruncate os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p ftruncate os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = ftruncate(_regularfile_getOSBackedFD(file), length);
     return (result < 0) ? -errno : result;
@@ -636,8 +615,7 @@ int regularfile_fallocate(RegularFile* file, int mode, off_t offset, off_t lengt
         return -EBADF;
     }
 
-    trace("RegularFile %i fallocate os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fallocate os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fallocate(_regularfile_getOSBackedFD(file), mode, offset, length);
     return (result < 0) ? -errno : result;
@@ -650,8 +628,7 @@ int regularfile_fadvise(RegularFile* file, off_t offset, off_t len, int advice) 
         return -EBADF;
     }
 
-    trace("RegularFile %i fadvise os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fadvise os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = posix_fadvise(_regularfile_getOSBackedFD(file), offset, len, advice);
     return (result < 0) ? -errno : result;
@@ -664,8 +641,7 @@ int regularfile_flock(RegularFile* file, int operation) {
         return -EBADF;
     }
 
-    trace("RegularFile %i flock os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p flock os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = flock(_regularfile_getOSBackedFD(file), operation);
     return (result < 0) ? -errno : result;
@@ -679,8 +655,7 @@ int regularfile_fsetxattr(RegularFile* file, const char* name, const void* value
         return -EBADF;
     }
 
-    trace("RegularFile %i fsetxattr os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fsetxattr os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fsetxattr(_regularfile_getOSBackedFD(file), name, value, size, flags);
     return (result < 0) ? -errno : result;
@@ -693,8 +668,7 @@ ssize_t regularfile_fgetxattr(RegularFile* file, const char* name, void* value, 
         return -EBADF;
     }
 
-    trace("RegularFile %i fgetxattr os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fgetxattr os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     ssize_t result = fgetxattr(_regularfile_getOSBackedFD(file), name, value, size);
     return (result < 0) ? -errno : result;
@@ -707,8 +681,7 @@ ssize_t regularfile_flistxattr(RegularFile* file, char* list, size_t size) {
         return -EBADF;
     }
 
-    trace("RegularFile %i flistxattr os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p flistxattr os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     ssize_t result = flistxattr(_regularfile_getOSBackedFD(file), list, size);
     return (result < 0) ? -errno : result;
@@ -721,8 +694,7 @@ int regularfile_fremovexattr(RegularFile* file, const char* name) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fremovexattr os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fremovexattr os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = fremovexattr(_regularfile_getOSBackedFD(file), name);
     return (result < 0) ? -errno : result;
@@ -735,8 +707,8 @@ int regularfile_sync_range(RegularFile* file, off64_t offset, off64_t nbytes, un
         return -EBADF;
     }
 
-    trace("RegularFile %i sync_file_range os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace(
+        "RegularFile %p sync_file_range os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result =
         sync_file_range(_regularfile_getOSBackedFD(file), offset, nbytes, flags);
@@ -750,8 +722,7 @@ ssize_t regularfile_readahead(RegularFile* file, off64_t offset, size_t count) {
         return -EBADF;
     }
 
-    trace("RegularFile %i readahead os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p readahead os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     ssize_t result = readahead(_regularfile_getOSBackedFD(file), offset, count);
     return (result < 0) ? -errno : result;
@@ -764,8 +735,7 @@ off_t regularfile_lseek(RegularFile* file, off_t offset, int whence) {
         return -EBADF;
     }
 
-    trace("RegularFile %i lseek os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p lseek os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     ssize_t result = lseek(_regularfile_getOSBackedFD(file), offset, whence);
     return (result < 0) ? -errno : result;
@@ -778,8 +748,7 @@ int regularfile_getdents(RegularFile* file, struct linux_dirent* dirp, unsigned 
         return -EBADF;
     }
 
-    trace("RegularFile %i getdents os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p getdents os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     // getdents is not available for a direct call
     int result =
@@ -795,8 +764,7 @@ int regularfile_getdents64(RegularFile* file, struct linux_dirent64* dirp,
         return -EBADF;
     }
 
-    trace("RegularFile %i getdents64 os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p getdents64 os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result =
         (int)syscall(SYS_getdents64, _regularfile_getOSBackedFD(file), dirp, count);
@@ -810,8 +778,7 @@ int regularfile_ioctl(RegularFile* file, unsigned long request, void* arg) {
         return -EBADF;
     }
 
-    trace("RegularFile %i ioctl os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p ioctl os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     int result = ioctl(_regularfile_getOSBackedFD(file), request, arg);
     return (result < 0) ? -errno : result;
@@ -824,8 +791,7 @@ int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
         return -EBADF;
     }
 
-    trace("RegularFile %i fcntl os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p fcntl os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     if (command == F_SETFD) {
         intptr_t arg_int = (intptr_t)arg;
@@ -861,8 +827,7 @@ int regularfile_poll(RegularFile* file, struct pollfd* pfd) {
         return -EBADF;
     }
 
-    trace("RegularFile %i poll os-backed file %i", _regularfile_getFD(file),
-          _regularfile_getOSBackedFD(file));
+    trace("RegularFile %p poll os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     // Don't let the OS block us
     int oldfd = pfd->fd;
@@ -890,8 +855,7 @@ int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* sta
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i fstatat os-backed file %i, flags %d", dir ? _regularfile_getFD(dir) : -1,
-          osFd, flags);
+    trace("RegularFile %p fstatat os-backed file %i, flags %d", dir, osFd, flags);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -912,7 +876,7 @@ int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gi
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i fchownat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p fchownat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -933,7 +897,7 @@ int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, in
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i fchmodat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p fchmodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -954,7 +918,7 @@ int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct t
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i futimesat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p futimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -975,7 +939,7 @@ int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct t
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i utimesat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p utimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -996,7 +960,7 @@ int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int 
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i faccessat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p faccessat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1017,7 +981,7 @@ int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i mkdirat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p mkdirat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1038,7 +1002,7 @@ int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i mknodat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p mknodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1061,9 +1025,7 @@ int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* ne
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
-    trace("RegularFiles %i, %i linkat os-backed files %i, %i",
-          oldDir ? _regularfile_getFD(oldDir) : -1, newDir ? _regularfile_getFD(newDir) : -1,
-          oldOsFd, newOsFd);
+    trace("RegularFiles %p, %p linkat os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1091,7 +1053,7 @@ int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i unlinkat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p unlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1112,7 +1074,7 @@ int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* ta
     int osFd = _regularfile_getOSDirFD(dir);
     const char* linkpathTmp = linkpath;
 
-    trace("RegularFile %i symlinkat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p symlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1133,7 +1095,7 @@ ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i readlinkat os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p readlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;
@@ -1156,9 +1118,7 @@ int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile*
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
-    trace("RegularFiles %i, %i renameat2 os-backed files %i, %i",
-          oldDir ? _regularfile_getFD(oldDir) : -1, newDir ? _regularfile_getFD(newDir) : -1,
-          oldOsFd, newOsFd);
+    trace("RegularFiles %p, %p renameat2 os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1188,7 +1148,7 @@ int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigne
     int osFd = _regularfile_getOSDirFD(dir);
     const char* pathnameTmp = pathname;
 
-    trace("RegularFile %i statx os-backed file %i", dir ? _regularfile_getFD(dir) : -1, osFd);
+    trace("RegularFile %p statx os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         osFd = -1;

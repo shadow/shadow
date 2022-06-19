@@ -1904,10 +1904,10 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
           "sndbufsize=%" G_GSIZE_FORMAT " sndbuflen=%" G_GSIZE_FORMAT " rcvbufsize=%" G_GSIZE_FORMAT
           " rcbuflen=%" G_GSIZE_FORMAT " "
-          "retrans=%" G_GSIZE_FORMAT " ploss=%f fd=%i",
+          "retrans=%" G_GSIZE_FORMAT " ploss=%f desc=%p",
           tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed, outSize,
           outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
-          tcp->super.super.super.handle);
+          &tcp->super.super.super);
 }
 
 static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer userData) {

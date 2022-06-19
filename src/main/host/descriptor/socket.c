@@ -269,7 +269,7 @@ void legacysocket_setSocketName(LegacySocket* socket, in_addr_t ip, in_port_t po
     gchar* ipString = address_ipToNewString(ip);
     GString* stringBuffer = g_string_new(ipString);
     g_free(ipString);
-    g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
+    g_string_append_printf(stringBuffer, ":%u (descriptor %p)", ntohs(port), &socket->super.super);
     socket->boundString = g_string_free(stringBuffer, FALSE);
 
     /* the socket is now bound */
