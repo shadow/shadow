@@ -31,18 +31,6 @@
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
 #define PRELOAD_OPENSSL_CRYPTO_LIB_STR "libshadow_openssl_crypto.so"
 
-// Allow turning off libc preloading at run-time.
-static bool _use_preload_libc = true;
-ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_preload_libc)
-
-// Allow turning off openssl rng lib preloading at run-time.
-static bool _use_preload_openssl_rng = true;
-ADD_CONFIG_HANDLER(config_getUseOpensslRNGPreload, _use_preload_openssl_rng)
-
-// Allow turning on openssl crypto lib preloading at run-time.
-static bool _use_preload_openssl_crypto = true;
-ADD_CONFIG_HANDLER(config_getUseOpensslCryptoPreload, _use_preload_openssl_crypto)
-
 struct _Manager {
     const Controller* controller;
 
@@ -70,17 +58,12 @@ struct _Manager {
     Scheduler* scheduler;
 
     GMutex lock;
-    GMutex pluginInitLock;
-
-    /* We will not enter plugin context when set. Used when destroying threads */
-    gboolean forceShadowContext;
 
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
     guint numPluginErrors;
 
-    gchar* cwdPath;
     gchar* dataPath;
     gchar* hostsPath;
 
@@ -102,8 +85,6 @@ struct _Manager {
 
     MAGIC_DECLARE;
 };
-
-static Manager* globalmanager = NULL;
 
 static void _manager_lock(Manager* manager) {
     MAGIC_ASSERT(manager);
@@ -206,18 +187,12 @@ ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->wat
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed) {
-    if (globalmanager != NULL) {
-        return NULL;
-    }
-
     Manager* manager = g_new0(Manager, 1);
     MAGIC_INIT(manager);
-    globalmanager = manager;
 
     manager->watcher = childpidwatcher_new();
 
     g_mutex_init(&(manager->lock));
-    g_mutex_init(&(manager->pluginInitLock));
 
     manager->controller = controller;
     manager->config = config;
@@ -236,14 +211,14 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->preloadInjectorPath = _manager_getRequiredPreloadPath(PRELOAD_INJECTOR_LIB_STR);
 
     // Only required if option is enabled.
-    if (_use_preload_libc) {
+    if (config_getUseLibcPreload(manager->config)) {
         manager->preloadLibcPath = _manager_getRequiredPreloadPath(PRELOAD_LIBC_LIB_STR);
     } else {
         info("Preloading the libc library is disabled.");
     }
 
     // Only required if option is enabled.
-    if (_use_preload_openssl_rng) {
+    if (config_getUseOpensslRNGPreload(manager->config)) {
         manager->preloadOpensslRngPath =
             _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_RNG_LIB_STR);
     } else {
@@ -251,7 +226,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     }
 
     // Only required if option is enabled.
-    if (_use_preload_openssl_crypto) {
+    if (config_getUseOpensslCryptoPreload(manager->config)) {
         manager->preloadOpensslCryptoPath =
             _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_CRYPTO_LIB_STR);
     } else {
@@ -266,7 +241,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->scheduler =
         scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
 
-    manager->cwdPath = g_get_current_dir();
+    gchar* cwdPath = g_get_current_dir();
 
     char* dataDirectory = config_getDataDirectory(config);
 
@@ -277,7 +252,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
 
     if (dataDirectory[0] != '/') {
         // Relative path
-        manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+        manager->dataPath = g_build_filename(cwdPath, dataDirectory, NULL);
     } else {
         // Absolute path
         manager->dataPath = g_build_filename(dataDirectory, NULL);
@@ -289,6 +264,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
         error("data directory '%s' already exists", manager->dataPath);
+        g_free(cwdPath);
         manager_free(manager);
         return NULL;
     }
@@ -296,7 +272,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     char* templateDirectory = config_getTemplateDirectory(config);
 
     if (templateDirectory != NULL) {
-        gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
+        gchar* templateDataPath = g_build_filename(cwdPath, templateDirectory, NULL);
         config_freeString(templateDirectory);
 
         debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
@@ -304,6 +280,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
             error("data template directory '%s' does not exists", templateDataPath);
             g_free(templateDataPath);
+            g_free(cwdPath);
             manager_free(manager);
             return NULL;
         }
@@ -315,8 +292,7 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
         g_free(templateDataPath);
     } else {
         /* provide a warning for backwards compatibility; can remove this sometime in the future */
-        gchar* compatTemplatePath =
-            g_build_filename(manager->cwdPath, "shadow.data.template", NULL);
+        gchar* compatTemplatePath = g_build_filename(cwdPath, "shadow.data.template", NULL);
         if (g_file_test(compatTemplatePath, G_FILE_TEST_EXISTS)) {
             warning("The directory 'shadow.data.template' exists, but '--data-template' was not "
                     "set. Ignore this warning if this was intentional.");
@@ -345,15 +321,14 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->checkFdUsage = true;
     manager->checkMemUsage = true;
 
+    g_free(cwdPath);
+
     return manager;
 }
 
 gint manager_free(Manager* manager) {
     MAGIC_ASSERT(manager);
     gint returnCode = (manager->numPluginErrors > 0) ? -1 : 0;
-
-    /* we will never execute inside the plugin again */
-    manager->forceShadowContext = TRUE;
 
     if (manager->watcher) {
         childpidwatcher_free(manager->watcher);
@@ -375,6 +350,10 @@ gint manager_free(Manager* manager) {
     }
 
     if (manager->object_counter_alloc && manager->object_counter_dealloc) {
+        // add the worker's global counters
+        worker_addAndClearGlobalAllocCounters(
+            manager->object_counter_alloc, manager->object_counter_dealloc);
+
         char* str = counter_alloc_string(manager->object_counter_alloc);
         info("Global allocated object counts: %s", str);
         counter_free_string(manager->object_counter_alloc, str);
@@ -399,11 +378,7 @@ gint manager_free(Manager* manager) {
     }
 
     g_mutex_clear(&(manager->lock));
-    g_mutex_clear(&(manager->pluginInitLock));
 
-    if (manager->cwdPath) {
-        g_free(manager->cwdPath);
-    }
     if (manager->dataPath) {
         g_free(manager->dataPath);
     }
@@ -422,6 +397,9 @@ gint manager_free(Manager* manager) {
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
     }
+    if (manager->preloadOpensslCryptoPath) {
+        g_free(manager->preloadOpensslCryptoPath);
+    }
 
     if (manager->statusLogger) {
         statusLogger_free(manager->statusLogger);
@@ -429,14 +407,8 @@ gint manager_free(Manager* manager) {
 
     MAGIC_CLEAR(manager);
     g_free(manager);
-    globalmanager = NULL;
 
     return returnCode;
-}
-
-gboolean manager_isForced(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->forceShadowContext;
 }
 
 guint manager_getRawCPUFrequency(Manager* manager) {
@@ -499,17 +471,17 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, const gchar* 
     debug("Adding Shadow injector lib path %s", manager->preloadInjectorPath);
     g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadInjectorPath));
 
-    if (_use_preload_libc) {
+    if (manager->preloadLibcPath) {
         debug("Adding Shadow libc lib path %s", manager->preloadLibcPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadLibcPath));
     }
 
-    if (_use_preload_openssl_rng) {
+    if (manager->preloadOpensslRngPath) {
         debug("Adding Shadow openssl rng lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
     }
 
-    if (_use_preload_openssl_crypto) {
+    if (manager->preloadOpensslCryptoPath) {
         debug("Adding Shadow openssl crypto lib path %s", manager->preloadOpensslCryptoPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslCryptoPath));
     }
@@ -846,34 +818,6 @@ const gchar* manager_getHostsRootPath(Manager* manager) {
     return manager->hostsPath;
 }
 
-static void _manager_increment_object_counts(Manager* manager, Counter** mgr_obj_counts,
-                                             const char* obj_name) {
-    _manager_lock(manager);
-    // This is created on the fly, so that if we did not enable counting mode
-    // then we don't need to create the counter object.
-    if (!*mgr_obj_counts) {
-        *mgr_obj_counts = counter_new();
-    }
-    counter_add_value(*mgr_obj_counts, obj_name, 1);
-    _manager_unlock(manager);
-}
-
-void manager_increment_object_alloc_counter_global(const char* object_name) {
-    if (globalmanager) {
-        MAGIC_ASSERT(globalmanager);
-        _manager_increment_object_counts(
-            globalmanager, &globalmanager->object_counter_alloc, object_name);
-    }
-}
-
-void manager_increment_object_dealloc_counter_global(const char* object_name) {
-    if (globalmanager) {
-        MAGIC_ASSERT(globalmanager);
-        _manager_increment_object_counts(
-            globalmanager, &globalmanager->object_counter_dealloc, object_name);
-    }
-}
-
 static void _manager_add_object_counts(Manager* manager, Counter** mgr_obj_counts,
                                        Counter* obj_counts) {
     _manager_lock(manager);
@@ -896,7 +840,7 @@ void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_co
     _manager_add_object_counts(manager, &manager->object_counter_dealloc, dealloc_obj_counts);
 }
 
-void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
+void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
     // This is created on the fly, so that if we did not enable counting mode
@@ -906,12 +850,6 @@ void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
     }
     counter_add_counter(manager->syscall_counter, syscall_counts);
     _manager_unlock(manager);
-}
-
-void manager_add_syscall_counts_global(Counter* syscall_counts) {
-    if (globalmanager) {
-        manager_add_syscall_counts(globalmanager, syscall_counts);
-    }
 }
 
 SimulationTime manager_getBootstrapEndTime(Manager* manager) {

@@ -9,6 +9,7 @@ use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::task::TaskRef;
+use crate::utility::counter::Counter;
 use crate::utility::random::Random;
 use log_bindings::Logger;
 use std::sync::Arc;
@@ -98,11 +99,6 @@ pub type StraceFmtMode = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ChildPidWatcher {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct Counter {
     _unused: [u8; 0],
 }
 #[repr(C)]
@@ -2349,6 +2345,15 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn worker_add_syscall_counts(syscall_counts: *const Counter);
+}
+extern "C" {
     pub fn worker_threadID() -> i32;
 }
 extern "C" {
@@ -2383,6 +2388,12 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_isAlive() -> bool;
+}
+extern "C" {
+    pub fn worker_addAndClearGlobalAllocCounters(
+        alloc_counter: *mut Counter,
+        dealloc_counter: *mut Counter,
+    );
 }
 extern "C" {
     pub fn process_registerCompatDescriptor(
@@ -2503,15 +2514,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
-}
-extern "C" {
-    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
 extern "C" {
     pub fn affinity_getGoodWorkerAffinity() -> ::std::os::raw::c_int;

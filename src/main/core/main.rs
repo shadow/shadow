@@ -10,6 +10,7 @@ use crate::core::controller::Controller;
 use crate::core::logger::shadow_logger;
 use crate::core::sim_config::SimConfig;
 use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
+use crate::core::worker;
 use crate::cshadow as c;
 use crate::shmem::cleanup;
 
@@ -75,6 +76,11 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     // run any global C configuration handlers
     unsafe { c::runConfigHandlers(&shadow_config as *const ConfigOptions) };
+
+    // configure other global state
+    if shadow_config.experimental.use_object_counters.unwrap() {
+        worker::enable_object_counters();
+    }
 
     // start up the logging subsystem to handle all future messages
     shadow_logger::init().unwrap();

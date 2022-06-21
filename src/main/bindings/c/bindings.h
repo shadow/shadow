@@ -219,9 +219,9 @@ int64_t counter_add_value(struct Counter *counter, const char *id, int64_t value
 
 int64_t counter_sub_value(struct Counter *counter, const char *id, int64_t value);
 
-void counter_add_counter(struct Counter *counter, struct Counter *other);
+void counter_add_counter(struct Counter *counter, const struct Counter *other);
 
-void counter_sub_counter(struct Counter *counter, struct Counter *other);
+void counter_sub_counter(struct Counter *counter, const struct Counter *other);
 
 bool counter_equals_counter(const struct Counter *counter, const struct Counter *other);
 
@@ -371,8 +371,6 @@ bool config_getUseSeccomp(const struct ConfigOptions *config);
 
 bool config_getUseSyscallCounters(const struct ConfigOptions *config);
 
-bool config_getUseObjectCounters(const struct ConfigOptions *config);
-
 bool config_getUseLibcPreload(const struct ConfigOptions *config);
 
 bool config_getUseOpensslRNGPreload(const struct ConfigOptions *config);
@@ -510,11 +508,22 @@ void worker_newForThisThread(WorkerPool *worker_pool,
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectAllocCounter(void);
 
+// Implementation for counting allocated objects. Do not use this function directly.
+// Use worker_count_allocation instead from the call site.
+void worker_increment_object_alloc_counter(const char *object_name);
+
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectDeallocCounter(void);
 
+// Implementation for counting deallocated objects. Do not use this function directly.
+// Use worker_count_deallocation instead from the call site.
+void worker_increment_object_dealloc_counter(const char *object_name);
+
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_syscallCounter(void);
+
+// Aggregate the given syscall counts in a worker syscall counter.
+void worker_add_syscall_counts(const struct Counter *syscall_counts);
 
 // ID of the current thread's Worker. Panics if the thread has no Worker.
 int32_t worker_threadID(void);
@@ -546,6 +555,9 @@ bool worker_isBootstrapActive(void);
 WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
+
+void worker_addAndClearGlobalAllocCounters(struct Counter *alloc_counter,
+                                           struct Counter *dealloc_counter);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free
