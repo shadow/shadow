@@ -5,10 +5,13 @@ use crate::host::descriptor::File;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::timer::Timer;
+use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::format::StraceFmtMode;
 use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::task::TaskRef;
+use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::random::Random;
 use log_bindings::Logger;
@@ -99,20 +102,6 @@ pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 3;
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 4;
 pub type SchedulerPolicyType = ::std::os::raw::c_uint;
-pub const StraceFmtMode_STRACE_FMT_MODE_OFF: StraceFmtMode = 0;
-pub const StraceFmtMode_STRACE_FMT_MODE_STANDARD: StraceFmtMode = 1;
-pub const StraceFmtMode_STRACE_FMT_MODE_DETERMINISTIC: StraceFmtMode = 2;
-pub type StraceFmtMode = ::std::os::raw::c_uint;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ChildPidWatcher {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct SyscallHandler {
-    _unused: [u8; 0],
-}
 extern "C" {
     pub fn runConfigHandlers(config: *const ConfigOptions);
 }
@@ -2866,107 +2855,13 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn main_runShadow(
-        argc: ::std::os::raw::c_int,
-        argv: *const *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn worker_newForThisThread(
-        worker_pool: *mut WorkerPool,
-        worker_id: i32,
-        bootstrap_end_time: SimulationTime,
-    );
-}
-extern "C" {
-    pub fn worker_increment_object_alloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_increment_object_dealloc_counter(object_name: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub fn worker_add_syscall_counts(syscall_counts: *const Counter);
-}
-extern "C" {
-    pub fn worker_threadID() -> i32;
-}
-extern "C" {
-    pub fn worker_setActiveHost(host: *mut Host);
-}
-extern "C" {
-    pub fn worker_setActiveProcess(process: *mut Process);
-}
-extern "C" {
-    pub fn worker_setActiveThread(thread: *mut Thread);
-}
-extern "C" {
-    pub fn worker_setRoundEndTime(t: SimulationTime);
-}
-extern "C" {
-    pub fn worker_setCurrentEmulatedTime(t: EmulatedTime);
-}
-extern "C" {
-    pub fn worker_clearCurrentTime();
-}
-extern "C" {
-    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
-}
-extern "C" {
-    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
-}
-extern "C" {
-    pub fn worker_updateMinHostRunahead(t: SimulationTime);
-}
-extern "C" {
-    pub fn worker_isBootstrapActive() -> bool;
-}
-extern "C" {
-    pub fn worker_isAlive() -> bool;
-}
-extern "C" {
-    pub fn worker_addAndClearGlobalAllocCounters(
-        alloc_counter: *mut Counter,
-        dealloc_counter: *mut Counter,
-    );
-}
-extern "C" {
-    pub fn process_registerCompatDescriptor(
-        proc_: *mut Process,
-        desc: *mut CompatDescriptor,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_deregisterCompatDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *mut CompatDescriptor;
-}
-extern "C" {
-    pub fn process_getRegisteredCompatDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *const CompatDescriptor;
-}
-extern "C" {
-    pub fn process_registerLegacyDescriptor(
-        proc_: *mut Process,
-        desc: *mut LegacyDescriptor,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_deregisterLegacyDescriptor(proc_: *mut Process, desc: *mut LegacyDescriptor);
-}
-extern "C" {
-    pub fn process_getRegisteredLegacyDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *mut LegacyDescriptor;
-}
-extern "C" {
     pub fn worker_runEvent(event: *mut Event);
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
+}
+extern "C" {
+    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
 }
 extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
@@ -2998,7 +2893,19 @@ extern "C" {
     pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
 }
 extern "C" {
+    pub fn worker_isAlive() -> bool;
+}
+extern "C" {
     pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
+}
+extern "C" {
+    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
+}
+extern "C" {
+    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
+}
+extern "C" {
+    pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
     pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
@@ -3036,6 +2943,12 @@ extern "C" {
         sourceAddress: *mut Address,
         destinationAddress: *mut Address,
     );
+}
+extern "C" {
+    pub fn worker_clearCurrentTime();
+}
+extern "C" {
+    pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;

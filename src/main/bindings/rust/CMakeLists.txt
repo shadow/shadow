@@ -145,10 +145,13 @@ add_custom_command(OUTPUT wrapper.rs
         --raw-line "use crate::host::descriptor::descriptor_table::DescriptorTable;"
         --raw-line "use crate::host::memory_manager::MemoryManager;"
         --raw-line "use crate::host::timer::Timer;"
+        --raw-line "use crate::host::syscall::handler::SyscallHandler;"
+        --raw-line "use crate::host::syscall::format::StraceFmtMode;"
         --raw-line "use crate::core::controller::Controller;"
         --raw-line "use crate::core::support::configuration::ConfigOptions;"
         --raw-line "use crate::core::support::configuration::QDiscMode;"
         --raw-line "use crate::core::work::task::TaskRef;"
+        --raw-line "use crate::utility::childpid_watcher::ChildPidWatcher;"
         --raw-line "use crate::utility::counter::Counter;"
         --raw-line "use crate::utility::random::Random;"
         --raw-line "use log_bindings::Logger;"
@@ -161,6 +164,10 @@ add_custom_command(OUTPUT wrapper.rs
 
         # used to generate #[must_use] annotations
         --enable-function-attribute-detection
+
+        # don't generate rust bindings for c bindings of rust code
+        --blocklist-file ".*/bindings-opaque.h"
+        --blocklist-file ".*/bindings.h"
 
         ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.h -o ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.rs -- ${LLVM_FLAGS}
     VERBATIM
