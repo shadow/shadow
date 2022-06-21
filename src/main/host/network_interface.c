@@ -410,15 +410,20 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
 
-    gint socketHandle = -1;
-    if (socket.type == CST_LEGACY_SOCKET) {
-        socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
+    LegacySocket* legacySocket = NULL;
+    switch (socket.type) {
+        case CST_LEGACY_SOCKET:
+            legacySocket = socket.object.as_legacy_socket;
+            break;
+        case CST_NONE:
+            legacySocket = NULL;
+            break;
     }
 
-    /* count our bandwidth usage by interface, and by socket handle if possible */
+    /* count our bandwidth usage by interface, and by socket if possible */
     Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        tracker_addInputBytes(tracker, packet, socketHandle);
+    if (tracker != NULL && legacySocket != NULL) {
+        tracker_addInputBytes(tracker, packet, legacySocket);
     }
 }
 
@@ -479,7 +484,7 @@ static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket*
 
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, Host* host,
-                                                  gint* socketHandle) {
+                                                  LegacySocket** socketOut) {
     Packet* packet = NULL;
 
     while (!packet && !rrsocketqueue_isEmpty(&interface->rrQueue)) {
@@ -492,8 +497,14 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, H
         }
 
         packet = compatsocket_pullOutPacket(&socket, host);
-        if (socket.type == CST_LEGACY_SOCKET) {
-            *socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
+
+        switch (socket.type) {
+            case CST_LEGACY_SOCKET:
+                *socketOut = socket.object.as_legacy_socket;
+                break;
+            case CST_NONE:
+                *socketOut = NULL;
+                break;
         }
 
         if (packet) {
@@ -514,7 +525,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, H
 
 /* first-in-first-out queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface, Host* host,
-                                                       gint* socketHandle) {
+                                                       LegacySocket** socketOut) {
     /* use packet priority field to select based on application ordering.
      * this is really a simplification of prioritizing on timestamps. */
     Packet* packet = NULL;
@@ -529,8 +540,14 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         }
 
         packet = compatsocket_pullOutPacket(&socket, host);
-        if (socket.type == CST_LEGACY_SOCKET) {
-            *socketHandle = descriptor_getHandle((LegacyDescriptor*)socket.object.as_legacy_socket);
+
+        switch (socket.type) {
+            case CST_LEGACY_SOCKET:
+                *socketOut = socket.object.as_legacy_socket;
+                break;
+            case CST_NONE:
+                *socketOut = NULL;
+                break;
         }
 
         if (packet) {
@@ -556,18 +573,18 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
 
     /* loop until we find a socket that has something to send */
     while(interface->sendBucket.bytesRemaining >= CONFIG_MTU) {
-        gint socketHandle = -1;
+        LegacySocket* legacySocket = NULL;
 
         /* choose which packet to send next based on our queuing discipline */
         Packet* packet;
         switch(interface->qdisc) {
             case Q_DISC_MODE_ROUND_ROBIN: {
-                packet = _networkinterface_selectRoundRobin(interface, src, &socketHandle);
+                packet = _networkinterface_selectRoundRobin(interface, src, &legacySocket);
                 break;
             }
             case Q_DISC_MODE_FIFO:
             default: {
-                packet = _networkinterface_selectFirstInFirstOut(interface, src, &socketHandle);
+                packet = _networkinterface_selectFirstInFirstOut(interface, src, &legacySocket);
                 break;
             }
         }
@@ -609,8 +626,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
         }
 
         Tracker* tracker = host_getTracker(src);
-        if (tracker != NULL) {
-            tracker_addOutputBytes(tracker, packet, socketHandle);
+        if (tracker != NULL && legacySocket != NULL) {
+            tracker_addOutputBytes(tracker, packet, legacySocket);
         }
 
         /* sending side is done with its ref */

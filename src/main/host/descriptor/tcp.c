@@ -1338,14 +1338,13 @@ static void _tcp_flush(TCP* tcp, Host* host) {
     /* update the tracker input/output buffer stats */
     Tracker* tracker = host_getTracker(host);
     LegacySocket* socket = (LegacySocket*)tcp;
-    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
     gsize inSize = legacysocket_getInputBufferSize(&(tcp->super));
     gsize outSize = legacysocket_getOutputBufferSize(&(tcp->super));
     if (tracker != NULL) {
         tracker_updateSocketInputBuffer(
-            tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
+            tracker, socket, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
         tracker_updateSocketOutputBuffer(
-            tracker, descriptor->handle, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
+            tracker, socket, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
     }
 
     /* should we send a fin after clearing the output buffer */
@@ -1688,7 +1687,8 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
 
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
-        tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
+        tracker_updateSocketPeer(
+            tracker, &tcpChild->child->parent->super, *ip, ntohs(tcpChild->super.peerPort));
     }
 
     return 0;
