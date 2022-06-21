@@ -51,16 +51,23 @@ fn bindgen_test_layout___sigset_t() {
         8usize,
         concat!("Alignment of ", stringify!(__sigset_t))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<__sigset_t>())).__val as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__sigset_t),
-            "::",
-            stringify!(__val)
-        )
-    );
+    fn test_field___val() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<__sigset_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).__val) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__sigset_t),
+                "::",
+                stringify!(__val)
+            )
+        );
+    }
+    test_field___val();
 }
 pub type sigset_t = __sigset_t;
 pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
@@ -139,26 +146,40 @@ fn bindgen_test_layout_sigval() {
         8usize,
         concat!("Alignment of ", stringify!(sigval))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<sigval>())).sival_int as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(sigval),
-            "::",
-            stringify!(sival_int)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<sigval>())).sival_ptr as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(sigval),
-            "::",
-            stringify!(sival_ptr)
-        )
-    );
+    fn test_field_sival_int() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<sigval>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sival_int) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(sigval),
+                "::",
+                stringify!(sival_int)
+            )
+        );
+    }
+    test_field_sival_int();
+    fn test_field_sival_ptr() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<sigval>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sival_ptr) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(sigval),
+                "::",
+                stringify!(sival_ptr)
+            )
+        );
+    }
+    test_field_sival_ptr();
 }
 pub type __sigval_t = sigval;
 #[repr(C)]
@@ -206,32 +227,42 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_1() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_1>())).si_pid as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
-            "::",
-            stringify!(si_pid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_1>())).si_uid as *const _
-                as usize
-        },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
-            "::",
-            stringify!(si_uid)
-        )
-    );
+    fn test_field_si_pid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_pid) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
+                "::",
+                stringify!(si_pid)
+            )
+        );
+    }
+    test_field_si_pid();
+    fn test_field_si_uid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_uid) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_1),
+                "::",
+                stringify!(si_uid)
+            )
+        );
+    }
+    test_field_si_uid();
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -258,45 +289,60 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_2() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_tid as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
-            "::",
-            stringify!(si_tid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_overrun as *const _
-                as usize
-        },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
-            "::",
-            stringify!(si_overrun)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_2>())).si_sigval as *const _
-                as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
-            "::",
-            stringify!(si_sigval)
-        )
-    );
+    fn test_field_si_tid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_2>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_tid) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+                "::",
+                stringify!(si_tid)
+            )
+        );
+    }
+    test_field_si_tid();
+    fn test_field_si_overrun() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_2>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_overrun) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+                "::",
+                stringify!(si_overrun)
+            )
+        );
+    }
+    test_field_si_overrun();
+    fn test_field_si_sigval() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_2>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_sigval) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_2),
+                "::",
+                stringify!(si_sigval)
+            )
+        );
+    }
+    test_field_si_sigval();
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -323,45 +369,60 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_3() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_pid as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
-            "::",
-            stringify!(si_pid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_uid as *const _
-                as usize
-        },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
-            "::",
-            stringify!(si_uid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_3>())).si_sigval as *const _
-                as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
-            "::",
-            stringify!(si_sigval)
-        )
-    );
+    fn test_field_si_pid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_3>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_pid) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+                "::",
+                stringify!(si_pid)
+            )
+        );
+    }
+    test_field_si_pid();
+    fn test_field_si_uid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_3>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_uid) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+                "::",
+                stringify!(si_uid)
+            )
+        );
+    }
+    test_field_si_uid();
+    fn test_field_si_sigval() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_3>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_sigval) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_3),
+                "::",
+                stringify!(si_sigval)
+            )
+        );
+    }
+    test_field_si_sigval();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -390,71 +451,96 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_4() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_pid as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
-            "::",
-            stringify!(si_pid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_uid as *const _
-                as usize
-        },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
-            "::",
-            stringify!(si_uid)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_status as *const _
-                as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
-            "::",
-            stringify!(si_status)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_utime as *const _
-                as usize
-        },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
-            "::",
-            stringify!(si_utime)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_4>())).si_stime as *const _
-                as usize
-        },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
-            "::",
-            stringify!(si_stime)
-        )
-    );
+    fn test_field_si_pid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_4>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_pid) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+                "::",
+                stringify!(si_pid)
+            )
+        );
+    }
+    test_field_si_pid();
+    fn test_field_si_uid() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_4>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_uid) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+                "::",
+                stringify!(si_uid)
+            )
+        );
+    }
+    test_field_si_uid();
+    fn test_field_si_status() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_4>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_status) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+                "::",
+                stringify!(si_status)
+            )
+        );
+    }
+    test_field_si_status();
+    fn test_field_si_utime() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_4>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_utime) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+                "::",
+                stringify!(si_utime)
+            )
+        );
+    }
+    test_field_si_utime();
+    fn test_field_si_stime() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_4>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_stime) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_4),
+                "::",
+                stringify!(si_stime)
+            )
+        );
+    }
+    test_field_si_stime();
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -493,36 +579,44 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bind
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<
-                siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
-            >()))
-            ._lower as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
-            "::",
-            stringify!(_lower)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<
-                siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
-            >()))
-            ._upper as *const _ as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
-            "::",
-            stringify!(_upper)
-        )
-    );
+    fn test_field__lower() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<
+                    siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+                >::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._lower) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+                "::",
+                stringify!(_lower)
+            )
+        );
+    }
+    test_field__lower();
+    fn test_field__upper() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<
+                    siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+                >::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._upper) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+                "::",
+                stringify!(_upper)
+            )
+        );
+    }
+    test_field__upper();
 }
 #[test]
 fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1() {
@@ -542,32 +636,44 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>()))
-                ._addr_bnd as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
-            "::",
-            stringify!(_addr_bnd)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1>()))._pkey
-                as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
-            "::",
-            stringify!(_pkey)
-        )
-    );
+    fn test_field__addr_bnd() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<
+                    siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1,
+                >::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._addr_bnd) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
+                "::",
+                stringify!(_addr_bnd)
+            )
+        );
+    }
+    test_field__addr_bnd();
+    fn test_field__pkey() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<
+                    siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1,
+                >::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._pkey) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5__bindgen_ty_1),
+                "::",
+                stringify!(_pkey)
+            )
+        );
+    }
+    test_field__pkey();
 }
 #[test]
 fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5() {
@@ -587,45 +693,60 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_5() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>())).si_addr as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
-            "::",
-            stringify!(si_addr)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>())).si_addr_lsb
-                as *const _ as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
-            "::",
-            stringify!(si_addr_lsb)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_5>()))._bounds as *const _
-                as usize
-        },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
-            "::",
-            stringify!(_bounds)
-        )
-    );
+    fn test_field_si_addr() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_5>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_addr) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+                "::",
+                stringify!(si_addr)
+            )
+        );
+    }
+    test_field_si_addr();
+    fn test_field_si_addr_lsb() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_5>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_addr_lsb) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+                "::",
+                stringify!(si_addr_lsb)
+            )
+        );
+    }
+    test_field_si_addr_lsb();
+    fn test_field__bounds() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_5>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._bounds) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_5),
+                "::",
+                stringify!(_bounds)
+            )
+        );
+    }
+    test_field__bounds();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -651,32 +772,42 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_6() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_6>())).si_band as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
-            "::",
-            stringify!(si_band)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_6>())).si_fd as *const _
-                as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
-            "::",
-            stringify!(si_fd)
-        )
-    );
+    fn test_field_si_band() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_6>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_band) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
+                "::",
+                stringify!(si_band)
+            )
+        );
+    }
+    test_field_si_band();
+    fn test_field_si_fd() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_6>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_fd) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_6),
+                "::",
+                stringify!(si_fd)
+            )
+        );
+    }
+    test_field_si_fd();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -703,45 +834,60 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1__bindgen_ty_7() {
             stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7)
         )
     );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._call_addr as *const _
-                as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
-            "::",
-            stringify!(_call_addr)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._syscall as *const _
-                as usize
-        },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
-            "::",
-            stringify!(_syscall)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1__bindgen_ty_7>()))._arch as *const _
-                as usize
-        },
-        12usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
-            "::",
-            stringify!(_arch)
-        )
-    );
+    fn test_field__call_addr() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_7>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._call_addr) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+                "::",
+                stringify!(_call_addr)
+            )
+        );
+    }
+    test_field__call_addr();
+    fn test_field__syscall() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_7>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._syscall) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+                "::",
+                stringify!(_syscall)
+            )
+        );
+    }
+    test_field__syscall();
+    fn test_field__arch() {
+        assert_eq!(
+            unsafe {
+                let uninit =
+                    ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1__bindgen_ty_7>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._arch) as usize - ptr as usize
+            },
+            12usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1__bindgen_ty_7),
+                "::",
+                stringify!(_arch)
+            )
+        );
+    }
+    test_field__arch();
 }
 #[test]
 fn bindgen_test_layout_siginfo_t__bindgen_ty_1() {
@@ -755,92 +901,142 @@ fn bindgen_test_layout_siginfo_t__bindgen_ty_1() {
         8usize,
         concat!("Alignment of ", stringify!(siginfo_t__bindgen_ty_1))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._pad as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_pad)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._kill as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_kill)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._timer as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_timer)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._rt as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_rt)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigchld as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_sigchld)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigfault as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_sigfault)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigpoll as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_sigpoll)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t__bindgen_ty_1>()))._sigsys as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t__bindgen_ty_1),
-            "::",
-            stringify!(_sigsys)
-        )
-    );
+    fn test_field__pad() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._pad) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_pad)
+            )
+        );
+    }
+    test_field__pad();
+    fn test_field__kill() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._kill) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_kill)
+            )
+        );
+    }
+    test_field__kill();
+    fn test_field__timer() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._timer) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_timer)
+            )
+        );
+    }
+    test_field__timer();
+    fn test_field__rt() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._rt) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_rt)
+            )
+        );
+    }
+    test_field__rt();
+    fn test_field__sigchld() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._sigchld) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_sigchld)
+            )
+        );
+    }
+    test_field__sigchld();
+    fn test_field__sigfault() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._sigfault) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_sigfault)
+            )
+        );
+    }
+    test_field__sigfault();
+    fn test_field__sigpoll() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._sigpoll) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_sigpoll)
+            )
+        );
+    }
+    test_field__sigpoll();
+    fn test_field__sigsys() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t__bindgen_ty_1>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._sigsys) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t__bindgen_ty_1),
+                "::",
+                stringify!(_sigsys)
+            )
+        );
+    }
+    test_field__sigsys();
 }
 #[test]
 fn bindgen_test_layout_siginfo_t() {
@@ -854,56 +1050,91 @@ fn bindgen_test_layout_siginfo_t() {
         8usize,
         concat!("Alignment of ", stringify!(siginfo_t))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_signo as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t),
-            "::",
-            stringify!(si_signo)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_errno as *const _ as usize },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t),
-            "::",
-            stringify!(si_errno)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t>())).si_code as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t),
-            "::",
-            stringify!(si_code)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t>())).__pad0 as *const _ as usize },
-        12usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t),
-            "::",
-            stringify!(__pad0)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<siginfo_t>()))._sifields as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(siginfo_t),
-            "::",
-            stringify!(_sifields)
-        )
-    );
+    fn test_field_si_signo() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_signo) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t),
+                "::",
+                stringify!(si_signo)
+            )
+        );
+    }
+    test_field_si_signo();
+    fn test_field_si_errno() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_errno) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t),
+                "::",
+                stringify!(si_errno)
+            )
+        );
+    }
+    test_field_si_errno();
+    fn test_field_si_code() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).si_code) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t),
+                "::",
+                stringify!(si_code)
+            )
+        );
+    }
+    test_field_si_code();
+    fn test_field___pad0() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).__pad0) as usize - ptr as usize
+            },
+            12usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t),
+                "::",
+                stringify!(__pad0)
+            )
+        );
+    }
+    test_field___pad0();
+    fn test_field__sifields() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<siginfo_t>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr)._sifields) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(siginfo_t),
+                "::",
+                stringify!(_sifields)
+            )
+        );
+    }
+    test_field__sifields();
 }
 pub type GList = [u64; 3usize];
 #[repr(C)]
@@ -986,238 +1217,380 @@ fn bindgen_test_layout__HostParameters() {
         8usize,
         concat!("Alignment of ", stringify!(_HostParameters))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).id as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(id)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).nodeSeed as *const _ as usize },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(nodeSeed)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).hostname as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(hostname)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).nodeId as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(nodeId)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).ipAddr as *const _ as usize },
-        20usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(ipAddr)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).requestedBwDownBits as *const _ as usize
-        },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(requestedBwDownBits)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).requestedBwUpBits as *const _ as usize
-        },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(requestedBwUpBits)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuFrequency as *const _ as usize },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(cpuFrequency)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuThreshold as *const _ as usize },
-        48usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(cpuThreshold)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuPrecision as *const _ as usize },
-        56usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(cpuPrecision)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).heartbeatInterval as *const _ as usize
-        },
-        64usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(heartbeatInterval)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogLevel as *const _ as usize
-        },
-        72usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(heartbeatLogLevel)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogInfo as *const _ as usize
-        },
-        76usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(heartbeatLogInfo)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).logLevel as *const _ as usize },
-        80usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(logLevel)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapDir as *const _ as usize },
-        88usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(pcapDir)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapCaptureSize as *const _ as usize },
-        96usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(pcapCaptureSize)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
-        100usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(qdisc)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).recvBufSize as *const _ as usize },
-        104usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(recvBufSize)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneRecvBuf as *const _ as usize },
-        112usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(autotuneRecvBuf)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).sendBufSize as *const _ as usize },
-        120usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(sendBufSize)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneSendBuf as *const _ as usize },
-        128usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(autotuneSendBuf)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).interfaceBufSize as *const _ as usize
-        },
-        136usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(interfaceBufSize)
-        )
-    );
+    fn test_field_id() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).id) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(id)
+            )
+        );
+    }
+    test_field_id();
+    fn test_field_nodeSeed() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nodeSeed) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(nodeSeed)
+            )
+        );
+    }
+    test_field_nodeSeed();
+    fn test_field_hostname() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).hostname) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(hostname)
+            )
+        );
+    }
+    test_field_hostname();
+    fn test_field_nodeId() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nodeId) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(nodeId)
+            )
+        );
+    }
+    test_field_nodeId();
+    fn test_field_ipAddr() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).ipAddr) as usize - ptr as usize
+            },
+            20usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(ipAddr)
+            )
+        );
+    }
+    test_field_ipAddr();
+    fn test_field_requestedBwDownBits() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).requestedBwDownBits) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(requestedBwDownBits)
+            )
+        );
+    }
+    test_field_requestedBwDownBits();
+    fn test_field_requestedBwUpBits() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).requestedBwUpBits) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(requestedBwUpBits)
+            )
+        );
+    }
+    test_field_requestedBwUpBits();
+    fn test_field_cpuFrequency() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuFrequency) as usize - ptr as usize
+            },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuFrequency)
+            )
+        );
+    }
+    test_field_cpuFrequency();
+    fn test_field_cpuThreshold() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuThreshold) as usize - ptr as usize
+            },
+            48usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuThreshold)
+            )
+        );
+    }
+    test_field_cpuThreshold();
+    fn test_field_cpuPrecision() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuPrecision) as usize - ptr as usize
+            },
+            56usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuPrecision)
+            )
+        );
+    }
+    test_field_cpuPrecision();
+    fn test_field_heartbeatInterval() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatInterval) as usize - ptr as usize
+            },
+            64usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatInterval)
+            )
+        );
+    }
+    test_field_heartbeatInterval();
+    fn test_field_heartbeatLogLevel() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatLogLevel) as usize - ptr as usize
+            },
+            72usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatLogLevel)
+            )
+        );
+    }
+    test_field_heartbeatLogLevel();
+    fn test_field_heartbeatLogInfo() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatLogInfo) as usize - ptr as usize
+            },
+            76usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatLogInfo)
+            )
+        );
+    }
+    test_field_heartbeatLogInfo();
+    fn test_field_logLevel() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).logLevel) as usize - ptr as usize
+            },
+            80usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(logLevel)
+            )
+        );
+    }
+    test_field_logLevel();
+    fn test_field_pcapDir() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).pcapDir) as usize - ptr as usize
+            },
+            88usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(pcapDir)
+            )
+        );
+    }
+    test_field_pcapDir();
+    fn test_field_pcapCaptureSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).pcapCaptureSize) as usize - ptr as usize
+            },
+            96usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(pcapCaptureSize)
+            )
+        );
+    }
+    test_field_pcapCaptureSize();
+    fn test_field_qdisc() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).qdisc) as usize - ptr as usize
+            },
+            100usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(qdisc)
+            )
+        );
+    }
+    test_field_qdisc();
+    fn test_field_recvBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).recvBufSize) as usize - ptr as usize
+            },
+            104usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(recvBufSize)
+            )
+        );
+    }
+    test_field_recvBufSize();
+    fn test_field_autotuneRecvBuf() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).autotuneRecvBuf) as usize - ptr as usize
+            },
+            112usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(autotuneRecvBuf)
+            )
+        );
+    }
+    test_field_autotuneRecvBuf();
+    fn test_field_sendBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sendBufSize) as usize - ptr as usize
+            },
+            120usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(sendBufSize)
+            )
+        );
+    }
+    test_field_sendBufSize();
+    fn test_field_autotuneSendBuf() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).autotuneSendBuf) as usize - ptr as usize
+            },
+            128usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(autotuneSendBuf)
+            )
+        );
+    }
+    test_field_autotuneSendBuf();
+    fn test_field_interfaceBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).interfaceBufSize) as usize - ptr as usize
+            },
+            136usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(interfaceBufSize)
+            )
+        );
+    }
+    test_field_interfaceBufSize();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1373,16 +1746,23 @@ fn bindgen_test_layout__PluginVirtualPtr() {
         8usize,
         concat!("Alignment of ", stringify!(_PluginVirtualPtr))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PluginVirtualPtr>())).val as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PluginVirtualPtr),
-            "::",
-            stringify!(val)
-        )
-    );
+    fn test_field_val() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PluginVirtualPtr>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).val) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PluginVirtualPtr),
+                "::",
+                stringify!(val)
+            )
+        );
+    }
+    test_field_val();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1401,16 +1781,23 @@ fn bindgen_test_layout__PluginPhysicalPtr() {
         8usize,
         concat!("Alignment of ", stringify!(_PluginPhysicalPtr))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PluginPhysicalPtr>())).val as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PluginPhysicalPtr),
-            "::",
-            stringify!(val)
-        )
-    );
+    fn test_field_val() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PluginPhysicalPtr>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).val) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PluginPhysicalPtr),
+                "::",
+                stringify!(val)
+            )
+        );
+    }
+    test_field_val();
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -1431,36 +1818,57 @@ fn bindgen_test_layout__SysCallReg() {
         8usize,
         concat!("Alignment of ", stringify!(_SysCallReg))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReg>())).as_i64 as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReg),
-            "::",
-            stringify!(as_i64)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReg>())).as_u64 as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReg),
-            "::",
-            stringify!(as_u64)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReg>())).as_ptr as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReg),
-            "::",
-            stringify!(as_ptr)
-        )
-    );
+    fn test_field_as_i64() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReg>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_i64) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReg),
+                "::",
+                stringify!(as_i64)
+            )
+        );
+    }
+    test_field_as_i64();
+    fn test_field_as_u64() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReg>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_u64) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReg),
+                "::",
+                stringify!(as_u64)
+            )
+        );
+    }
+    test_field_as_u64();
+    fn test_field_as_ptr() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReg>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_ptr) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReg),
+                "::",
+                stringify!(as_ptr)
+            )
+        );
+    }
+    test_field_as_ptr();
 }
 pub type SysCallReg = _SysCallReg;
 #[repr(C)]
@@ -1481,26 +1889,40 @@ fn bindgen_test_layout__SysCallArgs() {
         8usize,
         concat!("Alignment of ", stringify!(_SysCallArgs))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallArgs>())).number as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallArgs),
-            "::",
-            stringify!(number)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallArgs>())).args as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallArgs),
-            "::",
-            stringify!(args)
-        )
-    );
+    fn test_field_number() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallArgs>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).number) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallArgs),
+                "::",
+                stringify!(number)
+            )
+        );
+    }
+    test_field_number();
+    fn test_field_args() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallArgs>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).args) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallArgs),
+                "::",
+                stringify!(args)
+            )
+        );
+    }
+    test_field_args();
 }
 pub type SysCallArgs = _SysCallArgs;
 pub const SysCallReturnState_SYSCALL_DONE: SysCallReturnState = 0;
@@ -1533,46 +1955,74 @@ fn bindgen_test_layout__SysCallReturn() {
         8usize,
         concat!("Alignment of ", stringify!(_SysCallReturn))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReturn>())).state as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReturn),
-            "::",
-            stringify!(state)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReturn>())).retval as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReturn),
-            "::",
-            stringify!(retval)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReturn>())).cond as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReturn),
-            "::",
-            stringify!(cond)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallReturn>())).restartable as *const _ as usize },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallReturn),
-            "::",
-            stringify!(restartable)
-        )
-    );
+    fn test_field_state() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).state) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReturn),
+                "::",
+                stringify!(state)
+            )
+        );
+    }
+    test_field_state();
+    fn test_field_retval() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).retval) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReturn),
+                "::",
+                stringify!(retval)
+            )
+        );
+    }
+    test_field_retval();
+    fn test_field_cond() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cond) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReturn),
+                "::",
+                stringify!(cond)
+            )
+        );
+    }
+    test_field_cond();
+    fn test_field_restartable() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).restartable) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallReturn),
+                "::",
+                stringify!(restartable)
+            )
+        );
+    }
+    test_field_restartable();
 }
 pub type SysCallReturn = _SysCallReturn;
 #[repr(C)]
@@ -1593,26 +2043,40 @@ fn bindgen_test_layout__ShMemBlock() {
         8usize,
         concat!("Alignment of ", stringify!(_ShMemBlock))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_ShMemBlock>())).p as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_ShMemBlock),
-            "::",
-            stringify!(p)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_ShMemBlock>())).nbytes as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_ShMemBlock),
-            "::",
-            stringify!(nbytes)
-        )
-    );
+    fn test_field_p() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).p) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_ShMemBlock),
+                "::",
+                stringify!(p)
+            )
+        );
+    }
+    test_field_p();
+    fn test_field_nbytes() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nbytes) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_ShMemBlock),
+                "::",
+                stringify!(nbytes)
+            )
+        );
+    }
+    test_field_nbytes();
 }
 pub type ShMemBlock = _ShMemBlock;
 pub type SysCallHandler = _SysCallHandler;
@@ -1915,16 +2379,23 @@ fn bindgen_test_layout__Tsc() {
         8usize,
         concat!("Alignment of ", stringify!(_Tsc))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Tsc>())).cyclesPerSecond as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Tsc),
-            "::",
-            stringify!(cyclesPerSecond)
-        )
-    );
+    fn test_field_cyclesPerSecond() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Tsc>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cyclesPerSecond) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Tsc),
+                "::",
+                stringify!(cyclesPerSecond)
+            )
+        );
+    }
+    test_field_cyclesPerSecond();
 }
 pub type Tsc = _Tsc;
 #[repr(C)]
@@ -1998,66 +2469,108 @@ fn bindgen_test_layout__TransportFunctionTable() {
         8usize,
         concat!("Alignment of ", stringify!(_TransportFunctionTable))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).close as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(close)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).cleanup as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(cleanup)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).free as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(free)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).send as *const _ as usize },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(send)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).receive as *const _ as usize },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(receive)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).magic as *const _ as usize },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TransportFunctionTable),
-            "::",
-            stringify!(magic)
-        )
-    );
+    fn test_field_close() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).close) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(close)
+            )
+        );
+    }
+    test_field_close();
+    fn test_field_cleanup() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cleanup) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(cleanup)
+            )
+        );
+    }
+    test_field_cleanup();
+    fn test_field_free() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).free) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(free)
+            )
+        );
+    }
+    test_field_free();
+    fn test_field_send() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).send) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(send)
+            )
+        );
+    }
+    test_field_send();
+    fn test_field_receive() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).receive) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(receive)
+            )
+        );
+    }
+    test_field_receive();
+    fn test_field_magic() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TransportFunctionTable>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).magic) as usize - ptr as usize
+            },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TransportFunctionTable),
+                "::",
+                stringify!(magic)
+            )
+        );
+    }
+    test_field_magic();
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -2078,36 +2591,57 @@ fn bindgen_test_layout__Transport() {
         8usize,
         concat!("Alignment of ", stringify!(_Transport))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Transport>())).super_ as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Transport),
-            "::",
-            stringify!(super_)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Transport>())).vtable as *const _ as usize },
-        56usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Transport),
-            "::",
-            stringify!(vtable)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Transport>())).magic as *const _ as usize },
-        64usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Transport),
-            "::",
-            stringify!(magic)
-        )
-    );
+    fn test_field_super() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Transport>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).super_) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Transport),
+                "::",
+                stringify!(super_)
+            )
+        );
+    }
+    test_field_super();
+    fn test_field_vtable() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Transport>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).vtable) as usize - ptr as usize
+            },
+            56usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Transport),
+                "::",
+                stringify!(vtable)
+            )
+        );
+    }
+    test_field_vtable();
+    fn test_field_magic() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Transport>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).magic) as usize - ptr as usize
+            },
+            64usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Transport),
+                "::",
+                stringify!(magic)
+            )
+        );
+    }
+    test_field_magic();
 }
 pub use self::_ProtocolType as ProtocolType;
 pub const _ProtocolType_PNONE: _ProtocolType = 0;
@@ -2565,166 +3099,261 @@ fn bindgen_test_layout__SysCallHandler() {
         8usize,
         concat!("Alignment of ", stringify!(_SysCallHandler))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).host as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(host)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).process as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(process)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).thread as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(thread)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).syscall_handler_rs as *const _ as usize
-        },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(syscall_handler_rs)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).epoll as *const _ as usize },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(epoll)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).blockedSyscallNR as *const _ as usize
-        },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(blockedSyscallNR)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).perfTimer as *const _ as usize },
-        48usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(perfTimer)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsCurrent as *const _ as usize
-        },
-        56usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(perfSecondsCurrent)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsTotal as *const _ as usize
-        },
-        64usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(perfSecondsTotal)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).numSyscalls as *const _ as usize },
-        72usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(numSyscalls)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).syscall_counter as *const _ as usize },
-        80usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(syscall_counter)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_SysCallHandler>())).havePendingResult as *const _ as usize
-        },
-        88usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(havePendingResult)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).pendingResult as *const _ as usize },
-        96usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(pendingResult)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
-        128usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(referenceCount)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
-        132usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(magic)
-        )
-    );
+    fn test_field_host() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).host) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(host)
+            )
+        );
+    }
+    test_field_host();
+    fn test_field_process() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).process) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(process)
+            )
+        );
+    }
+    test_field_process();
+    fn test_field_thread() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).thread) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(thread)
+            )
+        );
+    }
+    test_field_thread();
+    fn test_field_syscall_handler_rs() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).syscall_handler_rs) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(syscall_handler_rs)
+            )
+        );
+    }
+    test_field_syscall_handler_rs();
+    fn test_field_epoll() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).epoll) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(epoll)
+            )
+        );
+    }
+    test_field_epoll();
+    fn test_field_blockedSyscallNR() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).blockedSyscallNR) as usize - ptr as usize
+            },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(blockedSyscallNR)
+            )
+        );
+    }
+    test_field_blockedSyscallNR();
+    fn test_field_perfTimer() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).perfTimer) as usize - ptr as usize
+            },
+            48usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(perfTimer)
+            )
+        );
+    }
+    test_field_perfTimer();
+    fn test_field_perfSecondsCurrent() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).perfSecondsCurrent) as usize - ptr as usize
+            },
+            56usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(perfSecondsCurrent)
+            )
+        );
+    }
+    test_field_perfSecondsCurrent();
+    fn test_field_perfSecondsTotal() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).perfSecondsTotal) as usize - ptr as usize
+            },
+            64usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(perfSecondsTotal)
+            )
+        );
+    }
+    test_field_perfSecondsTotal();
+    fn test_field_numSyscalls() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).numSyscalls) as usize - ptr as usize
+            },
+            72usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(numSyscalls)
+            )
+        );
+    }
+    test_field_numSyscalls();
+    fn test_field_syscall_counter() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).syscall_counter) as usize - ptr as usize
+            },
+            80usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(syscall_counter)
+            )
+        );
+    }
+    test_field_syscall_counter();
+    fn test_field_havePendingResult() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).havePendingResult) as usize - ptr as usize
+            },
+            88usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(havePendingResult)
+            )
+        );
+    }
+    test_field_havePendingResult();
+    fn test_field_pendingResult() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).pendingResult) as usize - ptr as usize
+            },
+            96usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(pendingResult)
+            )
+        );
+    }
+    test_field_pendingResult();
+    fn test_field_referenceCount() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).referenceCount) as usize - ptr as usize
+            },
+            128usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(referenceCount)
+            )
+        );
+    }
+    test_field_referenceCount();
+    fn test_field_magic() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_SysCallHandler>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).magic) as usize - ptr as usize
+            },
+            132usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_SysCallHandler),
+                "::",
+                stringify!(magic)
+            )
+        );
+    }
+    test_field_magic();
 }
 extern "C" {
     pub fn syscallhandler_fcntl(
@@ -2902,46 +3531,74 @@ fn bindgen_test_layout__TriggerObject() {
         8usize,
         concat!("Alignment of ", stringify!(_TriggerObject))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_pointer as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_pointer)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_descriptor as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_descriptor)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_file as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_file)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_futex as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_futex)
-        )
-    );
+    fn test_field_as_pointer() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TriggerObject>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_pointer) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TriggerObject),
+                "::",
+                stringify!(as_pointer)
+            )
+        );
+    }
+    test_field_as_pointer();
+    fn test_field_as_descriptor() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TriggerObject>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_descriptor) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TriggerObject),
+                "::",
+                stringify!(as_descriptor)
+            )
+        );
+    }
+    test_field_as_descriptor();
+    fn test_field_as_file() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TriggerObject>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_file) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TriggerObject),
+                "::",
+                stringify!(as_file)
+            )
+        );
+    }
+    test_field_as_file();
+    fn test_field_as_futex() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_TriggerObject>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).as_futex) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_TriggerObject),
+                "::",
+                stringify!(as_futex)
+            )
+        );
+    }
+    test_field_as_futex();
 }
 pub type Trigger = _Trigger;
 #[repr(C)]
@@ -2963,36 +3620,57 @@ fn bindgen_test_layout__Trigger() {
         8usize,
         concat!("Alignment of ", stringify!(_Trigger))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).type_ as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(type_)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).object as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(object)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).status as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(status)
-        )
-    );
+    fn test_field_type() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Trigger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).type_) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Trigger),
+                "::",
+                stringify!(type_)
+            )
+        );
+    }
+    test_field_type();
+    fn test_field_object() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Trigger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).object) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Trigger),
+                "::",
+                stringify!(object)
+            )
+        );
+    }
+    test_field_object();
+    fn test_field_status() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Trigger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).status) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Trigger),
+                "::",
+                stringify!(status)
+            )
+        );
+    }
+    test_field_status();
 }
 extern "C" {
     pub fn syscallcondition_new(trigger: Trigger) -> *mut SysCallCondition;
@@ -3033,118 +3711,193 @@ fn bindgen_test_layout__PacketTCPHeader() {
         8usize,
         concat!("Alignment of ", stringify!(_PacketTCPHeader))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).flags as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(flags)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sourceIP as *const _ as usize },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(sourceIP)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sourcePort as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(sourcePort)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).destinationIP as *const _ as usize },
-        12usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(destinationIP)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_PacketTCPHeader>())).destinationPort as *const _ as usize
-        },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(destinationPort)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).sequence as *const _ as usize },
-        20usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(sequence)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).acknowledgment as *const _ as usize },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(acknowledgment)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).selectiveACKs as *const _ as usize },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(selectiveACKs)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).window as *const _ as usize },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(window)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).timestampValue as *const _ as usize },
-        48usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(timestampValue)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PacketTCPHeader>())).timestampEcho as *const _ as usize },
-        56usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_PacketTCPHeader),
-            "::",
-            stringify!(timestampEcho)
-        )
-    );
+    fn test_field_flags() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).flags) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(flags)
+            )
+        );
+    }
+    test_field_flags();
+    fn test_field_sourceIP() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sourceIP) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(sourceIP)
+            )
+        );
+    }
+    test_field_sourceIP();
+    fn test_field_sourcePort() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sourcePort) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(sourcePort)
+            )
+        );
+    }
+    test_field_sourcePort();
+    fn test_field_destinationIP() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).destinationIP) as usize - ptr as usize
+            },
+            12usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(destinationIP)
+            )
+        );
+    }
+    test_field_destinationIP();
+    fn test_field_destinationPort() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).destinationPort) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(destinationPort)
+            )
+        );
+    }
+    test_field_destinationPort();
+    fn test_field_sequence() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sequence) as usize - ptr as usize
+            },
+            20usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(sequence)
+            )
+        );
+    }
+    test_field_sequence();
+    fn test_field_acknowledgment() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).acknowledgment) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(acknowledgment)
+            )
+        );
+    }
+    test_field_acknowledgment();
+    fn test_field_selectiveACKs() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).selectiveACKs) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(selectiveACKs)
+            )
+        );
+    }
+    test_field_selectiveACKs();
+    fn test_field_window() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).window) as usize - ptr as usize
+            },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(window)
+            )
+        );
+    }
+    test_field_window();
+    fn test_field_timestampValue() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).timestampValue) as usize - ptr as usize
+            },
+            48usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(timestampValue)
+            )
+        );
+    }
+    test_field_timestampValue();
+    fn test_field_timestampEcho() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_PacketTCPHeader>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).timestampEcho) as usize - ptr as usize
+            },
+            56usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_PacketTCPHeader),
+                "::",
+                stringify!(timestampEcho)
+            )
+        );
+    }
+    test_field_timestampEcho();
 }
 extern "C" {
     pub fn packet_getPayloadLength(packet: *const Packet) -> guint;

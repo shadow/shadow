@@ -24,8 +24,8 @@ You may need to install bindgen, cbindgen, and clang:
 
 ```bash
 apt install -y clang
-cargo install --force --version 0.20.0 cbindgen
-cargo install --force --version 0.59.1 bindgen
+cargo install --force --version 0.24.3 cbindgen
+cargo install --force --version 0.60.1 bindgen
 ```
 
 The versions of bindgen and cbindgen you install should match the [versions
