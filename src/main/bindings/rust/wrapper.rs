@@ -5,7 +5,9 @@ use crate::host::descriptor::File;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::timer::Timer;
+use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
+use crate::core::support::configuration::QDiscMode;
 use crate::core::work::task::TaskRef;
 use crate::utility::random::Random;
 use log_bindings::Logger;
@@ -20,10 +22,6 @@ pub const SHADOW_SOMAXCONN: u32 = 4096;
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
 pub type size_t = ::std::os::raw::c_ulong;
-pub type guint32 = ::std::os::raw::c_uint;
-pub type guint64 = ::std::os::raw::c_ulong;
-pub type gssize = ::std::os::raw::c_long;
-pub type gsize = ::std::os::raw::c_ulong;
 pub type __uint16_t = ::std::os::raw::c_ushort;
 pub type __int32_t = ::std::os::raw::c_int;
 pub type __uint32_t = ::std::os::raw::c_uint;
@@ -34,14 +32,6 @@ pub type __pid_t = ::std::os::raw::c_int;
 pub type __clock_t = ::std::os::raw::c_long;
 pub type __ssize_t = ::std::os::raw::c_long;
 pub type pid_t = __pid_t;
-pub type gchar = ::std::os::raw::c_char;
-pub type gint = ::std::os::raw::c_int;
-pub type gboolean = gint;
-pub type guint = ::std::os::raw::c_uint;
-pub type gdouble = f64;
-pub type gpointer = *mut ::std::os::raw::c_void;
-pub type gconstpointer = *const ::std::os::raw::c_void;
-pub type GQuark = guint32;
 pub type ssize_t = __ssize_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -72,6 +62,69 @@ fn bindgen_test_layout___sigset_t() {
     );
 }
 pub type sigset_t = __sigset_t;
+pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
+pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
+pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
+pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
+pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
+pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
+pub type _LogLevel = ::std::os::raw::c_uint;
+pub use self::_LogLevel as LogLevel;
+extern "C" {
+    pub fn rustlogger_new() -> *mut Logger;
+}
+extern "C" {
+    pub fn main_sidechannelMitigationsEnabled() -> bool;
+}
+extern "C" {
+    pub fn main_checkGlibVersion() -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn main_printBuildInfo();
+}
+extern "C" {
+    pub fn main_logBuildInfo();
+}
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 1;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 3;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 4;
+pub type SchedulerPolicyType = ::std::os::raw::c_uint;
+pub const StraceFmtMode_STRACE_FMT_MODE_OFF: StraceFmtMode = 0;
+pub const StraceFmtMode_STRACE_FMT_MODE_STANDARD: StraceFmtMode = 1;
+pub const StraceFmtMode_STRACE_FMT_MODE_DETERMINISTIC: StraceFmtMode = 2;
+pub type StraceFmtMode = ::std::os::raw::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ChildPidWatcher {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct Counter {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct SyscallHandler {
+    _unused: [u8; 0],
+}
+extern "C" {
+    pub fn runConfigHandlers(config: *const ConfigOptions);
+}
+pub type guint32 = ::std::os::raw::c_uint;
+pub type guint64 = ::std::os::raw::c_ulong;
+pub type gssize = ::std::os::raw::c_long;
+pub type gsize = ::std::os::raw::c_ulong;
+pub type gchar = ::std::os::raw::c_char;
+pub type gint = ::std::os::raw::c_int;
+pub type gboolean = gint;
+pub type guint = ::std::os::raw::c_uint;
+pub type gdouble = f64;
+pub type gpointer = *mut ::std::os::raw::c_void;
+pub type gconstpointer = *const ::std::os::raw::c_void;
+pub type GQuark = guint32;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union sigval {
@@ -863,52 +916,10 @@ pub struct _GTimer {
     _unused: [u8; 0],
 }
 pub type GTimer = _GTimer;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Controller {
-    _unused: [u8; 0],
-}
-pub type Controller = _Controller;
-pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
-pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
-pub type QDiscMode = ::std::os::raw::c_uint;
-pub const StraceFmtMode_STRACE_FMT_MODE_OFF: StraceFmtMode = 0;
-pub const StraceFmtMode_STRACE_FMT_MODE_STANDARD: StraceFmtMode = 1;
-pub const StraceFmtMode_STRACE_FMT_MODE_DETERMINISTIC: StraceFmtMode = 2;
-pub type StraceFmtMode = ::std::os::raw::c_uint;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ChildPidWatcher {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct Counter {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct SyscallHandler {
-    _unused: [u8; 0],
-}
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 1;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 3;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 4;
-pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
 pub type WorkerPool = u8;
-pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
-pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
-pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
-pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
-pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
-pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
-pub type _LogLevel = ::std::os::raw::c_uint;
-pub use self::_LogLevel as LogLevel;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Process {
@@ -943,11 +954,10 @@ pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
 pub type _LogInfoFlags = i32;
 pub type HostParameters = _HostParameters;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _HostParameters {
     pub id: GQuark,
     pub nodeSeed: guint,
-    pub hostname: *mut gchar,
+    pub hostname: *const gchar,
     pub nodeId: guint,
     pub ipAddr: in_addr_t,
     pub requestedBwDownBits: guint64,
@@ -959,7 +969,7 @@ pub struct _HostParameters {
     pub heartbeatLogLevel: LogLevel,
     pub heartbeatLogInfo: LogInfoFlags,
     pub logLevel: LogLevel,
-    pub pcapDir: *mut gchar,
+    pub pcapDir: *const gchar,
     pub pcapCaptureSize: guint32,
     pub qdisc: QDiscMode,
     pub recvBufSize: guint64,
@@ -1229,12 +1239,99 @@ pub struct _DNS {
     _unused: [u8; 0],
 }
 pub type DNS = _DNS;
+extern "C" {
+    pub fn dns_new() -> *mut DNS;
+}
+extern "C" {
+    pub fn dns_free(dns: *mut DNS);
+}
+extern "C" {
+    pub fn dns_register(
+        dns: *mut DNS,
+        id: GQuark,
+        name: *const gchar,
+        requestedIP: in_addr_t,
+    ) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
+}
+extern "C" {
+    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
+}
+pub type Manager = u8;
+extern "C" {
+    pub fn manager_new(
+        controller: *const Controller,
+        config: *const ConfigOptions,
+        endTime: SimulationTime,
+        randomSeed: guint,
+    ) -> *mut Manager;
+}
+extern "C" {
+    pub fn manager_free(manager: *mut Manager) -> gint;
+}
+extern "C" {
+    pub fn manager_run(arg1: *mut Manager);
+}
+extern "C" {
+    pub fn manager_addNewVirtualHost(
+        manager: *mut Manager,
+        params: *mut HostParameters,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn manager_addNewVirtualProcess(
+        manager: *mut Manager,
+        hostName: *const gchar,
+        pluginName: *const gchar,
+        startTime: SimulationTime,
+        stopTime: SimulationTime,
+        argv: *const *const gchar,
+        environment: *const ::std::os::raw::c_char,
+        pause_for_debugging: bool,
+    );
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Event {
     _unused: [u8; 0],
 }
 pub type Event = _Event;
+pub type LegacyDescriptor = [u64; 7usize];
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
+pub type _Status = i32;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn utility_hashString(str_: *const ::std::os::raw::c_char) -> ::std::os::raw::c_uint;
+}
+pub type DescriptorCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
+pub type DescriptorCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
+pub type DescriptorFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
 pub type HostId = GQuark;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1522,25 +1619,6 @@ fn bindgen_test_layout__ShMemBlock() {
     );
 }
 pub type ShMemBlock = _ShMemBlock;
-pub type LegacyDescriptor = [u64; 7usize];
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
-pub type _Status = i32;
-extern "C" {
-    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-pub type DescriptorCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
-pub type DescriptorCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
-pub type DescriptorFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1654,7 +1732,7 @@ extern "C" {
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
-        argv: *mut *mut gchar,
+        argv: *const *const gchar,
         pause_for_debugging: bool,
     ) -> *mut Process;
 }
@@ -1859,25 +1937,6 @@ pub struct _CPU {
     _unused: [u8; 0],
 }
 pub type CPU = _CPU;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _StatusListener {
-    _unused: [u8; 0],
-}
-pub type StatusListener = _StatusListener;
-extern "C" {
-    pub fn statuslistener_ref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_unref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_onStatusChanged(
-        listener: *mut StatusListener,
-        currentStatus: Status,
-        transitions: Status,
-    );
-}
 extern "C" {
     pub fn descriptor_unref(data: gpointer);
 }
@@ -2145,7 +2204,7 @@ extern "C" {
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *mut *mut gchar,
-        argv: *mut *mut gchar,
+        argv: *const *const gchar,
         pause_for_debugging: bool,
     );
 }
@@ -2168,7 +2227,7 @@ extern "C" {
     pub fn host_getTsc(host: *mut Host) -> *mut Tsc;
 }
 extern "C" {
-    pub fn host_getName(host: *mut Host) -> *mut gchar;
+    pub fn host_getName(host: *mut Host) -> *const gchar;
 }
 extern "C" {
     pub fn host_getDefaultAddress(host: *mut Host) -> *mut Address;
@@ -2264,13 +2323,105 @@ extern "C" {
     pub fn host_getNextDeterministicSequenceValue(host: *mut Host) -> guint64;
 }
 extern "C" {
+    pub fn statuslistener_ref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_unref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_onStatusChanged(
+        listener: *mut StatusListener,
+        currentStatus: Status,
+        transitions: Status,
+    );
+}
+extern "C" {
+    pub fn main_runShadow(
+        argc: ::std::os::raw::c_int,
+        argv: *const *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn worker_newForThisThread(
+        worker_pool: *mut WorkerPool,
+        worker_id: i32,
+        bootstrap_end_time: SimulationTime,
+    );
+}
+extern "C" {
+    pub fn worker_threadID() -> i32;
+}
+extern "C" {
+    pub fn worker_setActiveHost(host: *mut Host);
+}
+extern "C" {
+    pub fn worker_setActiveProcess(process: *mut Process);
+}
+extern "C" {
+    pub fn worker_setActiveThread(thread: *mut Thread);
+}
+extern "C" {
+    pub fn worker_setRoundEndTime(t: SimulationTime);
+}
+extern "C" {
+    pub fn worker_setCurrentEmulatedTime(t: EmulatedTime);
+}
+extern "C" {
+    pub fn worker_clearCurrentTime();
+}
+extern "C" {
+    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
+}
+extern "C" {
+    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
+}
+extern "C" {
+    pub fn worker_updateMinHostRunahead(t: SimulationTime);
+}
+extern "C" {
+    pub fn worker_isBootstrapActive() -> bool;
+}
+extern "C" {
+    pub fn worker_isAlive() -> bool;
+}
+extern "C" {
+    pub fn process_registerCompatDescriptor(
+        proc_: *mut Process,
+        desc: *mut CompatDescriptor,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_deregisterCompatDescriptor(
+        proc_: *mut Process,
+        handle: ::std::os::raw::c_int,
+    ) -> *mut CompatDescriptor;
+}
+extern "C" {
+    pub fn process_getRegisteredCompatDescriptor(
+        proc_: *mut Process,
+        handle: ::std::os::raw::c_int,
+    ) -> *const CompatDescriptor;
+}
+extern "C" {
+    pub fn process_registerLegacyDescriptor(
+        proc_: *mut Process,
+        desc: *mut LegacyDescriptor,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_deregisterLegacyDescriptor(proc_: *mut Process, desc: *mut LegacyDescriptor);
+}
+extern "C" {
+    pub fn process_getRegisteredLegacyDescriptor(
+        proc_: *mut Process,
+        handle: ::std::os::raw::c_int,
+    ) -> *mut LegacyDescriptor;
+}
+extern "C" {
     pub fn worker_runEvent(event: *mut Event);
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
-}
-extern "C" {
-    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
 }
 extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
@@ -2302,19 +2453,7 @@ extern "C" {
     pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
 }
 extern "C" {
-    pub fn worker_isAlive() -> bool;
-}
-extern "C" {
     pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
-}
-extern "C" {
-    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
-}
-extern "C" {
-    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
-}
-extern "C" {
-    pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
     pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
@@ -2354,12 +2493,6 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn worker_clearCurrentTime();
-}
-extern "C" {
-    pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
-}
-extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;
 }
 extern "C" {
@@ -2379,97 +2512,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
-}
-extern "C" {
-    pub fn main_runShadow(
-        argc: ::std::os::raw::c_int,
-        argv: *const *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn worker_newForThisThread(
-        worker_pool: *mut WorkerPool,
-        worker_id: i32,
-        bootstrap_end_time: SimulationTime,
-    );
-}
-extern "C" {
-    pub fn worker_threadID() -> i32;
-}
-extern "C" {
-    pub fn worker_setActiveHost(host: *mut Host);
-}
-extern "C" {
-    pub fn worker_setActiveProcess(process: *mut Process);
-}
-extern "C" {
-    pub fn worker_setActiveThread(thread: *mut Thread);
-}
-extern "C" {
-    pub fn worker_updateMinHostRunahead(t: SimulationTime);
-}
-extern "C" {
-    pub fn process_registerCompatDescriptor(
-        proc_: *mut Process,
-        desc: *mut CompatDescriptor,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_deregisterCompatDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *mut CompatDescriptor;
-}
-extern "C" {
-    pub fn process_getRegisteredCompatDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *const CompatDescriptor;
-}
-extern "C" {
-    pub fn process_registerLegacyDescriptor(
-        proc_: *mut Process,
-        desc: *mut LegacyDescriptor,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_deregisterLegacyDescriptor(proc_: *mut Process, desc: *mut LegacyDescriptor);
-}
-extern "C" {
-    pub fn process_getRegisteredLegacyDescriptor(
-        proc_: *mut Process,
-        handle: ::std::os::raw::c_int,
-    ) -> *mut LegacyDescriptor;
-}
-extern "C" {
-    pub fn controller_new(
-        arg1: *const ConfigOptions,
-        arg2: *const HashSet_String,
-    ) -> *mut Controller;
-}
-extern "C" {
-    pub fn controller_free(arg1: *mut Controller);
-}
-extern "C" {
-    pub fn controller_run(arg1: *mut Controller) -> gint;
-}
-extern "C" {
-    pub fn rustlogger_new() -> *mut Logger;
-}
-extern "C" {
-    pub fn main_sidechannelMitigationsEnabled() -> bool;
-}
-extern "C" {
-    pub fn main_checkGlibVersion() -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn main_printBuildInfo();
-}
-extern "C" {
-    pub fn main_logBuildInfo();
-}
-extern "C" {
-    pub fn runConfigHandlers(config: *const ConfigOptions);
 }
 extern "C" {
     pub fn affinity_getGoodWorkerAffinity() -> ::std::os::raw::c_int;

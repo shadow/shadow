@@ -12,12 +12,13 @@
 #include "lib/logger/log_level.h"
 #include "main/core/support/definitions.h"
 #include "main/host/tracker_types.h"
+#include "main/bindings/c/bindings-opaque.h"
 
 typedef struct _HostParameters HostParameters;
 struct _HostParameters {
     GQuark id;
     guint nodeSeed;
-    gchar* hostname;
+    const gchar* hostname;
     guint nodeId;
     in_addr_t ipAddr;
     guint64 requestedBwDownBits;
@@ -29,7 +30,7 @@ struct _HostParameters {
     LogLevel heartbeatLogLevel;
     LogInfoFlags heartbeatLogInfo;
     LogLevel logLevel;
-    gchar* pcapDir;
+    const gchar* pcapDir;
     guint32 pcapCaptureSize;
     QDiscMode qdisc;
     guint64 recvBufSize;

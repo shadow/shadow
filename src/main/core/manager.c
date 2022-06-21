@@ -15,7 +15,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "main/core/controller.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
@@ -45,7 +44,7 @@ static bool _use_preload_openssl_crypto = true;
 ADD_CONFIG_HANDLER(config_getUseOpensslCryptoPreload, _use_preload_openssl_crypto)
 
 struct _Manager {
-    Controller* controller;
+    const Controller* controller;
 
     ChildPidWatcher* watcher;
 
@@ -205,8 +204,8 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
-Manager* manager_new(Controller* controller, const ConfigOptions* config, SimulationTime endTime,
-                     guint randomSeed) {
+Manager* manager_new(const Controller* controller, const ConfigOptions* config,
+                     SimulationTime endTime, guint randomSeed) {
     if (globalmanager != NULL) {
         return NULL;
     }
@@ -593,9 +592,10 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, const gchar* 
     return envv;
 }
 
-void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginPath,
-                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
-                                  char* environment, bool pause_for_debugging) {
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginPath,
+                                  SimulationTime startTime, SimulationTime stopTime,
+                                  const gchar* const* argv, const char* environment,
+                                  bool pause_for_debugging) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
@@ -645,7 +645,10 @@ void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
 SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
                                               Address* destinationAddress) {
     MAGIC_ASSERT(manager);
-    return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
+
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_getLatency(manager->controller, src, dst);
 }
 
 SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
@@ -659,7 +662,10 @@ SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark 
 gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
                                           Address* destinationAddress) {
     MAGIC_ASSERT(manager);
-    return controller_getReliability(manager->controller, sourceAddress, destinationAddress);
+
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_getReliability(manager->controller, src, dst);
 }
 
 gfloat manager_getReliability(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
@@ -672,13 +678,19 @@ gfloat manager_getReliability(Manager* manager, GQuark sourceHostID, GQuark dest
 
 bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress) {
     MAGIC_ASSERT(manager);
-    return controller_isRoutable(manager->controller, sourceAddress, destinationAddress);
+
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_isRoutable(manager->controller, src, dst);
 }
 
 void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
                                   Address* destinationAddress) {
     MAGIC_ASSERT(manager);
-    controller_incrementPacketCount(manager->controller, sourceAddress, destinationAddress);
+
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    controller_incrementPacketCount(manager->controller, src, dst);
 }
 
 const ConfigOptions* manager_getConfig(Manager* manager) {

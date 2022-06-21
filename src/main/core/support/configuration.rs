@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::MetadataExt;
 use std::str::FromStr;
 
 use clap::ArgEnum;
@@ -919,10 +918,35 @@ impl FromStr for StraceLoggingMode {
 /// overwrite the config file value with `None`. From the example above, you could now specify
 /// "--runahead null" to overwrite the config file value (for example `Some(5ms)`) with a `None`
 /// value.
-#[derive(Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, JsonSchema, Eq, PartialEq)]
 pub enum NullableOption<T> {
     Value(T),
     Null,
+}
+
+impl<T> NullableOption<T> {
+    pub fn as_ref(&self) -> NullableOption<&T> {
+        match self {
+            NullableOption::Value(ref x) => NullableOption::Value(x),
+            NullableOption::Null => NullableOption::Null,
+        }
+    }
+
+    pub fn as_mut(&mut self) -> NullableOption<&mut T> {
+        match self {
+            NullableOption::Value(ref mut x) => NullableOption::Value(x),
+            NullableOption::Null => NullableOption::Null,
+        }
+    }
+
+    /// Easier to use than `Into<Option<T>>` since `Option` has a lot of blanket `From`
+    /// implementations, requiring a lot of type annotations.
+    pub fn to_option(self) -> Option<T> {
+        match self {
+            NullableOption::Value(x) => Some(x),
+            NullableOption::Null => None,
+        }
+    }
 }
 
 impl<T: serde::Serialize> serde::Serialize for NullableOption<T> {
@@ -955,6 +979,22 @@ where
             "null" => Ok(Self::Null),
             x => Ok(Self::Value(FromStr::from_str(x)?)),
         }
+    }
+}
+
+/// A trait for `Option`-like types that can be flattened into a single `Option`.
+pub trait Flatten<T> {
+    fn flatten(self) -> Option<T>;
+    fn flatten_ref(&self) -> Option<&T>;
+}
+
+impl<T> Flatten<T> for Option<NullableOption<T>> {
+    fn flatten(self) -> Option<T> {
+        self.map(|x| x.to_option()).flatten()
+    }
+
+    fn flatten_ref(&self) -> Option<&T> {
+        self.as_ref().map(|x| x.as_ref().to_option()).flatten()
     }
 }
 
@@ -1038,7 +1078,7 @@ fn generate_help_strs(
 
 /// Parses a string as a list of arguments following the shell's parsing rules. This
 /// uses `g_shell_parse_argv()` for parsing.
-fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
+pub fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
     if args_str.is_empty() {
         return Ok(Vec::new());
     }
@@ -1076,6 +1116,11 @@ fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
 
     unsafe { c::process_parseArgStrFree(argv, error) };
     Ok(args)
+}
+
+/// Returns the number of hosts, taking into account the 'quantity' option for each host.
+fn count_hosts(config: &ConfigOptions) -> u32 {
+    config.hosts.iter().map(|(_, host)| *host.quantity).sum()
 }
 
 #[cfg(test)]
@@ -1255,18 +1300,6 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn hashsetstring_contains(
-        set: *const HashSet<String>,
-        hostname: *const libc::c_char,
-    ) -> bool {
-        let set = unsafe { set.as_ref() }.unwrap();
-        assert!(!hostname.is_null());
-        let hostname = unsafe { CStr::from_ptr(hostname) };
-
-        set.contains(hostname.to_str().unwrap())
-    }
-
-    #[no_mangle]
     pub extern "C" fn clioptions_freeString(string: *mut libc::c_char) {
         if !string.is_null() {
             unsafe { CString::from_raw(string) };
@@ -1327,13 +1360,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getSeed(config: *const ConfigOptions) -> libc::c_uint {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.general.seed.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getLogLevel(config: *const ConfigOptions) -> c_log::LogLevel {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1346,40 +1372,12 @@ mod export {
     ) -> c::SimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-
-        match config.general.heartbeat_interval {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
-            }
-            Some(NullableOption::Null) | None => SIMTIME_INVALID,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getRunahead(config: *const ConfigOptions) -> c::SimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        match config.experimental.runahead {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND
-            }
-            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            Some(NullableOption::Null) | None => 0,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseDynamicRunahead(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_dynamic_runahead.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseCpuPinning(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_cpu_pinning.unwrap()
+        config
+            .general
+            .heartbeat_interval
+            .flatten()
+            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
+            .unwrap_or(SIMTIME_INVALID)
     }
 
     #[no_mangle]
@@ -1504,20 +1502,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getStopTime(config: *const ConfigOptions) -> c::SimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config
-            .general
-            .stop_time
-            .unwrap()
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getBootstrapEndTime(
         config: *const ConfigOptions,
     ) -> c::SimulationTime {
@@ -1541,7 +1525,7 @@ mod export {
             Some(w) => *w,
             None => {
                 // By default use 1 worker per host.
-                NonZeroU32::new(config_getNHosts(config)).unwrap()
+                NonZeroU32::new(count_hosts(config)).unwrap()
             }
         }
     }
@@ -1578,79 +1562,13 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        match config.general.template_directory {
-            Some(NullableOption::Value(ref x)) => {
+        match config.general.template_directory.flatten_ref() {
+            Some(x) => {
                 let x = tilde_expansion(x);
                 CString::into_raw(CString::new(x.to_str().unwrap()).unwrap())
             }
-            Some(NullableOption::Null) | None => std::ptr::null_mut(),
+            None => std::ptr::null_mut(),
         }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getSocketRecvBuffer(config: *const ConfigOptions) -> u64 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config
-            .experimental
-            .socket_recv_buffer
-            .unwrap()
-            .convert(units::SiPrefixUpper::Base)
-            .unwrap()
-            .value()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getSocketSendBuffer(config: *const ConfigOptions) -> u64 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config
-            .experimental
-            .socket_send_buffer
-            .unwrap()
-            .convert(units::SiPrefixUpper::Base)
-            .unwrap()
-            .value()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getSocketSendAutotune(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config.experimental.socket_send_autotune.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getSocketRecvAutotune(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config.experimental.socket_recv_autotune.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getInterfaceBuffer(config: *const ConfigOptions) -> u64 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config
-            .experimental
-            .interface_buffer
-            .unwrap()
-            .convert(units::SiPrefixUpper::Base)
-            .unwrap()
-            .value()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getInterfaceQdisc(config: *const ConfigOptions) -> QDiscMode {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config.experimental.interface_qdisc.unwrap()
     }
 
     #[no_mangle]
@@ -1714,13 +1632,12 @@ mod export {
     ) -> c::SimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-
-        match config.experimental.host_heartbeat_interval {
-            Some(NullableOption::Value(x)) => {
-                x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND
-            }
-            Some(NullableOption::Null) | None => SIMTIME_INVALID,
-        }
+        config
+            .experimental
+            .host_heartbeat_interval
+            .flatten()
+            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
+            .unwrap_or(SIMTIME_INVALID)
     }
 
     #[no_mangle]
@@ -1732,319 +1649,6 @@ mod export {
             StraceLoggingMode::Standard => StraceFmtMode::Standard,
             StraceLoggingMode::Deterministic => StraceFmtMode::Deterministic,
             StraceLoggingMode::Off => StraceFmtMode::Off,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseShortestPath(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config.network.use_shortest_path.unwrap()
-    }
-
-    #[no_mangle]
-    #[must_use]
-    pub extern "C" fn config_iterHosts(
-        config: *const ConfigOptions,
-        f: unsafe extern "C" fn(
-            *const libc::c_char,
-            *const ConfigOptions,
-            *const HostOptions,
-            *mut libc::c_void,
-        ) -> libc::c_int,
-        data: *mut libc::c_void,
-    ) -> libc::c_int {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        for (name, host) in &config.hosts {
-            // bind the string to a local variable so it's not dropped before f() runs
-            let name = CString::new(name.clone()).unwrap();
-            let rv = unsafe {
-                f(
-                    name.as_c_str().as_ptr(),
-                    config as *const _,
-                    host as *const _,
-                    data,
-                )
-            };
-            if rv != 0 {
-                return rv;
-            }
-        }
-
-        0
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getNHosts(config: *const ConfigOptions) -> u32 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config
-            .hosts
-            .iter()
-            .map(|(_, host)| hostoptions_getQuantity(host))
-            .sum()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_freeString(string: *mut libc::c_char) {
-        if !string.is_null() {
-            unsafe { CString::from_raw(string) };
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getNetworkNodeId(host: *const HostOptions) -> libc::c_uint {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        host.network_node_id
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getIpAddr(
-        host: *const HostOptions,
-        addr: *mut libc::in_addr_t,
-    ) -> libc::c_int {
-        assert!(!host.is_null());
-        assert!(!addr.is_null());
-        let host = unsafe { &*host };
-        let addr = unsafe { &mut *addr };
-
-        match host.ip_addr {
-            Some(x) => {
-                *addr = u32::to_be(x.into());
-                0
-            }
-            None => -1,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getQuantity(host: *const HostOptions) -> libc::c_uint {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        *host.quantity
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getLogLevel(host: *const HostOptions) -> c_log::LogLevel {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match &host.options.log_level {
-            Some(NullableOption::Value(x)) => x.to_c_loglevel(),
-            Some(NullableOption::Null) | None => c_log::_LogLevel_LOGLEVEL_UNSET,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getPcapDirectory(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match &host.options.pcap_directory {
-            Some(NullableOption::Value(pcap_dir)) => {
-                let pcap_dir = tilde_expansion(pcap_dir);
-                CString::into_raw(CString::new(pcap_dir.to_str().unwrap()).unwrap())
-            }
-            Some(NullableOption::Null) | None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getPcapCaptureSize(host: *const HostOptions) -> u32 {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        host.options
-            .pcap_capture_size
-            .unwrap()
-            .convert(units::SiPrefixUpper::Base)
-            .unwrap()
-            .value()
-            .try_into()
-            .unwrap()
-    }
-
-    /// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
-    /// the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthDown(
-        host: *const HostOptions,
-        bandwidth_down: *mut u64,
-    ) -> libc::c_int {
-        assert!(!host.is_null());
-        assert!(!bandwidth_down.is_null());
-        let host = unsafe { &*host };
-        let bandwidth_down = unsafe { &mut *bandwidth_down };
-
-        match host.bandwidth_down {
-            Some(x) => {
-                *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                0
-            }
-            None => -1,
-        }
-    }
-
-    /// Get the upstream bandwidth of the host if it exists. A non-zero return value means that
-    /// the host did not have an upstream bandwidth and that `bandwidth_up` was not updated.
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthUp(
-        host: *const HostOptions,
-        bandwidth_up: *mut u64,
-    ) -> libc::c_int {
-        assert!(!host.is_null());
-        assert!(!bandwidth_up.is_null());
-        let host = unsafe { &*host };
-        let bandwidth_up = unsafe { &mut *bandwidth_up };
-
-        match host.bandwidth_up {
-            Some(x) => {
-                *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                0
-            }
-            None => -1,
-        }
-    }
-
-    #[no_mangle]
-    #[must_use]
-    pub extern "C" fn hostoptions_iterProcesses(
-        host: *const HostOptions,
-        f: unsafe extern "C" fn(*const ProcessOptions, *mut libc::c_void) -> libc::c_int,
-        data: *mut libc::c_void,
-    ) -> libc::c_int {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        for proc in &host.processes {
-            let rv = unsafe { f(proc as *const _, data) };
-
-            if rv != 0 {
-                return rv;
-            }
-        }
-
-        0
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_freeString(string: *mut libc::c_char) {
-        if !string.is_null() {
-            unsafe { CString::from_raw(string) };
-        }
-    }
-
-    /// Will return a NULL pointer if the path does not exist.
-    #[no_mangle]
-    pub extern "C" fn processoptions_getPath(proc: *const ProcessOptions) -> *mut libc::c_char {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        let expanded = tilde_expansion(proc.path.to_str().unwrap());
-
-        let path = match expanded.canonicalize() {
-            Ok(path) => path,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                log::warn!("Unable to find {:?}", &expanded);
-                return std::ptr::null_mut();
-            }
-            Err(_) => panic!(),
-        };
-
-        let metadata = std::fs::metadata(&path).unwrap();
-
-        if !metadata.is_file() {
-            log::warn!("The path {:?} is not a file", &path);
-            return std::ptr::null_mut();
-        }
-
-        // this mask doesn't guarantee that we can execute the file (the file might have S_IXUSR
-        // but be owned by a different user), but it should catch most errors
-        let mask = libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH;
-        if (metadata.mode() & mask) == 0 {
-            log::warn!("The path {:?} is not executable", &path);
-            return std::ptr::null_mut();
-        }
-
-        CString::into_raw(CString::new(path.to_str().unwrap()).unwrap())
-    }
-
-    /// Returns the path exactly as specified in the config. Caller must free returned string.
-    #[no_mangle]
-    pub extern "C" fn processoptions_getRawPath(proc: *const ProcessOptions) -> *mut libc::c_char {
-        assert!(!proc.is_null());
-        let proc = unsafe { proc.as_ref().unwrap() };
-        CString::into_raw(CString::new(proc.path.to_string_lossy().as_bytes()).unwrap())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_getArgs(
-        proc: *const ProcessOptions,
-        f: unsafe extern "C" fn(*const libc::c_char, *mut libc::c_void),
-        data: *mut libc::c_void,
-    ) {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        let args = match &proc.args {
-            ProcessArgs::List(x) => x.iter().map(|y| OsStr::new(y).to_os_string()).collect(),
-            ProcessArgs::Str(x) => parse_string_as_args(OsStr::new(&x.trim())).unwrap(),
-        };
-
-        for arg in &args {
-            // bind the string to a local variable so it's not dropped before f() runs
-            let arg = CString::new(arg.as_bytes()).unwrap();
-            unsafe { f(arg.as_c_str().as_ptr(), data) }
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_getEnvironment(
-        proc: *const ProcessOptions,
-    ) -> *mut libc::c_char {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        CString::into_raw(CString::new(proc.environment.clone()).unwrap())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_getQuantity(proc: *const ProcessOptions) -> u32 {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        *proc.quantity
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_getStartTime(
-        proc: *const ProcessOptions,
-    ) -> c::SimulationTime {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        proc.start_time
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
-    }
-
-    #[no_mangle]
-    pub extern "C" fn processoptions_getStopTime(proc: *const ProcessOptions) -> c::SimulationTime {
-        assert!(!proc.is_null());
-        let proc = unsafe { &*proc };
-
-        match proc.stop_time {
-            Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
-            None => SIMTIME_INVALID,
         }
     }
 }

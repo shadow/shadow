@@ -303,7 +303,7 @@ void host_shutdown(Host* host) {
         random_free(host->random);
     }
 
-    if(host->params.pcapDir) g_free(host->params.pcapDir);
+    if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
 
     g_mutex_clear(&(host->lock));
 
@@ -321,7 +321,7 @@ void host_shutdown(Host* host) {
 #endif
 
     if(host->defaultAddress) address_unref(host->defaultAddress);
-    if(host->params.hostname) g_free(host->params.hostname);
+    if(host->params.hostname) g_free((gchar*)host->params.hostname);
 
     utility_assert(host_getSharedMem(host));
     shimshmemhost_destroy(host_getSharedMem(host));
@@ -412,7 +412,7 @@ guint64 host_getNewPacketID(Host* host) {
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
                          const gchar* pluginName, const gchar* pluginPath, gchar** envv,
-                         gchar** argv, bool pause_for_debugging) {
+                         const gchar* const* argv, bool pause_for_debugging) {
     MAGIC_ASSERT(host);
     {
         ShMemBlockSerialized sharedMemBlockSerial =
@@ -477,7 +477,7 @@ Tsc* host_getTsc(Host* host) {
     return &host->tsc;
 }
 
-gchar* host_getName(Host* host) {
+const gchar* host_getName(Host* host) {
     MAGIC_ASSERT(host);
     return host->params.hostname;
 }

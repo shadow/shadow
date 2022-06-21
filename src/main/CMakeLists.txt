@@ -82,7 +82,6 @@ set(shadow_srcs
     core/support/config_handlers.c
     core/work/event.c
     core/main.c
-    core/controller.c
     core/manager.c
     core/worker.c
 

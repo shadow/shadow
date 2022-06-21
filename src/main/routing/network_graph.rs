@@ -10,9 +10,12 @@ use crate::core::support::{units, units::Unit};
 use crate::routing::petgraph_wrapper::GraphWrapper;
 use crate::utility::tilde_expansion;
 
+use anyhow::Context;
 use log::*;
 use petgraph::graph::NodeIndex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
+type NetGraphError = Box<dyn Error + Send + Sync + 'static>;
 
 /// A graph node.
 #[derive(Debug, PartialEq)]
@@ -128,7 +131,7 @@ impl NetworkGraph {
         self.graph.node_weight(index).map(|w| w.id)
     }
 
-    pub fn parse(graph_text: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn parse(graph_text: &str) -> Result<Self, NetGraphError> {
         let gml_graph = gml_parser::parse(graph_text)?;
 
         let mut g = match gml_graph.directed {
@@ -180,7 +183,7 @@ impl NetworkGraph {
     pub fn compute_shortest_paths(
         &self,
         nodes: &[NodeIndex],
-    ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, Box<dyn Error>> {
+    ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, NetGraphError> {
         let start = std::time::Instant::now();
 
         // calculate shortest paths
@@ -227,7 +230,7 @@ impl NetworkGraph {
     pub fn get_direct_paths(
         &self,
         nodes: &[NodeIndex],
-    ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, Box<dyn Error>> {
+    ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, NetGraphError> {
         let start = std::time::Instant::now();
 
         let paths: HashMap<_, _> = nodes
@@ -235,7 +238,7 @@ impl NetworkGraph {
             .flat_map(|src| nodes.iter().map(move |dst| (*src, *dst)))
             // we require the graph to be connected with exactly one edge between any two nodes
             .map(|(src, dst)| Ok(((src, dst), self.get_edge_weight(&src, &dst)?.into())))
-            .collect::<Result<_, Box<dyn Error>>>()?;
+            .collect::<Result<_, NetGraphError>>()?;
 
         assert_eq!(paths.len(), nodes.len().pow(2));
 
@@ -254,7 +257,7 @@ impl NetworkGraph {
         &self,
         src: &NodeIndex,
         dst: &NodeIndex,
-    ) -> Result<&ShadowEdge, Box<dyn Error>> {
+    ) -> Result<&ShadowEdge, NetGraphError> {
         let src_id = self.node_index_to_id(*src).unwrap();
         let dst_id = self.node_index_to_id(*dst).unwrap();
         match &self.graph {
@@ -336,7 +339,15 @@ impl std::convert::From<&ShadowEdge> for PathProperties {
     }
 }
 
+#[derive(Debug)]
 pub struct IpPreviouslyAssignedError;
+impl std::error::Error for IpPreviouslyAssignedError {}
+
+impl std::fmt::Display for IpPreviouslyAssignedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "IP address has already been assigned")
+    }
+}
 
 /// Tool for assigning IP addresses to graph nodes.
 #[derive(Debug)]
@@ -459,23 +470,28 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
 }
 
 /// Read and decompress a file.
-fn read_xz<P: AsRef<std::path::Path>>(path: P) -> Result<String, Box<dyn Error>> {
-    let mut f = std::io::BufReader::new(std::fs::File::open(path)?);
+fn read_xz<P: AsRef<std::path::Path>>(path: P) -> Result<String, NetGraphError> {
+    let path = path.as_ref();
+
+    let mut f = std::io::BufReader::new(
+        std::fs::File::open(path).with_context(|| format!("Failed to open file: {path:?}"))?,
+    );
 
     let mut decomp: Vec<u8> = Vec::new();
-    lzma_rs::xz_decompress(&mut f, &mut decomp)?;
+    lzma_rs::xz_decompress(&mut f, &mut decomp).context("Failed to decompress file")?;
     decomp.shrink_to_fit();
 
     Ok(String::from_utf8(decomp)?)
 }
 
 /// Get the network graph as a string.
-pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, Box<dyn Error>> {
+pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, NetGraphError> {
     Ok(match graph_options {
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: None,
             path: f,
-        })) => std::fs::read_to_string(tilde_expansion(f))?,
+        })) => std::fs::read_to_string(tilde_expansion(f))
+            .with_context(|| format!("Failed to read file: {f}"))?,
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: Some(Compression::Xz),
             path: f,
@@ -750,7 +766,7 @@ mod export {
         match ip_assignment.assign_ip(node_id, ip_addr) {
             Ok(()) => 0,
             Err(IpPreviouslyAssignedError) => {
-                error!("IP {} was assigned to multiple hosts", ip_addr,);
+                error!("IP {} was assigned to multiple hosts", ip_addr);
                 -1
             }
         }

@@ -110,7 +110,7 @@ static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     return exists ? FALSE : TRUE;
 }
 
-Address* dns_register(DNS* dns, GQuark id, gchar* name, in_addr_t requestedIP) {
+Address* dns_register(DNS* dns, GQuark id, const gchar* name, in_addr_t requestedIP) {
     MAGIC_ASSERT(dns);
     utility_assert(name);
 

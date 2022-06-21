@@ -50,6 +50,8 @@ typedef struct CompatDescriptor CompatDescriptor;
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
+typedef struct Controller Controller;
+
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
@@ -58,10 +60,6 @@ typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
 typedef struct File File;
-
-typedef struct HashSet_String HashSet_String;
-
-typedef struct HostOptions HostOptions;
 
 // Tool for assigning IP addresses to graph nodes.
 typedef struct IpAssignment_u32 IpAssignment_u32;
@@ -118,8 +116,6 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 // let x = pmr[5];
 // ```
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
-
-typedef struct ProcessOptions ProcessOptions;
 
 typedef struct Random Random;
 

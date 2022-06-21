@@ -53,6 +53,8 @@ typedef struct CompatDescriptor CompatDescriptor;
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
+typedef struct Controller Controller;
+
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
@@ -61,10 +63,6 @@ typedef struct DescriptorTable DescriptorTable;
 
 // A wrapper for any type of file object.
 typedef struct File File;
-
-typedef struct HashSet_String HashSet_String;
-
-typedef struct HostOptions HostOptions;
 
 // Tool for assigning IP addresses to graph nodes.
 typedef struct IpAssignment_u32 IpAssignment_u32;
@@ -121,8 +119,6 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 // let x = pmr[5];
 // ```
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
-
-typedef struct ProcessOptions ProcessOptions;
 
 typedef struct Random Random;
 
@@ -277,6 +273,28 @@ void statusLogger_updateEmuTime(const struct StatusLogger_ShadowStatusBarState *
 void statusLogger_updateNumFailedProcesses(const struct StatusLogger_ShadowStatusBarState *status_logger,
                                            uint32_t num_failed_processes);
 
+DNS *controller_getDNS(const struct Controller *controller);
+
+SimulationTime controller_getLatency(const struct Controller *controller,
+                                     in_addr_t src,
+                                     in_addr_t dst);
+
+float controller_getReliability(const struct Controller *controller, in_addr_t src, in_addr_t dst);
+
+void controller_incrementPacketCount(const struct Controller *controller,
+                                     in_addr_t src,
+                                     in_addr_t dst);
+
+bool controller_isRoutable(const struct Controller *controller, in_addr_t src, in_addr_t dst);
+
+bool controller_managerFinishedCurrentRound(const struct Controller *controller,
+                                            SimulationTime min_next_event_time,
+                                            SimulationTime *execute_window_start,
+                                            SimulationTime *execute_window_end);
+
+void controller_updateMinRunahead(const struct Controller *controller,
+                                  SimulationTime min_path_latency);
+
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
 
@@ -325,8 +343,6 @@ int main_runShadow(int argc, const char *const *argv);
 
 int manager_saveProcessedConfigYaml(const struct ConfigOptions *config, const char *filename);
 
-bool hashsetstring_contains(const struct HashSet_String *set, const char *hostname);
-
 void clioptions_freeString(char *string);
 
 bool clioptions_getGdb(const struct CliOptions *options);
@@ -343,17 +359,9 @@ void config_freeString(char *string);
 
 void config_showConfig(const struct ConfigOptions *config);
 
-unsigned int config_getSeed(const struct ConfigOptions *config);
-
 LogLevel config_getLogLevel(const struct ConfigOptions *config);
 
 SimulationTime config_getHeartbeatInterval(const struct ConfigOptions *config);
-
-SimulationTime config_getRunahead(const struct ConfigOptions *config);
-
-bool config_getUseDynamicRunahead(const struct ConfigOptions *config);
-
-bool config_getUseCpuPinning(const struct ConfigOptions *config);
 
 bool config_getUseSchedFifo(const struct ConfigOptions *config);
 
@@ -385,8 +393,6 @@ SimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config
 
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
-SimulationTime config_getStopTime(const struct ConfigOptions *config);
-
 SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
 
 uint32_t config_getWorkers(const struct ConfigOptions *config);
@@ -396,18 +402,6 @@ SchedulerPolicyType config_getSchedulerPolicy(const struct ConfigOptions *config
 char *config_getDataDirectory(const struct ConfigOptions *config);
 
 char *config_getTemplateDirectory(const struct ConfigOptions *config);
-
-uint64_t config_getSocketRecvBuffer(const struct ConfigOptions *config);
-
-uint64_t config_getSocketSendBuffer(const struct ConfigOptions *config);
-
-bool config_getSocketSendAutotune(const struct ConfigOptions *config);
-
-bool config_getSocketRecvAutotune(const struct ConfigOptions *config);
-
-uint64_t config_getInterfaceBuffer(const struct ConfigOptions *config);
-
-enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
 bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
@@ -422,62 +416,6 @@ LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
 SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
 
 enum StraceFmtMode config_getStraceLoggingMode(const struct ConfigOptions *config);
-
-bool config_getUseShortestPath(const struct ConfigOptions *config);
-
-__attribute__((warn_unused_result))
-int config_iterHosts(const struct ConfigOptions *config,
-                     int (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
-                     void *data);
-
-uint32_t config_getNHosts(const struct ConfigOptions *config);
-
-void hostoptions_freeString(char *string);
-
-unsigned int hostoptions_getNetworkNodeId(const struct HostOptions *host);
-
-int hostoptions_getIpAddr(const struct HostOptions *host, in_addr_t *addr);
-
-unsigned int hostoptions_getQuantity(const struct HostOptions *host);
-
-LogLevel hostoptions_getLogLevel(const struct HostOptions *host);
-
-char *hostoptions_getPcapDirectory(const struct HostOptions *host);
-
-uint32_t hostoptions_getPcapCaptureSize(const struct HostOptions *host);
-
-// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
-// the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
-int hostoptions_getBandwidthDown(const struct HostOptions *host, uint64_t *bandwidth_down);
-
-// Get the upstream bandwidth of the host if it exists. A non-zero return value means that
-// the host did not have an upstream bandwidth and that `bandwidth_up` was not updated.
-int hostoptions_getBandwidthUp(const struct HostOptions *host, uint64_t *bandwidth_up);
-
-__attribute__((warn_unused_result))
-int hostoptions_iterProcesses(const struct HostOptions *host,
-                              int (*f)(const struct ProcessOptions*, void*),
-                              void *data);
-
-void processoptions_freeString(char *string);
-
-// Will return a NULL pointer if the path does not exist.
-char *processoptions_getPath(const struct ProcessOptions *proc);
-
-// Returns the path exactly as specified in the config. Caller must free returned string.
-char *processoptions_getRawPath(const struct ProcessOptions *proc);
-
-void processoptions_getArgs(const struct ProcessOptions *proc,
-                            void (*f)(const char*, void*),
-                            void *data);
-
-char *processoptions_getEnvironment(const struct ProcessOptions *proc);
-
-uint32_t processoptions_getQuantity(const struct ProcessOptions *proc);
-
-SimulationTime processoptions_getStartTime(const struct ProcessOptions *proc);
-
-SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 
 // Parses a string as bits-per-second. Returns '-1' on error.
 int64_t parse_bandwidth(const char *s);
