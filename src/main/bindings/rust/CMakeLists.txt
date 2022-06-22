@@ -50,7 +50,6 @@ add_custom_command(OUTPUT wrapper.rs
 
         # used by shadow's main function
         --whitelist-function "main_.*"
-        --whitelist-function "utility_hashString"
         --whitelist-function "shmemcleanup_tryCleanup"
         --whitelist-function "manager_(new|free|run|addNewVirtualHost|addNewVirtualProcess)"
         --whitelist-function "manager_increment_object_alloc_counter_global"

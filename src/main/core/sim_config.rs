@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
+use std::hash::{Hash, Hasher};
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,13 +16,13 @@ use crate::core::support::configuration::{
 };
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::support::units::{self, Unit};
-use crate::cshadow as c;
 use crate::routing::network_graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::tilde_expansion;
 
 /// The simulation configuration after processing the configuration options and network graph.
 pub struct SimConfig {
-    pub manager_seed: u32,
+    // deterministic source of randomness for the simulation
+    pub random: Xoshiro256PlusPlus,
 
     // map of ip addresses to graph nodes
     pub ip_assignment: IpAssignment<u32>,
@@ -39,9 +40,6 @@ impl SimConfig {
         // 'seed_from_u64()' uses SplitMix64 to derive the actual seed, so we are okay here
         let seed = config.general.seed.unwrap();
         let mut random = Xoshiro256PlusPlus::seed_from_u64(seed.into());
-
-        // get the manager seed first to match the old Shadow behaviour
-        let manager_seed = random.gen();
 
         // this should be the same for all hosts
         let randomness_for_seed_calc = random.gen();
@@ -123,14 +121,6 @@ impl SimConfig {
             }
         }
 
-        // arrange so that hosts with an IP address are at the beginning of the list, to match the
-        // old Shadow behaviour
-        hosts.sort_by(|a, b| match (a.ip_addr.is_some(), b.ip_addr.is_some()) {
-            (true, true) | (false, false) => std::cmp::Ordering::Equal,
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-        });
-
         // assign IP addresses to hosts and graph nodes
         let ip_assignment = assign_ips(&mut hosts)?;
 
@@ -142,7 +132,7 @@ impl SimConfig {
         )?;
 
         Ok(Self {
-            manager_seed,
+            random,
             ip_assignment,
             routing_info,
             hosts,
@@ -154,7 +144,7 @@ impl SimConfig {
 pub struct HostInfo {
     pub name: String,
     pub processes: Vec<ProcessInfo>,
-    pub seed: u32,
+    pub seed: u64,
     pub network_node_id: u32,
     pub pause_for_debugging: bool,
     pub cpu_threshold: u64,
@@ -190,7 +180,7 @@ fn build_host(
     config: &ConfigOptions,
     host: &HostOptions,
     hostname: &str,
-    randomness_for_seed_calc: u32,
+    randomness_for_seed_calc: u64,
     hosts_to_debug: &HashSet<String>,
 ) -> anyhow::Result<Vec<HostInfo>> {
     let quantity = *host.quantity;
@@ -214,8 +204,9 @@ fn build_host(
 
         // hostname hash is used as part of the host's seed
         let hostname_hash = {
-            let hostname_cstr = std::ffi::CString::new(hostname.clone()).unwrap();
-            unsafe { c::utility_hashString(hostname_cstr.as_ptr()) }
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            hostname.hash(&mut hasher);
+            hasher.finish()
         };
 
         let pause_for_debugging = hosts_to_debug.contains(&hostname);
