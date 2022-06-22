@@ -146,7 +146,27 @@ typedef void (*TaskObjectFreeFunc)(void*);
 
 typedef void (*TaskArgumentFreeFunc)(void*);
 
+#define EMUTIME_INVALID UINT64_MAX
+
+#define EMUTIME_MAX (UINT64_MAX - 1)
+
 #define EMUTIME_MIN 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 

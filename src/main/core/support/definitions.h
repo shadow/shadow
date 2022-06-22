@@ -79,17 +79,6 @@ typedef guint64 EmulatedTime;
  */
 #define EMUTIME_UNIX_EPOCH (0)
 
-/**
- * Represents an invalid emulation time.
- */
-#define EMUTIME_INVALID G_MAXUINT64
-
-/**
- * Maximum and minimum valid values.
- */
-#define EMUTIME_MAX (G_MAXUINT64-1)
-#define EMUTIME_MIN 0
-
 /* Ensure it can be converted to EmulatedTime */
 #define SIMTIME_MAX (EMUTIME_MAX - EMUTIME_SIMULATION_START)
 #define SIMTIME_MIN 0

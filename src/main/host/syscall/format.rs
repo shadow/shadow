@@ -26,19 +26,6 @@ pub enum StraceFmtMode {
     Deterministic,
 }
 
-impl TryFrom<u32> for StraceFmtMode {
-    type Error = ();
-
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == Self::Off as u32 => Ok(Self::Off),
-            x if x == Self::Standard as u32 => Ok(Self::Standard),
-            x if x == Self::Deterministic as u32 => Ok(Self::Deterministic),
-            _ => Err(()),
-        }
-    }
-}
-
 impl From<StraceFmtMode> for Option<FmtOptions> {
     fn from(x: StraceFmtMode) -> Self {
         match x {
@@ -573,7 +560,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn log_syscall(
         proc: *mut c::Process,
-        logging_mode: c::StraceFmtMode,
+        logging_mode: StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,
         args: *const libc::c_char,

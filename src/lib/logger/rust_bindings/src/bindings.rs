@@ -44,56 +44,91 @@ fn bindgen_test_layout__Logger() {
         8usize,
         concat!("Alignment of ", stringify!(_Logger))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).log as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Logger),
-            "::",
-            stringify!(log)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).flush as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Logger),
-            "::",
-            stringify!(flush)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).destroy as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Logger),
-            "::",
-            stringify!(destroy)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).setLevel as *const _ as usize },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Logger),
-            "::",
-            stringify!(setLevel)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).isEnabled as *const _ as usize },
-        32usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Logger),
-            "::",
-            stringify!(isEnabled)
-        )
-    );
+    fn test_field_log() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Logger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).log) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Logger),
+                "::",
+                stringify!(log)
+            )
+        );
+    }
+    test_field_log();
+    fn test_field_flush() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Logger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).flush) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Logger),
+                "::",
+                stringify!(flush)
+            )
+        );
+    }
+    test_field_flush();
+    fn test_field_destroy() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Logger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).destroy) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Logger),
+                "::",
+                stringify!(destroy)
+            )
+        );
+    }
+    test_field_destroy();
+    fn test_field_setLevel() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Logger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).setLevel) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Logger),
+                "::",
+                stringify!(setLevel)
+            )
+        );
+    }
+    test_field_setLevel();
+    fn test_field_isEnabled() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Logger>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).isEnabled) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Logger),
+                "::",
+                stringify!(isEnabled)
+            )
+        );
+    }
+    test_field_isEnabled();
 }
 extern "C" {
     pub fn logger_setDefault(logger: *mut Logger);
@@ -162,44 +197,72 @@ fn bindgen_test_layout___va_list_tag() {
         8usize,
         concat!("Alignment of ", stringify!(__va_list_tag))
     );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<__va_list_tag>())).gp_offset as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__va_list_tag),
-            "::",
-            stringify!(gp_offset)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<__va_list_tag>())).fp_offset as *const _ as usize },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__va_list_tag),
-            "::",
-            stringify!(fp_offset)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<__va_list_tag>())).overflow_arg_area as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__va_list_tag),
-            "::",
-            stringify!(overflow_arg_area)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<__va_list_tag>())).reg_save_area as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__va_list_tag),
-            "::",
-            stringify!(reg_save_area)
-        )
-    );
+    fn test_field_gp_offset() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<__va_list_tag>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).gp_offset) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__va_list_tag),
+                "::",
+                stringify!(gp_offset)
+            )
+        );
+    }
+    test_field_gp_offset();
+    fn test_field_fp_offset() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<__va_list_tag>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).fp_offset) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__va_list_tag),
+                "::",
+                stringify!(fp_offset)
+            )
+        );
+    }
+    test_field_fp_offset();
+    fn test_field_overflow_arg_area() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<__va_list_tag>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).overflow_arg_area) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__va_list_tag),
+                "::",
+                stringify!(overflow_arg_area)
+            )
+        );
+    }
+    test_field_overflow_arg_area();
+    fn test_field_reg_save_area() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<__va_list_tag>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).reg_save_area) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__va_list_tag),
+                "::",
+                stringify!(reg_save_area)
+            )
+        );
+    }
+    test_field_reg_save_area();
 }
