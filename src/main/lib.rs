@@ -14,8 +14,6 @@ pub mod cshadow {
     #![allow(non_snake_case)]
     // https://github.com/rust-lang/rust/issues/66220
     #![allow(improper_ctypes)]
-    // https://github.com/rust-lang/rust-bindgen/issues/1651
-    #![allow(deref_nullptr)]
     include!("bindings/rust/wrapper.rs");
 }
 
