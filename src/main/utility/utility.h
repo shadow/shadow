@@ -122,6 +122,4 @@ int return_code_for_signal(int signal);
  safely abort the process (with a core dump, if enabled). */
 _Noreturn void die_after_vfork();
 
-unsigned int utility_hashString(const char* str);
-
 #endif /* SHD_UTILITY_H_ */

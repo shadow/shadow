@@ -388,7 +388,3 @@ void die_after_vfork() {
     // Convince the compiler that we really don't return.
     _exit(1);
 }
-
-unsigned int utility_hashString(const char* str) {
-    return g_str_hash(str);
-}

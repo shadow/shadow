@@ -3,6 +3,9 @@ use std::os::unix::ffi::OsStrExt;
 use std::sync::RwLock;
 use std::time::Duration;
 
+use rand::Rng;
+use rand_xoshiro::Xoshiro256PlusPlus;
+
 use crate::core::sim_config::{HostInfo, SimConfig};
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::Flatten;
@@ -14,7 +17,8 @@ pub struct Controller<'a> {
     // general options and user configuration for the simulation
     config: &'a ConfigOptions,
 
-    manager_seed: u32,
+    // random source from which all node random sources originate
+    random: Xoshiro256PlusPlus,
 
     // global network connectivity info
     ip_assignment: IpAssignment<u32>,
@@ -46,7 +50,7 @@ impl<'a> Controller<'a> {
             is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
             hosts: sim_config.hosts,
-            manager_seed: sim_config.manager_seed,
+            random: sim_config.random,
             ip_assignment: sim_config.ip_assignment,
             routing_info: sim_config.routing_info,
             dns,
@@ -66,6 +70,8 @@ impl<'a> Controller<'a> {
         // take the host list so that we can free the list later without mutating self
         let mut hosts = self.hosts.split_off(0);
 
+        let manager_seed = self.random.gen();
+
         // the manager takes a const pointer and not a reference, so we use this reference to make
         // sure we don't mutate self after the manager is created
         let _fake_ref_for_manager = &self;
@@ -80,7 +86,7 @@ impl<'a> Controller<'a> {
                     &self,
                     self.config,
                     SimulationTime::to_c_simtime(Some(end_time)),
-                    self.manager_seed,
+                    manager_seed,
                 )
             };
             assert!(!manager.is_null());
