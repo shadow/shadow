@@ -25,7 +25,6 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
     MAGIC_INIT(funcTable);
     descriptor->funcTable = funcTable;
     descriptor->type = type;
-    descriptor->handle = -1;
     descriptor->listeners = g_hash_table_new_full(
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
     descriptor->refCountStrong = 1;

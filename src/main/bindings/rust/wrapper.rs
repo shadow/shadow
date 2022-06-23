@@ -1662,7 +1662,7 @@ pub struct _Event {
     _unused: [u8; 0],
 }
 pub type Event = _Event;
-pub type LegacyDescriptor = [u64; 7usize];
+pub type LegacyDescriptor = [u64; 6usize];
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
@@ -2563,7 +2563,7 @@ pub struct _Transport {
 fn bindgen_test_layout__Transport() {
     assert_eq!(
         ::std::mem::size_of::<_Transport>(),
-        72usize,
+        64usize,
         concat!("Size of: ", stringify!(_Transport))
     );
     assert_eq!(
@@ -2595,7 +2595,7 @@ fn bindgen_test_layout__Transport() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).vtable) as usize - ptr as usize
             },
-            56usize,
+            48usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_Transport),
@@ -2612,7 +2612,7 @@ fn bindgen_test_layout__Transport() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).magic) as usize - ptr as usize
             },
-            64usize,
+            56usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_Transport),
