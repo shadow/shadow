@@ -91,6 +91,8 @@ struct _TCPChild {
     enum TCPChildState state;
     guint key; /* hash(peerIP, peerPort) */
     TCP* parent;
+    /* the handle to return when the socket is accepted */
+    int handle;
     MAGIC_DECLARE;
 };
 
@@ -261,7 +263,8 @@ static TCP* _tcp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (TCP*)descriptor;
 }
 
-static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_t peerPort) {
+static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peerIP,
+                               in_port_t peerPort) {
     MAGIC_ASSERT(tcp);
     MAGIC_ASSERT(parent);
 
@@ -276,6 +279,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 
     child->state = TCPCS_INCOMPLETE;
     legacysocket_setPeerName(&(tcp->super), peerIP, peerPort);
+
+    child->handle = handle;
 
     /* the child is bound to the parent server's address, because all packets
      * coming from the child should appear to be coming from the server itself */
@@ -1679,7 +1684,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
         descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
     }
 
-    *acceptedHandle = tcpChild->super.super.super.handle;
+    *acceptedHandle = tcpChild->child->handle;
     utility_assert(ip);
     *ip = tcpChild->super.peerIP;
     utility_assert(port);
@@ -1993,11 +1998,12 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 guint64 sendBufSize = host_getConfiguredSendBufSize(host);
 
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
-                process_registerLegacyDescriptor(
+                int handle = process_registerLegacyDescriptor(
                     descriptor_getOwnerProcess((LegacyDescriptor*)tcp),
                     (LegacyDescriptor*)multiplexed);
 
-                multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
+                multiplexed->child =
+                    _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 
                 /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
