@@ -27,7 +27,6 @@ void descriptor_refWeak(gpointer data);
 void descriptor_unrefWeak(gpointer data);
 void descriptor_close(LegacyDescriptor* descriptor, Host* host);
 
-void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle);
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess);
 Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor);
 LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor);

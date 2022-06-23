@@ -160,11 +160,6 @@ LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor) {
     return descriptor->type;
 }
 
-void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle) {
-    MAGIC_ASSERT(descriptor);
-    descriptor->handle = handle;
-}
-
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
     MAGIC_ASSERT(descriptor);
     descriptor->ownerProcess = ownerProcess;

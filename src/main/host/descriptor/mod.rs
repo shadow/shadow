@@ -698,19 +698,6 @@ impl CompatDescriptor {
         unsafe { Some(Box::from_raw(descriptor)) }
     }
 
-    /// Update the handle.
-    /// This is a no-op for non-legacy descriptors.
-    pub fn set_handle(&mut self, handle: Option<u32>) {
-        if let CompatDescriptor::Legacy(d) = self {
-            let handle = match handle {
-                Some(x) => x.try_into().unwrap(),
-                None => -1,
-            };
-            unsafe { c::descriptor_setHandle(d.ptr(), handle) }
-        }
-        // new descriptor types don't store their file handle, so do nothing
-    }
-
     /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
     pub fn close(
         self,
