@@ -165,11 +165,6 @@ void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle) {
     descriptor->handle = handle;
 }
 
-gint descriptor_getHandle(LegacyDescriptor* descriptor) {
-    MAGIC_ASSERT(descriptor);
-    return descriptor->handle;
-}
-
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
     MAGIC_ASSERT(descriptor);
     descriptor->ownerProcess = ownerProcess;
