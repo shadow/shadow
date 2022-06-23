@@ -154,7 +154,7 @@ name = "test_itimer"
 path = "itimer/test_itimer.rs"
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 libc = "0.2"
 nix = "0.24.1"
 rand = { version="0.8.5", features=["small_rng"] }
