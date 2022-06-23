@@ -802,10 +802,6 @@ const struct CompatDescriptor *process_getRegisteredCompatDescriptor(Process *pr
 // increment the ref count if you are to hold a reference to this descriptor.
 int process_registerLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
 
-// Unlike the deregister method for the `CompatDescriptor`, you do not need to manually
-// unref the LegacyDescriptor as it's done automatically.
-void process_deregisterLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
-
 // Get a temporary reference to a legacy descriptor.
 LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
 

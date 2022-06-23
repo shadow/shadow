@@ -251,49 +251,6 @@ mod export {
         fd.try_into().unwrap()
     }
 
-    /// Unlike the deregister method for the `CompatDescriptor`, you do not need to manually
-    /// unref the LegacyDescriptor as it's done automatically.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_deregisterLegacyDescriptor(
-        proc: *mut cshadow::Process,
-        desc: *mut cshadow::LegacyDescriptor,
-    ) {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
-
-        if desc.is_null() {
-            return;
-        }
-
-        let handle = unsafe { cshadow::descriptor_getHandle(desc) };
-        let handle: u32 = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::warn!(
-                    "Attempted to deregister a descriptor with handle {}",
-                    handle
-                );
-                return;
-            }
-        };
-
-        match proc.deregister_descriptor(handle.try_into().unwrap()) {
-            Some(CompatDescriptor::Legacy(removed_desc)) => {
-                if unsafe { removed_desc.ptr() } != desc {
-                    panic!("Deregistered the wrong descriptor with handle {}", handle);
-                }
-            }
-            Some(_) => {
-                panic!(
-                    "We were given a pointer to a 'LegacyDescriptor', but when we removed it, \
-                     we didn't get a legacy descriptor back"
-                );
-            }
-            None => {
-                log::error!("Could not deregister a descriptor with handle {}", handle);
-            }
-        }
-    }
-
     /// Get a temporary reference to a legacy descriptor.
     #[no_mangle]
     pub unsafe extern "C" fn process_getRegisteredLegacyDescriptor(
