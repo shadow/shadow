@@ -86,11 +86,6 @@ static inline RegularFile* _regularfile_descriptorToFile(LegacyDescriptor* desc)
     return file;
 }
 
-static inline int _regularfile_getFD(RegularFile* file) {
-    MAGIC_ASSERT(file);
-    return descriptor_getHandle(&file->super);
-}
-
 static inline int _regularfile_getOSBackedFD(RegularFile* file) {
     MAGIC_ASSERT(file);
     return file->osfile.fd;
@@ -272,11 +267,6 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     }
 #endif
 
-    int fd = _regularfile_getFD(file);
-    if (fd < 0) {
-        utility_panic("Cannot openat() on an unregistered descriptor object with fd %d", fd);
-    }
-
     /* The default case is a regular file. We do this first so that we have
      * an absolute path to compare for special files. */
     char* abspath = _regularfile_getAbsolutePath(dir, pathname, workingDir);
@@ -343,8 +333,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     /* The os-backed file is now ready. */
     descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    /* We checked above that fd is non-negative. */
-    return fd;
+    return 0;
 }
 
 int regularfile_open(RegularFile* file, const char* pathname, int flags, mode_t mode,
