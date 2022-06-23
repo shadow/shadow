@@ -237,3 +237,28 @@ mod tests {
         }
     }
 }
+
+mod export {
+    /// Get the backtrace. This function is slow. The string must be freed using `free_backtrace()`.
+    #[no_mangle]
+    pub unsafe extern "C" fn backtrace() -> *mut libc::c_char {
+        let s = format!("{:?}", backtrace::Backtrace::new());
+
+        // add a tab at the start of every line
+        let s = s
+            .trim_end()
+            .split('\n')
+            .map(|x| format!("\t{}", x))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let s = std::ffi::CString::new(s).unwrap();
+        s.into_raw()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn backtrace_free(backtrace: *mut libc::c_char) {
+        assert!(!backtrace.is_null());
+        unsafe { std::ffi::CString::from_raw(backtrace) };
+    }
+}
