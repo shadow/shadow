@@ -805,6 +805,7 @@ version = "2.1.0"
 dependencies = [
  "anyhow",
  "atomic_refcell",
+ "backtrace",
  "bitflags",
  "bytes",
  "clap",
