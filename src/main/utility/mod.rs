@@ -239,7 +239,7 @@ mod tests {
 }
 
 mod export {
-    /// Get the backtrace. This function is slow. The string must be freed using `free_backtrace()`.
+    /// Get the backtrace. This function is slow. The string must be freed using `backtrace_free()`.
     #[no_mangle]
     pub unsafe extern "C" fn backtrace() -> *mut libc::c_char {
         let s = format!("{:?}", backtrace::Backtrace::new());

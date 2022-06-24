@@ -293,7 +293,7 @@ void statusLogger_updateEmuTime(const struct StatusLogger_ShadowStatusBarState *
 void statusLogger_updateNumFailedProcesses(const struct StatusLogger_ShadowStatusBarState *status_logger,
                                            uint32_t num_failed_processes);
 
-// Get the backtrace. This function is slow. The string must be freed using `free_backtrace()`.
+// Get the backtrace. This function is slow. The string must be freed using `backtrace_free()`.
 char *backtrace(void);
 
 void backtrace_free(char *backtrace);
