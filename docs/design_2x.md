@@ -5,7 +5,7 @@ hybrid between simulation and emulation architectures: it directly executes
 applications as Linux processes, but runs them in the context of a
 discrete-event network simulation.
 
-Shadow's version 2 design in summarized in the following sections. Please see
+Shadow's version 2 design is summarized in the following sections. Please see
 the end of this document for references to published design articles with more
 details.
 
