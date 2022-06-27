@@ -80,7 +80,7 @@ int regularfile_getShadowFlags(RegularFile* file) {
 }
 
 static inline RegularFile* _regularfile_descriptorToFile(LegacyDescriptor* desc) {
-    utility_assert(descriptor_getType(desc) == DT_FILE);
+    utility_assert(legacydesc_getType(desc) == DT_FILE);
     RegularFile* file = (RegularFile*)desc;
     MAGIC_ASSERT(file);
     return file;
@@ -100,7 +100,7 @@ static void _regularfile_closeHelper(RegularFile* file) {
         file->osfile.fd = OSFILE_INVALID;
 
         /* The os-backed file is no longer ready. */
-        descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+        legacydesc_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, FALSE);
     }
 }
 
@@ -124,7 +124,7 @@ static void _regularfile_free(LegacyDescriptor* desc) {
         free(file->osfile.absPathAtOpen);
     }
 
-    descriptor_clear((LegacyDescriptor*)file);
+    legacydesc_clear((LegacyDescriptor*)file);
     MAGIC_CLEAR(file);
     free(file);
 
@@ -142,7 +142,7 @@ RegularFile* regularfile_new() {
 
     *file = (RegularFile){0};
 
-    descriptor_init(&(file->super), DT_FILE, &_fileFunctions);
+    legacydesc_init(&(file->super), DT_FILE, &_fileFunctions);
     MAGIC_INIT(file);
     file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
 
@@ -331,7 +331,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* The os-backed file is now ready. */
-    descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    legacydesc_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     return 0;
 }

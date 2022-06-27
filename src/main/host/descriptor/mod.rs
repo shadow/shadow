@@ -670,7 +670,7 @@ impl CountedLegacyDescriptorRef {
 impl Drop for CountedLegacyDescriptorRef {
     fn drop(&mut self) {
         // unref the legacy descriptor object
-        unsafe { c::descriptor_unref(self.0.ptr() as *mut core::ffi::c_void) };
+        unsafe { c::legacydesc_unref(self.0.ptr() as *mut core::ffi::c_void) };
     }
 }
 
@@ -707,7 +707,7 @@ impl CompatDescriptor {
         match self {
             Self::New(desc) => desc.close(event_queue),
             Self::Legacy(desc) => {
-                unsafe { c::descriptor_close(desc.ptr(), host) };
+                unsafe { c::legacydesc_close(desc.ptr(), host) };
                 Some(Ok(()))
             }
         }

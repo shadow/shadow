@@ -114,9 +114,9 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             }
 
             if (val == 0) {
-                descriptor_removeFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
+                legacydesc_removeFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
             } else {
-                descriptor_addFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
+                legacydesc_addFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
             }
 
             result = 0;
@@ -192,9 +192,9 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
             }
 
             if (val == 0) {
-                descriptor_removeFlags((LegacyDescriptor*)udp, O_NONBLOCK);
+                legacydesc_removeFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             } else {
-                descriptor_addFlags((LegacyDescriptor*)udp, O_NONBLOCK);
+                legacydesc_addFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             }
 
             result = 0;
@@ -244,7 +244,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    LegacyDescriptorType dtype = descriptor_getType(desc);
+    LegacyDescriptorType dtype = legacydesc_getType(desc);
 
     int result = 0;
     if (dtype == DT_FILE) {

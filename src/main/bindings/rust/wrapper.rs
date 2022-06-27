@@ -2391,19 +2391,19 @@ pub struct _CPU {
 }
 pub type CPU = _CPU;
 extern "C" {
-    pub fn descriptor_unref(data: gpointer);
+    pub fn legacydesc_unref(data: gpointer);
 }
 extern "C" {
-    pub fn descriptor_close(descriptor: *mut LegacyDescriptor, host: *mut Host);
+    pub fn legacydesc_close(descriptor: *mut LegacyDescriptor, host: *mut Host);
 }
 extern "C" {
-    pub fn descriptor_setOwnerProcess(
+    pub fn legacydesc_setOwnerProcess(
         descriptor: *mut LegacyDescriptor,
         ownerProcess: *mut Process,
     );
 }
 extern "C" {
-    pub fn descriptor_shutdownHelper(legacyDesc: *mut LegacyDescriptor);
+    pub fn legacydesc_shutdownHelper(legacyDesc: *mut LegacyDescriptor);
 }
 pub type Transport = _Transport;
 pub type TransportFunctionTable = _TransportFunctionTable;

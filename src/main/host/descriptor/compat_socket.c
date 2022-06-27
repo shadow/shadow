@@ -35,7 +35,7 @@ CompatSocket compatsocket_refAs(const CompatSocket* socket) {
     };
 
     switch (new_socket.type) {
-        case CST_LEGACY_SOCKET: descriptor_ref(new_socket.object.as_legacy_socket); break;
+        case CST_LEGACY_SOCKET: legacydesc_ref(new_socket.object.as_legacy_socket); break;
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
@@ -46,7 +46,7 @@ CompatSocket compatsocket_refAs(const CompatSocket* socket) {
 
 void compatsocket_unref(const CompatSocket* socket) {
     switch (socket->type) {
-        case CST_LEGACY_SOCKET: descriptor_unref(socket->object.as_legacy_socket); break;
+        case CST_LEGACY_SOCKET: legacydesc_unref(socket->object.as_legacy_socket); break;
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 

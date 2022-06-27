@@ -499,7 +499,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
     utility_assert(fileName != NULL);
 
     RegularFile* stdfile = regularfile_new();
-    descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
     CompatDescriptor* replacedDesc = descriptortable_set(proc->descTable, fd, compatDesc);
@@ -540,13 +540,13 @@ static void _process_start(Process* proc) {
     // Set up stdout
     gchar* stdoutFileName = _process_outputFileName(proc, "stdout");
     proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName);
-    descriptor_ref((LegacyDescriptor*)proc->stdoutFile);
+    legacydesc_ref((LegacyDescriptor*)proc->stdoutFile);
     g_free(stdoutFileName);
 
     // Set up stderr
     gchar* stderrFileName = _process_outputFileName(proc, "stderr");
     proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName);
-    descriptor_ref((LegacyDescriptor*)proc->stderrFile);
+    legacydesc_ref((LegacyDescriptor*)proc->stderrFile);
     g_free(stderrFileName);
 
     if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
@@ -946,10 +946,10 @@ static void _process_free(Process* proc) {
 #endif
 
     if (proc->stderrFile) {
-        descriptor_unref((LegacyDescriptor*)proc->stderrFile);
+        legacydesc_unref((LegacyDescriptor*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
-        descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
+        legacydesc_unref((LegacyDescriptor*)proc->stdoutFile);
     }
     if (proc->straceFd >= 0) {
         close(proc->straceFd);

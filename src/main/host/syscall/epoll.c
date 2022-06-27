@@ -31,7 +31,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)epolld);
 
     if (flags & EPOLL_CLOEXEC) {
-        descriptor_addFlags((LegacyDescriptor*)epolld, EPOLL_CLOEXEC);
+        legacydesc_addFlags((LegacyDescriptor*)epolld, EPOLL_CLOEXEC);
     }
 
     return handle;

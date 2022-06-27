@@ -91,7 +91,7 @@ impl Process {
 
         if let Some(CompatDescriptor::Legacy(ref replaced_desc)) = replaced_desc {
             unsafe {
-                cshadow::descriptor_setOwnerProcess(replaced_desc.ptr(), std::ptr::null_mut())
+                cshadow::legacydesc_setOwnerProcess(replaced_desc.ptr(), std::ptr::null_mut())
             };
         }
 
@@ -106,7 +106,7 @@ impl Process {
 
         if let Some(CompatDescriptor::Legacy(ref removed_desc)) = removed_desc {
             unsafe {
-                cshadow::descriptor_setOwnerProcess(removed_desc.ptr(), std::ptr::null_mut())
+                cshadow::legacydesc_setOwnerProcess(removed_desc.ptr(), std::ptr::null_mut())
             };
         }
 
@@ -243,7 +243,7 @@ mod export {
         let mut proc = unsafe { Process::borrow_from_c(proc) };
         assert!(!desc.is_null());
 
-        unsafe { cshadow::descriptor_setOwnerProcess(desc, proc.cprocess) };
+        unsafe { cshadow::legacydesc_setOwnerProcess(desc, proc.cprocess) };
         let desc =
             CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(HostTreePointer::new(desc)));
 

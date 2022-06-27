@@ -183,7 +183,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
     /* ref it for the EpollWatch, which also covers the listener reference
      * (which is freed below in _epollwatch_free) */
     if (type == EWT_LEGACY_DESCRIPTOR) {
-        descriptor_ref(object.as_descriptor);
+        legacydesc_ref(object.as_descriptor);
     }
 
     watch->id = ++epoll->watch_id_counter;
@@ -218,8 +218,8 @@ static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
-        descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
-        descriptor_unref(watch->watchObject.as_descriptor);
+        legacydesc_removeListener(watch->watchObject.as_descriptor, watch->listener);
+        legacydesc_unref(watch->watchObject.as_descriptor);
     } else if (watch->watchType == EWT_GENERIC_FILE) {
         file_removeListener(watch->watchObject.as_file, watch->listener);
         file_drop(watch->watchObject.as_file);
@@ -245,7 +245,7 @@ static void _epollwatch_unref(EpollWatch* watch) {
 }
 
 static Epoll* _epoll_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
+    utility_assert(legacydesc_getType(descriptor) == DT_EPOLL);
     return (Epoll*)descriptor;
 }
 
@@ -258,7 +258,7 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
     g_hash_table_destroy(epoll->watching);
     g_hash_table_destroy(epoll->ready);
 
-    descriptor_clear((LegacyDescriptor*)epoll);
+    legacydesc_clear((LegacyDescriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 
@@ -290,7 +290,7 @@ void epoll_clearWatchListeners(Epoll* epoll) {
         statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
 
         if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
-            descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
+            legacydesc_removeListener(watch->watchObject.as_descriptor, watch->listener);
         } else if (watch->watchType == EWT_GENERIC_FILE) {
             file_removeListener(watch->watchObject.as_file, watch->listener);
         }
@@ -325,14 +325,14 @@ Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
     MAGIC_INIT(epoll);
 
-    descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions);
+    legacydesc_init(&(epoll->super), DT_EPOLL, &epollFunctions);
 
     /* allocate backend needed for managing events for this descriptor */
     epoll->watching = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
     epoll->ready = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
 
     /* the epoll descriptor itself is always able to be epolled */
-    descriptor_adjustStatus(&(epoll->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    legacydesc_adjustStatus(&(epoll->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     worker_count_allocation(Epoll);
 
@@ -357,7 +357,7 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     /* check shadow descriptor status */
     Status status;
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
-        status = descriptor_getStatus(watch->watchObject.as_descriptor);
+        status = legacydesc_getStatus(watch->watchObject.as_descriptor);
     } else if (watch->watchType == EWT_GENERIC_FILE) {
         status = file_getStatus(watch->watchObject.as_file);
     }
@@ -506,7 +506,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
                                                 STATUS_DESCRIPTOR_WRITABLE,
                                             SLF_ALWAYS);
             if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
-                descriptor_addListener(watch->watchObject.as_descriptor, watch->listener);
+                legacydesc_addListener(watch->watchObject.as_descriptor, watch->listener);
             } else if (watch->watchType == EWT_GENERIC_FILE) {
                 file_addListener(watch->watchObject.as_file, watch->listener);
             }
@@ -550,7 +550,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
             /* its deleted, so stop listening for updates */
             statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
             if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
-                descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
+                legacydesc_removeListener(watch->watchObject.as_descriptor, watch->listener);
             } else if (watch->watchType == EWT_GENERIC_FILE) {
                 file_removeListener(watch->watchObject.as_file, watch->listener);
             }
@@ -693,7 +693,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
-    descriptor_adjustStatus(
+    legacydesc_adjustStatus(
         &(epoll->super), STATUS_DESCRIPTOR_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 
     return 0;
@@ -735,6 +735,6 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
     }
 
     /* check the status on the parent epoll fd and adjust as needed */
-    descriptor_adjustStatus(
+    legacydesc_adjustStatus(
         &(epoll->super), STATUS_DESCRIPTOR_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 }

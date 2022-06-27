@@ -127,7 +127,7 @@ impl DescriptorTable {
         for descriptor in self.descriptors.values() {
             match descriptor {
                 CompatDescriptor::New(_) => continue,
-                CompatDescriptor::Legacy(d) => unsafe { c::descriptor_shutdownHelper(d.ptr()) },
+                CompatDescriptor::Legacy(d) => unsafe { c::legacydesc_shutdownHelper(d.ptr()) },
             };
         }
     }
