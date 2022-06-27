@@ -17,7 +17,7 @@
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
 
-void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
+void legacydesc_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable) {
     utility_assert(descriptor && funcTable);
 
@@ -35,7 +35,7 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
     worker_count_allocation(LegacyDescriptor);
 }
 
-void descriptor_clear(LegacyDescriptor* descriptor) {
+void legacydesc_clear(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     if (descriptor->listeners) {
         g_hash_table_destroy(descriptor->listeners);
@@ -43,7 +43,7 @@ void descriptor_clear(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(descriptor);
 }
 
-static void _descriptor_cleanup(LegacyDescriptor* descriptor) {
+static void _legacydesc_cleanup(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
@@ -53,7 +53,7 @@ static void _descriptor_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _descriptor_free(LegacyDescriptor* descriptor) {
+static void _legacydesc_free(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
@@ -63,7 +63,7 @@ static void _descriptor_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(LegacyDescriptor);
 }
 
-void descriptor_ref(gpointer data) {
+void legacydesc_ref(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
@@ -75,7 +75,7 @@ void descriptor_ref(gpointer data) {
           descriptor->refCountWeak);
 }
 
-void descriptor_unref(gpointer data) {
+void legacydesc_unref(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
@@ -94,22 +94,22 @@ void descriptor_unref(gpointer data) {
         // this was the last strong reference, but there are weak references, so cleanup only
         trace("Descriptor %p kept alive by weak count of %d", descriptor, descriptor->refCountWeak);
 
-        // create a temporary weak reference to prevent the _descriptor_cleanup() from calling
-        // descriptor_unrefWeak() and running the _descriptor_free() while still running the
-        // _descriptor_cleanup()
-        descriptor_refWeak(descriptor);
-        _descriptor_cleanup(descriptor);
-        descriptor_unrefWeak(descriptor);
+        // create a temporary weak reference to prevent the _legacydesc_cleanup() from calling
+        // legacydesc_unrefWeak() and running the _legacydesc_free() while still running the
+        // _legacydesc_cleanup()
+        legacydesc_refWeak(descriptor);
+        _legacydesc_cleanup(descriptor);
+        legacydesc_unrefWeak(descriptor);
 
         return;
     }
 
     // this was the last strong reference and no weak references, so cleanup and free
-    _descriptor_cleanup(descriptor);
-    _descriptor_free(descriptor);
+    _legacydesc_cleanup(descriptor);
+    _legacydesc_free(descriptor);
 }
 
-void descriptor_refWeak(gpointer data) {
+void legacydesc_refWeak(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
@@ -118,7 +118,7 @@ void descriptor_refWeak(gpointer data) {
           descriptor->refCountStrong);
 }
 
-void descriptor_unrefWeak(gpointer data) {
+void legacydesc_unrefWeak(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
@@ -134,43 +134,43 @@ void descriptor_unrefWeak(gpointer data) {
     }
 
     // this was the last weak reference and no strong references, so we should free
-    // _descriptor_cleanup() should have been called earlier when the strong count reached 0
-    _descriptor_free(descriptor);
+    // _legacydesc_cleanup() should have been called earlier when the strong count reached 0
+    _legacydesc_free(descriptor);
 }
 
-void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
+void legacydesc_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
     // if it's already closed, exit early
-    if ((descriptor_getStatus(descriptor) & STATUS_DESCRIPTOR_CLOSED) != 0) {
+    if ((legacydesc_getStatus(descriptor) & STATUS_DESCRIPTOR_CLOSED) != 0) {
         warning("Attempting to close an already-closed descriptor");
         return;
     }
 
     trace("Descriptor %p calling vtable close now", descriptor);
-    descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
+    legacydesc_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
 
     descriptor->funcTable->close(descriptor, host);
 }
 
-LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor) {
+LegacyDescriptorType legacydesc_getType(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;
 }
 
-void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
+void legacydesc_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
     MAGIC_ASSERT(descriptor);
     descriptor->ownerProcess = ownerProcess;
 }
 
-Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor) {
+Process* legacydesc_getOwnerProcess(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->ownerProcess;
 }
 
 #ifdef DEBUG
-static gchar* _descriptor_statusToString(Status ds) {
+static gchar* _legacydesc_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
     if (ds & STATUS_DESCRIPTOR_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
@@ -192,7 +192,7 @@ static gchar* _descriptor_statusToString(Status ds) {
 }
 #endif
 
-static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status oldStatus) {
+static void _legacydesc_handleStatusChange(LegacyDescriptor* descriptor, Status oldStatus) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
@@ -203,8 +203,8 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
     }
 
 #ifdef DEBUG
-    gchar* before = _descriptor_statusToString(oldStatus);
-    gchar* after = _descriptor_statusToString(descriptor->status);
+    gchar* before = _legacydesc_statusToString(oldStatus);
+    gchar* after = _legacydesc_statusToString(descriptor->status);
     trace("Status changed on desc %p, from %s to %s", descriptor, before, after);
     g_free(before);
     g_free(after);
@@ -247,7 +247,7 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
     }
 }
 
-void descriptor_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits) {
+void legacydesc_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits) {
     MAGIC_ASSERT(descriptor);
 
     Status oldStatus = descriptor->status;
@@ -262,48 +262,48 @@ void descriptor_adjustStatus(LegacyDescriptor* descriptor, Status status, gboole
     }
 
     /* Let helper handle the change. */
-    _descriptor_handleStatusChange(descriptor, oldStatus);
+    _legacydesc_handleStatusChange(descriptor, oldStatus);
 }
 
-Status descriptor_getStatus(LegacyDescriptor* descriptor) {
+Status legacydesc_getStatus(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->status;
 }
 
-void descriptor_addListener(LegacyDescriptor* descriptor, StatusListener* listener) {
+void legacydesc_addListener(LegacyDescriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
     statuslistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void descriptor_removeListener(LegacyDescriptor* descriptor, StatusListener* listener) {
+void legacydesc_removeListener(LegacyDescriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);
 }
 
-gint descriptor_getFlags(LegacyDescriptor* descriptor) {
+gint legacydesc_getFlags(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->flags;
 }
 
-void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacydesc_setFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags = flags;
 }
 
-void descriptor_addFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacydesc_addFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags |= flags;
 }
 
-void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacydesc_removeFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags &= ~flags;
 }
 
-void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
+void legacydesc_shutdownHelper(LegacyDescriptor* legacyDesc) {
     MAGIC_ASSERT(legacyDesc);
 
     if (legacyDesc->type == DT_EPOLL) {
@@ -311,7 +311,7 @@ void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
     }
 }
 
-bool descriptor_supportsSaRestart(LegacyDescriptor* legacyDesc) {
+bool legacydesc_supportsSaRestart(LegacyDescriptor* legacyDesc) {
     switch (legacyDesc->type) {
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:

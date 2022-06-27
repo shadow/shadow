@@ -46,7 +46,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
     }
 
     /* We can only seek on files, otherwise its a pipe error. */
-    if (descriptor_getType(desc) != DT_FILE && offset != 0) {
+    if (legacydesc_getType(desc) != DT_FILE && offset != 0) {
         return -ESPIPE;
     }
 
@@ -102,7 +102,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = legacydesc_getType(desc);
 
     ssize_t result = 0;
 
@@ -176,7 +176,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
     }
 
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -191,7 +191,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
@@ -217,7 +217,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = legacydesc_getType(desc);
 
     ssize_t result = 0;
 
@@ -289,7 +289,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
     }
 
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -304,7 +304,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};

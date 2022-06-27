@@ -38,12 +38,12 @@ add_custom_command(OUTPUT wrapper.rs
 
         --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
-        --whitelist-function "descriptor_close"
-        --whitelist-function "descriptor_unref"
-        --whitelist-function "descriptor_getHandle"
-        --whitelist-function "descriptor_setHandle"
-        --whitelist-function "descriptor_setOwnerProcess"
-        --whitelist-function "descriptor_shutdownHelper"
+        --whitelist-function "legacydesc_close"
+        --whitelist-function "legacydesc_unref"
+        --whitelist-function "legacydesc_getHandle"
+        --whitelist-function "legacydesc_setHandle"
+        --whitelist-function "legacydesc_setOwnerProcess"
+        --whitelist-function "legacydesc_shutdownHelper"
         --whitelist-function "host_.*"
         # Needs CompatSocket
         --blacklist-function "host_.*Interface"

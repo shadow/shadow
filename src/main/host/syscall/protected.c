@@ -47,14 +47,14 @@ bool _syscallhandler_wasBlocked(const SysCallHandler* sys) { return sys->blocked
 int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
                                        LegacyDescriptorType expectedType) {
     if (descriptor) {
-        Status status = descriptor_getStatus(descriptor);
+        Status status = legacydesc_getStatus(descriptor);
 
         if (status & STATUS_DESCRIPTOR_CLOSED) {
             warning("descriptor %p is closed", descriptor);
             return -EBADF;
         }
 
-        LegacyDescriptorType type = descriptor_getType(descriptor);
+        LegacyDescriptorType type = legacydesc_getType(descriptor);
 
         if (expectedType != DT_NONE && type != expectedType) {
             warning(

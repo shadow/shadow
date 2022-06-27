@@ -180,17 +180,17 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
     }
 
     int result = 0;
-    if (descriptor_getType(desc) == DT_FILE) {
+    if (legacydesc_getType(desc) == DT_FILE) {
         result = _syscallhandler_fcntlHelper(sys, (RegularFile*)desc, fd, command, argReg);
     } else {
         /* TODO: add additional support for important operations. */
         switch (command) {
             case F_GETFL: {
-                result = descriptor_getFlags(desc);
+                result = legacydesc_getFlags(desc);
                 break;
             }
             case F_SETFL: {
-                descriptor_setFlags(desc, argReg.as_i64);
+                legacydesc_setFlags(desc, argReg.as_i64);
                 break;
             }
             default: {

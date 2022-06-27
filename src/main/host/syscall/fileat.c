@@ -134,7 +134,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
         file_desc, dir_desc, pathname, flags, mode, process_getWorkingDir(sys->process));
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the RegularFile. */
-        descriptor_close((LegacyDescriptor*)file_desc, sys->host);
+        legacydesc_close((LegacyDescriptor*)file_desc, sys->host);
 
         CompatDescriptor* removed_desc = process_deregisterCompatDescriptor(sys->process, handle);
         utility_assert(removed_desc != NULL);

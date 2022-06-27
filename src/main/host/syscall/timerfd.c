@@ -80,10 +80,10 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (flags & TFD_NONBLOCK) {
-        descriptor_addFlags((LegacyDescriptor*)timer, O_NONBLOCK);
+        legacydesc_addFlags((LegacyDescriptor*)timer, O_NONBLOCK);
     }
     if (flags & TFD_CLOEXEC) {
-        descriptor_addFlags((LegacyDescriptor*)timer, O_CLOEXEC);
+        legacydesc_addFlags((LegacyDescriptor*)timer, O_CLOEXEC);
     }
 
     trace("timerfd_create() returning fd %i", tfd);

@@ -24,8 +24,8 @@
 #include "main/utility/utility.h"
 
 static LegacySocket* _legacysocket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
-                   descriptor_getType(descriptor) == DT_UDPSOCKET);
+    utility_assert(legacydesc_getType(descriptor) == DT_TCPSOCKET ||
+                   legacydesc_getType(descriptor) == DT_UDPSOCKET);
     return (LegacySocket*)descriptor;
 }
 
@@ -369,7 +369,7 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet*
 
     /* we just added a packet, so we are readable */
     if(socket->inputBufferLength > 0) {
-        descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, TRUE);
     }
 
     return TRUE;
@@ -399,7 +399,7 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, Host* host) {
 
         /* we are not readable if we are now empty */
         if(socket->inputBufferLength <= 0) {
-            descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, FALSE);
+            legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, FALSE);
         }
     }
 
@@ -448,7 +448,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet
 
     /* we just added a packet, we are no longer writable if full */
     if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
-        descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
     /* tell the interface to include us when sending out to the network */
@@ -486,7 +486,7 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, Host* host) {
 
         /* we are writable if we now have space */
         if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
-            descriptor_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+            legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, TRUE);
         }
     }
 

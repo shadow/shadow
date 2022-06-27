@@ -474,7 +474,7 @@ static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket*
     if (socket->type == CST_LEGACY_SOCKET) {
         LegacyDescriptor* descriptor = (LegacyDescriptor*)socket->object.as_legacy_socket;
 
-        LegacyDescriptorType type = descriptor_getType(descriptor);
+        LegacyDescriptorType type = legacydesc_getType(descriptor);
         if (type == DT_TCPSOCKET) {
             TCP* tcp = (TCP*)descriptor;
             tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);

@@ -54,7 +54,7 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
 }
 
 static UDP* _udp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
+    utility_assert(legacydesc_getType(descriptor) == DT_UDPSOCKET);
     return (UDP*)descriptor;
 }
 
@@ -221,7 +221,7 @@ static void _udp_free(LegacyDescriptor* descriptor) {
     UDP* udp = _udp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(udp);
 
-    descriptor_clear(descriptor);
+    legacydesc_clear(descriptor);
     MAGIC_CLEAR(udp);
     g_free(udp);
 
@@ -270,7 +270,7 @@ UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     udp->stateLast = UDPS_CLOSED;
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
-    descriptor_adjustStatus(
+    legacydesc_adjustStatus(
         (LegacyDescriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     worker_count_allocation(UDP);

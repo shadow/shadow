@@ -53,7 +53,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd, s
             return errcode;
         }
 
-        if (descriptor_getType(desc) != DT_FILE) {
+        if (legacydesc_getType(desc) != DT_FILE) {
             debug("Descriptor exists for fd %i, but is not a file type", fd);
             return -EACCES;
         }

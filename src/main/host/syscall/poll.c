@@ -32,8 +32,8 @@ static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, s
 
     // Some logic depends on the descriptor type. USE DT_NONE for non-legacy descriptors
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
-    LegacyDescriptorType dType = ldesc ? descriptor_getType(ldesc) : DT_NONE;
-    Status dstat = ldesc ? descriptor_getStatus(ldesc)
+    LegacyDescriptorType dType = ldesc ? legacydesc_getType(ldesc) : DT_NONE;
+    Status dstat = ldesc ? legacydesc_getStatus(ldesc)
                          : openfile_getStatus(compatdescriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {

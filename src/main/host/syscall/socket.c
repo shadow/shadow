@@ -38,8 +38,8 @@
  * in this corner case and we should be allowed to read from it. */
 static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
                                                LegacyDescriptor* desc) {
-    if (desc && descriptor_getType(desc) == DT_TCPSOCKET &&
-        (descriptor_getStatus(desc) & STATUS_DESCRIPTOR_CLOSED)) {
+    if (desc && legacydesc_getType(desc) == DT_TCPSOCKET &&
+        (legacydesc_getStatus(desc) & STATUS_DESCRIPTOR_CLOSED)) {
         /* Connection error will be -ENOTCONN when reading is done. */
         if (tcp_getConnectionError((TCP*)desc) == -EISCONN) {
             return true;
@@ -68,7 +68,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
         return errcode;
     }
 
-    LegacyDescriptorType type = descriptor_getType(desc);
+    LegacyDescriptorType type = legacydesc_getType(desc);
     if (type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
         debug("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
@@ -91,7 +91,7 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
         return errcode;
     }
 
-    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
+    LegacyDescriptorType type = legacydesc_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_TCPSOCKET) {
         debug("descriptor %i is not a TCP socket", sockfd);
         return -EOPNOTSUPP;
@@ -114,7 +114,7 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
         return errcode;
     }
 
-    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
+    LegacyDescriptorType type = legacydesc_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_UDPSOCKET) {
         debug("descriptor %i is not a UDP socket", sockfd);
         return -EOPNOTSUPP;
@@ -198,7 +198,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         tcp_desc, sys->host, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
     LegacyDescriptor* desc = (LegacyDescriptor*)tcp_desc;
-    if (errcode == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (errcode == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* This is a blocking accept, and we don't have a connection yet.
          * The socket becomes readable when we have a connection to accept.
          * This blocks indefinitely without a timeout. */
@@ -207,7 +207,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     } else if (errcode < 0) {
         trace("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -224,10 +224,10 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* Set the flags on the accepted socket if requested. */
     if (flags & SOCK_NONBLOCK) {
-        descriptor_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_NONBLOCK);
+        legacydesc_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_NONBLOCK);
     }
     if (flags & SOCK_CLOEXEC) {
-        descriptor_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_CLOEXEC);
+        legacydesc_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_CLOEXEC);
     }
 
     /* check if they wanted to know where we got the data from */
@@ -364,7 +364,7 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket*
         }
         case SO_ERROR: {
             int error = 0;
-            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
+            if (legacydesc_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 /* Return error for failed connect() attempts. */
                 int connerr = tcp_getConnectionError((TCP*)sock);
                 if (connerr == -ECONNRESET || connerr == -ECONNREFUSED) {
@@ -469,7 +469,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
             newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
 
             legacysocket_setOutputBufferSize(sock, newsize);
-            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
+            if (legacydesc_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableSendBufferAutotuning((TCP*)sock);
             }
             return 0;
@@ -489,7 +489,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
             newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
 
             legacysocket_setInputBufferSize(sock, newsize);
-            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
+            if (legacydesc_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableReceiveBufferAutotuning((TCP*)sock);
             }
             return 0;
@@ -563,7 +563,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
 
     ssize_t retval = 0;
 
-    if (descriptor_getType(desc) == DT_TCPSOCKET) {
+    if (legacydesc_getType(desc) == DT_TCPSOCKET) {
         int errcode = tcp_getConnectionError((TCP*)socket_desc);
 
         if (errcode > 0) {
@@ -580,12 +580,12 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     if (retval == 0) {
         size_t sizeNeeded = bufSize;
 
-        if (descriptor_getType(desc) == DT_TCPSOCKET) {
+        if (legacydesc_getType(desc) == DT_TCPSOCKET) {
             // we can only truncate the data if it is a TCP connection
             /* TODO: Dynamically compute size based on how much data is actually
              * available in the descriptor. */
             sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
-        } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
+        } else if (legacydesc_getType(desc) == DT_UDPSOCKET) {
             // allow it to be 1 byte longer than the max datagram size
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
@@ -596,7 +596,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         trace("recv returned %zd", retval);
     }
 
-    bool nonblocking_mode = descriptor_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
+    bool nonblocking_mode = legacydesc_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
     if (retval == -EWOULDBLOCK && !nonblocking_mode) {
         trace("recv would block on socket %i", sockfd);
         /* We need to block until the descriptor is ready to read. */
@@ -604,7 +604,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     }
 
     /* check if they wanted to know where we got the data from */
@@ -612,7 +612,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         trace("address info is requested in recv on socket %i", sockfd);
 
         /* only write an address for UDP sockets */
-        if (descriptor_getType(desc) == DT_UDPSOCKET) {
+        if (legacydesc_getType(desc) == DT_UDPSOCKET) {
             _syscallhandler_getnameHelper(
                 sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), srcAddrPtr, addrlenPtr);
         } else {
@@ -683,7 +683,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     errcode = 0;
 
-    if (descriptor_getType(desc) == DT_UDPSOCKET) {
+    if (legacydesc_getType(desc) == DT_UDPSOCKET) {
         /* make sure that we have somewhere to send it */
         if (dest_ip == 0 || dest_port == 0) {
             /* its ok if they setup a default destination with connect() */
@@ -720,7 +720,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
             host_associateInterface(sys->host, &compat_socket, bindAddr);
         }
-    } else if (descriptor_getType(desc) == DT_TCPSOCKET) {
+    } else if (legacydesc_getType(desc) == DT_TCPSOCKET) {
         errcode = tcp_getConnectionError((TCP*)socket_desc);
 
         trace("connection error state is currently %i", errcode);
@@ -749,12 +749,12 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     if (errcode == 0) {
         size_t sizeNeeded = bufSize;
 
-        if (descriptor_getType(desc) == DT_TCPSOCKET) {
+        if (legacydesc_getType(desc) == DT_TCPSOCKET) {
             // we can only truncate the data if it is a TCP connection
             /* TODO: Dynamically compute size based on how much data is actually
              * available in the descriptor. */
             sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
-        } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
+        } else if (legacydesc_getType(desc) == DT_UDPSOCKET) {
             // allow it to be 1 byte longer than the max so that we can receive EMSGSIZE
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
@@ -765,7 +765,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         trace("send returned %zd", retval);
     }
 
-    bool nonblocking_mode = descriptor_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
+    bool nonblocking_mode = legacydesc_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
     if (retval == -EWOULDBLOCK && !nonblocking_mode) {
         if (bufSize > 0) {
             /* We need to block until the descriptor is ready to write. */
@@ -773,7 +773,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
                 .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
             return (SysCallReturn){.state = SYSCALL_BLOCK,
                                    .cond = syscallcondition_new(trigger),
-                                   .restartable = descriptor_supportsSaRestart(desc)};
+                                   .restartable = legacydesc_supportsSaRestart(desc)};
         } else {
             /* We attempted to write 0 bytes, so no need to block or return EWOULDBLOCK. */
             retval = 0;
@@ -948,8 +948,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     errcode = legacysocket_connectToPeer(socket_desc, sys->host, peerAddr, peerPort, family);
 
     LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
-    if (descriptor_getType(desc) == DT_TCPSOCKET &&
-        !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (legacydesc_getType(desc) == DT_TCPSOCKET &&
+        !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* This is a blocking connect call. */
         if (errcode == -EINPROGRESS) {
             /* This is the first time we ever called connect, and so we
@@ -961,7 +961,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
                           .status = STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE};
             return (SysCallReturn){.state = SYSCALL_BLOCK,
                                    .cond = syscallcondition_new(trigger),
-                                   .restartable = descriptor_supportsSaRestart(desc)};
+                                   .restartable = legacydesc_supportsSaRestart(desc)};
         } else if (_syscallhandler_wasBlocked(sys) && errcode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errcode = 0;
@@ -1002,7 +1002,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     // If we can validate that, we can delete this comment.
     //    /* Only a TCP socket can be connected to a peer.
     //     * TODO: Needs to be updated when we support AF_UNIX. */
-    //    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)socket_desc);
+    //    LegacyDescriptorType type = legacydesc_getType((LegacyDescriptor*)socket_desc);
     //    if(type != DT_TCPSOCKET) {
     //        info("descriptor %i is not a TCP socket", sockfd);
     //        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 =
@@ -1120,7 +1120,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     errcode = 0;
     switch (level) {
         case SOL_TCP: {
-            if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
+            if (legacydesc_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
                 errcode = -EOPNOTSUPP;
                 break;
             }
@@ -1241,7 +1241,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
     errcode = 0;
     switch (level) {
         case SOL_TCP: {
-            if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
+            if (legacydesc_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
                 errcode = -ENOPROTOOPT;
                 break;
             }
@@ -1359,10 +1359,10 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
-        descriptor_addFlags(&sock_desc->super.super, O_NONBLOCK);
+        legacydesc_addFlags(&sock_desc->super.super, O_NONBLOCK);
     }
     if (type & SOCK_CLOEXEC) {
-        descriptor_addFlags(&sock_desc->super.super, O_CLOEXEC);
+        legacydesc_addFlags(&sock_desc->super.super, O_CLOEXEC);
     }
 
     trace("socket() returning fd %i", sockfd);

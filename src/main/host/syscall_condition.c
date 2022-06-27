@@ -59,7 +59,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                descriptor_ref(cond->trigger.object.as_descriptor);
+                legacydesc_ref(cond->trigger.object.as_descriptor);
                 return cond;
             }
             case TRIGGER_FILE: {
@@ -113,7 +113,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     if (cond->trigger.object.as_pointer && cond->triggerListener) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                descriptor_removeListener(
+                legacydesc_removeListener(
                     cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
@@ -177,7 +177,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                descriptor_unref(cond->trigger.object.as_descriptor);
+                legacydesc_unref(cond->trigger.object.as_descriptor);
                 break;
             }
             case TRIGGER_FILE: {
@@ -279,7 +279,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 
     switch (cond->trigger.type) {
         case TRIGGER_DESCRIPTOR: {
-            if (descriptor_getStatus(cond->trigger.object.as_descriptor) & cond->trigger.status) {
+            if (legacydesc_getStatus(cond->trigger.object.as_descriptor) & cond->trigger.status) {
                 return true;
             }
             break;
@@ -454,7 +454,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* 
                     cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
-                descriptor_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
+                legacydesc_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
                 break;
             }
             case TRIGGER_FILE: {

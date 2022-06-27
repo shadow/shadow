@@ -42,7 +42,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = legacydesc_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -103,7 +103,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -117,7 +117,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){
@@ -136,7 +136,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = legacydesc_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -188,7 +188,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -202,7 +202,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = descriptor_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){
@@ -224,7 +224,7 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
-    LegacyDescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = legacydesc_getType(desc);
 
     if (dType != DT_FILE) {
         warning("Cannot dup legacy non-regular-file descriptors");

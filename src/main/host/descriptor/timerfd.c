@@ -28,7 +28,7 @@ struct _TimerFd {
 };
 
 static TimerFd* _timerfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_TIMER);
+    utility_assert(legacydesc_getType(descriptor) == DT_TIMER);
     return (TimerFd*)descriptor;
 }
 
@@ -37,13 +37,13 @@ static void _timerfd_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(timerfd);
     trace("timer desc %p closing now", &timerfd->super);
     timerfd->isClosed = TRUE;
-    descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
+    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
 }
 
 static void _timerfd_free(LegacyDescriptor* descriptor) {
     TimerFd* timerfd = _timerfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timerfd);
-    descriptor_clear((LegacyDescriptor*)timerfd);
+    legacydesc_clear((LegacyDescriptor*)timerfd);
     if (timerfd->timer) {
         timer_drop(timerfd->timer);
         timerfd->timer = NULL;
@@ -74,12 +74,12 @@ TimerFd* timerfd_new(HostId hostId) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
     MAGIC_INIT(timerfd);
 
-    descriptor_init(&(timerfd->super), DT_TIMER, &_timerfdFunctions);
-    descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    legacydesc_init(&(timerfd->super), DT_TIMER, &_timerfdFunctions);
+    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    descriptor_refWeak(timerfd);
+    legacydesc_refWeak(timerfd);
     TaskRef* task =
-        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, descriptor_unrefWeak, NULL);
+        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, legacydesc_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
     taskref_drop(task);
 
@@ -109,7 +109,7 @@ static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
     MAGIC_ASSERT(timerfd);
 
     if (!timerfd->isClosed) {
-        descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, TRUE);
     }
 }
 
@@ -174,7 +174,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
     }
 
     /* settings were modified, reset readability */
-    descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     /* now set the new times as requested */
     if (new_value->it_value.tv_sec == 0 && new_value->it_value.tv_nsec == 0) {
@@ -203,7 +203,7 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
         *(guint64*)buf = expirationCount;
 
         /* reset readability */
-        descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+        legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
         return (ssize_t)sizeof(guint64);
     } else {
