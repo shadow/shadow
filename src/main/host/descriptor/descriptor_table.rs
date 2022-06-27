@@ -28,7 +28,7 @@ impl DescriptorTable {
     }
 
     /// Add the descriptor at an unused index, and return the index.
-    pub fn add(&mut self, mut descriptor: CompatDescriptor, min_index: u32) -> u32 {
+    pub fn add(&mut self, descriptor: CompatDescriptor, min_index: u32) -> u32 {
         let idx = if let Some(idx) = self.available_indices.range(min_index..).next() {
             // Un-borrow from `available_indices`.
             let idx = *idx;
@@ -61,7 +61,6 @@ impl DescriptorTable {
             idx
         };
 
-        descriptor.set_handle(Some(idx));
         let prev = self.descriptors.insert(idx, descriptor);
         debug_assert!(prev.is_none(), "Already a descriptor at {}", idx);
 
@@ -85,12 +84,9 @@ impl DescriptorTable {
 
     /// Remove the descriptor at the given index and return it.
     pub fn remove(&mut self, idx: u32) -> Option<CompatDescriptor> {
-        let mut maybe_descriptor = self.descriptors.remove(&idx);
+        let maybe_descriptor = self.descriptors.remove(&idx);
         self.available_indices.insert(idx);
         self.trim_tail();
-        if let Some(descriptor) = &mut maybe_descriptor {
-            descriptor.set_handle(None);
-        }
         maybe_descriptor
     }
 
@@ -106,22 +102,15 @@ impl DescriptorTable {
 
     /// Insert a descriptor at `index`. If a descriptor is already present at
     /// that index, it is unregistered from that index and returned.
-    pub fn set(
-        &mut self,
-        index: u32,
-        mut descriptor: CompatDescriptor,
-    ) -> Option<CompatDescriptor> {
-        descriptor.set_handle(Some(index));
-
+    pub fn set(&mut self, index: u32, descriptor: CompatDescriptor) -> Option<CompatDescriptor> {
         // We ensure the index is no longer in `self.available_indices`. We *don't* ensure
         // `self.next_index` is > `index`, since that'd require adding the indices in between to
         // `self.available_indices`. It uses less memory and is no more expensive to iterate when
         // *using* `self.available_indices` instead.
         self.available_indices.remove(&index);
 
-        if let Some(mut prev) = self.descriptors.insert(index, descriptor) {
+        if let Some(prev) = self.descriptors.insert(index, descriptor) {
             trace!("Overwriting index {}", index);
-            prev.set_handle(None);
             Some(prev)
         } else {
             trace!("Setting to unused index {}", index);
@@ -146,11 +135,8 @@ impl DescriptorTable {
     /// Remove and return all descriptors.
     pub fn remove_all<'a>(&mut self) -> impl Iterator<Item = CompatDescriptor> {
         // reset the descriptor table
-        let mut old_self = std::mem::replace(self, Self::new());
+        let old_self = std::mem::replace(self, Self::new());
         // return the old descriptors
-        for desc in old_self.descriptors.values_mut() {
-            desc.set_handle(None);
-        }
         old_self.descriptors.into_values()
     }
 }

@@ -35,7 +35,7 @@ static TimerFd* _timerfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
 static void _timerfd_close(LegacyDescriptor* descriptor, Host* host) {
     TimerFd* timerfd = _timerfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timerfd);
-    trace("timer fd %i closing now", timerfd->super.handle);
+    trace("timer desc %p closing now", &timerfd->super);
     timerfd->isClosed = TRUE;
     descriptor_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
 }
@@ -135,7 +135,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
 
     timer_arm(timerfd->timer, host, nextExpireTime, interval);
 
-    trace("timer fd %i armed to expire in %" G_GUINT64_FORMAT " nanos", timerfd->super.handle,
+    trace("timer desc %p armed to expire in %" G_GUINT64_FORMAT " nanos", &timerfd->super,
           nextExpireTime - now);
 }
 
@@ -163,9 +163,9 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
           "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
           "and timer interval to "
           "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
-          "on timer fd %d",
+          "on timer desc %p",
           new_value->it_value.tv_sec, new_value->it_value.tv_nsec, new_value->it_interval.tv_sec,
-          new_value->it_interval.tv_nsec, timerfd->super.handle);
+          new_value->it_interval.tv_nsec, &timerfd->super);
 
     /* first get the old value if requested */
     if (old_value) {
@@ -197,8 +197,8 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
             return (ssize_t)-EINVAL;
         }
 
-        trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d", expirationCount,
-              timerfd->super.handle);
+        trace("Reading %" G_GUINT64_FORMAT " expirations from timer desc %p", expirationCount,
+              &timerfd->super);
 
         *(guint64*)buf = expirationCount;
 

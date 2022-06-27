@@ -233,8 +233,8 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                g_string_append_printf(string, "status on descriptor %d%s",
-                                       descriptor_getHandle(cond->trigger.object.as_descriptor),
+                g_string_append_printf(string, "status on descriptor %p%s",
+                                       cond->trigger.object.as_descriptor,
                                        cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }

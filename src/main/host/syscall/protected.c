@@ -50,16 +50,15 @@ int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
         Status status = descriptor_getStatus(descriptor);
 
         if (status & STATUS_DESCRIPTOR_CLOSED) {
-            warning("descriptor handle '%i' is closed",
-                    descriptor_getHandle(descriptor));
+            warning("descriptor %p is closed", descriptor);
             return -EBADF;
         }
 
         LegacyDescriptorType type = descriptor_getType(descriptor);
 
         if (expectedType != DT_NONE && type != expectedType) {
-            warning("descriptor handle '%i' is of type %i, expected type %i",
-                    descriptor_getHandle(descriptor), type, expectedType);
+            warning(
+                "descriptor %p is of type %i, expected type %i", descriptor, type, expectedType);
             return -EINVAL;
         }
 

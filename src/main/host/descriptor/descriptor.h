@@ -26,14 +26,10 @@ void descriptor_unref(gpointer data);
 void descriptor_refWeak(gpointer data);
 void descriptor_unrefWeak(gpointer data);
 void descriptor_close(LegacyDescriptor* descriptor, Host* host);
-gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data);
 
-void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle);
-gint descriptor_getHandle(LegacyDescriptor* descriptor);
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess);
 Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor);
 LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor);
-gint* descriptor_getHandleReference(LegacyDescriptor* descriptor);
 
 gint descriptor_getFlags(LegacyDescriptor* descriptor);
 void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags);

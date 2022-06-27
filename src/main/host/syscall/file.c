@@ -72,12 +72,17 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the RegularFile. */
         descriptor_close((LegacyDescriptor*)filed, sys->host);
-        process_deregisterLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
-    } else {
-        utility_assert(errcode == handle);
-    }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        CompatDescriptor* removed_desc = process_deregisterCompatDescriptor(sys->process, handle);
+        utility_assert(removed_desc != NULL);
+        utility_assert(compatdescriptor_asLegacy(removed_desc) == (LegacyDescriptor*)filed);
+        compatdescriptor_free(removed_desc);
+
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    } else {
+        utility_assert(errcode == 0);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
+    }
 }
 
 static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {

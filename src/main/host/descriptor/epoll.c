@@ -458,7 +458,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor*
                    const struct epoll_event* event, Host* host) {
     MAGIC_ASSERT(epoll);
 
-    trace("epoll descriptor %i, operation %s, descriptor %i", epoll->super.handle,
+    trace("epoll descriptor %p, operation %s, descriptor %i", &epoll->super,
           _epoll_operationToStr(operation), fd);
 
     EpollWatchTypes watchType;
@@ -658,8 +658,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
                 not_ready_list = g_list_append(not_ready_list, key);
             }
         } else {
-            error("epoll descriptor %d ready list has items that aren't ready",
-                  descriptor_getHandle(&epoll->super));
+            error("epoll %p ready list has items that aren't ready", &epoll->super);
         }
 
         next_key = g_list_next(next_key);
@@ -672,7 +671,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 
     *nEvents = eventIndex;
 
-    trace("epoll descriptor %i collected %i events", descriptor_getHandle(&epoll->super), eventIndex);
+    trace("epoll descriptor %p collected %i events", &epoll->super, eventIndex);
 
     next_key = NULL;
     if (not_ready_list) {
@@ -703,13 +702,12 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
     MAGIC_ASSERT(epoll);
 
-    trace("status changed on epoll %i", descriptor_getHandle(&epoll->super));
+    trace("status changed on epoll %p", &epoll->super);
 
     if (key != NULL) {
         EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
         if (watch != NULL) {
-            trace("status changed in epoll %i on watched descriptor %i",
-                  descriptor_getHandle(&epoll->super), watch->fd);
+            trace("status changed in epoll %p on watched descriptor %i", &epoll->super, watch->fd);
 
             /* update the status for the child watch fd */
             _epollwatch_updateStatus(watch);

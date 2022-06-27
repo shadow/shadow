@@ -112,10 +112,8 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
     return NULL;
 }
 
-static int _syscallhandler_openPluginFile(SysCallHandler* sys, RegularFile* file) {
+static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFile* file) {
     utility_assert(file);
-
-    int fd = descriptor_getHandle((LegacyDescriptor*)file);
 
     trace("Trying to open file %i in the plugin", fd);
 
@@ -212,7 +210,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     int pluginFD = -1;
 
     if (file_desc) {
-        pluginFD = _syscallhandler_openPluginFile(sys, file_desc);
+        pluginFD = _syscallhandler_openPluginFile(sys, fd, file_desc);
         if (pluginFD < 0) {
             warning("mmap on fd %d for %zu bytes failed.", fd, len);
             return (SysCallReturn){

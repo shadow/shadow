@@ -25,13 +25,12 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
     MAGIC_INIT(funcTable);
     descriptor->funcTable = funcTable;
     descriptor->type = type;
-    descriptor->handle = -1;
     descriptor->listeners = g_hash_table_new_full(
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
     descriptor->refCountStrong = 1;
     descriptor->refCountWeak = 0;
 
-    trace("Descriptor %i has been initialized now", descriptor->handle);
+    trace("Descriptor %p has been initialized now", descriptor);
 
     worker_count_allocation(LegacyDescriptor);
 }
@@ -49,7 +48,7 @@ static void _descriptor_cleanup(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor->funcTable);
 
     if (descriptor->funcTable->cleanup) {
-        trace("Descriptor %i calling vtable cleanup now", descriptor->handle);
+        trace("Descriptor %p calling vtable cleanup now", descriptor);
         descriptor->funcTable->cleanup(descriptor);
     }
 }
@@ -58,7 +57,7 @@ static void _descriptor_free(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    trace("Descriptor %i calling vtable free now", descriptor->handle);
+    trace("Descriptor %p calling vtable free now", descriptor);
     descriptor->funcTable->free(descriptor);
 
     worker_count_deallocation(LegacyDescriptor);
@@ -72,8 +71,8 @@ void descriptor_ref(gpointer data) {
     utility_assert(descriptor->refCountStrong > 0);
 
     (descriptor->refCountStrong)++;
-    trace("Descriptor %i strong_ref++ to %i (weak_ref=%i)", descriptor->handle,
-          descriptor->refCountStrong, descriptor->refCountWeak);
+    trace("Descriptor %p strong_ref++ to %i (weak_ref=%i)", descriptor, descriptor->refCountStrong,
+          descriptor->refCountWeak);
 }
 
 void descriptor_unref(gpointer data) {
@@ -81,8 +80,8 @@ void descriptor_unref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountStrong)--;
-    trace("Descriptor %i strong_ref-- to %i (weak_ref=%i)", descriptor->handle,
-          descriptor->refCountStrong, descriptor->refCountWeak);
+    trace("Descriptor %p strong_ref-- to %i (weak_ref=%i)", descriptor, descriptor->refCountStrong,
+          descriptor->refCountWeak);
 
     utility_assert(descriptor->refCountStrong >= 0);
 
@@ -93,8 +92,7 @@ void descriptor_unref(gpointer data) {
 
     if (descriptor->refCountWeak > 0) {
         // this was the last strong reference, but there are weak references, so cleanup only
-        trace("Descriptor %i kept alive by weak count of %d", descriptor->handle,
-              descriptor->refCountWeak);
+        trace("Descriptor %p kept alive by weak count of %d", descriptor, descriptor->refCountWeak);
 
         // create a temporary weak reference to prevent the _descriptor_cleanup() from calling
         // descriptor_unrefWeak() and running the _descriptor_free() while still running the
@@ -116,8 +114,8 @@ void descriptor_refWeak(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)++;
-    trace("Descriptor %i weak_ref++ to %i (strong_ref=%i)", descriptor->handle,
-          descriptor->refCountWeak, descriptor->refCountStrong);
+    trace("Descriptor %p weak_ref++ to %i (strong_ref=%i)", descriptor, descriptor->refCountWeak,
+          descriptor->refCountStrong);
 }
 
 void descriptor_unrefWeak(gpointer data) {
@@ -125,8 +123,8 @@ void descriptor_unrefWeak(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)--;
-    trace("Descriptor %i weak_ref-- to %i (strong_ref=%i)", descriptor->handle,
-          descriptor->refCountWeak, descriptor->refCountStrong);
+    trace("Descriptor %p weak_ref-- to %i (strong_ref=%i)", descriptor, descriptor->refCountWeak,
+          descriptor->refCountStrong);
 
     utility_assert(descriptor->refCountWeak >= 0);
 
@@ -150,31 +148,15 @@ void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
         return;
     }
 
-    trace("Descriptor %i calling vtable close now", descriptor->handle);
+    trace("Descriptor %p calling vtable close now", descriptor);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
 
     descriptor->funcTable->close(descriptor, host);
 }
 
-gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data) {
-    MAGIC_ASSERT(foo);
-    MAGIC_ASSERT(bar);
-    return foo->handle > bar->handle ? +1 : foo->handle == bar->handle ? 0 : -1;
-}
-
 LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;
-}
-
-void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle) {
-    MAGIC_ASSERT(descriptor);
-    descriptor->handle = handle;
-}
-
-gint descriptor_getHandle(LegacyDescriptor* descriptor) {
-    MAGIC_ASSERT(descriptor);
-    return descriptor->handle;
 }
 
 void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
@@ -185,11 +167,6 @@ void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProc
 Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->ownerProcess;
-}
-
-gint* descriptor_getHandleReference(LegacyDescriptor* descriptor) {
-    MAGIC_ASSERT(descriptor);
-    return &(descriptor->handle);
 }
 
 #ifdef DEBUG
@@ -228,7 +205,7 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
 #ifdef DEBUG
     gchar* before = _descriptor_statusToString(oldStatus);
     gchar* after = _descriptor_statusToString(descriptor->status);
-    trace("Status changed on desc %i, from %s to %s", descriptor->handle, before, after);
+    trace("Status changed on desc %p, from %s to %s", descriptor, before, after);
     g_free(before);
     g_free(after);
 #endif

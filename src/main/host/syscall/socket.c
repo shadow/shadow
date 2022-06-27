@@ -245,10 +245,8 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
 #ifdef DEBUG
     gchar* bindAddrStr = address_ipToNewString(addr);
     gchar* peerAddrStr = address_ipToNewString(peerAddr);
-    trace("trying to bind to inet address %s:%u on socket %i with peer %s:%u",
-          bindAddrStr, ntohs(port),
-          descriptor_getHandle((LegacyDescriptor*)socket_desc), peerAddrStr,
-          ntohs(peerPort));
+    trace("trying to bind to inet address %s:%u on socket %p with peer %s:%u", bindAddrStr,
+          ntohs(port), (LegacyDescriptor*)socket_desc, peerAddrStr, ntohs(peerPort));
     g_free(bindAddrStr);
     g_free(peerAddrStr);
 #endif
