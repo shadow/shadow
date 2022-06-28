@@ -98,6 +98,8 @@ struct _TCPChild {
 
 typedef struct _TCPServer TCPServer;
 struct _TCPServer {
+    /* children will be registered in this process' descriptor table */
+    Process* processForChildren;
     /* all children of this server */
     GHashTable* children;
     /* pending children to accept in order. */
@@ -330,7 +332,7 @@ static void _tcpserver_updateBacklog(TCPServer* server, gint _backlog) {
     server->pendingMax = backlog;
 }
 
-static TCPServer* _tcpserver_new(gint backlog) {
+static TCPServer* _tcpserver_new(gint backlog, Process* processForChildren) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
 
@@ -338,6 +340,9 @@ static TCPServer* _tcpserver_new(gint backlog) {
     server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) legacydesc_unrefWeak);
     server->pending = g_queue_new();
     server->pendingMax = 0;
+
+    process_ref(processForChildren);
+    server->processForChildren = processForChildren;
 
     _tcpserver_updateBacklog(server, backlog);
 
@@ -353,6 +358,9 @@ static void _tcpserver_free(TCPServer* server) {
     if(server->children) {
         g_hash_table_destroy(server->children);
     }
+
+    process_unref(server->processForChildren);
+    server->processForChildren = NULL;
 
     MAGIC_CLEAR(server);
     g_free(server);
@@ -1614,11 +1622,11 @@ static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, i
     return -EINPROGRESS;
 }
 
-void tcp_enterServerMode(TCP* tcp, Host* host, gint backlog) {
+void tcp_enterServerMode(TCP* tcp, Host* host, Process* process, gint backlog) {
     MAGIC_ASSERT(tcp);
 
     /* we are a server ready to listen, build our server state */
-    tcp->server = _tcpserver_new(backlog);
+    tcp->server = _tcpserver_new(backlog, process);
 
     /* we are now listening for connections */
     _tcp_setState(tcp, host, TCPS_LISTEN);
@@ -1996,13 +2004,19 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 guint64 recvBufSize = host_getConfiguredRecvBufSize(host);
                 guint64 sendBufSize = host_getConfiguredSendBufSize(host);
 
+                /* We will register the child socket with whichever process called listen() on the
+                 * parent socket. This is incorrect and we should register the child socket with
+                 * whichever process eventually calls accept() on the parent socket, but this is
+                 * difficult to fix and isn't an issue until we support fork().
+                 * See: https://github.com/shadow/shadow/issues/1780 */
+                Process* registerInProcess = tcp->server->processForChildren;
+
                 /* we need to multiplex a new child */
-                Process* ownerProc = legacydesc_getOwnerProcess((LegacyDescriptor*)tcp);
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
-                legacydesc_setOwnerProcess((LegacyDescriptor*)multiplexed, ownerProc);
+                legacydesc_setOwnerProcess((LegacyDescriptor*)multiplexed, registerInProcess);
                 Descriptor* desc =
                     descriptor_fromLegacy((LegacyDescriptor*)multiplexed, /* flags= */ 0);
-                int handle = process_registerDescriptor(ownerProc, desc);
+                int handle = process_registerDescriptor(registerInProcess, desc);
 
                 multiplexed->child =
                     _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);

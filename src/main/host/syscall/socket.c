@@ -1194,7 +1194,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
         }
     }
 
-    tcp_enterServerMode(tcp_desc, sys->host, backlog);
+    tcp_enterServerMode(tcp_desc, sys->host, sys->process, backlog);
     return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
