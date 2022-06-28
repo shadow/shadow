@@ -87,33 +87,14 @@ impl Process {
     ) -> Option<Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
-        let replaced_desc = desc_table.set(new_fd, desc);
-
-        if let Some(CompatFile::Legacy(ref replaced_desc)) =
-            replaced_desc.as_ref().map(|x| x.file())
-        {
-            unsafe {
-                cshadow::legacydesc_setOwnerProcess(replaced_desc.ptr(), std::ptr::null_mut())
-            };
-        }
-
-        replaced_desc
+        desc_table.set(new_fd, desc)
     }
 
     /// Deregister the descriptor with the given fd handle and return it.
     pub fn deregister_descriptor(&mut self, fd: u32) -> Option<Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
-        let removed_desc = desc_table.remove(fd);
-
-        if let Some(CompatFile::Legacy(ref removed_desc)) = removed_desc.as_ref().map(|x| x.file())
-        {
-            unsafe {
-                cshadow::legacydesc_setOwnerProcess(removed_desc.ptr(), std::ptr::null_mut())
-            };
-        }
-
-        removed_desc
+        desc_table.remove(fd)
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {

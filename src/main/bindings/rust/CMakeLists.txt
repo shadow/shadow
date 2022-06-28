@@ -42,7 +42,6 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "legacydesc_(ref|unref)"
         --whitelist-function "legacydesc_getHandle"
         --whitelist-function "legacydesc_setHandle"
-        --whitelist-function "legacydesc_setOwnerProcess"
         --whitelist-function "legacydesc_shutdownHelper"
         --whitelist-function "host_.*"
         # Needs CompatSocket

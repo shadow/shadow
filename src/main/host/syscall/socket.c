@@ -1357,7 +1357,6 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     }
 
     /* Now make sure it will be valid when we operate on it. */
-    legacydesc_setOwnerProcess((LegacyDescriptor*)sock_desc, sys->process);
     Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)sock_desc, descFlags);
     int sockfd = process_registerDescriptor(sys->process, desc);
 

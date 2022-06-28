@@ -2013,7 +2013,6 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 
                 /* we need to multiplex a new child */
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
-                legacydesc_setOwnerProcess((LegacyDescriptor*)multiplexed, registerInProcess);
                 Descriptor* desc =
                     descriptor_fromLegacy((LegacyDescriptor*)multiplexed, /* flags= */ 0);
                 int handle = process_registerDescriptor(registerInProcess, desc);

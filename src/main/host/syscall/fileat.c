@@ -126,7 +126,6 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
 
     /* Create and open the file. */
     RegularFile* file_desc = regularfile_new();
-    legacydesc_setOwnerProcess((LegacyDescriptor*)file_desc, sys->process);
     errcode = regularfile_openat(file_desc, dir_desc, pathname, flags & ~O_CLOEXEC, mode,
                                  process_getWorkingDir(sys->process));
 

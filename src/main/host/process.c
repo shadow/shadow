@@ -499,8 +499,6 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
     utility_assert(fileName != NULL);
 
     RegularFile* stdfile = regularfile_new();
-    legacydesc_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
-
     Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)stdfile, /* flags= */ 0);
     Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
 

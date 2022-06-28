@@ -34,7 +34,6 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     }
 
     Epoll* epolld = epoll_new();
-    legacydesc_setOwnerProcess((LegacyDescriptor*)epolld, sys->process);
     Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)epolld, descFlags);
     int handle = process_registerDescriptor(sys->process, desc);
 
