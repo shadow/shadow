@@ -197,17 +197,17 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     errcode = tcp_acceptServerPeer(
         tcp_desc, sys->host, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
-    LegacyDescriptor* desc = (LegacyDescriptor*)tcp_desc;
-    if (errcode == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
+    LegacyDescriptor* legacyDesc = (LegacyDescriptor*)tcp_desc;
+    if (errcode == -EWOULDBLOCK && !(legacydesc_getFlags(legacyDesc) & O_NONBLOCK)) {
         /* This is a blocking accept, and we don't have a connection yet.
          * The socket becomes readable when we have a connection to accept.
          * This blocks indefinitely without a timeout. */
         trace("Listening socket %i waiting for acceptable connection.", sockfd);
         Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+            .type = TRIGGER_DESCRIPTOR, .object = legacyDesc, .status = STATUS_DESCRIPTOR_READABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = legacydesc_supportsSaRestart(desc)};
+                               .restartable = legacydesc_supportsSaRestart(legacyDesc)};
     } else if (errcode < 0) {
         trace("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -222,12 +222,16 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     trace("listening socket %i accepted fd %i", sockfd, accepted_fd);
 
+    /* Get the descriptor for this new socket and set flags if necessary. */
+    Descriptor* desc = process_getRegisteredDescriptorMut(sys->process, accepted_fd);
+    if (flags & SOCK_CLOEXEC) {
+        descriptor_setFlags(desc, O_CLOEXEC);
+    }
+    desc = NULL;
+
     /* Set the flags on the accepted socket if requested. */
     if (flags & SOCK_NONBLOCK) {
         legacydesc_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_NONBLOCK);
-    }
-    if (flags & SOCK_CLOEXEC) {
-        legacydesc_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_CLOEXEC);
     }
 
     /* check if they wanted to know where we got the data from */
@@ -1347,10 +1351,15 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
         sock_desc = (LegacySocket*)udp_new(sys->host, recvBufSize, sendBufSize);
     }
 
+    int descFlags = 0;
+    if (type & SOCK_CLOEXEC) {
+        descFlags |= O_CLOEXEC;
+    }
+
     /* Now make sure it will be valid when we operate on it. */
     legacydesc_setOwnerProcess((LegacyDescriptor*)sock_desc, sys->process);
-    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)sock_desc);
-    int sockfd = process_registerCompatDescriptor(sys->process, desc);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)sock_desc, descFlags);
+    int sockfd = process_registerDescriptor(sys->process, desc);
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {
@@ -1361,9 +1370,6 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
         legacydesc_addFlags(&sock_desc->super.super, O_NONBLOCK);
-    }
-    if (type & SOCK_CLOEXEC) {
-        legacydesc_addFlags(&sock_desc->super.super, O_CLOEXEC);
     }
 
     trace("socket() returning fd %i", sockfd);

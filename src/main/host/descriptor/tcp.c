@@ -2000,9 +2000,9 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 Process* ownerProc = legacydesc_getOwnerProcess((LegacyDescriptor*)tcp);
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
                 legacydesc_setOwnerProcess((LegacyDescriptor*)multiplexed, ownerProc);
-                CompatDescriptor* desc =
-                    compatdescriptor_fromLegacy((LegacyDescriptor*)multiplexed);
-                int handle = process_registerCompatDescriptor(ownerProc, desc);
+                Descriptor* desc =
+                    descriptor_fromLegacy((LegacyDescriptor*)multiplexed, /* flags= */ 0);
+                int handle = process_registerDescriptor(ownerProc, desc);
 
                 multiplexed->child =
                     _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);

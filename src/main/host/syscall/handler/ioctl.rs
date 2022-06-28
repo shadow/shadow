@@ -1,6 +1,6 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus};
+use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 
@@ -16,17 +16,7 @@ impl SyscallHandler {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor_mut(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                return c::syscallhandler_ioctl(
-                    ctx.thread.csyscallhandler(),
-                    args as *const SysCallArgs,
-                )
-                .into();
-            },
-        };
+        let desc = Self::get_descriptor_mut(ctx.process, fd)?;
 
         // add the CLOEXEC flag
         if request == libc::FIOCLEX {
@@ -46,7 +36,21 @@ impl SyscallHandler {
             return Ok(0.into());
         }
 
-        let file = desc.open_file().inner_file().clone();
+        // NOTE: anything past this point should only modify the file, not the descriptor
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
+            // if it's a legacy descriptor, use the C syscall handler instead
+            CompatFile::Legacy(_) => unsafe {
+                return c::syscallhandler_ioctl(
+                    ctx.thread.csyscallhandler(),
+                    args as *const SysCallArgs,
+                )
+                .into();
+            },
+        };
+
+        let file = file.inner_file().clone();
         let mut file = file.borrow_mut();
 
         // all file types that shadow implements should support non-blocking operation

@@ -434,17 +434,17 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-static void _getWatchObject(const CompatDescriptor* descriptor, EpollWatchTypes* watchType,
+static void _getWatchObject(const Descriptor* descriptor, EpollWatchTypes* watchType,
                             EpollWatchObject* watchObject) {
-    LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(descriptor);
+    LegacyDescriptor* legacyDescriptor = descriptor_asLegacy(descriptor);
 
-    /* if the compat descriptor is for a legacy descriptor */
+    /* if the descriptor is for a legacy descriptor */
     if (legacyDescriptor != NULL) {
         *watchType = EWT_LEGACY_DESCRIPTOR;
         watchObject->as_descriptor = legacyDescriptor;
     } else {
-        const File* file = compatdescriptor_newRefFile(descriptor);
-        /* if the compat descriptor is for a generic file object */
+        const File* file = descriptor_newRefFile(descriptor);
+        /* if the descriptor is for a generic file object */
         if (file != NULL) {
             *watchType = EWT_GENERIC_FILE;
             watchObject->as_file = file;
@@ -454,7 +454,7 @@ static void _getWatchObject(const CompatDescriptor* descriptor, EpollWatchTypes*
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor* descriptor,
+gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descriptor,
                    const struct epoll_event* event, Host* host) {
     MAGIC_ASSERT(epoll);
 

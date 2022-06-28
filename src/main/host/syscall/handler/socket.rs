@@ -3,7 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
+    CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
@@ -81,10 +81,10 @@ impl SyscallHandler {
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 
-        let mut desc = Descriptor::new(OpenFile::new(File::Socket(socket)));
+        let mut desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(socket))));
         desc.set_flags(descriptor_flags);
 
-        let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));
+        let fd = ctx.process.register_descriptor(desc);
 
         debug!("Created socket fd {}", fd);
 
@@ -99,10 +99,12 @@ impl SyscallHandler {
         let addr_len: libc::socklen_t = args.get(2).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_bind(
                         ctx.thread.csyscallhandler(),
@@ -113,9 +115,8 @@ impl SyscallHandler {
             }
         };
 
-        let file = desc.open_file().inner_file().clone();
+        let file = file.inner_file().clone();
 
-        // get the socket for the descriptor
         let socket = match file {
             File::Socket(ref x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
@@ -152,10 +153,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_sendto(
                             ctx.thread.csyscallhandler(),
@@ -266,10 +267,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_recvfrom(
                             ctx.thread.csyscallhandler(),
@@ -368,10 +369,12 @@ impl SyscallHandler {
             TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getsockname(
                         ctx.thread.csyscallhandler(),
@@ -382,8 +385,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
@@ -415,10 +417,12 @@ impl SyscallHandler {
             TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getpeername(
                         ctx.thread.csyscallhandler(),
@@ -429,8 +433,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
@@ -459,10 +462,12 @@ impl SyscallHandler {
         let backlog: libc::c_int = args.get(1).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_listen(
                         ctx.thread.csyscallhandler(),
@@ -473,8 +478,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
@@ -504,10 +508,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_accept(
                             ctx.thread.csyscallhandler(),
@@ -543,10 +547,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_accept4(
                             ctx.thread.csyscallhandler(),
@@ -626,15 +630,14 @@ impl SyscallHandler {
             new_socket.borrow_mut().set_status(FileStatus::NONBLOCK);
         }
 
-        let mut new_desc = Descriptor::new(OpenFile::new(File::Socket(new_socket)));
+        let mut new_desc =
+            Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(new_socket))));
 
         if flags.contains(SockFlag::SOCK_CLOEXEC) {
             new_desc.set_flags(DescriptorFlags::CLOEXEC);
         }
 
-        let new_fd = ctx
-            .process
-            .register_descriptor(CompatDescriptor::New(new_desc));
+        let new_fd = ctx.process.register_descriptor(new_desc);
 
         Ok(new_fd.into())
     }
@@ -659,10 +662,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_connect(
                             ctx.thread.csyscallhandler(),
@@ -674,7 +677,6 @@ impl SyscallHandler {
             },
         };
 
-        // get the socket for the descriptor
         let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
@@ -701,10 +703,12 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_shutdown(
                         ctx.thread.csyscallhandler(),
@@ -715,8 +719,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
@@ -786,20 +789,20 @@ impl SyscallHandler {
         });
 
         // file descriptors for the sockets
-        let mut desc_1 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_1))));
-        let mut desc_2 = Descriptor::new(OpenFile::new(File::Socket(Socket::Unix(socket_2))));
+        let mut desc_1 = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(
+            Socket::Unix(socket_1),
+        ))));
+        let mut desc_2 = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(
+            Socket::Unix(socket_2),
+        ))));
 
         // set the file descriptor flags
         desc_1.set_flags(descriptor_flags);
         desc_2.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let fd_1 = ctx
-            .process
-            .register_descriptor(CompatDescriptor::New(desc_1));
-        let fd_2 = ctx
-            .process
-            .register_descriptor(CompatDescriptor::New(desc_2));
+        let fd_1 = ctx.process.register_descriptor(desc_1);
+        let fd_2 = ctx.process.register_descriptor(desc_2);
 
         // try to write them to the caller
         let fds = [i32::try_from(fd_1).unwrap(), i32::try_from(fd_2).unwrap()];
@@ -835,10 +838,12 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getsockopt(
                         ctx.thread.csyscallhandler(),
@@ -849,8 +854,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };
@@ -871,10 +875,12 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
+        let desc = Self::get_descriptor(ctx.process, fd)?;
+
+        let file = match desc.file() {
+            CompatFile::New(file) => file,
             // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
+            CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_setsockopt(
                         ctx.thread.csyscallhandler(),
@@ -885,8 +891,7 @@ impl SyscallHandler {
             }
         };
 
-        // get the socket for the descriptor
-        let socket = match desc.open_file().inner_file() {
+        let socket = match file.inner_file() {
             File::Socket(x) => x,
             _ => return Err(Errno::ENOTSOCK.into()),
         };

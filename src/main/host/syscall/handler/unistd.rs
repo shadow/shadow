@@ -3,7 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
+    CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::Trigger;
@@ -49,20 +49,10 @@ impl SyscallHandler {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => unsafe {
-                return c::syscallhandler_dup(
-                    ctx.thread.csyscallhandler(),
-                    args as *const c::SysCallArgs,
-                )
-                .into();
-            },
-        };
+        let desc = Self::get_descriptor(ctx.process, fd)?;
 
         // duplicate the descriptor
-        let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+        let new_desc = desc.dup(DescriptorFlags::empty());
         let new_fd = ctx.process.register_descriptor(new_desc);
 
         // return the new fd
@@ -75,17 +65,7 @@ impl SyscallHandler {
         let new_fd = libc::c_int::from(args.get(1));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, old_fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // we don't support dup2 for legacy descriptors
-            CompatDescriptor::Legacy(_) => {
-                warn!(
-                    "dup2() is not supported for legacy descriptors (fd={})",
-                    old_fd
-                );
-                return Err(nix::errno::Errno::ENOSYS.into());
-            }
-        };
+        let desc = Self::get_descriptor(ctx.process, old_fd)?;
 
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
         // value as oldfd, then dup2() does nothing, and returns newfd"
@@ -96,7 +76,7 @@ impl SyscallHandler {
         let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
         // duplicate the descriptor
-        let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+        let new_desc = desc.dup(DescriptorFlags::empty());
         let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
 
         // close the replaced descriptor
@@ -120,17 +100,7 @@ impl SyscallHandler {
         let flags = libc::c_int::from(args.get(2));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor(ctx.process, old_fd)? {
-            CompatDescriptor::New(desc) => desc,
-            // we don't support dup3 for legacy descriptors
-            CompatDescriptor::Legacy(_) => {
-                warn!(
-                    "dup3() is not supported for legacy descriptors (fd={})",
-                    old_fd
-                );
-                return Err(nix::errno::Errno::ENOSYS.into());
-            }
-        };
+        let desc = Self::get_descriptor(ctx.process, old_fd)?;
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
         if old_fd == new_fd {
@@ -147,7 +117,7 @@ impl SyscallHandler {
         };
 
         // duplicate the descriptor
-        let new_desc = CompatDescriptor::New(desc.dup(flags));
+        let new_desc = desc.dup(flags);
         let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
 
         // close the replaced descriptor
@@ -184,10 +154,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_read(
                             ctx.thread.csyscallhandler(),
@@ -223,10 +193,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_pread64(
                             ctx.thread.csyscallhandler(),
@@ -318,10 +288,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_write(
                             ctx.thread.csyscallhandler(),
@@ -357,10 +327,10 @@ impl SyscallHandler {
             // we were previously blocked, so re-use the file from the previous syscall invocation
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
-            None => match Self::get_descriptor(ctx.process, fd)? {
-                CompatDescriptor::New(desc) => desc.open_file().clone(),
+            None => match Self::get_descriptor(ctx.process, fd)?.file() {
+                CompatFile::New(file) => file.clone(),
                 // if it's a legacy descriptor, use the C syscall handler instead
-                CompatDescriptor::Legacy(_) => {
+                CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_pwrite64(
                             ctx.thread.csyscallhandler(),
@@ -490,20 +460,16 @@ impl SyscallHandler {
         });
 
         // file descriptors for the read and write file objects
-        let mut reader_desc = Descriptor::new(OpenFile::new(File::Pipe(reader)));
-        let mut writer_desc = Descriptor::new(OpenFile::new(File::Pipe(writer)));
+        let mut reader_desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Pipe(reader))));
+        let mut writer_desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Pipe(writer))));
 
         // set the file descriptor flags
         reader_desc.set_flags(descriptor_flags);
         writer_desc.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let read_fd = ctx
-            .process
-            .register_descriptor(CompatDescriptor::New(reader_desc));
-        let write_fd = ctx
-            .process
-            .register_descriptor(CompatDescriptor::New(writer_desc));
+        let read_fd = ctx.process.register_descriptor(reader_desc);
+        let write_fd = ctx.process.register_descriptor(writer_desc);
 
         // try to write them to the caller
         let fds = [

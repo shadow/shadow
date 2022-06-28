@@ -501,8 +501,8 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
     RegularFile* stdfile = regularfile_new();
     legacydesc_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
-    CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
-    CompatDescriptor* replacedDesc = descriptortable_set(proc->descTable, fd, compatDesc);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)stdfile, /* flags= */ 0);
+    Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
 
     // assume the fd was not previously in use
     utility_assert(replacedDesc == NULL);

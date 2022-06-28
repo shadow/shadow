@@ -66,7 +66,8 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     /* Create and open the file. */
     RegularFile* filed = regularfile_new();
     legacydesc_setOwnerProcess((LegacyDescriptor*)filed, sys->process);
-    errcode = regularfile_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));
+    errcode = regularfile_open(
+        filed, pathname, flags & ~O_CLOEXEC, mode, process_getWorkingDir(sys->process));
 
     if (errcode < 0) {
         /* This will unref/free the RegularFile. */
@@ -76,8 +77,8 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     }
 
     utility_assert(errcode == 0);
-    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)filed);
-    int handle = process_registerCompatDescriptor(sys->process, desc);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)filed, flags & O_CLOEXEC);
+    int handle = process_registerDescriptor(sys->process, desc);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
 }
 
