@@ -964,7 +964,9 @@ impl MemoryMapper {
         let (interval, region) = match self.regions.get(usize::from(src.ptr())) {
             Some((i, r)) => (i, r),
             None => {
-                warn!("src {:?} isn't in any mapped region", src);
+                if !src.ptr().is_null() {
+                    warn!("src {:?} isn't in any mapped region", src);
+                }
                 return None;
             }
         };
