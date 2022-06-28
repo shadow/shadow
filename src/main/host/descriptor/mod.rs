@@ -768,13 +768,6 @@ mod export {
         }
     }
 
-    /// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
-    /// count.
-    #[no_mangle]
-    pub extern "C" fn compatdescriptor_free(descriptor: *mut CompatDescriptor) {
-        CompatDescriptor::from_raw(descriptor);
-    }
-
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
     /// modified, so the returned pointer must not outlive the lifetime of the compat descriptor.

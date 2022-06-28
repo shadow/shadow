@@ -623,10 +623,6 @@ struct CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_de
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
 LegacyDescriptor *compatdescriptor_asLegacy(const struct CompatDescriptor *descriptor);
 
-// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
-// count.
-void compatdescriptor_free(struct CompatDescriptor *descriptor);
-
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
 // modified, so the returned pointer must not outlive the lifetime of the compat descriptor.
@@ -790,10 +786,6 @@ SysCallReturn memorymanager_handleMprotect(struct MemoryManager *memory_manager,
 // Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
 // access it after.
 int process_registerCompatDescriptor(Process *proc, struct CompatDescriptor *desc);
-
-// Deregistering a `CompatDescriptor` returns an owned reference to that `CompatDescriptor`,
-// and you must drop it manually when finished.
-struct CompatDescriptor *process_deregisterCompatDescriptor(Process *proc, int handle);
 
 // Get a temporary reference to a descriptor.
 const struct CompatDescriptor *process_getRegisteredCompatDescriptor(Process *proc, int handle);

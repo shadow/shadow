@@ -184,32 +184,6 @@ mod export {
         fd.try_into().unwrap()
     }
 
-    /// Deregistering a `CompatDescriptor` returns an owned reference to that `CompatDescriptor`,
-    /// and you must drop it manually when finished.
-    #[no_mangle]
-    pub extern "C" fn process_deregisterCompatDescriptor(
-        proc: *mut cshadow::Process,
-        handle: libc::c_int,
-    ) -> *mut CompatDescriptor {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
-
-        let handle: u32 = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::debug!(
-                    "Attempted to deregister a descriptor with handle {}",
-                    handle
-                );
-                return std::ptr::null_mut();
-            }
-        };
-
-        match proc.deregister_descriptor(handle) {
-            Some(d) => CompatDescriptor::into_raw(Box::new(d)),
-            None => std::ptr::null_mut(),
-        }
-    }
-
     /// Get a temporary reference to a descriptor.
     #[no_mangle]
     pub extern "C" fn process_getRegisteredCompatDescriptor(
