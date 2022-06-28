@@ -62,92 +62,130 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         DupFn::Fcntl,
         DupFn::FcntlCloExec,
     ] {
-        tests.extend([test_utils::ShadowTest::new(
-            &format!("test_dup <dup_fn={:?}>", dup_fn),
+        tests.push(test_utils::ShadowTest::new(
+            &format!("test_dup_io <dup_fn={:?}>", dup_fn),
             move || test_dup_io(dup_fn),
             set![TestEnv::Libc, TestEnv::Shadow],
-        )]);
+        ));
     }
 
     tests
 }
 
 fn test_dup() -> Result<(), String> {
-    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
-
-    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
-        let write_fd_dup = check_system_call!(|| unsafe { libc::dup(write_fd) }, &[])?;
-        assert_eq!(unsafe { libc::close(write_fd_dup) }, 0);
+    let test_fd = |fd| -> Result<(), String> {
+        let fd_dup = check_system_call!(|| unsafe { libc::dup(fd) }, &[])?;
+        assert_eq!(unsafe { libc::close(fd_dup) }, 0);
 
         check_system_call!(|| unsafe { libc::dup(-1) }, &[libc::EBADF])?;
         check_system_call!(|| unsafe { libc::dup(5000) }, &[libc::EBADF])?;
 
         Ok(())
-    })
+    };
+
+    // test a pipe
+    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || test_fd(write_fd))?;
+
+    // test a regular file
+    let file_fd = nix::fcntl::open(
+        "/dev/null",
+        nix::fcntl::OFlag::empty(),
+        nix::sys::stat::Mode::empty(),
+    )
+    .unwrap();
+    test_utils::run_and_close_fds(&[file_fd], || test_fd(file_fd))?;
+
+    Ok(())
 }
 
 fn test_dup2() -> Result<(), String> {
-    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
     let target = 1000;
-    assert!(target != read_fd && target != write_fd);
 
-    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
-        let write_fd_dup = check_system_call!(|| unsafe { libc::dup2(write_fd, target) }, &[])?;
-        assert_eq!(write_fd_dup, target);
-        assert_eq!(unsafe { libc::close(write_fd_dup) }, 0);
+    let test_fd = |fd| -> Result<(), String> {
+        let fd_dup = check_system_call!(|| unsafe { libc::dup2(fd, target) }, &[])?;
+        assert_eq!(fd_dup, target);
+        assert_eq!(unsafe { libc::close(fd_dup) }, 0);
 
         check_system_call!(|| unsafe { libc::dup2(-1, target) }, &[libc::EBADF])?;
         check_system_call!(|| unsafe { libc::dup2(5000, target) }, &[libc::EBADF])?;
-        check_system_call!(|| unsafe { libc::dup2(write_fd, -1) }, &[libc::EBADF])?;
+        check_system_call!(|| unsafe { libc::dup2(fd, -1) }, &[libc::EBADF])?;
 
         Ok(())
-    })
+    };
+
+    // test a pipe
+    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+    assert!(target != read_fd && target != write_fd);
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || test_fd(write_fd))?;
+
+    // test a regular file
+    let file_fd = nix::fcntl::open(
+        "/dev/null",
+        nix::fcntl::OFlag::empty(),
+        nix::sys::stat::Mode::empty(),
+    )
+    .unwrap();
+    assert_ne!(target, file_fd);
+    test_utils::run_and_close_fds(&[file_fd], || test_fd(file_fd))?;
+
+    Ok(())
 }
 
 fn test_dup3() -> Result<(), String> {
-    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
     let flag = libc::O_CLOEXEC;
     let target = 1000;
-    assert!(target != read_fd && target != write_fd);
 
-    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
-        let write_fd_dup =
-            check_system_call!(|| unsafe { libc::dup3(write_fd, target, flag) }, &[])?;
-        assert_eq!(write_fd_dup, target);
-        assert_eq!(unsafe { libc::close(write_fd_dup) }, 0);
+    let test_fd = |fd| -> Result<(), String> {
+        let fd_dup = check_system_call!(|| unsafe { libc::dup3(fd, target, flag) }, &[])?;
+        assert_eq!(fd_dup, target);
+        assert_eq!(unsafe { libc::close(fd_dup) }, 0);
 
         check_system_call!(|| unsafe { libc::dup3(-1, target, flag) }, &[libc::EBADF])?;
         check_system_call!(|| unsafe { libc::dup3(5000, target, flag) }, &[libc::EBADF])?;
-        check_system_call!(|| unsafe { libc::dup3(write_fd, -1, flag) }, &[libc::EBADF])?;
+        check_system_call!(|| unsafe { libc::dup3(fd, -1, flag) }, &[libc::EBADF])?;
 
         Ok(())
-    })
+    };
+
+    // test a pipe
+    let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+    assert!(target != read_fd && target != write_fd);
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || test_fd(write_fd))?;
+
+    // test a regular file
+    let file_fd = nix::fcntl::open(
+        "/dev/null",
+        nix::fcntl::OFlag::empty(),
+        nix::sys::stat::Mode::empty(),
+    )
+    .unwrap();
+    assert_ne!(target, file_fd);
+    test_utils::run_and_close_fds(&[file_fd], || test_fd(file_fd))?;
+
+    Ok(())
 }
 
 fn test_fcntl() -> Result<(), String> {
     for command in &[libc::F_DUPFD, libc::F_DUPFD_CLOEXEC] {
-        let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
         let min_fd = 1000;
-        assert!(min_fd != read_fd && min_fd != write_fd);
 
-        test_utils::run_and_close_fds(&[write_fd, read_fd], || -> Result<(), String> {
-            let write_fd_dup_1 =
-                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, min_fd) }, &[])
-                    .unwrap();
-            assert_eq!(write_fd_dup_1, min_fd);
+        let test_fd = |fd| -> Result<(), String> {
+            let fd_dup_1 =
+                check_system_call!(|| unsafe { libc::fcntl(fd, *command, min_fd) }, &[]).unwrap();
+            assert_eq!(fd_dup_1, min_fd);
 
-            let write_fd_dup_2 =
-                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, min_fd) }, &[])
-                    .unwrap();
-            assert_eq!(write_fd_dup_2, min_fd + 1);
+            let fd_dup_2 =
+                check_system_call!(|| unsafe { libc::fcntl(fd, *command, min_fd) }, &[]).unwrap();
+            assert_eq!(fd_dup_2, min_fd + 1);
 
-            let write_fd_dup_3 =
-                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, 0) }, &[]).unwrap();
-            assert!(write_fd_dup_3 < min_fd);
+            let fd_dup_3 =
+                check_system_call!(|| unsafe { libc::fcntl(fd, *command, 0) }, &[]).unwrap();
+            assert!(fd_dup_3 < min_fd);
 
-            assert_eq!(unsafe { libc::close(write_fd_dup_1) }, 0);
-            assert_eq!(unsafe { libc::close(write_fd_dup_2) }, 0);
-            assert_eq!(unsafe { libc::close(write_fd_dup_3) }, 0);
+            assert_eq!(unsafe { libc::close(fd_dup_1) }, 0);
+            assert_eq!(unsafe { libc::close(fd_dup_2) }, 0);
+            assert_eq!(unsafe { libc::close(fd_dup_3) }, 0);
 
             check_system_call!(
                 || unsafe { libc::fcntl(-1, libc::F_DUPFD, min_fd) },
@@ -158,12 +196,27 @@ fn test_fcntl() -> Result<(), String> {
                 &[libc::EBADF]
             )?;
             check_system_call!(
-                || unsafe { libc::fcntl(write_fd, libc::F_DUPFD, -1) },
+                || unsafe { libc::fcntl(fd, libc::F_DUPFD, -1) },
                 &[libc::EINVAL]
             )?;
 
             Ok(())
-        })?
+        };
+
+        // test a pipe
+        let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+        assert!(min_fd != read_fd && min_fd != write_fd);
+        test_utils::run_and_close_fds(&[write_fd, read_fd], || test_fd(write_fd))?;
+
+        // test a regular file
+        let file_fd = nix::fcntl::open(
+            "/dev/null",
+            nix::fcntl::OFlag::empty(),
+            nix::sys::stat::Mode::empty(),
+        )
+        .unwrap();
+        assert_ne!(min_fd, file_fd);
+        test_utils::run_and_close_fds(&[file_fd], || test_fd(file_fd))?;
     }
 
     Ok(())
