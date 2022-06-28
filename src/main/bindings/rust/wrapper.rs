@@ -2391,6 +2391,9 @@ pub struct _CPU {
 }
 pub type CPU = _CPU;
 extern "C" {
+    pub fn legacydesc_ref(data: gpointer);
+}
+extern "C" {
     pub fn legacydesc_unref(data: gpointer);
 }
 extern "C" {

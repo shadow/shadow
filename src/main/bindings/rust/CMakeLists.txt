@@ -39,7 +39,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
         --whitelist-function "legacydesc_close"
-        --whitelist-function "legacydesc_unref"
+        --whitelist-function "legacydesc_(ref|unref)"
         --whitelist-function "legacydesc_getHandle"
         --whitelist-function "legacydesc_setHandle"
         --whitelist-function "legacydesc_setOwnerProcess"

@@ -667,6 +667,14 @@ impl CountedLegacyDescriptorRef {
     }
 }
 
+impl std::clone::Clone for CountedLegacyDescriptorRef {
+    fn clone(&self) -> Self {
+        // ref the legacy descriptor object
+        unsafe { c::legacydesc_ref(self.0.ptr() as *mut core::ffi::c_void) };
+        Self(self.0)
+    }
+}
+
 impl Drop for CountedLegacyDescriptorRef {
     fn drop(&mut self) {
         // unref the legacy descriptor object
