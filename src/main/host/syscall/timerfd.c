@@ -67,7 +67,9 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Create the timer and double check that it's valid. */
     TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
-    int tfd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)timer);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)timer, sys->process);
+    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)timer);
+    int tfd = process_registerCompatDescriptor(sys->process, desc);
 
 #ifdef DEBUG
     /* This should always be a valid descriptor. */

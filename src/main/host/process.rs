@@ -169,7 +169,6 @@ impl Process {
 
 mod export {
     use super::*;
-    use crate::{host::descriptor::CountedLegacyDescriptorRef, utility::HostTreePointer};
 
     /// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
     /// access it after.
@@ -231,24 +230,6 @@ mod export {
             Some(d) => d as *const CompatDescriptor,
             None => std::ptr::null(),
         }
-    }
-
-    /// Register a `LegacyDescriptor`. This takes ownership of the descriptor and you must
-    /// increment the ref count if you are to hold a reference to this descriptor.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_registerLegacyDescriptor(
-        proc: *mut cshadow::Process,
-        desc: *mut cshadow::LegacyDescriptor,
-    ) -> libc::c_int {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
-        assert!(!desc.is_null());
-
-        unsafe { cshadow::legacydesc_setOwnerProcess(desc, proc.cprocess) };
-        let desc =
-            CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(HostTreePointer::new(desc)));
-
-        let fd = proc.register_descriptor(desc);
-        fd.try_into().unwrap()
     }
 
     /// Get a temporary reference to a legacy descriptor.

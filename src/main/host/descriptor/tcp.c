@@ -1993,14 +1993,16 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 
                 flags |= TCP_PF_PROCESSED;
 
-                /* we need to multiplex a new child */
                 guint64 recvBufSize = host_getConfiguredRecvBufSize(host);
                 guint64 sendBufSize = host_getConfiguredSendBufSize(host);
 
+                /* we need to multiplex a new child */
+                Process* ownerProc = legacydesc_getOwnerProcess((LegacyDescriptor*)tcp);
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
-                int handle = process_registerLegacyDescriptor(
-                    legacydesc_getOwnerProcess((LegacyDescriptor*)tcp),
-                    (LegacyDescriptor*)multiplexed);
+                legacydesc_setOwnerProcess((LegacyDescriptor*)multiplexed, ownerProc);
+                CompatDescriptor* desc =
+                    compatdescriptor_fromLegacy((LegacyDescriptor*)multiplexed);
+                int handle = process_registerCompatDescriptor(ownerProc, desc);
 
                 multiplexed->child =
                     _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);

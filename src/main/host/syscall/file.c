@@ -65,7 +65,9 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     /* Create the new descriptor for this file. */
     RegularFile* filed = regularfile_new();
-    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)filed, sys->process);
+    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)filed);
+    int handle = process_registerCompatDescriptor(sys->process, desc);
 
     /* Now open the file. */
     errcode = regularfile_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));

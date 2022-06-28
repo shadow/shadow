@@ -126,8 +126,9 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
 
     /* Create the new descriptor for this file. */
     RegularFile* file_desc = regularfile_new();
-    int handle =
-        process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)file_desc);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)file_desc, sys->process);
+    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)file_desc);
+    int handle = process_registerCompatDescriptor(sys->process, desc);
 
     /* Now open the file. */
     errcode = regularfile_openat(

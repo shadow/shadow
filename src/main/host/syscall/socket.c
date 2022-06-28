@@ -1348,8 +1348,9 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     }
 
     /* Now make sure it will be valid when we operate on it. */
-    int sockfd =
-        process_registerLegacyDescriptor(sys->process, &sock_desc->super.super);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)sock_desc, sys->process);
+    CompatDescriptor* desc = compatdescriptor_fromLegacy((LegacyDescriptor*)sock_desc);
+    int sockfd = process_registerCompatDescriptor(sys->process, desc);
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {

@@ -239,7 +239,9 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = dupError};
     }
 
-    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)newFile);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)newFile, sys->process);
+    CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)newFile);
+    int handle = process_registerCompatDescriptor(sys->process, compatDesc);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
 }
 
