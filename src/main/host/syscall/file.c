@@ -63,26 +63,23 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Create the new descriptor for this file. */
+    /* Create and open the file. */
     RegularFile* filed = regularfile_new();
-    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)filed, sys->process);
+    errcode = regularfile_open(
+        filed, pathname, flags & ~O_CLOEXEC, mode, process_getWorkingDir(sys->process));
 
-    /* Now open the file. */
-    errcode = regularfile_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));
     if (errcode < 0) {
-        /* This will remove the descriptor entry and unref/free the RegularFile. */
+        /* This will unref/free the RegularFile. */
         legacydesc_close((LegacyDescriptor*)filed, sys->host);
-
-        CompatDescriptor* removed_desc = process_deregisterCompatDescriptor(sys->process, handle);
-        utility_assert(removed_desc != NULL);
-        utility_assert(compatdescriptor_asLegacy(removed_desc) == (LegacyDescriptor*)filed);
-        compatdescriptor_free(removed_desc);
-
+        legacydesc_unref(filed);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    } else {
-        utility_assert(errcode == 0);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
     }
+
+    utility_assert(errcode == 0);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)filed, flags & O_CLOEXEC);
+    int handle = process_registerDescriptor(sys->process, desc);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
 }
 
 static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {

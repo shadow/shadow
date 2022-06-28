@@ -65,9 +65,16 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
+    int descFlags = 0;
+    if (flags & EPOLL_CLOEXEC) {
+        descFlags |= O_CLOEXEC;
+    }
+
     /* Create the timer and double check that it's valid. */
     TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
-    int tfd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)timer);
+    legacydesc_setOwnerProcess((LegacyDescriptor*)timer, sys->process);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)timer, descFlags);
+    int tfd = process_registerDescriptor(sys->process, desc);
 
 #ifdef DEBUG
     /* This should always be a valid descriptor. */
@@ -81,9 +88,6 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     /* Set any options that were given. */
     if (flags & TFD_NONBLOCK) {
         legacydesc_addFlags((LegacyDescriptor*)timer, O_NONBLOCK);
-    }
-    if (flags & TFD_CLOEXEC) {
-        legacydesc_addFlags((LegacyDescriptor*)timer, O_CLOEXEC);
     }
 
     trace("timerfd_create() returning fd %i", tfd);

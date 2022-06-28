@@ -1,5 +1,5 @@
 use crate::cshadow as c;
-use crate::host::descriptor::CompatDescriptor;
+use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::utility::notnull::*;
 
 use std::collections::{BTreeSet, HashMap};
@@ -8,7 +8,7 @@ use log::*;
 
 /// Map of file handles to file descriptors. Typically owned by a Process.
 pub struct DescriptorTable {
-    descriptors: HashMap<u32, CompatDescriptor>,
+    descriptors: HashMap<u32, Descriptor>,
 
     // Indices less than `next_index` known to be available.
     available_indices: BTreeSet<u32>,
@@ -28,7 +28,7 @@ impl DescriptorTable {
     }
 
     /// Add the descriptor at an unused index, and return the index.
-    pub fn add(&mut self, descriptor: CompatDescriptor, min_index: u32) -> u32 {
+    pub fn add(&mut self, descriptor: Descriptor, min_index: u32) -> u32 {
         let idx = if let Some(idx) = self.available_indices.range(min_index..).next() {
             // Un-borrow from `available_indices`.
             let idx = *idx;
@@ -83,7 +83,7 @@ impl DescriptorTable {
     }
 
     /// Remove the descriptor at the given index and return it.
-    pub fn remove(&mut self, idx: u32) -> Option<CompatDescriptor> {
+    pub fn remove(&mut self, idx: u32) -> Option<Descriptor> {
         let maybe_descriptor = self.descriptors.remove(&idx);
         self.available_indices.insert(idx);
         self.trim_tail();
@@ -91,18 +91,18 @@ impl DescriptorTable {
     }
 
     /// Get the descriptor at `idx`, if any.
-    pub fn get(&self, idx: u32) -> Option<&CompatDescriptor> {
+    pub fn get(&self, idx: u32) -> Option<&Descriptor> {
         self.descriptors.get(&idx)
     }
 
     /// Get the descriptor at `idx`, if any.
-    pub fn get_mut(&mut self, idx: u32) -> Option<&mut CompatDescriptor> {
+    pub fn get_mut(&mut self, idx: u32) -> Option<&mut Descriptor> {
         self.descriptors.get_mut(&idx)
     }
 
     /// Insert a descriptor at `index`. If a descriptor is already present at
     /// that index, it is unregistered from that index and returned.
-    pub fn set(&mut self, index: u32, descriptor: CompatDescriptor) -> Option<CompatDescriptor> {
+    pub fn set(&mut self, index: u32, descriptor: Descriptor) -> Option<Descriptor> {
         // We ensure the index is no longer in `self.available_indices`. We *don't* ensure
         // `self.next_index` is > `index`, since that'd require adding the indices in between to
         // `self.available_indices`. It uses less memory and is no more expensive to iterate when
@@ -125,15 +125,15 @@ impl DescriptorTable {
     /// TODO: remove this once the TCP layer is better designed.
     pub fn shutdown_helper(&mut self) {
         for descriptor in self.descriptors.values() {
-            match descriptor {
-                CompatDescriptor::New(_) => continue,
-                CompatDescriptor::Legacy(d) => unsafe { c::legacydesc_shutdownHelper(d.ptr()) },
+            match descriptor.file() {
+                CompatFile::New(_) => continue,
+                CompatFile::Legacy(d) => unsafe { c::legacydesc_shutdownHelper(d.ptr()) },
             };
         }
     }
 
     /// Remove and return all descriptors.
-    pub fn remove_all<'a>(&mut self) -> impl Iterator<Item = CompatDescriptor> {
+    pub fn remove_all<'a>(&mut self) -> impl Iterator<Item = Descriptor> {
         // reset the descriptor table
         let old_self = std::mem::replace(self, Self::new());
         // return the old descriptors
@@ -167,13 +167,13 @@ mod export {
     pub unsafe extern "C" fn descriptortable_set(
         table: *mut DescriptorTable,
         index: c_int,
-        descriptor: *mut CompatDescriptor,
-    ) -> *mut CompatDescriptor {
+        descriptor: *mut Descriptor,
+    ) -> *mut Descriptor {
         let table = unsafe { table.as_mut().unwrap() };
-        let descriptor = CompatDescriptor::from_raw(descriptor);
+        let descriptor = Descriptor::from_raw(descriptor);
 
         match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
-            Some(d) => CompatDescriptor::into_raw(Box::new(d)),
+            Some(d) => Descriptor::into_raw(Box::new(d)),
             None => std::ptr::null_mut(),
         }
     }

@@ -48,8 +48,6 @@ typedef struct ChildPidWatcher ChildPidWatcher;
 
 typedef struct CliOptions CliOptions;
 
-typedef struct CompatDescriptor CompatDescriptor;
-
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
@@ -57,6 +55,10 @@ typedef struct Controller Controller;
 
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
+
+// A file descriptor that reference an open file. Also contains flags that change the behaviour of
+// this file descriptor.
+typedef struct Descriptor Descriptor;
 
 // Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;
@@ -595,9 +597,9 @@ void descriptortable_free(struct DescriptorTable *table);
 // Store the given descriptor at the given index. Any previous descriptor that was
 // stored there will be returned. This consumes a ref to the given descriptor as in
 // add(), and any returned descriptor must be freed manually.
-struct CompatDescriptor *descriptortable_set(struct DescriptorTable *table,
-                                             int index,
-                                             struct CompatDescriptor *descriptor);
+struct Descriptor *descriptortable_set(struct DescriptorTable *table,
+                                       int index,
+                                       struct Descriptor *descriptor);
 
 // This is a helper function that handles some corner cases where some
 // descriptors are linked to each other and we must remove that link in
@@ -613,30 +615,30 @@ struct Arc_AtomicRefCell_AbstractUnixNamespace *abstractunixnamespace_new(void);
 
 void abstractunixnamespace_free(struct Arc_AtomicRefCell_AbstractUnixNamespace *ns);
 
-// The new compat descriptor takes ownership of the reference to the legacy descriptor and
-// does not increment its ref count, but will decrement the ref count when this compat
-// descriptor is freed/dropped.
-struct CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_descriptor);
+// The new descriptor takes ownership of the reference to the legacy descriptor and does not
+// increment its ref count, but will decrement the ref count when this descriptor is
+// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
+// `O_CLOEXEC`.
+struct Descriptor *descriptor_fromLegacy(LegacyDescriptor *legacy_descriptor, int descriptor_flags);
 
-// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
-// descriptor object. Otherwise returns NULL. The legacy descriptor's ref count is not
-// modified, so the pointer must not outlive the lifetime of the compat descriptor.
-LegacyDescriptor *compatdescriptor_asLegacy(const struct CompatDescriptor *descriptor);
+// If the descriptor is a legacy descriptor, returns a pointer to the legacy descriptor object.
+// Otherwise returns NULL. The legacy descriptor's ref count is not modified, so the pointer
+// must not outlive the lifetime of the descriptor.
+LegacyDescriptor *descriptor_asLegacy(const struct Descriptor *descriptor);
 
-// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
-// count.
-void compatdescriptor_free(struct CompatDescriptor *descriptor);
-
-// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
 // `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
-// modified, so the returned pointer must not outlive the lifetime of the compat descriptor.
-const struct OpenFile *compatdescriptor_borrowOpenFile(const struct CompatDescriptor *descriptor);
+// modified, so the returned pointer must not outlive the lifetime of the descriptor.
+const struct OpenFile *descriptor_borrowOpenFile(const struct Descriptor *descriptor);
 
-// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
 // `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is incremented,
 // so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
 // memory will leak.
-const struct OpenFile *compatdescriptor_newRefOpenFile(const struct CompatDescriptor *descriptor);
+const struct OpenFile *descriptor_newRefOpenFile(const struct Descriptor *descriptor);
+
+// The descriptor flags must be either 0 or `O_CLOEXEC`.
+void descriptor_setFlags(struct Descriptor *descriptor, int flags);
 
 // Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
 // this function.
@@ -657,10 +659,10 @@ void openfile_removeListener(const struct OpenFile *file, StatusListener *listen
 // underlying data if their handles are equal.
 uintptr_t openfile_getCanonicalHandle(const struct OpenFile *file);
 
-// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
 // `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
 // pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
-const struct File *compatdescriptor_newRefFile(const struct CompatDescriptor *descriptor);
+const struct File *descriptor_newRefFile(const struct Descriptor *descriptor);
 
 // Decrement the ref count of the `File` object. The pointer must not be used after calling
 // this function.
@@ -787,20 +789,15 @@ SysCallReturn memorymanager_handleMprotect(struct MemoryManager *memory_manager,
                                            uintptr_t size,
                                            int32_t prot);
 
-// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
-// access it after.
-int process_registerCompatDescriptor(Process *proc, struct CompatDescriptor *desc);
-
-// Deregistering a `CompatDescriptor` returns an owned reference to that `CompatDescriptor`,
-// and you must drop it manually when finished.
-struct CompatDescriptor *process_deregisterCompatDescriptor(Process *proc, int handle);
+// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
+// after.
+int process_registerDescriptor(Process *proc, struct Descriptor *desc);
 
 // Get a temporary reference to a descriptor.
-const struct CompatDescriptor *process_getRegisteredCompatDescriptor(Process *proc, int handle);
+const struct Descriptor *process_getRegisteredDescriptor(Process *proc, int handle);
 
-// Register a `LegacyDescriptor`. This takes ownership of the descriptor and you must
-// increment the ref count if you are to hold a reference to this descriptor.
-int process_registerLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
+// Get a temporary mutable reference to a descriptor.
+struct Descriptor *process_getRegisteredDescriptorMut(Process *proc, int handle);
 
 // Get a temporary reference to a legacy descriptor.
 LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);

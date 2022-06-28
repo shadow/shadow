@@ -150,38 +150,6 @@ RegularFile* regularfile_new() {
     return file;
 }
 
-RegularFile* regularfile_dup(RegularFile* file, int* dupError) {
-    MAGIC_ASSERT(file);
-
-    int newFd;
-
-    // only dup the os fd if it's valid
-    if (file->osfile.fd >= 0) {
-        newFd = dup(file->osfile.fd);
-
-        if (newFd < 0) {
-            *dupError = errno;
-            return NULL;
-        }
-    } else {
-        newFd = file->osfile.fd;
-    }
-
-    RegularFile* newFile = regularfile_new();
-
-    newFile->type = file->type;
-
-    // CLOEXEC is a descriptor flag and it is not copied during a dup()
-    newFile->shadowFlags = file->shadowFlags & ~O_CLOEXEC;
-
-    newFile->osfile.fd = newFd;
-    newFile->osfile.flagsAtOpen = file->osfile.flagsAtOpen;
-    newFile->osfile.modeAtOpen = file->osfile.modeAtOpen;
-    newFile->osfile.absPathAtOpen = strdup(file->osfile.absPathAtOpen);
-
-    return newFile;
-}
-
 static char* _regularfile_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
     if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {

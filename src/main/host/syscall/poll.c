@@ -26,15 +26,15 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, struct pollfd* pfd) {
+static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct pollfd* pfd) {
     // Handle legacy and non-legacy descriptors. This will be NULL if it's not a legacy descriptor.
-    LegacyDescriptor* ldesc = compatdescriptor_asLegacy(cdesc);
+    LegacyDescriptor* ldesc = descriptor_asLegacy(cdesc);
 
     // Some logic depends on the descriptor type. USE DT_NONE for non-legacy descriptors
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
     LegacyDescriptorType dType = ldesc ? legacydesc_getType(ldesc) : DT_NONE;
-    Status dstat = ldesc ? legacydesc_getStatus(ldesc)
-                         : openfile_getStatus(compatdescriptor_borrowOpenFile(cdesc));
+    Status dstat =
+        ldesc ? legacydesc_getStatus(ldesc) : openfile_getStatus(descriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {
         // Rely on the kernel to poll the OS-back file
@@ -76,10 +76,9 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
         trace("poll checking fd %i", pfd->fd);
 
         /* Get the descriptor. */
-        const CompatDescriptor* cdesc =
-            process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
-        if (cdesc) {
-            _syscallhandler_getPollEventsHelper(cdesc, pfd);
+        const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
+        if (desc) {
+            _syscallhandler_getPollEventsHelper(desc, pfd);
         } else {
             pfd->revents |= POLLNVAL;
         }
@@ -102,9 +101,8 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
             continue;
         }
 
-        const CompatDescriptor* cdesc =
-            process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
-        utility_assert(cdesc); // we would have returned POLLNVAL in getPollEvents
+        const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
+        utility_assert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
         if (pfd->events & POLLIN) {
@@ -115,7 +113,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         if (epev.events) {
-            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, cdesc, &epev, sys->host);
+            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, desc, &epev, sys->host);
         }
     }
 }

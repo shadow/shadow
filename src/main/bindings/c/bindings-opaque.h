@@ -45,8 +45,6 @@ typedef struct ChildPidWatcher ChildPidWatcher;
 
 typedef struct CliOptions CliOptions;
 
-typedef struct CompatDescriptor CompatDescriptor;
-
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
@@ -54,6 +52,10 @@ typedef struct Controller Controller;
 
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
+
+// A file descriptor that reference an open file. Also contains flags that change the behaviour of
+// this file descriptor.
+typedef struct Descriptor Descriptor;
 
 // Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;

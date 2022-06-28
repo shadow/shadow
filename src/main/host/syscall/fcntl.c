@@ -25,7 +25,6 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
     int result = 0;
 
     switch (command) {
-        case F_GETFD:
         case F_GETFL:
         case F_GETOWN:
         case F_GETSIG:
@@ -40,7 +39,6 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
             break;
         }
 
-        case F_SETFD:
         case F_SETFL:
         case F_SETOWN:
         case F_SETSIG:
@@ -144,10 +142,15 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
             break;
         }
 
+        case F_GETFD:
+        case F_SETFD:
         case F_DUPFD:
         case F_DUPFD_CLOEXEC: {
-            // TODO: update this once we implement dup
-            // no break: fall through to default case
+            warning("F_GETFD or F_SETFD or F_DUPFD or F_DUPFD_CLOEXEC (%lu) on file %i should have "
+                    "been handled by the rust fcntl syscall handler",
+                    command, fd);
+            result = -EINVAL;
+            break;
         }
 
         default: {

@@ -6,6 +6,7 @@
 #include "main/host/syscall/epoll.h"
 
 #include <errno.h>
+#include <fcntl.h>
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
@@ -27,12 +28,15 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
         return -EINVAL;
     }
 
-    Epoll* epolld = epoll_new();
-    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)epolld);
-
+    int descFlags = 0;
     if (flags & EPOLL_CLOEXEC) {
-        legacydesc_addFlags((LegacyDescriptor*)epolld, EPOLL_CLOEXEC);
+        descFlags |= O_CLOEXEC;
     }
+
+    Epoll* epolld = epoll_new();
+    legacydesc_setOwnerProcess((LegacyDescriptor*)epolld, sys->process);
+    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)epolld, descFlags);
+    int handle = process_registerDescriptor(sys->process, desc);
 
     return handle;
 }
@@ -94,15 +98,14 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    const CompatDescriptor* compatDescriptor =
-        process_getRegisteredCompatDescriptor(sys->process, fd);
+    const Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, fd);
 
-    if (compatDescriptor == NULL) {
+    if (descriptor == NULL) {
         debug("Child %i is not a shadow descriptor", fd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
-    LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(compatDescriptor);
+    LegacyDescriptor* legacyDescriptor = descriptor_asLegacy(descriptor);
 
     // Make sure the child is not closed only if it's a legacy descriptor
     // FIXME: for now we allow child fds to be closed on EPOLL_CTL_DEL operations,
@@ -125,7 +128,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event, sys->host);
+    errorCode = epoll_control(epoll, op, fd, descriptor, event, sys->host);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }

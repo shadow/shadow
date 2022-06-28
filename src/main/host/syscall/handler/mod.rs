@@ -1,6 +1,6 @@
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
-use crate::host::descriptor::CompatDescriptor;
+use crate::host::descriptor::Descriptor;
 use crate::host::process::Process;
 use crate::host::syscall_types::SysCallArgs;
 use crate::host::syscall_types::SyscallResult;
@@ -72,12 +72,12 @@ impl SyscallHandler {
         }
     }
 
-    /// Internal helper that returns the `CompatDescriptor` for the fd if it
-    /// exists, otherwise returns EBADF.
+    /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
+    /// EBADF.
     fn get_descriptor(
         process: &Process,
         fd: impl TryInto<u32>,
-    ) -> Result<&CompatDescriptor, nix::errno::Errno> {
+    ) -> Result<&Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
         let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
@@ -87,12 +87,12 @@ impl SyscallHandler {
         }
     }
 
-    /// Internal helper that returns the `CompatDescriptor` for the fd if it
-    /// exists, otherwise returns EBADF.
+    /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
+    /// EBADF.
     fn get_descriptor_mut(
         process: &mut Process,
         fd: impl TryInto<u32>,
-    ) -> Result<&mut CompatDescriptor, nix::errno::Errno> {
+    ) -> Result<&mut Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
         let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 

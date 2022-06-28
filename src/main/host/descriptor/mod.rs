@@ -605,7 +605,7 @@ impl DescriptorFlags {
 #[derive(Debug)]
 pub struct Descriptor {
     /// The file that this descriptor points to.
-    file: OpenFile,
+    file: CompatFile,
     /// Descriptor flags.
     flags: DescriptorFlags,
 }
@@ -615,14 +615,14 @@ impl IsSend for Descriptor {}
 impl IsSync for Descriptor {}
 
 impl Descriptor {
-    pub fn new(file: OpenFile) -> Self {
+    pub fn new(file: CompatFile) -> Self {
         Self {
             file,
             flags: DescriptorFlags::empty(),
         }
     }
 
-    pub fn open_file(&self) -> &OpenFile {
+    pub fn file(&self) -> &CompatFile {
         &self.file
     }
 
@@ -634,8 +634,13 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
-        self.file.close(event_queue)
+    /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
+    pub fn close(
+        self,
+        host: *mut c::Host,
+        event_queue: &mut EventQueue,
+    ) -> Option<Result<(), SyscallError>> {
+        self.file.close(host, event_queue)
     }
 
     /// Duplicate the descriptor, with both descriptors pointing to the same `OpenFile`. In
@@ -646,6 +651,18 @@ impl Descriptor {
             file: self.file.clone(),
             flags,
         }
+    }
+
+    pub fn into_raw(descriptor: Box<Self>) -> *mut Self {
+        Box::into_raw(descriptor)
+    }
+
+    pub fn from_raw(descriptor: *mut Self) -> Option<Box<Self>> {
+        if descriptor.is_null() {
+            return None;
+        }
+
+        unsafe { Some(Box::from_raw(descriptor)) }
     }
 }
 
@@ -667,6 +684,14 @@ impl CountedLegacyDescriptorRef {
     }
 }
 
+impl std::clone::Clone for CountedLegacyDescriptorRef {
+    fn clone(&self) -> Self {
+        // ref the legacy descriptor object
+        unsafe { c::legacydesc_ref(self.0.ptr() as *mut core::ffi::c_void) };
+        Self(self.0)
+    }
+}
+
 impl Drop for CountedLegacyDescriptorRef {
     fn drop(&mut self) {
         // unref the legacy descriptor object
@@ -674,40 +699,58 @@ impl Drop for CountedLegacyDescriptorRef {
     }
 }
 
-// don't implement copy or clone without considering the legacy descriptor's ref count
-#[derive(Debug)]
-pub enum CompatDescriptor {
-    New(Descriptor),
-    Legacy(CountedLegacyDescriptorRef),
+/// Used to track how many descriptors are open for a `LegacyDescriptor`. When the `close()` method
+/// is called, the legacy descriptor's `legacydesc_close()` will only be called if this is the last
+/// descriptor for that legacy descriptor. This is similar to an `OpenFile` object, but does not
+/// close the descriptor when dropped since we don't have a pointer to the host. If this counter is
+/// dropped before closing the legacy descriptor, the legacy descriptor will not be closed properly.
+#[derive(Clone, Debug)]
+pub struct LegacyDescriptorCounter {
+    desc: CountedLegacyDescriptorRef,
+    /// A count of how many open descriptors there are with reference to this legacy descriptor.
+    open_count: Arc<()>,
 }
 
-// will not compile if `CompatDescriptor` is not Send + Sync
-impl IsSend for CompatDescriptor {}
-impl IsSync for CompatDescriptor {}
-
-impl CompatDescriptor {
-    pub fn into_raw(descriptor: Box<Self>) -> *mut Self {
-        Box::into_raw(descriptor)
-    }
-
-    pub fn from_raw(descriptor: *mut Self) -> Option<Box<Self>> {
-        if descriptor.is_null() {
-            return None;
+impl LegacyDescriptorCounter {
+    pub fn new(desc: CountedLegacyDescriptorRef) -> Self {
+        Self {
+            desc,
+            open_count: Arc::new(()),
         }
-
-        unsafe { Some(Box::from_raw(descriptor)) }
     }
 
-    /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
+    pub unsafe fn ptr(&self) -> *mut c::LegacyDescriptor {
+        unsafe { self.desc.ptr() }
+    }
+
+    /// Close the descriptor, and if this is the last descriptor pointing to its legacy descriptor,
+    /// close the legacy descriptor as well.
+    pub fn close(self, host: *mut c::Host) {
+        // this isn't subject to race conditions since we should never access descriptors
+        // from multiple threads at the same time
+        if Arc::<()>::strong_count(&self.open_count) == 1 {
+            unsafe { c::legacydesc_close(self.ptr(), host) }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum CompatFile {
+    New(OpenFile),
+    Legacy(LegacyDescriptorCounter),
+}
+
+impl CompatFile {
+    /// Close the file. The `host` option is a legacy option for legacy descriptors.
     pub fn close(
         self,
         host: *mut c::Host,
         event_queue: &mut EventQueue,
     ) -> Option<Result<(), SyscallError>> {
         match self {
-            Self::New(desc) => desc.close(event_queue),
-            Self::Legacy(desc) => {
-                unsafe { c::legacydesc_close(desc.ptr(), host) };
+            Self::New(file) => file.close(event_queue),
+            Self::Legacy(file) => {
+                file.close(host);
                 Some(Ok(()))
             }
         }
@@ -727,79 +770,89 @@ impl std::fmt::Debug for c::SysCallReturn {
 mod export {
     use super::*;
 
-    /// The new compat descriptor takes ownership of the reference to the legacy descriptor and
-    /// does not increment its ref count, but will decrement the ref count when this compat
-    /// descriptor is freed/dropped.
+    /// The new descriptor takes ownership of the reference to the legacy descriptor and does not
+    /// increment its ref count, but will decrement the ref count when this descriptor is
+    /// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
+    /// `O_CLOEXEC`.
     #[no_mangle]
-    pub unsafe extern "C" fn compatdescriptor_fromLegacy(
+    pub unsafe extern "C" fn descriptor_fromLegacy(
         legacy_descriptor: *mut c::LegacyDescriptor,
-    ) -> *mut CompatDescriptor {
+        descriptor_flags: libc::c_int,
+    ) -> *mut Descriptor {
         assert!(!legacy_descriptor.is_null());
 
-        let descriptor = CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(
-            HostTreePointer::new(legacy_descriptor),
-        ));
-        CompatDescriptor::into_raw(Box::new(descriptor))
+        let mut descriptor = Descriptor::new(CompatFile::Legacy(LegacyDescriptorCounter::new(
+            CountedLegacyDescriptorRef::new(HostTreePointer::new(legacy_descriptor)),
+        )));
+
+        let descriptor_flags = OFlag::from_bits(descriptor_flags).unwrap();
+        let (descriptor_flags, remaining) = DescriptorFlags::from_o_flags(descriptor_flags);
+        assert!(remaining.is_empty());
+        descriptor.set_flags(descriptor_flags);
+
+        Descriptor::into_raw(Box::new(descriptor))
     }
 
-    /// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
-    /// descriptor object. Otherwise returns NULL. The legacy descriptor's ref count is not
-    /// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+    /// If the descriptor is a legacy descriptor, returns a pointer to the legacy descriptor object.
+    /// Otherwise returns NULL. The legacy descriptor's ref count is not modified, so the pointer
+    /// must not outlive the lifetime of the descriptor.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_asLegacy(
-        descriptor: *const CompatDescriptor,
+    pub extern "C" fn descriptor_asLegacy(
+        descriptor: *const Descriptor,
     ) -> *mut c::LegacyDescriptor {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
-        if let CompatDescriptor::Legacy(d) = descriptor {
+        if let CompatFile::Legacy(d) = descriptor.file() {
             unsafe { d.ptr() }
         } else {
             std::ptr::null_mut()
         }
     }
 
-    /// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's ref
-    /// count.
-    #[no_mangle]
-    pub extern "C" fn compatdescriptor_free(descriptor: *mut CompatDescriptor) {
-        CompatDescriptor::from_raw(descriptor);
-    }
-
-    /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+    /// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
-    /// modified, so the returned pointer must not outlive the lifetime of the compat descriptor.
+    /// modified, so the returned pointer must not outlive the lifetime of the descriptor.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_borrowOpenFile(
-        descriptor: *const CompatDescriptor,
-    ) -> *const OpenFile {
+    pub extern "C" fn descriptor_borrowOpenFile(descriptor: *const Descriptor) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
-        match descriptor {
-            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => d.open_file(),
+        match descriptor.file() {
+            CompatFile::Legacy(_) => std::ptr::null_mut(),
+            CompatFile::New(d) => d,
         }
     }
 
-    /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+    /// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is incremented,
     /// so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
     /// memory will leak.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_newRefOpenFile(
-        descriptor: *const CompatDescriptor,
-    ) -> *const OpenFile {
+    pub extern "C" fn descriptor_newRefOpenFile(descriptor: *const Descriptor) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
-        match descriptor {
-            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.open_file().clone())),
+        match descriptor.file() {
+            CompatFile::Legacy(_) => std::ptr::null_mut(),
+            CompatFile::New(d) => Box::into_raw(Box::new(d.clone())),
         }
+    }
+
+    /// The descriptor flags must be either 0 or `O_CLOEXEC`.
+    #[no_mangle]
+    pub extern "C" fn descriptor_setFlags(descriptor: *mut Descriptor, flags: libc::c_int) {
+        assert!(!descriptor.is_null());
+
+        let descriptor = unsafe { &mut *descriptor };
+        let flags = OFlag::from_bits(flags).unwrap();
+        let (flags, remaining_flags) = DescriptorFlags::from_o_flags(flags);
+        assert!(remaining_flags.is_empty());
+
+        descriptor.set_flags(flags);
     }
 
     /// Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
@@ -866,20 +919,18 @@ mod export {
         file.inner_file().canonical_handle()
     }
 
-    /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+    /// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
     /// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
     /// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
     #[no_mangle]
-    pub extern "C" fn compatdescriptor_newRefFile(
-        descriptor: *const CompatDescriptor,
-    ) -> *const File {
+    pub extern "C" fn descriptor_newRefFile(descriptor: *const Descriptor) -> *const File {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
 
-        match descriptor {
-            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.open_file().inner_file().clone())),
+        match descriptor.file() {
+            CompatFile::Legacy(_) => std::ptr::null_mut(),
+            CompatFile::New(d) => Box::into_raw(Box::new(d.inner_file().clone())),
         }
     }
 

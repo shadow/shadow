@@ -3,7 +3,7 @@ use std::os::unix::io::{FromRawFd, IntoRawFd};
 use nix::unistd::Pid;
 
 use crate::cshadow;
-use crate::host::descriptor::CompatDescriptor;
+use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::format::{FmtOptions, StraceFmtMode};
 
 use super::timer::Timer;
@@ -66,14 +66,14 @@ impl Process {
     }
 
     /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor(&mut self, desc: CompatDescriptor) -> u32 {
+    pub fn register_descriptor(&mut self, desc: Descriptor) -> u32 {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         desc_table.add(desc, 0)
     }
 
     /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor_with_min_fd(&mut self, desc: CompatDescriptor, min_fd: u32) -> u32 {
+    pub fn register_descriptor_with_min_fd(&mut self, desc: Descriptor, min_fd: u32) -> u32 {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         desc_table.add(desc, min_fd)
@@ -82,14 +82,16 @@ impl Process {
     /// Register a descriptor with a given fd handle and return the descriptor that it replaced.
     pub fn register_descriptor_with_fd(
         &mut self,
-        desc: CompatDescriptor,
+        desc: Descriptor,
         new_fd: u32,
-    ) -> Option<CompatDescriptor> {
+    ) -> Option<Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         let replaced_desc = desc_table.set(new_fd, desc);
 
-        if let Some(CompatDescriptor::Legacy(ref replaced_desc)) = replaced_desc {
+        if let Some(CompatFile::Legacy(ref replaced_desc)) =
+            replaced_desc.as_ref().map(|x| x.file())
+        {
             unsafe {
                 cshadow::legacydesc_setOwnerProcess(replaced_desc.ptr(), std::ptr::null_mut())
             };
@@ -99,12 +101,13 @@ impl Process {
     }
 
     /// Deregister the descriptor with the given fd handle and return it.
-    pub fn deregister_descriptor(&mut self, fd: u32) -> Option<CompatDescriptor> {
+    pub fn deregister_descriptor(&mut self, fd: u32) -> Option<Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         let removed_desc = desc_table.remove(fd);
 
-        if let Some(CompatDescriptor::Legacy(ref removed_desc)) = removed_desc {
+        if let Some(CompatFile::Legacy(ref removed_desc)) = removed_desc.as_ref().map(|x| x.file())
+        {
             unsafe {
                 cshadow::legacydesc_setOwnerProcess(removed_desc.ptr(), std::ptr::null_mut())
             };
@@ -134,14 +137,14 @@ impl Process {
     }
 
     /// Get a reference to the descriptor with the given fd handle.
-    pub fn get_descriptor(&self, fd: u32) -> Option<&CompatDescriptor> {
+    pub fn get_descriptor(&self, fd: u32) -> Option<&Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         desc_table.get(fd)
     }
 
     /// Get a mutable reference to the descriptor with the given fd handle.
-    pub fn get_descriptor_mut(&mut self, fd: u32) -> Option<&mut CompatDescriptor> {
+    pub fn get_descriptor_mut(&mut self, fd: u32) -> Option<&mut Descriptor> {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
         desc_table.get_mut(fd)
@@ -169,54 +172,27 @@ impl Process {
 
 mod export {
     use super::*;
-    use crate::{host::descriptor::CountedLegacyDescriptorRef, utility::HostTreePointer};
 
-    /// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
-    /// access it after.
+    /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
+    /// after.
     #[no_mangle]
-    pub extern "C" fn process_registerCompatDescriptor(
+    pub extern "C" fn process_registerDescriptor(
         proc: *mut cshadow::Process,
-        desc: *mut CompatDescriptor,
+        desc: *mut Descriptor,
     ) -> libc::c_int {
         let mut proc = unsafe { Process::borrow_from_c(proc) };
-        let desc = CompatDescriptor::from_raw(desc).unwrap();
+        let desc = Descriptor::from_raw(desc).unwrap();
 
         let fd = proc.register_descriptor(*desc);
         fd.try_into().unwrap()
     }
 
-    /// Deregistering a `CompatDescriptor` returns an owned reference to that `CompatDescriptor`,
-    /// and you must drop it manually when finished.
-    #[no_mangle]
-    pub extern "C" fn process_deregisterCompatDescriptor(
-        proc: *mut cshadow::Process,
-        handle: libc::c_int,
-    ) -> *mut CompatDescriptor {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
-
-        let handle: u32 = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::debug!(
-                    "Attempted to deregister a descriptor with handle {}",
-                    handle
-                );
-                return std::ptr::null_mut();
-            }
-        };
-
-        match proc.deregister_descriptor(handle) {
-            Some(d) => CompatDescriptor::into_raw(Box::new(d)),
-            None => std::ptr::null_mut(),
-        }
-    }
-
     /// Get a temporary reference to a descriptor.
     #[no_mangle]
-    pub extern "C" fn process_getRegisteredCompatDescriptor(
+    pub extern "C" fn process_getRegisteredDescriptor(
         proc: *mut cshadow::Process,
         handle: libc::c_int,
-    ) -> *const CompatDescriptor {
+    ) -> *const Descriptor {
         let proc = unsafe { Process::borrow_from_c(proc) };
 
         let handle: u32 = match handle.try_into() {
@@ -228,27 +204,31 @@ mod export {
         };
 
         match proc.get_descriptor(handle) {
-            Some(d) => d as *const CompatDescriptor,
+            Some(d) => d as *const Descriptor,
             None => std::ptr::null(),
         }
     }
 
-    /// Register a `LegacyDescriptor`. This takes ownership of the descriptor and you must
-    /// increment the ref count if you are to hold a reference to this descriptor.
+    /// Get a temporary mutable reference to a descriptor.
     #[no_mangle]
-    pub unsafe extern "C" fn process_registerLegacyDescriptor(
+    pub extern "C" fn process_getRegisteredDescriptorMut(
         proc: *mut cshadow::Process,
-        desc: *mut cshadow::LegacyDescriptor,
-    ) -> libc::c_int {
+        handle: libc::c_int,
+    ) -> *mut Descriptor {
         let mut proc = unsafe { Process::borrow_from_c(proc) };
-        assert!(!desc.is_null());
 
-        unsafe { cshadow::legacydesc_setOwnerProcess(desc, proc.cprocess) };
-        let desc =
-            CompatDescriptor::Legacy(CountedLegacyDescriptorRef::new(HostTreePointer::new(desc)));
+        let handle: u32 = match handle.try_into() {
+            Ok(i) => i,
+            Err(_) => {
+                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                return std::ptr::null_mut();
+            }
+        };
 
-        let fd = proc.register_descriptor(desc);
-        fd.try_into().unwrap()
+        match proc.get_descriptor_mut(handle) {
+            Some(d) => d as *mut Descriptor,
+            None => std::ptr::null_mut(),
+        }
     }
 
     /// Get a temporary reference to a legacy descriptor.
@@ -267,8 +247,8 @@ mod export {
             }
         };
 
-        match proc.get_descriptor(handle) {
-            Some(CompatDescriptor::Legacy(desc)) => unsafe { desc.ptr() },
+        match proc.get_descriptor(handle).map(|x| x.file()) {
+            Some(CompatFile::Legacy(desc)) => unsafe { desc.ptr() },
             Some(_) => {
                 log::warn!("A descriptor exists for fd={}, but it is not a legacy descriptor. Returning NULL.",
                            handle);

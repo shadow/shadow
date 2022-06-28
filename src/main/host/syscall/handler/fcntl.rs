@@ -1,6 +1,6 @@
 use crate::cshadow;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, File, FileStatus};
+use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
 use nix::errno::Errno;
@@ -15,29 +15,42 @@ impl SyscallHandler {
         let fd: RawFd = args.args[0].into();
         let cmd: i32 = args.args[1].into();
 
-        // get the descriptor, or return early if it doesn't exist
-        let desc = match Self::get_descriptor_mut(ctx.process, fd)? {
-            CompatDescriptor::New(d) => d,
-            // if it's a legacy descriptor, use the C syscall handler instead
-            CompatDescriptor::Legacy(_) => {
-                return unsafe {
-                    cshadow::syscallhandler_fcntl(
-                        ctx.thread.csyscallhandler(),
-                        args as *const cshadow::SysCallArgs,
-                    )
-                }
-                .into()
-            }
+        // NOTE: this function should *not* run the C syscall handler if the cmd modifies the
+        // descriptor
+
+        // helper function to run the C syscall handler
+        let legacy_syscall_fn = |ctx: &mut ThreadContext, args: &SysCallArgs| {
+            SyscallResult::from(unsafe {
+                cshadow::syscallhandler_fcntl(
+                    ctx.thread.csyscallhandler(),
+                    args as *const cshadow::SysCallArgs,
+                )
+            })
         };
+
+        // get the descriptor, or return early if it doesn't exist
+        let desc = Self::get_descriptor_mut(ctx.process, fd)?;
 
         Ok(match cmd {
             libc::F_GETFL => {
-                let file = desc.open_file().inner_file().borrow();
+                let file = match desc.file() {
+                    CompatFile::New(d) => d,
+                    // if it's a legacy descriptor, use the C syscall handler instead
+                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                };
+
+                let file = file.inner_file().borrow();
                 // combine the file status and access mode flags
                 let flags = file.get_status().as_o_flags() | file.mode().as_o_flags();
                 SysCallReg::from(flags.bits())
             }
             libc::F_SETFL => {
+                let file = match desc.file() {
+                    CompatFile::New(d) => d,
+                    // if it's a legacy descriptor, use the C syscall handler instead
+                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                };
+
                 let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
                 // remove access mode flags
                 status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR | OFlag::O_PATH);
@@ -53,7 +66,7 @@ impl SyscallHandler {
                         | OFlag::O_TRUNC,
                 );
 
-                let mut file = desc.open_file().inner_file().borrow_mut();
+                let mut file = file.inner_file().borrow_mut();
                 let old_flags = file.get_status().as_o_flags();
 
                 // fcntl(2): "On Linux, this command can change only the O_APPEND, O_ASYNC, O_DIRECT,
@@ -107,7 +120,7 @@ impl SyscallHandler {
                 let min_fd: i32 = args.args[2].into();
                 let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
 
-                let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+                let new_desc = desc.dup(DescriptorFlags::empty());
                 let new_fd = ctx
                     .process
                     .register_descriptor_with_min_fd(new_desc, min_fd);
@@ -117,16 +130,21 @@ impl SyscallHandler {
                 let min_fd: i32 = args.args[2].into();
                 let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
 
-                let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::CLOEXEC));
+                let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
                 let new_fd = ctx
                     .process
                     .register_descriptor_with_min_fd(new_desc, min_fd);
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
-            libc::F_GETPIPE_SZ =>
-            {
+            libc::F_GETPIPE_SZ => {
+                let file = match desc.file() {
+                    CompatFile::New(d) => d,
+                    // if it's a legacy descriptor, use the C syscall handler instead
+                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                };
+
                 #[allow(irrefutable_let_patterns)]
-                if let File::Pipe(pipe) = desc.open_file().inner_file() {
+                if let File::Pipe(pipe) = file.inner_file() {
                     SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
                 } else {
                     return Err(Errno::EINVAL.into());

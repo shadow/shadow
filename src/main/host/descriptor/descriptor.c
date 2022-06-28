@@ -6,6 +6,7 @@
 
 #include "main/host/descriptor/descriptor.h"
 
+#include <fcntl.h>
 #include <stddef.h>
 
 #include "lib/logger/logger.h"
@@ -290,11 +291,19 @@ gint legacydesc_getFlags(LegacyDescriptor* descriptor) {
 
 void legacydesc_setFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
+    if (flags & O_CLOEXEC) {
+        warning("Adding CLOEXEC to legacy descriptor when it should "
+                "have been added to the descriptor");
+    }
     descriptor->flags = flags;
 }
 
 void legacydesc_addFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
+    if (flags & O_CLOEXEC) {
+        warning("Adding CLOEXEC to legacy descriptor when it should "
+                "have been added to the descriptor");
+    }
     descriptor->flags |= flags;
 }
 
