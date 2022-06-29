@@ -2896,10 +2896,10 @@ extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthUp(ip: in_addr_t) -> guint32;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthDown(ip: in_addr_t) -> guint32;
 }
 extern "C" {
     pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);

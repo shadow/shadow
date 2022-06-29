@@ -308,6 +308,10 @@ SimulationTime controller_getLatency(const struct Controller *controller,
 
 float controller_getReliability(const struct Controller *controller, in_addr_t src, in_addr_t dst);
 
+uint64_t controller_getBandwidthDownBytes(const struct Controller *controller, in_addr_t ip);
+
+uint64_t controller_getBandwidthUpBytes(const struct Controller *controller, in_addr_t ip);
+
 void controller_incrementPacketCount(const struct Controller *controller,
                                      in_addr_t src,
                                      in_addr_t dst);

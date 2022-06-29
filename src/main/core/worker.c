@@ -623,12 +623,12 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
-guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthUp(_worker_pool()->manager, nodeID, ip);
+guint32 worker_getNodeBandwidthUp(in_addr_t ip) {
+    return manager_getNodeBandwidthUp(_worker_pool()->manager, ip);
 }
 
-guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
+guint32 worker_getNodeBandwidthDown(in_addr_t ip) {
+    return manager_getNodeBandwidthDown(_worker_pool()->manager, ip);
 }
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {

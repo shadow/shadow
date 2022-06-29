@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::os::unix::fs::MetadataExt;
@@ -29,6 +29,9 @@ pub struct SimConfig {
 
     // routing information for paths between graph nodes
     pub routing_info: RoutingInfo<u32>,
+
+    // bandwidths of hosts at ip addresses
+    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
 
     // a list of hosts and their processes
     pub hosts: Vec<HostInfo>,
@@ -131,10 +134,25 @@ impl SimConfig {
             config.network.use_shortest_path.unwrap(),
         )?;
 
+        // get all host bandwidths
+        let host_bandwidths = hosts
+            .iter()
+            .map(|host| {
+                // we made sure above that every host has a bandwidth set
+                let bw = Bandwidth {
+                    up_bytes: host.bandwidth_up_bits.unwrap() / 8,
+                    down_bytes: host.bandwidth_down_bits.unwrap() / 8,
+                };
+
+                (host.ip_addr.unwrap(), bw)
+            })
+            .collect();
+
         Ok(Self {
             random,
             ip_assignment,
             routing_info,
+            host_bandwidths,
             hosts,
         })
     }
@@ -173,6 +191,12 @@ pub struct ProcessInfo {
     pub stop_time: Option<SimulationTime>,
     pub args: Vec<OsString>,
     pub env: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Bandwidth {
+    pub up_bytes: u64,
+    pub down_bytes: u64,
 }
 
 /// For a host entry in the configuration options, build a list of `HostInfo` objects.
