@@ -96,11 +96,6 @@ static void _manager_unlock(Manager* manager) {
     g_mutex_unlock(&(manager->lock));
 }
 
-static Host* _manager_getHost(Manager* manager, GQuark hostID) {
-    MAGIC_ASSERT(manager);
-    return scheduler_getHost(manager->scheduler, hostID);
-}
-
 static gchar* _manager_getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
     const ElfW(Dyn) *rpath = NULL;
@@ -625,14 +620,6 @@ SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceA
     return controller_getLatency(manager->controller, src, dst);
 }
 
-SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
-    Host* sourceHost = _manager_getHost(manager, sourceHostID);
-    Host* destinationHost = _manager_getHost(manager, destinationHostID);
-    Address* sourceAddress = host_getDefaultAddress(sourceHost);
-    Address* destinationAddress = host_getDefaultAddress(destinationHost);
-    return manager_getLatencyForAddresses(manager, sourceAddress, destinationAddress);
-}
-
 gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
                                           Address* destinationAddress) {
     MAGIC_ASSERT(manager);
@@ -640,14 +627,6 @@ gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddre
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
     return controller_getReliability(manager->controller, src, dst);
-}
-
-gfloat manager_getReliability(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
-    Host* sourceHost = _manager_getHost(manager, sourceHostID);
-    Host* destinationHost = _manager_getHost(manager, destinationHostID);
-    Address* sourceAddress = host_getDefaultAddress(sourceHost);
-    Address* destinationAddress = host_getDefaultAddress(destinationHost);
-    return manager_getReliabilityForAddresses(manager, sourceAddress, destinationAddress);
 }
 
 bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress) {

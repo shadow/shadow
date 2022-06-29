@@ -44,10 +44,8 @@ guint32 manager_getNodeBandwidthDown(Manager* manager, in_addr_t ip);
 void manager_updateMinRunahead(Manager* manager, SimulationTime time);
 SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
                                               Address* destinationAddress);
-SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID);
 gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
                                           Address* destinationAddress);
-gfloat manager_getReliability(Manager* manager, GQuark sourceHostID, GQuark destinationHostID);
 bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress);
 void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
                                   Address* destinationAddress);

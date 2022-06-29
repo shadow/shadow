@@ -2911,16 +2911,10 @@ extern "C" {
     ) -> SimulationTime;
 }
 extern "C" {
-    pub fn worker_getLatency(sourceHostID: GQuark, destinationHostID: GQuark) -> SimulationTime;
-}
-extern "C" {
     pub fn worker_getReliabilityForAddresses(
         sourceAddress: *mut Address,
         destinationAddress: *mut Address,
     ) -> gdouble;
-}
-extern "C" {
-    pub fn worker_getReliability(sourceHostID: GQuark, destinationHostID: GQuark) -> gdouble;
 }
 extern "C" {
     pub fn worker_isRoutable(sourceAddress: *mut Address, destinationAddress: *mut Address)

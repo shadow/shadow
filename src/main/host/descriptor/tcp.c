@@ -432,12 +432,9 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
         Address* srcAddress = worker_resolveIPToAddress(sourceIP);
         Address* dstAddress = worker_resolveIPToAddress(destinationIP);
 
-        GQuark sourceID = (GQuark)address_getID(srcAddress);
-        GQuark destinationID = (GQuark)address_getID(dstAddress);
-
         /* these sim time values are a duration and not an absolute time */
-        SimulationTime srcLatency = worker_getLatency(sourceID, destinationID);
-        SimulationTime dstLatency = worker_getLatency(destinationID, sourceID);
+        SimulationTime srcLatency = worker_getLatencyForAddresses(srcAddress, dstAddress);
+        SimulationTime dstLatency = worker_getLatencyForAddresses(dstAddress, srcAddress);
 
         /* find latency in milliseconds */
         guint sendLatency = (guint)ceil((gdouble)srcLatency / SIMTIME_ONE_MILLISECOND);
@@ -445,9 +442,8 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
 
         if(sendLatency == 0 || receiveLatency == 0) {
             utility_panic("need nonzero latency to set buffer sizes, "
-                          "source=%" G_GUINT32_FORMAT " dest=%" G_GUINT32_FORMAT
-                          " send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
-                          sourceID, destinationID, sendLatency, receiveLatency);
+                          "send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
+                          sendLatency, receiveLatency);
         }
         utility_assert(sendLatency > 0 && receiveLatency > 0);
 
