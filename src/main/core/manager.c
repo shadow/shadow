@@ -466,7 +466,7 @@ static gchar** _manager_generateEnvv(Manager* manager, Host* host, const gchar* 
      *   - preload path of the openssl rng lib
      *   - preload path of the openssl crypto lib
      *   - preload values from LD_PRELOAD entries in the environment process option */
-    GPtrArray* ldPreloadArray = g_ptr_array_new();
+    GPtrArray* ldPreloadArray = g_ptr_array_new_with_free_func(g_free);
 
     debug("Adding Shadow injector lib path %s", manager->preloadInjectorPath);
     g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadInjectorPath));
@@ -708,16 +708,16 @@ static void _manager_checkResourceUsage(Manager* manager) {
     if (manager->checkFdUsage) {
         unsigned long fd_count = 0;
         DIR* dirp = opendir("/proc/self/fd");
-        if (dirp != NULL) {
-            struct dirent* entry = NULL;
-            while ((entry = readdir(dirp)) != NULL) {
-                fd_count++;
-            }
-        } else {
+        if (dirp == NULL) {
             warning("Unable to open '/proc/self/fd': %s", g_strerror(errno));
             manager->checkFdUsage = false;
             return;
         }
+        struct dirent* entry = NULL;
+        while ((entry = readdir(dirp)) != NULL) {
+            fd_count++;
+        }
+        closedir(dirp);
 
         struct rlimit fd_lim;
         if (getrlimit(RLIMIT_NOFILE, &fd_lim) != 0) {
