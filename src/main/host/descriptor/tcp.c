@@ -432,12 +432,9 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
         Address* srcAddress = worker_resolveIPToAddress(sourceIP);
         Address* dstAddress = worker_resolveIPToAddress(destinationIP);
 
-        GQuark sourceID = (GQuark)address_getID(srcAddress);
-        GQuark destinationID = (GQuark)address_getID(dstAddress);
-
         /* these sim time values are a duration and not an absolute time */
-        SimulationTime srcLatency = worker_getLatency(sourceID, destinationID);
-        SimulationTime dstLatency = worker_getLatency(destinationID, sourceID);
+        SimulationTime srcLatency = worker_getLatencyForAddresses(srcAddress, dstAddress);
+        SimulationTime dstLatency = worker_getLatencyForAddresses(dstAddress, srcAddress);
 
         /* find latency in milliseconds */
         guint sendLatency = (guint)ceil((gdouble)srcLatency / SIMTIME_ONE_MILLISECOND);
@@ -445,9 +442,8 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
 
         if(sendLatency == 0 || receiveLatency == 0) {
             utility_panic("need nonzero latency to set buffer sizes, "
-                          "source=%" G_GUINT32_FORMAT " dest=%" G_GUINT32_FORMAT
-                          " send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
-                          sourceID, destinationID, sendLatency, receiveLatency);
+                          "send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
+                          sendLatency, receiveLatency);
         }
         utility_assert(sendLatency > 0 && receiveLatency > 0);
 
@@ -538,16 +534,10 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
 
     guint32 rtt_milliseconds = (guint32)_tcp_calculateRTT(tcp, host);
 
-    Address* srcAddress = worker_resolveIPToAddress(sourceIP);
-    Address* dstAddress = worker_resolveIPToAddress(destinationIP);
-
-    GQuark sourceID = (GQuark)address_getID(srcAddress);
-    GQuark destinationID = (GQuark)address_getID(dstAddress);
-
     /* i got delay, now i need values for my send and receive buffer
      * sizes based on bandwidth in both directions. do my send size first. */
-    guint32 my_send_bw = worker_getNodeBandwidthUp(sourceID, sourceIP);
-    guint32 their_receive_bw = worker_getNodeBandwidthDown(destinationID, destinationIP);
+    guint32 my_send_bw = worker_getNodeBandwidthUp(sourceIP);
+    guint32 their_receive_bw = worker_getNodeBandwidthDown(destinationIP);
 
     /* KiBps is the same as Bpms, which works with our RTT calculation. */
     guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
@@ -556,8 +546,8 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
     guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
     /* now the same thing for my receive buf */
-    guint32 my_receive_bw = worker_getNodeBandwidthDown(sourceID, sourceIP);
-    guint32 their_send_bw = worker_getNodeBandwidthUp(destinationID, destinationIP);
+    guint32 my_receive_bw = worker_getNodeBandwidthDown(sourceIP);
+    guint32 their_send_bw = worker_getNodeBandwidthUp(destinationIP);
 
     /* KiBps is the same as Bpms, which works with our RTT calculation. */
     guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;

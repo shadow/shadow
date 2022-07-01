@@ -2896,10 +2896,10 @@ extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthUp(ip: in_addr_t) -> guint32;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthDown(ip: in_addr_t) -> guint32;
 }
 extern "C" {
     pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);
@@ -2911,16 +2911,10 @@ extern "C" {
     ) -> SimulationTime;
 }
 extern "C" {
-    pub fn worker_getLatency(sourceHostID: GQuark, destinationHostID: GQuark) -> SimulationTime;
-}
-extern "C" {
     pub fn worker_getReliabilityForAddresses(
         sourceAddress: *mut Address,
         destinationAddress: *mut Address,
     ) -> gdouble;
-}
-extern "C" {
-    pub fn worker_getReliability(sourceHostID: GQuark, destinationHostID: GQuark) -> gdouble;
 }
 extern "C" {
     pub fn worker_isRoutable(sourceAddress: *mut Address, destinationAddress: *mut Address)

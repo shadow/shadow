@@ -623,12 +623,12 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
-guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthUp(_worker_pool()->manager, nodeID, ip);
+guint32 worker_getNodeBandwidthUp(in_addr_t ip) {
+    return manager_getNodeBandwidthUp(_worker_pool()->manager, ip);
 }
 
-guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
+guint32 worker_getNodeBandwidthDown(in_addr_t ip) {
+    return manager_getNodeBandwidthDown(_worker_pool()->manager, ip);
 }
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
@@ -640,16 +640,8 @@ SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* de
         _worker_pool()->manager, sourceAddress, destinationAddress);
 }
 
-SimulationTime worker_getLatency(GQuark sourceHostID, GQuark destinationHostID) {
-    return manager_getLatency(_worker_pool()->manager, sourceHostID, destinationHostID);
-}
-
 gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
     return manager_getReliabilityForAddresses(_worker_pool()->manager, sourceAddress, destinationAddress);
-}
-
-gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID) {
-    return manager_getReliability(_worker_pool()->manager, sourceHostID, destinationHostID);
 }
 
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {

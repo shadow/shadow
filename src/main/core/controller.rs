@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::sync::RwLock;
@@ -6,7 +7,7 @@ use std::time::Duration;
 use rand::Rng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-use crate::core::sim_config::{HostInfo, SimConfig};
+use crate::core::sim_config::{Bandwidth, HostInfo, SimConfig};
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::Flatten;
 use crate::core::support::simulation_time::SimulationTime;
@@ -23,6 +24,7 @@ pub struct Controller<'a> {
     // global network connectivity info
     ip_assignment: IpAssignment<u32>,
     routing_info: RoutingInfo<u32>,
+    host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
     dns: *mut c::DNS,
     is_runahead_dynamic: bool,
 
@@ -53,6 +55,7 @@ impl<'a> Controller<'a> {
             random: sim_config.random,
             ip_assignment: sim_config.ip_assignment,
             routing_info: sim_config.routing_info,
+            host_bandwidths: sim_config.host_bandwidths,
             dns,
             scheduling_data: RwLock::new(ControllerScheduling {
                 min_runahead_config,
@@ -236,6 +239,7 @@ trait SimController {
     unsafe fn get_dns(&self) -> *mut c::DNS;
     fn get_latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime>;
     fn get_reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32>;
+    fn get_bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth>;
     fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr);
     fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool;
     fn manager_finished_current_round(
@@ -264,6 +268,10 @@ impl SimController for Controller<'_> {
         let dst = self.ip_assignment.get_node(dst)?;
 
         Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
+    }
+
+    fn get_bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
+        self.host_bandwidths.get(&ip)
     }
 
     fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
@@ -430,6 +438,28 @@ mod export {
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
         controller.get_reliability(src, dst).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn controller_getBandwidthDownBytes(
+        controller: *const Controller,
+        ip: libc::in_addr_t,
+    ) -> u64 {
+        let controller = unsafe { controller.as_ref() }.unwrap();
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+
+        controller.get_bandwidth(ip).unwrap().down_bytes
+    }
+
+    #[no_mangle]
+    pub extern "C" fn controller_getBandwidthUpBytes(
+        controller: *const Controller,
+        ip: libc::in_addr_t,
+    ) -> u64 {
+        let controller = unsafe { controller.as_ref() }.unwrap();
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+
+        controller.get_bandwidth(ip).unwrap().up_bytes
     }
 
     #[no_mangle]
