@@ -28,9 +28,6 @@ static int _parallelism;
 ADD_CONFIG_HANDLER(config_getParallelism, _parallelism)
 
 struct _Scheduler {
-    // Unowned back-pointer.
-    Manager* manager;
-
     WorkerPool* workerPool;
 
     /* global lock for all threads, hold this as little as possible */
@@ -121,9 +118,6 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
 
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
-
-    // Unowned back-pointer
-    scheduler->manager = manager;
 
     scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
                                            /*nParallel=*/_parallelism);
