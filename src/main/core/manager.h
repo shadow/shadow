@@ -58,8 +58,6 @@ const gchar* manager_getHostsRootPath(Manager* manager);
 void manager_run(Manager*);
 
 /* info received from controller to set up the simulation */
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
-                           const gchar* startSymbol);
 int manager_addNewVirtualHost(Manager* manager, HostParameters* params);
 void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginName,
                                   SimulationTime startTime, SimulationTime stopTime,
