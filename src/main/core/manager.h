@@ -56,7 +56,6 @@ void manager_incrementPluginError(Manager* manager);
 const gchar* manager_getHostsRootPath(Manager* manager);
 
 void manager_run(Manager*);
-gboolean manager_schedulerIsRunning(Manager* manager);
 
 /* info received from controller to set up the simulation */
 void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,

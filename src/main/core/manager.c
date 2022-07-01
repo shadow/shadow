@@ -643,11 +643,6 @@ const ConfigOptions* manager_getConfig(Manager* manager) {
     return manager->config;
 }
 
-gboolean manager_schedulerIsRunning(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return scheduler_isRunning(manager->scheduler);
-}
-
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
