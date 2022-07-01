@@ -42,6 +42,9 @@ Futex* futex_new(PluginPhysicalPtr word) {
 
 static void _futex_free(Futex* futex) {
     MAGIC_ASSERT(futex);
+
+    g_hash_table_destroy(futex->listeners);
+
     MAGIC_CLEAR(futex);
     free(futex);
     worker_count_deallocation(Futex);

@@ -908,7 +908,7 @@ static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
     process_freePtrsWithoutFlushing(proc);
-    g_array_free(proc->memoryRefs, false);
+    g_array_free(proc->memoryRefs, true);
 
     _process_terminate(proc);
     if (proc->threads) {
