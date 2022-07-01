@@ -62,7 +62,7 @@ gint tcp_getConnectionError(TCP* tcp);
 // clang-format on
 
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
-void tcp_enterServerMode(TCP* tcp, Host* host, gint backlog);
+void tcp_enterServerMode(TCP* tcp, Host* host, Process* process, gint backlog);
 void tcp_updateServerBacklog(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
                           gint* acceptedHandle);

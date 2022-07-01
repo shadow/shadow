@@ -27,8 +27,6 @@ void legacydesc_refWeak(gpointer data);
 void legacydesc_unrefWeak(gpointer data);
 void legacydesc_close(LegacyDescriptor* descriptor, Host* host);
 
-void legacydesc_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess);
-Process* legacydesc_getOwnerProcess(LegacyDescriptor* descriptor);
 LegacyDescriptorType legacydesc_getType(LegacyDescriptor* descriptor);
 
 gint legacydesc_getFlags(LegacyDescriptor* descriptor);

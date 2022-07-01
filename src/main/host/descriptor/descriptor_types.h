@@ -44,7 +44,6 @@ struct _DescriptorFunctionTable {
 
 struct _LegacyDescriptor {
     DescriptorFunctionTable* funcTable;
-    Process* ownerProcess;
     LegacyDescriptorType type;
     Status status;
     GHashTable* listeners;

@@ -160,16 +160,6 @@ LegacyDescriptorType legacydesc_getType(LegacyDescriptor* descriptor) {
     return descriptor->type;
 }
 
-void legacydesc_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
-    MAGIC_ASSERT(descriptor);
-    descriptor->ownerProcess = ownerProcess;
-}
-
-Process* legacydesc_getOwnerProcess(LegacyDescriptor* descriptor) {
-    MAGIC_ASSERT(descriptor);
-    return descriptor->ownerProcess;
-}
-
 #ifdef DEBUG
 static gchar* _legacydesc_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
