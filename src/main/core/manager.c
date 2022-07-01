@@ -593,17 +593,11 @@ DNS* manager_getDNS(Manager* manager) {
 }
 
 guint32 manager_getNodeBandwidthUp(Manager* manager, in_addr_t ip) {
-    // TODO: The `/ 1024 * 1024 / 1000 * 1000` is a workaround to keep the same networking
-    // performance/results. It should be removed in an isolated commit so that the performance
-    // change is caused by this small integer rounding change.
-    return controller_getBandwidthUpBytes(manager->controller, ip) / 1024 * 1024 / 1000 * 1000 / 1024;
+    return controller_getBandwidthUpBytes(manager->controller, ip) / 1024;
 }
 
 guint32 manager_getNodeBandwidthDown(Manager* manager, in_addr_t ip) {
-    // TODO: The `/ 1024 * 1024 / 1000 * 1000` is a workaround to keep the same networking
-    // performance/results. It should be removed in an isolated commit so that the performance
-    // change is caused by this small integer rounding change.
-    return controller_getBandwidthDownBytes(manager->controller, ip) / 1024 * 1024 / 1000 * 1000 / 1024;
+    return controller_getBandwidthDownBytes(manager->controller, ip) / 1024;
 }
 
 void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
