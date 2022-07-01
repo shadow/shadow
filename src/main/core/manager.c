@@ -41,7 +41,6 @@ struct _Manager {
 
     /* simulation cli options */
     const ConfigOptions* config;
-    SimulationTime bootstrapEndTime;
 
     /* manager random source, init from controller random, used to init host randoms */
     Random* random;
@@ -192,7 +191,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->controller = controller;
     manager->config = config;
     manager->random = random_new(randomSeed);
-    manager->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
@@ -825,9 +823,4 @@ void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts)
     }
     counter_add_counter(manager->syscall_counter, syscall_counts);
     _manager_unlock(manager);
-}
-
-SimulationTime manager_getBootstrapEndTime(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->bootstrapEndTime;
 }

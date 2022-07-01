@@ -51,7 +51,6 @@ void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
                                   Address* destinationAddress);
 
 const ConfigOptions* manager_getConfig(Manager* manager);
-SimulationTime manager_getBootstrapEndTime(Manager* manager);
 
 void manager_incrementPluginError(Manager* manager);
 const gchar* manager_getHostsRootPath(Manager* manager);
