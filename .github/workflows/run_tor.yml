@@ -148,16 +148,23 @@ jobs:
         run: |
           tail -n 200 shadow/build/Testing/Temporary/LastTest.log
 
+      - name: Compress logs
+        if: failure()
+        run: |
+          shopt -s globstar
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/src/test/tor/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+
       - name: Upload shadow data directory
         uses: actions/upload-artifact@v2
         if: failure()
         with:
           name: shadow-data-dir
-          path: shadow/build/src/test/tor/**/*.data/*
+          path: shadow/build/src/test/tor/**/*.data.tar.xz
 
       - name: Upload shadow log file
         uses: actions/upload-artifact@v2
         if: failure()
         with:
           name: shadow-log-file
-          path: shadow/build/Testing/Temporary/LastTest.log
+          path: shadow/build/Testing/Temporary.tar.xz
