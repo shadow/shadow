@@ -159,4 +159,4 @@ libc = "0.2"
 nix = "0.24.1"
 rand = { version="0.8.5", features=["small_rng"] }
 signal-hook = "0.3.14"
-once_cell = "1.12.0"
+once_cell = "1.12.1"
