@@ -60,6 +60,7 @@ macro(add_linux_tests)
    if(DEFINED LINUX_TEST_PROPERTIES)
       set_tests_properties(${LINUX_TEST_NAME} PROPERTIES ${LINUX_TEST_PROPERTIES})
    endif()
+   set_property(TEST ${LINUX_TEST_NAME} APPEND PROPERTY LABELS linux)
 endmacro()
 
 ## example: add_shadow_tests(BASENAME bind LOGLEVEL debug ARGS --pin-cpus)
@@ -174,6 +175,8 @@ macro(add_shadow_tests)
    if(DEFINED SHADOW_TEST_PROPERTIES)
       set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
    endif()
+
+   set_property(TEST ${SHADOW_TEST_NAME} APPEND PROPERTY LABELS shadow)
 
    set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
    list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})
