@@ -124,8 +124,6 @@ typedef struct Random Random;
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
-typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
-
 typedef struct SyscallHandler SyscallHandler;
 
 // Mostly for interoperability with C APIs.

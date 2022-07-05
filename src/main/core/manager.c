@@ -61,8 +61,6 @@ struct _Manager {
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
-    guint numPluginErrors;
-
     gchar* dataPath;
     gchar* hostsPath;
 
@@ -75,8 +73,6 @@ struct _Manager {
     gchar* preloadOpensslRngPath;
     // Path to the openssl crypto lib that we preload for managed processes.
     gchar* preloadOpensslCryptoPath;
-
-    StatusLogger_ShadowStatusBarState* statusLogger;
 
     time_t timeOfLastUsageCheck;
     bool checkFdUsage;
@@ -303,14 +299,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     }
     g_free(configFilename);
 
-    if (config_getProgress(config)) {
-        if (isatty(STDERR_FILENO) == 1) {
-            manager->statusLogger = statusBar_new(endTime);
-        } else {
-            manager->statusLogger = statusPrinter_new(endTime);
-        }
-    }
-
     manager->checkFdUsage = true;
     manager->checkMemUsage = true;
 
@@ -319,9 +307,8 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     return manager;
 }
 
-gint manager_free(Manager* manager) {
+void manager_free(Manager* manager) {
     MAGIC_ASSERT(manager);
-    gint returnCode = (manager->numPluginErrors > 0) ? -1 : 0;
 
     if (manager->watcher) {
         childpidwatcher_free(manager->watcher);
@@ -394,14 +381,8 @@ gint manager_free(Manager* manager) {
         g_free(manager->preloadOpensslCryptoPath);
     }
 
-    if (manager->statusLogger) {
-        statusLogger_free(manager->statusLogger);
-    }
-
     MAGIC_CLEAR(manager);
     g_free(manager);
-
-    return returnCode;
 }
 
 guint manager_getRawCPUFrequency(Manager* manager) {
@@ -751,10 +732,6 @@ void manager_run(Manager* manager) {
          */
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
-        if (manager->statusLogger != NULL) {
-            statusLogger_updateEmuTime(manager->statusLogger, windowEnd);
-        }
-
         /* we are in control now, the workers are waiting for the next round */
         debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
               "] next event at %" G_GUINT64_FORMAT,
@@ -771,14 +748,7 @@ void manager_run(Manager* manager) {
 
 void manager_incrementPluginError(Manager* manager) {
     MAGIC_ASSERT(manager);
-    _manager_lock(manager);
-
-    manager->numPluginErrors++;
-    if (manager->statusLogger != NULL) {
-        statusLogger_updateNumFailedProcesses(manager->statusLogger, manager->numPluginErrors);
-    }
-
-    _manager_unlock(manager);
+    controller_incrementPluginErrors(manager->controller);
 }
 
 const gchar* manager_getHostsRootPath(Manager* manager) {

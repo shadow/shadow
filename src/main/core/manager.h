@@ -33,7 +33,7 @@ typedef struct _Manager Manager;
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed);
-gint manager_free(Manager* manager);
+void manager_free(Manager* manager);
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager);
 

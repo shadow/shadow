@@ -1,7 +1,3 @@
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
-use crate::utility::time::TimeParts;
-
 use std::io::Write;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -172,134 +168,10 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
     }
 }
 
-pub struct ShadowStatusBarState {
-    start: std::time::Instant,
-    current: EmulatedTime,
-    end: EmulatedTime,
-    num_failed_processes: u32,
-}
-
-impl std::fmt::Display for ShadowStatusBarState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sim_current = self.current.duration_since(&EmulatedTime::SIMULATION_START);
-        let sim_end = self.end.duration_since(&EmulatedTime::SIMULATION_START);
-        let frac = sim_current.as_millis() as f32 / sim_end.as_millis() as f32;
-
-        let sim_current = TimeParts::from_nanos(sim_current.as_nanos().into());
-        let sim_end = TimeParts::from_nanos(sim_end.as_nanos().into());
-        let realtime = TimeParts::from_nanos(self.start.elapsed().as_nanos());
-
-        write!(
-            f,
-            "{}% — simulated: {}/{}, realtime: {}, processes failed: {}",
-            (frac * 100.0).round() as i8,
-            sim_current.fmt_hr_min_sec(),
-            sim_end.fmt_hr_min_sec(),
-            realtime.fmt_hr_min_sec(),
-            self.num_failed_processes,
-        )
-    }
-}
-
-impl ShadowStatusBarState {
-    pub fn new(end: EmulatedTime) -> Self {
-        Self {
-            start: std::time::Instant::now(),
-            current: EmulatedTime::SIMULATION_START,
-            end,
-            num_failed_processes: 0,
-        }
-    }
-}
-
 nix::ioctl_read_bad!(_tiocgwinsz, libc::TIOCGWINSZ, libc::winsize);
 
 fn tiocgwinsz() -> nix::Result<libc::winsize> {
     let mut win_size: libc::winsize = unsafe { std::mem::zeroed() };
     unsafe { _tiocgwinsz(0, &mut win_size)? };
     Ok(win_size)
-}
-
-mod export {
-    use super::*;
-
-    pub enum StatusLogger<T: StatusBarState> {
-        Printer(StatusPrinter<T>),
-        Bar(StatusBar<T>),
-    }
-
-    impl<T: 'static + StatusBarState> StatusLogger<T> {
-        pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
-            match self {
-                Self::Printer(x) => x.mutate_state(f),
-                Self::Bar(x) => x.mutate_state(f),
-            }
-        }
-
-        pub fn stop(&mut self) {
-            match self {
-                Self::Printer(x) => x.stop(),
-                Self::Bar(x) => x.stop(),
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn statusBar_new(end: u64) -> *mut StatusLogger<ShadowStatusBarState> {
-        let end = SimulationTime::from_c_simtime(end).unwrap();
-        let end = EmulatedTime::from_abs_simtime(end);
-        let state = ShadowStatusBarState::new(end);
-
-        let redraw_interval = Duration::from_millis(1000);
-        Box::into_raw(Box::new(StatusLogger::Bar(StatusBar::new(
-            state,
-            redraw_interval,
-        ))))
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn statusPrinter_new(
-        end: u64,
-    ) -> *mut StatusLogger<ShadowStatusBarState> {
-        let end = SimulationTime::from_c_simtime(end).unwrap();
-        let end = EmulatedTime::from_abs_simtime(end);
-        let state = ShadowStatusBarState::new(end);
-
-        Box::into_raw(Box::new(StatusLogger::Printer(StatusPrinter::new(state))))
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn statusLogger_free(
-        status_logger: *mut StatusLogger<ShadowStatusBarState>,
-    ) {
-        assert!(!status_logger.is_null());
-        let mut status_logger = unsafe { Box::from_raw(status_logger) };
-        status_logger.stop();
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn statusLogger_updateEmuTime(
-        status_logger: *const StatusLogger<ShadowStatusBarState>,
-        current: u64,
-    ) {
-        let status_logger = unsafe { status_logger.as_ref() }.unwrap();
-        let current = SimulationTime::from_c_simtime(current).unwrap();
-        let current = EmulatedTime::from_abs_simtime(current);
-
-        status_logger.mutate_state(|state| {
-            state.current = current;
-        });
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn statusLogger_updateNumFailedProcesses(
-        status_logger: *const StatusLogger<ShadowStatusBarState>,
-        num_failed_processes: u32,
-    ) {
-        let status_logger = unsafe { status_logger.as_ref() }.unwrap();
-
-        status_logger.mutate_state(|state| {
-            state.num_failed_processes = num_failed_processes;
-        });
-    }
 }

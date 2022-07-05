@@ -1633,7 +1633,7 @@ extern "C" {
     ) -> *mut Manager;
 }
 extern "C" {
-    pub fn manager_free(manager: *mut Manager) -> gint;
+    pub fn manager_free(manager: *mut Manager);
 }
 extern "C" {
     pub fn manager_run(arg1: *mut Manager);
