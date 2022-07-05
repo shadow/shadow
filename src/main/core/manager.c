@@ -41,7 +41,6 @@ struct _Manager {
 
     /* simulation cli options */
     const ConfigOptions* config;
-    SimulationTime bootstrapEndTime;
 
     /* manager random source, init from controller random, used to init host randoms */
     Random* random;
@@ -62,8 +61,6 @@ struct _Manager {
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
-    guint numPluginErrors;
-
     gchar* dataPath;
     gchar* hostsPath;
 
@@ -76,8 +73,6 @@ struct _Manager {
     gchar* preloadOpensslRngPath;
     // Path to the openssl crypto lib that we preload for managed processes.
     gchar* preloadOpensslCryptoPath;
-
-    StatusLogger_ShadowStatusBarState* statusLogger;
 
     time_t timeOfLastUsageCheck;
     bool checkFdUsage;
@@ -192,7 +187,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     manager->controller = controller;
     manager->config = config;
     manager->random = random_new(randomSeed);
-    manager->bootstrapEndTime = config_getBootstrapEndTime(config);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
@@ -305,14 +299,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     }
     g_free(configFilename);
 
-    if (config_getProgress(config)) {
-        if (isatty(STDERR_FILENO) == 1) {
-            manager->statusLogger = statusBar_new(endTime);
-        } else {
-            manager->statusLogger = statusPrinter_new(endTime);
-        }
-    }
-
     manager->checkFdUsage = true;
     manager->checkMemUsage = true;
 
@@ -321,9 +307,8 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     return manager;
 }
 
-gint manager_free(Manager* manager) {
+void manager_free(Manager* manager) {
     MAGIC_ASSERT(manager);
-    gint returnCode = (manager->numPluginErrors > 0) ? -1 : 0;
 
     if (manager->watcher) {
         childpidwatcher_free(manager->watcher);
@@ -396,14 +381,8 @@ gint manager_free(Manager* manager) {
         g_free(manager->preloadOpensslCryptoPath);
     }
 
-    if (manager->statusLogger) {
-        statusLogger_free(manager->statusLogger);
-    }
-
     MAGIC_CLEAR(manager);
     g_free(manager);
-
-    return returnCode;
 }
 
 guint manager_getRawCPUFrequency(Manager* manager) {
@@ -645,11 +624,6 @@ const ConfigOptions* manager_getConfig(Manager* manager) {
     return manager->config;
 }
 
-gboolean manager_schedulerIsRunning(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return scheduler_isRunning(manager->scheduler);
-}
-
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
@@ -758,10 +732,6 @@ void manager_run(Manager* manager) {
          */
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
-        if (manager->statusLogger != NULL) {
-            statusLogger_updateEmuTime(manager->statusLogger, windowEnd);
-        }
-
         /* we are in control now, the workers are waiting for the next round */
         debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
               "] next event at %" G_GUINT64_FORMAT,
@@ -778,14 +748,7 @@ void manager_run(Manager* manager) {
 
 void manager_incrementPluginError(Manager* manager) {
     MAGIC_ASSERT(manager);
-    _manager_lock(manager);
-
-    manager->numPluginErrors++;
-    if (manager->statusLogger != NULL) {
-        statusLogger_updateNumFailedProcesses(manager->statusLogger, manager->numPluginErrors);
-    }
-
-    _manager_unlock(manager);
+    controller_incrementPluginErrors(manager->controller);
 }
 
 const gchar* manager_getHostsRootPath(Manager* manager) {
@@ -825,9 +788,4 @@ void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts)
     }
     counter_add_counter(manager->syscall_counter, syscall_counts);
     _manager_unlock(manager);
-}
-
-SimulationTime manager_getBootstrapEndTime(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->bootstrapEndTime;
 }

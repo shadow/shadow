@@ -127,8 +127,6 @@ typedef struct Random Random;
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
-typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
-
 typedef struct SyscallHandler SyscallHandler;
 
 // Mostly for interoperability with C APIs.
@@ -283,18 +281,6 @@ uint32_t random_nextU32(struct Random *rng);
 // Fills the buffer with pseudo-random bytes.
 void random_nextNBytes(struct Random *rng, uint8_t *buf, uintptr_t len);
 
-struct StatusLogger_ShadowStatusBarState *statusBar_new(uint64_t end);
-
-struct StatusLogger_ShadowStatusBarState *statusPrinter_new(uint64_t end);
-
-void statusLogger_free(struct StatusLogger_ShadowStatusBarState *status_logger);
-
-void statusLogger_updateEmuTime(const struct StatusLogger_ShadowStatusBarState *status_logger,
-                                uint64_t current);
-
-void statusLogger_updateNumFailedProcesses(const struct StatusLogger_ShadowStatusBarState *status_logger,
-                                           uint32_t num_failed_processes);
-
 // Get the backtrace. This function is slow. The string must be freed using `backtrace_free()`.
 char *backtrace(void);
 
@@ -325,6 +311,8 @@ bool controller_managerFinishedCurrentRound(const struct Controller *controller,
 
 void controller_updateMinRunahead(const struct Controller *controller,
                                   SimulationTime min_path_latency);
+
+void controller_incrementPluginErrors(const struct Controller *controller);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);

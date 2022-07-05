@@ -412,7 +412,9 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
 
     // Create the thread-local Worker object.
-    worker_newForThisThread(workerPool, threadID, manager_getBootstrapEndTime(workerPool->manager));
+    SimulationTime bootstrapEndTime =
+        config_getBootstrapEndTime(manager_getConfig(workerPool->manager));
+    worker_newForThisThread(workerPool, threadID, bootstrapEndTime);
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);
@@ -493,7 +495,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTi
     utility_assert(task);
     utility_assert(host);
 
-    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
+    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
         return FALSE;
     }
 
@@ -534,7 +536,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_assert(packet != NULL);
 
-    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
+    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
         /* the simulation is over, don't bother */
         return;
     }

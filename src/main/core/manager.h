@@ -33,7 +33,7 @@ typedef struct _Manager Manager;
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed);
-gint manager_free(Manager* manager);
+void manager_free(Manager* manager);
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager);
 
@@ -51,17 +51,13 @@ void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
                                   Address* destinationAddress);
 
 const ConfigOptions* manager_getConfig(Manager* manager);
-SimulationTime manager_getBootstrapEndTime(Manager* manager);
 
 void manager_incrementPluginError(Manager* manager);
 const gchar* manager_getHostsRootPath(Manager* manager);
 
 void manager_run(Manager*);
-gboolean manager_schedulerIsRunning(Manager* manager);
 
 /* info received from controller to set up the simulation */
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
-                           const gchar* startSymbol);
 int manager_addNewVirtualHost(Manager* manager, HostParameters* params);
 void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginName,
                                   SimulationTime startTime, SimulationTime stopTime,
