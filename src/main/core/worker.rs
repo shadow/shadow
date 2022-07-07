@@ -25,6 +25,7 @@ static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 // counters to be used when there is no worker active
 static ALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
+static SYSCALL_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -326,9 +327,12 @@ impl Worker {
             w.syscall_counter.add_counter(syscall_counts);
         })
         .unwrap_or_else(|| {
-            // no live worker
-            const MSG: &str = "Trying to add syscall counts when there is no worker; \
-                               throwing away syscall counts";
+            // no live worker; fall back to the shared counter
+            SYSCALL_COUNTER.lock().unwrap().add_counter(syscall_counts);
+
+            // while we handle this okay, this probably indicates an issue somewhere else in the
+            // code
+            const MSG: &str = "Trying to add syscall counts when there is no worker";
             log::warn!("{}", MSG);
 
             // panic only in debug builds
@@ -507,8 +511,9 @@ mod export {
         Worker::is_alive()
     }
 
+    /// Add the global counters to the provided counters, and clear the global counters.
     #[no_mangle]
-    pub extern "C" fn worker_addAndClearGlobalAllocCounters(
+    pub extern "C" fn worker_addFromGlobalAllocCounters(
         alloc_counter: *mut Counter,
         dealloc_counter: *mut Counter,
     ) {
@@ -523,5 +528,44 @@ mod export {
 
         *global_alloc_counter = Counter::new();
         *global_dealloc_counter = Counter::new();
+    }
+
+    /// Add the counters to their global counterparts, and clear the provided counters.
+    #[no_mangle]
+    pub extern "C" fn worker_addToGlobalAllocCounters(
+        alloc_counter: *mut Counter,
+        dealloc_counter: *mut Counter,
+    ) {
+        let alloc_counter = unsafe { alloc_counter.as_mut() }.unwrap();
+        let dealloc_counter = unsafe { dealloc_counter.as_mut() }.unwrap();
+
+        let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
+        let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
+
+        global_alloc_counter.add_counter(alloc_counter);
+        global_dealloc_counter.add_counter(dealloc_counter);
+
+        *alloc_counter = Counter::new();
+        *dealloc_counter = Counter::new();
+    }
+
+    /// Add the global counter to the provided counter, and clear the global counter.
+    #[no_mangle]
+    pub extern "C" fn worker_addFromGlobalSyscallCounter(syscall_counter: *mut Counter) {
+        let syscall_counter = unsafe { syscall_counter.as_mut() }.unwrap();
+
+        let mut global_syscall_counter = SYSCALL_COUNTER.lock().unwrap();
+        syscall_counter.add_counter(&global_syscall_counter);
+        *global_syscall_counter = Counter::new();
+    }
+
+    /// Add the counters to their global counterparts, and clear the provided counters.
+    #[no_mangle]
+    pub extern "C" fn worker_addToGlobalSyscallCounter(syscall_counter: *mut Counter) {
+        let syscall_counter = unsafe { syscall_counter.as_mut() }.unwrap();
+
+        let mut global_syscall_counter = SYSCALL_COUNTER.lock().unwrap();
+        global_syscall_counter.add_counter(&syscall_counter);
+        *syscall_counter = Counter::new();
     }
 }

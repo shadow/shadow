@@ -46,13 +46,6 @@ struct _Manager {
     Random* random;
     guint rawFrequencyKHz;
 
-    /* global object counters, we collect counts from workers at end of sim */
-    Counter* object_counter_alloc;
-    Counter* object_counter_dealloc;
-
-    // Global syscall counter, we collect counts from workers at end of sim
-    Counter* syscall_counter;
-
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
 
@@ -152,6 +145,11 @@ static gchar* _manager_scanRPathForLib(const gchar* libname) {
     return preloadArgValue;
 }
 
+static const gchar* _manager_getHostsRootPath(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->hostsPath;
+}
+
 static gchar* _manager_getRequiredPreloadPath(const gchar* libname) {
     gchar* libpath = _manager_scanRPathForLib(libname);
 
@@ -172,8 +170,6 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     _manager_unlock(manager);
     return r;
 }
-
-ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed) {
@@ -227,8 +223,8 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     guint nWorkers = config_getWorkers(config);
     SchedulerPolicyType policy = config_getSchedulerPolicy(config);
     guint schedulerSeed = _manager_nextRandomUInt(manager);
-    manager->scheduler =
-        scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
+    manager->scheduler = scheduler_new(
+        controller, manager->watcher, config, policy, nWorkers, schedulerSeed, endTime);
 
     gchar* cwdPath = g_get_current_dir();
 
@@ -322,39 +318,40 @@ void manager_free(Manager* manager) {
         scheduler_unref(manager->scheduler);
     }
 
-    if (manager->syscall_counter) {
-        char* str = counter_alloc_string(manager->syscall_counter);
+    if (config_getUseSyscallCounters(manager->config)) {
+        // get the worker's global counters
+        Counter* syscall_counter = counter_new();
+        worker_addFromGlobalSyscallCounter(syscall_counter);
+
+        char* str = counter_alloc_string(syscall_counter);
         info("Global syscall counts: %s", str);
-        counter_free_string(manager->syscall_counter, str);
-        counter_free(manager->syscall_counter);
+        counter_free_string(syscall_counter, str);
+        counter_free(syscall_counter);
     }
 
-    if (manager->object_counter_alloc && manager->object_counter_dealloc) {
-        // add the worker's global counters
-        worker_addAndClearGlobalAllocCounters(
-            manager->object_counter_alloc, manager->object_counter_dealloc);
+    if (config_getUseObjectCounters(manager->config)) {
+        // get the worker's global counters
+        Counter* object_counter_alloc = counter_new();
+        Counter* object_counter_dealloc = counter_new();
+        worker_addFromGlobalAllocCounters(object_counter_alloc, object_counter_dealloc);
 
-        char* str = counter_alloc_string(manager->object_counter_alloc);
+        char* str = counter_alloc_string(object_counter_alloc);
         info("Global allocated object counts: %s", str);
-        counter_free_string(manager->object_counter_alloc, str);
+        counter_free_string(object_counter_alloc, str);
 
-        str = counter_alloc_string(manager->object_counter_dealloc);
+        str = counter_alloc_string(object_counter_dealloc);
         info("Global deallocated object counts: %s", str);
-        counter_free_string(manager->object_counter_dealloc, str);
+        counter_free_string(object_counter_dealloc, str);
 
-        if (counter_equals_counter(
-                manager->object_counter_alloc, manager->object_counter_dealloc)) {
+        if (counter_equals_counter(object_counter_alloc, object_counter_dealloc)) {
             info("We allocated and deallocated the same number of objects :)");
         } else {
             /* don't change the formatting of this line as we search for it in test cases */
             warning("Memory leak detected");
         }
-    }
-    if (manager->object_counter_alloc) {
-        counter_free(manager->object_counter_alloc);
-    }
-    if (manager->object_counter_dealloc) {
-        counter_free(manager->object_counter_dealloc);
+
+        counter_free(object_counter_alloc);
+        counter_free(object_counter_dealloc);
     }
 
     g_mutex_clear(&(manager->lock));
@@ -385,7 +382,7 @@ void manager_free(Manager* manager) {
     g_free(manager);
 }
 
-guint manager_getRawCPUFrequency(Manager* manager) {
+static guint _manager_getRawCPUFrequency(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
     guint freq = manager->rawFrequencyKHz;
@@ -399,12 +396,12 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
 
-    guint managerCpuFreq = manager_getRawCPUFrequency(manager);
+    guint managerCpuFreq = _manager_getRawCPUFrequency(manager);
     params->cpuFrequency = MAX(0, managerCpuFreq);
 
     Host* host = host_new(params);
-    host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),
-               manager_getHostsRootPath(manager));
+    host_setup(host, controller_getDNS(manager->controller), _manager_getRawCPUFrequency(manager),
+               _manager_getHostsRootPath(manager));
 
     return scheduler_addHost(manager->scheduler, host);
 }
@@ -566,64 +563,6 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
     host_stopExecutionTimer(host);
 }
 
-DNS* manager_getDNS(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return controller_getDNS(manager->controller);
-}
-
-guint32 manager_getNodeBandwidthUp(Manager* manager, in_addr_t ip) {
-    return controller_getBandwidthUpBytes(manager->controller, ip) / 1024;
-}
-
-guint32 manager_getNodeBandwidthDown(Manager* manager, in_addr_t ip) {
-    return controller_getBandwidthDownBytes(manager->controller, ip) / 1024;
-}
-
-void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
-    MAGIC_ASSERT(manager);
-    return controller_updateMinRunahead(manager->controller, time);
-}
-
-SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
-                                              Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getLatency(manager->controller, src, dst);
-}
-
-gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
-                                          Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getReliability(manager->controller, src, dst);
-}
-
-bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_isRoutable(manager->controller, src, dst);
-}
-
-void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
-                                  Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    controller_incrementPacketCount(manager->controller, src, dst);
-}
-
-const ConfigOptions* manager_getConfig(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->config;
-}
-
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
@@ -744,48 +683,4 @@ void manager_run(Manager* manager) {
     }
 
     scheduler_finish(manager->scheduler);
-}
-
-void manager_incrementPluginError(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    controller_incrementPluginErrors(manager->controller);
-}
-
-const gchar* manager_getHostsRootPath(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->hostsPath;
-}
-
-static void _manager_add_object_counts(Manager* manager, Counter** mgr_obj_counts,
-                                       Counter* obj_counts) {
-    _manager_lock(manager);
-    // This is created on the fly, so that if we did not enable counting mode
-    // then we don't need to create the counter object.
-    if (!*mgr_obj_counts) {
-        *mgr_obj_counts = counter_new();
-    }
-    counter_add_counter(*mgr_obj_counts, obj_counts);
-    _manager_unlock(manager);
-}
-
-void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts) {
-    MAGIC_ASSERT(manager);
-    _manager_add_object_counts(manager, &manager->object_counter_alloc, alloc_obj_counts);
-}
-
-void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts) {
-    MAGIC_ASSERT(manager);
-    _manager_add_object_counts(manager, &manager->object_counter_dealloc, dealloc_obj_counts);
-}
-
-void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts) {
-    MAGIC_ASSERT(manager);
-    _manager_lock(manager);
-    // This is created on the fly, so that if we did not enable counting mode
-    // then we don't need to create the counter object.
-    if (!manager->syscall_counter) {
-        manager->syscall_counter = counter_new();
-    }
-    counter_add_counter(manager->syscall_counter, syscall_counts);
-    _manager_unlock(manager);
 }

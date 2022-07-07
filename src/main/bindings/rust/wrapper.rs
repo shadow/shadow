@@ -2858,7 +2858,7 @@ extern "C" {
     pub fn worker_getDNS() -> *mut DNS;
 }
 extern "C" {
-    pub fn worker_getChildPidWatcher() -> *mut ChildPidWatcher;
+    pub fn worker_getChildPidWatcher() -> *const ChildPidWatcher;
 }
 extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;
@@ -2896,10 +2896,10 @@ extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthUp(ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthUpKiBps(ip: in_addr_t) -> guint32;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthDown(ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthDownKiBps(ip: in_addr_t) -> guint32;
 }
 extern "C" {
     pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);

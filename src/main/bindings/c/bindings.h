@@ -390,6 +390,8 @@ bool config_getUseSeccomp(const struct ConfigOptions *config);
 
 bool config_getUseSyscallCounters(const struct ConfigOptions *config);
 
+bool config_getUseObjectCounters(const struct ConfigOptions *config);
+
 bool config_getUseLibcPreload(const struct ConfigOptions *config);
 
 bool config_getUseOpensslRNGPreload(const struct ConfigOptions *config);
@@ -575,8 +577,19 @@ WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
 
-void worker_addAndClearGlobalAllocCounters(struct Counter *alloc_counter,
-                                           struct Counter *dealloc_counter);
+// Add the global counters to the provided counters, and clear the global counters.
+void worker_addFromGlobalAllocCounters(struct Counter *alloc_counter,
+                                       struct Counter *dealloc_counter);
+
+// Add the counters to their global counterparts, and clear the provided counters.
+void worker_addToGlobalAllocCounters(struct Counter *alloc_counter,
+                                     struct Counter *dealloc_counter);
+
+// Add the global counter to the provided counter, and clear the global counter.
+void worker_addFromGlobalSyscallCounter(struct Counter *syscall_counter);
+
+// Add the counters to their global counterparts, and clear the provided counters.
+void worker_addToGlobalSyscallCounter(struct Counter *syscall_counter);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free

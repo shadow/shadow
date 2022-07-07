@@ -35,26 +35,6 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed);
 void manager_free(Manager* manager);
 
-ChildPidWatcher* manager_childpidwatcher(Manager* manager);
-
-guint manager_getRawCPUFrequency(Manager* manager);
-DNS* manager_getDNS(Manager* manager);
-guint32 manager_getNodeBandwidthUp(Manager* manager, in_addr_t ip);
-guint32 manager_getNodeBandwidthDown(Manager* manager, in_addr_t ip);
-void manager_updateMinRunahead(Manager* manager, SimulationTime time);
-SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
-                                              Address* destinationAddress);
-gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
-                                          Address* destinationAddress);
-bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress);
-void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
-                                  Address* destinationAddress);
-
-const ConfigOptions* manager_getConfig(Manager* manager);
-
-void manager_incrementPluginError(Manager* manager);
-const gchar* manager_getHostsRootPath(Manager* manager);
-
 void manager_run(Manager*);
 
 /* info received from controller to set up the simulation */
@@ -63,13 +43,5 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
                                   SimulationTime startTime, SimulationTime stopTime,
                                   const gchar* const* argv, const char* environment,
                                   bool pause_for_debugging);
-
-// Add the given allocated-object counts into a global manager counter.
-void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts);
-// Add the given deallocated-object counts into a global manager counter.
-void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts);
-
-// Add the given syscall counts into a global manager counter.
-void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts);
 
 #endif /* SHD_MANAGER_H_ */

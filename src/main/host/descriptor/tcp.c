@@ -536,8 +536,8 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
 
     /* i got delay, now i need values for my send and receive buffer
      * sizes based on bandwidth in both directions. do my send size first. */
-    guint32 my_send_bw = worker_getNodeBandwidthUp(sourceIP);
-    guint32 their_receive_bw = worker_getNodeBandwidthDown(destinationIP);
+    guint32 my_send_bw = worker_getNodeBandwidthUpKiBps(sourceIP);
+    guint32 their_receive_bw = worker_getNodeBandwidthDownKiBps(destinationIP);
 
     /* KiBps is the same as Bpms, which works with our RTT calculation. */
     guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
@@ -546,8 +546,8 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
     guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
     /* now the same thing for my receive buf */
-    guint32 my_receive_bw = worker_getNodeBandwidthDown(sourceIP);
-    guint32 their_send_bw = worker_getNodeBandwidthUp(destinationIP);
+    guint32 my_receive_bw = worker_getNodeBandwidthDownKiBps(sourceIP);
+    guint32 their_send_bw = worker_getNodeBandwidthUpKiBps(destinationIP);
 
     /* KiBps is the same as Bpms, which works with our RTT calculation. */
     guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;
