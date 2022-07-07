@@ -110,17 +110,18 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     worker_finish(myHosts, scheduler->endTime);
 }
 
-Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
-                         guint nWorkers, guint schedulerSeed,
-                         SimulationTime endTime) {
+Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
+                         const ConfigOptions* config, SchedulerPolicyType policyType,
+                         guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
 
-    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
-                                           /*nParallel=*/_parallelism);
+    scheduler->workerPool =
+        workerpool_new(controller, pidWatcher, scheduler, config, /*nThreads=*/nWorkers,
+                       /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round

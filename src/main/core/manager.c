@@ -145,6 +145,11 @@ static gchar* _manager_scanRPathForLib(const gchar* libname) {
     return preloadArgValue;
 }
 
+static const gchar* _manager_getHostsRootPath(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->hostsPath;
+}
+
 static gchar* _manager_getRequiredPreloadPath(const gchar* libname) {
     gchar* libpath = _manager_scanRPathForLib(libname);
 
@@ -165,8 +170,6 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     _manager_unlock(manager);
     return r;
 }
-
-ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
 Manager* manager_new(const Controller* controller, const ConfigOptions* config,
                      SimulationTime endTime, guint randomSeed) {
@@ -220,8 +223,8 @@ Manager* manager_new(const Controller* controller, const ConfigOptions* config,
     guint nWorkers = config_getWorkers(config);
     SchedulerPolicyType policy = config_getSchedulerPolicy(config);
     guint schedulerSeed = _manager_nextRandomUInt(manager);
-    manager->scheduler =
-        scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
+    manager->scheduler = scheduler_new(
+        controller, manager->watcher, config, policy, nWorkers, schedulerSeed, endTime);
 
     gchar* cwdPath = g_get_current_dir();
 
@@ -379,7 +382,7 @@ void manager_free(Manager* manager) {
     g_free(manager);
 }
 
-guint manager_getRawCPUFrequency(Manager* manager) {
+static guint _manager_getRawCPUFrequency(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
     guint freq = manager->rawFrequencyKHz;
@@ -393,12 +396,12 @@ int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
 
-    guint managerCpuFreq = manager_getRawCPUFrequency(manager);
+    guint managerCpuFreq = _manager_getRawCPUFrequency(manager);
     params->cpuFrequency = MAX(0, managerCpuFreq);
 
     Host* host = host_new(params);
-    host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),
-               manager_getHostsRootPath(manager));
+    host_setup(host, controller_getDNS(manager->controller), _manager_getRawCPUFrequency(manager),
+               _manager_getHostsRootPath(manager));
 
     return scheduler_addHost(manager->scheduler, host);
 }
@@ -560,64 +563,6 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
     host_stopExecutionTimer(host);
 }
 
-DNS* manager_getDNS(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return controller_getDNS(manager->controller);
-}
-
-guint32 manager_getNodeBandwidthUp(Manager* manager, in_addr_t ip) {
-    return controller_getBandwidthUpBytes(manager->controller, ip) / 1024;
-}
-
-guint32 manager_getNodeBandwidthDown(Manager* manager, in_addr_t ip) {
-    return controller_getBandwidthDownBytes(manager->controller, ip) / 1024;
-}
-
-void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
-    MAGIC_ASSERT(manager);
-    return controller_updateMinRunahead(manager->controller, time);
-}
-
-SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
-                                              Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getLatency(manager->controller, src, dst);
-}
-
-gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
-                                          Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getReliability(manager->controller, src, dst);
-}
-
-bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_isRoutable(manager->controller, src, dst);
-}
-
-void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
-                                  Address* destinationAddress) {
-    MAGIC_ASSERT(manager);
-
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    controller_incrementPacketCount(manager->controller, src, dst);
-}
-
-const ConfigOptions* manager_getConfig(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->config;
-}
-
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
@@ -738,14 +683,4 @@ void manager_run(Manager* manager) {
     }
 
     scheduler_finish(manager->scheduler);
-}
-
-void manager_incrementPluginError(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    controller_incrementPluginErrors(manager->controller);
-}
-
-const gchar* manager_getHostsRootPath(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return manager->hostsPath;
 }

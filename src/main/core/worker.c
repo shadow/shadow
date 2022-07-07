@@ -41,9 +41,14 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the object that communicates with the controller
-     * process */
-    Manager* manager;
+    /* Unowned pointer to the object that communicates with the controller process */
+    const Controller* controller;
+
+    /* Unowned pointer to the PID watcher for managed processes */
+    const ChildPidWatcher* pidWatcher;
+
+    /* Unowned pointer to the configuration options */
+    const ConfigOptions* config;
 
     /* Unowned pointer to the per-manager parallel scheduler object that feeds
      * events to all workers */
@@ -122,7 +127,8 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
+WorkerPool* workerpool_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
+                           Scheduler* scheduler, const ConfigOptions* config, int nWorkers,
                            int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_assert(nParallel >= 1);
@@ -133,7 +139,9 @@ WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .manager = manager,
+        .controller = controller,
+        .pidWatcher = pidWatcher,
+        .config = config,
         .scheduler = scheduler,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
@@ -360,7 +368,7 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return manager_getDNS(_worker_pool()->manager); }
+DNS* worker_getDNS() { return controller_getDNS(_worker_pool()->controller); }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
@@ -372,11 +380,9 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-ChildPidWatcher* worker_getChildPidWatcher() {
-    return manager_childpidwatcher(_worker_pool()->manager);
-}
+const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
 
-const ConfigOptions* worker_getConfig() { return manager_getConfig(_worker_pool()->manager); }
+const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
@@ -412,8 +418,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
 
     // Create the thread-local Worker object.
-    SimulationTime bootstrapEndTime =
-        config_getBootstrapEndTime(manager_getConfig(workerPool->manager));
+    SimulationTime bootstrapEndTime = config_getBootstrapEndTime(workerPool->config);
     worker_newForThisThread(workerPool, threadID, bootstrapEndTime);
 
     // Signal parent thread that we've set the nativeThreadID.
@@ -624,34 +629,41 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
 }
 
 guint32 worker_getNodeBandwidthUp(in_addr_t ip) {
-    return manager_getNodeBandwidthUp(_worker_pool()->manager, ip);
+    return controller_getBandwidthUpBytes(_worker_pool()->controller, ip) / 1024;
 }
 
 guint32 worker_getNodeBandwidthDown(in_addr_t ip) {
-    return manager_getNodeBandwidthDown(_worker_pool()->manager, ip);
+    return controller_getBandwidthDownBytes(_worker_pool()->controller, ip) / 1024;
 }
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
-    manager_updateMinRunahead(pool->manager, time);
+    controller_updateMinRunahead(pool->controller, time);
 }
 
 SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
-    return manager_getLatencyForAddresses(
-        _worker_pool()->manager, sourceAddress, destinationAddress);
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_getLatency(_worker_pool()->controller, src, dst);
 }
 
 gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
-    return manager_getReliabilityForAddresses(_worker_pool()->manager, sourceAddress, destinationAddress);
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_getReliability(_worker_pool()->controller, src, dst);
 }
 
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {
-    return manager_isRoutable(_worker_pool()->manager, sourceAddress, destinationAddress);
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return controller_isRoutable(_worker_pool()->controller, src, dst);
 }
 
 void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress) {
-    manager_incrementPacketCount(_worker_pool()->manager, sourceAddress, destinationAddress);
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    controller_incrementPacketCount(_worker_pool()->controller, src, dst);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
-void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
+void worker_incrementPluginError() { controller_incrementPluginErrors(_worker_pool()->controller); }

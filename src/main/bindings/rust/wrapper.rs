@@ -2858,7 +2858,7 @@ extern "C" {
     pub fn worker_getDNS() -> *mut DNS;
 }
 extern "C" {
-    pub fn worker_getChildPidWatcher() -> *mut ChildPidWatcher;
+    pub fn worker_getChildPidWatcher() -> *const ChildPidWatcher;
 }
 extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;

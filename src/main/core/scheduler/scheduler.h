@@ -17,9 +17,9 @@ typedef struct _Scheduler Scheduler;
 #include "main/core/work/event.h"
 #include "main/host/host.h"
 
-Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
-                         guint nWorkers, guint schedulerSeed,
-                         SimulationTime endTime);
+Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
+                         const ConfigOptions* config, SchedulerPolicyType policyType,
+                         guint nWorkers, guint schedulerSeed, SimulationTime endTime);
 void scheduler_ref(Scheduler*);
 void scheduler_unref(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
