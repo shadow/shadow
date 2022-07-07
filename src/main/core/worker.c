@@ -480,15 +480,13 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     _worker_setLastEventTime(worker_getCurrentEmulatedTime());
     worker_clearCurrentTime();
 
-    /* cleanup is all done, send counters to manager */
     WorkerPool* pool = _worker_pool();
 
-    // Send object counts to manager
-    manager_add_alloc_object_counts(pool->manager, _worker_objectAllocCounter());
-    manager_add_dealloc_object_counts(pool->manager, _worker_objectDeallocCounter());
+    /* send object counts to global counters */
+    worker_addToGlobalAllocCounters(_worker_objectAllocCounter(), _worker_objectDeallocCounter());
 
-    // Send syscall counts to manager
-    manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
+    /* send syscall counts to global counter */
+    worker_addToGlobalSyscallCounter(_worker_syscallCounter());
 }
 
 gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t) {

@@ -1409,6 +1409,13 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn config_getUseObjectCounters(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_object_counters.unwrap()
+    }
+
+    #[no_mangle]
     pub extern "C" fn config_getUseLibcPreload(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };

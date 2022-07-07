@@ -64,12 +64,4 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
                                   const gchar* const* argv, const char* environment,
                                   bool pause_for_debugging);
 
-// Add the given allocated-object counts into a global manager counter.
-void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts);
-// Add the given deallocated-object counts into a global manager counter.
-void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts);
-
-// Add the given syscall counts into a global manager counter.
-void manager_add_syscall_counts(Manager* manager, const Counter* syscall_counts);
-
 #endif /* SHD_MANAGER_H_ */
