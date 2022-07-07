@@ -628,11 +628,11 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
-guint32 worker_getNodeBandwidthUp(in_addr_t ip) {
+guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip) {
     return controller_getBandwidthUpBytes(_worker_pool()->controller, ip) / 1024;
 }
 
-guint32 worker_getNodeBandwidthDown(in_addr_t ip) {
+guint32 worker_getNodeBandwidthDownKiBps(in_addr_t ip) {
     return controller_getBandwidthDownBytes(_worker_pool()->controller, ip) / 1024;
 }
 
