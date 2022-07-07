@@ -3,6 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
+use log::warn;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use std::os::unix::prelude::RawFd;
@@ -32,6 +33,22 @@ impl SyscallHandler {
         let desc = Self::get_descriptor_mut(ctx.process, fd)?;
 
         Ok(match cmd {
+            libc::F_SETLK
+            | libc::F_SETLKW
+            | libc::F_OFD_SETLKW
+            | libc::F_GETLK
+            | libc::F_OFD_GETLK => {
+                match desc.file() {
+                    CompatFile::New(_) => {
+                        warn!("fcntl({}) unimplemented for {:?}", cmd, desc.file());
+                        return Err(Errno::ENOSYS.into());
+                    }
+                    CompatFile::Legacy(_) => {
+                        warn!("Using fcntl({}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258", cmd);
+                        return legacy_syscall_fn(ctx, args);
+                    }
+                };
+            }
             libc::F_GETFL => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
