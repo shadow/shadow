@@ -182,10 +182,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
             /* Return 0; no events are ready. */
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-        } else if (_syscallhandler_wasBlocked(sys)) {
-            // Should only happen if we were interrupted by a signal.
-            utility_assert(
-                thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
+        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINTR};
         } else {
             trace("No events are ready on epoll %i and we need to block", epfd);

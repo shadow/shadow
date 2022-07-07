@@ -190,7 +190,7 @@ fn test_set_then_set() -> anyhow::Result<()> {
     // Time remaining should be equal to or slightly less than what was set.
     let diff = TimeVal::from(it_value).sub(val.value);
     ensure_ord!(diff, >=, TimeVal::zero());
-    ensure_ord!(diff,<, TimeVal::microseconds(100));
+    ensure_ord!(diff,<, TimeVal::milliseconds(1));
 
     Ok(())
 }

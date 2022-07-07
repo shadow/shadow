@@ -630,9 +630,6 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             if((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE)) {
                 eventArray[eventIndex].events |= EPOLLOUT;
             }
-            if(watch->flags & EWF_EDGETRIGGER) {
-                eventArray[eventIndex].events |= EPOLLET;
-            }
 
             /* Record that we are reporting the event now. */
             watch->last_reported_event_time = worker_getCurrentEmulatedTime();
