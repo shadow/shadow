@@ -92,6 +92,9 @@ static void _test_epoll_wait_intr() {
     assert_nonneg_errno(sigaddset(&sigset, SIGUSR1));
     assert_nonneg_errno(sigprocmask(SIG_UNBLOCK, &sigset, &old_sigset));
 
+    GTimer* timer = g_timer_new();
+    g_timer_start(timer);
+
     // Arrange to be interrupted by SIGALRM
     assert_nonneg_errno(setitimer(
         ITIMER_REAL, &(struct itimerval){.it_value = {.tv_usec = interrupt_millis * 1000}}, NULL));
@@ -99,10 +102,8 @@ static void _test_epoll_wait_intr() {
     int epoll_fd = epoll_create1(0);
     assert_true_errno(epoll_fd > 0);
 
-    GTimer* timer = g_timer_new();
     struct epoll_event event = {0};
 
-    g_timer_start(timer);
     int epoll_result = epoll_wait(epoll_fd, &event, 1, timeout_millis);
 
     /* epoll_wait() returns the # of ready events, or -1 on error. */
