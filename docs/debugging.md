@@ -47,6 +47,11 @@ process to generate a core file, and then use GDB to inspect it afterwards.
 # Enable core dumps.
 ulimit -c unlimited
 
+# Ensure core dumps are written to a file.
+# e.g. this is sometimes needed in Ubuntu to override the default behavior of
+# piping the core file to the system crash handler.
+echo core | sudo tee /proc/sys/kernel/core_pattern
+
 # Run the simulation in which a process is crashing.
 shadow shadow.yaml
 
