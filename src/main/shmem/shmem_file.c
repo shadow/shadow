@@ -73,7 +73,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
     int fd = shm_open(shmf->name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, SHMEM_PERMISSION_BITS);
 
     if (fd >= 0) {
-        int rc = ftruncate(fd, nbytes);
+        int rc = posix_fallocate(fd, 0, nbytes);
         if (rc == 0) {
             void* p =
                 mmap(NULL, nbytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -86,8 +86,8 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
                 bad = true;
             }
 
-        } else { // failed truncate
-            panic("error on truncate: %s", strerror(errno));
+        } else {
+            panic("error allocating %zu bytes in shared mem: %s", nbytes, strerror(rc));
             bad = true;
         }
 

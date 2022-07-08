@@ -13,7 +13,7 @@
 #include "main/shmem/shmem_file.h"
 #include "main/shmem/shmem_util.h"
 
-#define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
+#define SHD_SHMEM_ALLOCATOR_POOL_NBYTES (1<<20)
 
 // when to change allocation strategies
 #define SHD_SHMEM_ALLOCATOR_CUTOVER_NBYTES                                     \
