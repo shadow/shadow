@@ -47,6 +47,11 @@ process to generate a core file, and then use GDB to inspect it afterwards.
 # Enable core dumps.
 ulimit -c unlimited
 
+# Ensure core dumps are written to a file.
+# e.g. this is sometimes needed in Ubuntu to override the default behavior of
+# piping the core file to the system crash handler.
+echo core | sudo tee /proc/sys/kernel/core_pattern
+
 # Run the simulation in which a process is crashing.
 shadow shadow.yaml
 
@@ -79,10 +84,25 @@ $ gdb --pid=1234
 
 ### Debugging with GDB
 
-```
-# It's often useful to look at the stack backtrace:
-> bt
+In managed processes, Shadow uses `SIGSYS` and `SIGSEGV` to intercept system
+calls and some CPU instructions. By default, GDB stops every time these signals
+are raised. In most cases you'll want to override this behavior to silently
+continue executing instead:
 
-# Or for a multi-threaded process, to look at all of the threads' backtraces:
-> thread apply all bt
+```
+(gdb) handle SIGSYS noprint
+(gdb) handle SIGSEGV noprint
+```
+
+Once you have reached a point of interest, it's often useful to look at the
+backtrace for the current stack:
+
+```
+(gdb) bt
+```
+
+In multi-threaded applications, you can get a backtrace for all stacks:
+
+```
+(gdb) thread apply all bt
 ```
