@@ -411,9 +411,13 @@ guint64 host_getNewPacketID(Host* host) {
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging) {
     MAGIC_ASSERT(host);
+
+    /* get a mutable version of the env list */
+    gchar** envv_dup = g_strdupv((gchar**)envv);
+
     {
         ShMemBlockSerialized sharedMemBlockSerial =
             shmemallocator_globalBlockSerialize(&host->shimSharedMemBlock);
@@ -422,7 +426,7 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        envv = g_environ_setenv(envv, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
+        envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
     guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host,
@@ -432,10 +436,12 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                                 host_getName(host),
                                 pluginName,
                                 pluginPath,
-                                envv,
+                                envv_dup,
                                 argv,
                                 pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
+
+    g_strfreev(envv_dup);
 }
 
 void host_freeAllApplications(Host* host) {

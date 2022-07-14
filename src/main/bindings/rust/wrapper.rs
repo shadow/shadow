@@ -2710,7 +2710,7 @@ extern "C" {
         stopTime: SimulationTime,
         pluginName: *const gchar,
         pluginPath: *const gchar,
-        envv: *mut *mut gchar,
+        envv: *const *const gchar,
         argv: *const *const gchar,
         pause_for_debugging: bool,
     );

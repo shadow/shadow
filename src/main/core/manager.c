@@ -555,8 +555,8 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
         utility_panic("Could not get basename of plugin path");
     }
 
-    host_addApplication(
-        host, startTime, stopTime, pluginName, pluginPath, envv, argv, pause_for_debugging);
+    host_addApplication(host, startTime, stopTime, pluginName, pluginPath,
+                        (const gchar* const*)envv, argv, pause_for_debugging);
     g_free(pluginName);
     g_strfreev(envv);
 

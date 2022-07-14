@@ -58,7 +58,7 @@ guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging);
 void host_freeAllApplications(Host* host);
 
