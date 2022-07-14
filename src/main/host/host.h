@@ -50,7 +50,7 @@ void host_stopExecutionTimer(Host* host);
 #define host_stopExecutionTimer(host)
 #endif
 
-void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath);
+void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
 void host_shutdown(Host* host);
 

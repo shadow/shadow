@@ -167,7 +167,7 @@ Host* host_new(HostParameters* params) {
 }
 
 /* this function is called by manager before the workers exist */
-void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath) {
+void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 
     /* get unique virtual address identifiers for each network interface */
@@ -190,7 +190,7 @@ void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPat
     }
 
     host->random = random_new(host->params.nodeSeed);
-    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold,
+    host->cpu = cpu_new(host->params.cpuFrequency, rawCPUFreq, host->params.cpuThreshold,
                         host->params.cpuPrecision);
 
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();

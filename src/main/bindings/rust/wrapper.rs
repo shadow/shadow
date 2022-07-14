@@ -112,6 +112,7 @@ pub type gsize = ::std::os::raw::c_ulong;
 pub type gchar = ::std::os::raw::c_char;
 pub type gint = ::std::os::raw::c_int;
 pub type gboolean = gint;
+pub type gulong = ::std::os::raw::c_ulong;
 pub type guint = ::std::os::raw::c_uint;
 pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
@@ -2684,7 +2685,7 @@ extern "C" {
     pub fn host_setup(
         host: *mut Host,
         dns: *mut DNS,
-        rawCPUFreq: guint,
+        rawCPUFreq: gulong,
         hostRootPath: *const gchar,
     );
 }
