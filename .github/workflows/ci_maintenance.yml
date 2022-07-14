@@ -13,11 +13,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/github-script@v3
+    - uses: actions/github-script@v6
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          github.issues.create({
+          github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
             title: 'Update versions of tools used in CI',

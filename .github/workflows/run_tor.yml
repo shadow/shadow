@@ -34,12 +34,12 @@ jobs:
 
     strategy:
       matrix:
-        container: ['ubuntu:20.04']
+        container: ['ubuntu:22.04']
         # supported tor releases are here:
         # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
         # when changing the tor versions, make sure to also update the
         # required CI tests in the GitHub repository settings
-        tor: ['tor-0.4.5.12', 'tor-0.4.6.10', 'tor-0.4.7.7']
+        tor: ['tor-0.4.5.12', 'tor-0.4.6.10', 'tor-0.4.7.8']
 
     env:
       CC: 'clang'
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout shadow
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: shadow
           # Run on PR head instead of merge result. Running on the merge
@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout tor
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: tor
           # this is not the official tor repo, but it's managed by the Tor Project
@@ -70,11 +70,11 @@ jobs:
           persist-credentials: false
 
       - name: Checkout tgen
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: tgen
           repository: shadow/tgen
-          ref: f28daefc20857c20e964aca6e970f69e2dce0edb
+          ref: 4f55d55632ca7358fb5245551561cafbc027c5a7
           persist-credentials: false
 
       - name: Get month
@@ -93,7 +93,7 @@ jobs:
           mkdir -p ~/.local/bin
 
       - name: Restore cargo registry cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry/index/
@@ -106,7 +106,7 @@ jobs:
 
       - name: Restore tor build cache
         id: restore-tor-build-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: tor
           key: tor-build-${{ matrix.container }}-${{ matrix.tor }}
@@ -156,14 +156,14 @@ jobs:
           for f in shadow/build/src/test/tor/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-data-dir
           path: shadow/build/src/test/tor/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-log-file
