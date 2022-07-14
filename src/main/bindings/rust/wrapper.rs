@@ -2682,6 +2682,12 @@ extern "C" {
     pub fn host_unlock(host: *mut Host);
 }
 extern "C" {
+    pub fn host_continueExecutionTimer(host: *mut Host);
+}
+extern "C" {
+    pub fn host_stopExecutionTimer(host: *mut Host);
+}
+extern "C" {
     pub fn host_setup(
         host: *mut Host,
         dns: *mut DNS,

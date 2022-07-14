@@ -352,19 +352,21 @@ void host_unlock(Host* host) {
     g_mutex_unlock(&(host->lock));
 }
 
-#ifdef USE_PERF_TIMERS
 /* resumes the execution timer for this host */
 void host_continueExecutionTimer(Host* host) {
+#ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_continue(host->executionTimer);
+#endif
 }
 
 /* stops the execution timer for this host */
 void host_stopExecutionTimer(Host* host) {
+#ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_stop(host->executionTimer);
-}
 #endif
+}
 
 GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);

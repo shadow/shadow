@@ -41,14 +41,8 @@ void host_unref(Host* host);
 void host_lock(Host* host);
 void host_unlock(Host* host);
 
-#ifdef USE_PERF_TIMERS
 void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);
-#else
-// define macros that do nothing
-#define host_continueExecutionTimer(host)
-#define host_stopExecutionTimer(host)
-#endif
 
 void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
