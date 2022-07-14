@@ -2667,7 +2667,7 @@ pub struct _NetworkInterface {
 }
 pub type NetworkInterface = _NetworkInterface;
 extern "C" {
-    pub fn host_new(params: *mut HostParameters) -> *mut Host;
+    pub fn host_new(params: *const HostParameters) -> *mut Host;
 }
 extern "C" {
     pub fn host_ref(host: *mut Host);

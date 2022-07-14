@@ -34,7 +34,7 @@ typedef GQuark HostId;
 #include "main/routing/dns.h"
 #include "main/routing/router.h"
 
-Host* host_new(HostParameters* params);
+Host* host_new(const HostParameters* params);
 void host_ref(Host* host);
 void host_unref(Host* host);
 

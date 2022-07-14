@@ -116,7 +116,7 @@ static SimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
-Host* host_new(HostParameters* params) {
+Host* host_new(const HostParameters* params) {
     utility_assert(params);
 
     Host* host = g_new0(Host, 1);
