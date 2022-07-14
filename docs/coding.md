@@ -9,7 +9,7 @@ definitions may require you to rebuild the bindings.
 When required, you can rebuild all of the C-Rust bindings by running:
 
 ```bash
-cd build && cmake --target bindings .. && make bindings
+cd build && cmake .. && make bindings
 ```
 
 To see the specific options/flags provided to bindgen and cbindgen, you can use

@@ -19,13 +19,13 @@ jobs:
       # Add the author as an assignee of the PR
       # https://github.com/marketplace/actions/auto-author-assign
       # before updating the version of this untrusted action, check the code manually
-      uses: toshimaru/auto-author-assign@084de2241839f0a3433adfd18d2906e8e786380e
+      uses: toshimaru/auto-author-assign@2f43a071b67edd3d56dfc034b1267c0c1576596c
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
     - name: Apply Labels
       # Add labels based on paths modified in PR
       # https://github.com/actions/labeler
-      uses: actions/labeler@v3
+      uses: actions/labeler@v4
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
         configuration-path: .github/pr_labeler_conf.yml

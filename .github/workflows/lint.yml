@@ -18,7 +18,7 @@ jobs:
   lint-python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -26,7 +26,7 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       - run: pip install flake8
@@ -35,7 +35,7 @@ jobs:
   lint-rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
@@ -48,7 +48,7 @@ jobs:
   lint-cargo-lock:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Cargo update check
         run: |
           # This will return an error if any versions of local crates in the Cargo.lock
@@ -59,9 +59,9 @@ jobs:
   lint-bindings:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:20.04
+      image: ubuntu:22.04
     env:
-      CONTAINER: ubuntu:20.04
+      CONTAINER: ubuntu:22.04
       CC: clang
       CXX: clang++
       RUSTPROFILE: minimal
@@ -77,7 +77,7 @@ jobs:
       # uses git and creates a "real" checkout that we can later `git diff`.
       # Otherwise it uses the GH API to just copy the contents locally, but
       # doesn't create a .git directory.
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -95,7 +95,7 @@ jobs:
           ci/container_scripts/install_extra_deps.sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Restore cargo registry cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry/index/
@@ -114,12 +114,12 @@ jobs:
       - name: Check bindings (release)
         run: |
           rm -rf build && mkdir build
-          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Release .. && make bindings)
+          (cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make bindings)
           git diff --exit-code
       - name: Check bindings (debug)
         run: |
           rm -rf build && mkdir build
-          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
+          (cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
           git diff --exit-code
       - name: Details
         if: failure()
