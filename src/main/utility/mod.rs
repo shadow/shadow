@@ -19,6 +19,9 @@ pub mod stream_len;
 pub mod syscall;
 pub mod time;
 
+use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+use std::path::{Path, PathBuf};
+
 use crate::{core::worker::Worker, host::host::HostId};
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
@@ -199,6 +202,57 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
 
     // if we don't have a tilde-prefix that we support, just return the unmodified path
     std::path::PathBuf::from(path)
+}
+
+/// Copy the contents of the `src` directory to a new directory named `dst`. Permissions will be
+/// preserved.
+pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    // a directory to copy
+    struct DirCopyTask {
+        src: PathBuf,
+        dst: PathBuf,
+        mode: u32,
+    }
+
+    // a stack of directories to copy
+    let mut stack: Vec<DirCopyTask> = vec![];
+
+    stack.push(DirCopyTask {
+        src: src.as_ref().to_path_buf(),
+        dst: dst.as_ref().to_path_buf(),
+        mode: src.as_ref().metadata()?.mode(),
+    });
+
+    while let Some(DirCopyTask { src, dst, mode }) = stack.pop() {
+        // create the directory with the same permissions
+        create_dir_with_mode(&dst, mode)?;
+
+        // copy directory contents
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+            let new_dst_path = dst.join(entry.file_name());
+
+            if meta.is_dir() {
+                stack.push(DirCopyTask {
+                    src: entry.path(),
+                    dst: new_dst_path,
+                    mode: meta.mode(),
+                });
+            } else {
+                // copy() will also copy the permissions
+                std::fs::copy(entry.path(), &new_dst_path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn create_dir_with_mode(path: impl AsRef<Path>, mode: u32) -> std::io::Result<()> {
+    let mut dir_builder = std::fs::DirBuilder::new();
+    dir_builder.mode(mode);
+    dir_builder.create(&path)
 }
 
 #[cfg(test)]

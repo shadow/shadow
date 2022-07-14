@@ -82,6 +82,9 @@ pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
 pub type _LogLevel = ::std::os::raw::c_uint;
 pub use self::_LogLevel as LogLevel;
 extern "C" {
+    pub fn logger_get_global_start_time_micros() -> i64;
+}
+extern "C" {
     pub fn rustlogger_new() -> *mut Logger;
 }
 extern "C" {
@@ -118,6 +121,9 @@ pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
 pub type gconstpointer = *const ::std::os::raw::c_void;
 pub type GQuark = guint32;
+extern "C" {
+    pub fn g_quark_from_string(string: *const gchar) -> GQuark;
+}
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union sigval {
@@ -1137,6 +1143,17 @@ pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
 pub type WorkerPool = u8;
+extern "C" {
+    pub fn manager_scanRpathForLib(libname: *const gchar) -> *mut gchar;
+}
+pub type Scheduler = u8;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Event {
+    _unused: [u8; 0],
+}
+pub type Event = _Event;
+pub type LegacyDescriptor = [u64; 5usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Process {
@@ -1157,513 +1174,6 @@ pub type SimulationTime = guint64;
 #[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
 #[doc = " distinguish each type of time in the code.,"]
 pub type EmulatedTime = guint64;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Tracker {
-    _unused: [u8; 0],
-}
-pub type Tracker = _Tracker;
-pub use self::_LogInfoFlags as LogInfoFlags;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
-pub type _LogInfoFlags = i32;
-pub type HostParameters = _HostParameters;
-#[repr(C)]
-pub struct _HostParameters {
-    pub id: GQuark,
-    pub nodeSeed: guint,
-    pub hostname: *const gchar,
-    pub nodeId: guint,
-    pub ipAddr: in_addr_t,
-    pub requestedBwDownBits: guint64,
-    pub requestedBwUpBits: guint64,
-    pub cpuFrequency: guint64,
-    pub cpuThreshold: guint64,
-    pub cpuPrecision: guint64,
-    pub heartbeatInterval: SimulationTime,
-    pub heartbeatLogLevel: LogLevel,
-    pub heartbeatLogInfo: LogInfoFlags,
-    pub logLevel: LogLevel,
-    pub pcapDir: *const gchar,
-    pub pcapCaptureSize: guint32,
-    pub qdisc: QDiscMode,
-    pub recvBufSize: guint64,
-    pub autotuneRecvBuf: gboolean,
-    pub sendBufSize: guint64,
-    pub autotuneSendBuf: gboolean,
-    pub interfaceBufSize: guint64,
-}
-#[test]
-fn bindgen_test_layout__HostParameters() {
-    assert_eq!(
-        ::std::mem::size_of::<_HostParameters>(),
-        144usize,
-        concat!("Size of: ", stringify!(_HostParameters))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_HostParameters>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_HostParameters))
-    );
-    fn test_field_id() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).id) as usize - ptr as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(id)
-            )
-        );
-    }
-    test_field_id();
-    fn test_field_nodeSeed() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).nodeSeed) as usize - ptr as usize
-            },
-            4usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(nodeSeed)
-            )
-        );
-    }
-    test_field_nodeSeed();
-    fn test_field_hostname() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).hostname) as usize - ptr as usize
-            },
-            8usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(hostname)
-            )
-        );
-    }
-    test_field_hostname();
-    fn test_field_nodeId() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).nodeId) as usize - ptr as usize
-            },
-            16usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(nodeId)
-            )
-        );
-    }
-    test_field_nodeId();
-    fn test_field_ipAddr() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).ipAddr) as usize - ptr as usize
-            },
-            20usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(ipAddr)
-            )
-        );
-    }
-    test_field_ipAddr();
-    fn test_field_requestedBwDownBits() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).requestedBwDownBits) as usize - ptr as usize
-            },
-            24usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(requestedBwDownBits)
-            )
-        );
-    }
-    test_field_requestedBwDownBits();
-    fn test_field_requestedBwUpBits() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).requestedBwUpBits) as usize - ptr as usize
-            },
-            32usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(requestedBwUpBits)
-            )
-        );
-    }
-    test_field_requestedBwUpBits();
-    fn test_field_cpuFrequency() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).cpuFrequency) as usize - ptr as usize
-            },
-            40usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(cpuFrequency)
-            )
-        );
-    }
-    test_field_cpuFrequency();
-    fn test_field_cpuThreshold() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).cpuThreshold) as usize - ptr as usize
-            },
-            48usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(cpuThreshold)
-            )
-        );
-    }
-    test_field_cpuThreshold();
-    fn test_field_cpuPrecision() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).cpuPrecision) as usize - ptr as usize
-            },
-            56usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(cpuPrecision)
-            )
-        );
-    }
-    test_field_cpuPrecision();
-    fn test_field_heartbeatInterval() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).heartbeatInterval) as usize - ptr as usize
-            },
-            64usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(heartbeatInterval)
-            )
-        );
-    }
-    test_field_heartbeatInterval();
-    fn test_field_heartbeatLogLevel() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).heartbeatLogLevel) as usize - ptr as usize
-            },
-            72usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(heartbeatLogLevel)
-            )
-        );
-    }
-    test_field_heartbeatLogLevel();
-    fn test_field_heartbeatLogInfo() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).heartbeatLogInfo) as usize - ptr as usize
-            },
-            76usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(heartbeatLogInfo)
-            )
-        );
-    }
-    test_field_heartbeatLogInfo();
-    fn test_field_logLevel() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).logLevel) as usize - ptr as usize
-            },
-            80usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(logLevel)
-            )
-        );
-    }
-    test_field_logLevel();
-    fn test_field_pcapDir() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).pcapDir) as usize - ptr as usize
-            },
-            88usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(pcapDir)
-            )
-        );
-    }
-    test_field_pcapDir();
-    fn test_field_pcapCaptureSize() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).pcapCaptureSize) as usize - ptr as usize
-            },
-            96usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(pcapCaptureSize)
-            )
-        );
-    }
-    test_field_pcapCaptureSize();
-    fn test_field_qdisc() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).qdisc) as usize - ptr as usize
-            },
-            100usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(qdisc)
-            )
-        );
-    }
-    test_field_qdisc();
-    fn test_field_recvBufSize() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).recvBufSize) as usize - ptr as usize
-            },
-            104usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(recvBufSize)
-            )
-        );
-    }
-    test_field_recvBufSize();
-    fn test_field_autotuneRecvBuf() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).autotuneRecvBuf) as usize - ptr as usize
-            },
-            112usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(autotuneRecvBuf)
-            )
-        );
-    }
-    test_field_autotuneRecvBuf();
-    fn test_field_sendBufSize() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).sendBufSize) as usize - ptr as usize
-            },
-            120usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(sendBufSize)
-            )
-        );
-    }
-    test_field_sendBufSize();
-    fn test_field_autotuneSendBuf() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).autotuneSendBuf) as usize - ptr as usize
-            },
-            128usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(autotuneSendBuf)
-            )
-        );
-    }
-    test_field_autotuneSendBuf();
-    fn test_field_interfaceBufSize() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).interfaceBufSize) as usize - ptr as usize
-            },
-            136usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_HostParameters),
-                "::",
-                stringify!(interfaceBufSize)
-            )
-        );
-    }
-    test_field_interfaceBufSize();
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Address {
-    _unused: [u8; 0],
-}
-#[doc = " An Address structure holds information used to identify nodes, allowing for"]
-#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
-#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
-#[doc = " should only be accessed using the functions in this class."]
-pub type Address = _Address;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _DNS {
-    _unused: [u8; 0],
-}
-pub type DNS = _DNS;
-extern "C" {
-    pub fn dns_new() -> *mut DNS;
-}
-extern "C" {
-    pub fn dns_free(dns: *mut DNS);
-}
-extern "C" {
-    pub fn dns_register(
-        dns: *mut DNS,
-        id: GQuark,
-        name: *const gchar,
-        requestedIP: in_addr_t,
-    ) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
-}
-extern "C" {
-    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
-}
-pub type Manager = u8;
-extern "C" {
-    pub fn manager_new(
-        controller: *const Controller,
-        config: *const ConfigOptions,
-        endTime: SimulationTime,
-        randomSeed: guint,
-    ) -> *mut Manager;
-}
-extern "C" {
-    pub fn manager_free(manager: *mut Manager);
-}
-extern "C" {
-    pub fn manager_run(arg1: *mut Manager);
-}
-extern "C" {
-    pub fn manager_addNewVirtualHost(
-        manager: *mut Manager,
-        params: *mut HostParameters,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn manager_addNewVirtualProcess(
-        manager: *mut Manager,
-        hostName: *const gchar,
-        pluginName: *const gchar,
-        startTime: SimulationTime,
-        stopTime: SimulationTime,
-        argv: *const *const gchar,
-        environment: *const ::std::os::raw::c_char,
-        pause_for_debugging: bool,
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Event {
-    _unused: [u8; 0],
-}
-pub type Event = _Event;
-pub type LegacyDescriptor = [u64; 5usize];
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
@@ -2656,6 +2166,441 @@ pub struct _Futex {
 pub type Futex = _Futex;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct _Tracker {
+    _unused: [u8; 0],
+}
+pub type Tracker = _Tracker;
+pub use self::_LogInfoFlags as LogInfoFlags;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
+pub type _LogInfoFlags = i32;
+pub type HostParameters = _HostParameters;
+#[repr(C)]
+pub struct _HostParameters {
+    pub id: GQuark,
+    pub nodeSeed: guint,
+    pub hostname: *const gchar,
+    pub nodeId: guint,
+    pub ipAddr: in_addr_t,
+    pub requestedBwDownBits: guint64,
+    pub requestedBwUpBits: guint64,
+    pub cpuFrequency: guint64,
+    pub cpuThreshold: guint64,
+    pub cpuPrecision: guint64,
+    pub heartbeatInterval: SimulationTime,
+    pub heartbeatLogLevel: LogLevel,
+    pub heartbeatLogInfo: LogInfoFlags,
+    pub logLevel: LogLevel,
+    pub pcapDir: *const gchar,
+    pub pcapCaptureSize: guint32,
+    pub qdisc: QDiscMode,
+    pub recvBufSize: guint64,
+    pub autotuneRecvBuf: gboolean,
+    pub sendBufSize: guint64,
+    pub autotuneSendBuf: gboolean,
+    pub interfaceBufSize: guint64,
+}
+#[test]
+fn bindgen_test_layout__HostParameters() {
+    assert_eq!(
+        ::std::mem::size_of::<_HostParameters>(),
+        144usize,
+        concat!("Size of: ", stringify!(_HostParameters))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_HostParameters>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_HostParameters))
+    );
+    fn test_field_id() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).id) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(id)
+            )
+        );
+    }
+    test_field_id();
+    fn test_field_nodeSeed() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nodeSeed) as usize - ptr as usize
+            },
+            4usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(nodeSeed)
+            )
+        );
+    }
+    test_field_nodeSeed();
+    fn test_field_hostname() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).hostname) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(hostname)
+            )
+        );
+    }
+    test_field_hostname();
+    fn test_field_nodeId() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nodeId) as usize - ptr as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(nodeId)
+            )
+        );
+    }
+    test_field_nodeId();
+    fn test_field_ipAddr() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).ipAddr) as usize - ptr as usize
+            },
+            20usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(ipAddr)
+            )
+        );
+    }
+    test_field_ipAddr();
+    fn test_field_requestedBwDownBits() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).requestedBwDownBits) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(requestedBwDownBits)
+            )
+        );
+    }
+    test_field_requestedBwDownBits();
+    fn test_field_requestedBwUpBits() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).requestedBwUpBits) as usize - ptr as usize
+            },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(requestedBwUpBits)
+            )
+        );
+    }
+    test_field_requestedBwUpBits();
+    fn test_field_cpuFrequency() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuFrequency) as usize - ptr as usize
+            },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuFrequency)
+            )
+        );
+    }
+    test_field_cpuFrequency();
+    fn test_field_cpuThreshold() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuThreshold) as usize - ptr as usize
+            },
+            48usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuThreshold)
+            )
+        );
+    }
+    test_field_cpuThreshold();
+    fn test_field_cpuPrecision() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cpuPrecision) as usize - ptr as usize
+            },
+            56usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(cpuPrecision)
+            )
+        );
+    }
+    test_field_cpuPrecision();
+    fn test_field_heartbeatInterval() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatInterval) as usize - ptr as usize
+            },
+            64usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatInterval)
+            )
+        );
+    }
+    test_field_heartbeatInterval();
+    fn test_field_heartbeatLogLevel() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatLogLevel) as usize - ptr as usize
+            },
+            72usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatLogLevel)
+            )
+        );
+    }
+    test_field_heartbeatLogLevel();
+    fn test_field_heartbeatLogInfo() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).heartbeatLogInfo) as usize - ptr as usize
+            },
+            76usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(heartbeatLogInfo)
+            )
+        );
+    }
+    test_field_heartbeatLogInfo();
+    fn test_field_logLevel() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).logLevel) as usize - ptr as usize
+            },
+            80usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(logLevel)
+            )
+        );
+    }
+    test_field_logLevel();
+    fn test_field_pcapDir() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).pcapDir) as usize - ptr as usize
+            },
+            88usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(pcapDir)
+            )
+        );
+    }
+    test_field_pcapDir();
+    fn test_field_pcapCaptureSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).pcapCaptureSize) as usize - ptr as usize
+            },
+            96usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(pcapCaptureSize)
+            )
+        );
+    }
+    test_field_pcapCaptureSize();
+    fn test_field_qdisc() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).qdisc) as usize - ptr as usize
+            },
+            100usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(qdisc)
+            )
+        );
+    }
+    test_field_qdisc();
+    fn test_field_recvBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).recvBufSize) as usize - ptr as usize
+            },
+            104usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(recvBufSize)
+            )
+        );
+    }
+    test_field_recvBufSize();
+    fn test_field_autotuneRecvBuf() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).autotuneRecvBuf) as usize - ptr as usize
+            },
+            112usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(autotuneRecvBuf)
+            )
+        );
+    }
+    test_field_autotuneRecvBuf();
+    fn test_field_sendBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).sendBufSize) as usize - ptr as usize
+            },
+            120usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(sendBufSize)
+            )
+        );
+    }
+    test_field_sendBufSize();
+    fn test_field_autotuneSendBuf() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).autotuneSendBuf) as usize - ptr as usize
+            },
+            128usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(autotuneSendBuf)
+            )
+        );
+    }
+    test_field_autotuneSendBuf();
+    fn test_field_interfaceBufSize() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).interfaceBufSize) as usize - ptr as usize
+            },
+            136usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(interfaceBufSize)
+            )
+        );
+    }
+    test_field_interfaceBufSize();
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Address {
+    _unused: [u8; 0],
+}
+#[doc = " An Address structure holds information used to identify nodes, allowing for"]
+#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
+#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
+#[doc = " should only be accessed using the functions in this class."]
+pub type Address = _Address;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct _Router {
     _unused: [u8; 0],
 }
@@ -2666,6 +2611,38 @@ pub struct _NetworkInterface {
     _unused: [u8; 0],
 }
 pub type NetworkInterface = _NetworkInterface;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _DNS {
+    _unused: [u8; 0],
+}
+pub type DNS = _DNS;
+extern "C" {
+    pub fn dns_new() -> *mut DNS;
+}
+extern "C" {
+    pub fn dns_free(dns: *mut DNS);
+}
+extern "C" {
+    pub fn dns_register(
+        dns: *mut DNS,
+        id: GQuark,
+        name: *const gchar,
+        requestedIP: in_addr_t,
+    ) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
+}
+extern "C" {
+    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
+}
 extern "C" {
     pub fn host_new(params: *const HostParameters) -> *mut Host;
 }
@@ -2848,6 +2825,42 @@ extern "C" {
         currentStatus: Status,
         transitions: Status,
     );
+}
+extern "C" {
+    pub fn scheduler_new(
+        controller: *const Controller,
+        pidWatcher: *const ChildPidWatcher,
+        config: *const ConfigOptions,
+        policyType: SchedulerPolicyType,
+        nWorkers: guint,
+        schedulerSeed: guint,
+        endTime: SimulationTime,
+    ) -> *mut Scheduler;
+}
+extern "C" {
+    pub fn scheduler_unref(arg1: *mut Scheduler);
+}
+extern "C" {
+    pub fn scheduler_shutdown(scheduler: *mut Scheduler);
+}
+extern "C" {
+    pub fn scheduler_start(arg1: *mut Scheduler);
+}
+extern "C" {
+    pub fn scheduler_continueNextRound(
+        arg1: *mut Scheduler,
+        arg2: SimulationTime,
+        arg3: SimulationTime,
+    );
+}
+extern "C" {
+    pub fn scheduler_awaitNextRound(arg1: *mut Scheduler) -> SimulationTime;
+}
+extern "C" {
+    pub fn scheduler_finish(arg1: *mut Scheduler);
+}
+extern "C" {
+    pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn worker_runEvent(event: *mut Event);

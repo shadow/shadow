@@ -347,6 +347,17 @@ pub fn enable_object_counters() {
     USE_OBJECT_COUNTERS.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
+pub fn with_global_syscall_counter<T>(f: impl FnOnce(&Counter) -> T) -> T {
+    let counter = SYSCALL_COUNTER.lock().unwrap();
+    f(&counter)
+}
+
+pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -> T {
+    let alloc_counter = ALLOC_COUNTER.lock().unwrap();
+    let dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
+    f(&alloc_counter, &dealloc_counter)
+}
+
 mod export {
     use super::*;
 
@@ -511,25 +522,6 @@ mod export {
         Worker::is_alive()
     }
 
-    /// Add the global counters to the provided counters, and clear the global counters.
-    #[no_mangle]
-    pub extern "C" fn worker_addFromGlobalAllocCounters(
-        alloc_counter: *mut Counter,
-        dealloc_counter: *mut Counter,
-    ) {
-        let alloc_counter = unsafe { alloc_counter.as_mut() }.unwrap();
-        let dealloc_counter = unsafe { dealloc_counter.as_mut() }.unwrap();
-
-        let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
-        let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
-
-        alloc_counter.add_counter(&global_alloc_counter);
-        dealloc_counter.add_counter(&global_dealloc_counter);
-
-        *global_alloc_counter = Counter::new();
-        *global_dealloc_counter = Counter::new();
-    }
-
     /// Add the counters to their global counterparts, and clear the provided counters.
     #[no_mangle]
     pub extern "C" fn worker_addToGlobalAllocCounters(
@@ -547,16 +539,6 @@ mod export {
 
         *alloc_counter = Counter::new();
         *dealloc_counter = Counter::new();
-    }
-
-    /// Add the global counter to the provided counter, and clear the global counter.
-    #[no_mangle]
-    pub extern "C" fn worker_addFromGlobalSyscallCounter(syscall_counter: *mut Counter) {
-        let syscall_counter = unsafe { syscall_counter.as_mut() }.unwrap();
-
-        let mut global_syscall_counter = SYSCALL_COUNTER.lock().unwrap();
-        syscall_counter.add_counter(&global_syscall_counter);
-        *global_syscall_counter = Counter::new();
     }
 
     /// Add the counters to their global counterparts, and clear the provided counters.
