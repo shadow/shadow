@@ -11,3 +11,6 @@ options. See https://github.com/shadow/shadow/issues/1945
 
 * Fixed behavior when multiple threads are blocked in `epoll_wait` on the same epoll
   file description. https://github.com/shadow/shadow/issues/2260
+
+* Fixed a bug causing `timerfd_settime` to not reset the internal timer's
+  expiration count. https://github.com/shadow/shadow/pull/2279

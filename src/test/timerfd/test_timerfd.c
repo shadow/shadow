@@ -158,7 +158,7 @@ static void _test_disarm_timer() {
 
     /* wait for 2 seconds */
     struct epoll_event event = {0};
-    assert_nonneg_errno(epoll_wait(efd, &event, 1, 2));
+    assert_nonneg_errno(epoll_wait(efd, &event, 1, 2000));
 
     /* it should not have expired since we disarmed the 1 second timer */
     uint64_t num_expires = 0;
@@ -191,7 +191,7 @@ static void _test_rearm_timer() {
 
     /* wait for 2 seconds */
     struct epoll_event event = {0};
-    assert_nonneg_errno(epoll_wait(efd, &event, 1, 2));
+    assert_nonneg_errno(epoll_wait(efd, &event, 1, 2000));
 
     /* The timer should be ready, but calling timerfd_settime should make it
      * unready again */
