@@ -182,15 +182,18 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if the path begins with a "~"
     if let Some(x) = path.strip_prefix('~') {
         // get the tilde-prefix (everything before the first separator)
-        let mut parts = x.splitn(2, '/');
-        let (tilde_prefix, remainder) = (parts.next().unwrap(), parts.next().unwrap_or(""));
-        assert!(parts.next().is_none());
-        // we only support expansion for our own home directory
-        // (nothing between the "~" and the separator)
+        let (tilde_prefix, remainder) = x.split_once('/').unwrap_or((x, ""));
+
         if tilde_prefix.is_empty() {
             if let Ok(ref home) = std::env::var("HOME") {
                 return [home, remainder].iter().collect::<std::path::PathBuf>();
             }
+        } else if ['+', '-'].contains(&tilde_prefix.chars().next().unwrap()) {
+            // not supported
+        } else {
+            return ["/home", tilde_prefix, remainder]
+                .iter()
+                .collect::<std::path::PathBuf>();
         }
     }
 
@@ -222,7 +225,9 @@ mod tests {
 
             assert_eq!(
                 tilde_expansion("~someuser/test"),
-                ["~someuser", "test"].iter().collect::<std::path::PathBuf>()
+                ["/home", "someuser", "test"]
+                    .iter()
+                    .collect::<std::path::PathBuf>()
             );
 
             assert_eq!(
