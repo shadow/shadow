@@ -546,7 +546,6 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
 
-    /* ownership is passed to the host/process below, so we don't free these */
     gchar** envv = _manager_generateEnvv(manager, host, environment);
 
     host_continueExecutionTimer(host);
@@ -559,6 +558,7 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const
     host_addApplication(
         host, startTime, stopTime, pluginName, pluginPath, envv, argv, pause_for_debugging);
     g_free(pluginName);
+    g_strfreev(envv);
 
     host_stopExecutionTimer(host);
 }
