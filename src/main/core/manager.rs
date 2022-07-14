@@ -565,13 +565,17 @@ impl<'a> Manager<'a> {
         let user_time_minutes = (resources.ru_utime.tv_sec as f64) / 60.0;
         let system_time_minutes = (resources.ru_stime.tv_sec as f64) / 60.0;
 
+        // tornettools assumes a specific log format for this message, so don't change it without
+        // testing that tornettools can parse resource usage information from the shadow log
+        // https://github.com/shadow/tornettools/blob/6c00856c3f08899da30bfc452b6a055572cc4536/tornettools/parse_rusage.py#L58-L86
         log::info!(
             "Process resource usage at simtime {} reported by getrusage(): \
             ru_maxrss={:.03} GiB, \
             ru_utime={:.03} minutes, \
             ru_stime={:.03} minutes, \
             ru_nvcsw={}, \
-            ru_nivcsw={}",
+            ru_nivcsw={}, \
+            _manager_heartbeat", // this is required for tornettools
             now.as_nanos(),
             max_memory,
             user_time_minutes,
