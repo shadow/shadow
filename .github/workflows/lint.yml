@@ -114,12 +114,12 @@ jobs:
       - name: Check bindings (release)
         run: |
           rm -rf build && mkdir build
-          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Release .. && make bindings)
+          (cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make bindings)
           git diff --exit-code
       - name: Check bindings (debug)
         run: |
           rm -rf build && mkdir build
-          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
+          (cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
           git diff --exit-code
       - name: Details
         if: failure()
