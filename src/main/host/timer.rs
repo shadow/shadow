@@ -166,6 +166,7 @@ impl Timer {
         debug_assert!(expire_time >= Worker::current_time().unwrap());
         internal.next_expire_time = Some(expire_time);
         internal.expire_interval = expire_interval;
+        internal.expiration_count = 0;
         Self::schedule_new_expire_event(&mut *internal, Arc::downgrade(&self.internal), host);
     }
 }
