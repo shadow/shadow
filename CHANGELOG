@@ -14,3 +14,6 @@ options. See https://github.com/shadow/shadow/issues/1945
 
 * Fixed a bug causing `timerfd_settime` to not reset the internal timer's
   expiration count. https://github.com/shadow/shadow/pull/2279
+
+* Fixed a panic when patching the VDSO in newer kernels, such as those in Ubuntu 22.04.
+  https://github.com/shadow/shadow/issues/2273

@@ -157,29 +157,48 @@ static int _replacement_getcpu(void* arg1, void* arg2, void* arg3) {
     return (int)syscall(SYS_getcpu, arg1, arg2, arg3);
 }
 
-static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnName,
-                               void* replacementFn) {
-    const Elf64_Sym* symbol = _findSymbol(parsedElf, vdsoFnName);
-    if (symbol == NULL) {
-        warning("Couldn't find symbol '%s' to override", vdsoFnName);
-        return;
+// Inject a trampoline that uses a relative jump. Only needs 5 bytes, but requires
+// that the offset fits in an i32.
+//
+// Returns injected trampoline size on success, or 0 if the trampoline couldn't be injected.
+static size_t _inject_trampoline_relative(void* start, size_t symbolSize, void* replacementFn) {
+    intptr_t jmp_offset = (intptr_t)replacementFn - ((intptr_t)start + 5);
+
+    if (jmp_offset > INT32_MAX || jmp_offset < INT32_MIN) {
+        trace("Offset from %p to %p doesn't fit in i32", start, replacementFn);
+        return 0;
     }
 
-    // Manually calculated trampoline size. Later validated in assertion.
+    const size_t trampolineSize = 5;
+    if (symbolSize < trampolineSize) {
+        trace("Can't inject %zd byte trampoline into %zd byte symbol", trampolineSize, symbolSize);
+        return 0;
+    }
+
+    uint8_t* current = start;
+    // opcode for jmp
+    *(current++) = 0xe9;
+    // jmp offset
+    *(int32_t*)current = (int32_t)jmp_offset;
+    current += sizeof(int32_t);
+
+    size_t actualTrampolineSize = (size_t)current - (size_t)start;
+    assert(actualTrampolineSize == trampolineSize);
+    return actualTrampolineSize;
+}
+
+// Inject a trampoline using an absolute jump. Less efficient at runtime and
+// needs 13 bytes, but can jump to any target address.
+//
+// Returns injected trampoline size on success, or 0 if the trampoline couldn't be injected.
+static size_t _inject_trampoline_absolute(void* start, size_t symbolSize, void* replacementFn) {
     const size_t trampolineSize = 13;
 
-    if (symbol->st_size < trampolineSize) {
-        // We *could* just log a warning here and return without injecting the
-        // trampoline. Shim-side warnings are currently a bit hidden, though.
-        // Better to err on the size of not accidentally proceeding with a
-        // potentially invalid simulation.
-        //
-        // TODO: Revisit when https://github.com/shadow/shadow/issues/2023 is fixed.
-        panic("Can't inject %zd byte trampoline into %zd byte symbol '%s'", trampolineSize,
-              symbol->st_size, vdsoFnName);
+    if (symbolSize < trampolineSize) {
+        trace("Can't inject %zd byte trampoline into %zd byte symbol", trampolineSize, symbolSize);
+        return 0;
     }
 
-    uint8_t* start = (void*)parsedElf->hdr + symbol->st_value;
     uint8_t* current = start;
 
     // movabs $...,%r10
@@ -193,11 +212,43 @@ static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnNa
     *(current++) = 0xff;
     *(current++) = 0xe2;
 
-    // Validate trampolineSize.
-    const size_t actualTrampolineSize = (size_t)current - (size_t)start;
-    // In debug builds require equality.
+    size_t actualTrampolineSize = (size_t)current - (size_t)start;
     assert(actualTrampolineSize == trampolineSize);
-    // Otherwise just ensure we didn't actually clobber another symbol.
+    return actualTrampolineSize;
+}
+
+static void _inject_trampoline(struct ParsedElf* parsedElf, const char* vdsoFnName,
+                               void* replacementFn) {
+    const Elf64_Sym* symbol = _findSymbol(parsedElf, vdsoFnName);
+    if (symbol == NULL) {
+        // This could happen e.g. if vdso is disabled at the system level.
+        warning("Couldn't find symbol '%s' to override", vdsoFnName);
+        return;
+    }
+
+    uint8_t* start = (void*)parsedElf->hdr + symbol->st_value;
+
+    size_t actualTrampolineSize =
+        _inject_trampoline_relative(start, symbol->st_size, replacementFn);
+    if (actualTrampolineSize == 0) {
+        actualTrampolineSize = _inject_trampoline_absolute(start, symbol->st_size, replacementFn);
+    }
+    // TODO: Some other trampoline strategies if neither of the above work:
+    //
+    // * In case the replacementFn is more than a 32-bit offset away, create a secondary
+    //   trampoline that *is* < 32-bit-offset away, e.g. using `mmap` with a supplied hint.
+    //
+    // * Inject `ud2; ret`, or even just `ud2`. `ud2` is only 2 bytes and raises
+    //   SIGILL; we could get control in the SIGILL signal handler and figure out
+    //   which patched function we're trying to execute by inspecting the
+    //   instruction pointer in the siginfo_t.
+
+    if (actualTrampolineSize == 0) {
+        // TODO: Make make this a warning or error when shim-side logs are more visible.
+        panic("Couldn't patch symbol '%s'", vdsoFnName);
+    }
+
+    // Validate that we didn't actually clobber another symbol.
     if (symbol->st_size < actualTrampolineSize) {
         panic("Accidentally wrote %zd byte trampoline into %zd byte symbol %s",
               actualTrampolineSize, symbol->st_size, vdsoFnName);
