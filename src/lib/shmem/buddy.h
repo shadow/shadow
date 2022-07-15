@@ -19,7 +19,7 @@
 #define SHD_BUDDY_PART_MIN_ORDER 4
 #define SHD_BUDDY_PART_MAX_ORDER 27
 
-#define SHD_BUDDY_META_MAX_NBYTES                                              \
+#define SHD_BUDDY_META_MAX_NBYTES                                                                  \
     (sizeof(void*) * (SHD_BUDDY_PART_MAX_ORDER - SHD_BUDDY_PART_MIN_ORDER + 1))
 
 typedef struct _BuddyControlBlock {
@@ -39,8 +39,7 @@ static inline unsigned buddycontrolblock_order(const BuddyControlBlock* bcb) {
     return bcb->_nxt >> (32 - SHD_BUDDY_ORDER_BITS);
 }
 
-static inline void buddycontrolblock_setOrder(BuddyControlBlock* bcb,
-                                              unsigned value) {
+static inline void buddycontrolblock_setOrder(BuddyControlBlock* bcb, unsigned value) {
     assert(bcb != NULL && value < 32); // 0 <= order <= 31
     bcb->_nxt &= SHD_BUDDY_ORDER_MASK;
     bcb->_nxt |= (value << (32 - SHD_BUDDY_ORDER_BITS));
@@ -51,8 +50,7 @@ static inline uint32_t buddycontrolblock_nxt(const BuddyControlBlock* bcb) {
     return bcb->_nxt & SHD_BUDDY_ORDER_MASK;
 }
 
-static inline void buddycontrolblock_setNxt(BuddyControlBlock* bcb,
-                                            unsigned value) {
+static inline void buddycontrolblock_setNxt(BuddyControlBlock* bcb, unsigned value) {
     assert(value <= SHD_BUDDY_ORDER_MASK);
     bcb->_nxt &= ~SHD_BUDDY_ORDER_MASK;
     bcb->_nxt |= value;
@@ -63,8 +61,7 @@ static inline bool buddycontrolblock_tag(const BuddyControlBlock* bcb) {
     return bcb->_prv >> (32 - SHD_BUDDY_TAG_BITS);
 }
 
-static inline void buddycontrolblock_setTag(BuddyControlBlock* bcb,
-                                            bool value) {
+static inline void buddycontrolblock_setTag(BuddyControlBlock* bcb, bool value) {
     assert(bcb != NULL);
     bcb->_prv &= SHD_BUDDY_TAG_MASK;
     bcb->_prv |= (value << (32 - SHD_BUDDY_TAG_BITS));
@@ -75,15 +72,13 @@ static inline uint32_t buddycontrolblock_prv(const BuddyControlBlock* bcb) {
     return bcb->_prv & SHD_BUDDY_TAG_MASK;
 }
 
-static inline void buddycontrolblock_setPrv(BuddyControlBlock* bcb,
-                                            unsigned value) {
+static inline void buddycontrolblock_setPrv(BuddyControlBlock* bcb, unsigned value) {
     assert(value <= SHD_BUDDY_TAG_MASK);
     bcb->_prv &= ~SHD_BUDDY_TAG_MASK;
     bcb->_prv |= value;
 }
 
-static inline BuddyControlBlock*
-buddycontrolblock_nxtBlock(const BuddyControlBlock* bcb) {
+static inline BuddyControlBlock* buddycontrolblock_nxtBlock(const BuddyControlBlock* bcb) {
     assert(bcb != NULL);
     uint32_t nxt = buddycontrolblock_nxt(bcb);
     if (nxt == 0) {
@@ -109,8 +104,7 @@ static inline void buddycontrolblock_setNxtBlock(BuddyControlBlock* bcb,
     buddycontrolblock_setNxt(bcb, offset);
 }
 
-static inline BuddyControlBlock*
-buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
+static inline BuddyControlBlock* buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
     assert(bcb != NULL);
     uint32_t prv = buddycontrolblock_prv(bcb);
     if (prv == 0) {
@@ -138,8 +132,7 @@ static inline void buddycontrolblock_setPrvBlock(BuddyControlBlock* bcb,
 
 static inline BuddyControlBlock* buddy_retreiveBCB(void* p) {
     uint8_t* cp = p;
-    BuddyControlBlock* bcb =
-        (BuddyControlBlock*)(cp - sizeof(BuddyControlBlock));
+    BuddyControlBlock* bcb = (BuddyControlBlock*)(cp - sizeof(BuddyControlBlock));
     return bcb;
 }
 
@@ -150,8 +143,7 @@ size_t buddy_metaSizeNBytes(uint32_t pool_nbytes);
 void buddy_poolInit(void* pool, size_t pool_nbytes);
 void buddy_metaInit(void* meta, const void* pool, uint32_t pool_nbytes);
 
-void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
-                  uint32_t pool_nbytes);
+void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool, uint32_t pool_nbytes);
 
 void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes);
 

@@ -4,9 +4,8 @@
 
 #include "lib/shmem/shmem_util.h"
 
-static BuddyControlBlock*
-_buddycontrolblock_computeBuddy(BuddyControlBlock* bcb, unsigned order,
-                                void* pool) {
+static BuddyControlBlock* _buddycontrolblock_computeBuddy(BuddyControlBlock* bcb, unsigned order,
+                                                          void* pool) {
 
     const uint8_t* bcb_p = (const uint8_t*)bcb;
     const uint8_t* pool_p = (const uint8_t*)pool;
@@ -63,8 +62,7 @@ void buddy_metaInit(void* meta, const void* pool, uint32_t pool_nbytes) {
     bcbs[nbcbs - 1] = (BuddyControlBlock*)pool;
 }
 
-static void _buddy_listInsert(BuddyControlBlock** list_head,
-                              BuddyControlBlock* bcb) {
+static void _buddy_listInsert(BuddyControlBlock** list_head, BuddyControlBlock* bcb) {
 
     // First onto the list.
 
@@ -104,8 +102,7 @@ static void _buddy_listInsert(BuddyControlBlock** list_head,
     }
 }
 
-static void _buddy_listRemove(BuddyControlBlock** list_head,
-                              BuddyControlBlock* bcb) {
+static void _buddy_listRemove(BuddyControlBlock** list_head, BuddyControlBlock* bcb) {
 
     unsigned order = buddycontrolblock_order(bcb);
     BuddyControlBlock* nxt = buddycontrolblock_nxtBlock(bcb);
@@ -138,15 +135,14 @@ static void _buddy_listRemove(BuddyControlBlock** list_head,
     }
 }
 
-static void _buddy_alloc_split_blocks(BuddyControlBlock* bcb, uint32_t k,
-                                      uint32_t j, BuddyControlBlock** bcbs) {
+static void _buddy_alloc_split_blocks(BuddyControlBlock* bcb, uint32_t k, uint32_t j,
+                                      BuddyControlBlock** bcbs) {
 
     assert(bcb != NULL && bcbs != NULL);
 
     while (j > k) {
         --j;
-        BuddyControlBlock* split =
-            (BuddyControlBlock*)((uint8_t*)bcb + shmem_util_uintPow2k(j));
+        BuddyControlBlock* split = (BuddyControlBlock*)((uint8_t*)bcb + shmem_util_uintPow2k(j));
         buddycontrolblock_setTag(split, true);
         buddycontrolblock_setOrder(split, j);
 
@@ -156,8 +152,7 @@ static void _buddy_alloc_split_blocks(BuddyControlBlock* bcb, uint32_t k,
     }
 }
 
-void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
-                  uint32_t pool_nbytes) {
+void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool, uint32_t pool_nbytes) {
 
     if (requested_nbytes == 0) {
         return NULL;
@@ -166,8 +161,7 @@ void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
     BuddyControlBlock** bcbs = meta;
     size_t nbcbs = buddy_metaNumLists(pool_nbytes);
 
-    size_t alloc_nbytes =
-        shmem_util_roundUpPow2(requested_nbytes + sizeof(BuddyControlBlock));
+    size_t alloc_nbytes = shmem_util_roundUpPow2(requested_nbytes + sizeof(BuddyControlBlock));
 
     uint32_t k = shmem_util_uintLog2(alloc_nbytes);
 
@@ -196,8 +190,7 @@ void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
     return ((uint8_t*)ret + sizeof(BuddyControlBlock));
 }
 
-static bool _buddycontrolblock_buddy_available(BuddyControlBlock* buddy,
-                                               unsigned order) {
+static bool _buddycontrolblock_buddy_available(BuddyControlBlock* buddy, unsigned order) {
     unsigned buddy_order = buddycontrolblock_order(buddy);
     bool tag = buddycontrolblock_tag(buddy);
 
@@ -220,12 +213,10 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
     unsigned bcb_order = buddycontrolblock_order(bcb);
     unsigned max_order = buddy_poolMaxOrder(pool_nbytes);
 
-    BuddyControlBlock* buddy =
-        _buddycontrolblock_computeBuddy(bcb, bcb_order, pool);
+    BuddyControlBlock* buddy = _buddycontrolblock_computeBuddy(bcb, bcb_order, pool);
     size_t idx = 0;
 
-    while (bcb_order < max_order &&
-           _buddycontrolblock_buddy_available(buddy, bcb_order)) {
+    while (bcb_order < max_order && _buddycontrolblock_buddy_available(buddy, bcb_order)) {
         // remove the buddy block from his list
         idx = bcb_order - SHD_BUDDY_PART_MIN_ORDER;
         _buddy_listRemove(&bcbs[idx], buddy);
@@ -240,5 +231,4 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
     idx = bcb_order - SHD_BUDDY_PART_MIN_ORDER;
 
     _buddy_listInsert(&bcbs[idx], bcb);
-
 }

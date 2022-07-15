@@ -15,11 +15,11 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/shim_event.h"
+#include "lib/shmem/shmem_allocator.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/thread_protected.h"
-#include "lib/shmem/shmem_allocator.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
 

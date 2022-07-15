@@ -14,10 +14,10 @@
 typedef struct _Thread Thread;
 
 #include "lib/shim/shim_shmem.h"
+#include "lib/shmem/shmem_allocator.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
-#include "lib/shmem/shmem_allocator.h"
 
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);

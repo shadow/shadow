@@ -11,9 +11,9 @@
 #include <stdarg.h>
 
 #include "lib/shim/shim_event.h"
+#include "lib/shmem/shmem_allocator.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
-#include "lib/shmem/shmem_allocator.h"
 #include "main/utility/utility.h"
 
 typedef struct _ThreadMethods {

@@ -13,9 +13,9 @@
 #include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
+#include "lib/shmem/shmem_allocator.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_numbers.h"
-#include "lib/shmem/shmem_allocator.h"
 
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.

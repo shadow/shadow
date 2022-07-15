@@ -22,8 +22,7 @@ static void buddycontrolblock_testOrder() {
 
     g_assert_cmpint(buddycontrolblock_order(&bcb), ==, 0);
 
-    for (unsigned idx = 0; idx < shmem_util_uintPow2k(SHD_BUDDY_ORDER_BITS);
-         ++idx) {
+    for (unsigned idx = 0; idx < shmem_util_uintPow2k(SHD_BUDDY_ORDER_BITS); ++idx) {
         buddycontrolblock_setOrder(&bcb, idx);
         g_assert_cmpint(buddycontrolblock_order(&bcb), ==, idx);
     }
@@ -146,8 +145,7 @@ static void buddy_implTestVsMalloc(size_t pool_nbytes) {
 
     for (size_t idx = 0; idx < kNAllocs; ++idx) {
         unsigned alloc_order = SHD_BUDDY_PART_MIN_ORDER + (rand() % n);
-        size_t alloc_nbytes =
-            shmem_util_uintPow2k(alloc_order) - sizeof(BuddyControlBlock);
+        size_t alloc_nbytes = shmem_util_uintPow2k(alloc_order) - sizeof(BuddyControlBlock);
 
         void* p = buddy_alloc(alloc_nbytes, meta, pool, pool_nbytes);
 
@@ -229,8 +227,7 @@ static void shmemutil_testPow2k() {
     g_assert_cmpint(shmem_util_uintPow2k(31), ==, 2147483648);
 }
 
-static void shmemallocator_implTestAlloc(ShMemAllocator* allocator,
-                                         size_t nbytes) {
+static void shmemallocator_implTestAlloc(ShMemAllocator* allocator, size_t nbytes) {
     ShMemBlock blk = shmemallocator_alloc(allocator, nbytes);
     g_assert_cmpint(blk.nbytes, ==, nbytes);
     g_assert_nonnull(blk.p);
@@ -262,8 +259,7 @@ static ShMemAllocator* shmemallocator_getWarm(ShMemBlock* blks) {
     return allocator;
 }
 
-static void shmemallocator_freeWarm(ShMemAllocator* allocator,
-                                    ShMemBlock* blks) {
+static void shmemallocator_freeWarm(ShMemAllocator* allocator, ShMemBlock* blks) {
 
     for (size_t idx = 0; idx < 2 + kNWarmups; ++idx) {
         shmemallocator_free(allocator, &blks[idx]);
@@ -324,14 +320,12 @@ static void shmemallocator_testSerial() {
     free(blks);
 }
 
-static ShMemSerializer* shmemserialzer_getWarm(ShMemAllocator* allocator,
-                                               ShMemBlock* blks) {
+static ShMemSerializer* shmemserialzer_getWarm(ShMemAllocator* allocator, ShMemBlock* blks) {
     ShMemSerializer* serializer = shmemserializer_create();
     g_assert_nonnull(serializer);
 
     for (size_t idx = 0; idx < 2 + kNWarmups; ++idx) {
-        ShMemBlockSerialized serial =
-            shmemallocator_blockSerialize(allocator, &blks[idx]);
+        ShMemBlockSerialized serial = shmemallocator_blockSerialize(allocator, &blks[idx]);
 
         shmemserializer_blockDeserialize(serializer, &serial);
     }
@@ -348,8 +342,7 @@ static void shmemserializer_implTestDeserialize(ShMemAllocator* allocator,
     ShMemBlock blk = shmemallocator_alloc(allocator, kTestNBytes);
     strcpy(blk.p, test_str);
 
-    ShMemBlockSerialized serial =
-        shmemallocator_blockSerialize(allocator, &blk);
+    ShMemBlockSerialized serial = shmemallocator_blockSerialize(allocator, &blk);
 
     ShMemBlock blk_2 = shmemserializer_blockDeserialize(serializer, &serial);
 
@@ -393,18 +386,13 @@ static void shmemserializer_testSerialize() {
 
     ShMemBlock blk = shmemallocator_alloc(allocator, 1);
 
-    ShMemBlockSerialized serial =
-        shmemallocator_blockSerialize(allocator, &blk);
+    ShMemBlockSerialized serial = shmemallocator_blockSerialize(allocator, &blk);
 
     ShMemBlock blk_2 = shmemserializer_blockDeserialize(serializer, &serial);
 
-    ShMemBlockSerialized serial_2 =
-        shmemserializer_blockSerialize(serializer, &blk_2);
+    ShMemBlockSerialized serial_2 = shmemserializer_blockSerialize(serializer, &blk_2);
 
-    g_assert_cmpmem(&serial,
-                    sizeof(ShMemBlockSerialized),
-                    &serial_2,
-                    sizeof(ShMemBlockSerialized));
+    g_assert_cmpmem(&serial, sizeof(ShMemBlockSerialized), &serial_2, sizeof(ShMemBlockSerialized));
 
     shmemallocator_free(allocator, &blk);
 
@@ -425,10 +413,7 @@ static void shmemblockserialized_testString() {
 
     g_assert(!err);
 
-    g_assert_cmpmem(&blk,
-                    sizeof(ShMemBlockSerialized),
-                    &blk_2,
-                    sizeof(ShMemBlockSerialized));
+    g_assert_cmpmem(&blk, sizeof(ShMemBlockSerialized), &blk_2, sizeof(ShMemBlockSerialized));
 
     blk.offset = ULLONG_MAX;
     blk.nbytes = ULLONG_MAX;
@@ -442,19 +427,16 @@ static void shmemblockserialized_testString() {
 
     g_assert(!err);
 
-    g_assert_cmpmem(&blk,
-                    sizeof(ShMemBlockSerialized),
-                    &blk_2,
-                    sizeof(ShMemBlockSerialized));
+    g_assert_cmpmem(&blk, sizeof(ShMemBlockSerialized), &blk_2, sizeof(ShMemBlockSerialized));
 }
 
-static const char *test_fork_key = "TEST_FORK";
+static const char* test_fork_key = "TEST_FORK";
 static const char* test_fork_val1 = "hello";
 static const char* test_fork_val2 = "goodbye";
 
-static void shmemallocator_testForkExec(void *_, const void *user_data) {
+static void shmemallocator_testForkExec(void* _, const void* user_data) {
 
-    const char *path = user_data;
+    const char* path = user_data;
 
     ShMemAllocator* allocator = shmemallocator_create();
     g_assert_nonnull(allocator);
@@ -463,8 +445,7 @@ static void shmemallocator_testForkExec(void *_, const void *user_data) {
 
     strcpy(blk.p, test_fork_val1);
 
-    ShMemBlockSerialized serial =
-        shmemallocator_blockSerialize(allocator, &blk);
+    ShMemBlockSerialized serial = shmemallocator_blockSerialize(allocator, &blk);
 
     pid_t pid = fork();
 
@@ -473,25 +454,18 @@ static void shmemallocator_testForkExec(void *_, const void *user_data) {
         shmemallocator_destroyNoShmDelete(allocator);
 
         const size_t buf_nbytes = 256;
-        char offset_buf[buf_nbytes],
-              nbytes_buf[buf_nbytes],
-              block_nbytes_buf[buf_nbytes];
+        char offset_buf[buf_nbytes], nbytes_buf[buf_nbytes], block_nbytes_buf[buf_nbytes];
 
         snprintf(offset_buf, buf_nbytes, "%zu", serial.offset);
         snprintf(nbytes_buf, buf_nbytes, "%zu", serial.nbytes);
         snprintf(block_nbytes_buf, buf_nbytes, "%zu", serial.block_nbytes);
 
-        int rc = execl(path, path, test_fork_key,
-                       offset_buf,
-                       nbytes_buf,
-                       block_nbytes_buf,
-                       serial.name,
-                       (char *) NULL);
+        int rc = execl(path, path, test_fork_key, offset_buf, nbytes_buf, block_nbytes_buf,
+                       serial.name, (char*)NULL);
 
         if (rc != 0) {
             exit(rc);
         }
-
 
     } else { // parent process
 
@@ -508,7 +482,7 @@ static void shmemallocator_testForkExec(void *_, const void *user_data) {
 }
 
 // after fork + exec, the exec'd process executes this
-static void shmemallocator_auxTestForkExec(int argc, char **argv) {
+static void shmemallocator_auxTestForkExec(int argc, char** argv) {
     if (argc != 6) {
         exit(-1);
     }
@@ -520,8 +494,7 @@ static void shmemallocator_auxTestForkExec(int argc, char **argv) {
     strcpy(serial.name, argv[5]);
 
     ShMemSerializer* serializer = shmemserializer_create();
-    ShMemBlock blk =
-        shmemserializer_blockDeserialize(serializer, &serial);
+    ShMemBlock blk = shmemserializer_blockDeserialize(serializer, &serial);
 
     int rc = 0;
 
@@ -548,109 +521,48 @@ int main(int argc, char** argv) {
     g_test_set_nonfatal_assertions();
 
     /* buddy tests */
-    g_test_add("/shmem/buddycontrolblock_testOrder",
-               void,
-               NULL,
-               NULL,
-               buddycontrolblock_testOrder,
-               NULL);
+    g_test_add(
+        "/shmem/buddycontrolblock_testOrder", void, NULL, NULL, buddycontrolblock_testOrder, NULL);
 
-    g_test_add("/shmem/buddycontrolblock_testOrderAndNxt",
-               void,
-               NULL,
-               NULL,
-               buddycontrolblock_testOrderAndNxt,
-               NULL);
+    g_test_add("/shmem/buddycontrolblock_testOrderAndNxt", void, NULL, NULL,
+               buddycontrolblock_testOrderAndNxt, NULL);
 
-    g_test_add("/shmem/buddycontrolblock_testTagAndPrv",
-               void,
-               NULL,
-               NULL,
-               buddycontrolblock_testTagAndPrv,
-               NULL);
+    g_test_add("/shmem/buddycontrolblock_testTagAndPrv", void, NULL, NULL,
+               buddycontrolblock_testTagAndPrv, NULL);
 
-    g_test_add("/shmem/buddycontrolblock_testGoodSizes",
-               void,
-               NULL,
-               NULL,
-               buddycontrolblock_testGoodSizes,
-               NULL);
+    g_test_add("/shmem/buddycontrolblock_testGoodSizes", void, NULL, NULL,
+               buddycontrolblock_testGoodSizes, NULL);
 
-    g_test_add("/shmem/buddy_testVsMalloc",
-               void,
-               NULL,
-               NULL,
-               buddy_testVsMalloc,
-               NULL);
+    g_test_add("/shmem/buddy_testVsMalloc", void, NULL, NULL, buddy_testVsMalloc, NULL);
 
     /* shmemfile tests */
 
-    g_test_add("/shmem/shmemfile_testGoodAlloc",
-               void,
-               NULL,
-               NULL,
-               shmemfile_testGoodAlloc,
-               NULL);
+    g_test_add("/shmem/shmemfile_testGoodAlloc", void, NULL, NULL, shmemfile_testGoodAlloc, NULL);
 
     /* shmemutil tests */
 
-    g_test_add("/shmem/shmemutil_testLog2",
-               void,
-               NULL,
-               NULL,
-               shmemutil_testLog2,
-               NULL);
+    g_test_add("/shmem/shmemutil_testLog2", void, NULL, NULL, shmemutil_testLog2, NULL);
 
-    g_test_add("/shmem/shmemutil_testPow2k",
-               void,
-               NULL,
-               NULL,
-               shmemutil_testPow2k,
-               NULL);
+    g_test_add("/shmem/shmemutil_testPow2k", void, NULL, NULL, shmemutil_testPow2k, NULL);
 
     /* shmemallocator tests */
 
-    g_test_add("/shmem/shmemallocator_testAlloc",
-               void,
-               NULL,
-               NULL,
-               shmemallocator_testAlloc,
-               NULL);
+    g_test_add("/shmem/shmemallocator_testAlloc", void, NULL, NULL, shmemallocator_testAlloc, NULL);
 
-    g_test_add("/shmem/shmemallocator_testSerial",
-               void,
-               NULL,
-               NULL,
-               shmemallocator_testSerial,
-               NULL);
+    g_test_add(
+        "/shmem/shmemallocator_testSerial", void, NULL, NULL, shmemallocator_testSerial, NULL);
 
-    g_test_add("/shmem/shmemblockserialized_testString",
-               void,
-               NULL,
-               NULL,
-               shmemblockserialized_testString,
-               NULL);
+    g_test_add("/shmem/shmemblockserialized_testString", void, NULL, NULL,
+               shmemblockserialized_testString, NULL);
 
-    g_test_add("/shmem/shmemserializer_testDeserialize",
-               void,
-               NULL,
-               NULL,
-               shmemserializer_testDeserialize,
-               NULL);
+    g_test_add("/shmem/shmemserializer_testDeserialize", void, NULL, NULL,
+               shmemserializer_testDeserialize, NULL);
 
-    g_test_add("/shmem/shmemserializer_testSerialize",
-               void,
-               NULL,
-               NULL,
-               shmemserializer_testSerialize,
-               NULL);
+    g_test_add("/shmem/shmemserializer_testSerialize", void, NULL, NULL,
+               shmemserializer_testSerialize, NULL);
 
-    g_test_add("/shmem/shmemallocator_testForkExec",
-               void,
-               argv[0],
-               NULL,
-               shmemallocator_testForkExec,
-               NULL);
+    g_test_add("/shmem/shmemallocator_testForkExec", void, argv[0], NULL,
+               shmemallocator_testForkExec, NULL);
 
     return g_test_run();
 }
