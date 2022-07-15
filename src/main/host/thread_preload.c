@@ -19,7 +19,7 @@
 #include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/thread_protected.h"
-#include "main/shmem/shmem_allocator.h"
+#include "lib/shmem/shmem_allocator.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
 

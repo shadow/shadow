@@ -6,7 +6,7 @@
 
 #include "lib/shim/shim_shmem.h"
 #include "main/core/support/definitions.h"
-#include "main/shmem/shmem_allocator.h"
+#include "lib/shmem/shmem_allocator.h"
 
 // Should be called by all syscall wrappers to ensure the shim is initialized.
 void shim_ensure_init();

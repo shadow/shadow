@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "main/shmem/shmem_file.h"
+#include "lib/shmem/shmem_file.h"
 
 typedef struct _ShMemAllocator ShMemAllocator;
 typedef struct _ShMemSerializer ShMemSerializer;

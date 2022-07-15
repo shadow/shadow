@@ -1,4 +1,4 @@
-#include "main/shmem/shmem_file.h"
+#include "lib/shmem/shmem_file.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "main/shmem/shmem_util.h"
+#include "lib/shmem/shmem_util.h"
 
 // Keep these consistent with cleanup.rs
 static const char* SHADOW_PREFIX = "shadow_shmemfile";

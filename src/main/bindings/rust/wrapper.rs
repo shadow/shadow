@@ -1220,6 +1220,60 @@ pub struct _ShimHostProtectedSharedMem {
     _unused: [u8; 0],
 }
 pub type ShimShmemHostLock = _ShimHostProtectedSharedMem;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShMemBlock {
+    pub p: *mut ::std::os::raw::c_void,
+    pub nbytes: size_t,
+}
+#[test]
+fn bindgen_test_layout__ShMemBlock() {
+    assert_eq!(
+        ::std::mem::size_of::<_ShMemBlock>(),
+        16usize,
+        concat!("Size of: ", stringify!(_ShMemBlock))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_ShMemBlock>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_ShMemBlock))
+    );
+    fn test_field_p() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).p) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_ShMemBlock),
+                "::",
+                stringify!(p)
+            )
+        );
+    }
+    test_field_p();
+    fn test_field_nbytes() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).nbytes) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_ShMemBlock),
+                "::",
+                stringify!(nbytes)
+            )
+        );
+    }
+    test_field_nbytes();
+}
+pub type ShMemBlock = _ShMemBlock;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 pub type PluginPhysicalPtr = _PluginPhysicalPtr;
@@ -1519,60 +1573,6 @@ fn bindgen_test_layout__SysCallReturn() {
     test_field_restartable();
 }
 pub type SysCallReturn = _SysCallReturn;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _ShMemBlock {
-    pub p: *mut ::std::os::raw::c_void,
-    pub nbytes: size_t,
-}
-#[test]
-fn bindgen_test_layout__ShMemBlock() {
-    assert_eq!(
-        ::std::mem::size_of::<_ShMemBlock>(),
-        16usize,
-        concat!("Size of: ", stringify!(_ShMemBlock))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_ShMemBlock>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_ShMemBlock))
-    );
-    fn test_field_p() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).p) as usize - ptr as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_ShMemBlock),
-                "::",
-                stringify!(p)
-            )
-        );
-    }
-    test_field_p();
-    fn test_field_nbytes() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_ShMemBlock>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).nbytes) as usize - ptr as usize
-            },
-            8usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_ShMemBlock),
-                "::",
-                stringify!(nbytes)
-            )
-        );
-    }
-    test_field_nbytes();
-}
-pub type ShMemBlock = _ShMemBlock;
 pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

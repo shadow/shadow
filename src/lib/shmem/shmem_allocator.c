@@ -1,4 +1,4 @@
-#include "main/shmem/shmem_allocator.h"
+#include "lib/shmem/shmem_allocator.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -9,9 +9,9 @@
 #include <pthread.h>
 
 #include "lib/logger/logger.h"
-#include "main/shmem/buddy.h"
-#include "main/shmem/shmem_file.h"
-#include "main/shmem/shmem_util.h"
+#include "lib/shmem/buddy.h"
+#include "lib/shmem/shmem_file.h"
+#include "lib/shmem/shmem_util.h"
 
 #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES (1<<20)
 
