@@ -378,10 +378,6 @@ void config_freeString(char *string);
 
 void config_showConfig(const struct ConfigOptions *config);
 
-LogLevel config_getLogLevel(const struct ConfigOptions *config);
-
-SimulationTime config_getHeartbeatInterval(const struct ConfigOptions *config);
-
 bool config_getUseSchedFifo(const struct ConfigOptions *config);
 
 bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
@@ -389,14 +385,6 @@ bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
 bool config_getUseSeccomp(const struct ConfigOptions *config);
 
 bool config_getUseSyscallCounters(const struct ConfigOptions *config);
-
-bool config_getUseObjectCounters(const struct ConfigOptions *config);
-
-bool config_getUseLibcPreload(const struct ConfigOptions *config);
-
-bool config_getUseOpensslRNGPreload(const struct ConfigOptions *config);
-
-bool config_getUseOpensslCryptoPreload(const struct ConfigOptions *config);
 
 bool config_getUseMemoryManager(const struct ConfigOptions *config);
 
@@ -413,14 +401,6 @@ SimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
 SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
-
-uint32_t config_getWorkers(const struct ConfigOptions *config);
-
-SchedulerPolicyType config_getSchedulerPolicy(const struct ConfigOptions *config);
-
-char *config_getDataDirectory(const struct ConfigOptions *config);
-
-char *config_getTemplateDirectory(const struct ConfigOptions *config);
 
 bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
@@ -577,16 +557,9 @@ WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
 
-// Add the global counters to the provided counters, and clear the global counters.
-void worker_addFromGlobalAllocCounters(struct Counter *alloc_counter,
-                                       struct Counter *dealloc_counter);
-
 // Add the counters to their global counterparts, and clear the provided counters.
 void worker_addToGlobalAllocCounters(struct Counter *alloc_counter,
                                      struct Counter *dealloc_counter);
-
-// Add the global counter to the provided counter, and clear the global counter.
-void worker_addFromGlobalSyscallCounter(struct Counter *syscall_counter);
 
 // Add the counters to their global counterparts, and clear the provided counters.
 void worker_addToGlobalSyscallCounter(struct Counter *syscall_counter);

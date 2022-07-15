@@ -15,7 +15,6 @@ use super::simulation_time::{SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ON
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::format::StraceFmtMode;
-use crate::utility::tilde_expansion;
 
 use log_bindings as c_log;
 
@@ -657,7 +656,7 @@ impl From<LogLevel> for log::Level {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SchedulerPolicy {
     Host,
@@ -1118,11 +1117,6 @@ pub fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
     Ok(args)
 }
 
-/// Returns the number of hosts, taking into account the 'quantity' option for each host.
-fn count_hosts(config: &ConfigOptions) -> u32 {
-    config.hosts.iter().map(|(_, host)| *host.quantity).sum()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1360,27 +1354,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getLogLevel(config: *const ConfigOptions) -> c_log::LogLevel {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.general.log_level.as_ref().unwrap().to_c_loglevel()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getHeartbeatInterval(
-        config: *const ConfigOptions,
-    ) -> c::SimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config
-            .general
-            .heartbeat_interval
-            .flatten()
-            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
-            .unwrap_or(SIMTIME_INVALID)
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseSchedFifo(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1406,34 +1379,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_syscall_counters.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseObjectCounters(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_object_counters.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseLibcPreload(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_preload_libc.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseOpensslRNGPreload(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_preload_openssl_rng.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseOpensslCryptoPreload(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_preload_openssl_crypto.unwrap()
     }
 
     #[no_mangle]
@@ -1515,60 +1460,6 @@ mod export {
             .unwrap()
             .value()
             * SIMTIME_ONE_SECOND
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getWorkers(config: *const ConfigOptions) -> NonZeroU32 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        match &config.experimental.worker_threads {
-            Some(w) => *w,
-            None => {
-                // By default use 1 worker per host.
-                NonZeroU32::new(count_hosts(config)).unwrap()
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getSchedulerPolicy(
-        config: *const ConfigOptions,
-    ) -> c::SchedulerPolicyType {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        config
-            .experimental
-            .scheduler_policy
-            .as_ref()
-            .unwrap()
-            .to_c_sched_policy_type()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getDataDirectory(config: *const ConfigOptions) -> *mut libc::c_char {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        let data_directory = config.general.data_directory.as_ref().unwrap();
-        let data_directory = tilde_expansion(data_directory);
-        CString::into_raw(CString::new(data_directory.to_str().unwrap()).unwrap())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getTemplateDirectory(
-        config: *const ConfigOptions,
-    ) -> *mut libc::c_char {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        match config.general.template_directory.flatten_ref() {
-            Some(x) => {
-                let x = tilde_expansion(x);
-                CString::into_raw(CString::new(x.to_str().unwrap()).unwrap())
-            }
-            None => std::ptr::null_mut(),
-        }
     }
 
     #[no_mangle]

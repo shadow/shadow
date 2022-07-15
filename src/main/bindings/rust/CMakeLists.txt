@@ -36,6 +36,9 @@ add_custom_command(OUTPUT wrapper.rs
         --blacklist-type "_?ShimProcessSharedMem"
         --blacklist-function "thread_sharedMem"
 
+        # glib functions
+        --whitelist-function "g_quark_from_string"
+
         --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
         --whitelist-function "legacydesc_close"
@@ -50,10 +53,9 @@ add_custom_command(OUTPUT wrapper.rs
         # used by shadow's main function
         --whitelist-function "main_.*"
         --whitelist-function "shmemcleanup_tryCleanup"
-        --whitelist-function "manager_(new|free|run|addNewVirtualHost|addNewVirtualProcess)"
-        --whitelist-function "manager_increment_object_alloc_counter_global"
-        --whitelist-function "manager_increment_object_dealloc_counter_global"
-        --whitelist-function "manager_add_syscall_counts_global"
+        --whitelist-function "scanRpathForLib"
+        --whitelist-function "scheduler_(new|unref|addHost|start|finish|shutdown)"
+        --whitelist-function "scheduler_(continueNextRound|awaitNextRound)"
         --whitelist-function "runConfigHandlers"
         --whitelist-function "rustlogger_new"
         --whitelist-function "dns_.*"
@@ -63,6 +65,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "process_.*"
         --whitelist-function "shadow_logger_getDefault"
         --whitelist-function "shadow_logger_shouldFilter"
+        --whitelist-function "logger_get_global_start_time_micros"
         --whitelist-function "statuslistener_ref"
         --whitelist-function "statuslistener_unref"
         --whitelist-function "statuslistener_onStatusChanged"
@@ -106,6 +109,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-type "LogInfoFlags"
         --whitelist-type "SimulationTime"
         --whitelist-type "SchedulerPolicyType"
+        --whitelist-type "Scheduler"
         --whitelist-type "ProtocolTCPFlags"
         --whitelist-var "CONFIG_PIPE_BUFFER_SIZE"
         --whitelist-var "SYSCALL_IO_BUFSIZE"
@@ -119,6 +123,7 @@ add_custom_command(OUTPUT wrapper.rs
         --opaque-type "Logger"
         --opaque-type "DescriptorTable"
         --opaque-type "MemoryManager"
+        --opaque-type "Scheduler"
         --opaque-type "Random"
         --opaque-type "TaskRef"
         --opaque-type "GList"

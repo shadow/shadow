@@ -850,6 +850,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
     shimshmemprocess_init(proc->shimSharedMemBlock.p, proc);
 
+    envv = g_strdupv(envv);
+
     {
         ShMemBlockSerialized sharedMemBlockSerial =
             shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);

@@ -116,7 +116,7 @@ static SimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
-Host* host_new(HostParameters* params) {
+Host* host_new(const HostParameters* params) {
     utility_assert(params);
 
     Host* host = g_new0(Host, 1);
@@ -167,7 +167,7 @@ Host* host_new(HostParameters* params) {
 }
 
 /* this function is called by manager before the workers exist */
-void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath) {
+void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 
     /* get unique virtual address identifiers for each network interface */
@@ -190,7 +190,7 @@ void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPat
     }
 
     host->random = random_new(host->params.nodeSeed);
-    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold,
+    host->cpu = cpu_new(host->params.cpuFrequency, rawCPUFreq, host->params.cpuThreshold,
                         host->params.cpuPrecision);
 
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
@@ -352,19 +352,21 @@ void host_unlock(Host* host) {
     g_mutex_unlock(&(host->lock));
 }
 
-#ifdef USE_PERF_TIMERS
 /* resumes the execution timer for this host */
 void host_continueExecutionTimer(Host* host) {
+#ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_continue(host->executionTimer);
+#endif
 }
 
 /* stops the execution timer for this host */
 void host_stopExecutionTimer(Host* host) {
+#ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_stop(host->executionTimer);
-}
 #endif
+}
 
 GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);
@@ -411,9 +413,13 @@ guint64 host_getNewPacketID(Host* host) {
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging) {
     MAGIC_ASSERT(host);
+
+    /* get a mutable version of the env list */
+    gchar** envv_dup = g_strdupv((gchar**)envv);
+
     {
         ShMemBlockSerialized sharedMemBlockSerial =
             shmemallocator_globalBlockSerialize(&host->shimSharedMemBlock);
@@ -422,7 +428,7 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        envv = g_environ_setenv(envv, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
+        envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
     guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host,
@@ -432,10 +438,12 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                                 host_getName(host),
                                 pluginName,
                                 pluginPath,
-                                envv,
+                                envv_dup,
                                 argv,
                                 pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
+
+    g_strfreev(envv_dup);
 }
 
 void host_freeAllApplications(Host* host) {

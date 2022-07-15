@@ -24,4 +24,5 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/routing/packet.h"
+#include "main/utility/rpath.h"
 #include "main/utility/utility.h"

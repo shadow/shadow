@@ -82,7 +82,6 @@ set(shadow_srcs
     core/support/config_handlers.c
     core/work/event.c
     core/main.c
-    core/manager.c
     core/worker.c
 
     host/descriptor/descriptor.c
@@ -143,6 +142,7 @@ set(shadow_srcs
     utility/async_priority_queue.c
     utility/count_down_latch.c
     utility/priority_queue.c
+    utility/rpath.c
     utility/tagged_ptr.c
     utility/utility.c
 )

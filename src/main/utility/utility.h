@@ -97,13 +97,6 @@ gchar* utility_getHomePath(const gchar* path);
 guint utility_getRawCPUFrequency(const gchar* freqFilename);
 gboolean utility_isRandomPath(const gchar* path);
 
-gboolean utility_removeAll(const gchar* path);
-gboolean utility_copyAll(const gchar* srcPath, const gchar* dstPath);
-
-GString* utility_getFileContents(const gchar* fileName);
-gchar* utility_getNewTemporaryFilename(const gchar* templateStr);
-gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
-
 gchar* utility_strvToNewStr(gchar** strv);
 
 __attribute__((__format__(__printf__, 4, 5)))

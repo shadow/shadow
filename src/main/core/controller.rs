@@ -1,16 +1,16 @@
 use std::collections::HashMap;
-use std::ffi::CString;
-use std::os::unix::ffi::OsStrExt;
 use std::sync::atomic::AtomicU32;
 use std::sync::RwLock;
 use std::time::Duration;
 
+use anyhow::Context;
 use rand::Rng;
+use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
+use crate::core::manager::Manager;
 use crate::core::sim_config::{Bandwidth, HostInfo, SimConfig};
-use crate::core::support::configuration::ConfigOptions;
-use crate::core::support::configuration::Flatten;
+use crate::core::support::configuration::{ConfigOptions, Flatten};
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow as c;
@@ -93,151 +93,14 @@ impl<'a> Controller<'a> {
     pub fn run(mut self) -> anyhow::Result<()> {
         let end_time = self.scheduling_data.read().unwrap().end_time;
 
-        // take the host list so that we can free the list later without mutating self
-        let mut hosts = self.hosts.split_off(0);
+        let manager_hosts = std::mem::take(&mut self.hosts);
+        let manager_rand = Xoshiro256PlusPlus::seed_from_u64(self.random.gen());
+        let manager = Manager::new(&self, self.config, manager_hosts, end_time, manager_rand)
+            .context("Failed to initialize the manager")?;
 
-        let manager_seed = self.random.gen();
-
-        // the manager takes a const pointer and not a reference, so we use this reference to make
-        // sure we don't mutate self after the manager is created
-        let _fake_ref_for_manager = &self;
-
-        // scope used to prevent manager from being accessed after it's freed
-        {
-            // The controller will be responsible for distributing the actions to the managers so that
-            // they all have a consistent view of the simulation, topology, etc.  For now we only have
-            // one manager so send it everything.
-            let manager = unsafe {
-                c::manager_new(
-                    &self,
-                    self.config,
-                    SimulationTime::to_c_simtime(Some(end_time)),
-                    manager_seed,
-                )
-            };
-            assert!(!manager.is_null());
-
-            // add hosts and processes to the manager
-            for host in &hosts {
-                let hostname = CString::new(&*host.name).unwrap();
-                let pcap_dir = host
-                    .pcap_dir
-                    .as_ref()
-                    .map(|x| CString::new(x.to_str().unwrap()).unwrap());
-
-                // scope used to enforce drop order for pointers
-                {
-                    let mut params = c::HostParameters {
-                        // the manager sets this ID
-                        id: 0,
-                        // the manager sets this CPU frequency
-                        cpuFrequency: 0,
-                        // cast the u64 to a u32, ignoring truncated bits
-                        nodeSeed: host.seed as u32,
-                        hostname: hostname.as_ptr(),
-                        nodeId: host.network_node_id,
-                        ipAddr: match host.ip_addr.unwrap() {
-                            std::net::IpAddr::V4(ip) => u32::to_be(ip.into()),
-                            // the config only allows ipv4 addresses, so this shouldn't happen
-                            std::net::IpAddr::V6(_) => unreachable!("IPv6 not supported"),
-                        },
-                        requestedBwDownBits: host.bandwidth_down_bits.unwrap(),
-                        requestedBwUpBits: host.bandwidth_up_bits.unwrap(),
-                        cpuThreshold: host.cpu_threshold,
-                        cpuPrecision: host.cpu_precision,
-                        heartbeatInterval: SimulationTime::to_c_simtime(host.heartbeat_interval),
-                        heartbeatLogLevel: host
-                            .heartbeat_log_level
-                            .map(|x| x.to_c_loglevel())
-                            .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                        heartbeatLogInfo: host
-                            .heartbeat_log_info
-                            .iter()
-                            .map(|x| x.to_c_loginfoflag())
-                            .reduce(|x, y| x | y)
-                            .unwrap_or(c::_LogInfoFlags_LOG_INFO_FLAGS_NONE),
-                        logLevel: host
-                            .log_level
-                            .map(|x| x.to_c_loglevel())
-                            .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                        // the `as_ref()` is important to prevent `map()` from consuming the `Option`
-                        // and using a pointer to a temporary value
-                        pcapDir: pcap_dir
-                            .as_ref()
-                            .map(|x| x.as_ptr())
-                            .unwrap_or(std::ptr::null()),
-                        pcapCaptureSize: host.pcap_capture_size.try_into().unwrap(),
-                        qdisc: host.qdisc,
-                        recvBufSize: host.recv_buf_size,
-                        autotuneRecvBuf: if host.autotune_recv_buf { 1 } else { 0 },
-                        sendBufSize: host.send_buf_size,
-                        autotuneSendBuf: if host.autotune_send_buf { 1 } else { 0 },
-                        interfaceBufSize: host.interface_buf_size,
-                    };
-
-                    if unsafe { c::manager_addNewVirtualHost(manager, &mut params) } != 0 {
-                        panic!("Could not add the host '{}'", host.name);
-                    }
-
-                    // make sure we never accidentally drop the following objects before running the
-                    // unsafe code (will be a compile-time error if they were dropped)
-                    let _ = &hostname;
-                    let _ = &pcap_dir;
-                }
-
-                for proc in &host.processes {
-                    let plugin_path = CString::new(proc.plugin.to_str().unwrap()).unwrap();
-                    let env = CString::new(&*proc.env).unwrap();
-                    let pause_for_debugging = host.pause_for_debugging;
-
-                    let argv: Vec<CString> = proc
-                        .args
-                        .iter()
-                        .map(|x| CString::new(x.as_bytes()).unwrap())
-                        .collect();
-
-                    // scope used to enforce drop order for pointers
-                    {
-                        let argv_ptrs: Vec<*const i8> = argv
-                            .iter()
-                            .map(|x| x.as_ptr())
-                            // the last element of argv must be NULL
-                            .chain(std::iter::once(std::ptr::null()))
-                            .collect();
-
-                        unsafe {
-                            c::manager_addNewVirtualProcess(
-                                manager,
-                                hostname.as_ptr(),
-                                plugin_path.as_ptr(),
-                                SimulationTime::to_c_simtime(Some(proc.start_time)),
-                                SimulationTime::to_c_simtime(proc.stop_time),
-                                argv_ptrs.as_ptr(),
-                                env.as_ptr(),
-                                pause_for_debugging,
-                            )
-                        }
-
-                        // make sure we never accidentally drop the following objects before running the
-                        // unsafe code (will be a compile-time error if they were dropped)
-                        let _ = &plugin_path;
-                        let _ = &env;
-                        let _ = &argv;
-                        let _ = &argv_ptrs;
-                    }
-                }
-            }
-
-            // we don't use the host/process list anymore, so may as well free the memory
-            hosts.clear();
-            hosts.shrink_to_fit();
-
-            log::info!("Running simulation");
-            unsafe { c::manager_run(manager) };
-            log::info!("Finished simulation, cleaning up now");
-
-            unsafe { c::manager_free(manager) };
-        }
+        log::info!("Running simulation");
+        manager.run()?;
+        log::info!("Finished simulation");
 
         let num_plugin_errors = self
             .num_plugin_errors
@@ -247,9 +110,6 @@ impl<'a> Controller<'a> {
                 "{num_plugin_errors} managed processes exited with a non-zero error code"
             ));
         }
-
-        // access the immutable reference to make sure we haven't mutated self
-        let _fake_ref_for_manager = _fake_ref_for_manager;
 
         Ok(())
     }
@@ -266,7 +126,7 @@ impl std::ops::Drop for Controller<'_> {
 }
 
 /// Controller methods that are accessed by the manager.
-trait SimController {
+pub trait SimController {
     unsafe fn get_dns(&self) -> *mut c::DNS;
     fn get_latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime>;
     fn get_reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32>;

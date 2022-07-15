@@ -19,29 +19,11 @@
  * RESULTING FROM THE USE OF THIS SOFTWARE.
  */
 
-#ifndef SHD_MANAGER_H_
-#define SHD_MANAGER_H_
+#ifndef SHD_RPATH_H_
+#define SHD_RPATH_H_
 
 #include <glib.h>
-#include <netinet/in.h>
 
-#include "main/core/support/definitions.h"
-#include "main/host/host_parameters.h"
-#include "main/routing/dns.h"
+gchar* scanRpathForLib(const gchar* libname);
 
-typedef struct _Manager Manager;
-
-Manager* manager_new(const Controller* controller, const ConfigOptions* config,
-                     SimulationTime endTime, guint randomSeed);
-void manager_free(Manager* manager);
-
-void manager_run(Manager*);
-
-/* info received from controller to set up the simulation */
-int manager_addNewVirtualHost(Manager* manager, HostParameters* params);
-void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, const gchar* pluginName,
-                                  SimulationTime startTime, SimulationTime stopTime,
-                                  const gchar* const* argv, const char* environment,
-                                  bool pause_for_debugging);
-
-#endif /* SHD_MANAGER_H_ */
+#endif /* SHD_RPATH_H_ */

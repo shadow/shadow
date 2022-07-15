@@ -205,9 +205,4 @@ typedef guint64 EmulatedTime;
  */
 #define CONFIG_TCPCLOSETIMER_DELAY (60 * SIMTIME_ONE_SECOND)
 
-/**
- * Filename to find the CPU speed.
- */
-#define CONFIG_CPU_MAX_FREQ_FILE "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
-
 #endif /* SHD_DEFINITIONS_H_ */

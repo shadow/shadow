@@ -34,23 +34,17 @@ typedef GQuark HostId;
 #include "main/routing/dns.h"
 #include "main/routing/router.h"
 
-Host* host_new(HostParameters* params);
+Host* host_new(const HostParameters* params);
 void host_ref(Host* host);
 void host_unref(Host* host);
 
 void host_lock(Host* host);
 void host_unlock(Host* host);
 
-#ifdef USE_PERF_TIMERS
 void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);
-#else
-// define macros that do nothing
-#define host_continueExecutionTimer(host)
-#define host_stopExecutionTimer(host)
-#endif
 
-void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath);
+void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
 void host_shutdown(Host* host);
 
@@ -58,7 +52,7 @@ guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, gchar** envv,
+                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging);
 void host_freeAllApplications(Host* host);
 
