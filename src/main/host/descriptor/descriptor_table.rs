@@ -127,7 +127,7 @@ impl DescriptorTable {
         for descriptor in self.descriptors.values() {
             match descriptor.file() {
                 CompatFile::New(_) => continue,
-                CompatFile::Legacy(d) => unsafe { c::legacydesc_shutdownHelper(d.ptr()) },
+                CompatFile::Legacy(f) => unsafe { c::legacyfile_shutdownHelper(f.ptr()) },
             };
         }
     }
@@ -189,7 +189,7 @@ mod export {
         table.shutdown_helper();
     }
 
-    /// Close all descriptors. The `host` option is a legacy option for legacy descriptors.
+    /// Close all descriptors. The `host` option is a legacy option for legacy files.
     #[no_mangle]
     pub unsafe extern "C" fn descriptortable_removeAndCloseAll(
         table: *mut DescriptorTable,

@@ -176,24 +176,24 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     trace("fcntl called on fd %d for command %lu", fd, command);
 
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
-    int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     int result = 0;
-    if (legacydesc_getType(desc) == DT_FILE) {
+    if (legacyfile_getType(desc) == DT_FILE) {
         result = _syscallhandler_fcntlHelper(sys, (RegularFile*)desc, fd, command, argReg);
     } else {
         /* TODO: add additional support for important operations. */
         switch (command) {
             case F_GETFL: {
-                result = legacydesc_getFlags(desc);
+                result = legacyfile_getFlags(desc);
                 break;
             }
             case F_SETFL: {
-                legacydesc_setFlags(desc, argReg.as_i64);
+                legacyfile_setFlags(desc, argReg.as_i64);
                 break;
             }
             default: {

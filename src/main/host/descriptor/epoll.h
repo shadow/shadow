@@ -15,7 +15,7 @@
 
 typedef struct _Epoll Epoll;
 
-/* free this with legacydesc_free() */
+/* free this with legacyfile_free() */
 Epoll* epoll_new();
 
 gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descriptor,

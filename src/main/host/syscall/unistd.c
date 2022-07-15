@@ -36,13 +36,13 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = legacydesc_getType(desc);
+    LegacyFileType dType = legacyfile_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -56,7 +56,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     }
 
     /* Now it's an error if the descriptor is closed. */
-    int errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    int errorCode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
@@ -103,7 +103,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -113,11 +113,11 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         }
 
         /* We need to block until the descriptor is ready to read. */
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        Trigger trigger =
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_READABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = legacydesc_supportsSaRestart(desc)};
+                               .restartable = legacyfile_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){
@@ -130,13 +130,13 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
           offset);
 
     /* Get the descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = legacydesc_getType(desc);
+    LegacyFileType dType = legacyfile_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -150,7 +150,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     }
 
     /* Now it's an error if the descriptor is closed. */
-    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
@@ -188,7 +188,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -198,11 +198,11 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
         }
 
         /* We need to block until the descriptor is ready to write. */
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+        Trigger trigger =
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_WRITABLE};
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = legacydesc_supportsSaRestart(desc)};
+                               .restartable = legacyfile_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){

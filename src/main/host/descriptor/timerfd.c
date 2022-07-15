@@ -20,30 +20,30 @@
 #include "main/utility/utility.h"
 
 struct _TimerFd {
-    LegacyDescriptor super;
+    LegacyFile super;
     Timer* timer;
     gboolean isClosed;
 
     MAGIC_DECLARE;
 };
 
-static TimerFd* _timerfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(legacydesc_getType(descriptor) == DT_TIMER);
+static TimerFd* _timerfd_fromLegacyFile(LegacyFile* descriptor) {
+    utility_assert(legacyfile_getType(descriptor) == DT_TIMER);
     return (TimerFd*)descriptor;
 }
 
-static void _timerfd_close(LegacyDescriptor* descriptor, Host* host) {
-    TimerFd* timerfd = _timerfd_fromLegacyDescriptor(descriptor);
+static void _timerfd_close(LegacyFile* descriptor, Host* host) {
+    TimerFd* timerfd = _timerfd_fromLegacyFile(descriptor);
     MAGIC_ASSERT(timerfd);
     trace("timer desc %p closing now", &timerfd->super);
     timerfd->isClosed = TRUE;
-    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
+    legacyfile_adjustStatus(&(timerfd->super), STATUS_FILE_ACTIVE, FALSE);
 }
 
-static void _timerfd_free(LegacyDescriptor* descriptor) {
-    TimerFd* timerfd = _timerfd_fromLegacyDescriptor(descriptor);
+static void _timerfd_free(LegacyFile* descriptor) {
+    TimerFd* timerfd = _timerfd_fromLegacyFile(descriptor);
     MAGIC_ASSERT(timerfd);
-    legacydesc_clear((LegacyDescriptor*)timerfd);
+    legacyfile_clear((LegacyFile*)timerfd);
     if (timerfd->timer) {
         timer_drop(timerfd->timer);
         timerfd->timer = NULL;
@@ -53,8 +53,8 @@ static void _timerfd_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(TimerFd);
 }
 
-static void _timerfd_cleanup(LegacyDescriptor* descriptor) {
-    TimerFd* timerfd = _timerfd_fromLegacyDescriptor(descriptor);
+static void _timerfd_cleanup(LegacyFile* descriptor) {
+    TimerFd* timerfd = _timerfd_fromLegacyFile(descriptor);
     MAGIC_ASSERT(timerfd);
 
     if (timerfd->timer) {
@@ -65,7 +65,7 @@ static void _timerfd_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static DescriptorFunctionTable _timerfdFunctions = {
+static LegacyFileFunctionTable _timerfdFunctions = {
     _timerfd_close, _timerfd_cleanup, _timerfd_free, MAGIC_VALUE};
 
 static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
@@ -74,12 +74,12 @@ TimerFd* timerfd_new(HostId hostId) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
     MAGIC_INIT(timerfd);
 
-    legacydesc_init(&(timerfd->super), DT_TIMER, &_timerfdFunctions);
-    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    legacyfile_init(&(timerfd->super), DT_TIMER, &_timerfdFunctions);
+    legacyfile_adjustStatus(&(timerfd->super), STATUS_FILE_ACTIVE, TRUE);
 
-    legacydesc_refWeak(timerfd);
+    legacyfile_refWeak(timerfd);
     TaskRef* task =
-        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, legacydesc_unrefWeak, NULL);
+        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, legacyfile_unrefWeak, NULL);
     timerfd->timer = timer_new(task);
     taskref_drop(task);
 
@@ -109,7 +109,7 @@ static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
     MAGIC_ASSERT(timerfd);
 
     if (!timerfd->isClosed) {
-        legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacyfile_adjustStatus(&(timerfd->super), STATUS_FILE_READABLE, TRUE);
     }
 }
 
@@ -174,7 +174,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
     }
 
     /* settings were modified, reset readability */
-    legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+    legacyfile_adjustStatus(&(timerfd->super), STATUS_FILE_READABLE, FALSE);
 
     /* now set the new times as requested */
     if (new_value->it_value.tv_sec == 0 && new_value->it_value.tv_nsec == 0) {
@@ -203,7 +203,7 @@ ssize_t timerfd_read(TimerFd* timerfd, void* buf, size_t count) {
         *(guint64*)buf = expirationCount;
 
         /* reset readability */
-        legacydesc_adjustStatus(&(timerfd->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+        legacyfile_adjustStatus(&(timerfd->super), STATUS_FILE_READABLE, FALSE);
 
         return (ssize_t)sizeof(guint64);
     } else {

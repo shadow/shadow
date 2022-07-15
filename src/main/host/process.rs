@@ -212,12 +212,12 @@ mod export {
         }
     }
 
-    /// Get a temporary reference to a legacy descriptor.
+    /// Get a temporary reference to a legacy file.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getRegisteredLegacyDescriptor(
+    pub unsafe extern "C" fn process_getRegisteredLegacyFile(
         proc: *mut cshadow::Process,
         handle: libc::c_int,
-    ) -> *mut cshadow::LegacyDescriptor {
+    ) -> *mut cshadow::LegacyFile {
         let proc = unsafe { Process::borrow_from_c(proc) };
 
         let handle: u32 = match handle.try_into() {
@@ -229,10 +229,12 @@ mod export {
         };
 
         match proc.get_descriptor(handle).map(|x| x.file()) {
-            Some(CompatFile::Legacy(desc)) => unsafe { desc.ptr() },
+            Some(CompatFile::Legacy(file)) => unsafe { file.ptr() },
             Some(_) => {
-                log::warn!("A descriptor exists for fd={}, but it is not a legacy descriptor. Returning NULL.",
-                           handle);
+                log::warn!(
+                    "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
+                    handle
+                );
                 std::ptr::null_mut()
             }
             None => std::ptr::null_mut(),

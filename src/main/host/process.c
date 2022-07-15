@@ -499,7 +499,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
     utility_assert(fileName != NULL);
 
     RegularFile* stdfile = regularfile_new();
-    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)stdfile, /* flags= */ 0);
+    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
     Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
 
     // assume the fd was not previously in use
@@ -538,13 +538,13 @@ static void _process_start(Process* proc) {
     // Set up stdout
     gchar* stdoutFileName = _process_outputFileName(proc, "stdout");
     proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName);
-    legacydesc_ref((LegacyDescriptor*)proc->stdoutFile);
+    legacyfile_ref((LegacyFile*)proc->stdoutFile);
     g_free(stdoutFileName);
 
     // Set up stderr
     gchar* stderrFileName = _process_outputFileName(proc, "stderr");
     proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName);
-    legacydesc_ref((LegacyDescriptor*)proc->stderrFile);
+    legacyfile_ref((LegacyFile*)proc->stderrFile);
     g_free(stderrFileName);
 
     if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
@@ -946,10 +946,10 @@ static void _process_free(Process* proc) {
 #endif
 
     if (proc->stderrFile) {
-        legacydesc_unref((LegacyDescriptor*)proc->stderrFile);
+        legacyfile_unref((LegacyFile*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
-        legacydesc_unref((LegacyDescriptor*)proc->stdoutFile);
+        legacyfile_unref((LegacyFile*)proc->stdoutFile);
     }
     if (proc->straceFd >= 0) {
         close(proc->straceFd);

@@ -8,8 +8,8 @@
 
 #include <glib.h>
 
-typedef enum _LegacyDescriptorType LegacyDescriptorType;
-enum _LegacyDescriptorType {
+typedef enum _LegacyFileType LegacyFileType;
+enum _LegacyFileType {
     DT_NONE,
     DT_TCPSOCKET,
     DT_UDPSOCKET,
@@ -19,32 +19,32 @@ enum _LegacyDescriptorType {
     DT_FILE,
 };
 
-typedef struct _LegacyDescriptor LegacyDescriptor;
-typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
+typedef struct _LegacyFile LegacyFile;
+typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
 
 #include "main/core/support/definitions.h"
 #include "main/host/status.h"
 #include "main/utility/utility.h"
 
 /* required functions */
-typedef void (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);
-typedef void (*DescriptorCleanupFunc)(LegacyDescriptor* descriptor);
-typedef void (*DescriptorFreeFunc)(LegacyDescriptor* descriptor);
+typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, Host* host);
+typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
+typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
 
 /*
  * Virtual function table for base descriptor, storing pointers to required
  * callable functions.
  */
-struct _DescriptorFunctionTable {
-    DescriptorCloseFunc close;
-    DescriptorCleanupFunc cleanup;
-    DescriptorFreeFunc free;
+struct _LegacyFileFunctionTable {
+    LegacyFileCloseFunc close;
+    LegacyFileCleanupFunc cleanup;
+    LegacyFileFreeFunc free;
     MAGIC_DECLARE;
 };
 
-struct _LegacyDescriptor {
-    DescriptorFunctionTable* funcTable;
-    LegacyDescriptorType type;
+struct _LegacyFile {
+    LegacyFileFunctionTable* funcTable;
+    LegacyFileType type;
     Status status;
     GHashTable* listeners;
     gint refCountStrong;

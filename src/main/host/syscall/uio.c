@@ -22,13 +22,11 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
-                                             PluginPtr iovPtr,
+static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
-                                             LegacyDescriptor** desc_out,
-                                             const struct iovec** iov_out) {
+                                             LegacyFile** desc_out, const struct iovec** iov_out) {
     /* Get the descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
         return -EBADF;
     }
@@ -46,7 +44,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
     }
 
     /* We can only seek on files, otherwise its a pipe error. */
-    if (legacydesc_getType(desc) != DT_FILE && offset != 0) {
+    if (legacyfile_getType(desc) != DT_FILE && offset != 0) {
         return -ESPIPE;
     }
 
@@ -93,7 +91,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
-    LegacyDescriptor* desc = NULL;
+    LegacyFile* desc = NULL;
     const struct iovec* iov;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
@@ -102,7 +100,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = legacydesc_getType(desc);
+    LegacyFileType dType = legacyfile_getType(desc);
 
     ssize_t result = 0;
 
@@ -176,7 +174,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
     }
 
-    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -186,12 +184,12 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        Trigger trigger =
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_READABLE};
 
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = legacydesc_supportsSaRestart(desc)};
+                               .restartable = legacyfile_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
@@ -208,7 +206,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
-    LegacyDescriptor* desc = NULL;
+    LegacyFile* desc = NULL;
     const struct iovec* iov;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
@@ -217,7 +215,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    LegacyDescriptorType dType = legacydesc_getType(desc);
+    LegacyFileType dType = legacyfile_getType(desc);
 
     ssize_t result = 0;
 
@@ -289,7 +287,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
     }
 
-    if (result == -EWOULDBLOCK && !(legacydesc_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -299,12 +297,12 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+        Trigger trigger =
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_WRITABLE};
 
         return (SysCallReturn){.state = SYSCALL_BLOCK,
                                .cond = syscallcondition_new(trigger),
-                               .restartable = legacydesc_supportsSaRestart(desc)};
+                               .restartable = legacyfile_supportsSaRestart(desc)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};

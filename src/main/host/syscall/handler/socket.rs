@@ -103,7 +103,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_bind(
@@ -155,7 +155,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_sendto(
@@ -269,7 +269,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_recvfrom(
@@ -373,7 +373,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getsockname(
@@ -421,7 +421,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getpeername(
@@ -466,7 +466,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_listen(
@@ -510,7 +510,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_accept(
@@ -549,7 +549,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_accept4(
@@ -664,7 +664,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_connect(
@@ -707,7 +707,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_shutdown(
@@ -842,7 +842,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_getsockopt(
@@ -879,7 +879,7 @@ impl SyscallHandler {
 
         let file = match desc.file() {
             CompatFile::New(file) => file,
-            // if it's a legacy descriptor, use the C syscall handler instead
+            // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 return unsafe {
                     c::syscallhandler_setsockopt(

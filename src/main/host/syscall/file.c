@@ -31,12 +31,12 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, filefd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, filefd);
     if (desc && file_desc_out) {
         *file_desc_out = (RegularFile*)desc;
     }
 
-    int errcode = _syscallhandler_validateDescriptor(desc, DT_FILE);
+    int errcode = _syscallhandler_validateLegacyFile(desc, DT_FILE);
     if (errcode) {
         debug("descriptor %i is invalid", filefd);
         return errcode;
@@ -70,13 +70,13 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     if (errcode < 0) {
         /* This will unref/free the RegularFile. */
-        legacydesc_close((LegacyDescriptor*)filed, sys->host);
-        legacydesc_unref(filed);
+        legacyfile_close((LegacyFile*)filed, sys->host);
+        legacyfile_unref(filed);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     utility_assert(errcode == 0);
-    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)filed, flags & O_CLOEXEC);
+    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)filed, flags & O_CLOEXEC);
     int handle = process_registerDescriptor(sys->process, desc);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
 }

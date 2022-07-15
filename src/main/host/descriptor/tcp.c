@@ -260,8 +260,8 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 
 static void _tcp_flush(TCP* tcp, Host* host);
 
-static TCP* _tcp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(legacydesc_getType(descriptor) == DT_TCPSOCKET);
+static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
+    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
     return (TCP*)descriptor;
 }
 
@@ -276,7 +276,7 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peer
     /* my parent can find me by my key */
     child->key = utility_ipPortHash(peerIP, peerPort);
 
-    legacydesc_ref(parent);
+    legacyfile_ref(parent);
     child->parent = parent;
 
     child->state = TCPCS_INCOMPLETE;
@@ -307,7 +307,7 @@ static void _tcpchild_free(TCPChild* child) {
         g_hash_table_remove(child->parent->server->children, &(child->key));
     }
 
-    legacydesc_unref(child->parent);
+    legacyfile_unref(child->parent);
 
     MAGIC_CLEAR(child);
     g_free(child);
@@ -337,7 +337,8 @@ static TCPServer* _tcpserver_new(gint backlog, Process* processForChildren) {
     MAGIC_INIT(server);
 
     // store weak references to children
-    server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) legacydesc_unrefWeak);
+    server->children =
+        g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)legacyfile_unrefWeak);
     server->pending = g_queue_new();
     server->pendingMax = 0;
 
@@ -658,7 +659,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
     /* some state transitions require us to update the descriptor status */
     switch (state) {
         case TCPS_LISTEN: {
-            legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, TRUE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, TRUE);
             break;
         }
         case TCPS_SYNSENT: {
@@ -669,8 +670,8 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
         }
         case TCPS_ESTABLISHED: {
             tcp->flags |= TCPF_WAS_ESTABLISHED;
-            legacydesc_adjustStatus(
-                (LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
+            legacyfile_adjustStatus(
+                (LegacyFile*)tcp, STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
             break;
         }
         case TCPS_CLOSING: {
@@ -683,7 +684,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
             _tcp_clearRetransmit(tcp, (guint)-1);
 
             /* user can no longer use socket */
-            legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE);
 
             /*
              * servers have to wait for all children to close.
@@ -719,9 +720,9 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
         }
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
-            legacydesc_ref(tcp);
+            legacyfile_ref(tcp);
             TaskRef* closeTask = taskref_new_bound(
-                host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, legacydesc_unref, NULL);
+                host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, legacyfile_unref, NULL);
             SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
             /* if a child of a server initiated the close, close more quickly */
@@ -792,7 +793,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
         /* the packet takes up more space */
         tcp->throttledOutputLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
         }
 
         packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
@@ -946,7 +947,7 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
 
         tcp->retransmit.queueLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
         }
     }
 }
@@ -991,7 +992,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     g_queue_free(keys_sorted);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }
 
@@ -1014,7 +1015,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
     }
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }
 
@@ -1031,10 +1032,10 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
     gboolean success = priorityqueue_push(tcp->retransmit.scheduledTimerExpirations, expireTimePtr);
 
     if(success) {
-        legacydesc_ref(tcp);
+        legacyfile_ref(tcp);
         TaskRef* retexpTask =
             taskref_new_bound(host_getID(host), _tcp_runRetransmitTimerExpiredTask, tcp, NULL,
-                              legacydesc_unref, NULL);
+                              legacyfile_unref, NULL);
         worker_scheduleTaskWithDelay(retexpTask, host, delay);
         taskref_drop(retexpTask);
 
@@ -1151,7 +1152,7 @@ static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 
     /* reset retransmit timer since we are resending it now */
@@ -1368,18 +1369,18 @@ static void _tcp_flush(TCP* tcp, Host* host) {
         if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_RD_SIGNALED)) {
             /* user needs to read a 0 so it knows we closed */
             tcp->error |= TCPE_RECEIVE_EOF;
-            legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_READABLE, TRUE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE);
         }
     }
 
     if((tcp->error & TCPE_CONNECTION_RESET) && (tcp->flags & TCPF_RESET_SIGNALED)) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
     } else if((tcp->error & TCPE_SEND_EOF) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
     } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
     } else {
-        legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }
 
@@ -1440,7 +1441,7 @@ static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpo
 }
 
 static gboolean _tcp_isFamilySupported(LegacySocket* socket, sa_family_t family) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
     return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
 }
@@ -1590,7 +1591,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
     /* Only try to connect if we haven't already started. */
@@ -1647,7 +1648,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
         utility_assert(legacysocket_getInputBufferLength(&tcp->super) == 0);
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
         return -EWOULDBLOCK;
     }
 
@@ -1672,14 +1673,14 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     tcpChild->child->state = TCPCS_ACCEPTED;
 
     /* update child descriptor status */
-    legacydesc_adjustStatus(&(tcpChild->super.super.super),
-                            STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
+    legacyfile_adjustStatus(
+        &(tcpChild->super.super.super), STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
     } else {
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
     }
 
     *acceptedHandle = tcpChild->child->handle;
@@ -1784,8 +1785,8 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             }
         }
 
-        Status s = legacydesc_getStatus((LegacyDescriptor*)tcp);
-        gboolean waitingUserRead = (s & STATUS_DESCRIPTOR_READABLE) ? TRUE : FALSE;
+        Status s = legacyfile_getStatus((LegacyFile*)tcp);
+        gboolean waitingUserRead = (s & STATUS_FILE_READABLE) ? TRUE : FALSE;
 
         if((isNextPacket && !waitingUserRead) || (packetFits)) {
             /* make sure its in order */
@@ -1928,7 +1929,7 @@ static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer user
 
 /* return TRUE if the packet should be retransmitted */
 static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
     /* fetch the TCP info from the packet */
@@ -2004,7 +2005,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 /* we need to multiplex a new child */
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
                 Descriptor* desc =
-                    descriptor_fromLegacy((LegacyDescriptor*)multiplexed, /* flags= */ 0);
+                    descriptor_fromLegacyFile((LegacyFile*)multiplexed, /* flags= */ 0);
                 int handle = process_registerDescriptor(registerInProcess, desc);
 
                 multiplexed->child =
@@ -2013,7 +2014,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 
                 /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
                  * so we need another ref for the children table */
-                legacydesc_refWeak(multiplexed);
+                legacyfile_refWeak(multiplexed);
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
                 tcp->server->pendingCount += 1;
@@ -2070,8 +2071,8 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                     tcp->child->state = TCPCS_PENDING;
                     g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
-                    legacydesc_adjustStatus(
-                        &(tcp->child->parent->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+                    legacyfile_adjustStatus(
+                        &(tcp->child->parent->super.super.super), STATUS_FILE_READABLE, TRUE);
                 }
             }
             break;
@@ -2253,9 +2254,9 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
                 TaskRef* sendACKTask = taskref_new_bound(
-                    host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, legacydesc_unref, NULL);
+                    host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, legacyfile_unref, NULL);
                 /* taks holds a ref to tcp */
-                legacydesc_ref(tcp);
+                legacyfile_ref(tcp);
 
                 /* figure out what we should use as delay */
                 SimulationTime delay = 0;
@@ -2287,7 +2288,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 }
 
 static void _tcp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
     /* if we run a server, the packet could be for an existing child */
@@ -2307,14 +2308,14 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* user can no longer access socket */
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_CLOSED, TRUE);
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_CLOSED, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_ACTIVE, FALSE);
     }
 }
 
 static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2383,14 +2384,14 @@ static void _tcp_sendWindowUpdate(Host* host, gpointer voidTcp, gpointer data) {
 
 static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(tcp);
 
     Host* host = thread_getHost(thread);
 
     /*
      * TODO
-     * We call legacydesc_adjustStatus too many times here, to handle the readable
+     * We call legacyfile_adjustStatus too many times here, to handle the readable
      * state of the socket at times when we have a partially read packet. Consider
      * adding a required hook for socket subclasses so the socket layer can
      * query TCP for readability status.
@@ -2495,7 +2496,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     if ((legacysocket_getInputBufferLength(&(tcp->super)) > 0) ||
         (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
-        legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
         more_readable_data = true;
     } else {
         /* all of our ordered user data has been read */
@@ -2504,8 +2505,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
             if(totalCopied > 0) {
                 /* we just received bytes, so we can't EOF until the next call.
                  * make sure we stay readable so we DO actually EOF the socket */
-                legacydesc_adjustStatus(
-                    &(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+                legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
                 if(tcp->state == TCPS_CLOSED) {
@@ -2517,7 +2517,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
             }
         } else {
             /* our socket still has unordered data or is still open, but empty for now */
-            legacydesc_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
+            legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
         }
     }
 
@@ -2535,10 +2535,10 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
         /* our receive window just opened, make sure the sender knows it can
          * send more. otherwise we get into a deadlock situation!
          * make sure we don't send multiple events when read is called many times per instant */
-        legacydesc_ref(tcp);
+        legacyfile_ref(tcp);
 
         TaskRef* updateWindowTask = taskref_new_bound(
-            host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacydesc_unref, NULL);
+            host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
         worker_scheduleTaskWithDelay(updateWindowTask, thread_getHost(thread), 1);
         taskref_drop(updateWindowTask);
 
@@ -2557,8 +2557,8 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     return totalCopied;
 }
 
-static void _tcp_cleanup(LegacyDescriptor* descriptor) {
-    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
+static void _tcp_cleanup(LegacyFile* descriptor) {
+    TCP* tcp = _tcp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(tcp);
 
     // if we have a parent, we should break any references between it and us
@@ -2568,8 +2568,8 @@ static void _tcp_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _tcp_free(LegacyDescriptor* descriptor) {
-    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
+static void _tcp_free(LegacyFile* descriptor) {
+    TCP* tcp = _tcp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(tcp);
 
     priorityqueue_free(tcp->throttledOutput);
@@ -2595,15 +2595,15 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
     tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
-    legacydesc_clear((LegacyDescriptor*)tcp);
+    legacyfile_clear((LegacyFile*)tcp);
     MAGIC_CLEAR(tcp);
     g_free(tcp);
 
     worker_count_deallocation(TCP);
 }
 
-static void _tcp_close(LegacyDescriptor* descriptor, Host* host) {
-    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
+static void _tcp_close(LegacyFile* descriptor, Host* host) {
+    TCP* tcp = _tcp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(tcp);
 
     /* We always return FALSE because we handle process deregististration
@@ -2614,7 +2614,7 @@ static void _tcp_close(LegacyDescriptor* descriptor, Host* host) {
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
     /* the user closed the connection, so should never interact with the socket again */
-    legacydesc_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+    legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE);
 
     switch (tcp->state) {
         case TCPS_LISTEN:

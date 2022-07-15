@@ -13,14 +13,14 @@
 #include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
 
-static Transport* _transport_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(legacydesc_getType(descriptor) == DT_TCPSOCKET ||
-                   legacydesc_getType(descriptor) == DT_UDPSOCKET);
+static Transport* _transport_fromLegacyFile(LegacyFile* descriptor) {
+    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
+                   legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (Transport*)descriptor;
 }
 
-static void _transport_cleanup(LegacyDescriptor* descriptor) {
-    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
+static void _transport_cleanup(LegacyFile* descriptor) {
+    Transport* transport = _transport_fromLegacyFile(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
 
@@ -29,8 +29,8 @@ static void _transport_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _transport_free(LegacyDescriptor* descriptor) {
-    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
+static void _transport_free(LegacyFile* descriptor) {
+    Transport* transport = _transport_fromLegacyFile(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
 
@@ -41,21 +41,20 @@ static void _transport_free(LegacyDescriptor* descriptor) {
     transport->vtable->free(descriptor);
 }
 
-static void _transport_close(LegacyDescriptor* descriptor, Host* host) {
-    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
+static void _transport_close(LegacyFile* descriptor, Host* host) {
+    Transport* transport = _transport_fromLegacyFile(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
     transport->vtable->close(descriptor, host);
 }
 
-DescriptorFunctionTable transport_functions = {
+LegacyFileFunctionTable transport_functions = {
     _transport_close, _transport_cleanup, _transport_free, MAGIC_VALUE};
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable,
-                    LegacyDescriptorType type) {
+void transport_init(Transport* transport, TransportFunctionTable* vtable, LegacyFileType type) {
     utility_assert(transport && vtable);
 
-    legacydesc_init(&(transport->super), type, &transport_functions);
+    legacyfile_init(&(transport->super), type, &transport_functions);
 
     MAGIC_INIT(transport);
     MAGIC_INIT(vtable);

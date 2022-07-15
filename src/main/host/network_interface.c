@@ -472,9 +472,9 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
 static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket* socket,
                                                  Packet* packet) {
     if (socket->type == CST_LEGACY_SOCKET) {
-        LegacyDescriptor* descriptor = (LegacyDescriptor*)socket->object.as_legacy_socket;
+        LegacyFile* descriptor = (LegacyFile*)socket->object.as_legacy_socket;
 
-        LegacyDescriptorType type = legacydesc_getType(descriptor);
+        LegacyFileType type = legacyfile_getType(descriptor);
         if (type == DT_TCPSOCKET) {
             TCP* tcp = (TCP*)descriptor;
             tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);

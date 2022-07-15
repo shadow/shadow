@@ -18,8 +18,8 @@
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
 
-void legacydesc_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
-                     DescriptorFunctionTable* funcTable) {
+void legacyfile_init(LegacyFile* descriptor, LegacyFileType type,
+                     LegacyFileFunctionTable* funcTable) {
     utility_assert(descriptor && funcTable);
 
     MAGIC_INIT(descriptor);
@@ -36,7 +36,7 @@ void legacydesc_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
     worker_count_allocation(LegacyDescriptor);
 }
 
-void legacydesc_clear(LegacyDescriptor* descriptor) {
+void legacyfile_clear(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     if (descriptor->listeners) {
         g_hash_table_destroy(descriptor->listeners);
@@ -44,7 +44,7 @@ void legacydesc_clear(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(descriptor);
 }
 
-static void _legacydesc_cleanup(LegacyDescriptor* descriptor) {
+static void _legacyfile_cleanup(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
@@ -54,7 +54,7 @@ static void _legacydesc_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _legacydesc_free(LegacyDescriptor* descriptor) {
+static void _legacyfile_free(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
@@ -64,8 +64,8 @@ static void _legacydesc_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(LegacyDescriptor);
 }
 
-void legacydesc_ref(gpointer data) {
-    LegacyDescriptor* descriptor = data;
+void legacyfile_ref(gpointer data) {
+    LegacyFile* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     // should not increment the strong count when there are only weak references left
@@ -76,8 +76,8 @@ void legacydesc_ref(gpointer data) {
           descriptor->refCountWeak);
 }
 
-void legacydesc_unref(gpointer data) {
-    LegacyDescriptor* descriptor = data;
+void legacyfile_unref(gpointer data) {
+    LegacyFile* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountStrong)--;
@@ -95,23 +95,23 @@ void legacydesc_unref(gpointer data) {
         // this was the last strong reference, but there are weak references, so cleanup only
         trace("Descriptor %p kept alive by weak count of %d", descriptor, descriptor->refCountWeak);
 
-        // create a temporary weak reference to prevent the _legacydesc_cleanup() from calling
-        // legacydesc_unrefWeak() and running the _legacydesc_free() while still running the
-        // _legacydesc_cleanup()
-        legacydesc_refWeak(descriptor);
-        _legacydesc_cleanup(descriptor);
-        legacydesc_unrefWeak(descriptor);
+        // create a temporary weak reference to prevent the _legacyfile_cleanup() from calling
+        // legacyfile_unrefWeak() and running the _legacyfile_free() while still running the
+        // _legacyfile_cleanup()
+        legacyfile_refWeak(descriptor);
+        _legacyfile_cleanup(descriptor);
+        legacyfile_unrefWeak(descriptor);
 
         return;
     }
 
     // this was the last strong reference and no weak references, so cleanup and free
-    _legacydesc_cleanup(descriptor);
-    _legacydesc_free(descriptor);
+    _legacyfile_cleanup(descriptor);
+    _legacyfile_free(descriptor);
 }
 
-void legacydesc_refWeak(gpointer data) {
-    LegacyDescriptor* descriptor = data;
+void legacyfile_refWeak(gpointer data) {
+    LegacyFile* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)++;
@@ -119,8 +119,8 @@ void legacydesc_refWeak(gpointer data) {
           descriptor->refCountStrong);
 }
 
-void legacydesc_unrefWeak(gpointer data) {
-    LegacyDescriptor* descriptor = data;
+void legacyfile_unrefWeak(gpointer data) {
+    LegacyFile* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)--;
@@ -135,44 +135,44 @@ void legacydesc_unrefWeak(gpointer data) {
     }
 
     // this was the last weak reference and no strong references, so we should free
-    // _legacydesc_cleanup() should have been called earlier when the strong count reached 0
-    _legacydesc_free(descriptor);
+    // _legacyfile_cleanup() should have been called earlier when the strong count reached 0
+    _legacyfile_free(descriptor);
 }
 
-void legacydesc_close(LegacyDescriptor* descriptor, Host* host) {
+void legacyfile_close(LegacyFile* descriptor, Host* host) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
     // if it's already closed, exit early
-    if ((legacydesc_getStatus(descriptor) & STATUS_DESCRIPTOR_CLOSED) != 0) {
+    if ((legacyfile_getStatus(descriptor) & STATUS_FILE_CLOSED) != 0) {
         warning("Attempting to close an already-closed descriptor");
         return;
     }
 
     trace("Descriptor %p calling vtable close now", descriptor);
-    legacydesc_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
+    legacyfile_adjustStatus(descriptor, STATUS_FILE_CLOSED, TRUE);
 
     descriptor->funcTable->close(descriptor, host);
 }
 
-LegacyDescriptorType legacydesc_getType(LegacyDescriptor* descriptor) {
+LegacyFileType legacyfile_getType(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;
 }
 
 #ifdef DEBUG
-static gchar* _legacydesc_statusToString(Status ds) {
+static gchar* _legacyfile_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
-    if (ds & STATUS_DESCRIPTOR_ACTIVE) {
+    if (ds & STATUS_FILE_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
     }
-    if (ds & STATUS_DESCRIPTOR_READABLE) {
+    if (ds & STATUS_FILE_READABLE) {
         g_string_append_printf(string, "READABLE|");
     }
-    if (ds & STATUS_DESCRIPTOR_WRITABLE) {
+    if (ds & STATUS_FILE_WRITABLE) {
         g_string_append_printf(string, "WRITEABLE|");
     }
-    if (ds & STATUS_DESCRIPTOR_CLOSED) {
+    if (ds & STATUS_FILE_CLOSED) {
         g_string_append_printf(string, "CLOSED|");
     }
     if(string->len == 0) {
@@ -183,7 +183,7 @@ static gchar* _legacydesc_statusToString(Status ds) {
 }
 #endif
 
-static void _legacydesc_handleStatusChange(LegacyDescriptor* descriptor, Status oldStatus) {
+static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldStatus) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
@@ -194,8 +194,8 @@ static void _legacydesc_handleStatusChange(LegacyDescriptor* descriptor, Status 
     }
 
 #ifdef DEBUG
-    gchar* before = _legacydesc_statusToString(oldStatus);
-    gchar* after = _legacydesc_statusToString(descriptor->status);
+    gchar* before = _legacyfile_statusToString(oldStatus);
+    gchar* after = _legacyfile_statusToString(descriptor->status);
     trace("Status changed on desc %p, from %s to %s", descriptor, before, after);
     g_free(before);
     g_free(after);
@@ -238,7 +238,7 @@ static void _legacydesc_handleStatusChange(LegacyDescriptor* descriptor, Status 
     }
 }
 
-void legacydesc_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits) {
+void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits) {
     MAGIC_ASSERT(descriptor);
 
     Status oldStatus = descriptor->status;
@@ -253,56 +253,56 @@ void legacydesc_adjustStatus(LegacyDescriptor* descriptor, Status status, gboole
     }
 
     /* Let helper handle the change. */
-    _legacydesc_handleStatusChange(descriptor, oldStatus);
+    _legacyfile_handleStatusChange(descriptor, oldStatus);
 }
 
-Status legacydesc_getStatus(LegacyDescriptor* descriptor) {
+Status legacyfile_getStatus(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->status;
 }
 
-void legacydesc_addListener(LegacyDescriptor* descriptor, StatusListener* listener) {
+void legacyfile_addListener(LegacyFile* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
     statuslistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void legacydesc_removeListener(LegacyDescriptor* descriptor, StatusListener* listener) {
+void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);
 }
 
-gint legacydesc_getFlags(LegacyDescriptor* descriptor) {
+gint legacyfile_getFlags(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->flags;
 }
 
-void legacydesc_setFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacyfile_setFlags(LegacyFile* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     if (flags & O_CLOEXEC) {
-        warning("Adding CLOEXEC to legacy descriptor when it should "
+        warning("Adding CLOEXEC to legacy file when it should "
                 "have been added to the descriptor");
     }
     descriptor->flags = flags;
 }
 
-void legacydesc_addFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacyfile_addFlags(LegacyFile* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     if (flags & O_CLOEXEC) {
-        warning("Adding CLOEXEC to legacy descriptor when it should "
+        warning("Adding CLOEXEC to legacy file when it should "
                 "have been added to the descriptor");
     }
     descriptor->flags |= flags;
 }
 
-void legacydesc_removeFlags(LegacyDescriptor* descriptor, gint flags) {
+void legacyfile_removeFlags(LegacyFile* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags &= ~flags;
 }
 
-void legacydesc_shutdownHelper(LegacyDescriptor* legacyDesc) {
+void legacyfile_shutdownHelper(LegacyFile* legacyDesc) {
     MAGIC_ASSERT(legacyDesc);
 
     if (legacyDesc->type == DT_EPOLL) {
@@ -310,7 +310,7 @@ void legacydesc_shutdownHelper(LegacyDescriptor* legacyDesc) {
     }
 }
 
-bool legacydesc_supportsSaRestart(LegacyDescriptor* legacyDesc) {
+bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc) {
     switch (legacyDesc->type) {
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:

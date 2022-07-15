@@ -27,9 +27,9 @@ typedef void (*SocketProcessFunc)(LegacySocket* socket, Host* host, Packet* pack
 typedef void (*SocketDropFunc)(LegacySocket* socket, Host* host, Packet* packet);
 
 struct _SocketFunctionTable {
-    DescriptorCloseFunc close;
-    DescriptorCleanupFunc cleanup;
-    DescriptorFreeFunc free;
+    LegacyFileCloseFunc close;
+    LegacyFileCleanupFunc cleanup;
+    LegacyFileFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;
     SocketProcessFunc process;
@@ -80,7 +80,7 @@ struct _LegacySocket {
 };
 
 void legacysocket_init(LegacySocket* socket, Host* host, SocketFunctionTable* vtable,
-                       LegacyDescriptorType type, guint receiveBufferSize, guint sendBufferSize);
+                       LegacyFileType type, guint receiveBufferSize, guint sendBufferSize);
 
 void legacysocket_pushInPacket(LegacySocket* socket, Host* host, Packet* packet);
 void legacysocket_dropPacket(LegacySocket* socket, Host* host, Packet* packet);

@@ -23,14 +23,14 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
-static LegacySocket* _legacysocket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(legacydesc_getType(descriptor) == DT_TCPSOCKET ||
-                   legacydesc_getType(descriptor) == DT_UDPSOCKET);
+static LegacySocket* _legacysocket_fromLegacyFile(LegacyFile* descriptor) {
+    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
+                   legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (LegacySocket*)descriptor;
 }
 
-static void _legacysocket_cleanup(LegacyDescriptor* descriptor) {
-    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_cleanup(LegacyFile* descriptor) {
+    LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -39,8 +39,8 @@ static void _legacysocket_cleanup(LegacyDescriptor* descriptor) {
     }
 }
 
-static void _legacysocket_free(LegacyDescriptor* descriptor) {
-    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_free(LegacyFile* descriptor) {
+    LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -74,11 +74,11 @@ static void _legacysocket_free(LegacyDescriptor* descriptor) {
     // during the free call. This could be fixed by making all descriptor types
     // a direct child of the descriptor class.
     MAGIC_CLEAR(socket);
-    socket->vtable->free((LegacyDescriptor*)socket);
+    socket->vtable->free((LegacyFile*)socket);
 }
 
-static void _legacysocket_close(LegacyDescriptor* descriptor, Host* host) {
-    LegacySocket* socket = _legacysocket_fromLegacyDescriptor(descriptor);
+static void _legacysocket_close(LegacyFile* descriptor, Host* host) {
+    LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -87,13 +87,13 @@ static void _legacysocket_close(LegacyDescriptor* descriptor, Host* host) {
         tracker_removeSocket(tracker, socket);
     }
 
-    socket->vtable->close((LegacyDescriptor*)socket, host);
+    socket->vtable->close((LegacyFile*)socket, host);
 }
 
 static gssize _legacysocket_sendUserData(Transport* transport, Thread* thread,
                                          PluginVirtualPtr buffer, gsize nBytes, in_addr_t ip,
                                          in_port_t port) {
-    LegacySocket* socket = _legacysocket_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    LegacySocket* socket = _legacysocket_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send((Transport*)socket, thread, buffer, nBytes, ip, port);
@@ -102,7 +102,7 @@ static gssize _legacysocket_sendUserData(Transport* transport, Thread* thread,
 static gssize _legacysocket_receiveUserData(Transport* transport, Thread* thread,
                                             PluginVirtualPtr buffer, gsize nBytes, in_addr_t* ip,
                                             in_port_t* port) {
-    LegacySocket* socket = _legacysocket_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    LegacySocket* socket = _legacysocket_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->receive((Transport*)socket, thread, buffer, nBytes, ip, port);
@@ -113,7 +113,7 @@ TransportFunctionTable socket_functions = {
     _legacysocket_sendUserData, _legacysocket_receiveUserData, MAGIC_VALUE};
 
 void legacysocket_init(LegacySocket* socket, Host* host, SocketFunctionTable* vtable,
-                       LegacyDescriptorType type, guint receiveBufferSize, guint sendBufferSize) {
+                       LegacyFileType type, guint receiveBufferSize, guint sendBufferSize) {
     utility_assert(socket && vtable);
 
     transport_init(&(socket->super), &socket_functions, type);
@@ -369,7 +369,7 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet*
 
     /* we just added a packet, so we are readable */
     if(socket->inputBufferLength > 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, TRUE);
     }
 
     return TRUE;
@@ -399,7 +399,7 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, Host* host) {
 
         /* we are not readable if we are now empty */
         if(socket->inputBufferLength <= 0) {
-            legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_READABLE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, FALSE);
         }
     }
 
@@ -448,7 +448,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet
 
     /* we just added a packet, we are no longer writable if full */
     if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
-        legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, FALSE);
     }
 
     /* tell the interface to include us when sending out to the network */
@@ -486,7 +486,7 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, Host* host) {
 
         /* we are writable if we now have space */
         if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
-            legacydesc_adjustStatus((LegacyDescriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, TRUE);
         }
     }
 

@@ -29,12 +29,12 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, tfd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, tfd);
     if (desc && timer_desc_out) {
         *timer_desc_out = (TimerFd*)desc;
     }
 
-    int errcode = _syscallhandler_validateDescriptor(desc, DT_TIMER);
+    int errcode = _syscallhandler_validateLegacyFile(desc, DT_TIMER);
     if (errcode) {
         debug("descriptor %i is invalid", tfd);
         return errcode;
@@ -72,7 +72,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Create the timer and double check that it's valid. */
     TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
-    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)timer, descFlags);
+    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)timer, descFlags);
     int tfd = process_registerDescriptor(sys->process, desc);
 
 #ifdef DEBUG
@@ -86,7 +86,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (flags & TFD_NONBLOCK) {
-        legacydesc_addFlags((LegacyDescriptor*)timer, O_NONBLOCK);
+        legacyfile_addFlags((LegacyFile*)timer, O_NONBLOCK);
     }
 
     trace("timerfd_create() returning fd %i", tfd);

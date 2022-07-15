@@ -114,9 +114,9 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             }
 
             if (val == 0) {
-                legacydesc_removeFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
+                legacyfile_removeFlags((LegacyFile*)tcp, O_NONBLOCK);
             } else {
-                legacydesc_addFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
+                legacyfile_addFlags((LegacyFile*)tcp, O_NONBLOCK);
             }
 
             result = 0;
@@ -192,9 +192,9 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
             }
 
             if (val == 0) {
-                legacydesc_removeFlags((LegacyDescriptor*)udp, O_NONBLOCK);
+                legacyfile_removeFlags((LegacyFile*)udp, O_NONBLOCK);
             } else {
-                legacydesc_addFlags((LegacyDescriptor*)udp, O_NONBLOCK);
+                legacyfile_addFlags((LegacyFile*)udp, O_NONBLOCK);
             }
 
             result = 0;
@@ -238,13 +238,13 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     trace("ioctl called on fd %d for request %ld", fd, request);
 
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
-    int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    LegacyDescriptorType dtype = legacydesc_getType(desc);
+    LegacyFileType dtype = legacyfile_getType(desc);
 
     int result = 0;
     if (dtype == DT_FILE) {

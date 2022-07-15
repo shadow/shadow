@@ -1150,7 +1150,7 @@ pub struct _Event {
     _unused: [u8; 0],
 }
 pub type Event = _Event;
-pub type LegacyDescriptor = [u64; 5usize];
+pub type LegacyFile = [u64; 5usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Process {
@@ -1173,22 +1173,22 @@ pub type SimulationTime = guint64;
 pub type EmulatedTime = guint64;
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
+pub const _Status_STATUS_FILE_READABLE: _Status = 2;
+pub const _Status_STATUS_FILE_WRITABLE: _Status = 4;
+pub const _Status_STATUS_FILE_CLOSED: _Status = 8;
 pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
 pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
 pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-pub type DescriptorCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
-pub type DescriptorCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
-pub type DescriptorFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
+pub type LegacyFileCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
+pub type LegacyFileCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+pub type LegacyFileFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
@@ -1899,16 +1899,16 @@ pub struct _CPU {
 }
 pub type CPU = _CPU;
 extern "C" {
-    pub fn legacydesc_ref(data: gpointer);
+    pub fn legacyfile_ref(data: gpointer);
 }
 extern "C" {
-    pub fn legacydesc_unref(data: gpointer);
+    pub fn legacyfile_unref(data: gpointer);
 }
 extern "C" {
-    pub fn legacydesc_close(descriptor: *mut LegacyDescriptor, host: *mut Host);
+    pub fn legacyfile_close(descriptor: *mut LegacyFile, host: *mut Host);
 }
 extern "C" {
-    pub fn legacydesc_shutdownHelper(legacyDesc: *mut LegacyDescriptor);
+    pub fn legacyfile_shutdownHelper(legacyDesc: *mut LegacyFile);
 }
 pub type Transport = _Transport;
 pub type TransportFunctionTable = _TransportFunctionTable;
@@ -1935,9 +1935,9 @@ pub type TransportReceiveFunc = ::std::option::Option<
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _TransportFunctionTable {
-    pub close: DescriptorCloseFunc,
-    pub cleanup: DescriptorCleanupFunc,
-    pub free: DescriptorFreeFunc,
+    pub close: LegacyFileCloseFunc,
+    pub cleanup: LegacyFileCleanupFunc,
+    pub free: LegacyFileFreeFunc,
     pub send: TransportSendFunc,
     pub receive: TransportReceiveFunc,
     pub magic: guint,
@@ -2060,7 +2060,7 @@ fn bindgen_test_layout__TransportFunctionTable() {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Transport {
-    pub super_: LegacyDescriptor,
+    pub super_: LegacyFile,
     pub vtable: *mut TransportFunctionTable,
     pub magic: guint,
 }
@@ -3424,7 +3424,7 @@ pub type TriggerObject = _TriggerObject;
 #[derive(Copy, Clone)]
 pub union _TriggerObject {
     pub as_pointer: *mut ::std::os::raw::c_void,
-    pub as_descriptor: *mut LegacyDescriptor,
+    pub as_legacy_file: *mut LegacyFile,
     pub as_file: *const File,
     pub as_futex: *mut Futex,
 }
@@ -3457,23 +3457,23 @@ fn bindgen_test_layout__TriggerObject() {
         );
     }
     test_field_as_pointer();
-    fn test_field_as_descriptor() {
+    fn test_field_as_legacy_file() {
         assert_eq!(
             unsafe {
                 let uninit = ::std::mem::MaybeUninit::<_TriggerObject>::uninit();
                 let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).as_descriptor) as usize - ptr as usize
+                ::std::ptr::addr_of!((*ptr).as_legacy_file) as usize - ptr as usize
             },
             0usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_TriggerObject),
                 "::",
-                stringify!(as_descriptor)
+                stringify!(as_legacy_file)
             )
         );
     }
-    test_field_as_descriptor();
+    test_field_as_legacy_file();
     fn test_field_as_file() {
         assert_eq!(
             unsafe {

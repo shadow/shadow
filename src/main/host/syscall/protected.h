@@ -97,7 +97,6 @@ EmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
-int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
-                                       LegacyDescriptorType expectedType);
+int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

@@ -26,7 +26,7 @@ enum _TriggerType {
 typedef union _TriggerObject TriggerObject;
 union _TriggerObject {
     void* as_pointer;
-    LegacyDescriptor* as_descriptor;
+    LegacyFile* as_legacy_file;
     const File* as_file;
     Futex* as_futex;
 };

@@ -130,7 +130,7 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     }
 
     if (sys->epoll) {
-        legacydesc_unref(sys->epoll);
+        legacyfile_unref(sys->epoll);
     }
 #ifdef USE_PERF_TIMERS
     if (sys->perfTimer) {

@@ -53,20 +53,20 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
             _udp_stateToAscii(udp->stateLast), _udp_stateToAscii(udp->state));
 }
 
-static UDP* _udp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(legacydesc_getType(descriptor) == DT_UDPSOCKET);
+static UDP* _udp_fromLegacyFile(LegacyFile* descriptor) {
+    utility_assert(legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (UDP*)descriptor;
 }
 
 static gboolean _udp_isFamilySupported(LegacySocket* socket, sa_family_t family) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
 static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
 
@@ -85,7 +85,7 @@ static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, i
 }
 
 static void _udp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
     /* UDP packet can be buffered immediately */
@@ -95,7 +95,7 @@ static void _udp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 }
 
 static void _udp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
     /* do nothing */
@@ -108,7 +108,7 @@ static void _udp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
  */
 static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(udp);
 
     const gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
@@ -171,7 +171,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
 
 static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(udp);
 
     if (legacysocket_peekNextInPacket(&(udp->super)) == NULL) {
@@ -217,19 +217,19 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
     return bytesCopied;
 }
 
-static void _udp_free(LegacyDescriptor* descriptor) {
-    UDP* udp = _udp_fromLegacyDescriptor(descriptor);
+static void _udp_free(LegacyFile* descriptor) {
+    UDP* udp = _udp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(udp);
 
-    legacydesc_clear(descriptor);
+    legacyfile_clear(descriptor);
     MAGIC_CLEAR(udp);
     g_free(udp);
 
     worker_count_deallocation(UDP);
 }
 
-static void _udp_close(LegacyDescriptor* descriptor, Host* host) {
-    UDP* udp = _udp_fromLegacyDescriptor(descriptor);
+static void _udp_close(LegacyFile* descriptor, Host* host) {
+    UDP* udp = _udp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(udp);
     _udp_setState(udp, UDPS_CLOSED);
 
@@ -270,8 +270,7 @@ UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     udp->stateLast = UDPS_CLOSED;
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
-    legacydesc_adjustStatus(
-        (LegacyDescriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
+    legacyfile_adjustStatus((LegacyFile*)udp, STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
 
     worker_count_allocation(UDP);
 
