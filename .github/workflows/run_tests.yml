@@ -43,24 +43,29 @@ jobs:
           - 'fedora:36'
           # EOL May 2024 https://www.centos.org/centos-stream/
           - 'quay.io/centos/centos:stream8'
-        cc: ['gcc', 'clang']
+        cc: ['gcc']
         buildtype: ['debug', 'release']
-        exclude:
-          # https://github.com/shadow/shadow/issues/1741
-          - container: 'quay.io/centos/centos:stream8'
-            cc: clang
-          # https://github.com/shadow/shadow/issues/1741
-          - container: 'ubuntu:21.10'
-            cc: clang
-          # https://github.com/shadow/shadow/issues/1741
-          - container: 'fedora:35'
-            cc: clang
         include:
           # Run some tests on the newest-available base vm, and hence
           # newest-available kernel. https://github.com/actions/virtual-environments
           - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
             cc: 'gcc'
+            buildtype: 'release'
+          - vm: 'ubuntu-22.04'
+            container: 'ubuntu:22.04'
+            cc: 'gcc'
+            buildtype: 'debug'
+
+          # Run some tests on the newest-available clang.  Testing clang on
+          # *every* platform is a bit overkill, but testing on at least one
+          # gives decent "bang for the buck" of testing compatibility with
+          # clang's most recent diagnostics and optimizations.
+          #
+          # Also use the more-recent kernel here.
+          - vm: 'ubuntu-22.04'
+            container: 'ubuntu:22.04'
+            cc: 'clang'
             buildtype: 'release'
           - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
