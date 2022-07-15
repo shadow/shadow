@@ -752,7 +752,7 @@ fn get_raw_cpu_frequency() -> anyhow::Result<u64> {
 
 fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
     let libname_c = CString::new(libname).unwrap();
-    let libpath_c = unsafe { c::manager_scanRpathForLib(libname_c.as_ptr()) };
+    let libpath_c = unsafe { c::scanRpathForLib(libname_c.as_ptr()) };
 
     // scope needed to make sure the CStr is dropped before we free libpath_c
     let libpath = if !libpath_c.is_null() {

@@ -19,11 +19,11 @@
  * RESULTING FROM THE USE OF THIS SOFTWARE.
  */
 
-#ifndef SHD_MANAGER_H_
-#define SHD_MANAGER_H_
+#ifndef SHD_RPATH_H_
+#define SHD_RPATH_H_
 
 #include <glib.h>
 
-gchar* manager_scanRpathForLib(const gchar* libname);
+gchar* scanRpathForLib(const gchar* libname);
 
-#endif /* SHD_MANAGER_H_ */
+#endif /* SHD_RPATH_H_ */

@@ -53,7 +53,7 @@ add_custom_command(OUTPUT wrapper.rs
         # used by shadow's main function
         --whitelist-function "main_.*"
         --whitelist-function "shmemcleanup_tryCleanup"
-        --whitelist-function "manager_scanRpathForLib"
+        --whitelist-function "scanRpathForLib"
         --whitelist-function "scheduler_(new|unref|addHost|start|finish|shutdown)"
         --whitelist-function "scheduler_(continueNextRound|awaitNextRound)"
         --whitelist-function "runConfigHandlers"

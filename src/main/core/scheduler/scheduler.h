@@ -11,7 +11,6 @@
 
 typedef struct _Scheduler Scheduler;
 
-#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"

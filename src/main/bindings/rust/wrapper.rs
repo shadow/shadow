@@ -1143,9 +1143,6 @@ pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
 pub type WorkerPool = u8;
-extern "C" {
-    pub fn manager_scanRpathForLib(libname: *const gchar) -> *mut gchar;
-}
 pub type Scheduler = u8;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -3842,4 +3839,7 @@ extern "C" {
 }
 extern "C" {
     pub fn packet_getTCPHeader(packet: *const Packet) -> *mut PacketTCPHeader;
+}
+extern "C" {
+    pub fn scanRpathForLib(libname: *const gchar) -> *mut gchar;
 }

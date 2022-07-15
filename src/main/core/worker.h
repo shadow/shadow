@@ -17,7 +17,6 @@ typedef struct _WorkerPool WorkerPool;
 typedef void (*WorkerPoolTaskFn)(void*);
 
 #include "lib/logger/log_level.h"
-#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
