@@ -31,6 +31,15 @@ struct TimerInternal {
     on_expire: Box<dyn Fn(&mut Host) + Send + Sync>,
 }
 
+impl TimerInternal {
+    fn reset(&mut self, next_expire_time: Option<EmulatedTime>, expire_interval: SimulationTime) {
+        self.min_valid_expire_id = self.next_expire_id;
+        self.expiration_count = 0;
+        self.next_expire_time = next_expire_time;
+        self.expire_interval = expire_interval;
+    }
+}
+
 impl Timer {
     /// Create a new Timer that directly executes `on_expire` on
     /// expiration. `on_expire` will cause a panic if it calls mutable methods
@@ -90,10 +99,7 @@ impl Timer {
     pub fn disarm(&mut self) {
         self.magic.debug_check();
         let mut internal = self.internal.borrow_mut();
-        internal.next_expire_time = None;
-        internal.expire_interval = SimulationTime::ZERO;
-        internal.expiration_count = 0;
-        internal.min_valid_expire_id = internal.next_expire_id;
+        internal.reset(None, SimulationTime::ZERO);
     }
 
     fn timer_expire(
@@ -161,13 +167,10 @@ impl Timer {
         expire_interval: SimulationTime,
     ) {
         self.magic.debug_check();
+        debug_assert!(expire_time >= Worker::current_time().unwrap());
 
         let mut internal = self.internal.borrow_mut();
-        debug_assert!(expire_time >= Worker::current_time().unwrap());
-        internal.next_expire_time = Some(expire_time);
-        internal.expire_interval = expire_interval;
-        internal.expiration_count = 0;
-        internal.min_valid_expire_id = internal.next_expire_id;
+        internal.reset(Some(expire_time), expire_interval);
         Self::schedule_new_expire_event(&mut *internal, Arc::downgrade(&self.internal), host);
     }
 }
