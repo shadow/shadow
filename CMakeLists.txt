@@ -96,7 +96,11 @@ message(STATUS "SHADOW_VERSION_PATCH=${SHADOW_VERSION_PATCH}")
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     ## current git commit version and hash
-    EXECUTE_PROCESS(COMMAND "git" "describe" "--long" "--dirty" OUTPUT_VARIABLE DESCRIBE)
+    ##
+    ## `--always` allows us to still get the commit hash and dirty status,
+    ## when tags aren't available, as sometimes happens when building from
+    ## a shallow clone.
+    EXECUTE_PROCESS(COMMAND "git" "describe" "--always" "--long" "--dirty" OUTPUT_VARIABLE DESCRIBE)
     if(DESCRIBE)
         string(REGEX REPLACE "\n" "" DESCRIBE ${DESCRIBE})
     endif(DESCRIBE)
