@@ -167,6 +167,7 @@ impl Timer {
         internal.next_expire_time = Some(expire_time);
         internal.expire_interval = expire_interval;
         internal.expiration_count = 0;
+        internal.min_valid_expire_id = internal.next_expire_id;
         Self::schedule_new_expire_event(&mut *internal, Arc::downgrade(&self.internal), host);
     }
 }
