@@ -207,6 +207,42 @@ static void _test_rearm_timer() {
     close(tfd);
 }
 
+static void _test_double_arm_timer() {
+    int efd, tfd;
+
+    /* create new timerfd */
+    assert_nonneg_errno(tfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK));
+
+    /* first arm the timer to go off in 1 sec */
+    struct itimerspec t = {0};
+    t.it_value.tv_sec = 1;
+    assert_nonneg_errno(timerfd_settime(tfd, 0, &t, NULL));
+
+    /* arm it again */
+    assert_nonneg_errno(timerfd_settime(tfd, 0, &t, NULL));
+
+    /* associate this timer with an epoll efd */
+    struct epoll_event timerevent = {0};
+    timerevent.events = EPOLLIN;
+    assert_nonneg_errno(efd = epoll_create(1));
+    assert_nonneg_errno(epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent));
+
+    /* wait for 1.1 seconds */
+    struct epoll_event event = {0};
+    assert_nonneg_errno(epoll_wait(efd, &event, 1, 1100));
+
+    /* The timer should be ready, and count should be 1  */
+    uint64_t num_expires = 0;
+    int rv = read(tfd, &num_expires, sizeof(uint64_t));
+    g_assert_cmpint(rv, ==, sizeof(uint64_t));
+    g_assert_cmpint(num_expires, ==, 1);
+
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
+    close(efd);
+    close(tfd);
+}
+
+
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
 
@@ -216,6 +252,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/timerfd/expired_pause", _test_expired_timer_pause);
     g_test_add_func("/timerfd/disarm", _test_disarm_timer);
     g_test_add_func("/timerfd/rearm", _test_rearm_timer);
+    g_test_add_func("/timerfd/double-arm", _test_double_arm_timer);
 
     return g_test_run();
 }
