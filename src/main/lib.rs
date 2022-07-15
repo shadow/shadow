@@ -24,4 +24,3 @@ pub mod utility;
 pub mod core;
 pub mod host;
 pub mod network;
-pub mod shmem;
