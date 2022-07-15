@@ -49,7 +49,8 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     if options.shm_cleanup {
         // clean up any orphaned shared memory
-        shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH).context("Cleaning shared memory files")?;
+        shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH)
+            .context("Cleaning shared memory files")?;
         std::process::exit(0);
     }
 
