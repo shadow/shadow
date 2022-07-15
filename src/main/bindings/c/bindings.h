@@ -586,23 +586,23 @@ struct Descriptor *descriptortable_set(struct DescriptorTable *table,
 // TODO: remove this once the TCP layer is better designed.
 void descriptortable_shutdownHelper(struct DescriptorTable *table);
 
-// Close all descriptors. The `host` option is a legacy option for legacy descriptors.
+// Close all descriptors. The `host` option is a legacy option for legacy files.
 void descriptortable_removeAndCloseAll(struct DescriptorTable *table, Host *host);
 
 struct Arc_AtomicRefCell_AbstractUnixNamespace *abstractunixnamespace_new(void);
 
 void abstractunixnamespace_free(struct Arc_AtomicRefCell_AbstractUnixNamespace *ns);
 
-// The new descriptor takes ownership of the reference to the legacy descriptor and does not
+// The new descriptor takes ownership of the reference to the legacy file and does not
 // increment its ref count, but will decrement the ref count when this descriptor is
 // freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
 // `O_CLOEXEC`.
-struct Descriptor *descriptor_fromLegacy(LegacyDescriptor *legacy_descriptor, int descriptor_flags);
+struct Descriptor *descriptor_fromLegacyFile(LegacyFile *legacy_file, int descriptor_flags);
 
-// If the descriptor is a legacy descriptor, returns a pointer to the legacy descriptor object.
-// Otherwise returns NULL. The legacy descriptor's ref count is not modified, so the pointer
-// must not outlive the lifetime of the descriptor.
-LegacyDescriptor *descriptor_asLegacy(const struct Descriptor *descriptor);
+// If the descriptor is a legacy file, returns a pointer to the legacy file object. Otherwise
+// returns NULL. The legacy file's ref count is not modified, so the pointer must not outlive
+// the lifetime of the descriptor.
+LegacyFile *descriptor_asLegacyFile(const struct Descriptor *descriptor);
 
 // If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
 // `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
@@ -777,8 +777,8 @@ const struct Descriptor *process_getRegisteredDescriptor(Process *proc, int hand
 // Get a temporary mutable reference to a descriptor.
 struct Descriptor *process_getRegisteredDescriptorMut(Process *proc, int handle);
 
-// Get a temporary reference to a legacy descriptor.
-LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
+// Get a temporary reference to a legacy file.
+LegacyFile *process_getRegisteredLegacyFile(Process *proc, int handle);
 
 SysCallReturn log_syscall(Process *proc,
                           enum StraceFmtMode logging_mode,

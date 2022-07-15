@@ -44,17 +44,16 @@ bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
 
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys) { return sys->blockedSyscallNR >= 0; }
 
-int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
-                                       LegacyDescriptorType expectedType) {
+int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType) {
     if (descriptor) {
-        Status status = legacydesc_getStatus(descriptor);
+        Status status = legacyfile_getStatus(descriptor);
 
-        if (status & STATUS_DESCRIPTOR_CLOSED) {
+        if (status & STATUS_FILE_CLOSED) {
             warning("descriptor %p is closed", descriptor);
             return -EBADF;
         }
 
-        LegacyDescriptorType type = legacydesc_getType(descriptor);
+        LegacyFileType type = legacyfile_getType(descriptor);
 
         if (expectedType != DT_NONE && type != expectedType) {
             warning(

@@ -26,23 +26,22 @@ typedef gssize (*TransportReceiveFunc)(Transport* transport, Thread* thread,
                                        in_port_t* port);
 
 struct _TransportFunctionTable {
-    DescriptorCloseFunc close;
-    DescriptorCleanupFunc cleanup;
-    DescriptorFreeFunc free;
+    LegacyFileCloseFunc close;
+    LegacyFileCleanupFunc cleanup;
+    LegacyFileFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;
     MAGIC_DECLARE_ALWAYS;
 };
 
 struct _Transport {
-    LegacyDescriptor super;
+    LegacyFile super;
     TransportFunctionTable* vtable;
 
     MAGIC_DECLARE_ALWAYS;
 };
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable,
-                    LegacyDescriptorType type);
+void transport_init(Transport* transport, TransportFunctionTable* vtable, LegacyFileType type);
 
 gssize transport_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                               gsize nBytes, in_addr_t ip, in_port_t port);

@@ -34,7 +34,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     }
 
     Epoll* epolld = epoll_new();
-    Descriptor* desc = descriptor_fromLegacy((LegacyDescriptor*)epolld, descFlags);
+    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)epolld, descFlags);
     int handle = process_registerDescriptor(sys->process, desc);
 
     return handle;
@@ -83,8 +83,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyDescriptor* epollDescriptor = process_getRegisteredLegacyDescriptor(sys->process, epfd);
-    gint errorCode = _syscallhandler_validateDescriptor(epollDescriptor, DT_EPOLL);
+    LegacyFile* epollDescriptor = process_getRegisteredLegacyFile(sys->process, epfd);
+    gint errorCode = _syscallhandler_validateLegacyFile(epollDescriptor, DT_EPOLL);
 
     if (errorCode) {
         trace("Error when trying to validate epoll %i", epfd);
@@ -104,16 +104,16 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
-    LegacyDescriptor* legacyDescriptor = descriptor_asLegacy(descriptor);
+    LegacyFile* legacyDescriptor = descriptor_asLegacyFile(descriptor);
 
-    // Make sure the child is not closed only if it's a legacy descriptor
+    // Make sure the child is not closed only if it's a legacy file
     // FIXME: for now we allow child fds to be closed on EPOLL_CTL_DEL operations,
     // because libevent frequently closes before issuing the EPOLL_CTL_DEL op.
     // Once #1101 is fixed, and we correctly clean up closed watch fds, then we can
     // error out here on EPOLL_CTL_DEL ops too.
     // See: https://github.com/shadow/shadow/issues/1101
     if (legacyDescriptor != NULL && op != EPOLL_CTL_DEL) {
-        errorCode = _syscallhandler_validateDescriptor(legacyDescriptor, DT_NONE);
+        errorCode = _syscallhandler_validateLegacyFile(legacyDescriptor, DT_NONE);
 
         if (errorCode) {
             debug("Child %i of epoll %i is closed", fd, epfd);
@@ -152,8 +152,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, epfd);
-    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_EPOLL);
+    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, epfd);
+    gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_EPOLL);
 
     if (errorCode) {
         trace("Error when trying to validate epoll %i", epfd);
@@ -190,8 +190,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* Block on epoll status. An epoll descriptor is readable when it
              * has events. */
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (LegacyDescriptor*)epoll,
-                                        .status = STATUS_DESCRIPTOR_READABLE};
+                                        .object = (LegacyFile*)epoll,
+                                        .status = STATUS_FILE_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
 
             /* Set timeout, if provided. */

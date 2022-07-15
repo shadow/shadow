@@ -59,7 +59,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                legacydesc_ref(cond->trigger.object.as_descriptor);
+                legacyfile_ref(cond->trigger.object.as_legacy_file);
                 return cond;
             }
             case TRIGGER_FILE: {
@@ -113,8 +113,8 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     if (cond->trigger.object.as_pointer && cond->triggerListener) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                legacydesc_removeListener(
-                    cond->trigger.object.as_descriptor, cond->triggerListener);
+                legacyfile_removeListener(
+                    cond->trigger.object.as_legacy_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FILE: {
@@ -177,7 +177,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
-                legacydesc_unref(cond->trigger.object.as_descriptor);
+                legacyfile_unref(cond->trigger.object.as_legacy_file);
                 break;
             }
             case TRIGGER_FILE: {
@@ -234,7 +234,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
                 g_string_append_printf(string, "status on descriptor %p%s",
-                                       cond->trigger.object.as_descriptor,
+                                       cond->trigger.object.as_legacy_file,
                                        cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }
@@ -279,7 +279,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 
     switch (cond->trigger.type) {
         case TRIGGER_DESCRIPTOR: {
-            if (legacydesc_getStatus(cond->trigger.object.as_descriptor) & cond->trigger.status) {
+            if (legacyfile_getStatus(cond->trigger.object.as_legacy_file) & cond->trigger.status) {
                 return true;
             }
             break;
@@ -454,7 +454,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* 
                     cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
-                legacydesc_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
+                legacyfile_addListener(cond->trigger.object.as_legacy_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FILE: {

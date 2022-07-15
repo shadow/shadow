@@ -44,7 +44,7 @@ typedef struct _RegularFile RegularFile;
 // Initialization and setup
 // ************************
 
-RegularFile* regularfile_new(); // Close the file with legacydesc_close()
+RegularFile* regularfile_new(); // Close the file with legacyfile_close()
 int regularfile_open(RegularFile* file, const char* pathname, int flags, mode_t mode,
                      const char* workingDir);
 int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname, int flags,

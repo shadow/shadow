@@ -13,13 +13,13 @@ enum _Status {
     STATUS_NONE = 0,
     /* the descriptor has been initialized and it is now OK to
      * unblock any plugin waiting on a particular status  */
-    STATUS_DESCRIPTOR_ACTIVE = 1 << 0,
+    STATUS_FILE_ACTIVE = 1 << 0,
     /* can be read, i.e. there is data waiting for user */
-    STATUS_DESCRIPTOR_READABLE = 1 << 1,
+    STATUS_FILE_READABLE = 1 << 1,
     /* can be written, i.e. there is available buffer space */
-    STATUS_DESCRIPTOR_WRITABLE = 1 << 2,
+    STATUS_FILE_WRITABLE = 1 << 2,
     /* user already called close */
-    STATUS_DESCRIPTOR_CLOSED = 1 << 3,
+    STATUS_FILE_CLOSED = 1 << 3,
     /* a wakeup operation occurred on a futex */
     STATUS_FUTEX_WAKEUP = 1 << 4,
     /* a listening socket is allowing connections; only applicable to connection-oriented unix

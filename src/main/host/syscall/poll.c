@@ -27,14 +27,14 @@
 ///////////////////////////////////////////////////////////
 
 static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct pollfd* pfd) {
-    // Handle legacy and non-legacy descriptors. This will be NULL if it's not a legacy descriptor.
-    LegacyDescriptor* ldesc = descriptor_asLegacy(cdesc);
+    // Handle legacy and non-legacy files. This will be NULL if it's not a legacy file.
+    LegacyFile* ldesc = descriptor_asLegacyFile(cdesc);
 
-    // Some logic depends on the descriptor type. USE DT_NONE for non-legacy descriptors
+    // Some logic depends on the file type. USE DT_NONE for non-legacy files
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
-    LegacyDescriptorType dType = ldesc ? legacydesc_getType(ldesc) : DT_NONE;
+    LegacyFileType dType = ldesc ? legacyfile_getType(ldesc) : DT_NONE;
     Status dstat =
-        ldesc ? legacydesc_getStatus(ldesc) : openfile_getStatus(descriptor_borrowOpenFile(cdesc));
+        ldesc ? legacyfile_getStatus(ldesc) : openfile_getStatus(descriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {
         // Rely on the kernel to poll the OS-back file
@@ -46,15 +46,15 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
         }
     } else {
         // Figure out which events to report
-        if ((dstat & STATUS_DESCRIPTOR_CLOSED) && !(dstat & STATUS_DESCRIPTOR_ACTIVE)) {
+        if ((dstat & STATUS_FILE_CLOSED) && !(dstat & STATUS_FILE_ACTIVE)) {
             pfd->revents |= POLLNVAL;
         }
-        if ((pfd->events & POLLIN) && (dstat & STATUS_DESCRIPTOR_ACTIVE) &&
-            (dstat & STATUS_DESCRIPTOR_READABLE)) {
+        if ((pfd->events & POLLIN) && (dstat & STATUS_FILE_ACTIVE) &&
+            (dstat & STATUS_FILE_READABLE)) {
             pfd->revents |= POLLIN;
         }
-        if ((pfd->events & POLLOUT) && (dstat & STATUS_DESCRIPTOR_ACTIVE) &&
-            (dstat & STATUS_DESCRIPTOR_WRITABLE)) {
+        if ((pfd->events & POLLOUT) && (dstat & STATUS_FILE_ACTIVE) &&
+            (dstat & STATUS_FILE_WRITABLE)) {
             pfd->revents |= POLLOUT;
         }
     }
@@ -144,8 +144,8 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
 
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (LegacyDescriptor*)sys->epoll,
-                                        .status = STATUS_DESCRIPTOR_READABLE};
+                                        .object = (LegacyFile*)sys->epoll,
+                                        .status = STATUS_FILE_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, sys->host,

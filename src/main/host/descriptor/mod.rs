@@ -100,13 +100,13 @@ bitflags::bitflags! {
     pub struct FileState: libc::c_int {
         /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
         /// state. (This is a legacy C state and should be considered deprecated.)
-        const ACTIVE = c::_Status_STATUS_DESCRIPTOR_ACTIVE;
+        const ACTIVE = c::_Status_STATUS_FILE_ACTIVE;
         /// Can be read, i.e. there is data waiting for user.
-        const READABLE = c::_Status_STATUS_DESCRIPTOR_READABLE;
+        const READABLE = c::_Status_STATUS_FILE_READABLE;
         /// Can be written, i.e. there is available buffer space.
-        const WRITABLE = c::_Status_STATUS_DESCRIPTOR_WRITABLE;
+        const WRITABLE = c::_Status_STATUS_FILE_WRITABLE;
         /// User already called close.
-        const CLOSED = c::_Status_STATUS_DESCRIPTOR_CLOSED;
+        const CLOSED = c::_Status_STATUS_FILE_CLOSED;
         /// A wakeup operation occurred on a futex.
         const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
         /// A listening socket is allowing connections. Only applicable to connection-oriented unix
@@ -634,7 +634,7 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
+    /// Close the descriptor. The `host` option is a legacy option for legacy file.
     pub fn close(
         self,
         host: *mut c::Host,
@@ -666,70 +666,70 @@ impl Descriptor {
     }
 }
 
-/// Represents a counted reference to a legacy descriptor object. Will decrement the descriptor's
-/// ref count when dropped.
+/// Represents a counted reference to a legacy file object. Will decrement the legacy file's ref
+/// count when dropped.
 #[derive(Debug)]
-pub struct CountedLegacyDescriptorRef(HostTreePointer<c::LegacyDescriptor>);
+pub struct CountedLegacyFileRef(HostTreePointer<c::LegacyFile>);
 
-impl CountedLegacyDescriptorRef {
-    /// Does not increment the legacy descriptor's ref count, but will decrement the ref count
-    /// when dropped.
-    pub fn new(ptr: HostTreePointer<c::LegacyDescriptor>) -> Self {
+impl CountedLegacyFileRef {
+    /// Does not increment the legacy file's ref count, but will decrement the ref count when
+    /// dropped.
+    pub fn new(ptr: HostTreePointer<c::LegacyFile>) -> Self {
         Self(ptr)
     }
 
     /// SAFETY: See `HostTreePointer::ptr`.
-    pub unsafe fn ptr(&self) -> *mut c::LegacyDescriptor {
+    pub unsafe fn ptr(&self) -> *mut c::LegacyFile {
         unsafe { self.0.ptr() }
     }
 }
 
-impl std::clone::Clone for CountedLegacyDescriptorRef {
+impl std::clone::Clone for CountedLegacyFileRef {
     fn clone(&self) -> Self {
-        // ref the legacy descriptor object
-        unsafe { c::legacydesc_ref(self.0.ptr() as *mut core::ffi::c_void) };
+        // ref the legacy file object
+        unsafe { c::legacyfile_ref(self.0.ptr() as *mut core::ffi::c_void) };
         Self(self.0)
     }
 }
 
-impl Drop for CountedLegacyDescriptorRef {
+impl Drop for CountedLegacyFileRef {
     fn drop(&mut self) {
-        // unref the legacy descriptor object
-        unsafe { c::legacydesc_unref(self.0.ptr() as *mut core::ffi::c_void) };
+        // unref the legacy file object
+        unsafe { c::legacyfile_unref(self.0.ptr() as *mut core::ffi::c_void) };
     }
 }
 
-/// Used to track how many descriptors are open for a `LegacyDescriptor`. When the `close()` method
-/// is called, the legacy descriptor's `legacydesc_close()` will only be called if this is the last
-/// descriptor for that legacy descriptor. This is similar to an `OpenFile` object, but does not
-/// close the descriptor when dropped since we don't have a pointer to the host. If this counter is
-/// dropped before closing the legacy descriptor, the legacy descriptor will not be closed properly.
+/// Used to track how many descriptors are open for a `LegacyFile`. When the `close()` method is
+/// called, the legacy file's `legacyfile_close()` will only be called if this is the last
+/// descriptor for that legacy file. This is similar to an `OpenFile` object, but does not close the
+/// file when dropped since we don't have a pointer to the host. If this counter is dropped before
+/// closing the legacy file, the legacy file will not be closed properly.
 #[derive(Clone, Debug)]
-pub struct LegacyDescriptorCounter {
-    desc: CountedLegacyDescriptorRef,
-    /// A count of how many open descriptors there are with reference to this legacy descriptor.
+pub struct LegacyFileCounter {
+    file: CountedLegacyFileRef,
+    /// A count of how many open descriptors there are with reference to this legacy file.
     open_count: Arc<()>,
 }
 
-impl LegacyDescriptorCounter {
-    pub fn new(desc: CountedLegacyDescriptorRef) -> Self {
+impl LegacyFileCounter {
+    pub fn new(file: CountedLegacyFileRef) -> Self {
         Self {
-            desc,
+            file,
             open_count: Arc::new(()),
         }
     }
 
-    pub unsafe fn ptr(&self) -> *mut c::LegacyDescriptor {
-        unsafe { self.desc.ptr() }
+    pub unsafe fn ptr(&self) -> *mut c::LegacyFile {
+        unsafe { self.file.ptr() }
     }
 
-    /// Close the descriptor, and if this is the last descriptor pointing to its legacy descriptor,
-    /// close the legacy descriptor as well.
+    /// Close the descriptor, and if this is the last descriptor pointing to its legacy file, close
+    /// the legacy file as well.
     pub fn close(self, host: *mut c::Host) {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
-            unsafe { c::legacydesc_close(self.ptr(), host) }
+            unsafe { c::legacyfile_close(self.ptr(), host) }
         }
     }
 }
@@ -737,11 +737,11 @@ impl LegacyDescriptorCounter {
 #[derive(Clone, Debug)]
 pub enum CompatFile {
     New(OpenFile),
-    Legacy(LegacyDescriptorCounter),
+    Legacy(LegacyFileCounter),
 }
 
 impl CompatFile {
-    /// Close the file. The `host` option is a legacy option for legacy descriptors.
+    /// Close the file. The `host` option is a legacy option for legacy files.
     pub fn close(
         self,
         host: *mut c::Host,
@@ -770,19 +770,19 @@ impl std::fmt::Debug for c::SysCallReturn {
 mod export {
     use super::*;
 
-    /// The new descriptor takes ownership of the reference to the legacy descriptor and does not
+    /// The new descriptor takes ownership of the reference to the legacy file and does not
     /// increment its ref count, but will decrement the ref count when this descriptor is
     /// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
     /// `O_CLOEXEC`.
     #[no_mangle]
-    pub unsafe extern "C" fn descriptor_fromLegacy(
-        legacy_descriptor: *mut c::LegacyDescriptor,
+    pub unsafe extern "C" fn descriptor_fromLegacyFile(
+        legacy_file: *mut c::LegacyFile,
         descriptor_flags: libc::c_int,
     ) -> *mut Descriptor {
-        assert!(!legacy_descriptor.is_null());
+        assert!(!legacy_file.is_null());
 
-        let mut descriptor = Descriptor::new(CompatFile::Legacy(LegacyDescriptorCounter::new(
-            CountedLegacyDescriptorRef::new(HostTreePointer::new(legacy_descriptor)),
+        let mut descriptor = Descriptor::new(CompatFile::Legacy(LegacyFileCounter::new(
+            CountedLegacyFileRef::new(HostTreePointer::new(legacy_file)),
         )));
 
         let descriptor_flags = OFlag::from_bits(descriptor_flags).unwrap();
@@ -793,13 +793,11 @@ mod export {
         Descriptor::into_raw(Box::new(descriptor))
     }
 
-    /// If the descriptor is a legacy descriptor, returns a pointer to the legacy descriptor object.
-    /// Otherwise returns NULL. The legacy descriptor's ref count is not modified, so the pointer
-    /// must not outlive the lifetime of the descriptor.
+    /// If the descriptor is a legacy file, returns a pointer to the legacy file object. Otherwise
+    /// returns NULL. The legacy file's ref count is not modified, so the pointer must not outlive
+    /// the lifetime of the descriptor.
     #[no_mangle]
-    pub extern "C" fn descriptor_asLegacy(
-        descriptor: *const Descriptor,
-    ) -> *mut c::LegacyDescriptor {
+    pub extern "C" fn descriptor_asLegacyFile(descriptor: *const Descriptor) -> *mut c::LegacyFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };

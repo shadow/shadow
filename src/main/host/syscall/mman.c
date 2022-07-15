@@ -46,14 +46,14 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd, s
 
     /* We only need a file if it's not an anonymous mapping. */
     if (!(flags & MAP_ANONYMOUS)) {
-        LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
-        int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+        LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+        int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
         if (errcode) {
             debug("Invalid fd %i", fd);
             return errcode;
         }
 
-        if (legacydesc_getType(desc) != DT_FILE) {
+        if (legacyfile_getType(desc) != DT_FILE) {
             debug("Descriptor exists for fd %i, but is not a file type", fd);
             return -EACCES;
         }

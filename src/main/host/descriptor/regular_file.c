@@ -46,7 +46,7 @@ enum _FileType {
 
 struct _RegularFile {
     /* File is a sub-type of a descriptor. */
-    LegacyDescriptor super;
+    LegacyFile super;
     FileType type;
     /* O file flags that we don't pass to the native fd, but instead track within
      * Shadow and handle manually. A subset of SHADOW_FLAG_MASK. */
@@ -79,8 +79,8 @@ int regularfile_getShadowFlags(RegularFile* file) {
     return file->shadowFlags;
 }
 
-static inline RegularFile* _regularfile_descriptorToFile(LegacyDescriptor* desc) {
-    utility_assert(legacydesc_getType(desc) == DT_FILE);
+static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc) {
+    utility_assert(legacyfile_getType(desc) == DT_FILE);
     RegularFile* file = (RegularFile*)desc;
     MAGIC_ASSERT(file);
     return file;
@@ -100,12 +100,12 @@ static void _regularfile_closeHelper(RegularFile* file) {
         file->osfile.fd = OSFILE_INVALID;
 
         /* The os-backed file is no longer ready. */
-        legacydesc_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+        legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE);
     }
 }
 
-static void _regularfile_close(LegacyDescriptor* desc, Host* host) {
-    RegularFile* file = _regularfile_descriptorToFile(desc);
+static void _regularfile_close(LegacyFile* desc, Host* host) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
 
     trace("Closing file %p with os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
@@ -113,8 +113,8 @@ static void _regularfile_close(LegacyDescriptor* desc, Host* host) {
     _regularfile_closeHelper(file);
 }
 
-static void _regularfile_free(LegacyDescriptor* desc) {
-    RegularFile* file = _regularfile_descriptorToFile(desc);
+static void _regularfile_free(LegacyFile* desc) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
 
     trace("Freeing file %p with os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
@@ -124,14 +124,14 @@ static void _regularfile_free(LegacyDescriptor* desc) {
         free(file->osfile.absPathAtOpen);
     }
 
-    legacydesc_clear((LegacyDescriptor*)file);
+    legacyfile_clear((LegacyFile*)file);
     MAGIC_CLEAR(file);
     free(file);
 
     worker_count_deallocation(RegularFile);
 }
 
-static DescriptorFunctionTable _fileFunctions = (DescriptorFunctionTable){
+static LegacyFileFunctionTable _fileFunctions = (LegacyFileFunctionTable){
     .close = _regularfile_close,
     .cleanup = NULL,
     .free = _regularfile_free,
@@ -142,7 +142,7 @@ RegularFile* regularfile_new() {
 
     *file = (RegularFile){0};
 
-    legacydesc_init(&(file->super), DT_FILE, &_fileFunctions);
+    legacyfile_init(&(file->super), DT_FILE, &_fileFunctions);
     MAGIC_INIT(file);
     file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
 
@@ -299,7 +299,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* The os-backed file is now ready. */
-    legacydesc_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, TRUE);
 
     return 0;
 }

@@ -52,7 +52,7 @@ impl SyscallHandler {
             libc::F_GETFL => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
-                    // if it's a legacy descriptor, use the C syscall handler instead
+                    // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
                 };
 
@@ -64,7 +64,7 @@ impl SyscallHandler {
             libc::F_SETFL => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
-                    // if it's a legacy descriptor, use the C syscall handler instead
+                    // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
                 };
 
@@ -156,7 +156,7 @@ impl SyscallHandler {
             libc::F_GETPIPE_SZ => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
-                    // if it's a legacy descriptor, use the C syscall handler instead
+                    // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
                 };
 

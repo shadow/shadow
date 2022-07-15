@@ -15,24 +15,24 @@
 
 /* Initialize the parent parts of a new descriptor subclass. This call should
  * be paired with a call to clear() before freeing the subclass object. */
-void legacydesc_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
-                     DescriptorFunctionTable* funcTable);
+void legacyfile_init(LegacyFile* descriptor, LegacyFileType type,
+                     LegacyFileFunctionTable* funcTable);
 /* Clear the bits that were initialized in init(). Following this call, the
  * descriptor becomes invalid and the subclass should be freed. */
-void legacydesc_clear(LegacyDescriptor* descriptor);
+void legacyfile_clear(LegacyFile* descriptor);
 
-void legacydesc_ref(gpointer data);
-void legacydesc_unref(gpointer data);
-void legacydesc_refWeak(gpointer data);
-void legacydesc_unrefWeak(gpointer data);
-void legacydesc_close(LegacyDescriptor* descriptor, Host* host);
+void legacyfile_ref(gpointer data);
+void legacyfile_unref(gpointer data);
+void legacyfile_refWeak(gpointer data);
+void legacyfile_unrefWeak(gpointer data);
+void legacyfile_close(LegacyFile* descriptor, Host* host);
 
-LegacyDescriptorType legacydesc_getType(LegacyDescriptor* descriptor);
+LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 
-gint legacydesc_getFlags(LegacyDescriptor* descriptor);
-void legacydesc_setFlags(LegacyDescriptor* descriptor, gint flags);
-void legacydesc_addFlags(LegacyDescriptor* descriptor, gint flags);
-void legacydesc_removeFlags(LegacyDescriptor* descriptor, gint flags);
+gint legacyfile_getFlags(LegacyFile* descriptor);
+void legacyfile_setFlags(LegacyFile* descriptor, gint flags);
+void legacyfile_addFlags(LegacyFile* descriptor, gint flags);
+void legacyfile_removeFlags(LegacyFile* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,
@@ -58,19 +58,19 @@ void legacydesc_removeFlags(LegacyDescriptor* descriptor, gint flags);
  * listener will trigger notifications via callback functions if the listener is
  * configured to monitor a bit that flipped.
  */
-void legacydesc_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits);
+void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits);
 
 /* Gets the current status of the descriptor. */
-Status legacydesc_getStatus(LegacyDescriptor* descriptor);
+Status legacyfile_getStatus(LegacyFile* descriptor);
 
 /* Adds a listener that will get notified via descriptorlistener_onStatusChanged
  * on status transitions (bit flips).
  */
-void legacydesc_addListener(LegacyDescriptor* descriptor, StatusListener* listener);
+void legacyfile_addListener(LegacyFile* descriptor, StatusListener* listener);
 
 /* Remove the listener for our set of listeners that get notified on status
  * transitions (bit flips). */
-void legacydesc_removeListener(LegacyDescriptor* descriptor, StatusListener* listener);
+void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener);
 
 /* This is a helper function that handles some corner cases where some
  * descriptors are linked to each other and we must remove that link in
@@ -80,11 +80,11 @@ void legacydesc_removeListener(LegacyDescriptor* descriptor, StatusListener* lis
  *
  * Intended to be called only from descriptor_table.rs.
  */
-void legacydesc_shutdownHelper(LegacyDescriptor* legacyDesc);
+void legacyfile_shutdownHelper(LegacyFile* legacyDesc);
 
 /* Whether the descriptor's operations are restartable in conjunction with
  * SA_RESTART. See signal(7).
  */
-bool legacydesc_supportsSaRestart(LegacyDescriptor* legacyDesc);
+bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc);
 
 #endif /* SHD_DESCRIPTOR_H_ */

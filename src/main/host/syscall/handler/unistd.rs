@@ -156,7 +156,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_read(
@@ -195,7 +195,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_pread64(
@@ -290,7 +290,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_write(
@@ -329,7 +329,7 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => match Self::get_descriptor(ctx.process, fd)?.file() {
                 CompatFile::New(file) => file.clone(),
-                // if it's a legacy descriptor, use the C syscall handler instead
+                // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     return unsafe {
                         c::syscallhandler_pwrite64(
