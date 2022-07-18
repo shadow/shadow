@@ -1861,16 +1861,24 @@ struct UnixSocketCommon {
 
 impl UnixSocketCommon {
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
-        if self.state.contains(FileState::CLOSED) {
-            log::warn!("Attempting to close an already-closed unix socket");
-        }
+        // check that the CLOSED flag was set by the protocol state
+        if !self.state.contains(FileState::CLOSED) {
+            const MSG: &str = "When closing a unix socket, the CLOSED flag was not set";
 
-        // set the closed flag and remove any other flags
-        self.copy_state(
-            /* mask= */ FileState::all(),
-            FileState::CLOSED,
-            event_queue,
-        );
+            log::warn!("{}", MSG);
+
+            // set the flag here since we missed doing it before
+            // do this before the conditional panic, otherwise rust gives us warnings
+            self.copy_state(
+                /* mask= */ FileState::all(),
+                FileState::CLOSED,
+                event_queue,
+            );
+
+            // panic in debug builds since the backtrace will be helpful for debugging
+            #[cfg(debug_assertions)]
+            panic!("{}", MSG);
+        }
 
         Ok(())
     }
