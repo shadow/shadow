@@ -5,6 +5,9 @@
 set -euo pipefail
 
 BUILD_IMAGES=0
+PUSH=0
+NOCACHE=
+REPO=shadowsim/shadow-ci
 
 CONTAINERS=(
     ubuntu:18.04
@@ -44,6 +47,8 @@ Usage: $0 ...
   -e EXTRAS      Set extra configurations to run
   -o             Set only configurations to run
   -n             nocache when building Docker images
+  -p             pushes images to dockerhub if set
+  -r             set Docker repository
 
 On the first run, you should use the '-i' flag to build the images.
 
@@ -71,7 +76,7 @@ Set *only* configurations to run:
 EOF
 }
 
-while getopts "h?ic:C:b:e:o:n" opt; do
+while getopts "h?ipc:C:b:e:o:nr:" opt; do
     case "$opt" in
     h|\?)
         show_help
@@ -94,6 +99,9 @@ while getopts "h?ic:C:b:e:o:n" opt; do
         ;;
     n)  NOCACHE=--no-cache
         ;;
+    p)  PUSH=1
+        ;;
+    r)  REPO="$OPTARG"
     esac
 done
 
@@ -107,7 +115,7 @@ run_one () {
     # Replace all forward slashes with '-'
     CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
 
-    TAG="shadow:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
+    TAG="$REPO:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
 
     if [ "${BUILD_IMAGES}" == "1" ]; then
         echo "Building $TAG"
@@ -181,6 +189,10 @@ EOF
     if [ "${RV}" != "0" ]; then
         echo "Exiting due to docker container failure (${TAG})"
         exit 1
+    fi
+
+    if [ "${PUSH}" == "1" ]; then
+        docker push "${TAG}"
     fi
 }
 

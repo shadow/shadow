@@ -51,7 +51,7 @@ run an interactive shell in a container built from that image.
 e.g.:
 
 ```{.bash}
-sudo docker run --shm-size=1g -it shadow:centos-8-clang-debug /bin/bash
+docker run --shm-size=1g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:centos-8-clang-debug /bin/bash
 ```
 
 If the failure happened in the middle of building the Docker image, you can do
