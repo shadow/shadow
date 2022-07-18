@@ -4,6 +4,7 @@
 
 set -euo pipefail
 
+DRYTAG=0
 BUILD_IMAGE=0
 PUSH=0
 NOCACHE=
@@ -25,6 +26,7 @@ Usage: $0 ...
   -n             nocache when building Docker images
   -p             push image to dockerhub
   -r             set Docker repository
+  -t             just get the image tag for the requested configuration
 
 On the first run, you should use the '-i' flag to build the image.
 
@@ -35,7 +37,7 @@ Run default configuration:
 EOF
 }
 
-while getopts "h?ipc:C:b:nr:" opt; do
+while getopts "h?ipc:C:b:nr:t" opt; do
     case "$opt" in
     h|\?)
         show_help
@@ -54,6 +56,9 @@ while getopts "h?ipc:C:b:nr:" opt; do
     p)  PUSH=1
         ;;
     r)  REPO="$OPTARG"
+        ;;
+    t)  DRYTAG=1
+        ;;
     esac
 done
 
@@ -64,6 +69,11 @@ run_one () {
     CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
 
     TAG="$REPO:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
+
+    if [ "${DRYTAG}" == "1" ]; then
+        echo $TAG
+        return 0
+    fi
 
     if [ "${BUILD_IMAGE}" == "1" ]; then
         echo "Building $TAG"
