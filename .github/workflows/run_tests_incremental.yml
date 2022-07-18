@@ -1,7 +1,7 @@
 # Syntax reference:
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
-name: Shadow Tests
+name: Shadow Tests Incremental
 permissions: read-all
 
 defaults:
@@ -13,9 +13,16 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize]
-
-env:
-  CARGO_TERM_COLOR: always
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build new Docker images"
+        type: boolean
+        default: false
+      push:
+        description: "Push Docker images"
+        type: boolean
+        default: false
 
 jobs:
   shadow:
@@ -70,18 +77,6 @@ jobs:
             cc: 'clang'
             buildtype: 'debug'
     runs-on: ${{ matrix.vm }}
-    container:
-      image: ${{ matrix.container }}
-      # the default shm-size for ubuntu:18.04, but with the size increased from
-      # 65536k. github's default docker seccomp policy seems to disallow
-      # process_vm_readv and process_vm_writev; disable it altogether. See
-      # https://docs.docker.com/engine/security/seccomp/
-      options: '--shm-size="1g" --security-opt seccomp=unconfined'
-    env:
-      CC: ${{ matrix.cc }}
-      CONTAINER: ${{ matrix.container }}
-      BUILDTYPE: ${{ matrix.buildtype }}
-      RUSTPROFILE: minimal
 
     env:
       # Assign these to env variables rather than using directly inline, to help
@@ -101,34 +96,43 @@ jobs:
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Get month
-        id: get-month
-        run: |
-          echo "::set-output name=month::$(/bin/date -u "+%Y%m")"
-
-      - name: Install dependencies
-        run: |
-          . ci/container_scripts/install_deps.sh
-          . ci/container_scripts/install_extra_deps.sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Restore cargo registry cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          # invalidate the cache once per month
-          key: cargo-registry-${{ steps.get-month.outputs.month }}
-          restore-keys: |
-            cargo-registry-
-
-      - name: Build
-        run: . ci/container_scripts/build_and_install.sh
-
       - name: Test
-        run: . ci/container_scripts/test.sh
+        run: |
+          FLAGS=()
+          FLAGS+=("-c" "${{ matrix.container }}")
+          FLAGS+=("-C" "${{ matrix.cc }}")
+          FLAGS+=("-b" "${{ matrix.buildtype }}")
+
+          # Get the generated tag for the image
+          IMAGETAG=`ci/run.sh -t ${FLAGS[@]}`
+
+          if [ "$INPUTS_BUILD" == "true" ]
+          then
+            # Build the image
+            FLAGS+=("-i")
+
+            # Fetch the base image for the build.
+            # Do this before logging in to avoid charging our account for the pull.
+            docker pull ${{ matrix.container }}
+          else
+            # Ensure the image is actually available
+            if ! docker pull "${IMAGETAG}"
+            then
+              echo "Couldn't pull image; building"
+              FLAGS+=("-i")
+            fi
+          fi
+
+          if [ "$INPUTS_PUSH" == "true" ]
+          then
+            FLAGS+=("-p")
+
+            # Log in so that we can push
+            docker login -u shadowsim --password "${{ secrets.DOCKERHUB_TOKEN }}"
+          fi
+
+          # Run
+          ci/run.sh ${FLAGS[@]}
 
       - name: Compress logs
         if: failure()
