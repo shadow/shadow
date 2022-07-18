@@ -77,7 +77,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         ),
     ];
 
-    // tests to repeat for different socket options
+    // inet-only tests
     for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
@@ -139,6 +139,20 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ]);
+        }
+    }
+
+    // unix-only tests
+    for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET].iter() {
+        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_non_existent_path"),
+                move || test_non_existent_path(sock_type, flag),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
         }
     }
 
@@ -633,6 +647,29 @@ fn test_double_connect(
 
         check_connect_call(&args_2, expected_errno_2)
     })
+}
+
+/// Test connect() to a path that doesn't exist.
+fn test_non_existent_path(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(libc::AF_UNIX, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    const NON_EXISTENT_PATH: &[u8] = b"/asdf/qwerty/y89pq234589oles.sock";
+    let mut path = [0i8; 108];
+    path[..NON_EXISTENT_PATH.len()].copy_from_slice(test_utils::u8_to_i8_slice(NON_EXISTENT_PATH));
+
+    let addr = libc::sockaddr_un {
+        sun_family: libc::AF_UNIX as u16,
+        sun_path: path,
+    };
+
+    let args = ConnectArguments {
+        fd: fd,
+        addr: Some(SockAddr::Unix(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+
+    test_utils::run_and_close_fds(&[fd], || check_connect_call(&args, Some(libc::ENOENT)))
 }
 
 /// Test connect() when the server queue is full, and for blocking sockets that an accept() unblocks
