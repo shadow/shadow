@@ -173,7 +173,7 @@ EOF
     CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
-         && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
+         && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
          && echo '' \
          && ci/container_scripts/build_and_install.sh \
          && ci/container_scripts/test.sh")"
