@@ -143,6 +143,12 @@ EOF
     RV=0
     docker start --attach "${CONTAINER_ID}" || RV=$?
 
+    # On failure, copy build directory out of container
+    if [ "$RV" != 0 ]
+    then
+        docker cp "${CONTAINER_ID}":/root/shadow/build ./ci/
+    fi
+
     # Remove the container, even if it failed
     echo -n "Removing container: "
     docker rm -f "${CONTAINER_ID}"

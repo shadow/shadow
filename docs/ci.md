@@ -31,6 +31,9 @@ with the clang compiler in debug mode:
 ci/run.sh -c ubuntu:18.04 -C clang -b debug"
 ```
 
+If the tests fail, shadow's build directory, including test outputs, will be copied
+from the ephemeral Docker container into `ci/build`.
+
 For additional options, run `ci/run.sh -h`.
 
 ## Debugging locally

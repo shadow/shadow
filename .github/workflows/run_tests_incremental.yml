@@ -138,19 +138,19 @@ jobs:
         if: failure()
         run: |
           shopt -s globstar
-          tar -cJf build/Testing/Temporary{.tar.xz,/}
-          for f in build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+          tar -cJf ci/build/Testing/Temporary{.tar.xz,/}
+          for f in ci/build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-data-dirs
-          path: build/**/*.data.tar.xz
+          path: ci/build/**/*.data.tar.xz
 
       - name: Upload shadow log file
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-log-file
-          path: build/Testing/Temporary.tar.xz
+          path: ci/build/Testing/Temporary.tar.xz
