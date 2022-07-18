@@ -1099,8 +1099,8 @@ impl Protocol for ConnOrientedInitial {
 
         // look up the server socket
         let server = match lookup_address(&common.namespace.borrow(), common.socket_type, addr) {
-            Some(x) => x,
-            None => return (self.into(), Err(Errno::ECONNREFUSED.into())),
+            Ok(x) => x,
+            Err(e) => return (self.into(), Err(e.into())),
         };
 
         // need to tell the server to queue a new child socket, and then link the current socket
@@ -1764,8 +1764,8 @@ impl Protocol for ConnLessInitial {
 
         // find the socket bound at the address
         let peer = match lookup_address(&common.namespace.borrow(), common.socket_type, addr) {
-            Some(x) => x,
-            None => return (self.into(), Err(Errno::ECONNREFUSED.into())),
+            Ok(x) => x,
+            Err(e) => return (self.into(), Err(e.into())),
         };
 
         let new_state = Self {
@@ -1971,15 +1971,10 @@ impl UnixSocketCommon {
             Some(ref x) => Arc::clone(x),
             None => {
                 // look up the socket from the address name
-                match lookup_address(&self.namespace.borrow(), self.socket_type, &addr.unwrap()) {
-                    // socket was found with the given name
-                    Some(ref recv_socket) => {
-                        // store an Arc of the recv buffer
-                        Arc::clone(recv_socket)
-                    }
-                    // no socket has the given name
-                    None => return Err(Errno::ECONNREFUSED.into()),
-                }
+                let recv_socket =
+                    lookup_address(&self.namespace.borrow(), self.socket_type, &addr.unwrap())?;
+                // store an Arc of the recv buffer
+                Arc::clone(&recv_socket)
             }
         };
 
@@ -2130,14 +2125,16 @@ fn lookup_address(
     namespace: &AbstractUnixNamespace,
     socket_type: UnixSocketType,
     addr: &nix::sys::socket::UnixAddr,
-) -> Option<Arc<AtomicRefCell<UnixSocket>>> {
+) -> Result<Arc<AtomicRefCell<UnixSocket>>, nix::errno::Errno> {
     // if an abstract address
     if let Some(name) = addr.as_abstract() {
         // look up the socket from the address name
-        namespace.lookup(socket_type, name)
+        namespace
+            .lookup(socket_type, name)
+            .ok_or(nix::errno::Errno::ECONNREFUSED)
     } else {
         log::warn!("Unix sockets with pathname addresses are not yet supported");
-        None
+        Err(nix::errno::Errno::ENOENT)
     }
 }
 

@@ -166,7 +166,7 @@ bool addrinfo_equals(const struct addrinfo* lhs, const struct addrinfo* rhs) {
             printf("Expected: %s ; Got: %s ; errno: %s\n",                                         \
                    getaddrinfo_rv_string(buf1_##__LINE__, expected),                               \
                    getaddrinfo_rv_string(buf2_##__LINE__, rv##__LINE__),                           \
-                   (rv##__LINE__ == EAI_SERVICE) ? strerror(errno) : "N/A");                       \
+                   (rv##__LINE__ == EAI_SYSTEM) ? strerror(errno) : "N/A");                        \
             g_test_fail();                                                                         \
         }                                                                                          \
     }
