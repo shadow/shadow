@@ -56,13 +56,14 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
         //
         // getaddrinfo(3): "EAI_SYSTEM: Other system error, check errno for
         // details."
-        if (rv == EBADF) {
+        if (rv == EBADF || rv == ENOENT) {
             // In cases where libc wasn't able to connect to a local resolver
             // (which is expected under Shadow), and the service wasn't found in
             // /etc/services, some versions of libc return non-zero rv and
-            // errno=EBADF.
+            // errno=EBADF or ENOENT.
             // https://github.com/shadow/shadow/issues/1869
-            warning("Converting EBADF to EAI_SERVICE to work around #1869");
+            // https://github.com/shadow/shadow/issues/2286
+            warning("Converting err %d to EAI_SERVICE to work around #1869 or #2286", rv);
             return EAI_SERVICE;
         }
         errno = rv;
