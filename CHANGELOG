@@ -1,26 +1,3 @@
 A list of user-facing changes since the latest Shadow release.
 
-* We have removed ptrace-mode, and the associated experimental options
-`use-o-n-waitpid-workaround` and `--interpose-method`. ptrace-mode was an
-alternative to Shadow's current interposition mechanism that uses `LD_PRELOAD`
-and `seccomp`. This change should be transparent to most users, since it hasn't
-been the default for several releases, and was only accessible via experimental
-options. See https://github.com/shadow/shadow/issues/1945
-
-* `dup()` and related syscalls are now supported for all file descriptors
-
-* Fixed behavior when multiple threads are blocked in `epoll_wait` on the same epoll
-  file description. https://github.com/shadow/shadow/issues/2260
-
-* Fixed bugs causing `timerfd_settime` to not reset the internal timer's
-  expiration count (https://github.com/shadow/shadow/pull/2279), and not cancel
-  previously scheduled timer-fire events (https://github.com/shadow/shadow/pull/2282).
-
-* Fixed a panic when patching the VDSO in newer kernels, such as those in Ubuntu 22.04.
-  https://github.com/shadow/shadow/issues/2273
-
-* Fixed the errno returned from calling `connect()` on a unix socket. This
-  fixes a `getaddrinfo()` test failure on some systems.
-  https://github.com/shadow/shadow/issues/2286
-
-* Fixed minor memory leaks. https://github.com/shadow/shadow/pull/2249
+* (add entry here)
