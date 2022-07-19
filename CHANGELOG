@@ -18,3 +18,9 @@ options. See https://github.com/shadow/shadow/issues/1945
 
 * Fixed a panic when patching the VDSO in newer kernels, such as those in Ubuntu 22.04.
   https://github.com/shadow/shadow/issues/2273
+
+* Fixed the errno returned from calling `connect()` on a unix socket. This
+  fixes a `getaddrinfo()` test failure on some systems.
+  https://github.com/shadow/shadow/issues/2286
+
+* Fixed minor memory leaks. https://github.com/shadow/shadow/pull/2249
