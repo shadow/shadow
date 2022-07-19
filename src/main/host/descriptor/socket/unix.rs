@@ -1863,12 +1863,8 @@ impl UnixSocketCommon {
     pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
         // check that the CLOSED flag was set by the protocol state
         if !self.state.contains(FileState::CLOSED) {
-            const MSG: &str = "When closing a unix socket, the CLOSED flag was not set";
-
-            log::warn!("{}", MSG);
-
             // set the flag here since we missed doing it before
-            // do this before the conditional panic, otherwise rust gives us warnings
+            // do this before the below panic, otherwise rust gives us warnings
             self.copy_state(
                 /* mask= */ FileState::all(),
                 FileState::CLOSED,
@@ -1876,8 +1872,7 @@ impl UnixSocketCommon {
             );
 
             // panic in debug builds since the backtrace will be helpful for debugging
-            #[cfg(debug_assertions)]
-            panic!("{}", MSG);
+            debug_panic!("When closing a unix socket, the CLOSED flag was not set");
         }
 
         Ok(())

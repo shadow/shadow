@@ -331,13 +331,8 @@ impl Worker {
             SYSCALL_COUNTER.lock().unwrap().add_counter(syscall_counts);
 
             // while we handle this okay, this probably indicates an issue somewhere else in the
-            // code
-            const MSG: &str = "Trying to add syscall counts when there is no worker";
-            log::warn!("{}", MSG);
-
-            // panic only in debug builds
-            #[cfg(debug_assertions)]
-            panic!("{}", MSG);
+            // code so panic only in debug builds
+            debug_panic!("Trying to add syscall counts when there is no worker");
         });
     }
 }

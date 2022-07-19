@@ -1,6 +1,8 @@
 // defines macros, so must be included first
 #[macro_use]
 pub mod enum_passthrough;
+#[macro_use]
+pub mod macros;
 
 pub mod byte_queue;
 pub mod childpid_watcher;

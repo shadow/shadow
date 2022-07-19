@@ -485,22 +485,14 @@ impl OpenFile {
 
             if file.state().contains(FileState::CLOSED) {
                 // panic if debug assertions are enabled
-                #[cfg(debug_assertions)]
-                panic!("Creating an `OpenFile` object for a closed file");
-
-                // otherwise warn only if debug assertions are not enabled
-                #[cfg(not(debug_assertions))]
-                log::warn!("Creating an `OpenFile` object for a closed file");
+                debug_panic!("Creating an `OpenFile` object for a closed file");
             }
 
             if file.has_open_file() {
                 // panic if debug assertions are enabled
-                #[cfg(debug_assertions)]
-                panic!("Creating an `OpenFile` object for a file that already has an `OpenFile` object");
-
-                // otherwise warn only if debug assertions are not enabled
-                #[cfg(not(debug_assertions))]
-                log::warn!("Creating an `OpenFile` object for a file that already has an `OpenFile` object");
+                debug_panic!(
+                    "Creating an `OpenFile` object for a file that already has an `OpenFile` object"
+                );
             }
 
             file.set_has_open_file(true);
