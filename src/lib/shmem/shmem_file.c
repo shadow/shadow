@@ -1,4 +1,4 @@
-#include "main/shmem/shmem_file.h"
+#include "lib/shmem/shmem_file.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "main/shmem/shmem_util.h"
+#include "lib/shmem/shmem_util.h"
 
 // Keep these consistent with cleanup.rs
 static const char* SHADOW_PREFIX = "shadow_shmemfile";
@@ -35,10 +35,9 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
     pid_t pid = getpid();
 
     // If the shmem file name format ever changes, we'll need to update cleanup.rs too.
-    snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
-             "/%s_%llu.%llu%c%" PRId64, SHADOW_PREFIX,
-             (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
-             PID_DELIM, (int64_t)pid);
+    snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes), "/%s_%llu.%llu%c%" PRId64, SHADOW_PREFIX,
+             (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec, PID_DELIM,
+             (int64_t)pid);
 }
 
 static size_t _shmemfile_roundUpToMultiple(size_t x, size_t multiple) {
@@ -46,9 +45,7 @@ static size_t _shmemfile_roundUpToMultiple(size_t x, size_t multiple) {
     return ((x + multiple - 1) / multiple) * multiple;
 }
 
-static size_t _shmemfile_systemPageNBytes() {
-    return (size_t)sysconf(_SC_PAGESIZE);
-}
+static size_t _shmemfile_systemPageNBytes() { return (size_t)sysconf(_SC_PAGESIZE); }
 
 int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
     if (nbytes == 0 || nbytes % _shmemfile_systemPageNBytes() != 0) {
@@ -75,8 +72,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
     if (fd >= 0) {
         int rc = posix_fallocate(fd, 0, nbytes);
         if (rc == 0) {
-            void* p =
-                mmap(NULL, nbytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
             if (p != MAP_FAILED) {
                 shmf->p = p;
@@ -130,8 +126,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
 
     if (fd >= 0) {
 
-        void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE,
-                       MAP_SHARED, fd, 0);
+        void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
         if (p != MAP_FAILED) {
             shmf->p = p;
@@ -176,6 +171,5 @@ int shmemfile_free(ShMemFile* shmf) {
 }
 
 size_t shmemfile_goodSizeNBytes(size_t requested_nbytes) {
-    return _shmemfile_roundUpToMultiple(
-        requested_nbytes, _shmemfile_systemPageNBytes());
+    return _shmemfile_roundUpToMultiple(requested_nbytes, _shmemfile_systemPageNBytes());
 }

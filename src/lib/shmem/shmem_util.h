@@ -6,9 +6,7 @@
 
 /* Intended to be private to shd-shmem-allocator. */
 
-static inline uint32_t shmem_util_uintPow2k(unsigned k) {
-    return (1 << k);
-}
+static inline uint32_t shmem_util_uintPow2k(unsigned k) { return (1 << k); }
 
 static inline uint32_t shmem_util_roundUpPow2(uint32_t x) {
     int pc = __builtin_popcount(x);

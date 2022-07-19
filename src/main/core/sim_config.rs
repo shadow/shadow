@@ -16,7 +16,7 @@ use crate::core::support::configuration::{
 };
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::support::units::{self, Unit};
-use crate::routing::network_graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
+use crate::network::network_graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::tilde_expansion;
 
 /// The simulation configuration after processing the configuration options and network graph.

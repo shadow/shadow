@@ -7,7 +7,7 @@ use crate::core::support::configuration::{
     self, Compression, FileSource, GraphOptions, GraphSource,
 };
 use crate::core::support::{units, units::Unit};
-use crate::routing::petgraph_wrapper::GraphWrapper;
+use crate::network::petgraph_wrapper::GraphWrapper;
 use crate::utility::tilde_expansion;
 
 use anyhow::Context;

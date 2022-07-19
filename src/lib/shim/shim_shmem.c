@@ -8,8 +8,8 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/shim_event.h"
+#include "lib/shmem/shmem_allocator.h"
 #include "main/host/host.h"
-#include "main/shmem/shmem_allocator.h"
 
 struct _ShimHostProtectedSharedMem {
     GQuark host_id;

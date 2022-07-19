@@ -14,7 +14,7 @@ use crate::core::support::configuration::{ConfigOptions, Flatten};
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow as c;
-use crate::routing::network_graph::{IpAssignment, RoutingInfo};
+use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::status_bar::{StatusBar, StatusBarState, StatusPrinter};
 use crate::utility::time::TimeParts;
 

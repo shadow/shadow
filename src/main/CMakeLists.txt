@@ -17,6 +17,7 @@ include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES}
 
 ## link to preload libs (rpath will not contain these paths when shadow is installed)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/shmem)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/injector_preload)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/libc_preload)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/openssl_preload)
@@ -55,20 +56,6 @@ if(SHADOW_COVERAGE STREQUAL ON)
 endif()
 
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
-
-set(SHD_SHMEM_SRC
-    shmem/buddy.c
-    shmem/shmem_allocator.c
-    shmem/shmem_file.c
-    shmem/shmem_util.c)
-
-add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
-target_link_libraries(shadow-shmem INTERFACE logger)
-
-add_executable(shd-shmem-test shmem/shmem_test.c)
-target_link_libraries(shd-shmem-test shadow-shmem
-    ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
-add_test(NAME shmem COMMAND shd-shmem-test)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -185,6 +172,7 @@ set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shim")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shmem")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/openssl_preload")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/tsc")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")

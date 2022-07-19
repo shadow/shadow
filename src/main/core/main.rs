@@ -12,7 +12,7 @@ use crate::core::sim_config::SimConfig;
 use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::shmem::cleanup;
+use crate::utility::shm_cleanup;
 
 /// Main entry point for the simulator.
 pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
@@ -49,7 +49,8 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     if options.shm_cleanup {
         // clean up any orphaned shared memory
-        cleanup::shm_cleanup(cleanup::SHM_DIR_PATH).context("Cleaning shared memory files")?;
+        shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH)
+            .context("Cleaning shared memory files")?;
         std::process::exit(0);
     }
 
@@ -105,7 +106,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // before we run the simulation, clean up any orphaned shared memory
-    if let Err(e) = cleanup::shm_cleanup(cleanup::SHM_DIR_PATH) {
+    if let Err(e) = shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH) {
         log::warn!("Unable to clean up shared memory files: {:?}", e);
     }
 
