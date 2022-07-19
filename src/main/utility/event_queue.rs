@@ -68,13 +68,8 @@ impl std::ops::Drop for EventQueue {
         }
 
         if !self.is_empty() {
-            const MSG: &str = "Dropping EventQueue while it still has events pending.";
-
-            log::warn!("{}", MSG);
-
             // panic in debug builds since the backtrace will be helpful for debugging
-            #[cfg(debug_assertions)]
-            panic!("{}", MSG);
+            debug_panic!("Dropping EventQueue while it still has events pending.");
         }
     }
 }
