@@ -11,7 +11,7 @@ crate-type = ["staticlib"]
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 atomic_refcell = "0.1"
-backtrace = "0.3.65"
+backtrace = "0.3.66"
 bitflags = "1.3"
 # custom version of the bytes crate required to make the 'try_unsplit' method public
 # issue: https://github.com/tokio-rs/bytes/issues/287
