@@ -254,7 +254,7 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread, ShimEv
     worker_setCurrentEmulatedTime(shimTime);
 }
 
-static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
+ShMemBlock* threadpreload_getIPCBlock(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     return &thread->ipc_blk;
 }
@@ -414,8 +414,8 @@ bool threadpreload_isRunning(Thread* base) {
     return thread->isRunning;
 }
 
-static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
-                       PluginPtr ctid, unsigned long newtls, Thread** childp) {
+int threadpreload_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+                        PluginPtr ctid, unsigned long newtls, Thread** childp) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     *childp = threadpreload_new(base->host, base->process, host_getNewProcessID(base->host));
@@ -487,18 +487,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     ThreadPreload* thread = g_new(ThreadPreload, 1);
 
     *thread = (ThreadPreload){
-        .base = thread_create(host, process, threadID, THREADPRELOAD_TYPE_ID,
-                              (ThreadMethods){
-                                  .run = threadpreload_run,
-                                  .resume = threadpreload_resume,
-                                  .handleProcessExit = threadpreload_handleProcessExit,
-                                  .getReturnCode = threadpreload_getReturnCode,
-                                  .isRunning = threadpreload_isRunning,
-                                  .free = threadpreload_free,
-                                  .nativeSyscall = threadpreload_nativeSyscall,
-                                  .clone = _threadpreload_clone,
-                                  .getIPCBlock = _threadpreload_getIPCBlock,
-                              }),
+        .base = thread_create(host, process, threadID, THREADPRELOAD_TYPE_ID),
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 

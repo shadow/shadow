@@ -16,27 +16,12 @@
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
 
-typedef struct _ThreadMethods {
-    pid_t (*run)(Thread* thread, char* pluginPath, char** argv, char** envv,
-                 const char* workingDir);
-    SysCallCondition* (*resume)(Thread* thread);
-    void (*handleProcessExit)(Thread* thread);
-    int (*getReturnCode)(Thread* thread);
-    bool (*isRunning)(Thread* thread);
-    void (*free)(Thread* thread);
-    long (*nativeSyscall)(Thread* thread, long n, va_list args);
-    int (*clone)(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
-                 PluginPtr ctid, unsigned long newtls, Thread** child);
-    ShMemBlock* (*getIPCBlock)(Thread* thread);
-} ThreadMethods;
-
 struct _Thread {
     // For safe down-casting. Set and checked by child class.
     int type_id;
 
     int tid;
 
-    ThreadMethods methods;
     pid_t nativePid;
     pid_t nativeTid;
     Host* host;
@@ -62,6 +47,6 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread thread_create(Host* host, Process* process, int type_id, int threadID,
-                     ThreadMethods methods);
+Thread thread_create(Host* host, Process* process, int type_id, int threadID);
+
 #endif

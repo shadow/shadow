@@ -21,13 +21,12 @@
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
+#include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
 
-Thread thread_create(Host* host, Process* process, int threadID, int type_id,
-                     ThreadMethods methods) {
+Thread thread_create(Host* host, Process* process, int threadID, int type_id) {
     Thread thread = {.type_id = type_id,
-                     .methods = methods,
                      .referenceCount = 1,
                      .host = host,
                      .process = process,
@@ -74,7 +73,7 @@ void thread_unref(Thread* thread) {
     utility_assert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
-        thread->methods.free(thread);
+        threadpreload_free(thread);
         if (thread->process) {
             process_unref(thread->process);
         }
@@ -90,18 +89,16 @@ void thread_unref(Thread* thread) {
 void thread_run(Thread* thread, char* pluginPath, char** argv, char** envv,
                 const char* workingDir) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.run);
 
     _thread_syncAffinityWithWorker(thread);
 
-    thread->nativePid = thread->methods.run(thread, pluginPath, argv, envv, workingDir);
+    thread->nativePid = threadpreload_run(thread, pluginPath, argv, envv, workingDir);
     // In Linux, the PID is equal to the TID of its first thread.
     thread->nativeTid = thread->nativePid;
 }
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.resume);
     _thread_syncAffinityWithWorker(thread);
 
     // Ensure the condition isn't triggered again, but don't clear it yet.
@@ -110,7 +107,7 @@ void thread_resume(Thread* thread) {
         syscallcondition_cancel(thread->cond);
     }
 
-    SysCallCondition* cond = thread->methods.resume(thread);
+    SysCallCondition* cond = threadpreload_resume(thread);
 
     // Now we're done with old condition.
     if (thread->cond) {
@@ -128,24 +125,21 @@ void thread_resume(Thread* thread) {
 void thread_handleProcessExit(Thread* thread) {
     MAGIC_ASSERT(thread);
     _thread_cleanupSysCallCondition(thread);
-    utility_assert(thread->methods.handleProcessExit);
-    thread->methods.handleProcessExit(thread);
+    threadpreload_handleProcessExit(thread);
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReturnCode);
-    return thread->methods.getReturnCode(thread);
+    return threadpreload_getReturnCode(thread);
 }
 
 bool thread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->methods.isRunning(thread);
+    return threadpreload_isRunning(thread);
 }
 
 ShMemBlock* thread_getIPCBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getIPCBlock);
-    return thread->methods.getIPCBlock(thread);
+    return threadpreload_getIPCBlock(thread);
 }
 
 ShMemBlock* thread_getShMBlock(Thread* thread) {
@@ -169,10 +163,9 @@ Host* thread_getHost(Thread* thread) { return thread->host; }
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.nativeSyscall);
     va_list(args);
     va_start(args, n);
-    long rv = thread->methods.nativeSyscall(thread, n, args);
+    long rv = threadpreload_nativeSyscall(thread, n, args);
     va_end(args);
     return rv;
 }
@@ -185,8 +178,7 @@ int thread_getID(Thread* thread) {
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.clone);
-    return thread->methods.clone(thread, flags, child_stack, ptid, ctid, newtls, child);
+    return threadpreload_clone(thread, flags, child_stack, ptid, ctid, newtls, child);
 }
 
 uint32_t thread_getProcessId(Thread* thread) {
