@@ -18,10 +18,10 @@
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"
+#include "main/host/managed_thread.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
-#include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
 

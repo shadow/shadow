@@ -1,11 +1,11 @@
-#include "main/host/thread_preload.h"
+#include "main/host/managed_thread.h"
 
-#include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
 #include <sched.h>
 #include <search.h>
+#include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -438,7 +438,8 @@ int managedthread_clone(Thread* base, unsigned long flags, PluginPtr child_stack
     utility_assert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
-    pid_t childNativeTid = thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
+    pid_t childNativeTid =
+        thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
     if (childNativeTid < 0) {
         trace("native clone failed %d(%s)", childNativeTid, strerror(-childNativeTid));
         thread_unref(*childp);
@@ -448,7 +449,7 @@ int managedthread_clone(Thread* base, unsigned long flags, PluginPtr child_stack
     trace("native clone created tid %d", childNativeTid);
     child->base.nativePid = base->nativePid;
     child->base.nativeTid = childNativeTid;
-    
+
     // Child is now ready to start.
     child->currentEvent.event_id = SHD_SHIM_EVENT_START;
     child->isRunning = 1;

@@ -1,5 +1,5 @@
-#ifndef SRC_MAIN_HOST_SHD_THREAD_PRELOAD_H_
-#define SRC_MAIN_HOST_SHD_THREAD_PRELOAD_H_
+#ifndef SRC_MAIN_HOST_SHD_MANAGED_THREAD_H
+#define SRC_MAIN_HOST_SHD_MANAGED_THREAD_H
 
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
@@ -20,4 +20,4 @@ long managedthread_nativeSyscall(Thread* base, long n, va_list args);
 int managedthread_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                         PluginPtr ctid, unsigned long newtls, Thread** childp);
 
-#endif // SRC_MAIN_HOST_SHD_THREAD_PRELOAD_H_
+#endif // SRC_MAIN_HOST_SHD_MANAGED_THREAD_H
