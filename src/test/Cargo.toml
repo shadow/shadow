@@ -160,7 +160,7 @@ path = "itimer/test_itimer.rs"
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 libc = "0.2"
-nix = "0.24.1"
+nix = "0.24.2"
 rand = { version="0.8.5", features=["small_rng"] }
 signal-hook = "0.3.14"
 once_cell = "1.13.0"
