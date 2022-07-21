@@ -6,7 +6,7 @@ updates:
   - package-ecosystem: 'cargo'
     directory: '/src'
     schedule:
-      interval: 'daily'
+      interval: 'monthly'
     target-branch: 'main'
     # don't auto-rebase, otherwise dependabot will rebase several PRs at once
     # and create many hours of unnecessary workflow runs
