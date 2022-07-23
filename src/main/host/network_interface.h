@@ -24,10 +24,6 @@ NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwD
                                        QDiscMode qdisc, guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
-Address* networkinterface_getAddress(NetworkInterface* interface);
-guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface);
-guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface);
-
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
 

@@ -166,6 +166,16 @@ Host* host_new(const HostParameters* params) {
     return host;
 }
 
+uint64_t host_get_bw_down_kiBps(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->params.requestedBwDownBits / (8 * 1024);
+}
+
+uint64_t host_get_bw_up_kiBps(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->params.requestedBwUpBits / (8 * 1024);
+}
+
 /* this function is called by manager before the workers exist */
 void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
@@ -207,8 +217,8 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
     host->futexTable = futextable_new();
 
     /* shadow uses values in KiB/s, but the config uses b/s */
-    guint64 bwDownKiBps = host->params.requestedBwDownBits / (8 * 1024);
-    guint64 bwUpKiBps = host->params.requestedBwUpBits / (8 * 1024);
+    guint64 bwDownKiBps = host_get_bw_down_kiBps(host);
+    guint64 bwUpKiBps = host_get_bw_up_kiBps(host);
 
     char* pcapDir = NULL;
     if (host->params.pcapDir != NULL) {

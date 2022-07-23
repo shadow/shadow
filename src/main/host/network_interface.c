@@ -225,33 +225,6 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
           _networkinterface_getRefillInterval());
 }
 
-Address* networkinterface_getAddress(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-    return interface->address;
-}
-
-guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-
-    SimulationTime timeFactor =
-        SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
-    guint64 bytesPerSecond = ((guint64)interface->sendBucket.bytesRefill) * ((guint64)timeFactor);
-    guint64 kibPerSecond = bytesPerSecond / 1024;
-
-    return (guint32)kibPerSecond;
-}
-
-guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-
-    SimulationTime timeFactor =
-        SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
-    guint64 bytesPerSecond = ((guint64)interface->receiveBucket.bytesRefill) * ((guint64)timeFactor);
-    guint64 kibPerSecond = bytesPerSecond / 1024;
-
-    return (guint32)kibPerSecond;
-}
-
 static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
         ProtocolType type, in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
