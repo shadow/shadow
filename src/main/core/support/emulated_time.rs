@@ -68,7 +68,7 @@ impl EmulatedTime {
         SimulationTime::from_c_simtime(d)
     }
 
-    /// Returns the duration since `earlier`, or `None` if `earlier` is after `self`.
+    /// Returns the duration since `earlier`, or 0 if `earlier` is after `self`.
     pub fn saturating_duration_since(&self, earlier: &EmulatedTime) -> SimulationTime {
         self.checked_duration_since(earlier)
             .unwrap_or(SimulationTime::ZERO)
