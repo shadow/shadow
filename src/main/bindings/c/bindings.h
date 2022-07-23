@@ -136,6 +136,8 @@ typedef struct TaskRef TaskRef;
 
 typedef struct Timer Timer;
 
+typedef struct TokenBucket TokenBucket;
+
 typedef uint64_t WatchHandle;
 
 typedef uint32_t HostId;
@@ -892,5 +894,16 @@ void routinginfo_incrementPacketCount(struct RoutingInfo_u32 *routing_info,
                                       in_addr_t dst);
 
 uint64_t routinginfo_smallestLatencyNs(struct RoutingInfo_u32 *routing_info);
+
+struct TokenBucket *tokenbucket_new(uint64_t capacity,
+                                    uint64_t refill_size,
+                                    uint64_t refill_interval_nanos);
+
+void tokenbucket_free(struct TokenBucket *tokenbucket_ptr);
+
+void tokenbucket_consume(struct TokenBucket *tokenbucket_ptr,
+                         uint64_t count,
+                         uint64_t *remaining_tokens,
+                         uint64_t *nanos_until_refill);
 
 #endif /* main_bindings_h */
