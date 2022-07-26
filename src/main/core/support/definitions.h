@@ -171,11 +171,6 @@ typedef guint64 EmulatedTime;
 #define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
 
 /**
- * Default ethernetv2 header size in bytes.
- */
-#define CONFIG_HEADER_SIZE_ETH 14
-
-/**
  * Default IP header size in bytes.
  */
 #define CONFIG_HEADER_SIZE_IP 20
