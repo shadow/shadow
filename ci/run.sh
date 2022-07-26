@@ -9,11 +9,9 @@ BUILD_IMAGES=0
 CONTAINERS=(
     ubuntu:18.04
     ubuntu:20.04
-    ubuntu:21.10
     ubuntu:22.04
     debian:10-slim
     debian:11-slim
-    fedora:34
     fedora:35
     fedora:36
     quay.io/centos/centos:stream8
