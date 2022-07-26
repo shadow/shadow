@@ -203,6 +203,11 @@ typedef guint64 EmulatedTime;
 #define CONFIG_MTU 1500
 
 /**
+ * Maximum segment size of a TCP payload, not counting the IP or TCP header
+ */
+#define CONFIG_TCP_MAX_SEGMENT_SIZE (CONFIG_MTU-CONFIG_HEADER_SIZE_TCPIP)
+
+/**
  * Maximum size of a datagram we are allowed to send out over the network
  */
 #define CONFIG_DATAGRAM_MAX_SIZE 65507
