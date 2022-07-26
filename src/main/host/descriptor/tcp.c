@@ -1550,10 +1550,8 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 //  tcpinfo->tcpi_rto;
 //  tcpinfo->tcpi_ato;
-    tcpinfo->tcpi_snd_mss =
-        (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
-    tcpinfo->tcpi_rcv_mss =
-        (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
+    tcpinfo->tcpi_snd_mss = (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
+    tcpinfo->tcpi_rcv_mss = (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
 
     tcpinfo->tcpi_unacked = (u_int32_t)(tcp->send.next - tcp->send.unacked);
 //  tcpinfo->tcpi_sacked;
@@ -1579,9 +1577,8 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_rttvar = (u_int32_t)tcp->timing.rttVariance;
     tcpinfo->tcpi_snd_ssthresh = (u_int32_t)tcp->cong.hooks->tcp_cong_ssthresh(tcp);
     tcpinfo->tcpi_snd_cwnd = (u_int32_t)tcp->cong.cwnd;
-    tcpinfo->tcpi_advmss =
-        (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
-//  tcpinfo->tcpi_reordering;
+    tcpinfo->tcpi_advmss = (u_int32_t)CONFIG_TCP_MAX_SEGMENT_SIZE;
+    //  tcpinfo->tcpi_reordering;
 
     tcpinfo->tcpi_rcv_rtt = (u_int32_t)tcp->info.rtt;
     tcpinfo->tcpi_rcv_space = (u_int32_t)tcp->receive.window;

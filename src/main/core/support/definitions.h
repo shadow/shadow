@@ -189,13 +189,13 @@ typedef guint64 EmulatedTime;
  * Header size in bytes of a routable packet with UDP encapsulation; includes
  * the IP and UDP headers but excludes the ethernet header and packet payload.
  */
-#define CONFIG_HEADER_SIZE_UDPIP (CONFIG_HEADER_SIZE_UDP+CONFIG_HEADER_SIZE_IP)
+#define CONFIG_HEADER_SIZE_UDPIP (CONFIG_HEADER_SIZE_UDP + CONFIG_HEADER_SIZE_IP)
 
 /**
  * Header size in bytes of a routable packet with TCP encapsulation; includes
  * the IP and TCP headers but excludes the ethernet header and packet payload.
  */
-#define CONFIG_HEADER_SIZE_TCPIP (CONFIG_HEADER_SIZE_TCP+CONFIG_HEADER_SIZE_IP)
+#define CONFIG_HEADER_SIZE_TCPIP (CONFIG_HEADER_SIZE_TCP + CONFIG_HEADER_SIZE_IP)
 
 /**
  * Maximum size of an IP packet without fragmenting over Ethernetv2
@@ -205,7 +205,7 @@ typedef guint64 EmulatedTime;
 /**
  * Maximum segment size of a TCP payload, not counting the IP or TCP header
  */
-#define CONFIG_TCP_MAX_SEGMENT_SIZE (CONFIG_MTU-CONFIG_HEADER_SIZE_TCPIP)
+#define CONFIG_TCP_MAX_SEGMENT_SIZE (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIP)
 
 /**
  * Maximum size of a datagram we are allowed to send out over the network
