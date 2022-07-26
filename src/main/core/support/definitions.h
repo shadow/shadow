@@ -171,24 +171,36 @@ typedef guint64 EmulatedTime;
 #define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
 
 /**
- * Header size of an ethernet frame
- * Measured using wireshark on normal traffic.
+ * Default ethernetv2 header size in bytes.
  */
 #define CONFIG_HEADER_SIZE_ETH 14
 
 /**
- * Header size of a packet with UDP encapsulation
- * 20 bytes IP, 8 bytes UDP
- * Measured using wireshark on normal traffic.
+ * Default IP header size in bytes.
  */
-#define CONFIG_HEADER_SIZE_UDPIP 28
+#define CONFIG_HEADER_SIZE_IP 20
 
 /**
- * Header size of a packet with TCP encapsulation
- * 20 bytes IP, 32 bytes TCP
- * Measured using wireshark on normal traffic.
+ * Default UDP header size in bytes.
  */
-#define CONFIG_HEADER_SIZE_TCPIP 52
+#define CONFIG_HEADER_SIZE_UDP 8
+
+/**
+ * Default TCP header size in bytes.
+ */
+#define CONFIG_HEADER_SIZE_TCP 32
+
+/**
+ * Header size in bytes of a routable packet with UDP encapsulation; includes
+ * the IP and UDP headers but excludes the ethernet header and packet payload.
+ */
+#define CONFIG_HEADER_SIZE_UDPIP (CONFIG_HEADER_SIZE_UDP+CONFIG_HEADER_SIZE_IP)
+
+/**
+ * Header size in bytes of a routable packet with TCP encapsulation; includes
+ * the IP and TCP headers but excludes the ethernet header and packet payload.
+ */
+#define CONFIG_HEADER_SIZE_TCPIP (CONFIG_HEADER_SIZE_TCP+CONFIG_HEADER_SIZE_IP)
 
 /**
  * Maximum size of an IP packet without fragmenting over Ethernetv2
