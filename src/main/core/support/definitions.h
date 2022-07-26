@@ -188,7 +188,7 @@ typedef guint64 EmulatedTime;
 /**
  * Default TCP header size in bytes.
  */
-#define CONFIG_HEADER_SIZE_TCP 32
+#define CONFIG_HEADER_SIZE_TCP 20
 
 /**
  * Header size in bytes of a routable packet with UDP encapsulation; includes
