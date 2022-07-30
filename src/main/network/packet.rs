@@ -10,7 +10,7 @@ impl PacketDisplay for *const c::Packet {
         let header_len: u16 = unsafe { c::packet_getHeaderSize(*self) }
             .try_into()
             .unwrap();
-        let payload_len: u16 = unsafe { c::packet_getPayloadLength(*self) }
+        let payload_len: u16 = unsafe { c::packet_getPayloadSize(*self) }
             .try_into()
             .unwrap();
         let protocol = unsafe { c::packet_getProtocol(*self) };
@@ -167,7 +167,7 @@ fn display_udp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
         u16::from_be(unsafe { c::packet_getSourcePort(packet) }).to_be_bytes();
     let dest_port: [u8; 2] =
         u16::from_be(unsafe { c::packet_getDestinationPort(packet) }).to_be_bytes();
-    let udp_len: u16 = u16::try_from(unsafe { c::packet_getPayloadLength(packet) })
+    let udp_len: u16 = u16::try_from(unsafe { c::packet_getPayloadSize(packet) })
         .unwrap()
         .checked_add(8)
         .unwrap();

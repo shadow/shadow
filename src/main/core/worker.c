@@ -564,7 +564,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */
-    if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
+    if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
         worker_updateMinHostRunahead(delay);

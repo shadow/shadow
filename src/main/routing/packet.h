@@ -44,6 +44,7 @@ void packet_unref(Packet* packet);
 static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(packet); }
 
 void packet_setPriority(Packet *packet, double value);
+gdouble packet_getPriority(const Packet* packet);
 
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
@@ -57,9 +58,9 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho);
 
-guint packet_getPayloadLength(const Packet* packet);
-gdouble packet_getPriority(const Packet* packet);
-guint packet_getHeaderSize(const Packet* packet);
+gsize packet_getTotalSize(const Packet* packet);
+gsize packet_getPayloadSize(const Packet* packet);
+gsize packet_getHeaderSize(const Packet* packet);
 
 in_addr_t packet_getDestinationIP(const Packet* packet);
 in_port_t packet_getDestinationPort(const Packet* packet);

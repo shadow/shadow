@@ -322,25 +322,31 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
     header->timestampEcho = timestampEcho;
 }
 
-guint packet_getPayloadLength(const Packet* packet) {
+gsize packet_getTotalSize(const Packet* packet) {
+    MAGIC_ASSERT(packet);
+    return packet_getPayloadSize(packet) + packet_getHeaderSize(packet);
+}
+
+gsize packet_getPayloadSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
     if(packet->payload) {
-        return (guint)payload_getLength(packet->payload);
+        return payload_getLength(packet->payload);
     } else {
         return 0;
     }
 }
 
+gsize packet_getHeaderSize(const Packet* packet) {
+    MAGIC_ASSERT(packet);
+    gsize size = packet->protocol == PUDP   ? CONFIG_HEADER_SIZE_UDPIP
+                 : packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIP
+                                            : 0;
+    return size;
+}
+
 gdouble packet_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
-}
-
-guint packet_getHeaderSize(const Packet* packet) {
-    MAGIC_ASSERT(packet);
-    guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIP :
-            packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIP : 0;
-    return size;
 }
 
 in_addr_t packet_getDestinationIP(const Packet* packet) {
