@@ -38,7 +38,7 @@ static void _routerqueuestatic_free(QueueManagerStatic* queueManager) {
 }
 
 static inline guint64 _routerqueuestatic_getPacketLength(Packet* packet) {
-    return (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+    return (guint64)(packet_getTotalSize(packet));
 }
 
 static gboolean _routerqueuestatic_enqueue(QueueManagerStatic* queueManager, Packet* packet) {

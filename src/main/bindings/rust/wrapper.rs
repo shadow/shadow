@@ -3809,10 +3809,13 @@ fn bindgen_test_layout__PacketTCPHeader() {
     test_field_timestampEcho();
 }
 extern "C" {
-    pub fn packet_getPayloadLength(packet: *const Packet) -> guint;
+    pub fn packet_getTotalSize(packet: *const Packet) -> gsize;
 }
 extern "C" {
-    pub fn packet_getHeaderSize(packet: *const Packet) -> guint;
+    pub fn packet_getPayloadSize(packet: *const Packet) -> gsize;
+}
+extern "C" {
+    pub fn packet_getHeaderSize(packet: *const Packet) -> gsize;
 }
 extern "C" {
     pub fn packet_getDestinationIP(packet: *const Packet) -> in_addr_t;

@@ -452,7 +452,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
             break;
         }
 
-        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+        guint64 length = (guint64)packet_getTotalSize(packet);
 
         _networkinterface_receivePacket(host, interface, packet);
 
@@ -617,7 +617,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
 
         /* successfully sent, calculate how long it took to 'send' this packet */
         if(!bootstrapping) {
-            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+            guint64 length = (guint64)packet_getTotalSize(packet);
             _networkinterface_consumeTokenBucket(&interface->sendBucket,
                                                  length);
             _networkinterface_scheduleNextRefillIfNeeded(interface, src);

@@ -791,7 +791,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
         packet_ref(packet);
 
         /* the packet takes up more space */
-        tcp->throttledOutputLength += packet_getPayloadLength(packet);
+        tcp->throttledOutputLength += packet_getPayloadSize(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
             legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
         }
@@ -809,7 +809,7 @@ static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
         packet_ref(packet);
 
         /* account for the packet length */
-        tcp->unorderedInputLength += packet_getPayloadLength(packet);
+        tcp->unorderedInputLength += packet_getPayloadSize(packet);
 
         packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
     }
@@ -945,7 +945,7 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
 
         packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_RETRANSMIT);
 
-        tcp->retransmit.queueLength += packet_getPayloadLength(packet);
+        tcp->retransmit.queueLength += packet_getPayloadSize(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
             legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
         }
@@ -982,7 +982,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
         key = g_queue_pop_head(keys_sorted);
         Packet* ackedPacket = g_hash_table_lookup(tcp->retransmit.queue, key);
         if (ackedPacket) {
-            tcp->retransmit.queueLength -= packet_getPayloadLength(ackedPacket);
+            tcp->retransmit.queueLength -= packet_getPayloadSize(ackedPacket);
             packet_addDeliveryStatus(ackedPacket, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
             g_hash_table_remove(tcp->retransmit.queue, key);
         }
@@ -1006,7 +1006,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
                                              GINT_TO_POINTER(seq));
 
         if (packet != NULL) {
-            tcp->retransmit.queueLength -= packet_getPayloadLength(packet);
+            tcp->retransmit.queueLength -= packet_getPayloadSize(packet);
             packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
             bool success = g_hash_table_remove(tcp->retransmit.queue,
                                                GINT_TO_POINTER(seq));
@@ -1148,7 +1148,7 @@ static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
     g_hash_table_steal(tcp->retransmit.queue, GINT_TO_POINTER(sequence));
 
     /* update queue length and status */
-    tcp->retransmit.queueLength -= packet_getPayloadLength(packet);
+    tcp->retransmit.queueLength -= packet_getPayloadSize(packet);
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
@@ -1272,7 +1272,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
             break;
         }
 
-        guint length = packet_getPayloadLength(packet);
+        gsize length = packet_getPayloadSize(packet);
         PacketTCPHeader* header = packet_getTCPHeader(packet);
 
         if(length > 0) {
@@ -1326,7 +1326,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
                 tcp->receive.lastSequence = header->sequence;
                 priorityqueue_pop(tcp->unorderedInput);
                 packet_unref(packet);
-                tcp->unorderedInputLength -= packet_getPayloadLength(packet);
+                tcp->unorderedInputLength -= packet_getPayloadSize(packet);
                 (tcp->receive.next)++;
                 continue;
             }
@@ -1739,7 +1739,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
 
     TCPProcessFlags flags = TCP_PF_NONE;
     SimulationTime now = worker_getCurrentSimulationTime();
-    guint packetLength = packet_getPayloadLength(packet);
+    gsize packetLength = packet_getPayloadSize(packet);
 
     /* it has data, check if its in the correct range */
     if(header->sequence >= (tcp->receive.next + tcp->receive.window)) {
@@ -1930,7 +1930,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
     MAGIC_ASSERT(tcp);
 
     /* fetch the TCP info from the packet */
-    guint packetLength = packet_getPayloadLength(packet);
+    gsize packetLength = packet_getPayloadSize(packet);
 
     /* if we run a server, the packet could be for an existing child */
     tcp = _tcp_getSourceTCP(tcp, packet_getSourceIP(packet), packet_getSourcePort(packet));
@@ -2415,8 +2415,8 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
 
     /* check if we have a partial packet waiting to get finished */
     if(remaining > 0 && tcp->partialUserDataPacket) {
-        guint partialLength = packet_getPayloadLength(tcp->partialUserDataPacket);
-        guint partialBytes = partialLength - tcp->partialOffset;
+        gsize partialLength = packet_getPayloadSize(tcp->partialUserDataPacket);
+        gsize partialBytes = partialLength - tcp->partialOffset;
         utility_assert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
@@ -2457,7 +2457,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
             break;
         }
 
-        guint packetLength = packet_getPayloadLength(nextPacket);
+        gsize packetLength = packet_getPayloadSize(nextPacket);
         copyLength = MIN(packetLength, remaining);
         gssize bytesCopied = packet_copyPayload(
             nextPacket, thread, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);

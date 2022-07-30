@@ -188,7 +188,7 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
     }
 
     /* copy lesser of requested and available amount to application buffer */
-    guint packetLength = packet_getPayloadLength(nextPacket);
+    gsize packetLength = packet_getPayloadSize(nextPacket);
     gsize copyLength = MIN(nBytes, packetLength);
     gssize bytesCopied = packet_copyPayload(nextPacket, thread, 0, buffer, copyLength);
     if (bytesCopied < 0) {

@@ -197,8 +197,7 @@ mod export {
 
         let pcap = unsafe { pcap.as_mut() }.unwrap();
 
-        let packet_len = unsafe { c::packet_getHeaderSize(packet) }
-            + unsafe { c::packet_getPayloadLength(packet) };
+        let packet_len: u32 = u32::try_from(unsafe { c::packet_getTotalSize(packet) }).unwrap();
 
         if let Err(e) = pcap.write_packet_fmt(ts_sec, ts_usec, packet_len, |writer| {
             packet.display_bytes(writer)

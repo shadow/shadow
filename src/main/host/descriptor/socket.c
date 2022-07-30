@@ -349,7 +349,7 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet*
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
-    guint length = packet_getPayloadLength(packet);
+    gsize length = packet_getPayloadSize(packet);
     if(length > legacysocket_getInputBufferSpace(socket)) {
         return FALSE;
     }
@@ -382,7 +382,7 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, Host* host) {
     Packet* packet = g_queue_pop_head(socket->inputBuffer);
     if(packet) {
         /* just removed a packet */
-        guint length = packet_getPayloadLength(packet);
+        gsize length = packet_getPayloadSize(packet);
         socket->inputBufferLength -= length;
 
         /* check if we need to reduce the buffer size */
@@ -423,7 +423,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
-    guint length = packet_getPayloadLength(packet);
+    gsize length = packet_getPayloadSize(packet);
     if(length > legacysocket_getOutputBufferSpace(socket)) {
         return FALSE;
     }
@@ -469,7 +469,7 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, Host* host) {
 
     if(packet) {
         /* just removed a packet */
-        guint length = packet_getPayloadLength(packet);
+        gsize length = packet_getPayloadSize(packet);
         socket->outputBufferLength -= length;
 
         /* check if we need to reduce the buffer size */

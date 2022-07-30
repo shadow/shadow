@@ -223,8 +223,8 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socke
     }
 
     gboolean isLocal = packet_getDestinationIP(packet) == htonl(INADDR_LOOPBACK);
-    gsize header = (gsize)packet_getHeaderSize(packet);
-    gsize payload = (gsize)packet_getPayloadLength(packet);
+    gsize header = packet_getHeaderSize(packet);
+    gsize payload = packet_getPayloadSize(packet);
     PacketDeliveryStatusFlags status = packet_getDeliveryStatus(packet);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
@@ -256,8 +256,8 @@ void tracker_addOutputBytes(Tracker* tracker, Packet* packet, LegacySocket* sock
     }
 
     gboolean isLocal = packet_getSourceIP(packet) == htonl(INADDR_LOOPBACK);
-    gsize header = (gsize)packet_getHeaderSize(packet);
-    gsize payload = (gsize)packet_getPayloadLength(packet);
+    gsize header = packet_getHeaderSize(packet);
+    gsize payload = packet_getPayloadSize(packet);
     PacketDeliveryStatusFlags status = packet_getDeliveryStatus(packet);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
