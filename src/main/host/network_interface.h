@@ -19,9 +19,9 @@
 
 typedef struct _NetworkInterface NetworkInterface;
 
-NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwDownKiBps,
-                                       guint64 bwUpKiBps, gchar* pcapDir, guint32 pcapCaptureSize,
-                                       QDiscMode qdisc, guint64 interfaceReceiveLength);
+NetworkInterface* networkinterface_new(Host* host, Address* address, gchar* pcapDir,
+                                       guint32 pcapCaptureSize, QDiscMode qdisc,
+                                       guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
@@ -32,9 +32,9 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 
 void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
                                 const CompatSocket* socket);
-void networkinterface_sent(NetworkInterface* interface);
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host);
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
+                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps);
 
 void networkinterface_setRouter(NetworkInterface* interface, Router* router);
 Router* networkinterface_getRouter(NetworkInterface* interface);

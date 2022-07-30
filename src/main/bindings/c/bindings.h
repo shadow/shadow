@@ -901,7 +901,7 @@ struct TokenBucket *tokenbucket_new(uint64_t capacity,
 
 void tokenbucket_free(struct TokenBucket *tokenbucket_ptr);
 
-void tokenbucket_consume(struct TokenBucket *tokenbucket_ptr,
+bool tokenbucket_consume(struct TokenBucket *tokenbucket_ptr,
                          uint64_t count,
                          uint64_t *remaining_tokens,
                          uint64_t *nanos_until_refill);

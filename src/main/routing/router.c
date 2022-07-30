@@ -130,3 +130,8 @@ Packet* router_dequeue(Router* router) {
 
     return packet;
 }
+
+Packet* router_peek(Router* router) {
+    MAGIC_ASSERT(router);
+    return router->queueHooks->peek(router->queueManager);
+}

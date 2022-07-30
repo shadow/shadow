@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/compat_socket.h"
@@ -27,16 +28,6 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
-
-typedef struct _NetworkInterfaceTokenBucket NetworkInterfaceTokenBucket;
-struct _NetworkInterfaceTokenBucket {
-    /* The maximum number of bytes the bucket can hold */
-    guint64 bytesCapacity;
-    /* The number of bytes remaining in the bucket */
-    guint64 bytesRemaining;
-    /* The number of bytes that get added to the bucket every millisecond */
-    guint64 bytesRefill;
-};
 
 struct _NetworkInterface {
     /* The upstream ISP router connected to this interface.
@@ -59,18 +50,15 @@ struct _NetworkInterface {
 
     /* the outgoing token bucket implements traffic shaping, i.e.,
      * packets are delayed until they conform with outgoing rate limits.*/
-    NetworkInterfaceTokenBucket sendBucket;
+    TokenBucket* tb_send;
+    /* If we have scheduled a send task but it has not yet executed. */
+    bool tb_send_refill_pending;
 
     /* the incoming token bucket implements traffic policing, i.e.,
      * packets that do not conform to incoming rate limits are dropped. */
-    NetworkInterfaceTokenBucket receiveBucket;
-
-    /* Store the time we started refilling our token buckets. This is used to
-     * help us compute when refills should occur following an idle period. */
-    SimulationTime timeStartedRefillingBuckets;
-
-    /* If we have scheduled a refill task but it has not yet executed. */
-    gboolean isRefillPending;
+    TokenBucket* tb_receive;
+    /* If we have scheduled a receive task but it has not yet executed. */
+    bool tb_receive_refill_pending;
 
     /* To support capturing incoming and outgoing packets */
     PcapWriter_BufWriter_File* pcap;
@@ -80,8 +68,6 @@ struct _NetworkInterface {
 
 /* forward declarations */
 static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src);
-static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer interface,
-                                                   gpointer userData);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     utility_assert(taggedSocketPtr != NULL);
@@ -94,135 +80,32 @@ static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     compatsocket_unref(&socket);
 }
 
-static inline SimulationTime _networkinterface_getRefillInterval() {
-    return (SimulationTime) SIMTIME_ONE_MILLISECOND*1;
+static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
+    uint64_t refill_interval_nanos = SIMTIME_ONE_MILLISECOND;
+    uint64_t refill_size = bwKiBps * 1024 / 1000;
+    // CONFIG_MTU ensures we don't "waste" any partial packet byte-chunks we
+    // had left from last round when we do the refill.
+    uint64_t capacity = refill_size + CONFIG_MTU;
+    debug("creating token bucket with capacity=%" G_GUINT64_FORMAT " refill_size=%" G_GUINT64_FORMAT
+          " refill_interval_nanos=%" G_GUINT64_FORMAT,
+          capacity, refill_size, refill_interval_nanos);
+    return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
 }
 
-static inline guint64 _networkinterface_getCapacityFactor() {
-    /* the capacity is this much times the refill rate */
-    return (guint64) 1;
-}
-
-static void _networkinterface_refillTokenBucket(NetworkInterfaceTokenBucket* bucket) {
-    /* We have room to add more tokens. */
-    bucket->bytesRemaining += bucket->bytesRefill;
-    /* Make sure we stay within capacity. */
-    if(bucket->bytesRemaining > bucket->bytesCapacity) {
-        bucket->bytesRemaining = bucket->bytesCapacity;
-    }
-}
-
-static void
-_networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
-                                     guint64 bytesConsumed) {
-    if (bytesConsumed >= bucket->bytesRemaining) {
-        bucket->bytesRemaining = 0;
-    } else {
-        bucket->bytesRemaining -= bytesConsumed;
-    }
-}
-
-static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
-                                                 TaskCallbackFunc func, SimulationTime delay) {
-    TaskRef* refillTask = taskref_new_bound(host_getID(host), func, interface, NULL, NULL, NULL);
-    worker_scheduleTaskWithDelay(refillTask, host, delay);
-    taskref_drop(refillTask);
-    interface->isRefillPending = TRUE;
-}
-
-static void _networkinterface_scheduleNextRefill(NetworkInterface* interface, Host* host) {
-    SimulationTime now = worker_getCurrentSimulationTime();
-    SimulationTime interval = _networkinterface_getRefillInterval();
-
-    /* This computes the time that the next refill should have occurred if we
-     * were to always call the refill function every interval, even though in
-     * practice we stop scheduling refill tasks once we notice we are idle. */
-    SimulationTime offset = now - interface->timeStartedRefillingBuckets;
-    SimulationTime relTimeSincelastRefill = offset % interval;
-    SimulationTime relTimeUntilNextRefill = interval - relTimeSincelastRefill;
-
-    /* call back when we need the next refill */
-    _networkinterface_scheduleRefillTask(
-        interface, host, _networkinterface_refillTokenBucketsCB, relTimeUntilNextRefill);
-}
-
-static gboolean _networkinterface_isRefillNeeded(NetworkInterface* interface) {
-    gboolean sendNeedsRefill = interface->sendBucket.bytesRemaining <
-                               interface->sendBucket.bytesCapacity;
-    gboolean receiveNeedsRefill = interface->receiveBucket.bytesRemaining <
-                                  interface->receiveBucket.bytesCapacity;
-    return (sendNeedsRefill || receiveNeedsRefill) &&
-           !interface->isRefillPending;
-}
-
-static void _networkinterface_scheduleNextRefillIfNeeded(NetworkInterface* interface, Host* host) {
-    if (_networkinterface_isRefillNeeded(interface)) {
-        _networkinterface_scheduleNextRefill(interface, host);
-    }
-}
-
-static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer voidInterface,
-                                                   gpointer userData) {
-    NetworkInterface* interface = voidInterface;
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
+                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps) {
     MAGIC_ASSERT(interface);
+    // /* we only receive packets from an upstream router if we have one (i.e.,
+    //  * if this is not a loopback interface). */
+    // if(interface->router) {
+    //     networkinterface_receivePackets(interface, host);
+    // }
+    // _networkinterface_sendPackets(interface, host);
 
-    /* We no longer have an outstanding event in the event queue. */
-    interface->isRefillPending = FALSE;
-
-    /* Refill the token buckets. */
-    _networkinterface_refillTokenBucket(&interface->receiveBucket);
-    _networkinterface_refillTokenBucket(&interface->sendBucket);
-
-    /* the refill may have caused us to be able to receive and send again.
-     * we only receive packets from an upstream router if we have one (i.e.,
-     * if this is not a loopback interface). */
-    if(interface->router) {
-        networkinterface_receivePackets(interface, host);
-    }
-    _networkinterface_sendPackets(interface, host);
-
-    _networkinterface_scheduleNextRefillIfNeeded(interface, host);
-}
-
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host) {
-    MAGIC_ASSERT(interface);
-
-    interface->timeStartedRefillingBuckets = worker_getCurrentSimulationTime();
-    _networkinterface_refillTokenBucketsCB(host, interface, NULL);
-}
-
-static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
-        guint64 bwDownKiBps, guint64 bwUpKiBps) {
-    MAGIC_ASSERT(interface);
-
-    /* set up the token buckets */
-    g_assert(_networkinterface_getRefillInterval() <= SIMTIME_ONE_SECOND);
-
-    SimulationTime timeFactor =
-        SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
-    guint64 bytesPerIntervalSend = bwUpKiBps * 1024 / timeFactor;
-    guint64 bytesPerIntervalReceive = bwDownKiBps * 1024 / timeFactor;
-
-    interface->receiveBucket.bytesRefill = bytesPerIntervalReceive;
-    interface->sendBucket.bytesRefill = bytesPerIntervalSend;
-
-    /* the CONFIG_MTU parts make sure we don't lose any partial bytes we had left
-     * from last round when we do the refill. */
-
-    guint64 capacityFactor = _networkinterface_getCapacityFactor();
-    interface->sendBucket.bytesCapacity =
-        (interface->sendBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
-    interface->receiveBucket.bytesCapacity =
-        (interface->receiveBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
-
-    debug("interface %s token buckets can send %" G_GUINT64_FORMAT " bytes "
-          "every %" G_GUINT64_FORMAT " nanoseconds",
-          address_toString(interface->address), interface->sendBucket.bytesRefill,
-          _networkinterface_getRefillInterval());
-    debug("interface %s token buckets can receive %" G_GUINT64_FORMAT " bytes "
-          "every %" G_GUINT64_FORMAT " nanoseconds",
-          address_toString(interface->address), interface->receiveBucket.bytesRefill,
-          _networkinterface_getRefillInterval());
+    // Set size and refill rates for token buckets.
+    // This needs to be called when host is booting, i.e. when the worker exists.
+    interface->tb_send = _networkinterface_create_tb(bwUpKiBps);
+    interface->tb_receive = _networkinterface_create_tb(bwDownKiBps);
 }
 
 static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
@@ -338,8 +221,8 @@ static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
-static void _networkinterface_receivePacket(Host* host, NetworkInterface* interface,
-                                            Packet* packet) {
+static void _networkinterface_process_packet_in(Host* host, NetworkInterface* interface,
+                                                Packet* packet) {
     MAGIC_ASSERT(interface);
 
     /* get the next packet */
@@ -400,9 +283,21 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
     }
 }
 
-static void _networkinterface_receivePacketTask(Host* host, gpointer voidInterface,
-                                                gpointer voidPacket) {
-    _networkinterface_receivePacket(host, voidInterface, voidPacket);
+static void _networkinterface_local_packet_arrived_CB(Host* host, gpointer voidInterface,
+                                                      gpointer voidPacket) {
+    _networkinterface_process_packet_in(host, voidInterface, voidPacket);
+}
+
+static uint64_t _networkinterface_packet_tokens(const Packet* packet) {
+    return (uint64_t)packet_getTotalSize(packet);
+}
+
+static void _networkinterface_continue_receiving_CB(Host* host, gpointer voidInterface,
+                                                    gpointer userData) {
+    NetworkInterface* interface = voidInterface;
+    MAGIC_ASSERT(interface);
+    interface->tb_receive_refill_pending = false;
+    networkinterface_receivePackets(interface, host);
 }
 
 void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
@@ -416,28 +311,40 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
     }
 
     /* get the bootstrapping mode */
-    gboolean bootstrapping = worker_isBootstrapActive();
+    gboolean is_bootstrapping = worker_isBootstrapActive();
+    const Packet* peeked_packet = NULL;
 
-    while(bootstrapping || interface->receiveBucket.bytesRemaining >= CONFIG_MTU) {
-        /* we are now the owner of the packet reference from the router */
-        Packet* packet = router_dequeue(interface->router);
-        if(!packet) {
-            break;
+    while ((peeked_packet = router_peek(interface->router))) {
+        // Check if our rate limits allow us to receive the packet.
+        if (!is_bootstrapping) {
+            uint64_t required = _networkinterface_packet_tokens(peeked_packet);
+            uint64_t remaining = 0, next_refill_nanos = 0;
+            if (!tokenbucket_consume(
+                    interface->tb_receive, required, &remaining, &next_refill_nanos)) {
+                // We are rate limited for now, call back when we have more tokens.
+                if (!interface->tb_receive_refill_pending) {
+                    /* Call back when we'll have more receive tokens. */
+                    TaskRef* recv_again =
+                        taskref_new_bound(host_getID(host), _networkinterface_continue_receiving_CB,
+                                          interface, NULL, NULL, NULL);
+                    worker_scheduleTaskWithDelay(
+                        recv_again, host, (SimulationTime)next_refill_nanos);
+                    taskref_drop(recv_again);
+                    interface->tb_receive_refill_pending = true;
+                }
+                return;
+            }
         }
 
-        guint64 length = (guint64)packet_getTotalSize(packet);
+        /* we are now the owner of the packet reference from the router */
+        Packet* packet = router_dequeue(interface->router);
+        // We already peeked it, so it better be here when we pop it.
+        utility_assert(packet);
 
-        _networkinterface_receivePacket(host, interface, packet);
+        _networkinterface_process_packet_in(host, interface, packet);
 
         /* release reference from router */
         packet_unref(packet);
-
-        /* update bandwidth accounting when not in infinite bandwidth mode */
-        if(!bootstrapping) {
-            _networkinterface_consumeTokenBucket(&interface->receiveBucket,
-                                                 length);
-            _networkinterface_scheduleNextRefillIfNeeded(interface, host);
-        }
     }
 }
 
@@ -538,31 +445,91 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
     return packet;
 }
 
+static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, Host* host,
+                                                     LegacySocket** socketOut) {
+    MAGIC_ASSERT(interface);
+    switch (interface->qdisc) {
+        case Q_DISC_MODE_ROUND_ROBIN: {
+            return _networkinterface_selectRoundRobin(interface, host, socketOut);
+        }
+        case Q_DISC_MODE_FIFO:
+        default: {
+            return _networkinterface_selectFirstInFirstOut(interface, host, socketOut);
+        }
+    }
+}
+
+static const Packet* _networkinterface_peek_next_packet_out(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+
+    CompatSocket socket = {0};
+    bool found = false;
+
+    switch (interface->qdisc) {
+        case Q_DISC_MODE_ROUND_ROBIN: {
+            found = rrsocketqueue_peek(&interface->rrQueue, &socket);
+            break;
+        }
+        case Q_DISC_MODE_FIFO:
+        default: {
+            found = fifosocketqueue_peek(&interface->fifoQueue, &socket);
+            break;
+        }
+    }
+
+    if (found) {
+        return compatsocket_peekNextOutPacket(&socket);
+    } else {
+        return NULL;
+    }
+}
+
+static void _networkinterface_continue_sending_CB(Host* host, gpointer voidInterface,
+                                                  gpointer userData) {
+    NetworkInterface* interface = voidInterface;
+    MAGIC_ASSERT(interface);
+    interface->tb_send_refill_pending = false;
+    _networkinterface_sendPackets(interface, host);
+}
+
 static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src) {
     MAGIC_ASSERT(interface);
 
-    gboolean bootstrapping = worker_isBootstrapActive();
+    gboolean is_bootstrapping = worker_isBootstrapActive();
+    const Packet* peeked_packet = NULL;
 
-    /* loop until we find a socket that has something to send */
-    while(interface->sendBucket.bytesRemaining >= CONFIG_MTU) {
+    while ((peeked_packet = _networkinterface_peek_next_packet_out(interface))) {
+        // Local packets arrive on our own interface, they do not go through the
+        // upstream router and do not consume bandwidth.
+        bool is_local =
+            address_toNetworkIP(interface->address) == packet_getDestinationIP(peeked_packet);
+
+        // Check if our rate limits allows us to send the packet.
+        if (!is_bootstrapping && !is_local) {
+            uint64_t required = _networkinterface_packet_tokens(peeked_packet);
+            uint64_t remaining = 0, next_refill_nanos = 0;
+            if (!tokenbucket_consume(
+                    interface->tb_send, required, &remaining, &next_refill_nanos)) {
+                // We are rate limited for now, call back when we have more tokens.
+                if (!interface->tb_send_refill_pending) {
+                    /* Call back when we'll have more send tokens. */
+                    TaskRef* send_again =
+                        taskref_new_bound(host_getID(src), _networkinterface_continue_sending_CB,
+                                          interface, NULL, NULL, NULL);
+                    worker_scheduleTaskWithDelay(
+                        send_again, src, (SimulationTime)next_refill_nanos);
+                    taskref_drop(send_again);
+                    interface->tb_send_refill_pending = true;
+                }
+                return;
+            }
+        }
+
+        // Now actually pop and send the packet.
         LegacySocket* legacySocket = NULL;
-
-        /* choose which packet to send next based on our queuing discipline */
-        Packet* packet;
-        switch(interface->qdisc) {
-            case Q_DISC_MODE_ROUND_ROBIN: {
-                packet = _networkinterface_selectRoundRobin(interface, src, &legacySocket);
-                break;
-            }
-            case Q_DISC_MODE_FIFO:
-            default: {
-                packet = _networkinterface_selectFirstInFirstOut(interface, src, &legacySocket);
-                break;
-            }
-        }
-        if(!packet) {
-            break;
-        }
+        Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &legacySocket);
+        // We already peeked it, so it better be here when we pop it.
+        utility_assert(packet);
 
         packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
 
@@ -572,13 +539,12 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
         }
 
         /* now actually send the packet somewhere */
-        if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
-            /* packet will arrive on our own interface, so it doesn't need to
-             * go through the upstream router and does not consume bandwidth. */
+        if (is_local) {
+            // Arrives directly back on our interface.
             packet_ref(packet);
             TaskRef* packetTask =
-                taskref_new_bound(host_getID(src), _networkinterface_receivePacketTask, interface,
-                                  packet, NULL, packet_unrefTaskFreeFunc);
+                taskref_new_bound(host_getID(src), _networkinterface_local_packet_arrived_CB,
+                                  interface, packet, NULL, packet_unrefTaskFreeFunc);
             worker_scheduleTaskWithDelay(packetTask, src, 1);
             taskref_drop(packetTask);
         } else {
@@ -586,14 +552,6 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
              * if we get here we are not loopback and should have been assigned a router. */
             utility_assert(interface->router);
             router_forward(interface->router, src, packet);
-        }
-
-        /* successfully sent, calculate how long it took to 'send' this packet */
-        if(!bootstrapping) {
-            guint64 length = (guint64)packet_getTotalSize(packet);
-            _networkinterface_consumeTokenBucket(&interface->sendBucket,
-                                                 length);
-            _networkinterface_scheduleNextRefillIfNeeded(interface, src);
         }
 
         Tracker* tracker = host_getTracker(src);
@@ -654,9 +612,9 @@ Router* networkinterface_getRouter(NetworkInterface* interface) {
     return interface->router;
 }
 
-NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwDownKiBps,
-                                       guint64 bwUpKiBps, gchar* pcapDir, guint32 pcapCaptureSize,
-                                       QDiscMode qdisc, guint64 interfaceReceiveLength) {
+NetworkInterface* networkinterface_new(Host* host, Address* address, gchar* pcapDir,
+                                       guint32 pcapCaptureSize, QDiscMode qdisc,
+                                       guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -690,13 +648,9 @@ NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwD
         g_string_free(filename, TRUE);
     }
 
-    /* set size and refill rates for token buckets */
-    _networkinterface_setupTokenBuckets(interface, bwDownKiBps, bwUpKiBps);
-
-    debug("bringing up network interface '%s' at '%s', %" G_GUINT64_FORMAT
-          " KiB/s up and %" G_GUINT64_FORMAT " KiB/s down using queuing discipline %s",
+    debug("bringing up network interface '%s' at '%s' using queuing discipline %s",
           address_toHostName(interface->address), address_toHostIPString(interface->address),
-          bwUpKiBps, bwDownKiBps, interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
+          interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);
     return interface;

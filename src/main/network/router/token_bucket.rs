@@ -31,9 +31,10 @@ impl TokenBucket {
         }
     }
 
-    /// Remove size tokens from the bucket if and only if the bucket contains
-    /// at least size tokens. Returns the updated token balance on success, and
-    /// the duration until the next token refill on error.
+    /// Remove size tokens from the bucket if and only if the bucket contains at
+    /// least size tokens. Returns the updated token balance on success, and the
+    /// duration until the next token refill on error. Passing a 0 size always
+    /// succeeds.
     pub fn comforming_remove(&mut self, size: u64) -> Result<u64, Duration> {
         let next_refill_span = self.lazy_refill();
 
@@ -123,7 +124,7 @@ mod export {
         count: u64,
         remaining_tokens: *mut u64,
         nanos_until_refill: *mut u64,
-    ) {
+    ) -> bool {
         let tokenbucket = unsafe { tokenbucket_ptr.as_mut() }.unwrap();
         let remaining_tokens = unsafe { remaining_tokens.as_mut() }.unwrap();
         let nanos_until_refill = unsafe { nanos_until_refill.as_mut() }.unwrap();
@@ -132,12 +133,14 @@ mod export {
             Ok(remaining) => {
                 *remaining_tokens = remaining;
                 *nanos_until_refill = 0;
+                true
             }
             Err(next_refill_duration) => {
                 *remaining_tokens = 0;
                 *nanos_until_refill = next_refill_duration.as_nanos() as u64;
+                false
             }
-        };
+        }
     }
 }
 
