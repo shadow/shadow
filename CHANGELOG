@@ -1,3 +1,6 @@
 A list of user-facing changes since the latest Shadow release.
 
+* Added latency modeling and potential thread-yield to rdtsc emulation,
+  allowing managed code to avoid deadlock in busy-loops that use only the rdtsc
+  instruction and no syscalls. https://github.com/shadow/shadow/pull/2314
 * (add entry here)
