@@ -24,7 +24,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
@@ -32,7 +32,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
@@ -80,7 +80,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.client.graphml.xml
       start_time: 600
@@ -92,7 +92,7 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
@@ -105,7 +105,7 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
@@ -117,7 +117,7 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
-      # See https://shadow.github.io/docs/guide/libopenblas.html
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torhiddenclient.graphml.xml
       start_time: 1500
