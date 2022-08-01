@@ -13,8 +13,8 @@ libopenblas is a fairly low-level library, and can get pulled in transitively
 via dependencies. e.g., [tgen](https://github.com/shadow/tgen) uses libigraph,
 which links against liblapack, which links against blas.
 
-libopenblas, when compiled with pthread support, uses [busy-loops](#busy-loops)
-in its worker threads.
+libopenblas, when compiled with pthread support, uses
+[busy-loops](limitations.md#busy-loops) in its worker threads.
 
 There are several known workarounds:
 
