@@ -37,6 +37,9 @@ the configuration options for those applications.
 ```yaml
 general:
   stop_time: 10m
+  # Needed to avoid deadlock in some configurations of tgen.
+  # See below.
+  model_unblocked_syscall_latency: true
 
 network:
   graph:
@@ -82,6 +85,9 @@ processes, which is why we specified `../../../tgen.server.graphml.xml` as the
 path to the TGen configuration in our Shadow configuration file
 (`./shadow.data/hosts/server/../../../tgen.server.graphml.xml` →
 `./tgen.server.graphml.xml`).
+
+`model_unblocked_syscall_latency` is used to avoid deadlock in case tgen was
+compiled with [libopenblas](compatibility_notes.md#libopenblas).
 
 ### Configuring TGen
 
