@@ -14,29 +14,25 @@ We also have scripts for running the continuous integration tests locally,
 inside Docker containers. This can be useful for debugging and for quickly
 iterating on a test that's failing in GitHub's test runs.
 
-The [`run.sh`](../ci/run.sh) script builds a Docker images for all
-supported configurations, and runs our tests in them.
+The [`run.sh`](../ci/run.sh) script builds shadow inside a Docker image, and
+runs our tests in it.
 
-On the first invocation you should tell the `run.sh` script to build the images
-using `-i`:
+By default, the script will attempt to use a Docker image with already shadow
+built, perform an incremental build on top of that, and then run shadow's tests.
+If you don't already have a local image, the script will implicitly try to pull
+from the [shadowsim/shadow-ci](https://hub.docker.com/r/shadowsim/shadow-ci) on
+dockerhub. You can override this repo with `-r` or force the script to build a
+new image locally with `-i`.
 
-
-```{.bash}
-sudo ci/run.sh -i
-```
-
-If you wish to only check whether the tests pass or fail, future invocations
-can omit the `-i` option to use the existing image and build/test only the
-incremental changes. None of the test results will be saved in this case, but
-it is much quicker to build.
-
-Note that building all images locally typically takes hours. More often,
-you'll want to only run some smaller set of configurations locally.
-To run only the configurations you specify, use the `-o` flag:
+For example, to perform an incremental build and test on ubuntu 18.04,
+with the clang compiler in debug mode:
 
 ```{.bash}
-sudo ci/run.sh -i -o "ubuntu:18.04;clang;debug fedora:35;gcc;release"
+ci/run.sh -c ubuntu:18.04 -C clang -b debug"
 ```
+
+If the tests fail, shadow's build directory, including test outputs, will be copied
+from the ephemeral Docker container into `ci/build`.
 
 For additional options, run `ci/run.sh -h`.
 
@@ -51,7 +47,7 @@ run an interactive shell in a container built from that image.
 e.g.:
 
 ```{.bash}
-sudo docker run --shm-size=1g -it shadow:centos-8-clang-debug /bin/bash
+docker run --shm-size=1g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:centos-8-clang-debug /bin/bash
 ```
 
 If the failure happened in the middle of building the Docker image, you can do
@@ -59,7 +55,7 @@ the same with the last intermediate layer that was built successfully. e.g.
 given the output:
 
 ```{.bash}
-$ sudo ci/run.sh -i -o "centos:8;clang;debug"
+$ ci/run.sh -i -c centos:8 -C clang -b debug
 <snip>
 Step 13/13 : RUN . ci/container_scripts/build_and_install.sh
  ---> Running in a11c4a554ef8
@@ -71,5 +67,5 @@ You can start a container from the image where Docker tried (and failed) to run
 `ci/the build_and_install.sh` script was executed with:
 
 ```{.bash}
-sudo docker run --shm-size=1g -it a11c4a554ef8 /bin/bash
+docker run --shm-size=1g --security-opt=seccomp=unconfined -it a11c4a554ef8 /bin/bash
 ```
