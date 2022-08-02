@@ -4,117 +4,86 @@
 
 set -euo pipefail
 
-BUILD_IMAGES=0
-
-CONTAINERS=(
-    ubuntu:18.04
-    ubuntu:20.04
-    ubuntu:22.04
-    debian:10-slim
-    debian:11-slim
-    fedora:34
-    fedora:35
-    fedora:36
-    quay.io/centos/centos:stream8
-    )
-
-CCS=(
-    gcc
-    clang
-    )
-
-BUILDTYPES=(
-    debug
-    release
-    )
-
-EXTRAS=("ubuntu:18.04;clang;coverage")
-
+DRYTAG=0
+BUILD_IMAGE=0
+PUSH=0
 NOCACHE=
+REPO=shadowsim/shadow-ci
+
+CONTAINER=ubuntu:18.04
+CC=gcc
+BUILDTYPE=debug
 
 show_help () {
     cat <<EOF
 Usage: $0 ...
   -h
   -?             Show help
-  -i             Build images
-  -c CONTAINERS  Set containers used in test matrix
-  -C CCS         Set C compilers used in test matrix
-  -b BUILDTYPES  Set build-types used in test matrix
-  -e EXTRAS      Set extra configurations to run
-  -o             Set only configurations to run
+  -i             Build image
+  -c CONTAINER   Set container
+  -C CC          Set C compiler
+  -b BUILDTYPE   Set build-types
   -n             nocache when building Docker images
+  -p             push image to dockerhub
+  -r             set Docker repository
+  -t             just get the image tag for the requested configuration
 
-On the first run, you should use the '-i' flag to build the images.
+On the first run, you should use the '-i' flag to build the image.
 
-Run all default configurations:
+Run default configuration:
 
   $0
 
-Run all default configurations, but restrict C compilers to gcc:
-
-  $0 -C gcc
-
-Run all default configurations, but restrict C compilers to gcc,
-and containers to ubuntu:18.04 and fedora:35:
-
-  $0 -C gcc -c "ubuntu:18.04 fedora:35"
-
-Set "extra" configurations to ubuntu:18.04;clang;coverage
-and debian:11-slim;gcc;coverage
-
-  $0 -e "ubuntu:18.04;clang;coverage debian:11-slim;gcc;coverage"
-
-Set *only* configurations to run:
-
-  $0 -o "ubuntu:18.04;clang;coverage debian:11-slim;gcc;coverage"
 EOF
 }
 
-while getopts "h?ic:C:b:e:o:n" opt; do
+while getopts "h?ipc:C:b:nr:t" opt; do
     case "$opt" in
     h|\?)
         show_help
         exit 0
         ;;
-    i)  BUILD_IMAGES=1
+    i)  BUILD_IMAGE=1
         ;;
-    c)  read -ra CONTAINERS <<< "$OPTARG"
+    c)  CONTAINER="$OPTARG"
         ;;
-    C)  read -ra CCS <<< "$OPTARG"
+    C)  CC="$OPTARG"
         ;;
-    b)  read -ra BUILDTYPES <<< "$OPTARG"
-        ;;
-    e)  read -ra EXTRAS <<< "$OPTARG"
-        ;;
-    o)  CONTAINERS=()
-        CCS=()
-        BUILDTYPES=()
-        read -ra EXTRAS <<< "$OPTARG"
+    b)  BUILDTYPE="$OPTARG"
         ;;
     n)  NOCACHE=--no-cache
+        ;;
+    p)  PUSH=1
+        ;;
+    r)  REPO="$OPTARG"
+        ;;
+    t)  DRYTAG=1
         ;;
     esac
 done
 
 run_one () {
-    CONTAINER="$1"
-    CC="$2"
-    BUILDTYPE="$3"
-
     # Replace the single ':' with a '-'
     CONTAINER_FOR_TAG=${CONTAINER/:/-}
     # Replace all forward slashes with '-'
     CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
 
-    TAG="shadow:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
+    TAG="$REPO:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
 
-    if [ "${BUILD_IMAGES}" == "1" ]; then
+    if [ "${DRYTAG}" == "1" ]; then
+        echo $TAG
+        return 0
+    fi
+
+    if [ "${BUILD_IMAGE}" == "1" ]; then
         echo "Building $TAG"
 
         # Build and tag a Docker image with the given configuration.
         docker build -t "$TAG" $NOCACHE -f- . <<EOF
         FROM $CONTAINER
+
+        ENV CARGO_TERM_COLOR=always
+        ENV RUSTPROFILE=minimal
 
         ENV CONTAINER "$CONTAINER"
         SHELL ["/bin/bash", "-c"]
@@ -165,7 +134,7 @@ EOF
     CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
-         && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
+         && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
          && echo '' \
          && ci/container_scripts/build_and_install.sh \
          && ci/container_scripts/test.sh")"
@@ -173,6 +142,12 @@ EOF
     # Start the container (build, install, and test)
     RV=0
     docker start --attach "${CONTAINER_ID}" || RV=$?
+
+    # On failure, copy build directory out of container
+    if [ "$RV" != 0 ]
+    then
+        docker cp "${CONTAINER_ID}":/root/shadow/build ./ci/
+    fi
 
     # Remove the container, even if it failed
     echo -n "Removing container: "
@@ -182,22 +157,10 @@ EOF
         echo "Exiting due to docker container failure (${TAG})"
         exit 1
     fi
+
+    if [ "${PUSH}" == "1" ]; then
+        docker push "${TAG}"
+    fi
 }
 
-# Array indexing follows the syntax of:
-# https://stackoverflow.com/a/61551944
-# to handle potentially empty arrays
-
-for CONTAINER in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-for CC in ${CCS[@]+"${CCS[@]}"}; do
-for BUILDTYPE in ${BUILDTYPES[@]+"${BUILDTYPES[@]}"}; do
-    run_one "$CONTAINER" "$CC" "$BUILDTYPE"
-done
-done
-done
-
-for EXTRA in ${EXTRAS[@]+"${EXTRAS[@]}"}; do
-    # Split on ';'
-    IFS=';' read -ra args <<< "$EXTRA"
-    run_one "${args[0]}" "${args[1]}" "${args[2]}"
-done
+run_one
