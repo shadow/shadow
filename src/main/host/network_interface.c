@@ -83,25 +83,50 @@ static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
 static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
     uint64_t refill_interval_nanos = SIMTIME_ONE_MILLISECOND;
     uint64_t refill_size = bwKiBps * 1024 / 1000;
-    // CONFIG_MTU ensures we don't "waste" any partial packet byte-chunks we
-    // had left from last round when we do the refill.
+
+    // The `CONFIG_MTU` part represents a "burst allowance" which is common in
+    // token buckets. Only the `capacity` of the bucket is increased by
+    // `CONFIG_MTU`, not the `refill_size`. Therefore, the long term rate limit
+    // enforced by the token bucket (configured by `refill_size`) is not
+    // affected much.
+    //
+    // What the burst allowance ensures is that we don't lose tokens that are
+    // unused because we don't fragment packets. If we set the capacity of the
+    // bucket to exactly the refill size (i.e., without the `CONFIG_MTU` burst
+    // allowance) and there are only 1499 tokens left in this sending round, a
+    // full packet would not fit. The next time the bucket refills, it adds
+    // `refill_size` tokens but in doing so 1499 tokens would fall over the top
+    // of the bucket; these tokens would represent wasted bandwidth, and could
+    // potentially accumulate in every refill interval leading to a
+    // significantly lower achievable bandwidth.
+    //
+    // A downside of the `CONFIG_MTU` burst allowance is that the sending rate
+    // could possibly become "bursty" with a behavior such as:
+    // - interval 1: send `refill_size` + `CONFIG_MTU` bytes, sending over the
+    //   allowance by 1500 bytes
+    // - refill: `refill_size` token gets added to the bucket
+    // - interval 2: send `refill_size` - `CONFIG_MTU` bytes, sending under the
+    //   allowance by 1500 bytes
+    // - refill: `refill_size` token gets added to the bucket
+    // - interval 3: send `refill_size` + `CONFIG_MTU` bytes, sending over the
+    //   allowance by 1500 bytes
+    // - repeat
+    //
+    // So it could become less smooth and more "bursty" even though the long
+    // term average is maintained. But I don't think this would happen much in
+    // practice, and we are batching sends for performance reasons.
     uint64_t capacity = refill_size + CONFIG_MTU;
+
     debug("creating token bucket with capacity=%" G_GUINT64_FORMAT " refill_size=%" G_GUINT64_FORMAT
           " refill_interval_nanos=%" G_GUINT64_FORMAT,
           capacity, refill_size, refill_interval_nanos);
+
     return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
 }
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
                                                  uint64_t bwDownKiBps, uint64_t bwUpKiBps) {
     MAGIC_ASSERT(interface);
-    // /* we only receive packets from an upstream router if we have one (i.e.,
-    //  * if this is not a loopback interface). */
-    // if(interface->router) {
-    //     networkinterface_receivePackets(interface, host);
-    // }
-    // _networkinterface_sendPackets(interface, host);
-
     // Set size and refill rates for token buckets.
     // This needs to be called when host is booting, i.e. when the worker exists.
     interface->tb_send = _networkinterface_create_tb(bwUpKiBps);
