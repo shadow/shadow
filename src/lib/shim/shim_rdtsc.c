@@ -19,9 +19,28 @@
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
 
+static uint64_t _shim_rdtsc_nanos(bool allowNative) {
+    if (allowNative) {
+        // To handle this correctly, we'd need to execute a real rdtsc
+        // instruction. To do that, we'd need to temporarily allow
+        // native rdtsc.  I *think* it's not that hard to implement, but
+        // could add a bit of overhead.  Better to notice if we're using
+        // rdtsc and avoid it if possible.
+        panic("Native rdtsc unimplemented.")
+    }
+    struct timespec t = {0};
+    // *don't* directly call shim_sys_get_simtime_nanos() here.  We need to go
+    // through the syscall code to correctly handle the case where
+    // `model_unblocked_syscall_latency` is enabled.
+    long rv = shim_emulated_syscall(SYS_clock_gettime, CLOCK_REALTIME, &t);
+    if (rv != 0) {
+        panic("emulated SYS_clock_gettime: %s", strerror(-rv));
+    }
+    return (uint64_t)t.tv_nsec + (uint64_t)t.tv_sec * 1000000000;
+}
+
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
     static Tsc tsc;
@@ -54,18 +73,20 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         unsigned char* insn = (unsigned char*)regs[REG_RIP];
         if (isRdtsc(insn)) {
             trace("Emulating rdtsc");
+            uint64_t nanos = _shim_rdtsc_nanos(oldNativeSyscallFlag);
             uint64_t rax, rdx;
             uint64_t rip = regs[REG_RIP];
-            Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, shim_sys_get_simtime_nanos());
+            Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, nanos);
             regs[REG_RDX] = rdx;
             regs[REG_RAX] = rax;
             regs[REG_RIP] = rip;
             handled = true;
         } else if (isRdtscp(insn)) {
             trace("Emulating rdtscp");
+            uint64_t nanos = _shim_rdtsc_nanos(oldNativeSyscallFlag);
             uint64_t rax, rdx, rcx;
             uint64_t rip = regs[REG_RIP];
-            Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, shim_sys_get_simtime_nanos());
+            Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, nanos);
             regs[REG_RDX] = rdx;
             regs[REG_RAX] = rax;
             regs[REG_RCX] = rcx;

@@ -1,3 +1,4 @@
+use core::arch::x86_64::_rdtsc as rdtsc;
 use std::time::{Duration, Instant};
 
 // We've found several real-world examples where the process does a busy wait
@@ -17,6 +18,18 @@ fn test_wait_for_timeout() {
     }
 }
 
+// Same idea as `test_wait_for_timeout`, but for a loop that makes *no* syscalls, only checking the
+// time directly via rdtsc. Regression test for
+// https://github.com/shadow/shadow/discussions/2299#discussioncomment-3198368
+fn test_wait_for_rdtsc_timeout() {
+    let t0 = unsafe { rdtsc() };
+    let target = t0 + 1000;
+    while unsafe { rdtsc() } < target {
+        // wait
+    }
+}
+
 fn main() {
     test_wait_for_timeout();
+    test_wait_for_rdtsc_timeout();
 }
