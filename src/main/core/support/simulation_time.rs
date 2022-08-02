@@ -2,8 +2,8 @@
 Values for working with a simulated duration. Use `EmulatedTime` to represent an instant in time.
 
 In Rust, use `EmulatedTime` to represent an instant in time, or
-[`std::time::Duration`] to represent a time interval. Use `SimulationTime` only
-when interacting with C APIs that use [`c::SimulationTime`].
+`SimulationTime` to represent a time interval. `SimulationTime` is meant to
+replace [`c::SimulationTime`] from the C APIs.
 
 This module contains some identically-named constants defined as C macros in
 `main/core/support/definitions.h`.
@@ -48,6 +48,10 @@ impl SimulationTime {
         }
     }
 
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+
     pub fn as_secs(&self) -> u64 {
         self.0 / SIMTIME_ONE_SECOND
     }
@@ -64,21 +68,51 @@ impl SimulationTime {
         (self.0 / SIMTIME_ONE_NANOSECOND).into()
     }
 
+    pub fn as_nanos_f64(&self) -> f64 {
+        self.as_nanos() as f64
+    }
+
     pub fn checked_add(self, other: Self) -> Option<Self> {
-        let sum = if let Some(s) = self.0.checked_add(other.0) {
-            s
-        } else {
-            return None;
-        };
-        SimulationTime::from_c_simtime(sum)
+        match self.0.checked_add(other.0) {
+            Some(sum) => SimulationTime::from_c_simtime(sum),
+            None => None,
+        }
+    }
+
+    pub fn checked_sub(self, other: Self) -> Option<Self> {
+        match self.0.checked_sub(other.0) {
+            Some(difference) => SimulationTime::from_c_simtime(difference),
+            None => None,
+        }
     }
 
     pub fn checked_mul(self, other: u64) -> Option<Self> {
-        if let Some(product) = self.0.checked_mul(other) {
-            SimulationTime::from_c_simtime(product)
-        } else {
-            None
+        match self.0.checked_mul(other) {
+            Some(product) => SimulationTime::from_c_simtime(product),
+            None => None,
         }
+    }
+
+    pub fn checked_div(self, other: u64) -> Option<Self> {
+        match self.0.checked_div(other) {
+            Some(quotient) => SimulationTime::from_c_simtime(quotient),
+            None => None,
+        }
+    }
+
+    pub fn saturating_add(self, other: Self) -> Self {
+        let sum = self.0.checked_add(other.0).unwrap_or(SIMTIME_MAX);
+        SimulationTime::from_c_simtime(sum).unwrap()
+    }
+
+    pub fn saturating_sub(self, other: Self) -> Self {
+        let difference = self.0.checked_sub(other.0).unwrap_or(SIMTIME_MIN);
+        SimulationTime::from_c_simtime(difference).unwrap()
+    }
+
+    pub fn saturating_mul(self, other: u64) -> Self {
+        let product = self.0.checked_mul(other).unwrap_or(SIMTIME_MAX);
+        SimulationTime::from_c_simtime(product).unwrap()
     }
 
     pub fn try_from_secs(s: u64) -> Option<Self> {
@@ -126,6 +160,22 @@ impl SimulationTime {
     }
 }
 
+impl std::ops::Add<SimulationTime> for SimulationTime {
+    type Output = SimulationTime;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.checked_add(other).unwrap()
+    }
+}
+
+impl std::ops::Sub<SimulationTime> for SimulationTime {
+    type Output = SimulationTime;
+
+    fn sub(self, other: Self) -> Self::Output {
+        self.checked_sub(other).unwrap()
+    }
+}
+
 impl std::ops::Mul<u64> for SimulationTime {
     type Output = SimulationTime;
 
@@ -134,11 +184,11 @@ impl std::ops::Mul<u64> for SimulationTime {
     }
 }
 
-impl std::ops::Add<SimulationTime> for SimulationTime {
+impl std::ops::Div<u64> for SimulationTime {
     type Output = SimulationTime;
 
-    fn add(self, other: Self) -> Self::Output {
-        self.checked_add(other).unwrap()
+    fn div(self, other: u64) -> Self::Output {
+        self.checked_div(other).unwrap()
     }
 }
 
