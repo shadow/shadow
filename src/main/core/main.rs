@@ -62,10 +62,8 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     .into();
 
     // load the configuration yaml
-    let file = std::fs::File::open(&config_filename)
-        .with_context(|| format!("Could not open config file {:?}", &config_filename))?;
-    let config_file: ConfigFileOptions = serde_yaml::from_reader(file)
-        .with_context(|| format!("Could not parse configuration file {:?}", &config_filename))?;
+    let config_file = load_config_file(&config_filename)
+        .with_context(|| format!("Failed to load configuration file {}", config_filename))?;
 
     // generate the final shadow configuration from the config file and cli options
     let shadow_config = ConfigOptions::new(config_file, options.clone());
@@ -179,6 +177,11 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn load_config_file(filename: impl AsRef<std::path::Path>) -> anyhow::Result<ConfigFileOptions> {
+    let file = std::fs::File::open(filename).context("Could not open config file")?;
+    Ok(serde_yaml::from_reader(file).context("Could not parse configuration file")?)
 }
 
 fn pause_for_gdb_attach() -> anyhow::Result<()> {
