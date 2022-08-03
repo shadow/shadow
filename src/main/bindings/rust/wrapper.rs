@@ -2745,6 +2745,12 @@ extern "C" {
     pub fn host_getUpstreamRouter(host: *mut Host, handle: in_addr_t) -> *mut Router;
 }
 extern "C" {
+    pub fn host_get_bw_down_kiBps(host: *mut Host) -> u64;
+}
+extern "C" {
+    pub fn host_get_bw_up_kiBps(host: *mut Host) -> u64;
+}
+extern "C" {
     pub fn host_returnHandleHack(handle: gint);
 }
 extern "C" {

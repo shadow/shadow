@@ -133,4 +133,6 @@ typedef struct TaskRef TaskRef;
 
 typedef struct Timer Timer;
 
+typedef struct TokenBucket TokenBucket;
+
 #endif /* main_opaque_bindings_h */

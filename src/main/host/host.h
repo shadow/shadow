@@ -75,6 +75,9 @@ guint64 host_getConfiguredSendBufSize(Host* host);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 Router* host_getUpstreamRouter(Host* host, in_addr_t handle);
 
+uint64_t host_get_bw_down_kiBps(Host* host);
+uint64_t host_get_bw_up_kiBps(Host* host);
+
 void host_returnHandleHack(gint handle);
 
 Tracker* host_getTracker(Host* host);

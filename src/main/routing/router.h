@@ -48,5 +48,7 @@ void router_forward(Router* router, Host* src, Packet* packet);
 void router_enqueue(Router* router, Host* host, Packet* packet);
 /* dequeue a downstream packet, i.e., receive it from the network */
 Packet* router_dequeue(Router* router);
+/* peek a downstream packet to check the next one we will receive from the network */
+Packet* router_peek(Router* router);
 
 #endif /* SRC_MAIN_ROUTING_SHD_ROUTER_H_ */
