@@ -85,8 +85,8 @@ pub struct ConfigFileOptions {
     pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
-    // note: serde 'with' is incompatible with 'derive(JsonSchema)': https://github.com/GREsau/schemars/issues/89
-    #[serde(with = "serde_with::rust::maps_duplicate_key_is_error")]
+    // since shadow parses to a serde_yaml::Value initially, we don't need to worry about duplicate
+    // hostnames here
     pub hosts: BTreeMap<String, HostOptions>,
 }
 

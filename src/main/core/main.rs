@@ -181,7 +181,21 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
 fn load_config_file(filename: impl AsRef<std::path::Path>) -> anyhow::Result<ConfigFileOptions> {
     let file = std::fs::File::open(filename).context("Could not open config file")?;
-    Ok(serde_yaml::from_reader(file).context("Could not parse configuration file")?)
+
+    // serde's default behaviour is to silently ignore duplicate keys during deserialization so we
+    // would typically need to use serde_with's `maps_duplicate_key_is_error()` on our
+    // 'ConfigFileOptions' struct to prevent duplicate hostnames, but since we deserialize to
+    // serde_yaml's `Value` type initially we don't need to prevent duplicate keys as serde_yaml
+    // does this for us: https://github.com/dtolnay/serde-yaml/pull/301
+
+    let mut config_file: serde_yaml::Value =
+        serde_yaml::from_reader(file).context("Could not parse configuration file as yaml")?;
+
+    config_file
+        .apply_merge()
+        .context("Could not merge '<<' keys")?;
+
+    Ok(serde_yaml::from_value(config_file).context("Could not parse configuration file")?)
 }
 
 fn pause_for_gdb_attach() -> anyhow::Result<()> {

@@ -76,3 +76,36 @@ Acceptable unit *prefixes* are:
 - tebi / Ti
 
 Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbytes`
+
+## YAML Extensions
+
+To help reduce repeated configuration options, Shadow supports the YAML ["merge
+key (`<<`)"](https://yaml.org/type/merge.html) convention. This merges the keys
+of the child mapping into the parent mapping, and is useful when combined with
+[YAML anchors (`&` and `*`)](https://yaml.org/spec/1.2.2/#692-node-anchors).
+
+Example:
+
+```yaml
+general:
+  # --snip--
+
+network:
+  # --snip--
+
+hosts:
+  server:
+    # --snip--
+  client-uk: &client
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/curl
+      args: server --silent
+      start_time: 5
+  client-us:
+    network_node_id: 1
+    <<: *client
+```
+
+For a longer example, see
+https://support.atlassian.com/bitbucket-cloud/docs/yaml-anchors/.
