@@ -104,7 +104,7 @@ jobs:
           FLAGS+=("-b" "${{ matrix.buildtype }}")
 
           # Get the generated tag for the image
-          IMAGETAG=`ci/run.sh -t ${FLAGS[@]}`
+          IMAGETAG=`ci/run.sh -t "${FLAGS[@]}"`
 
           if [ "$INPUTS_BUILD" == "true" ]
           then
@@ -132,7 +132,7 @@ jobs:
           fi
 
           # Run
-          ci/run.sh ${FLAGS[@]}
+          ci/run.sh "${FLAGS[@]}"
 
       - name: Compress logs
         if: failure()
