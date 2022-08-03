@@ -98,6 +98,7 @@ jobs:
 
       - name: Test
         run: |
+          set -x
           FLAGS=()
           FLAGS+=("-c" "${{ matrix.container }}")
           FLAGS+=("-C" "${{ matrix.cc }}")
