@@ -135,23 +135,24 @@ jobs:
           # Run
           ci/run.sh "${FLAGS[@]}"
 
-      - name: Compress logs
-        if: failure()
-        run: |
-          shopt -s globstar
-          tar -cJf ci/build/Testing/Temporary{.tar.xz,/}
-          for f in ci/build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
-
-      - name: Upload shadow data directories
+      - name: Upload build directory
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: shadow-data-dirs
-          path: ci/build/**/*.data.tar.xz
+          name: shadow-build
+          # Mainly we want the data directories, but occasionally
+          # it's useful to examine generated Makefiles, etc.
+          # We omit the Rust build directories (target), because
+          # they tend to be huge (~1 GB).
+          path: |
+            ci/build
+            !**/target
 
+      # Redundant with the build-directory, above, but provides
+      # convenient access.
       - name: Upload shadow log file
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-log-file
-          path: ci/build/Testing/Temporary.tar.xz
+          path: ci/build/Testing/Temporary/LastTest.log
