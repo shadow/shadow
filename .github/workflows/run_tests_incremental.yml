@@ -98,41 +98,8 @@ jobs:
 
       - name: Test
         run: |
-          FLAGS=()
-          FLAGS+=("-c" "${{ matrix.container }}")
-          FLAGS+=("-C" "${{ matrix.cc }}")
-          FLAGS+=("-b" "${{ matrix.buildtype }}")
-
-          # Get the generated tag for the image
-          IMAGETAG=`ci/run.sh -t ${FLAGS[@]}`
-
-          if [ "$INPUTS_BUILD" == "true" ]
-          then
-            # Build the image
-            FLAGS+=("-i")
-
-            # Fetch the base image for the build.
-            # Do this before logging in to avoid charging our account for the pull.
-            docker pull ${{ matrix.container }}
-          else
-            # Ensure the image is actually available
-            if ! docker pull "${IMAGETAG}"
-            then
-              echo "Couldn't pull image; building"
-              FLAGS+=("-i")
-            fi
-          fi
-
-          if [ "$INPUTS_PUSH" == "true" ]
-          then
-            FLAGS+=("-p")
-
-            # Log in so that we can push
-            docker login -u shadowsim --password "${{ secrets.DOCKERHUB_TOKEN }}"
-          fi
-
-          # Run
-          ci/run.sh ${FLAGS[@]}
+          set -x
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | wc -w
 
       - name: Compress logs
         if: failure()
