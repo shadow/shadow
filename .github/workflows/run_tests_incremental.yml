@@ -142,11 +142,13 @@ jobs:
           name: shadow-build
           # Mainly we want the data directories, but occasionally
           # it's useful to examine generated Makefiles, etc.
-          # We omit the Rust build directories (target), because
-          # they tend to be huge (~1 GB).
+          # We omit actual object files and executables, which can
+          # be quite large, especially in debug builds.
           path: |
             ci/build
             !**/target
+            !**/*.o
+            !ci/build/src/main/shadow
 
       # Redundant with the build-directory, above, but provides
       # convenient access.
