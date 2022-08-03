@@ -31,7 +31,8 @@ fn duration_abs_diff(t1: Duration, t0: Duration) -> Duration {
 fn main() {
     sleep_and_test();
     sleep_and_signal_test();
-    println!("Success.");
+    // DO NOT MERGE
+    panic!("fail");
 }
 
 fn sleep_and_test() {
