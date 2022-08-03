@@ -191,9 +191,24 @@ fn load_config_file(filename: impl AsRef<std::path::Path>) -> anyhow::Result<Con
     let mut config_file: serde_yaml::Value =
         serde_yaml::from_reader(file).context("Could not parse configuration file as yaml")?;
 
+    // apply the merge before removing extension fields
     config_file
         .apply_merge()
         .context("Could not merge '<<' keys")?;
+
+    // remove top-level extension fields
+    if let serde_yaml::Value::Mapping(ref mut mapping) = &mut config_file {
+        // remove entries having a key beginning with "x-" (follows docker's convention:
+        // https://docs.docker.com/compose/compose-file/#extension)
+        mapping.retain(|key, _value| {
+            if let serde_yaml::Value::String(key) = key {
+                if key.starts_with("x-") {
+                    return false;
+                }
+            }
+            true
+        });
+    }
 
     Ok(serde_yaml::from_value(config_file).context("Could not parse configuration file")?)
 }

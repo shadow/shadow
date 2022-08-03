@@ -79,6 +79,8 @@ Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbyt
 
 ## YAML Extensions
 
+### Merge/Override Mappings
+
 To help reduce repeated configuration options, Shadow supports the YAML ["merge
 key (`<<`)"](https://yaml.org/type/merge.html) convention. This merges the keys
 of the child mapping into the parent mapping, and is useful when combined with
@@ -109,3 +111,37 @@ hosts:
 
 For a longer example, see
 https://support.atlassian.com/bitbucket-cloud/docs/yaml-anchors/.
+
+### Extension Fields
+
+When using the "merge key" feature above, putting common options in a separate
+configuration fragment may help make the configuration more readable. Shadow
+supports the "extension field" convention used by [Docker
+Compose](https://docs.docker.com/compose/compose-file/compose-file-v3/). Any
+top-level field containing a key that begins with `x-` will be ignored by
+Shadow.
+
+Example:
+
+```yaml
+x-client: &client-defaults
+  processes:
+  - path: /usr/bin/curl
+    args: server --silent
+    start_time: 5
+
+general:
+  # --snip--
+
+network:
+  # --snip--
+
+hosts:
+  server:
+    # --snip--
+  client-uk:
+    network_node_id: 0
+    <<: *client-defaults
+  client-us:
+    network_node_id: 1
+    <<: *client-defaults
