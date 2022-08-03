@@ -68,18 +68,32 @@ impl EmulatedTime {
         SimulationTime::from_c_simtime(d)
     }
 
-    /// Returns the duration since `earlier`, or `None` if `earlier` is after `self`.
+    /// Returns the duration since `earlier`, or 0 if `earlier` is after `self`.
     pub fn saturating_duration_since(&self, earlier: &EmulatedTime) -> SimulationTime {
         self.checked_duration_since(earlier)
             .unwrap_or(SimulationTime::ZERO)
     }
 
-    pub fn checked_add(&self, other: SimulationTime) -> Option<EmulatedTime> {
-        EmulatedTime::from_c_emutime(self.0.checked_add(c::SimulationTime::from(other))?)
+    pub fn checked_add(&self, duration: SimulationTime) -> Option<EmulatedTime> {
+        EmulatedTime::from_c_emutime(self.0.checked_add(c::SimulationTime::from(duration))?)
     }
 
-    pub fn checked_sub(&self, other: SimulationTime) -> Option<EmulatedTime> {
-        EmulatedTime::from_c_emutime(self.0.checked_sub(c::SimulationTime::from(other))?)
+    pub fn checked_sub(&self, duration: SimulationTime) -> Option<EmulatedTime> {
+        EmulatedTime::from_c_emutime(self.0.checked_sub(c::SimulationTime::from(duration))?)
+    }
+
+    pub fn saturating_add(&self, duration: SimulationTime) -> EmulatedTime {
+        match self.checked_add(duration) {
+            Some(later) => later,
+            None => EmulatedTime::MAX,
+        }
+    }
+
+    pub fn saturating_sub(&self, duration: SimulationTime) -> EmulatedTime {
+        match self.checked_sub(duration) {
+            Some(earlier) => earlier,
+            None => EmulatedTime::SIMULATION_START,
+        }
     }
 }
 

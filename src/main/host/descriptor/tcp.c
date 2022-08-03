@@ -455,17 +455,11 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
 }
 
 static gsize _tcp_computeRTTMEM(TCP* tcp, Host* host, gboolean isRMEM) {
-    Address* address = host_getDefaultAddress(host);
-    in_addr_t ip = (in_addr_t)address_toNetworkIP(address);
-
-    NetworkInterface* interface = host_lookupInterface(host, ip);
-    g_assert(interface);
-
     gsize bw_KiBps = 0;
     if(isRMEM) {
-        bw_KiBps = (gsize)networkinterface_getSpeedDownKiBps(interface);
+        bw_KiBps = (gsize)host_get_bw_down_kiBps(host);
     } else {
-        bw_KiBps = (gsize)networkinterface_getSpeedUpKiBps(interface);
+        bw_KiBps = (gsize)host_get_bw_up_kiBps(host);
     }
 
     gsize bw_Bps = bw_KiBps * 1024;

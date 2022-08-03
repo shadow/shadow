@@ -170,7 +170,7 @@ Default: 1
 Type: Integer
 
 How many parallel threads to use to run the simulation. Optimal performance is
-usually obtained with `nproc`, or sometimes `nproc/2` with hyperthreading.
+usually obtained with `nproc`, or sometimes `nproc`/2 with hyperthreading.
 
 Virtual hosts depend on network packets that can potentially arrive from other
 virtual hosts, so each worker can only advance according to the propagation

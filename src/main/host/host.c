@@ -166,6 +166,16 @@ Host* host_new(const HostParameters* params) {
     return host;
 }
 
+uint64_t host_get_bw_down_kiBps(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->params.requestedBwDownBits / (8 * 1024);
+}
+
+uint64_t host_get_bw_up_kiBps(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->params.requestedBwUpBits / (8 * 1024);
+}
+
 /* this function is called by manager before the workers exist */
 void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
@@ -206,10 +216,6 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
 
-    /* shadow uses values in KiB/s, but the config uses b/s */
-    guint64 bwDownKiBps = host->params.requestedBwDownBits / (8 * 1024);
-    guint64 bwUpKiBps = host->params.requestedBwUpBits / (8 * 1024);
-
     char* pcapDir = NULL;
     if (host->params.pcapDir != NULL) {
         if (g_path_is_absolute(host->params.pcapDir)) {
@@ -220,12 +226,12 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
     }
 
     /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback = networkinterface_new(
-        host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, pcapDir, host->params.pcapCaptureSize,
-        host->params.qdisc, host->params.interfaceBufSize);
-    NetworkInterface* ethernet = networkinterface_new(
-        host, ethernetAddress, bwDownKiBps, bwUpKiBps, pcapDir, host->params.pcapCaptureSize,
-        host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* loopback =
+        networkinterface_new(host, loopbackAddress, pcapDir, host->params.pcapCaptureSize,
+                             host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet =
+        networkinterface_new(host, ethernetAddress, pcapDir, host->params.pcapCaptureSize,
+                             host->params.qdisc, host->params.interfaceBufSize);
 
     g_free(pcapDir);
 
@@ -249,9 +255,9 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
          "%" G_GUINT64_FORMAT " cpuFrequency, %" G_GUINT64_FORMAT " cpuThreshold, "
          "%" G_GUINT64_FORMAT " cpuPrecision",
          (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
-         address_toHostIPString(host->defaultAddress), bwUpKiBps, bwDownKiBps,
-         host->params.sendBufSize, host->params.recvBufSize, host->params.cpuFrequency,
-         host->params.cpuThreshold, host->params.cpuPrecision);
+         address_toHostIPString(host->defaultAddress), host_get_bw_up_kiBps(host),
+         host_get_bw_down_kiBps(host), host->params.sendBufSize, host->params.recvBufSize,
+         host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 static void _host_free(Host* host) {
@@ -384,13 +390,16 @@ void host_boot(Host* host) {
     }
 
     /* start refilling the token buckets for all interfaces */
+    guint64 bwDownKiBps = host_get_bw_down_kiBps(host);
+    guint64 bwUpKiBps = host_get_bw_up_kiBps(host);
+
     GHashTableIter iter;
     gpointer key, value;
     g_hash_table_iter_init(&iter, host->interfaces);
 
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         NetworkInterface* interface = value;
-        networkinterface_startRefillingTokenBuckets(interface, host);
+        networkinterface_startRefillingTokenBuckets(interface, host, bwDownKiBps, bwUpKiBps);
     }
 
     /* scheduling the starting and stopping of our virtual processes */
