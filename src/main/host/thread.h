@@ -50,11 +50,11 @@ pid_t thread_getNativeTid(Thread* thread);
 // Returns the Shadow thread id.
 int thread_getID(Thread* thread);
 
-// Create a new child thread as for `clone(2)`. Returns the child pid, or a
-// negative errno.  If the returned pid is >= 0, then `child` will be set to a
-// newly allocated and initialized child Thread. Caller is responsible for
-// adding the Thread to the process and arranging for it to run (typically by
-// calling process_addThread).
+// Create a new child thread as for `clone(2)`. Returns 0 on success, or a
+// negative errno on failure.  On success, `child` will be set to a newly
+// allocated and initialized child Thread. Caller is responsible for adding the
+// Thread to the process and arranging for it to run (typically by calling
+// process_addThread).
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child);
 

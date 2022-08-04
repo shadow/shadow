@@ -17,8 +17,11 @@ int managedthread_getReturnCode(ManagedThread* mthread);
 bool managedthread_isRunning(ManagedThread* mthread);
 ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread);
 long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args);
-int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr child_stack,
-                        PluginPtr ptid, PluginPtr ctid, unsigned long newtls, Thread** childp);
+// Execute a clone syscall in `parent`, and initialize `child` to manage the new
+// native thread.  Returns 0 on success or a negative errno on failure.
+int managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned long flags,
+                        PluginPtr child_stack, PluginPtr ptid, PluginPtr ctid,
+                        unsigned long newtls);
 // XXX Can we avoid exposing these?
 pid_t managedthread_getNativePid(ManagedThread* mthread);
 pid_t managedthread_getNativeTid(ManagedThread* mthread);

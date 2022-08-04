@@ -179,7 +179,16 @@ int thread_getID(Thread* thread) {
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
-    return managedthread_clone(thread->mthread, flags, child_stack, ptid, ctid, newtls, child);
+
+    *child = thread_new(thread->host, thread->process, host_getNewProcessID(thread->host));
+
+    int rv = managedthread_clone(
+        (*child)->mthread, thread->mthread, flags, child_stack, ptid, ctid, newtls);
+    if (rv < 0) {
+        thread_unref(*child);
+        *child = NULL;
+    }
+    return rv;
 }
 
 uint32_t thread_getProcessId(Thread* thread) {

@@ -380,46 +380,42 @@ int managedthread_getReturnCode(ManagedThread* mthread) { return mthread->return
 
 bool managedthread_isRunning(ManagedThread* mthread) { return mthread->isRunning; }
 
-int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr child_stack,
-                        PluginPtr ptid, PluginPtr ctid, unsigned long newtls, Thread** childp) {
-    *childp = thread_new(
-        mthread->base->host, mthread->base->process, host_getNewProcessID(mthread->base->host));
-    ManagedThread* child = ((*childp)->mthread);
+pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned long flags,
+                          PluginPtr child_stack, PluginPtr ptid, PluginPtr ctid,
+                          unsigned long newtls) {
     child->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_assert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
     childpidwatcher_watch(
-        worker_getChildPidWatcher(), mthread->nativePid, _markPluginExited, child->ipc_data);
+        worker_getChildPidWatcher(), parent->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new mthread to use.
-    _managedthread_continuePlugin(mthread, &(ShimEvent){.event_id = SHD_SHIM_EVENT_ADD_THREAD_REQ,
-                                                        .event_data.add_thread_req = {
-                                                            .ipc_block = ipc_blk_serial,
-                                                        }});
+    _managedthread_continuePlugin(parent, &(ShimEvent){.event_id = SHD_SHIM_EVENT_ADD_THREAD_REQ,
+                                                       .event_data.add_thread_req = {
+                                                           .ipc_block = ipc_blk_serial,
+                                                       }});
     ShimEvent response = {0};
-    _managedthread_waitForNextEvent(mthread, &response);
+    _managedthread_waitForNextEvent(parent, &response);
     utility_assert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
     pid_t childNativeTid =
-        thread_nativeSyscall(mthread->base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
+        thread_nativeSyscall(parent->base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
     if (childNativeTid < 0) {
         trace("native clone failed %d(%s)", childNativeTid, strerror(-childNativeTid));
-        thread_unref(*childp);
-        *childp = NULL;
         return childNativeTid;
     }
     trace("native clone created tid %d", childNativeTid);
-    child->nativePid = mthread->nativePid;
+    child->nativePid = parent->nativePid;
     child->nativeTid = childNativeTid;
 
     // Child is now ready to start.
     child->currentEvent.event_id = SHD_SHIM_EVENT_START;
     child->isRunning = 1;
 
-    return childNativeTid;
+    return 0;
 }
 
 long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
