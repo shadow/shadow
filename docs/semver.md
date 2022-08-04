@@ -19,7 +19,7 @@ versions:
   ([`general.data_directory`](shadow_config_spec.html#generaldata_directory))
   will not change.
 - The PID numbering (the values and their order) will not change.
-- Any supported platforms will not be dropped.
+- Any [supported platforms](supported_platforms.html) will not be dropped.
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 
