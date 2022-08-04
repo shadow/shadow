@@ -14,6 +14,9 @@ not ensure that Shadow successfully builds and passes tests on other platforms.
 However, we will review pull requests that allow Shadow to build and run on
 unsupported platforms.
 
+Our policy regarding supported platforms can be found in our ["stability
+guarantees"](semver.md).
+
 ## Docker
 
 If you are installing Shadow within a Docker container, you must increase the

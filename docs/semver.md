@@ -16,10 +16,10 @@ versions:
   backwards-compatible.
 	- Default values for existing options will not change.
 - File and directory names in Shadow's data directory
-  ([`general.data_directory`](shadow_config_spec.html#generaldata_directory))
+  ([`general.data_directory`](shadow_config_spec.md#generaldata_directory))
   will not change.
 - The PID numbering (the values and their order) will not change.
-- Any supported platforms will not be dropped.
+- Any [supported platforms](supported_platforms.md) will not be dropped.
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 
@@ -27,6 +27,6 @@ The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 - Experimental options may change or be removed.
 - The simulation may produce different results.
 - New files may be added in Shadow's data directory
-  ([`general.data_directory`](shadow_config_spec.html#generaldata_directory)).
+  ([`general.data_directory`](shadow_config_spec.md#generaldata_directory)).
 	- If new files are added in Shadow's host-data directories, they will begin
 	  with the prefix `<hostname>.<process name>.<pid>`.
