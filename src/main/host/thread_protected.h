@@ -12,6 +12,7 @@
 
 #include "lib/shim/shim_event.h"
 #include "lib/shmem/shmem_allocator.h"
+#include "main/host/managed_thread.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
@@ -43,6 +44,9 @@ struct _Thread {
     // to AFFINITY_UNINIT if CPU pinning is not enabled or if the thread has
     // not yet been pinned to a CPU.
     int affinity;
+
+    // The native, managed thread
+    ManagedThread* mthread;
 
     MAGIC_DECLARE;
 };

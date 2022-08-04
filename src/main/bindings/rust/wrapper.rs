@@ -1582,6 +1582,13 @@ pub struct _Thread {
 }
 pub type Thread = _Thread;
 extern "C" {
+    pub fn thread_new(
+        host: *mut Host,
+        process: *mut Process,
+        threadID: ::std::os::raw::c_int,
+    ) -> *mut Thread;
+}
+extern "C" {
     pub fn thread_ref(thread: *mut Thread);
 }
 extern "C" {

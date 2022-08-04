@@ -19,6 +19,7 @@ typedef struct _Thread Thread;
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 
+Thread* thread_new(Host* host, Process* process, int threadID);
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 

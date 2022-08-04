@@ -7,17 +7,17 @@
 
 typedef struct _ManagedThread ManagedThread;
 
-Thread* managedthread_new(Host* host, Process* process, gint threadID);
-void managedthread_free(Thread* base);
-pid_t managedthread_run(Thread* base, char* pluginPath, char** argv, char** envv,
+ManagedThread* managedthread_new(Thread* thread);
+void managedthread_free(ManagedThread* mthread);
+pid_t managedthread_run(ManagedThread* methread, char* pluginPath, char** argv, char** envv,
                         const char* workingDir);
-SysCallCondition* managedthread_resume(Thread* base);
-void managedthread_handleProcessExit(Thread* base);
-int managedthread_getReturnCode(Thread* base);
-bool managedthread_isRunning(Thread* base);
-ShMemBlock* managedthread_getIPCBlock(Thread* base);
-long managedthread_nativeSyscall(Thread* base, long n, va_list args);
-int managedthread_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
-                        PluginPtr ctid, unsigned long newtls, Thread** childp);
+SysCallCondition* managedthread_resume(ManagedThread* mthread);
+void managedthread_handleProcessExit(ManagedThread* mthread);
+int managedthread_getReturnCode(ManagedThread* mthread);
+bool managedthread_isRunning(ManagedThread* mthread);
+ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread);
+long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args);
+int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr child_stack,
+                        PluginPtr ptid, PluginPtr ctid, unsigned long newtls, Thread** childp);
 
 #endif // SRC_MAIN_HOST_SHD_MANAGED_THREAD_H

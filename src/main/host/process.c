@@ -556,7 +556,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread* mainThread = managedthread_new(proc->host, proc, tid);
+    Thread* mainThread = thread_new(proc->host, proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
