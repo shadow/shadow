@@ -385,7 +385,6 @@ SchedulerPolicy* schedulerpolicyhostsingle_new() {
     policy->free = _schedulerpolicyhostsingle_free;
 
     policy->data = data;
-    policy->referenceCount = 1;
 
     return policy;
 }

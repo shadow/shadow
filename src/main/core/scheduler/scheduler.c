@@ -51,7 +51,6 @@ struct _Scheduler {
     } currentRound;
 
     /* for memory management */
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -136,9 +135,6 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     scheduler->policy = schedulerpolicyhostsingle_new();
     utility_assert(scheduler->policy);
 
-    /* make sure our ref count is set before starting the threads */
-    scheduler->referenceCount = 1;
-
     info("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
@@ -158,7 +154,7 @@ void scheduler_shutdown(Scheduler* scheduler) {
     workerpool_joinAll(scheduler->workerPool);
 }
 
-static void _scheduler_free(Scheduler* scheduler) {
+void scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
     /* finish cleanup of shadow objects */
@@ -172,24 +168,6 @@ static void _scheduler_free(Scheduler* scheduler) {
 
     MAGIC_CLEAR(scheduler);
     g_free(scheduler);
-}
-
-void scheduler_ref(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    g_mutex_lock(&(scheduler->globalLock));
-    scheduler->referenceCount++;
-    g_mutex_unlock(&(scheduler->globalLock));
-}
-
-void scheduler_unref(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    g_mutex_lock(&(scheduler->globalLock));
-    scheduler->referenceCount--;
-    gboolean shouldFree = (scheduler->referenceCount <= 0) ? TRUE : FALSE;
-    g_mutex_unlock(&(scheduler->globalLock));
-    if(shouldFree) {
-        _scheduler_free(scheduler);
-    }
 }
 
 gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* receiver) {

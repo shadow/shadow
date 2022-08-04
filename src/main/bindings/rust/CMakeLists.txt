@@ -54,7 +54,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "main_.*"
         --whitelist-function "shmemcleanup_tryCleanup"
         --whitelist-function "scanRpathForLib"
-        --whitelist-function "scheduler_(new|unref|addHost|start|finish|shutdown)"
+        --whitelist-function "scheduler_(new|free|addHost|start|finish|shutdown)"
         --whitelist-function "scheduler_(continueNextRound|awaitNextRound)"
         --whitelist-function "runConfigHandlers"
         --whitelist-function "rustlogger_new"

@@ -2834,7 +2834,7 @@ extern "C" {
     ) -> *mut Scheduler;
 }
 extern "C" {
-    pub fn scheduler_unref(arg1: *mut Scheduler);
+    pub fn scheduler_free(arg1: *mut Scheduler);
 }
 extern "C" {
     pub fn scheduler_shutdown(scheduler: *mut Scheduler);
