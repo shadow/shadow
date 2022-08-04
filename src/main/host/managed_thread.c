@@ -202,11 +202,6 @@ void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, ch
     /* append to the env */
     myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipc_blk_buf, TRUE);
 
-    /* Tell the shim in the managed process whether to enable seccomp */
-    if (shimipc_getUseSeccomp()) {
-        myenvv = g_environ_setenv(myenvv, "SHADOW_USE_SECCOMP", "", TRUE);
-    }
-
     // set shadow's PID in the env so the child can run get_ppid
     myenvv = _add_u64_to_env(myenvv, "SHADOW_PID", getpid());
 

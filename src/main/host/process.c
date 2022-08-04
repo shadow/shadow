@@ -1264,22 +1264,6 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
         return;
     }
 
-    if (!shimipc_getUseSeccomp()) {
-        // ~legacy ptrace path. Send a real signal to the process.
-        if (!currentRunningThread) {
-            error("Sending a signal to a process in ptrace-mode is unimplemented. Signal %d to "
-                  "process %d lost.",
-                  siginfo->si_signo, process->processID);
-        } else {
-            long res = thread_nativeSyscall(
-                currentRunningThread, SYS_kill, process->nativePid, siginfo->si_signo);
-            if (res != 0) {
-                error("Sending signal to process: %s", strerror(-res));
-            }
-        }
-        return;
-    }
-
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(process->host), process_getSharedMem(process), siginfo->si_signo);
     if (action.ksa_handler == SIG_IGN ||

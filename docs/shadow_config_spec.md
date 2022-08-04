@@ -92,7 +92,6 @@ hosts:
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
-- [`experimental.use_seccomp`](#experimentaluse_seccomp)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
@@ -546,13 +545,6 @@ Type: Bool
 
 Use shim-side syscall handler to force hot-path syscalls to be handled via an
 inter-process syscall with Shadow.
-
-#### `experimental.use_seccomp`
-
-Default: true
-Type: Bool
-
-Use seccomp to trap syscalls.
 
 #### `experimental.use_syscall_counters`
 

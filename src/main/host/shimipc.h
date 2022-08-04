@@ -17,8 +17,3 @@ bool shimipc_sendExplicitBlockMessageEnabled();
 // Number of iterations to spin when waiting on IPC between Shadow and the shim
 // before blocking.
 ssize_t shimipc_spinMax();
-
-
-// Whether to use a seccomp filter in the shim to catch syscalls that would
-// otherwise not be interposed.
-bool shimipc_getUseSeccomp();
