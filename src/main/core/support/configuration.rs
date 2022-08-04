@@ -344,12 +344,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_dynamic_runahead").unwrap().as_str())]
     pub use_dynamic_runahead: Option<bool>,
 
-    /// The event scheduler's policy for thread synchronization
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "policy")]
-    #[clap(help = EXP_HELP.get("scheduler_policy").unwrap().as_str())]
-    pub scheduler_policy: Option<SchedulerPolicy>,
-
     /// Initial size of the socket's send buffer
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bytes")]
@@ -494,7 +488,6 @@ impl Default for ExperimentalOptions {
                 units::TimePrefix::Milli,
             ))),
             use_dynamic_runahead: Some(false),
-            scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
             socket_send_autotune: Some(true),
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
@@ -660,36 +653,6 @@ impl From<LogLevel> for log::Level {
             LogLevel::Info => log::Level::Info,
             LogLevel::Debug => log::Level::Debug,
             LogLevel::Trace => log::Level::Trace,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum SchedulerPolicy {
-    Host,
-    Steal,
-    Thread,
-    ThreadXThread,
-    ThreadXHost,
-}
-
-impl FromStr for SchedulerPolicy {
-    type Err = serde_yaml::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_yaml::from_str(s)
-    }
-}
-
-impl SchedulerPolicy {
-    pub fn to_c_sched_policy_type(&self) -> c::SchedulerPolicyType {
-        match self {
-            Self::Host => c::SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE,
-            Self::Steal => c::SchedulerPolicyType_SP_PARALLEL_HOST_STEAL,
-            Self::Thread => c::SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE,
-            Self::ThreadXThread => c::SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD,
-            Self::ThreadXHost => c::SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST,
         }
     }
 }

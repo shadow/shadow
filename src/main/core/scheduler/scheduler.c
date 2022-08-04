@@ -35,7 +35,6 @@ struct _Scheduler {
 
     /* the serial/parallel host/thread mapping/scheduling policy */
     SchedulerPolicy* policy;
-    SchedulerPolicyType policyType;
 
     /* we store the hosts here */
     GHashTable* hostIDToHostMap;
@@ -111,8 +110,8 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
 }
 
 Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
-                         const ConfigOptions* config, SchedulerPolicyType policyType,
-                         guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
+                         const ConfigOptions* config, guint nWorkers, guint schedulerSeed,
+                         SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
@@ -132,39 +131,9 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     scheduler->random = random_new(schedulerSeed);
 
     utility_assert(nWorkers >= 1);
-    scheduler->policyType = policyType;
 
     /* create the configured policy to handle queues */
-    switch(scheduler->policyType) {
-        case SP_PARALLEL_HOST_SINGLE: {
-            scheduler->policy = schedulerpolicyhostsingle_new();
-            break;
-        }
-        case SP_PARALLEL_HOST_STEAL: {
-            if (nWorkers > _parallelism) {
-                // Proceeding will cause the scheduler to deadlock, since the
-                // work stealing scheduler threads spin-wait for each-other to
-                // finish.
-                error("Host stealing scheduler is incompatible with --worker_threads > "
-                      "--parallelism");
-                exit(1);
-            }
-            scheduler->policy = schedulerpolicyhoststeal_new();
-            break;
-        }
-        case SP_PARALLEL_THREAD_SINGLE: {
-            scheduler->policy = schedulerpolicythreadsingle_new();
-            break;
-        }
-        case SP_PARALLEL_THREAD_PERTHREAD: {
-            scheduler->policy = schedulerpolicythreadperthread_new();
-            break;
-        }
-        case SP_PARALLEL_THREAD_PERHOST: {
-            scheduler->policy = schedulerpolicythreadperhost_new();
-            break;
-        }
-    }
+    scheduler->policy = schedulerpolicyhostsingle_new();
     utility_assert(scheduler->policy);
 
     /* make sure our ref count is set before starting the threads */
@@ -389,11 +358,6 @@ __attribute__((unused)) static void _scheduler_rebalanceHosts(Scheduler* schedul
     if(hosts) {
         g_queue_free(hosts);
     }
-}
-
-SchedulerPolicyType scheduler_getPolicy(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    return scheduler->policyType;
 }
 
 gboolean scheduler_isRunning(Scheduler* scheduler) {

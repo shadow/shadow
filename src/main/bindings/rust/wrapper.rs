@@ -2834,7 +2834,6 @@ extern "C" {
         controller: *const Controller,
         pidWatcher: *const ChildPidWatcher,
         config: *const ConfigOptions,
-        policyType: SchedulerPolicyType,
         nWorkers: guint,
         schedulerSeed: guint,
         endTime: SimulationTime,
