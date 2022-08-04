@@ -61,11 +61,13 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
     .into();
 
+    // this option is weird since it's a configuration option but we need to read it before merging
+    // with the configuration file
+    let use_extended_yaml = options.experimental.use_extended_yaml.unwrap_or_default();
+
     // load the configuration yaml
-    let file = std::fs::File::open(&config_filename)
-        .with_context(|| format!("Could not open config file {:?}", &config_filename))?;
-    let config_file: ConfigFileOptions = serde_yaml::from_reader(file)
-        .with_context(|| format!("Could not parse configuration file {:?}", &config_filename))?;
+    let config_file = load_config_file(&config_filename, use_extended_yaml)
+        .with_context(|| format!("Failed to load configuration file {}", config_filename))?;
 
     // generate the final shadow configuration from the config file and cli options
     let shadow_config = ConfigOptions::new(config_file, options.clone());
@@ -179,6 +181,45 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn load_config_file(
+    filename: impl AsRef<std::path::Path>,
+    extended_yaml: bool,
+) -> anyhow::Result<ConfigFileOptions> {
+    let file = std::fs::File::open(filename).context("Could not open config file")?;
+
+    // serde's default behaviour is to silently ignore duplicate keys during deserialization so we
+    // would typically need to use serde_with's `maps_duplicate_key_is_error()` on our
+    // 'ConfigFileOptions' struct to prevent duplicate hostnames, but since we deserialize to
+    // serde_yaml's `Value` type initially we don't need to prevent duplicate keys as serde_yaml
+    // does this for us: https://github.com/dtolnay/serde-yaml/pull/301
+
+    let mut config_file: serde_yaml::Value =
+        serde_yaml::from_reader(file).context("Could not parse configuration file as yaml")?;
+
+    if extended_yaml {
+        // apply the merge before removing extension fields
+        config_file
+            .apply_merge()
+            .context("Could not merge '<<' keys")?;
+
+        // remove top-level extension fields
+        if let serde_yaml::Value::Mapping(ref mut mapping) = &mut config_file {
+            // remove entries having a key beginning with "x-" (follows docker's convention:
+            // https://docs.docker.com/compose/compose-file/#extension)
+            mapping.retain(|key, _value| {
+                if let serde_yaml::Value::String(key) = key {
+                    if key.starts_with("x-") {
+                        return false;
+                    }
+                }
+                true
+            });
+        }
+    }
+
+    Ok(serde_yaml::from_value(config_file).context("Could not parse configuration file")?)
 }
 
 fn pause_for_gdb_attach() -> anyhow::Result<()> {

@@ -85,8 +85,8 @@ pub struct ConfigFileOptions {
     pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
-    // note: serde 'with' is incompatible with 'derive(JsonSchema)': https://github.com/GREsau/schemars/issues/89
-    #[serde(with = "serde_with::rust::maps_duplicate_key_is_error")]
+    // since shadow parses to a serde_yaml::Value initially, we don't need to worry about duplicate
+    // hostnames here
     pub hosts: BTreeMap<String, HostOptions>,
 }
 
@@ -449,6 +449,13 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
     pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
+
+    /// Enable extended YAML conventions (merge keys and extension fields). Can only be enabled on
+    /// the command line (enabling in the configuration file is a no-op).
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_extended_yaml").unwrap().as_str())]
+    pub use_extended_yaml: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -500,6 +507,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
+            use_extended_yaml: Some(false),
         }
     }
 }
