@@ -17,6 +17,7 @@
 #include "lib/shim/shim_event.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/worker.h"
+#include "main/host/affinity.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/thread_protected.h"
@@ -36,6 +37,15 @@ struct _ManagedThread {
     struct IPCData* ipc_data;
 
     uint64_t notificationHandle;
+
+    pid_t nativePid;
+    pid_t nativeTid;
+
+    // Value storing the current CPU affinity of the thread (more preceisely,
+    // of the native thread backing this thread object). This value will be set
+    // to AFFINITY_UNINIT if CPU pinning is not enabled or if the thread has
+    // not yet been pinned to a CPU.
+    int affinity;
 };
 
 typedef struct _ShMemWriteBlock {
@@ -43,6 +53,14 @@ typedef struct _ShMemWriteBlock {
     PluginPtr plugin_ptr;
     size_t n;
 } ShMemWriteBlock;
+
+/*
+ * Helper function. Sets the thread's CPU affinity to the worker's affinity.
+ */
+static void _managedthread_syncAffinityWithWorker(ManagedThread* mthread) {
+    mthread->affinity =
+        affinity_setProcessAffinity(mthread->nativeTid, worker_getAffinity(), mthread->affinity);
+}
 
 static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent* event) {
     // We're about to let managed thread execute, so need to release the shared memory lock.
@@ -60,7 +78,7 @@ static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent
 void managedthread_free(ManagedThread* mthread) {
     if (mthread->notificationHandle) {
         childpidwatcher_unwatch(
-            worker_getChildPidWatcher(), mthread->base->nativePid, mthread->notificationHandle);
+            worker_getChildPidWatcher(), mthread->nativePid, mthread->notificationHandle);
         mthread->notificationHandle = 0;
     }
 
@@ -150,7 +168,7 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file, c
 }
 
 static void _managedthread_cleanup(ManagedThread* thread) {
-    trace("child %d exited", thread->base->nativePid);
+    trace("child %d exited", thread->nativePid);
     thread->isRunning = 0;
 
     if (thread->base->sys) {
@@ -164,8 +182,10 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
     ipcData_markPluginExited(ipc);
 }
 
-pid_t managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, char** envv,
-                        const char* workingDir) {
+void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, char** envv,
+                       const char* workingDir) {
+    _managedthread_syncAffinityWithWorker(mthread);
+
     /* set the env for the child */
     gchar** myenvv = g_strdupv(envv);
 
@@ -201,9 +221,11 @@ pid_t managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, c
     g_free(envStr);
     g_free(argStr);
 
-    pid_t child_pid = _managedthread_fork_exec(mthread, pluginPath, argv, myenvv, workingDir);
+    mthread->nativePid = _managedthread_fork_exec(mthread, pluginPath, argv, myenvv, workingDir);
+    // In Linux, the PID is equal to the TID of its first thread.
+    mthread->nativeTid = mthread->nativePid;
     childpidwatcher_watch(
-        worker_getChildPidWatcher(), child_pid, _markPluginExited, mthread->ipc_data);
+        worker_getChildPidWatcher(), mthread->nativePid, _markPluginExited, mthread->ipc_data);
 
     /* cleanup the dupd env*/
     if (myenvv) {
@@ -215,8 +237,6 @@ pid_t managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, c
 
     /* mthread is now active */
     mthread->isRunning = 1;
-
-    return child_pid;
 }
 
 static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimEvent* e) {
@@ -242,6 +262,8 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     utility_assert(mthread->isRunning);
     utility_assert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
+    _managedthread_syncAffinityWithWorker(mthread);
+
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
     process_flushPtrs(mthread->base->process);
 
@@ -250,8 +272,8 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
             case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
-                trace("sending start event code to %d on %p", mthread->base->nativePid,
-                      mthread->ipc_data);
+                trace(
+                    "sending start event code to %d on %p", mthread->nativePid, mthread->ipc_data);
 
                 _managedthread_continuePlugin(mthread, &mthread->currentEvent);
                 break;
@@ -356,7 +378,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
 void managedthread_handleProcessExit(ManagedThread* mthread) {
     // TODO [rwails]: come back and make this logic more solid
 
-    childpidwatcher_unregisterPid(worker_getChildPidWatcher(), mthread->base->nativePid);
+    childpidwatcher_unregisterPid(worker_getChildPidWatcher(), mthread->nativePid);
 
     /* make sure we cleanup circular refs */
     if (mthread->base->sys) {
@@ -370,7 +392,7 @@ void managedthread_handleProcessExit(ManagedThread* mthread) {
 
     int status = 0;
 
-    utility_assert(mthread->base->nativePid > 0);
+    utility_assert(mthread->nativePid > 0);
 
     _managedthread_cleanup(mthread);
 }
@@ -389,7 +411,7 @@ int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr c
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
     childpidwatcher_watch(
-        worker_getChildPidWatcher(), mthread->base->nativePid, _markPluginExited, child->ipc_data);
+        worker_getChildPidWatcher(), mthread->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new mthread to use.
@@ -411,8 +433,8 @@ int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr c
         return childNativeTid;
     }
     trace("native clone created tid %d", childNativeTid);
-    child->base->nativePid = mthread->base->nativePid;
-    child->base->nativeTid = childNativeTid;
+    child->nativePid = mthread->nativePid;
+    child->nativeTid = childNativeTid;
 
     // Child is now ready to start.
     child->currentEvent.event_id = SHD_SHIM_EVENT_START;
@@ -451,6 +473,7 @@ ManagedThread* managedthread_new(Thread* thread) {
     ManagedThread* mthread = g_new(ManagedThread, 1);
     *mthread = (ManagedThread){
         .base = thread,
+        .affinity = AFFINITY_UNINIT,
     };
 
     _Static_assert(sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
@@ -464,3 +487,7 @@ ManagedThread* managedthread_new(Thread* thread) {
     worker_count_allocation(ManagedThread);
     return mthread;
 }
+
+pid_t managedthread_getNativePid(ManagedThread* mthread) { return mthread->nativePid; }
+
+pid_t managedthread_getNativeTid(ManagedThread* mthread) { return mthread->nativeTid; }

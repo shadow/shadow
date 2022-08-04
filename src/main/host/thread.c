@@ -17,7 +17,6 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
-#include "main/host/affinity.h"
 #include "main/host/managed_thread.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
@@ -31,7 +30,6 @@ Thread* thread_new(Host* host, Process* process, int threadID) {
                        .host = host,
                        .process = process,
                        .tid = threadID,
-                       .affinity = AFFINITY_UNINIT,
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
     host_ref(host);
@@ -52,14 +50,6 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
         syscallcondition_unref(thread->cond);
         thread->cond = NULL;
     }
-}
-
-/*
- * Helper function. Sets the thread's CPU affinity to the worker's affinity.
- */
-static void _thread_syncAffinityWithWorker(Thread *thread) {
-    thread->affinity =
-        affinity_setProcessAffinity(thread->nativeTid, worker_getAffinity(), thread->affinity);
 }
 
 void thread_ref(Thread* thread) {
@@ -95,17 +85,11 @@ void thread_unref(Thread* thread) {
 void thread_run(Thread* thread, char* pluginPath, char** argv, char** envv,
                 const char* workingDir) {
     MAGIC_ASSERT(thread);
-
-    _thread_syncAffinityWithWorker(thread);
-
-    thread->nativePid = managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir);
-    // In Linux, the PID is equal to the TID of its first thread.
-    thread->nativeTid = thread->nativePid;
+    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir);
 }
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
-    _thread_syncAffinityWithWorker(thread);
 
     // Ensure the condition isn't triggered again, but don't clear it yet.
     // Syscall handler can still access.
@@ -199,12 +183,12 @@ uint32_t thread_getHostId(Thread* thread) {
 
 pid_t thread_getNativePid(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->nativePid;
+    return managedthread_getNativePid(thread->mthread);
 }
 
 pid_t thread_getNativeTid(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->nativeTid;
+    return managedthread_getNativeTid(thread->mthread);
 }
 
 SysCallCondition* thread_getSysCallCondition(Thread* thread) {

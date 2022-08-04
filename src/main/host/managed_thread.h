@@ -9,8 +9,8 @@ typedef struct _ManagedThread ManagedThread;
 
 ManagedThread* managedthread_new(Thread* thread);
 void managedthread_free(ManagedThread* mthread);
-pid_t managedthread_run(ManagedThread* methread, char* pluginPath, char** argv, char** envv,
-                        const char* workingDir);
+void managedthread_run(ManagedThread* methread, char* pluginPath, char** argv, char** envv,
+                       const char* workingDir);
 SysCallCondition* managedthread_resume(ManagedThread* mthread);
 void managedthread_handleProcessExit(ManagedThread* mthread);
 int managedthread_getReturnCode(ManagedThread* mthread);
@@ -19,5 +19,8 @@ ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread);
 long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args);
 int managedthread_clone(ManagedThread* mthread, unsigned long flags, PluginPtr child_stack,
                         PluginPtr ptid, PluginPtr ctid, unsigned long newtls, Thread** childp);
+// XXX Can we avoid exposing these?
+pid_t managedthread_getNativePid(ManagedThread* mthread);
+pid_t managedthread_getNativeTid(ManagedThread* mthread);
 
 #endif // SRC_MAIN_HOST_SHD_MANAGED_THREAD_H

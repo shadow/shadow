@@ -23,8 +23,6 @@ struct _Thread {
 
     int tid;
 
-    pid_t nativePid;
-    pid_t nativeTid;
     Host* host;
     Process* process;
     // If non-null, this address should be cleared and futex-awoken on thread exit.
@@ -38,12 +36,6 @@ struct _Thread {
 
     // Non-null if blocked by a syscall.
     SysCallCondition* cond;
-
-    // Value storing the current CPU affinity of the thread (more preceisely,
-    // of the native thread backing this thread object). This value will be set
-    // to AFFINITY_UNINIT if CPU pinning is not enabled or if the thread has
-    // not yet been pinned to a CPU.
-    int affinity;
 
     // The native, managed thread
     ManagedThread* mthread;
