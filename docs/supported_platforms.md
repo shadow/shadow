@@ -15,7 +15,7 @@ However, we will review pull requests that allow Shadow to build and run on
 unsupported platforms.
 
 Our policy regarding supported platforms can be found in our ["stability
-guarantees"](semver.html).
+guarantees"](semver.md).
 
 ## Docker
 
