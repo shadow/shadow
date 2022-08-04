@@ -62,10 +62,6 @@ set(shadow_srcs
     core/logger/log_wrapper.c
     core/scheduler/scheduler.c
     core/scheduler/scheduler_policy_host_single.c
-    core/scheduler/scheduler_policy_host_steal.c
-    core/scheduler/scheduler_policy_thread_perhost.c
-    core/scheduler/scheduler_policy_thread_perthread.c
-    core/scheduler/scheduler_policy_thread_single.c
     core/support/config_handlers.c
     core/work/event.c
     core/main.c
