@@ -449,6 +449,13 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
     pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
+
+    /// Enable extended YAML conventions (merge keys and extension fields). Can only be enabled on
+    /// the command line (enabling in the configuration file is a no-op).
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_extended_yaml").unwrap().as_str())]
+    pub use_extended_yaml: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -500,6 +507,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
+            use_extended_yaml: Some(false),
         }
     }
 }

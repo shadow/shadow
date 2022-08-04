@@ -84,6 +84,7 @@ hosts:
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
+- [`experimental.use_extended_yaml`](#experimentaluse_extended_yaml)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
@@ -479,6 +480,14 @@ Type: Bool
 
 Send message to managed process telling it to stop spinning when a syscall
 blocks.
+
+#### `experimental.use_extended_yaml`
+
+Default: false  
+Type: Bool
+
+Enable extended YAML conventions (merge keys and extension fields). Can only be
+enabled on the command line (enabling in the configuration file is a no-op).
 
 #### `experimental.use_legacy_working_dir`
 

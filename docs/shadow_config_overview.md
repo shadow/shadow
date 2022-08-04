@@ -77,7 +77,10 @@ Acceptable unit *prefixes* are:
 
 Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbytes`
 
-## YAML Extensions
+## YAML Extensions (Experimental)
+
+Shadow has experimental support for extended YAML conventions. These can be
+enabled using the `--use-extended-yaml true` command line option.
 
 ### Merge/Override Mappings
 
