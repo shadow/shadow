@@ -64,13 +64,14 @@ static void _managedthread_syncAffinityWithWorker(ManagedThread* mthread) {
 
 static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent* event) {
     // We're about to let managed thread execute, so need to release the shared memory lock.
+    Host* host = thread_getHost(thread->base);
     shimshmem_setMaxRunaheadTime(
-        host_getShimShmemLock(thread->base->host), worker_maxEventRunaheadTime(thread->base->host));
+        host_getShimShmemLock(host), worker_maxEventRunaheadTime(host));
     shimshmem_setEmulatedTime(
-        host_getSharedMem(thread->base->host), worker_getCurrentEmulatedTime());
+        host_getSharedMem(host), worker_getCurrentEmulatedTime());
 
     // Reacquired in _managedthread_waitForNextEvent.
-    host_unlockShimShmemLock(thread->base->host);
+    host_unlockShimShmemLock(host);
 
     shimevent_sendEventToPlugin(thread->ipc_data, event);
 }
@@ -170,11 +171,6 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file, c
 static void _managedthread_cleanup(ManagedThread* thread) {
     trace("child %d exited", thread->nativePid);
     thread->isRunning = 0;
-
-    if (thread->base->sys) {
-        syscallhandler_unref(thread->base->sys);
-        thread->base->sys = NULL;
-    }
 }
 
 static void _markPluginExited(pid_t pid, void* voidIPC) {
@@ -276,6 +272,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
             case SHD_SHIM_EVENT_STOP: {
                 // the plugin stopped running
                 _managedthread_cleanup(mthread);
+
                 // it will not be sending us any more events
                 return NULL;
             }
@@ -297,16 +294,9 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                     return NULL;
                 }
 
-                // Some syscall handlers can result in death of the mthread,
-                // which unrefs the handler in cleanup. We keep an extra
-                // reference to it during the call to prevent it from
-                // disappearing while it's still referenced on the call stack.
-                SysCallHandler* handler = mthread->base->sys;
-                syscallhandler_ref(handler);
                 SysCallReturn result = syscallhandler_make_syscall(
-                    handler, &mthread->currentEvent.event_data.syscall.syscall_args);
-                syscallhandler_unref(handler);
-                handler = NULL;
+                    thread_getSysCallHandler(mthread->base),
+                    &mthread->currentEvent.event_data.syscall.syscall_args);
 
                 // remove the mthread's old syscall condition since it's no longer needed
                 if (mthread->base->cond) {
@@ -374,12 +364,6 @@ void managedthread_handleProcessExit(ManagedThread* mthread) {
     // TODO [rwails]: come back and make this logic more solid
 
     childpidwatcher_unregisterPid(worker_getChildPidWatcher(), mthread->nativePid);
-
-    /* make sure we cleanup circular refs */
-    if (mthread->base->sys) {
-        syscallhandler_unref(mthread->base->sys);
-        mthread->base->sys = NULL;
-    }
 
     if (!mthread->isRunning) {
         return;
@@ -457,6 +441,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     if (res.event_id == SHD_SHIM_EVENT_STOP) {
         trace("Plugin exited while executing native syscall %ld", n);
         _managedthread_cleanup(mthread);
+
         // We have to return *something* here. Probably doesn't matter much what.
         return -ESRCH;
     }

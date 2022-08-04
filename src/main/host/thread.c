@@ -109,6 +109,12 @@ void thread_resume(Thread* thread) {
     thread->cond = cond;
     if (thread->cond) {
         syscallcondition_waitNonblock(thread->cond, thread->host, thread->process, thread);
+    } else {
+        utility_assert(!managedthread_isRunning(thread->mthread));
+        if (thread->sys) {
+            syscallhandler_unref(thread->sys);
+            thread->sys = NULL;
+        }
     }
 }
 
@@ -116,6 +122,11 @@ void thread_handleProcessExit(Thread* thread) {
     MAGIC_ASSERT(thread);
     _thread_cleanupSysCallCondition(thread);
     managedthread_handleProcessExit(thread->mthread);
+    /* make sure we cleanup circular refs */
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
