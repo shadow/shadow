@@ -99,12 +99,6 @@ extern "C" {
 extern "C" {
     pub fn main_logBuildInfo();
 }
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 1;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 2;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 3;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 4;
-pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 extern "C" {
     pub fn runConfigHandlers(config: *const ConfigOptions);
 }

@@ -221,8 +221,7 @@ EmulatedTime scheduler_nextHostEventTime(Scheduler* scheduler, Host* host) {
     MAGIC_ASSERT(scheduler);
 
     if (!scheduler->policy->nextHostEventTime) {
-        /* TODO: implement for remaining schedulers or remove them. */
-        panic("scheduler_nextHostEventTime not implemented for scheduler type %d", scheduler->policy->type);
+        panic("scheduler_nextHostEventTime not implemented");
     }
     return scheduler->policy->nextHostEventTime(scheduler->policy, host);
 }

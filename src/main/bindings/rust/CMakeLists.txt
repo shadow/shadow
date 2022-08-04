@@ -109,7 +109,6 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-type "TriggerType"
         --whitelist-type "LogInfoFlags"
         --whitelist-type "SimulationTime"
-        --whitelist-type "SchedulerPolicyType"
         --whitelist-type "Scheduler"
         --whitelist-type "ProtocolTCPFlags"
         --whitelist-var "CONFIG_PIPE_BUFFER_SIZE"

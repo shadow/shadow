@@ -15,7 +15,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "main/bindings/c/bindings-opaque.h"
-#include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"

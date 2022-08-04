@@ -8,7 +8,6 @@
 
 typedef struct _SchedulerPolicy SchedulerPolicy;
 
-#include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/work/event.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
@@ -22,7 +21,6 @@ typedef SimulationTime (*SchedulerPolicyGetNextTimeFunc)(SchedulerPolicy*);
 typedef void (*SchedulerPolicyFreeFunc)(SchedulerPolicy*);
 
 struct _SchedulerPolicy {
-    SchedulerPolicyType type;
     gpointer data;
     gint referenceCount;
     SchedulerPolicyAddHostFunc addHost;

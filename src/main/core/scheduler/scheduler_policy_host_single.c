@@ -384,7 +384,6 @@ SchedulerPolicy* schedulerpolicyhostsingle_new() {
     policy->getNextTime = _schedulerpolicyhostsingle_getNextTime;
     policy->free = _schedulerpolicyhostsingle_free;
 
-    policy->type = SP_PARALLEL_HOST_SINGLE;
     policy->data = data;
     policy->referenceCount = 1;
 
