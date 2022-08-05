@@ -11,7 +11,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, SimController};
 use crate::core::sim_config::HostInfo;
-use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel, SchedulerPolicy};
+use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
@@ -197,8 +197,6 @@ impl<'a> Manager<'a> {
             .unwrap_or_else(|| u32::try_from(self.hosts.len()).unwrap().try_into().unwrap())
             .get();
 
-        let sched_policy = self.config.experimental.scheduler_policy.unwrap();
-
         // scope used so that the scheduler is dropped before we log the global counters below
         {
             let pid_watcher = ChildPidWatcher::new();
@@ -206,7 +204,6 @@ impl<'a> Manager<'a> {
                 self.controller,
                 &pid_watcher,
                 self.config,
-                sched_policy,
                 num_workers,
                 self.random.gen(),
                 self.end_time,
@@ -671,7 +668,6 @@ impl<'a> SchedulerWrapper<'a> {
         controller: &'a Controller,
         pid_watcher: &'a ChildPidWatcher,
         config: &'a ConfigOptions,
-        policy: SchedulerPolicy,
         num_workers: u32,
         scheduler_seed: u32,
         end_time: SimulationTime,
@@ -682,7 +678,6 @@ impl<'a> SchedulerWrapper<'a> {
                     controller,
                     pid_watcher,
                     config,
-                    policy.to_c_sched_policy_type(),
                     num_workers,
                     scheduler_seed,
                     end_time.into(),

@@ -17,8 +17,8 @@ typedef struct _Scheduler Scheduler;
 #include "main/host/host.h"
 
 Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
-                         const ConfigOptions* config, SchedulerPolicyType policyType,
-                         guint nWorkers, guint schedulerSeed, SimulationTime endTime);
+                         const ConfigOptions* config, guint nWorkers, guint schedulerSeed,
+                         SimulationTime endTime);
 void scheduler_ref(Scheduler*);
 void scheduler_unref(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
@@ -37,7 +37,6 @@ EmulatedTime scheduler_nextHostEventTime(Scheduler*, Host* host);
 
 int scheduler_addHost(Scheduler*, Host*);
 Host* scheduler_getHost(Scheduler*, GQuark);
-SchedulerPolicyType scheduler_getPolicy(Scheduler*);
 gboolean scheduler_isRunning(Scheduler* scheduler);
 
 #endif /* SHD_SCHEDULER_H_ */
