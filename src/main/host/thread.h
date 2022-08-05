@@ -84,6 +84,7 @@ Host* thread_getHost(Thread* thread);
 // Get the syscallhandler for this thread.
 SysCallHandler* thread_getSysCallHandler(Thread* thread);
 SysCallCondition* thread_getSysCallCondition(Thread* thread);
+void thread_clearSysCallCondition(Thread* thread);
 
 sigset_t* thread_getSignalSet(Thread* thread);
 

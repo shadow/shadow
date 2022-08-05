@@ -20,7 +20,6 @@
 #include "main/host/affinity.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
-#include "main/host/thread_protected.h"
 
 struct _ManagedThread {
     Thread* base;
@@ -202,8 +201,8 @@ void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, ch
     myenvv = _add_u64_to_env(myenvv, "SHADOW_PID", getpid());
 
     // Pass the TSC Hz to the shim, so that it can emulate rdtsc.
-    myenvv =
-        _add_u64_to_env(myenvv, "SHADOW_TSC_HZ", host_getTsc(mthread->base->host)->cyclesPerSecond);
+    myenvv = _add_u64_to_env(
+        myenvv, "SHADOW_TSC_HZ", host_getTsc(thread_getHost(mthread->base))->cyclesPerSecond);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
@@ -235,11 +234,12 @@ static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimE
     shimevent_recvEventFromPlugin(mthread->ipc_data, e);
     // The managed mthread has yielded control back to us. Reacquire the shared
     // memory lock, which we released in `_managedthread_continuePlugin`.
-    host_lockShimShmemLock(mthread->base->host);
+    host_lockShimShmemLock(thread_getHost(mthread->base));
     trace("received shim_event %d", mthread->currentEvent.event_id);
 
     // Update time, which may have been incremented in the shim.
-    EmulatedTime shimTime = shimshmem_getEmulatedTime(host_getSharedMem(mthread->base->host));
+    EmulatedTime shimTime =
+        shimshmem_getEmulatedTime(host_getSharedMem(thread_getHost(mthread->base)));
     if (shimTime != worker_getCurrentEmulatedTime()) {
         trace("Updating time from %ld to %ld (+%ld)", worker_getCurrentEmulatedTime(), shimTime,
               shimTime - worker_getCurrentEmulatedTime());
@@ -256,7 +256,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
-    process_flushPtrs(mthread->base->process);
+    process_flushPtrs(thread_getProcess(mthread->base));
 
     while (true) {
         switch (mthread->currentEvent.event_id) {
@@ -299,17 +299,14 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                     &mthread->currentEvent.event_data.syscall.syscall_args);
 
                 // remove the mthread's old syscall condition since it's no longer needed
-                if (mthread->base->cond) {
-                    syscallcondition_unref(mthread->base->cond);
-                    mthread->base->cond = NULL;
-                }
+                thread_clearSysCallCondition(mthread->base);
 
                 if (!mthread->isRunning) {
                     return NULL;
                 }
 
                 // Flush any writes the syscallhandler made.
-                process_flushPtrs(mthread->base->process);
+                process_flushPtrs(thread_getProcess(mthread->base));
 
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {

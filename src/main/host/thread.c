@@ -21,8 +21,33 @@
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
-#include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
+
+struct _Thread {
+    // For safe down-casting. Set and checked by child class.
+    int type_id;
+
+    int tid;
+
+    Host* host;
+    Process* process;
+    // If non-null, this address should be cleared and futex-awoken on thread exit.
+    // See set_tid_address(2).
+    PluginPtr tidAddress;
+    int referenceCount;
+
+    SysCallHandler* sys;
+
+    ShMemBlock shimSharedMemBlock;
+
+    // Non-null if blocked by a syscall.
+    SysCallCondition* cond;
+
+    // The native, managed thread
+    ManagedThread* mthread;
+
+    MAGIC_DECLARE;
+};
 
 Thread* thread_new(Host* host, Process* process, int threadID) {
     Thread* thread = g_new(Thread, 1);
@@ -214,6 +239,14 @@ pid_t thread_getNativeTid(Thread* thread) {
 SysCallCondition* thread_getSysCallCondition(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->cond;
+}
+
+void thread_clearSysCallCondition(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    if (thread->cond) {
+        syscallcondition_unref(thread->cond);
+        thread->cond = NULL;
+    }
 }
 
 PluginVirtualPtr thread_getTidAddress(Thread* thread) {
