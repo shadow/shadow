@@ -8,16 +8,16 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use atomic_refcell::AtomicRefCell;
 
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-pub struct HostId(u32);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
+pub struct HostId(cshadow::HostId);
 
-impl From<u32> for HostId {
-    fn from(val: u32) -> Self {
+impl From<cshadow::HostId> for HostId {
+    fn from(val: cshadow::HostId) -> Self {
         HostId(val)
     }
 }
 
-impl From<HostId> for u32 {
+impl From<HostId> for cshadow::HostId {
     fn from(val: HostId) -> Self {
         val.0
     }

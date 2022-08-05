@@ -139,7 +139,7 @@ typedef struct TokenBucket TokenBucket;
 
 typedef uint64_t WatchHandle;
 
-typedef uint32_t HostId;
+typedef HostId HostId;
 
 typedef void (*TaskCallbackFunc)(Host*, void*, void*);
 
