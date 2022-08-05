@@ -63,10 +63,6 @@ void event_unref(Event* event) {
 void event_execute(Event* event, Host* host) {
     MAGIC_ASSERT(event);
 
-    host_lock(host);
-    host_lockShimShmemLock(host);
-    worker_setActiveHost(host);
-
     utility_assert(event_getHostID(event) == host_getID(host));
 
     /* check if we are allowed to execute or have to wait for cpu delays */
@@ -91,10 +87,6 @@ void event_execute(Event* event, Host* host) {
         taskref_execute(event->task, host);
         host_stopExecutionTimer(host);
     }
-
-    worker_setActiveHost(NULL);
-    host_unlockShimShmemLock(host);
-    host_unlock(host);
 }
 
 SimulationTime event_getTime(Event* event) {

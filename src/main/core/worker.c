@@ -461,9 +461,13 @@ void worker_runEvent(Event* event, Host* host) {
     worker_setCurrentEmulatedTime(
         emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event)));
 
+    worker_setActiveHost(host);
+
     /* process the local event */
     event_execute(event, host);
     event_unref(event);
+
+    worker_setActiveHost(NULL);
 
     /* update times */
     _worker_setLastEventTime(worker_getCurrentEmulatedTime());

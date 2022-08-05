@@ -79,7 +79,13 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
                 scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
         // get the host to run this event on
         Host* host = scheduler_getHost(scheduler, event_getHostID(event));
+        host_lock(host);
+        host_lockShimShmemLock(host);
+
         worker_runEvent(event, host);
+
+        host_unlockShimShmemLock(host);
+        host_unlock(host);
     }
 
     // Gets the time of the event at the head of the event queue right now.
