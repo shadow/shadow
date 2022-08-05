@@ -33,6 +33,28 @@ impl TaskRef {
 impl IsSend for TaskRef {}
 impl IsSync for TaskRef {}
 
+impl std::fmt::Debug for TaskRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.magic.debug_check();
+        f.debug_struct("TaskRef")
+            .field("magic", &self.magic)
+            // `Fn` doesn't have a debug impl, so we'll print the trait object's address
+            .field("inner", &Arc::as_ptr(&self.inner))
+            .finish()
+    }
+}
+
+impl PartialEq for TaskRef {
+    /// Two `TaskRef`s are equal if they point to the same task object.
+    fn eq(&self, other: &Self) -> bool {
+        self.magic.debug_check();
+        other.magic.debug_check();
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for TaskRef {}
+
 pub mod export {
     use super::*;
 
