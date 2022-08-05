@@ -113,6 +113,18 @@ impl Host {
         &mut random.0
     }
 
+    pub fn get_new_event_id(&mut self) -> u64 {
+        unsafe { cshadow::host_getNewEventID(self.chost) }
+    }
+
+    pub fn continue_execution_timer(&mut self) {
+        unsafe { cshadow::host_continueExecutionTimer(self.chost) };
+    }
+
+    pub fn stop_execution_timer(&mut self) {
+        unsafe { cshadow::host_stopExecutionTimer(self.chost) };
+    }
+
     pub fn chost(&self) -> *mut cshadow::Host {
         self.chost
     }

@@ -63,7 +63,6 @@ set(shadow_srcs
     core/scheduler/scheduler.c
     core/scheduler/scheduler_policy_host_single.c
     core/support/config_handlers.c
-    core/work/event.c
     core/main.c
     core/worker.c
 

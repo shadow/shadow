@@ -22,6 +22,8 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/host/tracker_types.h"
+#include "main/routing/dns.h"
+#include "main/routing/packet.minimal.h"
 
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
@@ -61,6 +63,8 @@ typedef struct Descriptor Descriptor;
 
 // Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;
+
+typedef struct Event Event;
 
 // A wrapper for any type of file object.
 typedef struct File File;
@@ -438,6 +442,28 @@ bool simtime_to_timeval(SimulationTime val,
 __attribute__((warn_unused_result))
 bool simtime_to_timespec(SimulationTime val,
                          struct timespec *out);
+
+struct Event *event_new(struct TaskRef *task_ref,
+                        SimulationTime time,
+                        Host *src_host,
+                        HostId dst_host_id);
+
+void event_free(struct Event *event);
+
+// Execute the event. **This frees the event.**
+void event_executeAndFree(struct Event *event, Host *host);
+
+// Convert the event into its inner `TaskRef`. **This frees the event, and you must manually
+// free/drop the returned `TaskRef`.**
+struct TaskRef *event_intoTask(struct Event *event);
+
+int32_t event_compare(const struct Event *a, const struct Event *b, void *_user_data);
+
+HostId event_getHostID(struct Event *event);
+
+SimulationTime event_getTime(const struct Event *event);
+
+void event_setTime(struct Event *event, SimulationTime time);
 
 // Create a new reference-counted task that can only be executed on the
 // given host. The callbacks can safely assume that they will only be called

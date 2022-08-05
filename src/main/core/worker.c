@@ -23,7 +23,6 @@
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/event.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -479,13 +478,13 @@ void worker_runEvent(Event* event, Host* host) {
         }
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
-        worker_scheduleTaskWithDelay(event_borrowTask(event), host, cpuDelay);
+        TaskRef* task = event_intoTask(event);
+        worker_scheduleTaskWithDelay(task, host, cpuDelay);
+        taskref_drop(task);
     } else {
         /* cpu is not blocked, its ok to execute the event */
-        event_execute(event, host);
+        event_executeAndFree(event, host);
     }
-
-    event_free(event);
 
     worker_setActiveHost(NULL);
 
@@ -526,7 +525,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTi
     }
 
     GQuark hostID = host_getID(host);
-    Event* event = event_new_(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
+    Event* event = event_new(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
 
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
@@ -618,7 +617,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         TaskRef* packetTask = taskref_new_unbound(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
 
-        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHostID);
+        Event* packetEvent = event_new(packetTask, deliverTime, srcHost, dstHostID);
 
         taskref_drop(packetTask);
 

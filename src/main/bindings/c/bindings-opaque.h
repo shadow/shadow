@@ -60,6 +60,8 @@ typedef struct Descriptor Descriptor;
 // Map of file handles to file descriptors. Typically owned by a Process.
 typedef struct DescriptorTable DescriptorTable;
 
+typedef struct Event Event;
+
 // A wrapper for any type of file object.
 typedef struct File File;
 

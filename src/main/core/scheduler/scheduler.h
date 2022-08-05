@@ -13,7 +13,6 @@ typedef struct _Scheduler Scheduler;
 
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/event.h"
 #include "main/host/host.h"
 
 Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,

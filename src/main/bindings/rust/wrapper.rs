@@ -10,6 +10,7 @@ use crate::host::syscall::format::StraceFmtMode;
 use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
+use crate::core::work::event::Event;
 use crate::core::work::task::TaskRef;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
@@ -1139,55 +1140,10 @@ pub type WorkerPool = u8;
 pub type Scheduler = u8;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Event {
-    _unused: [u8; 0],
-}
-pub type Event = _Event;
-pub type LegacyFile = [u64; 5usize];
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Process {
-    _unused: [u8; 0],
-}
-pub type Process = _Process;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _Host {
     _unused: [u8; 0],
 }
 pub type Host = _Host;
-#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
-#[doc = " of time throughput the simulator."]
-pub type SimulationTime = guint64;
-#[doc = " Emulation time in nanoseconds. Allows for a consistent representation"]
-#[doc = " of time throughput the simulator. Emulation time is the simulation time"]
-#[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
-#[doc = " distinguish each type of time in the code.,"]
-pub type EmulatedTime = guint64;
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
-pub const _Status_STATUS_FILE_READABLE: _Status = 2;
-pub const _Status_STATUS_FILE_WRITABLE: _Status = 4;
-pub const _Status_STATUS_FILE_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
-pub type _Status = i32;
-extern "C" {
-    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-pub type LegacyFileCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
-pub type LegacyFileCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
-pub type LegacyFileFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _StatusListener {
-    _unused: [u8; 0],
-}
-pub type StatusListener = _StatusListener;
 pub type HostId = GQuark;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1566,6 +1522,58 @@ fn bindgen_test_layout__SysCallReturn() {
     test_field_restartable();
 }
 pub type SysCallReturn = _SysCallReturn;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Process {
+    _unused: [u8; 0],
+}
+pub type Process = _Process;
+#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator."]
+pub type SimulationTime = guint64;
+#[doc = " Emulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator. Emulation time is the simulation time"]
+#[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
+#[doc = " distinguish each type of time in the code.,"]
+pub type EmulatedTime = guint64;
+pub type LegacyFile = [u64; 5usize];
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
+pub const _Status_STATUS_FILE_READABLE: _Status = 2;
+pub const _Status_STATUS_FILE_WRITABLE: _Status = 4;
+pub const _Status_STATUS_FILE_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
+pub type _Status = i32;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+pub type LegacyFileCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
+pub type LegacyFileCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+pub type LegacyFileFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
+extern "C" {
+    pub fn statuslistener_ref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_unref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_onStatusChanged(
+        listener: *mut StatusListener,
+        currentStatus: Status,
+        transitions: Status,
+    );
+}
 pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1669,6 +1677,67 @@ extern "C" {
         host_lock: *const ShimShmemHostLock,
     ) -> bool;
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Tracker {
+    _unused: [u8; 0],
+}
+pub type Tracker = _Tracker;
+pub use self::_LogInfoFlags as LogInfoFlags;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
+pub type _LogInfoFlags = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Address {
+    _unused: [u8; 0],
+}
+#[doc = " An Address structure holds information used to identify nodes, allowing for"]
+#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
+#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
+#[doc = " should only be accessed using the functions in this class."]
+pub type Address = _Address;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _DNS {
+    _unused: [u8; 0],
+}
+pub type DNS = _DNS;
+extern "C" {
+    pub fn dns_new() -> *mut DNS;
+}
+extern "C" {
+    pub fn dns_free(dns: *mut DNS);
+}
+extern "C" {
+    pub fn dns_register(
+        dns: *mut DNS,
+        id: GQuark,
+        name: *const gchar,
+        requestedIP: in_addr_t,
+    ) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
+}
+extern "C" {
+    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Packet {
+    _unused: [u8; 0],
+}
+pub type Packet = _Packet;
+pub type PacketTCPHeader = _PacketTCPHeader;
 extern "C" {
     pub fn process_new(
         host: *mut Host,
@@ -2137,13 +2206,6 @@ pub const ProtocolTCPFlags_PTCP_DUPACK: ProtocolTCPFlags = 64;
 pub type ProtocolTCPFlags = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Packet {
-    _unused: [u8; 0],
-}
-pub type Packet = _Packet;
-pub type PacketTCPHeader = _PacketTCPHeader;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _FutexTable {
     _unused: [u8; 0],
 }
@@ -2154,18 +2216,6 @@ pub struct _Futex {
     _unused: [u8; 0],
 }
 pub type Futex = _Futex;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Tracker {
-    _unused: [u8; 0],
-}
-pub type Tracker = _Tracker;
-pub use self::_LogInfoFlags as LogInfoFlags;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
-pub type _LogInfoFlags = i32;
 pub type HostParameters = _HostParameters;
 #[repr(C)]
 pub struct _HostParameters {
@@ -2581,16 +2631,6 @@ fn bindgen_test_layout__HostParameters() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Address {
-    _unused: [u8; 0],
-}
-#[doc = " An Address structure holds information used to identify nodes, allowing for"]
-#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
-#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
-#[doc = " should only be accessed using the functions in this class."]
-pub type Address = _Address;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _Router {
     _unused: [u8; 0],
 }
@@ -2601,38 +2641,6 @@ pub struct _NetworkInterface {
     _unused: [u8; 0],
 }
 pub type NetworkInterface = _NetworkInterface;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _DNS {
-    _unused: [u8; 0],
-}
-pub type DNS = _DNS;
-extern "C" {
-    pub fn dns_new() -> *mut DNS;
-}
-extern "C" {
-    pub fn dns_free(dns: *mut DNS);
-}
-extern "C" {
-    pub fn dns_register(
-        dns: *mut DNS,
-        id: GQuark,
-        name: *const gchar,
-        requestedIP: in_addr_t,
-    ) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_deregister(dns: *mut DNS, address: *mut Address);
-}
-extern "C" {
-    pub fn dns_resolveIPToAddress(dns: *mut DNS, ip: in_addr_t) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_resolveNameToAddress(dns: *mut DNS, name: *const gchar) -> *mut Address;
-}
-extern "C" {
-    pub fn dns_getHostsFilePath(dns: *mut DNS) -> *mut gchar;
-}
 extern "C" {
     pub fn host_new(params: *const HostParameters) -> *mut Host;
 }
@@ -2802,19 +2810,6 @@ extern "C" {
 }
 extern "C" {
     pub fn host_getNextDeterministicSequenceValue(host: *mut Host) -> guint64;
-}
-extern "C" {
-    pub fn statuslistener_ref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_unref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_onStatusChanged(
-        listener: *mut StatusListener,
-        currentStatus: Status,
-        transitions: Status,
-    );
 }
 extern "C" {
     pub fn scheduler_new(
