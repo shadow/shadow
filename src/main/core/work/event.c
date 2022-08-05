@@ -11,7 +11,6 @@
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/host.h"
-#include "main/host/tracker.h"
 #include "main/utility/utility.h"
 
 struct _Event {
@@ -50,28 +49,14 @@ void event_execute(Event* event, Host* host) {
 
     utility_assert(event_getHostID(event) == host_getID(host));
 
-    /* check if we are allowed to execute or have to wait for cpu delays */
-    CPU* cpu = host_getCPU(host);
-    cpu_updateTime(cpu, event->time);
+    host_continueExecutionTimer(host);
+    taskref_execute(event->task, host);
+    host_stopExecutionTimer(host);
+}
 
-    if(cpu_isBlocked(cpu)) {
-        SimulationTime cpuDelay = cpu_getDelay(cpu);
-        trace("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
-
-        /* track the event delay time */
-        Tracker* tracker = host_getTracker(host);
-        if (tracker != NULL) {
-            tracker_addVirtualProcessingDelay(tracker, cpuDelay);
-        }
-
-        /* this event is delayed due to cpu, so reschedule it to ourselves */
-        worker_scheduleTaskWithDelay(event->task, host, cpuDelay);
-    } else {
-        /* cpu is not blocked, its ok to execute the event */
-        host_continueExecutionTimer(host);
-        taskref_execute(event->task, host);
-        host_stopExecutionTimer(host);
-    }
+TaskRef* event_borrowTask(Event* event) {
+    MAGIC_ASSERT(event);
+    return event->task;
 }
 
 SimulationTime event_getTime(Event* event) {

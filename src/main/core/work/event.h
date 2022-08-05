@@ -20,6 +20,7 @@ Event* event_new_(TaskRef* task, SimulationTime time, Host* srcHost, GQuark dstH
 void event_free(Event* event);
 
 void event_execute(Event* event, Host* host);
+TaskRef* event_borrowTask(Event* event);
 gint event_compare(const Event* a, const Event* b, gpointer userData);
 
 GQuark event_getHostID(Event* event);
