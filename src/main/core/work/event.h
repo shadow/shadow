@@ -17,8 +17,7 @@ typedef struct _Event Event;
 #include "main/core/support/definitions.h"
 
 Event* event_new_(TaskRef* task, SimulationTime time, Host* srcHost, GQuark dstHostID);
-void event_ref(Event* event);
-void event_unref(Event* event);
+void event_free(Event* event);
 
 void event_execute(Event* event, Host* host);
 gint event_compare(const Event* a, const Event* b, gpointer userData);

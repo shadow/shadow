@@ -465,7 +465,7 @@ void worker_runEvent(Event* event, Host* host) {
 
     /* process the local event */
     event_execute(event, host);
-    event_unref(event);
+    event_free(event);
 
     worker_setActiveHost(NULL);
 

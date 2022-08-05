@@ -20,7 +20,6 @@ struct _Event {
     TaskRef* task;
     SimulationTime time;
     guint64 srcHostEventID;
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -34,30 +33,16 @@ Event* event_new_(TaskRef* task, SimulationTime time, Host* srcHost, GQuark dstH
     event->task = taskref_clone(task);
     event->time = time;
     event->srcHostEventID = host_getNewEventID(srcHost);
-    event->referenceCount = 1;
 
     worker_count_allocation(Event);
     return event;
 }
 
-static void _event_free(Event* event) {
+void event_free(Event* event) {
     taskref_drop(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
     worker_count_deallocation(Event);
-}
-
-void event_ref(Event* event) {
-    MAGIC_ASSERT(event);
-    event->referenceCount++;
-}
-
-void event_unref(Event* event) {
-    MAGIC_ASSERT(event);
-    event->referenceCount--;
-    if(event->referenceCount <= 0) {
-        _event_free(event);
-    }
 }
 
 void event_execute(Event* event, Host* host) {

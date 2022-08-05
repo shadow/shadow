@@ -108,7 +108,8 @@ static HostSingleQueueData* _hostsinglequeuedata_new() {
     HostSingleQueueData* qdata = g_new0(HostSingleQueueData, 1);
 
     g_mutex_init(&(qdata->lock));
-    qdata->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
+    qdata->pq =
+        priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_free);
 
     return qdata;
 }

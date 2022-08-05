@@ -183,7 +183,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
 
     SimulationTime eventTime = event_getTime(event);
     if(eventTime >= scheduler->endTime) {
-        event_unref(event);
+        event_free(event);
         return FALSE;
     }
 
