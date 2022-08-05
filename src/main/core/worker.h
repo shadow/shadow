@@ -30,7 +30,7 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/bindings/c/bindings.h"
 
 // To be called by scheduler. Consumes `event`
-void worker_runEvent(Event* event);
+void worker_runEvent(Event* event, Host* host);
 // To be called by worker thread
 void worker_finish(GQueue* hosts, SimulationTime time);
 

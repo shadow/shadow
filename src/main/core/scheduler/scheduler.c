@@ -77,7 +77,9 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     Event* event = NULL;
     while ((event = scheduler->policy->pop(
                 scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
-        worker_runEvent(event);
+        // get the host to run this event on
+        Host* host = scheduler_getHost(scheduler, event_getHostID(event));
+        worker_runEvent(event, host);
     }
 
     // Gets the time of the event at the head of the event queue right now.
@@ -182,7 +184,6 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
     utility_assert(receiver);
-    utility_assert(receiver == event_getHost(event));
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
