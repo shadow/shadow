@@ -19,8 +19,7 @@ typedef struct _Scheduler Scheduler;
 Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
                          const ConfigOptions* config, guint nWorkers, guint schedulerSeed,
                          SimulationTime endTime);
-void scheduler_ref(Scheduler*);
-void scheduler_unref(Scheduler*);
+void scheduler_free(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
 
 void scheduler_awaitStart(Scheduler*);

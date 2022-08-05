@@ -16,14 +16,14 @@ typedef struct _Event Event;
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 
-Event* event_new_(TaskRef* task, SimulationTime time, gpointer srcHost, gpointer dstHost);
+Event* event_new_(TaskRef* task, SimulationTime time, Host* srcHost, GQuark dstHostID);
 void event_ref(Event* event);
 void event_unref(Event* event);
 
-void event_execute(Event* event);
+void event_execute(Event* event, Host* host);
 gint event_compare(const Event* a, const Event* b, gpointer userData);
 
-gpointer event_getHost(Event* event);
+GQuark event_getHostID(Event* event);
 SimulationTime event_getTime(Event* event);
 void event_setTime(Event* event, SimulationTime time);
 

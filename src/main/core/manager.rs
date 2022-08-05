@@ -735,7 +735,7 @@ impl<'a> std::ops::Drop for SchedulerWrapper<'a> {
         self.finish();
         self.shutdown();
 
-        unsafe { c::scheduler_unref(self.ptr) };
+        unsafe { c::scheduler_free(self.ptr) };
     }
 }
 

@@ -311,7 +311,6 @@ static EmulatedTime _schedulerpolicyhostsingle_nextHostEventTime(SchedulerPolicy
     EmulatedTime nextEventTime = 0;
     Event* nextEvent = priorityqueue_peek(qdata->pq);
     if (nextEvent) {
-        utility_assert(event_getHost(nextEvent) == host);
         nextEventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(nextEvent));
         utility_assert(nextEventTime != EMUTIME_INVALID);
     }
@@ -385,7 +384,6 @@ SchedulerPolicy* schedulerpolicyhostsingle_new() {
     policy->free = _schedulerpolicyhostsingle_free;
 
     policy->data = data;
-    policy->referenceCount = 1;
 
     return policy;
 }

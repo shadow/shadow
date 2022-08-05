@@ -113,7 +113,6 @@ pub type gulong = ::std::os::raw::c_ulong;
 pub type guint = ::std::os::raw::c_uint;
 pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
-pub type gconstpointer = *const ::std::os::raw::c_void;
 pub type GQuark = guint32;
 extern "C" {
     pub fn g_quark_from_string(string: *const gchar) -> GQuark;
@@ -2694,13 +2693,7 @@ extern "C" {
     pub fn host_freeAllApplications(host: *mut Host);
 }
 extern "C" {
-    pub fn host_compare(a: gconstpointer, b: gconstpointer, user_data: gpointer) -> gint;
-}
-extern "C" {
     pub fn host_getID(host: *mut Host) -> HostId;
-}
-extern "C" {
-    pub fn host_isEqual(a: *mut Host, b: *mut Host) -> gboolean;
 }
 extern "C" {
     pub fn host_getCPU(host: *mut Host) -> *mut CPU;
@@ -2834,7 +2827,7 @@ extern "C" {
     ) -> *mut Scheduler;
 }
 extern "C" {
-    pub fn scheduler_unref(arg1: *mut Scheduler);
+    pub fn scheduler_free(arg1: *mut Scheduler);
 }
 extern "C" {
     pub fn scheduler_shutdown(scheduler: *mut Scheduler);
@@ -2859,7 +2852,7 @@ extern "C" {
     pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_runEvent(event: *mut Event);
+    pub fn worker_runEvent(event: *mut Event, host: *mut Host);
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);

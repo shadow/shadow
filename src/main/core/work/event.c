@@ -15,8 +15,8 @@
 #include "main/utility/utility.h"
 
 struct _Event {
-    Host* srcHost;
-    Host* dstHost;
+    GQuark dstHostID;
+    GQuark srcHostID;
     TaskRef* task;
     SimulationTime time;
     guint64 srcHostEventID;
@@ -24,13 +24,13 @@ struct _Event {
     MAGIC_DECLARE;
 };
 
-Event* event_new_(TaskRef* task, SimulationTime time, gpointer srcHost, gpointer dstHost) {
+Event* event_new_(TaskRef* task, SimulationTime time, Host* srcHost, GQuark dstHostID) {
     utility_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);
 
-    event->srcHost = (Host*)srcHost;
-    event->dstHost = (Host*)dstHost;
+    event->srcHostID = host_getID(srcHost);
+    event->dstHostID = dstHostID;
     event->task = taskref_clone(task);
     event->time = time;
     event->srcHostEventID = host_getNewEventID(srcHost);
@@ -60,15 +60,13 @@ void event_unref(Event* event) {
     }
 }
 
-void event_execute(Event* event) {
+void event_execute(Event* event, Host* host) {
     MAGIC_ASSERT(event);
 
-    host_lock(event->dstHost);
-    host_lockShimShmemLock(event->dstHost);
-    worker_setActiveHost(event->dstHost);
+    utility_assert(event_getHostID(event) == host_getID(host));
 
     /* check if we are allowed to execute or have to wait for cpu delays */
-    CPU* cpu = host_getCPU(event->dstHost);
+    CPU* cpu = host_getCPU(host);
     cpu_updateTime(cpu, event->time);
 
     if(cpu_isBlocked(cpu)) {
@@ -76,23 +74,19 @@ void event_execute(Event* event) {
         trace("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
         /* track the event delay time */
-        Tracker* tracker = host_getTracker(event->dstHost);
+        Tracker* tracker = host_getTracker(host);
         if (tracker != NULL) {
             tracker_addVirtualProcessingDelay(tracker, cpuDelay);
         }
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
-        worker_scheduleTaskWithDelay(event->task, event->dstHost, cpuDelay);
+        worker_scheduleTaskWithDelay(event->task, host, cpuDelay);
     } else {
         /* cpu is not blocked, its ok to execute the event */
-        host_continueExecutionTimer(event->dstHost);
-        taskref_execute(event->task, event->dstHost);
-        host_stopExecutionTimer(event->dstHost);
+        host_continueExecutionTimer(host);
+        taskref_execute(event->task, host);
+        host_stopExecutionTimer(host);
     }
-
-    worker_setActiveHost(NULL);
-    host_unlockShimShmemLock(event->dstHost);
-    host_unlock(event->dstHost);
 }
 
 SimulationTime event_getTime(Event* event) {
@@ -100,9 +94,9 @@ SimulationTime event_getTime(Event* event) {
     return event->time;
 }
 
-gpointer event_getHost(Event* event) {
+GQuark event_getHostID(Event* event) {
     MAGIC_ASSERT(event);
-    return event->dstHost;
+    return event->dstHostID;
 }
 
 void event_setTime(Event* event, SimulationTime time) {
@@ -127,16 +121,14 @@ gint event_compare(const Event* a, const Event* b, gpointer userData) {
     } else if (a->time < b->time) {
         return -1;
     } else {
-        gint cmpresult = host_compare(a->dstHost, b->dstHost, NULL);
-        if (cmpresult > 0) {
+        if (a->dstHostID > b->dstHostID) {
             return 1;
-        } else if (cmpresult < 0) {
+        } else if (a->dstHostID < b->dstHostID) {
             return -1;
         } else {
-            cmpresult = host_compare(a->srcHost, b->srcHost, NULL);
-            if (cmpresult > 0) {
+            if (a->srcHostID > b->srcHostID) {
                 return 1;
-            } else if (cmpresult < 0) {
+            } else if (a->srcHostID < b->srcHostID) {
                 return -1;
             } else {
                 /* src and dst host are the same. the event should be sorted in

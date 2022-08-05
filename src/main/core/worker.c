@@ -455,15 +455,19 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     return NULL;
 }
 
-void worker_runEvent(Event* event) {
+void worker_runEvent(Event* event, Host* host) {
 
     /* update cache, reset clocks */
     worker_setCurrentEmulatedTime(
         emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event)));
 
+    worker_setActiveHost(host);
+
     /* process the local event */
-    event_execute(event);
+    event_execute(event, host);
     event_unref(event);
+
+    worker_setActiveHost(NULL);
 
     /* update times */
     _worker_setLastEventTime(worker_getCurrentEmulatedTime());
@@ -501,7 +505,9 @@ gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTi
         return FALSE;
     }
 
-    Event* event = event_new_(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, host);
+    GQuark hostID = host_getID(host);
+    Event* event = event_new_(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
+
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
@@ -576,8 +582,8 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          * this is the only place where tasks are sent between separate hosts */
 
         Scheduler* scheduler = _worker_pool()->scheduler;
-        GQuark dstID = (GQuark)address_getID(dstAddress);
-        Host* dstHost = scheduler_getHost(scheduler, dstID);
+        GQuark dstHostID = (GQuark)address_getID(dstAddress);
+        Host* dstHost = scheduler_getHost(scheduler, dstHostID);
         utility_assert(dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -591,7 +597,9 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
          */
         TaskRef* packetTask = taskref_new_unbound(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
-        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
+
+        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHostID);
+
         taskref_drop(packetTask);
 
         scheduler_push(scheduler, packetEvent, srcHost, dstHost);

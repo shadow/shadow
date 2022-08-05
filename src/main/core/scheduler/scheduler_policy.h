@@ -22,7 +22,6 @@ typedef void (*SchedulerPolicyFreeFunc)(SchedulerPolicy*);
 
 struct _SchedulerPolicy {
     gpointer data;
-    gint referenceCount;
     SchedulerPolicyAddHostFunc addHost;
     SchedulerPolicyGetHostsFunc getAssignedHosts;
     SchedulerPolicyPushFunc push;

@@ -51,7 +51,6 @@ struct _Scheduler {
     } currentRound;
 
     /* for memory management */
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -78,7 +77,15 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     Event* event = NULL;
     while ((event = scheduler->policy->pop(
                 scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
-        worker_runEvent(event);
+        // get the host to run this event on
+        Host* host = scheduler_getHost(scheduler, event_getHostID(event));
+        host_lock(host);
+        host_lockShimShmemLock(host);
+
+        worker_runEvent(event, host);
+
+        host_unlockShimShmemLock(host);
+        host_unlock(host);
     }
 
     // Gets the time of the event at the head of the event queue right now.
@@ -136,9 +143,6 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     scheduler->policy = schedulerpolicyhostsingle_new();
     utility_assert(scheduler->policy);
 
-    /* make sure our ref count is set before starting the threads */
-    scheduler->referenceCount = 1;
-
     info("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
@@ -158,7 +162,7 @@ void scheduler_shutdown(Scheduler* scheduler) {
     workerpool_joinAll(scheduler->workerPool);
 }
 
-static void _scheduler_free(Scheduler* scheduler) {
+void scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
     /* finish cleanup of shadow objects */
@@ -174,24 +178,6 @@ static void _scheduler_free(Scheduler* scheduler) {
     g_free(scheduler);
 }
 
-void scheduler_ref(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    g_mutex_lock(&(scheduler->globalLock));
-    scheduler->referenceCount++;
-    g_mutex_unlock(&(scheduler->globalLock));
-}
-
-void scheduler_unref(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    g_mutex_lock(&(scheduler->globalLock));
-    scheduler->referenceCount--;
-    gboolean shouldFree = (scheduler->referenceCount <= 0) ? TRUE : FALSE;
-    g_mutex_unlock(&(scheduler->globalLock));
-    if(shouldFree) {
-        _scheduler_free(scheduler);
-    }
-}
-
 gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* receiver) {
     MAGIC_ASSERT(scheduler);
 
@@ -204,7 +190,6 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
     utility_assert(receiver);
-    utility_assert(receiver == event_getHost(event));
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);

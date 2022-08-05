@@ -466,24 +466,6 @@ void host_freeAllApplications(Host* host) {
     trace("done freeing application for host '%s'", host->params.hostname);
 }
 
-gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-    const Host* na = a;
-    const Host* nb = b;
-    MAGIC_ASSERT(na);
-    MAGIC_ASSERT(nb);
-    return na->params.id > nb->params.id ? +1 : na->params.id < nb->params.id ? -1 : 0;
-}
-
-gboolean host_isEqual(Host* a, Host* b) {
-    if(a == NULL && b == NULL) {
-        return TRUE;
-    } else if(a == NULL || b == NULL) {
-        return FALSE;
-    } else {
-        return host_compare(a, b, NULL) == 0;
-    }
-}
-
 CPU* host_getCPU(Host* host) {
     MAGIC_ASSERT(host);
     return host->cpu;
