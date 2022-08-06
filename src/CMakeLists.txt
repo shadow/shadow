@@ -1,3 +1,5 @@
+include(FindPkgConfig)
+
 # Outside of external, inclusion of headers within the project should be
 # relative to this directory.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -8,7 +10,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
-find_package(GLIB REQUIRED)
+
+pkg_check_modules(GLIB REQUIRED glib-2.0>=2.32)
 
 ## pthreads
 set(CMAKE_THREAD_PREFER_PTHREAD 1)

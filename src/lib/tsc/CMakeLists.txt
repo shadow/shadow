@@ -1,4 +1,4 @@
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 
 add_library(shadow-tsc STATIC tsc.c)
 target_compile_options(shadow-tsc PRIVATE -D_GNU_SOURCE -fPIC)

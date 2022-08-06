@@ -1,4 +1,4 @@
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 link_libraries(${GLIB_LIBRARIES} logger)
 add_executable(test-bind test_bind.c ../test_common.c)
 add_linux_tests(BASENAME bindc COMMAND test-bind)

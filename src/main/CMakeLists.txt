@@ -1,10 +1,6 @@
-## TODO if we have cmake > 3.1, can we do the following?
-#pkg_check_modules (GLIB2   glib-2.0>=2.32)
-#message(STATUS "GLIB2_VERSION = ${GLIB2_VERSION}")
-
 include(CheckSymbolExists)
 
-list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDES})
+list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDE_DIRS})
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${GLIB_LIBRARIES})
 
 check_symbol_exists(g_memdup2 "glib.h" HAS_MEMDUP2)
@@ -13,7 +9,7 @@ if(HAS_MEMDUP2)
     add_compile_definitions(HAS_MEMDUP2)
 endif()
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDE_DIRS})
 
 ## link to preload libs (rpath will not contain these paths when shadow is installed)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
@@ -144,6 +140,13 @@ foreach(INTERFACE_LINK_LIBRARY IN LISTS INTERFACE_LINK_LIBRARIES)
         set(RUSTFLAGS "-L${CMAKE_MATCH_1} -l${CMAKE_MATCH_2} ${RUSTFLAGS}")
     elseif(INTERFACE_LINK_LIBRARY MATCHES "^-l.*")
         set(RUSTFLAGS "${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
+    elseif(INTERFACE_LINK_LIBRARY MATCHES "glib-2.0")
+        # This symbol comes from ${GLIB_LIBRARIES}; without
+        # this clause we'd treat it as a target in the `else` clause
+        # below, but that fails since cmake doesn't know how to build it.
+        #
+        # XXX: there must be a nicer way of handling this than special-casing glib-2.0.
+        set(RUSTFLAGS "-l${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
     else()
         # Treat as a target
         #

@@ -1,5 +1,4 @@
-find_package(GLIB REQUIRED)
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 
 ## create and install an executable that can run outside of shadow
 add_executable(test-getaddrinfo test_getaddrinfo.c ../test_common.c)
