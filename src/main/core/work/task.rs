@@ -24,6 +24,9 @@ impl TaskRef {
         }
     }
 
+    /// Executes the task.
+    ///
+    /// If the task was created from C, will panic if the task's host lock isn't held.
     pub fn execute(&self, host: &mut Host) {
         self.magic.debug_check();
         (self.inner)(host)
@@ -252,15 +255,6 @@ pub mod export {
         Box::into_raw(Box::new(task))
     }
 
-    /// Creates a new reference to the `Task`.
-    ///
-    /// SAFETY: `task` must be a valid pointer.
-    #[no_mangle]
-    pub unsafe extern "C" fn taskref_clone(task: *const TaskRef) -> *mut TaskRef {
-        let task = unsafe { task.as_ref() }.unwrap();
-        Box::into_raw(Box::new(task.clone()))
-    }
-
     /// Destroys this reference to the `Task`, dropping the `Task` if no references remain.
     ///
     /// Panics if task's Host lock isn't held.
@@ -269,17 +263,5 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn taskref_drop(task: *mut TaskRef) {
         unsafe { Box::from_raw(notnull_mut(task)) };
-    }
-
-    /// Executes the task.
-    ///
-    /// Panics if task's Host lock isn't held.
-    ///
-    /// SAFETY: `task` must be legally dereferencable.
-    #[no_mangle]
-    pub unsafe extern "C" fn taskref_execute(task: *mut TaskRef, host: *mut cshadow::Host) {
-        let task = unsafe { task.as_mut() }.unwrap();
-        let mut host = unsafe { Host::borrow_from_c(host) };
-        task.execute(&mut host);
     }
 }

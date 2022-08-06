@@ -509,24 +509,12 @@ struct TaskRef *taskref_new_unbound(TaskCallbackFunc callback,
                                     TaskObjectFreeFunc object_free,
                                     TaskArgumentFreeFunc argument_free);
 
-// Creates a new reference to the `Task`.
-//
-// SAFETY: `task` must be a valid pointer.
-struct TaskRef *taskref_clone(const struct TaskRef *task);
-
 // Destroys this reference to the `Task`, dropping the `Task` if no references remain.
 //
 // Panics if task's Host lock isn't held.
 //
 // SAFETY: `task` must be legally dereferencable.
 void taskref_drop(struct TaskRef *task);
-
-// Executes the task.
-//
-// Panics if task's Host lock isn't held.
-//
-// SAFETY: `task` must be legally dereferencable.
-void taskref_execute(struct TaskRef *task, Host *host);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
