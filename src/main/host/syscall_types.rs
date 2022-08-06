@@ -351,19 +351,19 @@ impl From<c::SysCallReturn> for SyscallResult {
         match r.state {
             c::SysCallReturnState_SYSCALL_DONE => {
                 match crate::utility::syscall::raw_return_value_to_result(unsafe {
-                    r.retval.as_i64
+                    r.u.done.retval.as_i64
                 }) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(SyscallError::Failed(Failed {
                         errno: e.into(),
-                        restartable: r.restartable,
+                        restartable: unsafe { r.u.done.restartable },
                     })),
                 }
             }
             // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
             c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Blocked(Blocked {
-                condition: unsafe { SysCallCondition::consume_from_c(r.cond) },
-                restartable: r.restartable,
+                condition: unsafe { SysCallCondition::consume_from_c(r.u.blocked.cond) },
+                restartable: unsafe { r.u.blocked.restartable },
             })),
             c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
             _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
@@ -376,29 +376,37 @@ impl From<SyscallResult> for c::SysCallReturn {
         match syscall_return {
             Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: r.into(),
-                cond: std::ptr::null_mut(),
-                restartable: false,
+                u: c::SysCallReturnBody {
+                    done: c::SysCallReturnDone {
+                        retval: r.into(),
+                        // N/A for non-error result (and non-EINTR result in particular)
+                        restartable: false,
+                    },
+                },
             },
             Err(SyscallError::Failed(failed)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: c::SysCallReg {
-                    as_i64: -(failed.errno as i64),
+                u: c::SysCallReturnBody {
+                    done: c::SysCallReturnDone {
+                        retval: (-(failed.errno as i64)).into(),
+                        restartable: failed.restartable,
+                    },
                 },
-                cond: std::ptr::null_mut(),
-                restartable: failed.restartable,
             },
             Err(SyscallError::Blocked(blocked)) => Self {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
-                retval: c::SysCallReg { as_i64: 0 },
-                cond: blocked.condition.into_inner(),
-                restartable: blocked.restartable,
+                u: c::SysCallReturnBody {
+                    blocked: c::SysCallReturnBlocked {
+                        cond: blocked.condition.into_inner(),
+                        restartable: blocked.restartable,
+                    },
+                },
             },
             Err(SyscallError::Native) => Self {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
-                retval: c::SysCallReg { as_i64: 0 },
-                cond: std::ptr::null_mut(),
-                restartable: false,
+                // No field for native. This is the recommended way to default-initialize a union.
+                // https://rust-lang.github.io/rust-bindgen/using-unions.html#using-the-union-builtin
+                u: unsafe { std::mem::zeroed::<c::SysCallReturnBody>() },
             },
         }
     }

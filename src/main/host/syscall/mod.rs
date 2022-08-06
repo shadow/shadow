@@ -31,25 +31,3 @@ impl Trigger {
         })
     }
 }
-
-impl c::SysCallReturn {
-    pub fn from_errno(errno: nix::errno::Errno) -> Self {
-        Self {
-            state: c::SysCallReturnState_SYSCALL_DONE,
-            retval: c::SysCallReg {
-                as_i64: -(errno as i64),
-            },
-            cond: std::ptr::null_mut(),
-            restartable: false,
-        }
-    }
-
-    pub fn from_int(int: i64) -> Self {
-        Self {
-            state: c::SysCallReturnState_SYSCALL_DONE,
-            retval: c::SysCallReg { as_i64: int },
-            cond: std::ptr::null_mut(),
-            restartable: false,
-        }
-    }
-}

@@ -33,11 +33,11 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         struct timespec ts = {0};
         int rv = process_readPtr(sys->process, &ts, timeoutVPtr, sizeof(ts));
         if (rv < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
         timeoutSimTime = simtime_from_timespec(ts);
         if (timeoutSimTime == SIMTIME_INVALID) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+            return syscallreturn_makeDoneErrno(EINVAL);
         }
     }
 
@@ -47,14 +47,14 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     const uint32_t* futexVal = process_getReadablePtr(sys->process, futexVPtr, sizeof(uint32_t));
     if (!futexVal) {
         warning("Couldn't read futex address %p", (void*)futexVPtr.val);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     trace(
         "Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, (uint32_t)expectedVal);
     if (!_syscallhandler_wasBlocked(sys) && *futexVal != (uint32_t)expectedVal) {
         trace("Futex values don't match, try again later");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EAGAIN};
+        return syscallreturn_makeDoneErrno(EAGAIN);
     }
 
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
@@ -89,7 +89,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
             utility_debugAssert(success);
         }
 
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneI64(result);
     }
 
     // We'll need to block, dynamically create a futex if one does not yet exist
@@ -112,7 +112,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
                                                : timeoutSimTime;
         syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
     }
-    return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = true};
+    return syscallreturn_makeBlocked(cond, true);
 }
 
 static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,
@@ -126,14 +126,14 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
 
     trace("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);
 
-    int numWoken = 0;
+    unsigned int numWoken = 0;
     if (futex && numWakeups > 0) {
         trace("Futex trying to perform %i wakeups", numWakeups);
         numWoken = futex_wake(futex, (unsigned int)numWakeups);
         trace("Futex was able to perform %i/%i wakeups", numWoken, numWakeups);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = numWoken};
+    return syscallreturn_makeDoneU64(numWoken);
 }
 
 ///////////////////////////////////////////////////////////
@@ -160,12 +160,6 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
 
     trace("futex called with addr=%p op=%i (operation=%i and options=%i) and val=%i",
           (void*)uaddrptr.val, futex_op, operation, options, val);
-
-    // futex addr cannot be NULL
-    if (!uaddrptr.val) {
-        trace("Futex addr cannot be NULL");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
 
     switch (operation) {
         case FUTEX_WAIT: {
@@ -208,7 +202,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
     }
 
     warning("Unhandled futex operation %i", operation);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    return syscallreturn_makeDoneErrno(ENOSYS);
 }
 
 SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
@@ -216,7 +210,7 @@ SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallA
 
     debug("get_robust_list was called but we don't yet support it");
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    return syscallreturn_makeDoneErrno(ENOSYS);
 }
 
 SysCallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
@@ -224,5 +218,5 @@ SysCallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallA
 
     debug("set_robust_list was called but we don't yet support it");
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    return syscallreturn_makeDoneErrno(ENOSYS);
 }

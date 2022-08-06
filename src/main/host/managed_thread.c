@@ -319,17 +319,18 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                         _managedthread_waitForNextEvent(mthread, &mthread->currentEvent);
                     }
 
-                    return result.cond;
+                    return syscallreturn_blocked(&result)->cond;
                 }
 
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
+                    SysCallReturnDone* done = syscallreturn_done(&result);
                     shim_result =
                         (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                                     .event_data = {
-                                        .syscall_complete = {.retval = result.retval,
-                                                             .restartable = result.restartable},
+                                        .syscall_complete = {.retval = done->retval,
+                                                             .restartable = done->restartable},
 
                                     }};
                 } else if (result.state == SYSCALL_NATIVE) {

@@ -241,7 +241,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
     LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     LegacyFileType dtype = legacyfile_getType(desc);
@@ -259,5 +259,5 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
         result = -ENOTTY;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }

@@ -1182,7 +1182,10 @@ void process_flushPtrs(Process* proc) {
 
     // Flush and free any writers
     if (proc->memoryMutRef) {
-        memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
+        int rv = memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
+        if (rv) {
+            panic("Couldn't flush mutable reference");
+        }
         proc->memoryMutRef = NULL;
     }
 }

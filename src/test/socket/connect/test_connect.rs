@@ -318,7 +318,7 @@ fn test_null_addr() -> Result<(), String> {
     let args = ConnectArguments {
         fd: fd,
         addr: None,
-        addr_len: 5,
+        addr_len: std::mem::size_of::<libc::sockaddr_in>() as u32,
     };
 
     test_utils::run_and_close_fds(&[fd], || check_connect_call(&args, Some(libc::EFAULT)))

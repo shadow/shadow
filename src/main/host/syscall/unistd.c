@@ -38,7 +38,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     /* Get the descriptor. */
     LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+        return syscallreturn_makeDoneErrno(EBADF);
     }
 
     /* Some logic depends on the descriptor type. */
@@ -46,7 +46,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESPIPE};
+        return syscallreturn_makeDoneErrno(ESPIPE);
     }
 
     /* Divert io on sockets to socket handler to pick up special checks. */
@@ -58,8 +58,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     /* Now it's an error if the descriptor is closed. */
     int errorCode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errorCode != 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return syscallreturn_makeDoneErrno(-errorCode);
     }
     utility_debugAssert(desc);
 
@@ -115,13 +114,11 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         /* We need to block until the descriptor is ready to read. */
         Trigger trigger =
             (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(desc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
@@ -132,7 +129,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     /* Get the descriptor. */
     LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+        return syscallreturn_makeDoneErrno(EBADF);
     }
 
     /* Some logic depends on the descriptor type. */
@@ -140,7 +137,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESPIPE};
+        return syscallreturn_makeDoneErrno(ESPIPE);
     }
 
     /* Divert io on sockets to socket handler to pick up special checks. */
@@ -152,8 +149,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     /* Now it's an error if the descriptor is closed. */
     gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errorCode != 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return syscallreturn_makeDoneErrno(-errorCode);
     }
     utility_debugAssert(desc);
 
@@ -200,13 +196,11 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
         /* We need to block until the descriptor is ready to write. */
         Trigger trigger =
             (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_WRITABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(desc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 ///////////////////////////////////////////////////////////
@@ -240,39 +234,36 @@ SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
 SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
     trace("Exit group with exit code %ld", args->args[0].as_i64);
     process_markAsExiting(sys->process);
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    return syscallreturn_makeNative();
 }
 
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
-    guint pid = process_getProcessID(sys->process);
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)pid};
+    pid_t pid = process_getProcessID(sys->process);
+    return syscallreturn_makeDoneI64(pid);
 }
 
 SysCallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     // Just return a constant
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 1};
+    return syscallreturn_makeDoneI64(1);
 }
 
 SysCallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr tidptr = args->args[0].as_ptr; // int*
     thread_setTidAddress(sys->thread, tidptr);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
+    return syscallreturn_makeDoneI64(thread_getID(sys->thread));
 }
 
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     struct utsname* buf = NULL;
 
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!args->args[0].as_ptr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     buf = process_getWriteablePtr(sys->process, args->args[0].as_ptr, sizeof(*buf));
+    if (!buf) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
     const gchar* hostname = host_getName(sys->host);
 
@@ -282,5 +273,5 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
     snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
     snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }

@@ -52,15 +52,11 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     trace("Trying to open file with path name at plugin addr %p",
           (void*)pathnamePtr.val);
 
-    if (!pathnamePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get the path string from the plugin. */
     const char* pathname;
     int errcode = process_getReadableString(sys->process, pathnamePtr, PATH_MAX, &pathname, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Create and open the file. */
@@ -72,13 +68,13 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
         /* This will unref/free the RegularFile. */
         legacyfile_close((LegacyFile*)filed, sys->host);
         legacyfile_unref(filed);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)filed, flags & O_CLOEXEC);
     int handle = process_registerDescriptor(sys->process, desc);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
+    return syscallreturn_makeDoneI64(handle);
 }
 
 static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
@@ -86,10 +82,10 @@ static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = regularfile_fsync(file_desc)};
+    return syscallreturn_makeDoneI64(regularfile_fsync(file_desc));
 }
 
 ///////////////////////////////////////////////////////////
@@ -114,23 +110,20 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
     PluginPtr bufPtr = args->args[1].as_ptr; // struct stat*
 
-    /* Check that the buffer is not NULL */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get some memory in which to return the result. */
     struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    if (!buf) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fstat(file_desc, buf)};
+    return syscallreturn_makeDoneI64(regularfile_fstat(file_desc, buf));
 }
 
 SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
@@ -138,23 +131,20 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
     PluginPtr bufPtr = args->args[1].as_ptr; // struct statfs*
 
-    /* Check that the buffer is not NULL */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get some memory in which to return the result. */
     struct statfs* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    if (!buf) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fstatfs(file_desc, buf)};
+    return syscallreturn_makeDoneI64(regularfile_fstatfs(file_desc, buf));
 }
 
 SysCallReturn syscallhandler_fsync(SysCallHandler* sys,
@@ -180,12 +170,11 @@ SysCallReturn syscallhandler_fchown(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fchown(file_desc, args->args[1].as_u64, args->args[2].as_u64)};
+    return syscallreturn_makeDoneI64(
+        regularfile_fchown(file_desc, args->args[1].as_u64, args->args[2].as_u64));
 }
 
 SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
@@ -196,11 +185,10 @@ SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = regularfile_fchmod(file_desc, args->args[1].as_u64)};
+    return syscallreturn_makeDoneI64(regularfile_fchmod(file_desc, args->args[1].as_u64));
 }
 
 SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
@@ -211,13 +199,11 @@ SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fallocate(
-            file_desc, args->args[1].as_i64, args->args[2].as_u64, args->args[3].as_u64)};
+    return syscallreturn_makeDoneI64(regularfile_fallocate(
+        file_desc, args->args[1].as_i64, args->args[2].as_u64, args->args[3].as_u64));
 }
 
 SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
@@ -228,11 +214,10 @@ SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = regularfile_ftruncate(file_desc, args->args[1].as_u64)};
+    return syscallreturn_makeDoneI64(regularfile_ftruncate(file_desc, args->args[1].as_u64));
 }
 
 SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
@@ -243,13 +228,11 @@ SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fadvise(
-            file_desc, args->args[1].as_u64, args->args[2].as_u64, args->args[3].as_i64)};
+    return syscallreturn_makeDoneI64(regularfile_fadvise(
+        file_desc, args->args[1].as_u64, args->args[2].as_u64, args->args[3].as_i64));
 }
 
 SysCallReturn syscallhandler_flock(SysCallHandler* sys,
@@ -260,11 +243,10 @@ SysCallReturn syscallhandler_flock(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_flock(file_desc, args->args[1].as_i64)};
+    return syscallreturn_makeDoneI64(regularfile_flock(file_desc, args->args[1].as_i64));
 }
 
 SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
@@ -275,30 +257,24 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
     size_t size = args->args[3].as_u64;
     int flags = args->args[4].as_i64;
 
-    if (!namePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the name/value strings from the plugin. */
     const char* name;
     errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const void* value =
         (valuePtr.val && size > 0) ? process_getReadablePtr(sys->process, valuePtr, size) : NULL;
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fsetxattr(file_desc, name, value, size, flags)};
+    return syscallreturn_makeDoneI64(regularfile_fsetxattr(file_desc, name, value, size, flags));
 }
 
 SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
@@ -308,29 +284,24 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
     PluginPtr valuePtr = args->args[2].as_ptr; // void*
     size_t size = args->args[3].as_u64;
 
-    if (!namePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the name/value strings from the plugin. */
     const char* name;
     errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     void* value =
         (valuePtr.val && size > 0) ? process_getWriteablePtr(sys->process, valuePtr, size) : NULL;
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = regularfile_fgetxattr(file_desc, name, value, size)};
+    return syscallreturn_makeDoneI64(regularfile_fgetxattr(file_desc, name, value, size));
 }
 
 SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
@@ -343,14 +314,13 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     void* list =
         (listPtr.val && size > 0) ? process_getWriteablePtr(sys->process, listPtr, size) : NULL;
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_flistxattr(file_desc, list, size)};
+    return syscallreturn_makeDoneI64(regularfile_flistxattr(file_desc, list, size));
 }
 
 SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
@@ -358,26 +328,21 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
     int fd = args->args[0].as_i64;
     PluginPtr namePtr = args->args[1].as_ptr; // const char*
 
-    if (!namePtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the name string from the plugin. */
     const char* name;
     errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_fremovexattr(file_desc, name)};
+    return syscallreturn_makeDoneI64(regularfile_fremovexattr(file_desc, name));
 }
 
 SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
@@ -391,12 +356,10 @@ SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_sync_range(file_desc, offset, nbytes, flags)};
+    return syscallreturn_makeDoneI64(regularfile_sync_range(file_desc, offset, nbytes, flags));
 }
 
 SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
@@ -409,11 +372,10 @@ SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_readahead(file_desc, offset, count)};
+    return syscallreturn_makeDoneI64(regularfile_readahead(file_desc, offset, count));
 }
 
 SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
@@ -426,16 +388,15 @@ SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_lseek(file_desc, offset, whence)};
+    return syscallreturn_makeDoneI64(regularfile_lseek(file_desc, offset, whence));
 }
 
 SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
                                       const SysCallArgs* args) {
-    unsigned int fd = args->args[0].as_u64;
+    int fd = args->args[0].as_i64;
     PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
     unsigned int count = args->args[2].as_u64;
 
@@ -443,27 +404,21 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    /* Path should be non-NULL. */
-    if (!dirpPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
     struct linux_dirent* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    if (!dirp) {
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_getdents(file_desc, dirp, count)};
+    return syscallreturn_makeDoneI64(regularfile_getdents(file_desc, dirp, count));
 }
 
 SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
                                         const SysCallArgs* args) {
-    unsigned int fd = args->args[0].as_u64;
+    int fd = args->args[0].as_i64;
     PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
     unsigned int count = args->args[2].as_u64;
 
@@ -471,20 +426,14 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    /* Path should be non-NULL. */
-    if (!dirpPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
     struct linux_dirent64* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    if (!dirp) {
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = regularfile_getdents64(file_desc, dirp, count)};
+    return syscallreturn_makeDoneI64(regularfile_getdents64(file_desc, dirp, count));
 }

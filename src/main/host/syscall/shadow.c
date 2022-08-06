@@ -34,14 +34,14 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
 
     if (!name_ptr.val || !addr_ptr.val || addr_len < sizeof(uint32_t)) {
         trace("Invalid argument detected, returning EINVAL");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     const char* name;
     int rv = process_getReadableString(
         sys->process, name_ptr, name_len + 1 /* NULL byte */, &name, &name_len);
     if (rv != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+        return syscallreturn_makeDoneErrno(-rv);
     }
 
     if (strcasecmp(name, "localhost") == 0) {
@@ -49,7 +49,7 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
         *addr = htonl(INADDR_LOOPBACK);
         trace("Returning loopback address for localhost");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     Address* address;
@@ -73,18 +73,18 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
         *addr = ip;
 
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     } else {
         trace("Unable to find address for name %s", name);
         // return EFAULT like gethostname
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 }
 
 static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const SysCallArgs* args,
                                                      ShMemBlock* block) {
     if (!block) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENODEV};
+        return syscallreturn_makeDoneErrno(ENODEV);
     }
 
     PluginPtr shm_blk_pptr = args->args[0].as_ptr;
@@ -93,7 +93,7 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
         process_getWriteablePtr(sys->process, shm_blk_pptr, sizeof(*shm_blk_ptr));
     *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_shadow_get_ipc_blk(SysCallHandler* sys, const SysCallArgs* args) {
@@ -116,9 +116,9 @@ SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, con
     } else {
         trace("Not initializing memory manager");
     }
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_shadow_yield(SysCallHandler* sys, const SysCallArgs* args) {
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }

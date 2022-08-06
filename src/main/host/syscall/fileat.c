@@ -81,7 +81,7 @@ _syscallhandler_renameatHelper(SysCallHandler* sys, int olddirfd,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, olddirfd, oldpathPtr, &olddir_desc, &oldpath);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     RegularFile* newdir_desc = NULL;
@@ -90,14 +90,13 @@ _syscallhandler_renameatHelper(SysCallHandler* sys, int olddirfd,
     errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, newdirfd, newpathPtr, &newdir_desc, &newpath);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = regularfile_renameat2(
-                               olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_renameat2(olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd));
 }
 
 ///////////////////////////////////////////////////////////
@@ -121,7 +120,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Create and open the file. */
@@ -133,13 +132,13 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
         /* This will unref/free the RegularFile. */
         legacyfile_close((LegacyFile*)file_desc, sys->host);
         legacyfile_unref(file_desc);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)file_desc, flags & O_CLOEXEC);
     int handle = process_registerDescriptor(sys->process, desc);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
+    return syscallreturn_makeDoneI64(handle);
 }
 
 SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
@@ -154,7 +153,7 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
 
     ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Copy the path rather than getting a reference, so that the MemoryManager
@@ -163,22 +162,19 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
     char pathname[PATH_MAX];
     errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    /* Check for non-NULL buffer. */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get some memory in which to return the result. */
     struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    if (!buf) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fstatat(dir_desc, pathname, buf, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_fstatat(dir_desc, pathname, buf, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_fchownat(SysCallHandler* sys,
@@ -196,14 +192,13 @@ SysCallReturn syscallhandler_fchownat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fchownat(dir_desc, pathname, owner, group, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_fchownat(dir_desc, pathname, owner, group, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_fchmodat(SysCallHandler* sys,
@@ -220,14 +215,13 @@ SysCallReturn syscallhandler_fchmodat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_fchmodat(dir_desc, pathname, mode, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_fchmodat(dir_desc, pathname, mode, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
@@ -243,20 +237,18 @@ SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const struct timeval* times =
         process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
     if (!times) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_futimesat(dir_desc, pathname, times, plugin_cwd)};
+    return syscallreturn_makeDoneI64(regularfile_futimesat(dir_desc, pathname, times, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
@@ -273,20 +265,19 @@ SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const struct timespec* times =
         process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
     if (!times) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_utimensat(dir_desc, pathname, times, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_utimensat(dir_desc, pathname, times, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_faccessat(SysCallHandler* sys,
@@ -303,14 +294,13 @@ SysCallReturn syscallhandler_faccessat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_faccessat(dir_desc, pathname, mode, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_faccessat(dir_desc, pathname, mode, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_mkdirat(SysCallHandler* sys,
@@ -326,14 +316,12 @@ SysCallReturn syscallhandler_mkdirat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_mkdirat(dir_desc, pathname, mode, plugin_cwd)};
+    return syscallreturn_makeDoneI64(regularfile_mkdirat(dir_desc, pathname, mode, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_mknodat(SysCallHandler* sys,
@@ -350,14 +338,13 @@ SysCallReturn syscallhandler_mknodat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_mknodat(dir_desc, pathname, mode, dev, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_mknodat(dir_desc, pathname, mode, dev, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_linkat(SysCallHandler* sys,
@@ -375,7 +362,7 @@ SysCallReturn syscallhandler_linkat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, olddirfd, oldpathPtr, &olddir_desc, &oldpath);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     RegularFile* newdir_desc = NULL;
@@ -384,14 +371,13 @@ SysCallReturn syscallhandler_linkat(SysCallHandler* sys,
     errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, newdirfd, newpathPtr, &newdir_desc, &newpath);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){.state = SYSCALL_DONE,
-                           .retval.as_i64 = regularfile_linkat(
-                               olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_linkat(olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_unlinkat(SysCallHandler* sys,
@@ -407,14 +393,12 @@ SysCallReturn syscallhandler_unlinkat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, pathnamePtr, &dir_desc, &pathname);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_unlinkat(dir_desc, pathname, flags, plugin_cwd)};
+    return syscallreturn_makeDoneI64(regularfile_unlinkat(dir_desc, pathname, flags, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_symlinkat(SysCallHandler* sys,
@@ -430,21 +414,20 @@ SysCallReturn syscallhandler_symlinkat(SysCallHandler* sys,
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
         sys, dirfd, linkpathPtr, &dir_desc, &linkpath);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
     const char* targetpath;
     errcode = process_getReadableString(sys->process, targetpathPtr, PATH_MAX, &targetpath, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_symlinkat(dir_desc, linkpath, targetpath, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_symlinkat(dir_desc, linkpath, targetpath, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
@@ -459,7 +442,7 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
 
     ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Copy the path rather than getting a reference, so that the MemoryManager
@@ -468,20 +451,19 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
     char pathname[PATH_MAX];
     errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
     char* buf = process_getWriteablePtr(sys->process, bufPtr, bufSize);
     if (!buf) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd));
 }
 
 SysCallReturn syscallhandler_renameat(SysCallHandler* sys,
@@ -512,7 +494,7 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
 
     ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Copy the path rather than getting a reference, so that the MemoryManager
@@ -521,19 +503,18 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
     char pathname[PATH_MAX];
     errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
     struct statx* statxbuf = process_getWriteablePtr(sys->process, statxbufPtr, sizeof(*statxbuf));
     if (!statxbuf) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     const char* plugin_cwd = process_getWorkingDir(sys->process);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = regularfile_statx(dir_desc, pathname, flags, mask, statxbuf, plugin_cwd)};
+    return syscallreturn_makeDoneI64(
+        regularfile_statx(dir_desc, pathname, flags, mask, statxbuf, plugin_cwd));
 }
 #endif

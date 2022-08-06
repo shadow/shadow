@@ -203,7 +203,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     int errcode = _syscallhandler_validateMmapArgsHelper(
         sys, fd, len, prot, flags, &file_desc);
     if (errcode) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Now file_desc is null for an anonymous mapping, non-null otherwise. */
@@ -213,8 +213,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
         pluginFD = _syscallhandler_openPluginFile(sys, fd, file_desc);
         if (pluginFD < 0) {
             warning("mmap on fd %d for %zu bytes failed.", fd, len);
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -EACCES};
+            return syscallreturn_makeDoneErrno(EACCES);
         }
     }
 
@@ -223,15 +222,13 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     SysCallReturn result =
         memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
     if (result.state == SYSCALL_NATIVE) {
-        result = (SysCallReturn){.state = SYSCALL_DONE,
-                                 .retval = thread_nativeSyscall(sys->thread, SYS_mmap, addrPtr, len,
-                                                                prot, flags, pluginFD, offset)};
+        return syscallreturn_makeDoneI64(thread_nativeSyscall(
+            sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
     }
 
     trace("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
-          "%zu bytes returned %p (%s)",
-          (void*)addrPtr.val, pluginFD, len, (void*)result.retval.as_u64,
-          strerror(syscall_rawReturnValueToErrno(result.retval.as_i64)));
+          "%zu bytes returned %p",
+          (void*)addrPtr.val, pluginFD, len, (void*)syscallreturn_done(&result)->retval.as_u64);
 
     /* Close the file we asked them to open. */
     if (pluginFD >= 0) {
