@@ -11,7 +11,7 @@ find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
 
-pkg_check_modules(GLIB REQUIRED glib-2.0>=2.32)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.32)
 
 ## pthreads
 set(CMAKE_THREAD_PREFER_PTHREAD 1)

@@ -52,6 +52,7 @@ if(SHADOW_COVERAGE STREQUAL ON)
 endif()
 
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
+target_link_libraries(shadow-remora INTERFACE "-lstdc++")
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -127,52 +128,56 @@ set(shadow_srcs
 add_library(shadow-c STATIC ${shadow_srcs})
 target_link_libraries(shadow-c INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${GLIB_LIBRARIES}
+   PkgConfig::GLIB
    shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
 
-# TODO: extract -L and -l flags from the output of
-# `get_target_property(INTERFACE_LINK_LIBRARIES shadow-c
-# INTERFACE_LINK_LIBRARIES)`, and pass those through to cargo.
-set(RUST_DEPENDS "shadow-c")
-get_target_property(INTERFACE_LINK_LIBRARIES shadow-c INTERFACE_LINK_LIBRARIES)
-foreach(INTERFACE_LINK_LIBRARY IN LISTS INTERFACE_LINK_LIBRARIES)
+# All targets that our Rust project directly depends on.
+set(LIBS_TO_PROCESS "shadow-c")
+
+# Process each dependency, adding the compiler flags for individual libraries,
+# and recursively processing their dependencies.
+set(LIBS_SEEN "${LIBS_TO_PROCESS}")
+while(NOT "${LIBS_TO_PROCESS}" STREQUAL "")
+    # The list POP_FRONT operation would be a little nicer here, but it needs
+    # cmake 3.15.
+    list(GET LIBS_TO_PROCESS 0 INTERFACE_LINK_LIBRARY)
+    list(REMOVE_AT LIBS_TO_PROCESS 0)
     if(INTERFACE_LINK_LIBRARY MATCHES "(.*)/lib(.*)\(.so|.a)")
-        set(RUSTFLAGS "-L${CMAKE_MATCH_1} -l${CMAKE_MATCH_2} ${RUSTFLAGS}")
+        set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_MATCH_1} -l${CMAKE_MATCH_2}")
     elseif(INTERFACE_LINK_LIBRARY MATCHES "^-l.*")
-        set(RUSTFLAGS "${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
-    elseif(INTERFACE_LINK_LIBRARY MATCHES "glib-2.0")
-        # This symbol comes from ${GLIB_LIBRARIES}; without
-        # this clause we'd treat it as a target in the `else` clause
-        # below, but that fails since cmake doesn't know how to build it.
-        #
-        # XXX: there must be a nicer way of handling this than special-casing glib-2.0.
-        set(RUSTFLAGS "-l${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
+        set(RUSTFLAGS "${RUSTFLAGS} ${INTERFACE_LINK_LIBRARY}")
     else()
-        # Treat as a target
-        #
-        # XXX: LIBRARY_OUTPUT_DIRECTORY seems to not be set. We add the
-        # corresponding -L's manually after this loop.
-        #get_target_property(LIB logger LIBRARY_OUTPUT_DIRECTORY)
+        get_target_property(TYPE ${INTERFACE_LINK_LIBRARY} TYPE)
 
-        set(RUSTFLAGS "-l${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
+        get_target_property(IMPORTED ${INTERFACE_LINK_LIBRARY} IMPORTED)
+        if ("${IMPORTED}" STREQUAL "FALSE")
+            list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
+        endif()
 
-        # The DEPENDS clause in ExternalProject_Add doesn't recurse into
-        # INTERFACE dependencies; we need to add them ourselves too.
-        list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
+        if ("${TYPE}" STREQUAL "STATIC_LIBRARY")
+            get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
+            set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
+
+            get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
+            set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
+        elseif("${TYPE}" STREQUAL "INTERFACE_LIBRARY")
+            # Nothing to do for the target itself, but we'll recurse
+            # into its dependencies below.
+        else()
+            message(FATAL_ERROR "Unhandled TYPE:${TYPE} for ${INTERFACE_LINK_LIBRARY}")
+        endif()
+        get_target_property(REC_INTERFACE_LINK_LIBRARIES ${INTERFACE_LINK_LIBRARY} INTERFACE_LINK_LIBRARIES)
+        if (NOT "${REC_INTERFACE_LINK_LIBRARIES}" STREQUAL "REC_INTERFACE_LINK_LIBRARIES-NOTFOUND")
+            foreach(REC_INTERFACE_LINK_LIBRARY IN LISTS REC_INTERFACE_LINK_LIBRARIES)
+                list(FIND LIBS_SEEN "${REC_INTERFACE_LINK_LIBRARY}" IDX)
+                if ("${IDX}" EQUAL "-1")
+                    list(APPEND LIBS_TO_PROCESS "${REC_INTERFACE_LINK_LIBRARY}")
+                    list(APPEND LIBS_SEEN "${REC_INTERFACE_LINK_LIBRARY}")
+                endif()
+            endforeach()
+        endif()
     endif()
-endforeach(INTERFACE_LINK_LIBRARY)
-# Add shadow-c itself
-set(RUSTFLAGS "${RUSTFLAGS} -lshadow-c")
-# -lstdc++ is needed as a dependency when linking remora. TODO: make it an
-# INTERFACE dependency on remora and make the loop above recursive.
-set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
-# Manually add search-directories for our custom libraries.
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shim")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shmem")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/openssl_preload")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/tsc")
+endwhile()
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} SHADOW_VERSION=\"${SHADOW_VERSION_STRING_CONF}\"")
 
