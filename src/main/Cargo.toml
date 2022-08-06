@@ -9,7 +9,7 @@ path = "lib.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.60", features = ["backtrace"] }
 atomic_refcell = "0.1"
 backtrace = "0.3.66"
 bitflags = "1.3"
