@@ -6,7 +6,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
-use crate::utility::event_queue::EventQueue;
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::HostTreePointer;
 
 use unix::UnixSocket;
@@ -71,10 +71,10 @@ impl Socket {
     pub fn connect(
         &self,
         addr: &nix::sys::socket::SockAddr,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         match self {
-            Self::Unix(socket) => UnixSocket::connect(socket, addr, event_queue),
+            Self::Unix(socket) => UnixSocket::connect(socket, addr, cb_queue),
         }
     }
 }
@@ -168,8 +168,8 @@ impl SocketRefMut<'_> {
     enum_passthrough!(self, (), Unix;
         pub fn supports_sa_restart(&self) -> bool
     );
-    enum_passthrough!(self, (event_queue), Unix;
-        pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>
+    enum_passthrough!(self, (cb_queue), Unix;
+        pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
     enum_passthrough!(self, (status), Unix;
         pub fn set_status(&mut self, status: FileStatus)
@@ -184,13 +184,13 @@ impl SocketRefMut<'_> {
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
 
-    enum_passthrough_generic!(self, (bytes, offset, event_queue), Unix;
-        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+    enum_passthrough_generic!(self, (bytes, offset, cb_queue), Unix;
+        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (source, offset, event_queue), Unix;
-        pub fn write<R>(&mut self, source: R, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+    enum_passthrough_generic!(self, (source, offset, cb_queue), Unix;
+        pub fn write<R>(&mut self, source: R, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 }
@@ -217,29 +217,29 @@ impl SocketRefMut<'_> {
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 
-    enum_passthrough_generic!(self, (source, addr, event_queue), Unix;
+    enum_passthrough_generic!(self, (source, addr, cb_queue), Unix;
         // https://github.com/shadow/shadow/issues/2093
         #[allow(deprecated)]
-        pub fn sendto<R>(&mut self, source: R, addr: Option<nix::sys::socket::SockAddr>, event_queue: &mut EventQueue)
+        pub fn sendto<R>(&mut self, source: R, addr: Option<nix::sys::socket::SockAddr>, cb_queue: &mut CallbackQueue)
             -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (bytes, event_queue), Unix;
+    enum_passthrough_generic!(self, (bytes, cb_queue), Unix;
         // https://github.com/shadow/shadow/issues/2093
         #[allow(deprecated)]
-        pub fn recvfrom<W>(&mut self, bytes: W, event_queue: &mut EventQueue)
+        pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
             -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough!(self, (backlog, event_queue), Unix;
-        pub fn listen(&mut self, backlog: i32, event_queue: &mut EventQueue) -> Result<(), SyscallError>
+    enum_passthrough!(self, (backlog, cb_queue), Unix;
+        pub fn listen(&mut self, backlog: i32, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
 
-    pub fn accept(&mut self, event_queue: &mut EventQueue) -> Result<Socket, SyscallError> {
+    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<Socket, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.accept(event_queue).map(Socket::Unix),
+            Self::Unix(socket) => socket.accept(cb_queue).map(Socket::Unix),
         }
     }
 }

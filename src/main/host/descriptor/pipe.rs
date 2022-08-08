@@ -11,7 +11,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
-use crate::utility::event_queue::{EventQueue, Handle};
+use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
 
@@ -76,7 +76,7 @@ impl Pipe {
         self.buffer.as_ref().unwrap().borrow().max_len()
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+    pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         if self.state.contains(FileState::CLOSED) {
             log::warn!("Attempting to close an already-closed pipe");
         }
@@ -90,7 +90,7 @@ impl Pipe {
                 .as_ref()
                 .unwrap()
                 .borrow_mut()
-                .remove_writer(writer_handle, event_queue);
+                .remove_writer(writer_handle, cb_queue);
         }
 
         // if acting as a reader, inform the buffer that there is one fewer readers
@@ -99,7 +99,7 @@ impl Pipe {
                 .as_ref()
                 .unwrap()
                 .borrow_mut()
-                .remove_reader(reader_handle, event_queue);
+                .remove_reader(reader_handle, cb_queue);
         }
 
         // no need to hold on to the buffer anymore
@@ -109,7 +109,7 @@ impl Pipe {
         self.copy_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
-            event_queue,
+            cb_queue,
         );
 
         Ok(())
@@ -119,7 +119,7 @@ impl Pipe {
         &mut self,
         mut bytes: W,
         offset: libc::off_t,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         W: std::io::Write + std::io::Seek,
@@ -139,7 +139,7 @@ impl Pipe {
             .as_ref()
             .unwrap()
             .borrow_mut()
-            .read(&mut bytes, event_queue)?;
+            .read(&mut bytes, cb_queue)?;
 
         // the read would block if all:
         //  1. we could not read any bytes
@@ -159,7 +159,7 @@ impl Pipe {
         &mut self,
         mut bytes: R,
         offset: libc::off_t,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
@@ -195,9 +195,7 @@ impl Pipe {
         let len = bytes.stream_len_bp()? as usize;
 
         match self.write_mode {
-            WriteMode::Stream => Ok(buffer
-                .write_stream(bytes.by_ref(), len, event_queue)?
-                .into()),
+            WriteMode::Stream => Ok(buffer.write_stream(bytes.by_ref(), len, cb_queue)?.into()),
             WriteMode::Packet => {
                 let mut num_written = 0;
 
@@ -213,8 +211,7 @@ impl Pipe {
                     // split the packet up into PIPE_BUF-sized packets
                     let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF);
 
-                    if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, event_queue)
-                    {
+                    if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, cb_queue) {
                         // if we've already written bytes, return those instead of an error
                         if num_written > 0 {
                             break Ok(num_written.into());
@@ -241,7 +238,7 @@ impl Pipe {
     pub fn connect_to_buffer(
         arc: &Arc<AtomicRefCell<Self>>,
         buffer: Arc<AtomicRefCell<SharedBuf>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) {
         let weak = Arc::downgrade(arc);
         let pipe = &mut *arc.borrow_mut();
@@ -254,7 +251,7 @@ impl Pipe {
                     .as_ref()
                     .unwrap()
                     .borrow_mut()
-                    .add_writer(event_queue),
+                    .add_writer(cb_queue),
             );
         }
 
@@ -264,7 +261,7 @@ impl Pipe {
                     .as_ref()
                     .unwrap()
                     .borrow_mut()
-                    .add_reader(event_queue),
+                    .add_reader(cb_queue),
             );
         }
 
@@ -287,13 +284,13 @@ impl Pipe {
 
         let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
             monitoring,
-            move |buffer_state, event_queue| {
+            move |buffer_state, cb_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
                     let mut pipe = pipe.borrow_mut();
 
                     // update the pipe file's state to align with the buffer's current state
-                    pipe.align_state_to_buffer(buffer_state, event_queue);
+                    pipe.align_state_to_buffer(buffer_state, cb_queue);
                 }
             },
         );
@@ -302,14 +299,14 @@ impl Pipe {
 
         // update the pipe file's initial state to align with the buffer's current state
         let buffer_state = pipe.buffer.as_ref().unwrap().borrow().state();
-        pipe.align_state_to_buffer(buffer_state, event_queue);
+        pipe.align_state_to_buffer(buffer_state, cb_queue);
     }
 
     pub fn add_listener(
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
@@ -330,7 +327,7 @@ impl Pipe {
     /// Align the pipe's state to the buffer state. For example if the buffer is both `READABLE` and
     /// `WRITABLE`, and the pipe is only open in `READ` mode, the pipe's `READABLE` state will be
     /// set and the `WRITABLE` state will be unchanged.
-    fn align_state_to_buffer(&mut self, buffer_state: BufferState, event_queue: &mut EventQueue) {
+    fn align_state_to_buffer(&mut self, buffer_state: BufferState, cb_queue: &mut CallbackQueue) {
         let mut mask = FileState::empty();
         let mut file_state = FileState::empty();
 
@@ -358,20 +355,20 @@ impl Pipe {
         }
 
         // update the file's state
-        self.copy_state(mask, file_state, event_queue);
+        self.copy_state(mask, file_state, cb_queue);
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
+    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, event_queue);
+        self.handle_state_change(old_state, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
@@ -380,7 +377,7 @@ impl Pipe {
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, event_queue);
+            .notify_listeners(self.state, states_changed, cb_queue);
     }
 }
 

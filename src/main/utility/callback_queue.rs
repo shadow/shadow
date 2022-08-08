@@ -9,9 +9,9 @@ use std::sync::{Arc, Weak};
 
 /// A queue of events (functions/closures) which when run can add their own events to the queue.
 /// This allows events to be deferred and run later.
-pub struct EventQueue(std::collections::VecDeque<Box<dyn FnOnce(&mut Self)>>);
+pub struct CallbackQueue(std::collections::VecDeque<Box<dyn FnOnce(&mut Self)>>);
 
-impl EventQueue {
+impl CallbackQueue {
     /// Create an empty event queue.
     pub fn new() -> Self {
         Self(std::collections::VecDeque::new())
@@ -53,14 +53,14 @@ impl EventQueue {
     where
         F: FnOnce(&mut Self) -> U,
     {
-        let mut event_queue = Self::new();
-        let rv = (f)(&mut event_queue);
-        event_queue.run();
+        let mut cb_queue = Self::new();
+        let rv = (f)(&mut cb_queue);
+        cb_queue.run();
         rv
     }
 }
 
-impl std::ops::Drop for EventQueue {
+impl std::ops::Drop for CallbackQueue {
     fn drop(&mut self) {
         // don't show the following warning message if panicking
         if std::thread::panicking() {
@@ -117,23 +117,26 @@ impl<T: Clone + Copy + 'static> EventSource<T> {
     /// Add a listener.
     pub fn add_listener(
         &mut self,
-        notify_fn: impl Fn(T, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(T, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<T> {
         let inner_ref = Arc::downgrade(&Arc::clone(&self.inner));
         self.inner.borrow_mut().add_listener(inner_ref, notify_fn)
     }
 
     /// Notify all listeners.
-    pub fn notify_listeners(&mut self, message: T, event_queue: &mut EventQueue) {
+    pub fn notify_listeners(&mut self, message: T, cb_queue: &mut CallbackQueue) {
         for (_, l) in &self.inner.borrow().listeners {
             let l_clone = l.clone();
-            event_queue.add(move |event_queue| (l_clone)(message, event_queue));
+            cb_queue.add(move |cb_queue| (l_clone)(message, cb_queue));
         }
     }
 }
 
 struct EventSourceInner<T> {
-    listeners: std::vec::Vec<(HandleId, Arc<Box<dyn Fn(T, &mut EventQueue) + Send + Sync>>)>,
+    listeners: std::vec::Vec<(
+        HandleId,
+        Arc<Box<dyn Fn(T, &mut CallbackQueue) + Send + Sync>>,
+    )>,
     next_id: std::num::Wrapping<u32>,
 }
 
@@ -162,7 +165,7 @@ impl<T> EventSourceInner<T> {
     pub fn add_listener(
         &mut self,
         inner: std::sync::Weak<AtomicRefCell<Self>>,
-        notify_fn: impl Fn(T, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(T, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<T> {
         let handle_id = self.get_unused_id();
 
@@ -193,13 +196,13 @@ mod tests {
             *counter_clone.borrow_mut() += inc;
         });
 
-        EventQueue::queue_and_run(|queue| source.notify_listeners(1, queue));
-        EventQueue::queue_and_run(|queue| source.notify_listeners(3, queue));
+        CallbackQueue::queue_and_run(|queue| source.notify_listeners(1, queue));
+        CallbackQueue::queue_and_run(|queue| source.notify_listeners(3, queue));
 
         handle.stop_listening();
 
-        EventQueue::queue_and_run(|queue| source.notify_listeners(5, queue));
-        EventQueue::queue_and_run(|queue| source.notify_listeners(7, queue));
+        CallbackQueue::queue_and_run(|queue| source.notify_listeners(5, queue));
+        CallbackQueue::queue_and_run(|queue| source.notify_listeners(7, queue));
 
         assert_eq!(*counter.borrow(), 4);
     }

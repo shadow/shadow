@@ -10,7 +10,7 @@ use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
-use crate::utility::event_queue::EventQueue;
+use crate::utility::callback_queue::CallbackQueue;
 
 use std::sync::Arc;
 
@@ -39,7 +39,7 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        EventQueue::queue_and_run(|event_queue| desc.close(ctx.host.chost(), event_queue))
+        CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host.chost(), cb_queue))
             .unwrap_or(Ok(()))
             .map(|()| 0.into())
     }
@@ -83,8 +83,8 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            EventQueue::queue_and_run(|event_queue| {
-                replaced_desc.close(ctx.host.chost(), event_queue)
+            CallbackQueue::queue_and_run(|cb_queue| {
+                replaced_desc.close(ctx.host.chost(), cb_queue)
             });
         }
 
@@ -124,8 +124,8 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            EventQueue::queue_and_run(|event_queue| {
-                replaced_desc.close(ctx.host.chost(), event_queue)
+            CallbackQueue::queue_and_run(|cb_queue| {
+                replaced_desc.close(ctx.host.chost(), cb_queue)
             });
         }
 
@@ -243,11 +243,11 @@ impl SyscallHandler {
 
         let result =
             // call the file's read(), and run any resulting events
-            EventQueue::queue_and_run(|event_queue| {
+            CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().read(
                     ctx.process.memory_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
-                    event_queue,
+                    cb_queue,
                 )
             });
 
@@ -369,11 +369,11 @@ impl SyscallHandler {
 
         let result =
             // call the file's write(), and run any resulting events
-            EventQueue::queue_and_run(|event_queue| {
+            CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().write(
                     ctx.process.memory().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
-                    event_queue,
+                    cb_queue,
                 )
             });
 
@@ -454,9 +454,9 @@ impl SyscallHandler {
         let writer = Arc::new(AtomicRefCell::new(writer));
 
         // set the file objects to listen for events on the buffer
-        EventQueue::queue_and_run(|event_queue| {
-            pipe::Pipe::connect_to_buffer(&reader, Arc::clone(&buffer), event_queue);
-            pipe::Pipe::connect_to_buffer(&writer, Arc::clone(&buffer), event_queue);
+        CallbackQueue::queue_and_run(|cb_queue| {
+            pipe::Pipe::connect_to_buffer(&reader, Arc::clone(&buffer), cb_queue);
+            pipe::Pipe::connect_to_buffer(&writer, Arc::clone(&buffer), cb_queue);
         });
 
         // file descriptors for the read and write file objects
@@ -485,16 +485,16 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(0.into()),
             Err(e) => {
-                EventQueue::queue_and_run(|event_queue| {
+                CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
                     ctx.process
                         .deregister_descriptor(read_fd)
                         .unwrap()
-                        .close(ctx.host.chost(), event_queue);
+                        .close(ctx.host.chost(), cb_queue);
                     ctx.process
                         .deregister_descriptor(write_fd)
                         .unwrap()
-                        .close(ctx.host.chost(), event_queue);
+                        .close(ctx.host.chost(), cb_queue);
                 });
                 Err(e.into())
             }

@@ -143,7 +143,7 @@ impl DescriptorTable {
 
 mod export {
     use super::*;
-    use crate::host::descriptor::EventQueue;
+    use crate::host::descriptor::CallbackQueue;
     use libc::c_int;
 
     /// Create an object that can be used to store all descriptors created by a
@@ -197,9 +197,9 @@ mod export {
     ) {
         let table = unsafe { table.as_mut().unwrap() };
 
-        EventQueue::queue_and_run(|event_queue| {
+        CallbackQueue::queue_and_run(|cb_queue| {
             for desc in table.remove_all() {
-                desc.close(host, event_queue);
+                desc.close(host, cb_queue);
             }
         });
     }

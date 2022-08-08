@@ -17,7 +17,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
-use crate::utility::event_queue::{EventQueue, Handle};
+use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
 
@@ -116,18 +116,18 @@ impl UnixSocket {
         &self.common.recv_buffer
     }
 
-    fn inform_bytes_read(&mut self, num: u64, event_queue: &mut EventQueue) {
+    fn inform_bytes_read(&mut self, num: u64, cb_queue: &mut CallbackQueue) {
         self.protocol_state
-            .inform_bytes_read(&mut self.common, num, event_queue);
+            .inform_bytes_read(&mut self.common, num, cb_queue);
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
-        self.protocol_state.close(&mut self.common, event_queue)
+    pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
+        self.protocol_state.close(&mut self.common, cb_queue)
     }
 
-    fn refresh_file_state(&mut self, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&mut self, cb_queue: &mut CallbackQueue) {
         self.protocol_state
-            .refresh_file_state(&mut self.common, event_queue)
+            .refresh_file_state(&mut self.common, cb_queue)
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -147,7 +147,7 @@ impl UnixSocket {
         &mut self,
         mut _bytes: W,
         _offset: libc::off_t,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         W: std::io::Write + std::io::Seek,
@@ -162,7 +162,7 @@ impl UnixSocket {
         &mut self,
         mut _bytes: R,
         _offset: libc::off_t,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
@@ -179,13 +179,13 @@ impl UnixSocket {
         &mut self,
         bytes: R,
         addr: Option<nix::sys::socket::SockAddr>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         self.protocol_state
-            .sendto(&mut self.common, bytes, addr, event_queue)
+            .sendto(&mut self.common, bytes, addr, cb_queue)
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -193,13 +193,13 @@ impl UnixSocket {
     pub fn recvfrom<W>(
         &mut self,
         bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
         self.protocol_state
-            .recvfrom(&mut self.common, bytes, event_queue)
+            .recvfrom(&mut self.common, bytes, cb_queue)
     }
 
     pub fn ioctl(
@@ -215,10 +215,10 @@ impl UnixSocket {
     pub fn listen(
         &mut self,
         backlog: i32,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         self.protocol_state
-            .listen(&mut self.common, backlog, event_queue)
+            .listen(&mut self.common, backlog, cb_queue)
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -226,26 +226,26 @@ impl UnixSocket {
     pub fn connect(
         socket: &Arc<AtomicRefCell<Self>>,
         addr: &nix::sys::socket::SockAddr,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
         socket_ref
             .protocol_state
-            .connect(&mut socket_ref.common, socket, addr, event_queue)
+            .connect(&mut socket_ref.common, socket, addr, cb_queue)
     }
 
     pub fn accept(
         &mut self,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
-        self.protocol_state.accept(&mut self.common, event_queue)
+        self.protocol_state.accept(&mut self.common, cb_queue)
     }
 
     pub fn pair(
         status: FileStatus,
         socket_type: UnixSocketType,
         namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (Arc<AtomicRefCell<Self>>, Arc<AtomicRefCell<Self>>) {
         let socket_1 = UnixSocket::new(status, socket_type, namespace);
         let socket_2 = UnixSocket::new(status, socket_type, namespace);
@@ -258,7 +258,7 @@ impl UnixSocket {
                     &mut socket_1_ref.common,
                     &socket_1,
                     Arc::clone(&socket_2),
-                    event_queue,
+                    cb_queue,
                 )
                 .unwrap();
         }
@@ -271,7 +271,7 @@ impl UnixSocket {
                     &mut socket_2_ref.common,
                     &socket_2,
                     Arc::clone(&socket_1),
-                    event_queue,
+                    cb_queue,
                 )
                 .unwrap();
         }
@@ -283,7 +283,7 @@ impl UnixSocket {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
         self.common
             .event_source
@@ -384,20 +384,20 @@ impl ProtocolState {
             }
             UnixSocketType::Dgram => {
                 // this is a new socket and there are no listeners, so safe to use a temporary event queue
-                let mut event_queue = EventQueue::new();
+                let mut cb_queue = CallbackQueue::new();
 
                 // dgram unix sockets are immediately able to receive data, so initialize the
                 // receive buffer
 
                 // increment the buffer's reader count
-                let reader_handle = common.recv_buffer.borrow_mut().add_reader(&mut event_queue);
+                let reader_handle = common.recv_buffer.borrow_mut().add_reader(&mut cb_queue);
 
                 let weak = Weak::clone(socket);
                 let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
                     BufferState::READABLE,
-                    move |_, event_queue| {
+                    move |_, cb_queue| {
                         if let Some(socket) = weak.upgrade() {
-                            socket.borrow_mut().refresh_file_state(event_queue);
+                            socket.borrow_mut().refresh_file_state(cb_queue);
                         }
                     },
                 );
@@ -405,7 +405,7 @@ impl ProtocolState {
                 // make sure no events were generated since if there were events to run, they would
                 // probably not run correctly if the socket's Arc is not fully created yet (as in
                 // the case of `Arc::new_cyclic`)
-                assert!(event_queue.is_empty());
+                assert!(cb_queue.is_empty());
 
                 Self::ConnLessInitial(Some(ConnLessInitial {
                     this_socket: Weak::clone(socket),
@@ -442,37 +442,35 @@ impl ProtocolState {
         }
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         match self {
             Self::ConnOrientedInitial(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, event_queue)
+                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
             }
             Self::ConnOrientedListening(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, event_queue)
+                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
             }
             Self::ConnOrientedConnected(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, event_queue)
+                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
             }
-            Self::ConnOrientedClosed(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, event_queue)
-            }
-            Self::ConnLessInitial(x) => x.as_ref().unwrap().refresh_file_state(common, event_queue),
-            Self::ConnLessClosed(x) => x.as_ref().unwrap().refresh_file_state(common, event_queue),
+            Self::ConnOrientedClosed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+            Self::ConnLessInitial(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+            Self::ConnLessClosed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
         }
     }
 
     fn close(
         &mut self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
-            Self::ConnOrientedInitial(x) => x.take().unwrap().close(common, event_queue),
-            Self::ConnOrientedListening(x) => x.take().unwrap().close(common, event_queue),
-            Self::ConnOrientedConnected(x) => x.take().unwrap().close(common, event_queue),
-            Self::ConnOrientedClosed(x) => x.take().unwrap().close(common, event_queue),
-            Self::ConnLessInitial(x) => x.take().unwrap().close(common, event_queue),
-            Self::ConnLessClosed(x) => x.take().unwrap().close(common, event_queue),
+            Self::ConnOrientedInitial(x) => x.take().unwrap().close(common, cb_queue),
+            Self::ConnOrientedListening(x) => x.take().unwrap().close(common, cb_queue),
+            Self::ConnOrientedConnected(x) => x.take().unwrap().close(common, cb_queue),
+            Self::ConnOrientedClosed(x) => x.take().unwrap().close(common, cb_queue),
+            Self::ConnLessInitial(x) => x.take().unwrap().close(common, cb_queue),
+            Self::ConnLessClosed(x) => x.take().unwrap().close(common, cb_queue),
         };
 
         *self = new_state;
@@ -505,28 +503,26 @@ impl ProtocolState {
         common: &mut UnixSocketCommon,
         bytes: R,
         addr: Option<nix::sys::socket::SockAddr>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         match self {
             Self::ConnOrientedInitial(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
             }
             Self::ConnOrientedListening(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
             }
             Self::ConnOrientedConnected(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
             }
             Self::ConnOrientedClosed(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
+                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
             }
-            Self::ConnLessInitial(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, event_queue)
-            }
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().sendto(common, bytes, addr, event_queue),
+            Self::ConnLessInitial(x) => x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue),
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue),
         }
     }
 
@@ -536,24 +532,18 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
         match self {
-            Self::ConnOrientedInitial(x) => {
-                x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
-            }
-            Self::ConnOrientedListening(x) => {
-                x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
-            }
-            Self::ConnOrientedConnected(x) => {
-                x.as_mut().unwrap().recvfrom(common, bytes, event_queue)
-            }
-            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
-            Self::ConnLessInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, event_queue),
+            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnOrientedListening(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnOrientedConnected(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnLessInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
         }
     }
 
@@ -561,39 +551,25 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         num: u64,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) {
         match self {
             Self::ConnOrientedInitial(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
+                x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue)
             }
             Self::ConnOrientedListening(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
+                x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue)
             }
             Self::ConnOrientedConnected(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
+                x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue)
             }
             Self::ConnOrientedClosed(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
+                x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue)
             }
             Self::ConnLessInitial(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
+                x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue)
             }
-            Self::ConnLessClosed(x) => {
-                x.as_mut()
-                    .unwrap()
-                    .inform_bytes_read(common, num, event_queue)
-            }
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().inform_bytes_read(common, num, cb_queue),
         }
     }
 
@@ -642,19 +618,15 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         backlog: i32,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
-            Self::ConnOrientedInitial(x) => x.take().unwrap().listen(common, backlog, event_queue),
-            Self::ConnOrientedListening(x) => {
-                x.take().unwrap().listen(common, backlog, event_queue)
-            }
-            Self::ConnOrientedConnected(x) => {
-                x.take().unwrap().listen(common, backlog, event_queue)
-            }
-            Self::ConnOrientedClosed(x) => x.take().unwrap().listen(common, backlog, event_queue),
-            Self::ConnLessInitial(x) => x.take().unwrap().listen(common, backlog, event_queue),
-            Self::ConnLessClosed(x) => x.take().unwrap().listen(common, backlog, event_queue),
+            Self::ConnOrientedInitial(x) => x.take().unwrap().listen(common, backlog, cb_queue),
+            Self::ConnOrientedListening(x) => x.take().unwrap().listen(common, backlog, cb_queue),
+            Self::ConnOrientedConnected(x) => x.take().unwrap().listen(common, backlog, cb_queue),
+            Self::ConnOrientedClosed(x) => x.take().unwrap().listen(common, backlog, cb_queue),
+            Self::ConnLessInitial(x) => x.take().unwrap().listen(common, backlog, cb_queue),
+            Self::ConnLessClosed(x) => x.take().unwrap().listen(common, backlog, cb_queue),
         };
 
         *self = new_state;
@@ -668,25 +640,23 @@ impl ProtocolState {
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => {
-                x.take().unwrap().connect(common, socket, addr, event_queue)
+                x.take().unwrap().connect(common, socket, addr, cb_queue)
             }
             Self::ConnOrientedListening(x) => {
-                x.take().unwrap().connect(common, socket, addr, event_queue)
+                x.take().unwrap().connect(common, socket, addr, cb_queue)
             }
             Self::ConnOrientedConnected(x) => {
-                x.take().unwrap().connect(common, socket, addr, event_queue)
+                x.take().unwrap().connect(common, socket, addr, cb_queue)
             }
             Self::ConnOrientedClosed(x) => {
-                x.take().unwrap().connect(common, socket, addr, event_queue)
+                x.take().unwrap().connect(common, socket, addr, cb_queue)
             }
-            Self::ConnLessInitial(x) => {
-                x.take().unwrap().connect(common, socket, addr, event_queue)
-            }
-            Self::ConnLessClosed(x) => x.take().unwrap().connect(common, socket, addr, event_queue),
+            Self::ConnLessInitial(x) => x.take().unwrap().connect(common, socket, addr, cb_queue),
+            Self::ConnLessClosed(x) => x.take().unwrap().connect(common, socket, addr, cb_queue),
         };
 
         *self = new_state;
@@ -698,39 +668,33 @@ impl ProtocolState {
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         peer: Arc<AtomicRefCell<UnixSocket>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
-            Self::ConnOrientedInitial(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
-            Self::ConnOrientedListening(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
-            Self::ConnOrientedConnected(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
-            Self::ConnOrientedClosed(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
-            Self::ConnLessInitial(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
-            Self::ConnLessClosed(x) => {
-                x.take()
-                    .unwrap()
-                    .connect_unnamed(common, socket, peer, event_queue)
-            }
+            Self::ConnOrientedInitial(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
+            Self::ConnOrientedListening(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
+            Self::ConnOrientedConnected(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
+            Self::ConnOrientedClosed(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
+            Self::ConnLessInitial(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
+            Self::ConnLessClosed(x) => x
+                .take()
+                .unwrap()
+                .connect_unnamed(common, socket, peer, cb_queue),
         };
 
         *self = new_state;
@@ -740,15 +704,15 @@ impl ProtocolState {
     fn accept(
         &mut self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         match self {
-            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().accept(common, event_queue),
-            Self::ConnOrientedListening(x) => x.as_mut().unwrap().accept(common, event_queue),
-            Self::ConnOrientedConnected(x) => x.as_mut().unwrap().accept(common, event_queue),
-            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().accept(common, event_queue),
-            Self::ConnLessInitial(x) => x.as_mut().unwrap().accept(common, event_queue),
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().accept(common, event_queue),
+            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().accept(common, cb_queue),
+            Self::ConnOrientedListening(x) => x.as_mut().unwrap().accept(common, cb_queue),
+            Self::ConnOrientedConnected(x) => x.as_mut().unwrap().accept(common, cb_queue),
+            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().accept(common, cb_queue),
+            Self::ConnLessInitial(x) => x.as_mut().unwrap().accept(common, cb_queue),
+            Self::ConnLessClosed(x) => x.as_mut().unwrap().accept(common, cb_queue),
         }
     }
 
@@ -759,7 +723,7 @@ impl ProtocolState {
         from_address: Option<nix::sys::socket::UnixAddr>,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().queue_incoming_conn(
@@ -767,42 +731,42 @@ impl ProtocolState {
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
             Self::ConnOrientedListening(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
             Self::ConnOrientedConnected(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
             Self::ConnOrientedClosed(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
             Self::ConnLessInitial(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
             Self::ConnLessClosed(x) => x.as_mut().unwrap().queue_incoming_conn(
                 common,
                 from_address,
                 peer,
                 child_send_buffer,
-                event_queue,
+                cb_queue,
             ),
         }
     }
@@ -817,12 +781,12 @@ where
 {
     fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
     fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue);
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue);
 
     fn close(
         self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!("close() while in state {}", std::any::type_name::<Self>());
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
@@ -848,7 +812,7 @@ where
         _common: &mut UnixSocketCommon,
         _bytes: R,
         _addr: Option<nix::sys::socket::SockAddr>,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
@@ -863,7 +827,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _bytes: W,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
@@ -879,7 +843,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _num: u64,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) {
         panic!(
             "inform_bytes_read() while in state {}",
@@ -902,7 +866,7 @@ where
         self,
         _common: &mut UnixSocketCommon,
         _backlog: i32,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!("listen() while in state {}", std::any::type_name::<Self>());
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
@@ -915,7 +879,7 @@ where
         _common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _addr: &nix::sys::socket::SockAddr,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!("connect() while in state {}", std::any::type_name::<Self>());
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
@@ -926,7 +890,7 @@ where
         _common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _peer: Arc<AtomicRefCell<UnixSocket>>,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!(
             "connect_unnamed() while in state {}",
@@ -938,7 +902,7 @@ where
     fn accept(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
@@ -950,7 +914,7 @@ where
         _from_address: Option<nix::sys::socket::UnixAddr>,
         _peer: &Arc<AtomicRefCell<UnixSocket>>,
         _child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         log::warn!(
             "queue_incoming_conn() while in state {}",
@@ -969,22 +933,22 @@ impl Protocol for ConnOrientedInitial {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         common.copy_state(
             /* mask= */ FileState::all(),
             FileState::ACTIVE,
-            event_queue,
+            cb_queue,
         );
     }
 
     fn close(
         self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, event_queue);
-        (new_state.into(), common.close(event_queue))
+        new_state.refresh_file_state(common, cb_queue);
+        (new_state.into(), common.close(cb_queue))
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1012,7 +976,7 @@ impl Protocol for ConnOrientedInitial {
         common: &mut UnixSocketCommon,
         _bytes: R,
         addr: Option<nix::sys::socket::SockAddr>,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
@@ -1034,7 +998,7 @@ impl Protocol for ConnOrientedInitial {
         &mut self,
         common: &mut UnixSocketCommon,
         _bytes: W,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
@@ -1063,7 +1027,7 @@ impl Protocol for ConnOrientedInitial {
         self,
         common: &mut UnixSocketCommon,
         backlog: i32,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // it must have already been bound
         let bound_addr = match self.bound_addr {
@@ -1078,7 +1042,7 @@ impl Protocol for ConnOrientedInitial {
         };
 
         // refresh the socket's file state
-        new_state.refresh_file_state(common, event_queue);
+        new_state.refresh_file_state(common, cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1090,7 +1054,7 @@ impl Protocol for ConnOrientedInitial {
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         let addr = match addr {
             nix::sys::socket::SockAddr::Unix(x) => x,
@@ -1114,7 +1078,7 @@ impl Protocol for ConnOrientedInitial {
             self.bound_addr,
             socket,
             &common.recv_buffer,
-            event_queue,
+            cb_queue,
         ) {
             Ok(peer) => peer,
             Err(IncomingConnError::NotSupported) => {
@@ -1145,28 +1109,28 @@ impl Protocol for ConnOrientedInitial {
         let weak = Arc::downgrade(socket);
         let send_buffer_handle = send_buffer.borrow_mut().add_listener(
             BufferState::WRITABLE | BufferState::NO_READERS,
-            move |_, event_queue| {
+            move |_, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(event_queue);
+                    socket.borrow_mut().refresh_file_state(cb_queue);
                 }
             },
         );
 
         // increment the buffer's writer count
-        let writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+        let writer_handle = send_buffer.borrow_mut().add_writer(cb_queue);
 
         let weak = Arc::downgrade(socket);
         let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, event_queue| {
+            move |_, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(event_queue);
+                    socket.borrow_mut().refresh_file_state(cb_queue);
                 }
             },
         );
 
         // increment the buffer's reader count
-        let reader_handle = common.recv_buffer.borrow_mut().add_reader(event_queue);
+        let reader_handle = common.recv_buffer.borrow_mut().add_reader(cb_queue);
 
         let new_state = ConnOrientedConnected {
             bound_addr: self.bound_addr,
@@ -1178,7 +1142,7 @@ impl Protocol for ConnOrientedInitial {
             _send_buffer_handle: send_buffer_handle,
         };
 
-        new_state.refresh_file_state(common, event_queue);
+        new_state.refresh_file_state(common, cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1188,7 +1152,7 @@ impl Protocol for ConnOrientedInitial {
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         peer: Arc<AtomicRefCell<UnixSocket>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         assert!(self.bound_addr.is_none());
 
@@ -1202,29 +1166,29 @@ impl Protocol for ConnOrientedInitial {
             let weak = Arc::downgrade(socket);
             send_buffer_handle = send_buffer.borrow_mut().add_listener(
                 BufferState::WRITABLE | BufferState::NO_READERS,
-                move |_, event_queue| {
+                move |_, cb_queue| {
                     if let Some(socket) = weak.upgrade() {
-                        socket.borrow_mut().refresh_file_state(event_queue);
+                        socket.borrow_mut().refresh_file_state(cb_queue);
                     }
                 },
             );
 
             // increment the buffer's writer count
-            writer_handle = send_buffer.borrow_mut().add_writer(event_queue);
+            writer_handle = send_buffer.borrow_mut().add_writer(cb_queue);
         }
 
         let weak = Arc::downgrade(socket);
         let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, event_queue| {
+            move |_, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(event_queue);
+                    socket.borrow_mut().refresh_file_state(cb_queue);
                 }
             },
         );
 
         // increment the buffer's reader count
-        let reader_handle = common.recv_buffer.borrow_mut().add_reader(event_queue);
+        let reader_handle = common.recv_buffer.borrow_mut().add_reader(cb_queue);
 
         let new_state = ConnOrientedConnected {
             bound_addr: None,
@@ -1236,7 +1200,7 @@ impl Protocol for ConnOrientedInitial {
             _send_buffer_handle: send_buffer_handle,
         };
 
-        new_state.refresh_file_state(common, event_queue);
+        new_state.refresh_file_state(common, cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1244,7 +1208,7 @@ impl Protocol for ConnOrientedInitial {
     fn accept(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
@@ -1260,7 +1224,7 @@ impl Protocol for ConnOrientedListening {
         Ok(Some(self.bound_addr))
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         let mut new_state = FileState::ACTIVE;
 
         // socket is readable if the queue is not empty
@@ -1274,36 +1238,36 @@ impl Protocol for ConnOrientedListening {
         // In practice this should be uncommon so we don't worry about it, and avoids requiring that
         // the server keep a list of all connecting clients.
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, event_queue);
+        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
     }
 
     fn close(
         self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         for sock in self.queue {
             // close all queued sockets
-            if let Err(e) = sock.borrow_mut().close(event_queue) {
+            if let Err(e) = sock.borrow_mut().close(cb_queue) {
                 log::warn!("Unexpected error while closing queued unix socket: {:?}", e);
             }
         }
 
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, event_queue);
-        (new_state.into(), common.close(event_queue))
+        new_state.refresh_file_state(common, cb_queue);
+        (new_state.into(), common.close(cb_queue))
     }
 
     fn listen(
         mut self,
         common: &mut UnixSocketCommon,
         backlog: i32,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         self.queue_limit = backlog_to_queue_size(backlog);
 
         // refresh the socket's file state
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         (self.into(), Ok(()))
     }
@@ -1311,7 +1275,7 @@ impl Protocol for ConnOrientedListening {
     fn accept(
         &mut self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         let child_socket = match self.queue.pop_front() {
             Some(x) => x,
@@ -1319,7 +1283,7 @@ impl Protocol for ConnOrientedListening {
         };
 
         // refresh the socket's file state
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         Ok(child_socket)
     }
@@ -1330,7 +1294,7 @@ impl Protocol for ConnOrientedListening {
         from_address: Option<nix::sys::socket::UnixAddr>,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<&Arc<AtomicRefCell<UnixSocket>>, IncomingConnError> {
         if self.queue.len() >= self.queue_limit.try_into().unwrap() {
             assert!(!common.state.contains(FileState::SOCKET_ALLOWING_CONNECT));
@@ -1351,28 +1315,28 @@ impl Protocol for ConnOrientedListening {
         let weak = Arc::downgrade(&child_socket);
         let send_buffer_handle = child_send_buffer.borrow_mut().add_listener(
             BufferState::WRITABLE | BufferState::NO_READERS,
-            move |_, event_queue| {
+            move |_, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(event_queue);
+                    socket.borrow_mut().refresh_file_state(cb_queue);
                 }
             },
         );
 
         // increment the buffer's writer count
-        let writer_handle = child_send_buffer.borrow_mut().add_writer(event_queue);
+        let writer_handle = child_send_buffer.borrow_mut().add_writer(cb_queue);
 
         let weak = Arc::downgrade(&child_socket);
         let recv_buffer_handle = child_recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, event_queue| {
+            move |_, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(event_queue);
+                    socket.borrow_mut().refresh_file_state(cb_queue);
                 }
             },
         );
 
         // increment the buffer's reader count
-        let reader_handle = child_recv_buffer.borrow_mut().add_reader(event_queue);
+        let reader_handle = child_recv_buffer.borrow_mut().add_reader(cb_queue);
 
         let new_child_state = ConnOrientedConnected {
             // use the parent's bind address
@@ -1390,9 +1354,9 @@ impl Protocol for ConnOrientedListening {
 
         // defer refreshing the child socket's file-state until later
         let weak = Arc::downgrade(&child_socket);
-        event_queue.add(move |event_queue| {
+        cb_queue.add(move |cb_queue| {
             if let Some(child_socket) = weak.upgrade() {
-                child_socket.borrow_mut().refresh_file_state(event_queue);
+                child_socket.borrow_mut().refresh_file_state(cb_queue);
             }
         });
 
@@ -1400,7 +1364,7 @@ impl Protocol for ConnOrientedListening {
         self.queue.push_back(child_socket);
 
         // refresh the server socket's file state
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         // return a reference to the enqueued child socket
         Ok(self.queue.back().unwrap())
@@ -1420,7 +1384,7 @@ impl Protocol for ConnOrientedConnected {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         let mut new_state = FileState::ACTIVE;
 
         {
@@ -1438,30 +1402,30 @@ impl Protocol for ConnOrientedConnected {
             );
         }
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, event_queue);
+        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
     }
 
     fn close(
         self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // inform the buffer that there is one fewer readers
         common
             .recv_buffer
             .borrow_mut()
-            .remove_reader(self.reader_handle, event_queue);
+            .remove_reader(self.reader_handle, cb_queue);
 
         // inform the buffer that there is one fewer writers
         self.peer
             .borrow()
             .recv_buffer()
             .borrow_mut()
-            .remove_writer(self.writer_handle, event_queue);
+            .remove_writer(self.writer_handle, cb_queue);
 
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, event_queue);
-        (new_state.into(), common.close(event_queue))
+        new_state.refresh_file_state(common, cb_queue);
+        (new_state.into(), common.close(cb_queue))
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1471,15 +1435,15 @@ impl Protocol for ConnOrientedConnected {
         common: &mut UnixSocketCommon,
         bytes: R,
         addr: Option<nix::sys::socket::SockAddr>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         let recv_socket = common.resolve_destination(Some(&self.peer), addr)?;
-        let rv = common.sendto(bytes, &recv_socket, event_queue)?;
+        let rv = common.sendto(bytes, &recv_socket, cb_queue)?;
 
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         Ok(rv.into())
     }
@@ -1490,24 +1454,24 @@ impl Protocol for ConnOrientedConnected {
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
-        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
         if num_removed_from_buf > 0 {
             // defer informing the peer until we're done processing the current socket
             let peer = Arc::clone(&self.peer);
-            event_queue.add(move |event_queue| {
+            cb_queue.add(move |cb_queue| {
                 peer.borrow_mut()
-                    .inform_bytes_read(num_removed_from_buf, event_queue);
+                    .inform_bytes_read(num_removed_from_buf, cb_queue);
             });
         }
 
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         Ok((
             num_copied.into(),
@@ -1519,10 +1483,10 @@ impl Protocol for ConnOrientedConnected {
         &mut self,
         common: &mut UnixSocketCommon,
         num: u64,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) {
         common.sent_len = common.sent_len.checked_sub(num).unwrap();
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
     }
 
     fn ioctl(
@@ -1538,7 +1502,7 @@ impl Protocol for ConnOrientedConnected {
     fn accept(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
@@ -1558,18 +1522,18 @@ impl Protocol for ConnOrientedClosed {
         Err(Errno::EBADFD.into())
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         common.copy_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
-            event_queue,
+            cb_queue,
         );
     }
 
     fn close(
         self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // why are we trying to close an already closed file? we probably want a bt here...
         panic!("Trying to close an already closed socket");
@@ -1579,7 +1543,7 @@ impl Protocol for ConnOrientedClosed {
         &mut self,
         _common: &mut UnixSocketCommon,
         _num: u64,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) {
         // do nothing since we're already closed
     }
@@ -1601,7 +1565,7 @@ impl Protocol for ConnLessInitial {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         let mut new_state = FileState::ACTIVE;
 
         {
@@ -1611,33 +1575,33 @@ impl Protocol for ConnLessInitial {
             new_state.set(FileState::WRITABLE, common.sent_len < common.send_limit);
         }
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, event_queue);
+        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
     }
 
     fn close(
         self,
         common: &mut UnixSocketCommon,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // inform the buffer that there is one fewer readers
         common
             .recv_buffer
             .borrow_mut()
-            .remove_reader(self.reader_handle, event_queue);
+            .remove_reader(self.reader_handle, cb_queue);
 
         for byte_data in self.recv_data.into_iter() {
             // defer informing the senders until we're done processing the current socket
-            event_queue.add(move |event_queue| {
+            cb_queue.add(move |cb_queue| {
                 byte_data
                     .from_socket
                     .borrow_mut()
-                    .inform_bytes_read(byte_data.num_bytes, event_queue);
+                    .inform_bytes_read(byte_data.num_bytes, cb_queue);
             });
         }
 
         let new_state = ConnLessClosed {};
-        new_state.refresh_file_state(common, event_queue);
-        (new_state.into(), common.close(event_queue))
+        new_state.refresh_file_state(common, cb_queue);
+        (new_state.into(), common.close(cb_queue))
     }
 
     // https://github.com/shadow/shadow/issues/2093
@@ -1665,13 +1629,13 @@ impl Protocol for ConnLessInitial {
         common: &mut UnixSocketCommon,
         bytes: R,
         addr: Option<nix::sys::socket::SockAddr>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         let recv_socket = common.resolve_destination(self.peer.as_ref(), addr)?;
-        let rv = common.sendto(bytes, &recv_socket, event_queue)?;
+        let rv = common.sendto(bytes, &recv_socket, cb_queue)?;
 
         let byte_data = ByteData {
             from_socket: self.this_socket.upgrade().unwrap(),
@@ -1689,7 +1653,7 @@ impl Protocol for ConnLessInitial {
             ),
         }
 
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         Ok(rv.into())
     }
@@ -1700,26 +1664,26 @@ impl Protocol for ConnLessInitial {
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
-        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, event_queue)?;
+        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
         let byte_data = self.recv_data.pop_front().unwrap();
         assert!(num_removed_from_buf == byte_data.num_bytes);
 
         // defer informing the sender until we're done processing the current socket
-        event_queue.add(move |event_queue| {
+        cb_queue.add(move |cb_queue| {
             byte_data
                 .from_socket
                 .borrow_mut()
-                .inform_bytes_read(byte_data.num_bytes, event_queue);
+                .inform_bytes_read(byte_data.num_bytes, cb_queue);
         });
 
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
 
         Ok((
             num_copied.into(),
@@ -1731,10 +1695,10 @@ impl Protocol for ConnLessInitial {
         &mut self,
         common: &mut UnixSocketCommon,
         num: u64,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) {
         common.sent_len = common.sent_len.checked_sub(num).unwrap();
-        self.refresh_file_state(common, event_queue);
+        self.refresh_file_state(common, cb_queue);
     }
 
     fn ioctl(
@@ -1754,7 +1718,7 @@ impl Protocol for ConnLessInitial {
         common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: &nix::sys::socket::SockAddr,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // TODO: support AF_UNSPEC to disassociate
         let addr = match addr {
@@ -1774,7 +1738,7 @@ impl Protocol for ConnLessInitial {
             ..self
         };
 
-        new_state.refresh_file_state(common, event_queue);
+        new_state.refresh_file_state(common, cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1784,7 +1748,7 @@ impl Protocol for ConnLessInitial {
         common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
         peer: Arc<AtomicRefCell<UnixSocket>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         assert!(self.peer_addr.is_none());
         assert!(self.bound_addr.is_none());
@@ -1796,7 +1760,7 @@ impl Protocol for ConnLessInitial {
             ..self
         };
 
-        new_state.refresh_file_state(common, event_queue);
+        new_state.refresh_file_state(common, cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1815,18 +1779,18 @@ impl Protocol for ConnLessClosed {
         Ok(None)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, event_queue: &mut EventQueue) {
+    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
         common.copy_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
-            event_queue,
+            cb_queue,
         );
     }
 
     fn close(
         self,
         _common: &mut UnixSocketCommon,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // why are we trying to close an already closed file? we probably want a bt here...
         panic!("Trying to close an already closed socket");
@@ -1836,7 +1800,7 @@ impl Protocol for ConnLessClosed {
         &mut self,
         _common: &mut UnixSocketCommon,
         _num: u64,
-        _event_queue: &mut EventQueue,
+        _cb_queue: &mut CallbackQueue,
     ) {
         // do nothing since we're already closed
     }
@@ -1860,7 +1824,7 @@ struct UnixSocketCommon {
 }
 
 impl UnixSocketCommon {
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+    pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         // check that the CLOSED flag was set by the protocol state
         if !self.state.contains(FileState::CLOSED) {
             // set the flag here since we missed doing it before
@@ -1868,7 +1832,7 @@ impl UnixSocketCommon {
             self.copy_state(
                 /* mask= */ FileState::all(),
                 FileState::CLOSED,
-                event_queue,
+                cb_queue,
             );
 
             // panic in debug builds since the backtrace will be helpful for debugging
@@ -1990,7 +1954,7 @@ impl UnixSocketCommon {
         &mut self,
         mut bytes: R,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<usize, SyscallError>
     where
         R: std::io::Read + std::io::Seek,
@@ -2045,11 +2009,11 @@ impl UnixSocketCommon {
                 if len == 0 {
                     0
                 } else {
-                    send_buffer.write_stream(bytes, len, event_queue)?
+                    send_buffer.write_stream(bytes, len, cb_queue)?
                 }
             }
             UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
-                send_buffer.write_packet(bytes, len, event_queue)?;
+                send_buffer.write_packet(bytes, len, cb_queue)?;
                 len.try_into().unwrap()
             }
         };
@@ -2065,7 +2029,7 @@ impl UnixSocketCommon {
     pub fn recvfrom<W>(
         &mut self,
         mut bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(usize, usize), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
@@ -2083,7 +2047,7 @@ impl UnixSocketCommon {
             return Err(Errno::EWOULDBLOCK.into());
         }
 
-        let (num_copied, num_removed_from_buf) = recv_buffer.read(&mut bytes, event_queue)?;
+        let (num_copied, num_removed_from_buf) = recv_buffer.read(&mut bytes, cb_queue)?;
 
         Ok((num_copied, num_removed_from_buf))
     }
@@ -2101,17 +2065,17 @@ impl UnixSocketCommon {
         Err(Errno::EINVAL.into())
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
+    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, event_queue);
+        self.handle_state_change(old_state, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
@@ -2120,7 +2084,7 @@ impl UnixSocketCommon {
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, event_queue);
+            .notify_listeners(self.state, states_changed, cb_queue);
     }
 }
 

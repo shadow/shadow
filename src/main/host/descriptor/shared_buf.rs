@@ -2,7 +2,7 @@ use nix::errno::Errno;
 
 use crate::host::syscall_types::SyscallError;
 use crate::utility::byte_queue::ByteQueue;
-use crate::utility::event_queue::{EventQueue, EventSource, Handle};
+use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 
 pub struct SharedBuf {
     queue: ByteQueue,
@@ -40,17 +40,17 @@ impl SharedBuf {
 
     /// Register as a reader. The [`ReaderHandle`] must be returned to the buffer later with
     /// [`remove_reader()`](Self::remove_reader).
-    pub fn add_reader(&mut self, event_queue: &mut EventQueue) -> ReaderHandle {
+    pub fn add_reader(&mut self, cb_queue: &mut CallbackQueue) -> ReaderHandle {
         self.num_readers += 1;
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
         ReaderHandle {}
     }
 
-    pub fn remove_reader(&mut self, handle: ReaderHandle, event_queue: &mut EventQueue) {
+    pub fn remove_reader(&mut self, handle: ReaderHandle, cb_queue: &mut CallbackQueue) {
         self.num_readers -= 1;
         // don't run the handle's drop impl
         std::mem::forget(handle);
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
     }
 
     pub fn num_readers(&self) -> u16 {
@@ -59,17 +59,17 @@ impl SharedBuf {
 
     /// Register as a writer. The [`WriterHandle`] must be returned to the buffer later with
     /// [`remove_writer()`](Self::remove_writer).
-    pub fn add_writer(&mut self, event_queue: &mut EventQueue) -> WriterHandle {
+    pub fn add_writer(&mut self, cb_queue: &mut CallbackQueue) -> WriterHandle {
         self.num_writers += 1;
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
         WriterHandle {}
     }
 
-    pub fn remove_writer(&mut self, handle: WriterHandle, event_queue: &mut EventQueue) {
+    pub fn remove_writer(&mut self, handle: WriterHandle, cb_queue: &mut CallbackQueue) {
         self.num_writers -= 1;
         // don't run the handle's drop impl
         std::mem::forget(handle);
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
     }
 
     pub fn num_writers(&self) -> u16 {
@@ -79,10 +79,10 @@ impl SharedBuf {
     pub fn read<W: std::io::Write>(
         &mut self,
         bytes: W,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(usize, usize), SyscallError> {
         let (num_copied, num_removed_from_buf, _chunk_type) = self.queue.pop(bytes)?;
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
 
         Ok((num_copied, num_removed_from_buf))
     }
@@ -91,7 +91,7 @@ impl SharedBuf {
         &mut self,
         bytes: R,
         len: usize,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<usize, SyscallError> {
         if len == 0 {
             return Ok(0);
@@ -105,7 +105,7 @@ impl SharedBuf {
             .queue
             .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
 
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
 
         Ok(written)
     }
@@ -114,7 +114,7 @@ impl SharedBuf {
         &mut self,
         mut bytes: R,
         len: usize,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         if len > self.max_len() {
             // the socket could never send this packet, even if the buffer was empty
@@ -127,7 +127,7 @@ impl SharedBuf {
 
         self.queue.push_packet(bytes.by_ref(), len)?;
 
-        self.refresh_state(event_queue);
+        self.refresh_state(cb_queue);
 
         Ok(())
     }
@@ -135,10 +135,10 @@ impl SharedBuf {
     pub fn add_listener(
         &mut self,
         monitoring: BufferState,
-        notify_fn: impl Fn(BufferState, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(BufferState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> BufferHandle {
         self.event_source
-            .add_listener(move |(state, changed), event_queue| {
+            .add_listener(move |(state, changed), cb_queue| {
                 // true if any of the bits we're monitoring have changed
                 let flipped = monitoring.intersects(changed);
 
@@ -146,7 +146,7 @@ impl SharedBuf {
                     return;
                 }
 
-                (notify_fn)(state, event_queue)
+                (notify_fn)(state, cb_queue)
             })
     }
 
@@ -154,7 +154,7 @@ impl SharedBuf {
         self.state
     }
 
-    fn refresh_state(&mut self, event_queue: &mut EventQueue) {
+    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
         let state_mask = BufferState::READABLE
             | BufferState::WRITABLE
             | BufferState::NO_READERS
@@ -167,20 +167,20 @@ impl SharedBuf {
         new_state.set(BufferState::NO_READERS, self.num_readers() == 0);
         new_state.set(BufferState::NO_WRITERS, self.num_writers() == 0);
 
-        self.copy_state(state_mask, new_state, event_queue);
+        self.copy_state(state_mask, new_state, cb_queue);
     }
 
-    fn copy_state(&mut self, mask: BufferState, state: BufferState, event_queue: &mut EventQueue) {
+    fn copy_state(&mut self, mask: BufferState, state: BufferState, cb_queue: &mut CallbackQueue) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, event_queue);
+        self.handle_state_change(old_state, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: BufferState, event_queue: &mut EventQueue) {
+    fn handle_state_change(&mut self, old_state: BufferState, cb_queue: &mut CallbackQueue) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
@@ -189,7 +189,7 @@ impl SharedBuf {
         }
 
         self.event_source
-            .notify_listeners((self.state, states_changed), event_queue);
+            .notify_listeners((self.state, states_changed), cb_queue);
     }
 }
 

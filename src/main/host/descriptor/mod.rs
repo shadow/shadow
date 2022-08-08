@@ -6,7 +6,7 @@ use nix::fcntl::OFlag;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
-use crate::utility::event_queue::{EventQueue, EventSource, Handle};
+use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync};
 
 use socket::{Socket, SocketRef, SocketRefMut};
@@ -192,7 +192,7 @@ impl LegacyListenerHelper {
         // this will ref the pointer and unref it when the closure is dropped
         let ptr_wrapper = LegacyListener::new(ptr);
 
-        let handle = event_source.add_listener(move |(state, changed), _event_queue| unsafe {
+        let handle = event_source.add_listener(move |(state, changed), _cb_queue| unsafe {
             c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state.into(), changed.into())
         });
 
@@ -226,32 +226,31 @@ impl StateEventSource {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
-        self.inner
-            .add_listener(move |(state, changed), event_queue| {
-                // true if any of the bits we're monitoring have changed
-                let flipped = monitoring.intersects(changed);
+        self.inner.add_listener(move |(state, changed), cb_queue| {
+            // true if any of the bits we're monitoring have changed
+            let flipped = monitoring.intersects(changed);
 
-                // true if any of the bits we're monitoring are set
-                let on = monitoring.intersects(state);
+            // true if any of the bits we're monitoring are set
+            let on = monitoring.intersects(state);
 
-                let notify = match filter {
-                    // at least one monitored bit is on, and at least one has changed
-                    StateListenerFilter::OffToOn => flipped && on,
-                    // all monitored bits are off, and at least one has changed
-                    StateListenerFilter::OnToOff => flipped && !on,
-                    // at least one monitored bit has changed
-                    StateListenerFilter::Always => flipped,
-                    StateListenerFilter::Never => false,
-                };
+            let notify = match filter {
+                // at least one monitored bit is on, and at least one has changed
+                StateListenerFilter::OffToOn => flipped && on,
+                // all monitored bits are off, and at least one has changed
+                StateListenerFilter::OnToOff => flipped && !on,
+                // at least one monitored bit has changed
+                StateListenerFilter::Always => flipped,
+                StateListenerFilter::Never => false,
+            };
 
-                if !notify {
-                    return;
-                }
+            if !notify {
+                return;
+            }
 
-                (notify_fn)(state, changed, event_queue)
-            })
+            (notify_fn)(state, changed, cb_queue)
+        })
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
@@ -266,9 +265,9 @@ impl StateEventSource {
         &mut self,
         state: FileState,
         changed: FileState,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) {
-        self.inner.notify_listeners((state, changed), event_queue)
+        self.inner.notify_listeners((state, changed), cb_queue)
     }
 }
 
@@ -396,8 +395,8 @@ impl FileRefMut<'_> {
     enum_passthrough!(self, (val), Pipe, EventFd, Socket;
         pub fn set_has_open_file(&mut self, val: bool)
     );
-    enum_passthrough!(self, (event_queue), Pipe, EventFd, Socket;
-        pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError>
+    enum_passthrough!(self, (cb_queue), Pipe, EventFd, Socket;
+        pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
     enum_passthrough!(self, (status), Pipe, EventFd, Socket;
         pub fn set_status(&mut self, status: FileStatus)
@@ -412,13 +411,13 @@ impl FileRefMut<'_> {
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
 
-    enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, EventFd, Socket;
-        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+    enum_passthrough_generic!(self, (bytes, offset, cb_queue), Pipe, EventFd, Socket;
+        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (source, offset, event_queue), Pipe, EventFd, Socket;
-        pub fn write<R>(&mut self, source: R, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+    enum_passthrough_generic!(self, (source, offset, cb_queue), Pipe, EventFd, Socket;
+        pub fn write<R>(&mut self, source: R, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 }
@@ -510,7 +509,7 @@ impl OpenFile {
     /// Will close the inner `File` object if this is the last `OpenFile` for that `File`. This
     /// behaviour is the same as simply dropping this `OpenFile` object, but allows you to pass an
     /// event queue and get the return value of the close operation.
-    pub fn close(self, event_queue: &mut EventQueue) -> Option<Result<(), SyscallError>> {
+    pub fn close(self, cb_queue: &mut CallbackQueue) -> Option<Result<(), SyscallError>> {
         let OpenFile { inner } = self;
 
         // note: There is a race-condition here in a multi-threaded context. Since shadow should
@@ -527,7 +526,7 @@ impl OpenFile {
 
         // if this is the last reference, call close() on the file
         if let Ok(inner) = Arc::try_unwrap(inner) {
-            Some(inner.close(event_queue))
+            Some(inner.close(cb_queue))
         } else {
             None
         }
@@ -540,13 +539,13 @@ struct OpenFileInner {
 }
 
 impl OpenFileInner {
-    pub fn close(mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
-        self.close_helper(event_queue)
+    pub fn close(mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
+        self.close_helper(cb_queue)
     }
 
-    fn close_helper(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+    fn close_helper(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         if let Some(file) = self.file.take() {
-            file.borrow_mut().close(event_queue)?;
+            file.borrow_mut().close(cb_queue)?;
         }
         Ok(())
     }
@@ -555,7 +554,7 @@ impl OpenFileInner {
 impl std::ops::Drop for OpenFileInner {
     fn drop(&mut self) {
         // ignore any return value
-        let _ = EventQueue::queue_and_run(|event_queue| self.close_helper(event_queue));
+        let _ = CallbackQueue::queue_and_run(|cb_queue| self.close_helper(cb_queue));
     }
 }
 
@@ -630,9 +629,9 @@ impl Descriptor {
     pub fn close(
         self,
         host: *mut c::Host,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
-        self.file.close(host, event_queue)
+        self.file.close(host, cb_queue)
     }
 
     /// Duplicate the descriptor, with both descriptors pointing to the same `OpenFile`. In
@@ -737,10 +736,10 @@ impl CompatFile {
     pub fn close(
         self,
         host: *mut c::Host,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
         match self {
-            Self::New(file) => file.close(event_queue),
+            Self::New(file) => file.close(cb_queue),
             Self::Legacy(file) => {
                 file.close(host);
                 Some(Ok(()))

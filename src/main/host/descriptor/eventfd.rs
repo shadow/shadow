@@ -6,7 +6,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
-use crate::utility::event_queue::{EventQueue, Handle};
+use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
 
@@ -57,12 +57,12 @@ impl EventFd {
         self.has_open_file = val;
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> Result<(), SyscallError> {
+    pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
-            event_queue,
+            cb_queue,
         );
 
         Ok(())
@@ -72,7 +72,7 @@ impl EventFd {
         &mut self,
         mut bytes: W,
         offset: libc::off_t,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         W: std::io::Write + std::io::Seek,
@@ -111,7 +111,7 @@ impl EventFd {
             self.counter = 0;
         }
 
-        self.update_state(event_queue);
+        self.update_state(cb_queue);
 
         Ok(NUM_BYTES.into())
     }
@@ -120,7 +120,7 @@ impl EventFd {
         &mut self,
         mut bytes: R,
         offset: libc::off_t,
-        event_queue: &mut EventQueue,
+        cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
@@ -160,7 +160,7 @@ impl EventFd {
         }
 
         self.counter += value;
-        self.update_state(event_queue);
+        self.update_state(cb_queue);
 
         Ok(NUM_BYTES.into())
     }
@@ -179,7 +179,7 @@ impl EventFd {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
@@ -197,7 +197,7 @@ impl EventFd {
         self.state
     }
 
-    fn update_state(&mut self, event_queue: &mut EventQueue) {
+    fn update_state(&mut self, cb_queue: &mut CallbackQueue) {
         if self.state.contains(FileState::CLOSED) {
             return;
         }
@@ -212,21 +212,21 @@ impl EventFd {
         self.copy_state(
             FileState::READABLE | FileState::WRITABLE,
             readable_writable,
-            event_queue,
+            cb_queue,
         );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
+    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, event_queue);
+        self.handle_state_change(old_state, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
@@ -235,6 +235,6 @@ impl EventFd {
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, event_queue);
+            .notify_listeners(self.state, states_changed, cb_queue);
     }
 }
