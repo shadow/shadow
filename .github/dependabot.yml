@@ -7,6 +7,8 @@ updates:
     directory: '/src'
     schedule:
       interval: 'monthly'
+    # use a high limit since dependabot only checks monthly
+    open-pull-requests-limit: 30
     target-branch: 'main'
     # don't auto-rebase, otherwise dependabot will rebase several PRs at once
     # and create many hours of unnecessary workflow runs
