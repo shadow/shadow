@@ -434,6 +434,7 @@ pub struct ExperimentalOptions {
     /// Simulated latency of a vdso "syscall". For efficiency Shadow only
     /// actually adds this latency if and when `max_unapplied_cpu_latency` is
     /// reached.
+    #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("unblocked_vdso_latency").unwrap().as_str())]
     pub unblocked_vdso_latency: Option<units::Time<units::TimePrefix>>,
