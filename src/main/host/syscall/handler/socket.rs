@@ -11,7 +11,7 @@ use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
-use crate::utility::event_queue::EventQueue;
+use crate::utility::callback_queue::CallbackQueue;
 
 use log::*;
 use nix::errno::Errno;
@@ -214,13 +214,13 @@ impl SyscallHandler {
         let file_status = socket.borrow().get_status();
 
         // call the socket's sendto(), and run any resulting events
-        let result = EventQueue::queue_and_run(|event_queue| {
+        let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().sendto(
                 ctx.process
                     .memory()
                     .reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
                 addr,
-                event_queue,
+                cb_queue,
             )
         });
 
@@ -321,12 +321,12 @@ impl SyscallHandler {
         let file_status = socket.borrow().get_status();
 
         // call the socket's recvfrom(), and run any resulting events
-        let result = EventQueue::queue_and_run(|event_queue| {
+        let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().recvfrom(
                 ctx.process
                     .memory_mut()
                     .writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
-                event_queue,
+                cb_queue,
             )
         });
 
@@ -483,7 +483,7 @@ impl SyscallHandler {
             _ => return Err(Errno::ENOTSOCK.into()),
         };
 
-        EventQueue::queue_and_run(|event_queue| socket.borrow_mut().listen(backlog, event_queue))?;
+        CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().listen(backlog, cb_queue))?;
 
         Ok(0.into())
     }
@@ -588,8 +588,7 @@ impl SyscallHandler {
             }
         };
 
-        let result =
-            EventQueue::queue_and_run(|event_queue| socket.borrow_mut().accept(event_queue));
+        let result = CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue));
 
         let file_status = socket.borrow().get_status();
 
@@ -620,7 +619,7 @@ impl SyscallHandler {
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             ) {
-                EventQueue::queue_and_run(|event_queue| new_socket.borrow_mut().close(event_queue))
+                CallbackQueue::queue_and_run(|cb_queue| new_socket.borrow_mut().close(cb_queue))
                     .unwrap();
                 return Err(e);
             }
@@ -685,7 +684,7 @@ impl SyscallHandler {
         let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
 
         let mut rv =
-            EventQueue::queue_and_run(|event_queue| Socket::connect(socket, &addr, event_queue));
+            CallbackQueue::queue_and_run(|cb_queue| Socket::connect(socket, &addr, cb_queue));
 
         // if we will block
         if let Err(SyscallError::Blocked(ref mut blocked)) = rv {
@@ -779,12 +778,12 @@ impl SyscallHandler {
             descriptor_flags.insert(DescriptorFlags::CLOEXEC);
         }
 
-        let (socket_1, socket_2) = EventQueue::queue_and_run(|event_queue| {
+        let (socket_1, socket_2) = CallbackQueue::queue_and_run(|cb_queue| {
             UnixSocket::pair(
                 file_flags,
                 socket_type,
                 ctx.host.abstract_unix_namespace(),
-                event_queue,
+                cb_queue,
             )
         });
 
@@ -815,16 +814,16 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(0.into()),
             Err(e) => {
-                EventQueue::queue_and_run(|event_queue| {
+                CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
                     ctx.process
                         .deregister_descriptor(fd_1)
                         .unwrap()
-                        .close(ctx.host.chost(), event_queue);
+                        .close(ctx.host.chost(), cb_queue);
                     ctx.process
                         .deregister_descriptor(fd_2)
                         .unwrap()
-                        .close(ctx.host.chost(), event_queue);
+                        .close(ctx.host.chost(), cb_queue);
                 });
                 Err(e.into())
             }

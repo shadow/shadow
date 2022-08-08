@@ -7,7 +7,7 @@ use rand::seq::SliceRandom;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::FileState;
 use crate::host::descriptor::{StateEventSource, StateListenerFilter};
-use crate::utility::event_queue::Handle;
+use crate::utility::callback_queue::Handle;
 
 struct NamespaceEntry {
     /// The bound socket.
@@ -193,7 +193,7 @@ impl AbstractUnixNamespace {
         event_source.add_listener(
             FileState::CLOSED,
             StateListenerFilter::OffToOn,
-            move |state, _changed, _event_queue| {
+            move |state, _changed, _cb_queue| {
                 assert!(state.contains(FileState::CLOSED));
                 if let Some(ns) = ns.upgrade() {
                     f(&mut ns.borrow_mut());

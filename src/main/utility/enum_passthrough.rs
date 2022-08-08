@@ -3,18 +3,18 @@
 For example, the usage:
 
 ```rust
-enum_passthrough!(self, (event_queue), Pipe, Socket;
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+enum_passthrough!(self, (cb_queue), Pipe, Socket;
+    pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult
 );
 ```
 
 expands to:
 
 ```rust
-pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult {
     match self {
-        Self::Pipe(x) => x.close(event_queue),
-        Self::Socket(x) => x.close(event_queue),
+        Self::Pipe(x) => x.close(cb_queue),
+        Self::Socket(x) => x.close(cb_queue),
     }
 }
 ```
@@ -34,8 +34,8 @@ macro_rules! enum_passthrough {
 /** Like [`enum_passthrough!`], but allows generics. For example:
 
 ```rust
-enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, Socket;
-    pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+enum_passthrough_generic!(self, (bytes, offset, cb_queue), Pipe, Socket;
+    pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut EventQueue) -> SyscallResult
     where W: std::io::Write + std::io::Seek
 );
 ```
@@ -56,8 +56,8 @@ macro_rules! enum_passthrough_generic {
 /** Like [`enum_passthrough!`], but calls `into()` on the return value. For example:
 
 ```rust
-enum_passthrough_into!(self, (event_queue), Pipe, Socket;
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+enum_passthrough_into!(self, (cb_queue), Pipe, Socket;
+    pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult
 );
 ```
 **/
