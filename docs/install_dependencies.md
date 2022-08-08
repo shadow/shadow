@@ -6,6 +6,7 @@
   + glib (version >= 2.32.0)
   + cmake (version >= 3.2)
   + make
+  + pkg-config
   + xz-utils
   + lscpu
   + cargo, rustc (version \~ latest)

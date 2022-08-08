@@ -3,4 +3,10 @@ A list of user-facing changes since the latest Shadow release.
 * Added latency modeling and potential thread-yield to rdtsc emulation,
   allowing managed code to avoid deadlock in busy-loops that use only the rdtsc
   instruction and no syscalls. https://github.com/shadow/shadow/pull/2314
+* The build now internally uses `pkg-config` to locate glib, instead of a custom cmake module.
+  This is the [recommended](https://docs.gtk.org/glib/compiling.html) way of
+  getting the appropriate glib compile flags, and works better in non-standard layouts such
+  as in a [guix](https://guix.gnu.org/) environment.
+* The `setup` script now has a `--search` option, which can be used to add additional directories
+  to search for pkg-config files, C headers, and libraries. It obsoletes the options `--library` and `--include`.
 * (add entry here)

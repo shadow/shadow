@@ -1,4 +1,4 @@
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 add_executable(test_clone test_clone.c ../test_common.c)
 target_compile_options(test_clone PUBLIC "-pthread")
 target_link_libraries(test_clone ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})

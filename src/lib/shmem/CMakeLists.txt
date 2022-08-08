@@ -4,7 +4,7 @@ set(SHD_SHMEM_SRC
     shmem_file.c
     shmem_util.c)
 
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 
 add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
 

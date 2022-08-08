@@ -12,6 +12,7 @@ APT_PACKAGES="
   libglib2.0-0
   libglib2.0-dev
   make
+  pkg-config
   python3
   python3-pip
   xz-utils
@@ -31,6 +32,7 @@ RPM_PACKAGES="
   glib2-devel
   golang
   make
+  pkg-config
   python3
   python3-pip
   xz

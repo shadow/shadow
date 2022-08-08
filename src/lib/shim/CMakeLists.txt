@@ -7,9 +7,8 @@
 ## the functions we intercept MUST be in a shared library for dlsym searching.
 ## we redirect them to our internal shadow versions, or to libc.
 # include_directories(${CMAKE_SOURCE_DIR}/src/main)
-find_package(GLIB REQUIRED)
 find_package(RT REQUIRED)
-include_directories(${GLIB_INCLUDES})
+include_directories(${GLIB_INCLUDE_DIRS})
 
 set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES

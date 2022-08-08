@@ -42,8 +42,10 @@ After running `./setup install`, you can find the list of installed files in
     + `-g` or `--debug` to build Shadow with debugging symbols and additional
       runtime checks. This option will significantly reduce the simulator
       performance.
-    + `--include` and `--library` if you installed any dependencies in
-      non-standard locations or somewhere other than `~/.local`.
+    + `--search` if you installed dependencies to non-standard locations.
+      Used when searching for libraries, headers, and pkg-config files.
+      Appropriate suffixes like `/lib` and `/include` of the provided path
+      are also searched  when looking for files of the corresponding type.
     + `--prefix` if you want to install Shadow somewhere besides `~/.local`.
   + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and
     `make` directly is also possible, but unsupported. For example:
