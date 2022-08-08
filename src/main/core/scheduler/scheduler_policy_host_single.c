@@ -19,8 +19,6 @@ struct _HostSingleQueueData {
     GMutex lock;
     PriorityQueue* pq;
     SimulationTime lastEventTime;
-    gsize nPushed;
-    gsize nPopped;
 };
 
 typedef struct _HostSingleThreadData HostSingleThreadData;
@@ -171,7 +169,6 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
 
     /* 'deliver' the event to the destination queue */
     priorityqueue_push(qdata->pq, event);
-    qdata->nPushed++;
 
     /* release the destination queue lock */
     g_mutex_unlock(&(qdata->lock));
@@ -218,7 +215,6 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
             utility_assert(eventTime >= qdata->lastEventTime);
             qdata->lastEventTime = eventTime;
             nextEvent = priorityqueue_pop(qdata->pq);
-            qdata->nPopped++;
         } else {
             nextEvent = NULL;
         }
