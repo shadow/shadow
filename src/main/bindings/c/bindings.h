@@ -458,8 +458,6 @@ void event_executeAndFree(struct Event *event, Host *host);
 // free/drop the returned `TaskRef`.**
 struct TaskRef *event_intoTask(struct Event *event);
 
-int32_t event_compare(const struct Event *a, const struct Event *b, void *_user_data);
-
 HostId event_getHostID(struct Event *event);
 
 SimulationTime event_getTime(const struct Event *event);
