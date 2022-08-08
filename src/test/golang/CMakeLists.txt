@@ -24,6 +24,16 @@ macro(add_golang_test_exe)
     )
     set_property(TARGET ${AGTE_BASENAME} PROPERTY EXCLUDE_FROM_ALL true)
     add_dependencies(golang_tests ${AGTE_BASENAME})
+
+    # Horrible hack to force golang targets to build serially.  Seeing if it
+    # helps with https://github.com/shadow/shadow/issues/2341.  Using job pools
+    # would be a nicer way of doing this, but is only supported for cmake's
+    # ninja backend.
+    # https://cmake.org/cmake/help/latest/prop_gbl/JOB_POOLS.html#prop_gbl:JOB_POOLS
+    if (NOT "${PREV_GOLANG_TARGET}" STREQUAL "")
+      add_dependencies(${AGTE_BASENAME} "${PREV_GOLANG_TARGET}")
+    endif()
+    set(PREV_GOLANG_TARGET "${AGTE_BASENAME}")
 endmacro()
 
 add_golang_test_exe(BASENAME test_simple_http)
