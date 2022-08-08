@@ -1,3 +1,4 @@
+use std::sync::atomic::{compiler_fence, Ordering};
 use std::time::{Duration, Instant};
 
 /// Intended as a drop-in-replacement for glib's GTimer.
@@ -17,16 +18,20 @@ impl PerfTimer {
 
     /// Start the timer, which must not already be running.
     pub fn start(&mut self) {
+        compiler_fence(Ordering::SeqCst);
         debug_assert!(self.start_time.is_none());
         self.start_time = Some(Instant::now());
+        compiler_fence(Ordering::SeqCst);
     }
 
     /// Stop the timer, which must already be running.
     pub fn stop(&mut self) {
+        compiler_fence(Ordering::SeqCst);
         debug_assert!(self.start_time.is_some());
         if let Some(t) = self.start_time.take() {
             self.elapsed += Instant::now().duration_since(t)
         }
+        compiler_fence(Ordering::SeqCst);
     }
 
     /// Total time elapsed while the timer has been running.
