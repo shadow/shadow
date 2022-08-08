@@ -352,8 +352,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
                     TaskRef* recv_again =
                         taskref_new_bound(host_getID(host), _networkinterface_continue_receiving_CB,
                                           interface, NULL, NULL, NULL);
-                    worker_scheduleTaskWithDelay(
-                        recv_again, host, (SimulationTime)next_refill_nanos);
+                    host_scheduleTaskWithDelay(host, recv_again, (SimulationTime)next_refill_nanos);
                     taskref_drop(recv_again);
                     interface->tb_receive_refill_pending = true;
                 }
@@ -541,8 +540,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
                     TaskRef* send_again =
                         taskref_new_bound(host_getID(src), _networkinterface_continue_sending_CB,
                                           interface, NULL, NULL, NULL);
-                    worker_scheduleTaskWithDelay(
-                        send_again, src, (SimulationTime)next_refill_nanos);
+                    host_scheduleTaskWithDelay(src, send_again, (SimulationTime)next_refill_nanos);
                     taskref_drop(send_again);
                     interface->tb_send_refill_pending = true;
                 }
@@ -570,7 +568,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             TaskRef* packetTask =
                 taskref_new_bound(host_getID(src), _networkinterface_local_packet_arrived_CB,
                                   interface, packet, NULL, packet_unrefTaskFreeFunc);
-            worker_scheduleTaskWithDelay(packetTask, src, 1);
+            host_scheduleTaskWithDelay(src, packetTask, 1);
             taskref_drop(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.

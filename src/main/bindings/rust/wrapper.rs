@@ -2822,6 +2822,20 @@ extern "C" {
     pub fn host_getNextDeterministicSequenceValue(host: *mut Host) -> guint64;
 }
 extern "C" {
+    pub fn host_scheduleTaskAtEmulatedTime(
+        host: *mut Host,
+        task: *mut TaskRef,
+        time: EmulatedTime,
+    ) -> gboolean;
+}
+extern "C" {
+    pub fn host_scheduleTaskWithDelay(
+        host: *mut Host,
+        task: *mut TaskRef,
+        nanoDelay: SimulationTime,
+    ) -> gboolean;
+}
+extern "C" {
     pub fn scheduler_new(
         controller: *const Controller,
         pidWatcher: *const ChildPidWatcher,

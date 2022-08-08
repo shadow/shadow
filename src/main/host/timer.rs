@@ -157,7 +157,7 @@ impl Timer {
         let expire_id = internal_ref.next_expire_id;
         internal_ref.next_expire_id += 1;
         let task = TaskRef::new(move |host| Self::timer_expire(&internal_ptr, host, expire_id));
-        Worker::schedule_task_with_delay(task, host, delay);
+        host.schedule_task_with_delay(task, delay);
     }
 
     pub fn arm(

@@ -650,7 +650,7 @@ void process_addThread(Process* proc, Thread* thread) {
     process_ref(proc);
     TaskRef* task = taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
                                       _unref_process_cb, _unref_thread_cb);
-    worker_scheduleTaskWithDelay(task, proc->host, 0);
+    host_scheduleTaskWithDelay(proc->host, task, 0);
     taskref_drop(task);
 }
 
@@ -759,7 +759,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         TaskRef* startProcessTask =
             taskref_new_bound(host_getID(proc->host), _process_runStartTask, proc, NULL,
                               (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTaskAtEmulatedTime(startProcessTask, proc->host, proc->startTime);
+        host_scheduleTaskAtEmulatedTime(proc->host, startProcessTask, proc->startTime);
         taskref_drop(startProcessTask);
     }
 
@@ -768,7 +768,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         TaskRef* stopProcessTask =
             taskref_new_bound(host_getID(proc->host), _process_runStopTask, proc, NULL,
                               (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTaskAtEmulatedTime(stopProcessTask, proc->host, proc->stopTime);
+        host_scheduleTaskAtEmulatedTime(proc->host, stopProcessTask, proc->stopTime);
         taskref_drop(stopProcessTask);
     }
 }

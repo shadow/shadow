@@ -479,7 +479,7 @@ void worker_runEvent(Event* event, Host* host) {
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
         TaskRef* task = event_intoTask(event);
-        worker_scheduleTaskWithDelay(task, host, cpuDelay);
+        host_scheduleTaskWithDelay(host, task, cpuDelay);
         taskref_drop(task);
     } else {
         /* cpu is not blocked, its ok to execute the event */

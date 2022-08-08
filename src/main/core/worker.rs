@@ -1,7 +1,6 @@
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
-use std::sync::Mutex;
 
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -14,11 +13,11 @@ use crate::host::thread::ThreadId;
 use crate::host::thread::{CThread, Thread};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
+
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-
-use super::work::task::TaskRef;
+use std::sync::Mutex;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -220,34 +219,6 @@ impl Worker {
 
     fn set_last_event_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
-    }
-
-    pub fn schedule_task_at_emulated_time(
-        mut task: TaskRef,
-        host: &mut Host,
-        t: EmulatedTime,
-    ) -> bool {
-        let res = unsafe {
-            cshadow::worker_scheduleTaskAtEmulatedTime(
-                &mut task,
-                host.chost(),
-                EmulatedTime::to_c_emutime(Some(t)),
-            )
-        };
-        // Intentionally drop `task`. worker_scheduleTaskAtEmulatedTime clones.
-        res != 0
-    }
-
-    pub fn schedule_task_with_delay(mut task: TaskRef, host: &mut Host, t: SimulationTime) -> bool {
-        let res = unsafe {
-            cshadow::worker_scheduleTaskWithDelay(
-                &mut task,
-                host.chost(),
-                SimulationTime::to_c_simtime(Some(t)),
-            )
-        };
-        // Intentionally drop `task`. worker_scheduleTaskAtEmulatedTime clones.
-        res != 0
     }
 
     pub fn update_min_host_runahead(t: SimulationTime) {
