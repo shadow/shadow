@@ -2,6 +2,9 @@ use once_cell::unsync::OnceCell;
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use crate::core::support::emulated_time::EmulatedTime;
+use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 
@@ -123,6 +126,30 @@ impl Host {
 
     pub fn stop_execution_timer(&mut self) {
         unsafe { cshadow::host_stopExecutionTimer(self.chost) };
+    }
+
+    pub fn schedule_task_at_emulated_time(&mut self, mut task: TaskRef, t: EmulatedTime) -> bool {
+        let res = unsafe {
+            cshadow::host_scheduleTaskAtEmulatedTime(
+                self.chost(),
+                &mut task,
+                EmulatedTime::to_c_emutime(Some(t)),
+            )
+        };
+        // Intentionally drop `task`. An eventual event_new clones.
+        res != 0
+    }
+
+    pub fn schedule_task_with_delay(&mut self, mut task: TaskRef, t: SimulationTime) -> bool {
+        let res = unsafe {
+            cshadow::host_scheduleTaskWithDelay(
+                self.chost(),
+                &mut task,
+                SimulationTime::to_c_simtime(Some(t)),
+            )
+        };
+        // Intentionally drop `task`. An eventual event_new clones.
+        res != 0
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {

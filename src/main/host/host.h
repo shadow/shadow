@@ -132,4 +132,9 @@ void host_unlockShimShmemLock(Host* host);
 // items that are otherwise inconsistently ordered (e.g. hash table iterators).
 guint64 host_getNextDeterministicSequenceValue(Host* host);
 
+// Schedule a task for this host at time 'time'.
+gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime time);
+// Schedule a task for this host at a time 'nanoDelay' from now,.
+gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay);
+
 #endif /* SHD_HOST_H_ */

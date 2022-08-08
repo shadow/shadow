@@ -381,8 +381,8 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
     TaskRef* wakeupTask =
         taskref_new_bound(thread_getHostId(cond->thread), _syscallcondition_trigger, cond, NULL,
                           _syscallcondition_unrefcb, NULL);
-    worker_scheduleTaskWithDelay(
-        wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
+    host_scheduleTaskWithDelay(
+        thread_getHost(cond->thread), wakeupTask, 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
     taskref_drop(wakeupTask);

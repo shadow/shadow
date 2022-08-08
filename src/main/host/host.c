@@ -793,3 +793,11 @@ guint64 host_getNextDeterministicSequenceValue(Host* host) {
     MAGIC_ASSERT(host);
     return host->determinismSequenceCounter++;
 }
+
+gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime time) {
+    return worker_scheduleTaskAtEmulatedTime(task, host, time);
+}
+
+gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay) {
+    return worker_scheduleTaskWithDelay(task, host, nanoDelay);
+}

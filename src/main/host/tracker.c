@@ -618,6 +618,6 @@ void tracker_heartbeat(Tracker* tracker, Host* host) {
     tracker->lastHeartbeat = worker_getCurrentEmulatedTime();
     TaskRef* heartbeatTask =
         taskref_new_bound(host_getID(host), tracker_heartbeatTask, tracker, NULL, NULL, NULL);
-    worker_scheduleTaskWithDelay(heartbeatTask, host, tracker->interval);
+    host_scheduleTaskWithDelay(host, heartbeatTask, tracker->interval);
     taskref_drop(heartbeatTask);
 }
