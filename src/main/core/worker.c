@@ -23,10 +23,10 @@
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/event.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
@@ -456,16 +456,35 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 }
 
 void worker_runEvent(Event* event, Host* host) {
-
     /* update cache, reset clocks */
     worker_setCurrentEmulatedTime(
         emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event)));
 
     worker_setActiveHost(host);
 
-    /* process the local event */
-    event_execute(event, host);
-    event_unref(event);
+    /* check if we are allowed to execute or have to wait for cpu delays */
+    CPU* cpu = host_getCPU(host);
+    cpu_updateTime(cpu, event_getTime(event));
+
+    if(cpu_isBlocked(cpu)) {
+        SimulationTime cpuDelay = cpu_getDelay(cpu);
+        trace("event blocked on CPU, rescheduled for %" G_GUINT64_FORMAT " nanoseconds from now",
+              cpuDelay);
+
+        /* track the event delay time */
+        Tracker* tracker = host_getTracker(host);
+        if (tracker != NULL) {
+            tracker_addVirtualProcessingDelay(tracker, cpuDelay);
+        }
+
+        /* this event is delayed due to cpu, so reschedule it to ourselves */
+        TaskRef* task = event_intoTask(event);
+        worker_scheduleTaskWithDelay(task, host, cpuDelay);
+        taskref_drop(task);
+    } else {
+        /* cpu is not blocked, its ok to execute the event */
+        event_executeAndFree(event, host);
+    }
 
     worker_setActiveHost(NULL);
 
@@ -506,7 +525,7 @@ gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTi
     }
 
     GQuark hostID = host_getID(host);
-    Event* event = event_new_(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
+    Event* event = event_new(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
 
     return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
@@ -598,7 +617,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         TaskRef* packetTask = taskref_new_unbound(
             _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
 
-        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHostID);
+        Event* packetEvent = event_new(packetTask, deliverTime, srcHost, dstHostID);
 
         taskref_drop(packetTask);
 

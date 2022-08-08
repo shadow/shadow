@@ -18,7 +18,6 @@
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/event.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/utility/count_down_latch.h"
@@ -183,7 +182,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
 
     SimulationTime eventTime = event_getTime(event);
     if(eventTime >= scheduler->endTime) {
-        event_unref(event);
+        event_free(event);
         return FALSE;
     }
 

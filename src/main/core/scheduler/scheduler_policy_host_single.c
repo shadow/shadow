@@ -10,7 +10,6 @@
 #include "lib/logger/logger.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
-#include "main/core/work/event.h"
 #include "main/host/host.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
@@ -108,7 +107,8 @@ static HostSingleQueueData* _hostsinglequeuedata_new() {
     HostSingleQueueData* qdata = g_new0(HostSingleQueueData, 1);
 
     g_mutex_init(&(qdata->lock));
-    qdata->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
+    qdata->pq =
+        priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_free);
 
     return qdata;
 }

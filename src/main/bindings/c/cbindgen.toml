@@ -18,6 +18,8 @@ includes = [
   "main/host/syscall_types.h",
   "main/host/thread.h",
   "main/host/tracker_types.h",
+  "main/routing/dns.h",
+  "main/routing/packet.minimal.h",
 ]
 
 [enum]

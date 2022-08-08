@@ -8,16 +8,16 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use atomic_refcell::AtomicRefCell;
 
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-pub struct HostId(u32);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
+pub struct HostId(cshadow::HostId);
 
-impl From<u32> for HostId {
-    fn from(val: u32) -> Self {
+impl From<cshadow::HostId> for HostId {
+    fn from(val: cshadow::HostId) -> Self {
         HostId(val)
     }
 }
 
-impl From<HostId> for u32 {
+impl From<HostId> for cshadow::HostId {
     fn from(val: HostId) -> Self {
         val.0
     }
@@ -111,6 +111,18 @@ impl Host {
         let ptr = unsafe { cshadow::host_getRandom(self.chost) };
         let random = unsafe { ptr.as_mut() }.unwrap();
         &mut random.0
+    }
+
+    pub fn get_new_event_id(&mut self) -> u64 {
+        unsafe { cshadow::host_getNewEventID(self.chost) }
+    }
+
+    pub fn continue_execution_timer(&mut self) {
+        unsafe { cshadow::host_continueExecutionTimer(self.chost) };
+    }
+
+    pub fn stop_execution_timer(&mut self) {
+        unsafe { cshadow::host_stopExecutionTimer(self.chost) };
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {
