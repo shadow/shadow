@@ -6,36 +6,22 @@
 #ifndef SHD_SCHEDULER_POLICY_H_
 #define SHD_SCHEDULER_POLICY_H_
 
+#include <glib.h>
+#include <pthread.h>
+
+#include "main/bindings/c/bindings-opaque.h"
+#include "main/host/host.h"
+
 typedef struct _SchedulerPolicy SchedulerPolicy;
 
-#include "main/host/host.h"
-#include "main/utility/utility.h"
-
-typedef void (*SchedulerPolicyAddHostFunc)(SchedulerPolicy*, Host*, pthread_t);
-typedef GQueue* (*SchedulerPolicyGetHostsFunc)(SchedulerPolicy*);
-typedef void (*SchedulerPolicyPushFunc)(SchedulerPolicy*, Event*, Host*, Host*, SimulationTime);
-typedef Event* (*SchedulerPolicyPopFunc)(SchedulerPolicy*, SimulationTime);
-typedef EmulatedTime (*SchedulerPolicyNextHostEventTimeFunc)(SchedulerPolicy*, Host*);
-typedef SimulationTime (*SchedulerPolicyGetNextTimeFunc)(SchedulerPolicy*);
-typedef void (*SchedulerPolicyFreeFunc)(SchedulerPolicy*);
-
-struct _SchedulerPolicy {
-    gpointer data;
-    SchedulerPolicyAddHostFunc addHost;
-    SchedulerPolicyGetHostsFunc getAssignedHosts;
-    SchedulerPolicyPushFunc push;
-    SchedulerPolicyPopFunc pop;
-    SchedulerPolicyNextHostEventTimeFunc nextHostEventTime;
-    SchedulerPolicyGetNextTimeFunc getNextTime;
-    SchedulerPolicyFreeFunc free;
-    MAGIC_DECLARE;
-};
-
-SchedulerPolicy* schedulerpolicyglobalsingle_new();
-SchedulerPolicy* schedulerpolicyhostsingle_new();
-SchedulerPolicy* schedulerpolicyhoststeal_new();
-SchedulerPolicy* schedulerpolicythreadsingle_new();
-SchedulerPolicy* schedulerpolicythreadperthread_new();
-SchedulerPolicy* schedulerpolicythreadperhost_new();
+void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread);
+GQueue* schedulerpolicy_getAssignedHosts(SchedulerPolicy* policy);
+void schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost,
+                          SimulationTime barrier);
+Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier);
+EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* host);
+SimulationTime schedulerpolicy_getNextTime(SchedulerPolicy* policy);
+void schedulerpolicy_free(SchedulerPolicy* policy);
+SchedulerPolicy* schedulerpolicy_new();
 
 #endif /* SHD_SCHEDULER_POLICY_H_ */
