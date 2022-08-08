@@ -269,12 +269,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap().as_str())]
     pub use_explicit_block_message: Option<bool>,
 
-    /// Use seccomp to trap syscalls.
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_seccomp").unwrap().as_str())]
-    pub use_seccomp: Option<bool>,
-
     /// Count the number of occurrences for individual syscalls
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
@@ -465,7 +459,6 @@ impl Default for ExperimentalOptions {
         Self {
             use_sched_fifo: Some(false),
             use_explicit_block_message: Some(false),
-            use_seccomp: Some(true),
             use_syscall_counters: Some(true),
             use_object_counters: Some(true),
             use_preload_libc: Some(true),
@@ -1336,13 +1329,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_explicit_block_message.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseSeccomp(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_seccomp.unwrap()
     }
 
     #[no_mangle]

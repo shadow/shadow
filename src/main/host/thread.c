@@ -17,31 +17,53 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
-#include "main/host/affinity.h"
+#include "main/host/managed_thread.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
-#include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
 
-Thread thread_create(Host* host, Process* process, int threadID, int type_id,
-                     ThreadMethods methods) {
-    Thread thread = {.type_id = type_id,
-                     .methods = methods,
-                     .referenceCount = 1,
-                     .host = host,
-                     .process = process,
-                     .tid = threadID,
-                     .affinity = AFFINITY_UNINIT,
-                     .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
-                     MAGIC_INITIALIZER};
+struct _Thread {
+    // For safe down-casting. Set and checked by child class.
+    int type_id;
+
+    int tid;
+
+    Host* host;
+    Process* process;
+    // If non-null, this address should be cleared and futex-awoken on thread exit.
+    // See set_tid_address(2).
+    PluginPtr tidAddress;
+    int referenceCount;
+
+    SysCallHandler* sys;
+
+    ShMemBlock shimSharedMemBlock;
+
+    // Non-null if blocked by a syscall.
+    SysCallCondition* cond;
+
+    // The native, managed thread
+    ManagedThread* mthread;
+
+    MAGIC_DECLARE;
+};
+
+Thread* thread_new(Host* host, Process* process, int threadID) {
+    Thread* thread = g_new(Thread, 1);
+    *thread = (Thread){.referenceCount = 1,
+                       .host = host,
+                       .process = process,
+                       .tid = threadID,
+                       .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
+                       MAGIC_INITIALIZER};
     host_ref(host);
     process_ref(process);
 
-    shimshmemthread_init(thread_sharedMem(&thread), &thread);
+    thread->sys = syscallhandler_new(host, process, thread);
+    thread->mthread = managedthread_new(thread);
 
-    // .sys is created (and destroyed) in implementation, since it needs the
-    // address of the Thread (which we don't have yet).
+    shimshmemthread_init(thread_sharedMem(thread), thread);
 
     return thread;
 }
@@ -55,14 +77,6 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
     }
 }
 
-/*
- * Helper function. Sets the thread's CPU affinity to the worker's affinity.
- */
-static void _thread_syncAffinityWithWorker(Thread *thread) {
-    thread->affinity =
-        affinity_setProcessAffinity(thread->nativeTid, worker_getAffinity(), thread->affinity);
-}
-
 void thread_ref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)++;
@@ -74,12 +88,18 @@ void thread_unref(Thread* thread) {
     utility_assert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
-        thread->methods.free(thread);
+        managedthread_free(thread->mthread);
         if (thread->process) {
             process_unref(thread->process);
+            thread->process = NULL;
         }
         if (thread->host) {
             host_unref(thread->host);
+            thread->host = NULL;
+        }
+        if (thread->sys) {
+            syscallhandler_unref(thread->sys);
+            thread->sys = NULL;
         }
         shmemallocator_globalFree(&thread->shimSharedMemBlock);
         MAGIC_CLEAR(thread);
@@ -90,19 +110,11 @@ void thread_unref(Thread* thread) {
 void thread_run(Thread* thread, char* pluginPath, char** argv, char** envv,
                 const char* workingDir) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.run);
-
-    _thread_syncAffinityWithWorker(thread);
-
-    thread->nativePid = thread->methods.run(thread, pluginPath, argv, envv, workingDir);
-    // In Linux, the PID is equal to the TID of its first thread.
-    thread->nativeTid = thread->nativePid;
+    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir);
 }
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.resume);
-    _thread_syncAffinityWithWorker(thread);
 
     // Ensure the condition isn't triggered again, but don't clear it yet.
     // Syscall handler can still access.
@@ -110,7 +122,7 @@ void thread_resume(Thread* thread) {
         syscallcondition_cancel(thread->cond);
     }
 
-    SysCallCondition* cond = thread->methods.resume(thread);
+    SysCallCondition* cond = managedthread_resume(thread->mthread);
 
     // Now we're done with old condition.
     if (thread->cond) {
@@ -122,30 +134,38 @@ void thread_resume(Thread* thread) {
     thread->cond = cond;
     if (thread->cond) {
         syscallcondition_waitNonblock(thread->cond, thread->host, thread->process, thread);
+    } else {
+        utility_assert(!managedthread_isRunning(thread->mthread));
+        if (thread->sys) {
+            syscallhandler_unref(thread->sys);
+            thread->sys = NULL;
+        }
     }
 }
 
 void thread_handleProcessExit(Thread* thread) {
     MAGIC_ASSERT(thread);
     _thread_cleanupSysCallCondition(thread);
-    utility_assert(thread->methods.handleProcessExit);
-    thread->methods.handleProcessExit(thread);
+    managedthread_handleProcessExit(thread->mthread);
+    /* make sure we cleanup circular refs */
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReturnCode);
-    return thread->methods.getReturnCode(thread);
+    return managedthread_getReturnCode(thread->mthread);
 }
 
 bool thread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->methods.isRunning(thread);
+    return managedthread_isRunning(thread->mthread);
 }
 
 ShMemBlock* thread_getIPCBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getIPCBlock);
-    return thread->methods.getIPCBlock(thread);
+    return managedthread_getIPCBlock(thread->mthread);
 }
 
 ShMemBlock* thread_getShMBlock(Thread* thread) {
@@ -169,10 +189,9 @@ Host* thread_getHost(Thread* thread) { return thread->host; }
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.nativeSyscall);
     va_list(args);
     va_start(args, n);
-    long rv = thread->methods.nativeSyscall(thread, n, args);
+    long rv = managedthread_nativeSyscall(thread->mthread, n, args);
     va_end(args);
     return rv;
 }
@@ -185,8 +204,16 @@ int thread_getID(Thread* thread) {
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.clone);
-    return thread->methods.clone(thread, flags, child_stack, ptid, ctid, newtls, child);
+
+    *child = thread_new(thread->host, thread->process, host_getNewProcessID(thread->host));
+
+    int rv = managedthread_clone(
+        (*child)->mthread, thread->mthread, flags, child_stack, ptid, ctid, newtls);
+    if (rv < 0) {
+        thread_unref(*child);
+        *child = NULL;
+    }
+    return rv;
 }
 
 uint32_t thread_getProcessId(Thread* thread) {
@@ -201,17 +228,25 @@ uint32_t thread_getHostId(Thread* thread) {
 
 pid_t thread_getNativePid(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->nativePid;
+    return managedthread_getNativePid(thread->mthread);
 }
 
 pid_t thread_getNativeTid(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->nativeTid;
+    return managedthread_getNativeTid(thread->mthread);
 }
 
 SysCallCondition* thread_getSysCallCondition(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->cond;
+}
+
+void thread_clearSysCallCondition(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    if (thread->cond) {
+        syscallcondition_unref(thread->cond);
+        thread->cond = NULL;
+    }
 }
 
 PluginVirtualPtr thread_getTidAddress(Thread* thread) {

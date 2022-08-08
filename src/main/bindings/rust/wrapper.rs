@@ -1582,6 +1582,13 @@ pub struct _Thread {
 }
 pub type Thread = _Thread;
 extern "C" {
+    pub fn thread_new(
+        host: *mut Host,
+        process: *mut Process,
+        threadID: ::std::os::raw::c_int,
+    ) -> *mut Thread;
+}
+extern "C" {
     pub fn thread_ref(thread: *mut Thread);
 }
 extern "C" {
@@ -1667,6 +1674,9 @@ extern "C" {
 }
 extern "C" {
     pub fn thread_getSysCallCondition(thread: *mut Thread) -> *mut SysCallCondition;
+}
+extern "C" {
+    pub fn thread_clearSysCallCondition(thread: *mut Thread);
 }
 extern "C" {
     pub fn thread_getSignalSet(thread: *mut Thread) -> *mut sigset_t;

@@ -387,8 +387,6 @@ bool config_getUseSchedFifo(const struct ConfigOptions *config);
 
 bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
 
-bool config_getUseSeccomp(const struct ConfigOptions *config);
-
 bool config_getUseSyscallCounters(const struct ConfigOptions *config);
 
 bool config_getUseMemoryManager(const struct ConfigOptions *config);

@@ -37,10 +37,10 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
     Thread* child = NULL;
     {
-        int childpid =
+        int res =
             thread_clone(sys->thread, filtered_flags, child_stack, ptid, ctid, newtls, &child);
-        if (childpid < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = childpid};
+        if (res < 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
         }
     }
     utility_assert(child);

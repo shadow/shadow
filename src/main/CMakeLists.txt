@@ -107,7 +107,7 @@ set(shadow_srcs
     host/thread.c
     host/host.c
     host/syscall_condition.c
-    host/thread_preload.c
+    host/managed_thread.c
     host/network_interface.c
     host/network_queuing_disciplines.c
     host/tracker.c

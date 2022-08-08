@@ -48,12 +48,12 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/host.h"
+#include "main/host/managed_thread.h"
 #include "main/host/process.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
-#include "main/host/thread_preload.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
@@ -556,7 +556,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread* mainThread = threadpreload_new(proc->host, proc, tid);
+    Thread* mainThread = thread_new(proc->host, proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
@@ -1261,22 +1261,6 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
     utility_assert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
 
     if (siginfo->si_signo == 0) {
-        return;
-    }
-
-    if (!shimipc_getUseSeccomp()) {
-        // ~legacy ptrace path. Send a real signal to the process.
-        if (!currentRunningThread) {
-            error("Sending a signal to a process in ptrace-mode is unimplemented. Signal %d to "
-                  "process %d lost.",
-                  siginfo->si_signo, process->processID);
-        } else {
-            long res = thread_nativeSyscall(
-                currentRunningThread, SYS_kill, process->nativePid, siginfo->si_signo);
-            if (res != 0) {
-                error("Sending signal to process: %s", strerror(-res));
-            }
-        }
         return;
     }
 

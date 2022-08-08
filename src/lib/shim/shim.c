@@ -453,9 +453,7 @@ static void _shim_parent_init_preload() {
     _shim_ipc_wait_for_start_event();
     _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
-    if (getenv("SHADOW_USE_SECCOMP") != NULL) {
-        _shim_parent_init_seccomp();
-    }
+    _shim_parent_init_seccomp();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }

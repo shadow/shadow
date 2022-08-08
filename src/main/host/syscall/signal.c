@@ -71,15 +71,6 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
-    if (!shimipc_getUseSeccomp()) {
-        // ~legacy ptrace path. Send a real signal to the thread.
-        pid_t nativeTid = thread_getNativePid(thread);
-        Process* process = thread_getProcess(thread);
-        pid_t nativePid = process_getNativePid(process);
-        long res = thread_nativeSyscall(sys->thread, SYS_tgkill, nativePid, nativeTid, sig);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
-    }
-
     Process* process = thread_getProcess(thread);
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(sys->host), process_getSharedMem(process), sig);
@@ -226,11 +217,6 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
                                    PluginPtr oldActPtr, size_t masksize) {
     utility_assert(sys);
 
-    if (!shimipc_getUseSeccomp()) {
-        // No special handling needed.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-
     if (signum < 1 || signum > 64) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
     }
@@ -275,13 +261,6 @@ SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs
 }
 
 SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
-    if (!shimipc_getUseSeccomp()) {
-        // Outside of seccomp mode, just handle natively.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-    // Otherwise we need to emulate to ensure that the shim's own sigaltstack
-    // configuration isn't clobbered.
-
     utility_assert(sys && args);
     PluginPtr ss_ptr = args->args[0].as_ptr;
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
@@ -329,10 +308,6 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
 static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
                                      PluginPtr oldSetPtr, size_t sigsetsize) {
     utility_assert(sys);
-
-    if (!shimipc_getUseSeccomp()) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
 
     // From sigprocmask(2): This argument is currently required to have a fixed architecture
     // specific value (equal to sizeof(kernel_sigset_t)).
