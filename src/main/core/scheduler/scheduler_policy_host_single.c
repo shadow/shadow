@@ -14,13 +14,6 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 
-typedef struct _HostSingleQueueData HostSingleQueueData;
-struct _HostSingleQueueData {
-    GMutex lock;
-    PriorityQueue* pq;
-    SimulationTime lastEventTime;
-};
-
 typedef struct _HostSingleThreadData HostSingleThreadData;
 struct _HostSingleThreadData {
     /* used to cache getHosts() result for memory management as needed */
@@ -70,26 +63,6 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
     }
 }
 
-static HostSingleQueueData* _hostsinglequeuedata_new() {
-    HostSingleQueueData* qdata = g_new0(HostSingleQueueData, 1);
-
-    g_mutex_init(&(qdata->lock));
-    qdata->pq =
-        priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_free);
-
-    return qdata;
-}
-
-static void _hostsinglequeuedata_free(HostSingleQueueData* qdata) {
-    if(qdata) {
-        if(qdata->pq) {
-            priorityqueue_free(qdata->pq);
-        }
-        g_mutex_clear(&(qdata->lock));
-        g_free(qdata);
-    }
-}
-
 /* this must be run synchronously, or the call must be protected by locks */
 static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
     MAGIC_ASSERT(policy);
@@ -97,7 +70,7 @@ static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* ho
 
     /* each host has its own queue */
     if(!g_hash_table_lookup(data->hostToQueueDataMap, host)) {
-        g_hash_table_replace(data->hostToQueueDataMap, host, _hostsinglequeuedata_new());
+        g_hash_table_replace(data->hostToQueueDataMap, host, eventqueue_new());
     }
 
     /* each thread keeps track of the hosts it needs to run */
@@ -162,16 +135,11 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
     HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
 
     /* get the queue for the destination */
-    HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
+    ThreadSafeEventQueue* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
     utility_assert(qdata);
 
-    g_mutex_lock(&(qdata->lock));
-
     /* 'deliver' the event to the destination queue */
-    priorityqueue_push(qdata->pq, event);
-
-    /* release the destination queue lock */
-    g_mutex_unlock(&(qdata->lock));
+    eventqueue_push(qdata, event);
 }
 
 static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, SimulationTime barrier) {
@@ -203,23 +171,15 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
 
     while(!g_queue_is_empty(tdata->unprocessedHosts)) {
         Host* host = g_queue_peek_head(tdata->unprocessedHosts);
-        HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
+        ThreadSafeEventQueue* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
         utility_assert(qdata);
 
-        g_mutex_lock(&(qdata->lock));
+        Event* nextEvent = NULL;
+        SimulationTime eventTime = eventqueue_nextEventTime(qdata);
 
-        Event* nextEvent = priorityqueue_peek(qdata->pq);
-        SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
-
-        if(nextEvent != NULL && eventTime < barrier) {
-            utility_assert(eventTime >= qdata->lastEventTime);
-            qdata->lastEventTime = eventTime;
-            nextEvent = priorityqueue_pop(qdata->pq);
-        } else {
-            nextEvent = NULL;
+        if(eventTime != SIMTIME_INVALID && eventTime < barrier) {
+            nextEvent = eventqueue_pop(qdata);
         }
-
-        g_mutex_unlock(&(qdata->lock));
 
         if(nextEvent != NULL) {
             return nextEvent;
@@ -242,33 +202,26 @@ static EmulatedTime _schedulerpolicyhostsingle_nextHostEventTime(SchedulerPolicy
         g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     utility_assert(tdata);
 
-    HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
+    ThreadSafeEventQueue* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
     utility_assert(qdata);
 
-    g_mutex_lock(&(qdata->lock));
-
-    EmulatedTime nextEventTime = 0;
-    Event* nextEvent = priorityqueue_peek(qdata->pq);
-    if (nextEvent) {
-        nextEventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(nextEvent));
-        utility_assert(nextEventTime != EMUTIME_INVALID);
+    SimulationTime nextEventSimTime = eventqueue_nextEventTime(qdata);
+    EmulatedTime nextEventEmuTime = EMUTIME_INVALID;
+    if (nextEventSimTime != SIMTIME_INVALID) {
+        nextEventEmuTime = emutime_add_simtime(EMUTIME_SIMULATION_START, nextEventSimTime);
+        utility_assert(nextEventEmuTime != EMUTIME_INVALID);
     }
 
-    g_mutex_unlock(&(qdata->lock));
-
-    return nextEventTime;
+    return nextEventEmuTime;
 }
 
 static void _schedulerpolicyhostsingle_findMinTime(Host* host, HostSingleSearchState* state) {
-    HostSingleQueueData* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
+    ThreadSafeEventQueue* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
     utility_assert(qdata);
 
-    g_mutex_lock(&(qdata->lock));
-    Event* event = priorityqueue_peek(qdata->pq);
-    g_mutex_unlock(&(qdata->lock));
-
-    if(event != NULL) {
-        state->nextEventTime = MIN(state->nextEventTime, event_getTime(event));
+    SimulationTime nextEventTime = eventqueue_nextEventTime(qdata);
+    if (nextEventTime != SIMTIME_INVALID) {
+        state->nextEventTime = MIN(state->nextEventTime, nextEventTime);
     }
 }
 
@@ -308,8 +261,10 @@ static void _schedulerpolicyhostsingle_free(SchedulerPolicy* policy) {
 
 SchedulerPolicy* schedulerpolicyhostsingle_new() {
     HostSinglePolicyData* data = g_new0(HostSinglePolicyData, 1);
-    data->hostToQueueDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_hostsinglequeuedata_free);
-    data->threadToThreadDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_hostsinglethreaddata_free);
+    data->hostToQueueDataMap =
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_free);
+    data->threadToThreadDataMap = g_hash_table_new_full(
+        g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_hostsinglethreaddata_free);
     data->hostToThreadMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     SchedulerPolicy* policy = g_new0(SchedulerPolicy, 1);

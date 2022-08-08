@@ -137,6 +137,9 @@ typedef struct SyscallHandler SyscallHandler;
 // to directly use a `Fn(&mut Host)` trait object.
 typedef struct TaskRef TaskRef;
 
+// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
+typedef struct ThreadSafeEventQueue ThreadSafeEventQueue;
+
 typedef struct Timer Timer;
 
 typedef struct TokenBucket TokenBucket;
@@ -462,6 +465,17 @@ HostId event_getHostID(struct Event *event);
 SimulationTime event_getTime(const struct Event *event);
 
 void event_setTime(struct Event *event, SimulationTime time);
+
+struct ThreadSafeEventQueue *eventqueue_new(void);
+
+void eventqueue_free(struct ThreadSafeEventQueue *queue);
+
+// Takes ownership of the event.
+void eventqueue_push(const struct ThreadSafeEventQueue *queue, struct Event *event);
+
+struct Event *eventqueue_pop(const struct ThreadSafeEventQueue *queue);
+
+SimulationTime eventqueue_nextEventTime(const struct ThreadSafeEventQueue *queue);
 
 // Create a new reference-counted task that can only be executed on the
 // given host. The callbacks can safely assume that they will only be called
