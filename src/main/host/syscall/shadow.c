@@ -24,7 +24,7 @@ ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 
 SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     PluginPtr name_ptr = args->args[0].as_ptr;
     size_t name_len = args->args[1].as_u64;
     PluginPtr addr_ptr = args->args[2].as_ptr;
@@ -97,19 +97,19 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
 }
 
 SysCallReturn syscallhandler_shadow_get_ipc_blk(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     trace("handling shadow_get_ipc_blk syscall");
     return _syscallhandler_get_shmem_block(sys, args, thread_getIPCBlock(sys->thread));
 }
 
 SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
     return _syscallhandler_get_shmem_block(sys, args, thread_getShMBlock(sys->thread));
 }
 
 SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     if (_useMM) {
         trace("Initializing memory manager");
         memorymanager_initMapperIfNeeded(process_getMemoryManager(sys->process), sys->thread);

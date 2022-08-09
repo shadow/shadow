@@ -113,7 +113,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 }
 
 static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFile* file) {
-    utility_assert(file);
+    utility_debugAssert(file);
 
     trace("Trying to open file %i in the plugin", fd);
 
@@ -129,7 +129,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
 
     /* We need enough mem for the string, but no more than PATH_MAX. */
     size_t maplen = strnlen(mmap_path, PATH_MAX - 1) + 1; // an extra 1 for null
-    utility_assert(maplen > 1);
+    utility_debugAssert(maplen > 1);
 
     trace("Opening path '%s' in plugin.", mmap_path);
 
@@ -273,7 +273,7 @@ SysCallReturn syscallhandler_mmap2(SysCallHandler* sys, const SysCallArgs* args)
     int64_t pgoffset = args->args[5].as_i64;
 
     // As long as we're on a system where off_t is 64-bit, we can just remap to mmap.
-    utility_assert(sizeof(off_t) == sizeof(int64_t));
+    utility_debugAssert(sizeof(off_t) == sizeof(int64_t));
     return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, 4096 * pgoffset);
 }
 

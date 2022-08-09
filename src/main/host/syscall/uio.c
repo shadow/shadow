@@ -141,7 +141,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    utility_debugAssert(0);
                     break;
                 }
                 case DT_TCPSOCKET:
@@ -255,7 +255,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    utility_debugAssert(0);
                     break;
                 }
                 case DT_TCPSOCKET:

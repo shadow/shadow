@@ -61,7 +61,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(desc);
+    utility_debugAssert(desc);
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
@@ -71,7 +71,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     switch (dType) {
         case DT_FILE:
             if (!doPread) {
-                utility_assert(offset == 0);
+                utility_debugAssert(offset == 0);
                 result = regularfile_read((RegularFile*)desc, sys->host,
                                           process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                           sizeNeeded);
@@ -85,7 +85,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
             if (doPread) {
                 result = -ESPIPE;
             } else {
-                utility_assert(offset == 0);
+                utility_debugAssert(offset == 0);
                 result = timerfd_read((TimerFd*)desc,
                                       process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                       sizeNeeded);
@@ -94,7 +94,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
-            utility_assert(0);
+            utility_debugAssert(0);
             break;
         case DT_EPOLL:
         default:
@@ -155,7 +155,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(desc);
+    utility_debugAssert(desc);
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
@@ -165,7 +165,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     switch (dType) {
         case DT_FILE:
             if (!doPwrite) {
-                utility_assert(offset == 0);
+                utility_debugAssert(offset == 0);
                 result = regularfile_write((RegularFile*)desc,
                                            process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
                                            sizeNeeded);
@@ -179,7 +179,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
-            utility_assert(0);
+            utility_debugAssert(0);
             break;
         case DT_EPOLL:
         default:

@@ -133,11 +133,11 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
 
     scheduler->random = random_new(schedulerSeed);
 
-    utility_assert(nWorkers >= 1);
+    utility_debugAssert(nWorkers >= 1);
 
     /* create the configured policy to handle queues */
     scheduler->policy = schedulerpolicy_new();
-    utility_assert(scheduler->policy);
+    utility_debugAssert(scheduler->policy);
 
     info("main scheduler thread will operate with %u worker threads", nWorkers);
 
@@ -185,7 +185,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
-    utility_assert(receiver);
+    utility_debugAssert(receiver);
 
     /* push to a queue based on the policy */
     schedulerpolicy_push(
@@ -248,7 +248,7 @@ static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
     }
 
     /* we now should have moved all elements from the queue to the array */
-    utility_assert(g_queue_is_empty(queue));
+    utility_debugAssert(g_queue_is_empty(queue));
 
     /* shuffle array - Fisher-Yates shuffle */
     for(guint i = 0; i < length-1; i++) {
@@ -269,13 +269,13 @@ static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
 
 static void _scheduler_assignHostsToThread(Scheduler* scheduler, GQueue* hosts, pthread_t thread, uint maxAssignments) {
     MAGIC_ASSERT(scheduler);
-    utility_assert(hosts);
-    utility_assert(thread);
+    utility_debugAssert(hosts);
+    utility_debugAssert(thread);
 
     guint numAssignments = 0;
     while((maxAssignments == 0 || numAssignments < maxAssignments) && !g_queue_is_empty(hosts)) {
         Host* host = (Host*) g_queue_pop_head(hosts);
-        utility_assert(host);
+        utility_debugAssert(host);
         schedulerpolicy_addHost(scheduler->policy, host, thread);
         numAssignments++;
     }

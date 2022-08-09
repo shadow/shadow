@@ -137,7 +137,7 @@ void schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost, 
 
     /* get the queue for the destination */
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, dstHost);
-    utility_assert(qdata);
+    utility_debugAssert(qdata);
 
     /* 'deliver' the event to the destination queue */
     eventqueue_push(qdata, event);
@@ -173,7 +173,7 @@ Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
     while(!g_queue_is_empty(tdata->unprocessedHosts)) {
         Host* host = g_queue_peek_head(tdata->unprocessedHosts);
         ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
-        utility_assert(qdata);
+        utility_debugAssert(qdata);
 
         Event* nextEvent = NULL;
         SimulationTime eventTime = eventqueue_nextEventTime(qdata);
@@ -200,16 +200,16 @@ EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* ho
     /* figure out which hosts we should be checking */
     HostSingleThreadData* tdata =
         g_hash_table_lookup(policy->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
-    utility_assert(tdata);
+    utility_debugAssert(tdata);
 
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
-    utility_assert(qdata);
+    utility_debugAssert(qdata);
 
     SimulationTime nextEventSimTime = eventqueue_nextEventTime(qdata);
     EmulatedTime nextEventEmuTime = EMUTIME_INVALID;
     if (nextEventSimTime != SIMTIME_INVALID) {
         nextEventEmuTime = emutime_add_simtime(EMUTIME_SIMULATION_START, nextEventSimTime);
-        utility_assert(nextEventEmuTime != EMUTIME_INVALID);
+        utility_debugAssert(nextEventEmuTime != EMUTIME_INVALID);
     }
 
     return nextEventEmuTime;
@@ -217,7 +217,7 @@ EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* ho
 
 static void _schedulerpolicy_findMinTime(Host* host, HostSingleSearchState* state) {
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
-    utility_assert(qdata);
+    utility_debugAssert(qdata);
 
     SimulationTime nextEventTime = eventqueue_nextEventTime(qdata);
     if (nextEventTime != SIMTIME_INVALID) {

@@ -57,9 +57,9 @@ ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
-    utility_assert(host);
-    utility_assert(process);
-    utility_assert(thread);
+    utility_debugAssert(host);
+    utility_debugAssert(process);
+    utility_debugAssert(thread);
 
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
@@ -151,7 +151,7 @@ void syscallhandler_ref(SysCallHandler* sys) {
 void syscallhandler_unref(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
     (sys->referenceCount)--;
-    utility_assert(sys->referenceCount >= 0);
+    utility_debugAssert(sys->referenceCount >= 0);
     if(sys->referenceCount == 0) {
         _syscallhandler_free(sys);
     }
@@ -272,7 +272,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Return that response now.
         trace("Returning delayed result");
         sys->havePendingResult = false;
-        utility_assert(sys->pendingResult.state != SYSCALL_BLOCK);
+        utility_debugAssert(sys->pendingResult.state != SYSCALL_BLOCK);
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
     } else {
@@ -607,7 +607,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 trace("Reached unblocked syscall limit. Yielding.");
                 // Block instead, but save the result so that we can return it
                 // later instead of re-executing the syscall.
-                utility_assert(!sys->havePendingResult);
+                utility_debugAssert(!sys->havePendingResult);
                 sys->havePendingResult = true;
                 sys->pendingResult = scr;
                 utility_assert(scr.cond == NULL);

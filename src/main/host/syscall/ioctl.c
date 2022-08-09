@@ -66,7 +66,7 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -80,7 +80,7 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -94,7 +94,7 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -108,7 +108,7 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -158,7 +158,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -172,7 +172,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
             int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }
@@ -186,7 +186,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
             int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
 
             if (rv != 0) {
-                utility_assert(rv < 0);
+                utility_debugAssert(rv < 0);
                 result = rv;
                 break;
             }

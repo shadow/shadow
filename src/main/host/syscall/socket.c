@@ -176,7 +176,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(tcp_desc);
+    utility_debugAssert(tcp_desc);
 
     /* We must be listening in order to accept. */
     if (!tcp_isValidListener(tcp_desc)) {
@@ -213,11 +213,11 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     }
 
     /* We accepted something! */
-    utility_assert(accepted_fd > 0);
+    utility_debugAssert(accepted_fd > 0);
     TCP* accepted_tcp_desc = NULL;
     errcode = _syscallhandler_validateTCPSocketHelper(
         sys, accepted_fd, &accepted_tcp_desc);
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
 
     trace("listening socket %i accepted fd %i", sockfd, accepted_fd);
 
@@ -438,7 +438,8 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
 
             // shadow doesn't support other congestion types, so do nothing
             const char* current_name = tcp_cong(tcp)->hooks->tcp_cong_name_str();
-            utility_assert(current_name != NULL && strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
+            utility_debugAssert(current_name != NULL &&
+                                strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
             return 0;
         }
         default: {
@@ -669,7 +670,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     if (destAddrPtr.val) {
         const struct sockaddr* dest_addr =
             process_getReadablePtr(sys->process, destAddrPtr, addrlen);
-        utility_assert(dest_addr);
+        utility_debugAssert(dest_addr);
 
         /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
         if (dest_addr->sa_family != AF_INET) {
@@ -820,7 +821,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* It's an error if it is already bound. */
     if (legacysocket_isBound(socket_desc)) {
@@ -874,7 +875,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* Make sure the addr PluginPtr is not NULL. */
     if (!addrPtr.val) {
@@ -890,7 +891,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
-    utility_assert(addr);
+    utility_debugAssert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     if (addr->sa_family != AF_INET && addr->sa_family != AF_UNSPEC) {
@@ -995,7 +996,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     // TODO I'm not sure if we should be able to get the peer name on UDP
     // sockets. If you call connect on it, then getpeername should probably
@@ -1045,7 +1046,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* Get the name of the socket.
      * TODO: Needs to be updated when we support AF_UNIX. */
@@ -1094,7 +1095,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* The optlen pointer must be non-null. */
     if (!optlenPtr.val) {
@@ -1163,7 +1164,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(tcp_desc);
+    utility_debugAssert(tcp_desc);
 
     /* only listen on the socket if it is not used for other functions */
     if (!tcp_isListeningAllowed(tcp_desc)) {
@@ -1227,7 +1228,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* Return early if there is no data. */
     if (optlen == 0) {
@@ -1361,7 +1362,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     if (errcode != 0) {
         utility_panic("Unable to find socket %i that we just created.", sockfd);
     }
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {

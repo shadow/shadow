@@ -80,7 +80,7 @@ int regularfile_getShadowFlags(RegularFile* file) {
 }
 
 static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc) {
-    utility_assert(legacyfile_getType(desc) == DT_FILE);
+    utility_debugAssert(legacyfile_getType(desc) == DT_FILE);
     RegularFile* file = (RegularFile*)desc;
     MAGIC_ASSERT(file);
     return file;
@@ -161,9 +161,9 @@ static char* _regularfile_getConcatStr(const char* prefix, const char sep, const
 
 static char* _regularfile_getAbsolutePath(RegularFile* dir, const char* pathname,
                                           const char* workingDir) {
-    utility_assert(pathname);
-    utility_assert(workingDir);
-    utility_assert(workingDir[0] == '/');
+    utility_debugAssert(pathname);
+    utility_debugAssert(workingDir);
+    utility_debugAssert(workingDir[0] == '/');
 
     /* Compute the absolute path, which will allow us to reopen later. */
     if (pathname[0] == '/') {
@@ -225,7 +225,7 @@ static void _regularfile_print_flags(int flags) {
 int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname, int flags,
                        mode_t mode, const char* workingDir) {
     MAGIC_ASSERT(file);
-    utility_assert(file->osfile.fd == OSFILE_INVALID);
+    utility_debugAssert(file->osfile.fd == OSFILE_INVALID);
 
     trace("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
           flags, (int)mode, workingDir);
@@ -311,9 +311,9 @@ int regularfile_open(RegularFile* file, const char* pathname, int flags, mode_t 
 
 static void _regularfile_readRandomBytes(RegularFile* file, Host* host, void* buf,
                                          size_t numBytes) {
-    utility_assert(file->type == FILE_TYPE_RANDOM);
+    utility_debugAssert(file->type == FILE_TYPE_RANDOM);
 
-    utility_assert(host != NULL);
+    utility_debugAssert(host != NULL);
 
     trace("RegularFile %p will read %zu bytes from random source for host %s", file, numBytes,
           host_getName(host));

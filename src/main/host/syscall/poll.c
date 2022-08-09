@@ -102,7 +102,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
-        utility_assert(desc); // we would have returned POLLNVAL in getPollEvents
+        utility_debugAssert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
         if (pfd->events & POLLIN) {

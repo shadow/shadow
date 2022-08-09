@@ -135,7 +135,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
@@ -175,7 +175,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
 }
 
 SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     pid_t tgid = args->args[0].as_i64;
     pid_t tid = args->args[1].as_i64;
@@ -198,7 +198,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
 }
 
 SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t tid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
@@ -215,7 +215,7 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
 
 static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
                                    PluginPtr oldActPtr, size_t masksize) {
-    utility_assert(sys);
+    utility_debugAssert(sys);
 
     if (signum < 1 || signum > 64) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
@@ -252,7 +252,7 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
 }
 
 SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     SysCallReturn ret =
         _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
                       /*actPtr=*/args->args[1].as_ptr,
@@ -261,7 +261,7 @@ SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs
 }
 
 SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     PluginPtr ss_ptr = args->args[0].as_ptr;
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
@@ -307,7 +307,7 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
 
 static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
                                      PluginPtr oldSetPtr, size_t sigsetsize) {
-    utility_assert(sys);
+    utility_debugAssert(sys);
 
     // From sigprocmask(2): This argument is currently required to have a fixed architecture
     // specific value (equal to sizeof(kernel_sigset_t)).
@@ -360,7 +360,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
 }
 
 SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     SysCallReturn ret =
         _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,

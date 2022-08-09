@@ -136,7 +136,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)file_desc, flags & O_CLOEXEC);
     int handle = process_registerDescriptor(sys->process, desc);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};

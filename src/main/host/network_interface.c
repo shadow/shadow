@@ -70,7 +70,7 @@ struct _NetworkInterface {
 static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
-    utility_assert(taggedSocketPtr != NULL);
+    utility_debugAssert(taggedSocketPtr != NULL);
     if (taggedSocketPtr == NULL) {
         return;
     }
@@ -194,7 +194,7 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
 
     /* make sure there is no collision */
-    utility_assert(!g_hash_table_contains(interface->boundSockets, key));
+    utility_debugAssert(!g_hash_table_contains(interface->boundSockets, key));
 
     /* need to store our own reference to the socket object */
     CompatSocket newSocketRef = compatsocket_refAs(socket);
@@ -218,7 +218,7 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 }
 
 static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
-    utility_assert(interface->pcap != NULL);
+    utility_debugAssert(interface->pcap != NULL);
 
     /* get the current time that the packet is being sent/received */
     SimulationTime now = worker_getCurrentSimulationTime();
@@ -251,7 +251,7 @@ static void _networkinterface_process_packet_in(Host* host, NetworkInterface* in
     MAGIC_ASSERT(interface);
 
     /* get the next packet */
-    utility_assert(packet);
+    utility_debugAssert(packet);
 
     /* successfully received */
     packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_RECEIVED);
@@ -363,7 +363,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
         /* we are now the owner of the packet reference from the router */
         Packet* packet = router_dequeue(interface->router);
         // We already peeked it, so it better be here when we pop it.
-        utility_assert(packet);
+        utility_debugAssert(packet);
 
         _networkinterface_process_packet_in(host, interface, packet);
 
@@ -552,7 +552,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
         LegacySocket* legacySocket = NULL;
         Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &legacySocket);
         // We already peeked it, so it better be here when we pop it.
-        utility_assert(packet);
+        utility_debugAssert(packet);
 
         packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
 
@@ -573,7 +573,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
         } else {
             /* let the upstream router send to remote with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */
-            utility_assert(interface->router);
+            utility_debugAssert(interface->router);
             router_forward(interface->router, src, packet);
         }
 

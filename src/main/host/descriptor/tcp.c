@@ -261,7 +261,7 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 static void _tcp_flush(TCP* tcp, Host* host);
 
 static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
     return (TCP*)descriptor;
 }
 
@@ -446,7 +446,7 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
                           "send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
                           sendLatency, receiveLatency);
         }
-        utility_assert(sendLatency > 0 && receiveLatency > 0);
+        utility_debugAssert(sendLatency > 0 && receiveLatency > 0);
 
         rtt = sendLatency + receiveLatency;
     }
@@ -688,7 +688,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                 g_hash_table_size(tcp->server->children) <= 0) {
                 if(tcp->child && tcp->child->parent) {
                     TCP* parent = tcp->child->parent;
-                    utility_assert(parent->server);
+                    utility_debugAssert(parent->server);
 
                     /* tell my server to stop accepting packets for me
                      * this will destroy the child and NULL out tcp->child */
@@ -825,7 +825,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
          * for the client to drain the input buffer to further open the window.
          * otherwise, we may get into a deadlock situation where we never accept
          * any packets and the client never reads. */
-        utility_assert(!(legacysocket_getInputBufferLength(&(tcp->super)) == 0));
+        utility_debugAssert(!(legacysocket_getInputBufferLength(&(tcp->super)) == 0));
         debug("%s <-> %s: receive window is 0, we have space for %" G_GSIZE_FORMAT
               " bytes in the input buffer",
               tcp->super.boundString, tcp->super.peerString, space);
@@ -862,7 +862,7 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, Host* host, enum Protoc
         }
     }
 
-    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+    utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     /* make sure our receive window is up to date before putting it in the packet */
     _tcp_updateReceiveWindow(tcp);
@@ -1004,7 +1004,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
             packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
             bool success = g_hash_table_remove(tcp->retransmit.queue,
                                                GINT_TO_POINTER(seq));
-            utility_assert(success);
+            utility_debugAssert(success);
         }
     }
 
@@ -1301,7 +1301,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
         _rswlog(tcp, "Sent %d\n", header->sequence);
 
         /* we already checked for space, so this should always succeed */
-        utility_assert(success);
+        utility_debugAssert(success);
     }
 
     /* any packets now in order can be pushed to our user input buffer */
@@ -1385,7 +1385,7 @@ static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpo
     /* a timer expired, update our timer tracking state */
     SimulationTime now = worker_getCurrentSimulationTime();
     SimulationTime* scheduledTimerExpirationPtr = priorityqueue_pop(tcp->retransmit.scheduledTimerExpirations);
-    utility_assert(scheduledTimerExpirationPtr);
+    utility_debugAssert(scheduledTimerExpirationPtr);
     g_free(scheduledTimerExpirationPtr);
 
     trace("%s a scheduled retransmit timer expired", tcp->super.boundString);
@@ -1616,14 +1616,14 @@ void tcp_enterServerMode(TCP* tcp, Host* host, Process* process, gint backlog) {
 
 void tcp_updateServerBacklog(TCP* tcp, gint backlog) {
     MAGIC_ASSERT(tcp);
-    utility_assert(tcp_isValidListener(tcp));
+    utility_debugAssert(tcp_isValidListener(tcp));
     _tcpserver_updateBacklog(tcp->server, backlog);
 }
 
 gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
                           gint* acceptedHandle) {
     MAGIC_ASSERT(tcp);
-    utility_assert(acceptedHandle);
+    utility_debugAssert(acceptedHandle);
 
     /* make sure we are listening and bound to an ip and port */
     if(tcp->state != TCPS_LISTEN || !(tcp->super.flags & SF_BOUND)) {
@@ -1638,7 +1638,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     /* if there are no pending connection ready to accept, dont block waiting */
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
-        utility_assert(legacysocket_getInputBufferLength(&tcp->super) == 0);
+        utility_debugAssert(legacysocket_getInputBufferLength(&tcp->super) == 0);
         legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
         return -EWOULDBLOCK;
     }
@@ -1657,7 +1657,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     }
 
     /* better have a peer if we are established */
-    utility_assert(tcpChild->super.peerIP && tcpChild->super.peerPort);
+    utility_debugAssert(tcpChild->super.peerIP && tcpChild->super.peerPort);
 
     /* child now gets "accepted" */
     MAGIC_ASSERT(tcpChild->child);
@@ -1675,9 +1675,9 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     }
 
     *acceptedHandle = tcpChild->child->handle;
-    utility_assert(ip);
+    utility_debugAssert(ip);
     *ip = tcpChild->super.peerIP;
-    utility_assert(port);
+    utility_debugAssert(port);
     *port = tcpChild->super.peerPort;
 
     Tracker* tracker = host_getTracker(host);
@@ -2001,7 +2001,8 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
 
                 multiplexed->child =
                     _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);
-                utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
+                utility_debugAssert(
+                    g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 
                 /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
                  * so we need another ref for the children table */
@@ -2181,7 +2182,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
     if(!(flags & TCP_PF_PROCESSED)) {
         _rswlog(tcp, "Dropping spurious packet %d.\n", header->sequence);
         trace("dropping packet that had no useful info for us");
-        utility_assert(responseFlags == PTCP_NONE);
+        utility_debugAssert(responseFlags == PTCP_NONE);
         packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         return;
     }
@@ -2411,7 +2412,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     if(remaining > 0 && tcp->partialUserDataPacket) {
         gsize partialLength = packet_getPayloadSize(tcp->partialUserDataPacket);
         gsize partialBytes = partialLength - tcp->partialOffset;
-        utility_assert(partialBytes > 0);
+        utility_debugAssert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
         gssize bytesCopied = packet_copyPayload(
@@ -2433,15 +2434,15 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
         } else {
             /* still more partial bytes left */
             tcp->partialOffset += bytesCopied;
-            utility_assert(remaining == 0);
+            utility_debugAssert(remaining == 0);
         }
     }
 
     while(remaining > 0) {
         /* if we get here, we should have read the partial packet above, or
          * broken out below */
-        utility_assert(tcp->partialUserDataPacket == NULL);
-        utility_assert(tcp->partialOffset == 0);
+        utility_debugAssert(tcp->partialUserDataPacket == NULL);
+        utility_debugAssert(tcp->partialOffset == 0);
 
         /* get the next buffered packet - we'll always need it.
          * this could mark the socket as unreadable if this is its last packet.*/

@@ -130,8 +130,8 @@ WorkerPool* workerpool_new(const Controller* controller, const ChildPidWatcher* 
                            Scheduler* scheduler, const ConfigOptions* config, int nWorkers,
                            int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
-    utility_assert(nParallel >= 1);
-    utility_assert(nWorkers >= 1);
+    utility_debugAssert(nParallel >= 1);
+    utility_debugAssert(nWorkers >= 1);
 
     // Never makes sense to use more logical processors than workers.
     int nLogicalProcessors = MIN(nParallel, nWorkers);
@@ -212,7 +212,7 @@ void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
     }
 
     // Only supports one task at a time.
-    utility_assert(pool->taskFn == NULL);
+    utility_debugAssert(pool->taskFn == NULL);
 
     pool->taskFn = taskFn;
     pool->taskData = data;
@@ -233,7 +233,7 @@ void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
 
 void workerpool_joinAll(WorkerPool* pool) {
     MAGIC_ASSERT(pool);
-    utility_assert(!pool->joined);
+    utility_debugAssert(!pool->joined);
 
     // Signal threads to exit.
     _workerpool_startTaskFn(pool, NULL, NULL);
@@ -255,7 +255,7 @@ void workerpool_joinAll(WorkerPool* pool) {
         if (rv != 0) {
             utility_panic("pthread_join: %s", g_strerror(rv));
         }
-        utility_assert(threadRetval == NULL);
+        utility_debugAssert(threadRetval == NULL);
     }
 
     pool->joined = TRUE;
@@ -263,7 +263,7 @@ void workerpool_joinAll(WorkerPool* pool) {
 
 void workerpool_free(WorkerPool* pool) {
     MAGIC_ASSERT(pool);
-    utility_assert(pool->joined);
+    utility_debugAssert(pool->joined);
 
     // Free threads.
     for (int i = 0; i < pool->nWorkers; ++i) {
@@ -285,7 +285,7 @@ void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
                             void* taskData) {
     MAGIC_ASSERT(pool);
     // Public interface doesn't support NULL taskFn
-    utility_assert(taskFn);
+    utility_debugAssert(taskFn);
     _workerpool_startTaskFn(pool, taskFn, taskData);
 }
 
@@ -304,7 +304,7 @@ void workerpool_awaitTaskFn(WorkerPool* pool) {
 
 pthread_t workerpool_getThread(WorkerPool* pool, int threadId) {
     MAGIC_ASSERT(pool);
-    utility_assert(threadId < pool->nWorkers);
+    utility_debugAssert(threadId < pool->nWorkers);
     return pool->workerThreads[threadId];
 }
 
@@ -316,8 +316,8 @@ int workerpool_getNWorkers(WorkerPool* pool) {
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerPool, int workerID,
                                                int logicalProcessorIdx) {
     MAGIC_ASSERT(workerPool);
-    utility_assert(logicalProcessorIdx < lps_n(workerPool->logicalProcessors));
-    utility_assert(logicalProcessorIdx >= 0);
+    utility_debugAssert(logicalProcessorIdx < lps_n(workerPool->logicalProcessors));
+    utility_debugAssert(logicalProcessorIdx >= 0);
 
     int oldIdx = workerPool->workerLogicalProcessorIdxs[workerID];
     int oldCpuId = oldIdx >= 0 ? lps_cpuId(workerPool->logicalProcessors, oldIdx) : AFFINITY_UNINIT;
@@ -517,8 +517,8 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
 }
 
 gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t) {
-    utility_assert(task);
-    utility_assert(host);
+    utility_debugAssert(task);
+    utility_debugAssert(host);
 
     if (!scheduler_isRunning(_worker_pool()->scheduler)) {
         return FALSE;
@@ -531,17 +531,17 @@ gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTi
 }
 
 gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay) {
-    utility_assert(task);
-    utility_assert(host);
+    utility_debugAssert(task);
+    utility_debugAssert(host);
 
     EmulatedTime clock_now = worker_getCurrentEmulatedTime();
-    utility_assert(clock_now != EMUTIME_INVALID);
+    utility_debugAssert(clock_now != EMUTIME_INVALID);
 
     return worker_scheduleTaskAtEmulatedTime(task, host, clock_now + nanoDelay);
 }
 
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
-    utility_assert(host);
+    utility_debugAssert(host);
     EmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
     EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
@@ -556,12 +556,12 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
     Packet* packet = voidPacket;
     in_addr_t ip = packet_getDestinationIP(packet);
     Router* router = host_getUpstreamRouter(host, ip);
-    utility_assert(router != NULL);
+    utility_debugAssert(router != NULL);
     router_enqueue(router, host, packet);
 }
 
 void worker_sendPacket(Host* srcHost, Packet* packet) {
-    utility_assert(packet != NULL);
+    utility_debugAssert(packet != NULL);
 
     if (!scheduler_isRunning(_worker_pool()->scheduler)) {
         /* the simulation is over, don't bother */
@@ -603,7 +603,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(scheduler, dstHostID);
-        utility_assert(dstHost);
+        utility_debugAssert(dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
 

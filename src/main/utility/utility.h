@@ -13,8 +13,7 @@
 
 #include "main/core/support/definitions.h"
 
-#ifdef DEBUG
-#define utility_assert(expr)                                                                       \
+#define utility_alwaysAssert(expr)                                                                 \
     do {                                                                                           \
         if G_LIKELY (expr) {                                                                       \
             ;                                                                                      \
@@ -22,8 +21,11 @@
             utility_handleError(__FILE__, __LINE__, G_STRFUNC, "Assertion failed: %s", #expr);     \
         }                                                                                          \
     } while (0)
+
+#ifdef DEBUG
+#define utility_debugAssert(expr) utility_alwaysAssert(expr)
 #else
-#define utility_assert(expr)
+#define utility_debugAssert(expr)
 #endif
 
 #define utility_panic(...) utility_handleError(__FILE__, __LINE__, G_STRFUNC, __VA_ARGS__);
@@ -70,8 +72,7 @@
  * Assert that a struct declared with MAGIC_DECLARE and initialized with
  * MAGIC_INIT still holds the value MAGIC_VALUE.
  */
-#define MAGIC_ASSERT(object)                                                   \
-    utility_assert((object) && ((object)->magic == MAGIC_VALUE))
+#define MAGIC_ASSERT(object) utility_debugAssert((object) && ((object)->magic == MAGIC_VALUE))
 
 /**
  * CLear a magic value. Future assertions with MAGIC_ASSERT will fail.

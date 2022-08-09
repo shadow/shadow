@@ -20,7 +20,7 @@
 
 void legacyfile_init(LegacyFile* descriptor, LegacyFileType type,
                      LegacyFileFunctionTable* funcTable) {
-    utility_assert(descriptor && funcTable);
+    utility_debugAssert(descriptor && funcTable);
 
     MAGIC_INIT(descriptor);
     MAGIC_INIT(funcTable);
@@ -69,7 +69,7 @@ void legacyfile_ref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     // should not increment the strong count when there are only weak references left
-    utility_assert(descriptor->refCountStrong > 0);
+    utility_debugAssert(descriptor->refCountStrong > 0);
 
     (descriptor->refCountStrong)++;
     trace("Descriptor %p strong_ref++ to %i (weak_ref=%i)", descriptor, descriptor->refCountStrong,
@@ -84,7 +84,7 @@ void legacyfile_unref(gpointer data) {
     trace("Descriptor %p strong_ref-- to %i (weak_ref=%i)", descriptor, descriptor->refCountStrong,
           descriptor->refCountWeak);
 
-    utility_assert(descriptor->refCountStrong >= 0);
+    utility_debugAssert(descriptor->refCountStrong >= 0);
 
     if (descriptor->refCountStrong > 0) {
         // there are strong references, so do nothing
@@ -127,7 +127,7 @@ void legacyfile_unrefWeak(gpointer data) {
     trace("Descriptor %p weak_ref-- to %i (strong_ref=%i)", descriptor, descriptor->refCountWeak,
           descriptor->refCountStrong);
 
-    utility_assert(descriptor->refCountWeak >= 0);
+    utility_debugAssert(descriptor->refCountWeak >= 0);
 
     if (descriptor->refCountStrong > 0 || descriptor->refCountWeak > 0) {
         // there are references (strong or weak), so do nothing

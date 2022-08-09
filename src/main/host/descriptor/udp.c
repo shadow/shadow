@@ -54,7 +54,7 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
 }
 
 static UDP* _udp_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_UDPSOCKET);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (UDP*)descriptor;
 }
 
@@ -140,7 +140,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
         }
     }
 
-    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+    utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     /* create the UDP packet */
     Packet* packet = packet_new(host);
@@ -198,7 +198,7 @@ static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginV
 
     Packet* packet = legacysocket_removeFromInputBuffer((LegacySocket*)udp, thread_getHost(thread));
 
-    utility_assert(bytesCopied == copyLength);
+    utility_debugAssert(bytesCopied == copyLength);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
 
     /* fill in address info */

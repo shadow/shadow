@@ -65,13 +65,13 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
-        utility_assert(
+        utility_debugAssert(
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
         if (remainder.val) {
             EmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
-            utility_assert(nextExpireTime != EMUTIME_INVALID);
-            utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+            utility_debugAssert(nextExpireTime != EMUTIME_INVALID);
+            utility_debugAssert(nextExpireTime >= worker_getCurrentEmulatedTime());
             SimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
             struct timespec timer_val = {0};
             if (!simtime_to_timespec(remainingTime, &timer_val)) {

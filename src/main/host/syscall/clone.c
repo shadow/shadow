@@ -15,7 +15,7 @@
 #include "main/utility/utility.h"
 
 SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
@@ -43,7 +43,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
         }
     }
-    utility_assert(child);
+    utility_debugAssert(child);
 
     unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
@@ -80,6 +80,6 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
 }
 
 SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
 }

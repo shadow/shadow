@@ -119,7 +119,7 @@ struct _Epoll {
 
 static EpollKey* _epollkey_new(int fd, uintptr_t objectPtr) {
     EpollKey* key = g_new0(EpollKey, 1);
-    utility_assert(key);
+    utility_debugAssert(key);
 
     key->fd = fd;
     key->objectPtr = objectPtr;
@@ -164,7 +164,7 @@ static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
     } else {
         /* Both were previously reported at the same time (or never reported yet),
          * so now we fall back to the deterministic unique id ordering. */
-        utility_assert(watch_1->id != watch_2->id);
+        utility_debugAssert(watch_1->id != watch_2->id);
         return (watch_1->id < watch_2->id) ? -1 : 1;
     }
 }
@@ -177,8 +177,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
                                    Host* host) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
-    utility_assert(event);
-    utility_assert(epoll);
+    utility_debugAssert(event);
+    utility_debugAssert(epoll);
 
     /* ref it for the EpollWatch, which also covers the listener reference
      * (which is freed below in _epollwatch_free) */
@@ -245,7 +245,7 @@ static void _epollwatch_unref(EpollWatch* watch) {
 }
 
 static Epoll* _epoll_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_EPOLL);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_EPOLL);
     return (Epoll*)descriptor;
 }
 
@@ -522,7 +522,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
             }
 
             MAGIC_ASSERT(watch);
-            utility_assert(event && (watch->flags & EWF_WATCHING));
+            utility_debugAssert(event && (watch->flags & EWF_WATCHING));
 
             /* the user set new events */
             watch->event = *event;
@@ -578,7 +578,7 @@ guint epoll_getNumReadyEvents(Epoll* epoll) {
 
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
     MAGIC_ASSERT(epoll);
-    utility_assert(nEvents);
+    utility_debugAssert(nEvents);
 
     /* return the available events in the eventArray, making sure not to
      * overflow. the number of actual events is returned in nEvents. */
@@ -637,7 +637,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             watch->flags &= ~EWF_WRITECHANGED;
 
             eventIndex++;
-            utility_assert(eventIndex <= eventArrayLength);
+            utility_debugAssert(eventIndex <= eventArrayLength);
 
             if(watch->flags & EWF_EDGETRIGGER) {
                 /* tag that an event was collected in ET mode */
@@ -724,7 +724,7 @@ static void _epoll_fileStatusChanged(Epoll* epoll, const EpollKey* key) {
                 /* unref gets called on the watch when it is removed from these tables */
                 g_hash_table_remove(epoll->watching, key);
                 /* we should have removed it from the ready list earlier */
-                utility_assert(!g_hash_table_contains(epoll->ready, key));
+                utility_debugAssert(!g_hash_table_contains(epoll->ready, key));
             }
         }
     }
