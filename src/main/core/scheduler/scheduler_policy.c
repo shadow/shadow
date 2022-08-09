@@ -28,7 +28,6 @@ struct _HostSingleThreadData {
 struct _SchedulerPolicy {
     GHashTable* hostToQueueDataMap;
     GHashTable* threadToThreadDataMap;
-    GHashTable* hostToThreadMap;
     MAGIC_DECLARE;
 };
 
@@ -81,9 +80,6 @@ void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t rand
             policy->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
     g_queue_push_tail(tdata->unprocessedHosts, host);
-
-    /* finally, store the host-to-thread mapping */
-    g_hash_table_replace(policy->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
 static void concat_queue_iter(Host* hostItem, GQueue* userQueue) {
@@ -255,7 +251,6 @@ void schedulerpolicy_free(SchedulerPolicy* policy) {
 
     g_hash_table_destroy(policy->hostToQueueDataMap);
     g_hash_table_destroy(policy->threadToThreadDataMap);
-    g_hash_table_destroy(policy->hostToThreadMap);
 
     MAGIC_CLEAR(policy);
     g_free(policy);
@@ -269,7 +264,6 @@ SchedulerPolicy* schedulerpolicy_new() {
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_free);
     policy->threadToThreadDataMap = g_hash_table_new_full(
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_threaddata_free);
-    policy->hostToThreadMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     return policy;
 }
