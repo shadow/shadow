@@ -127,10 +127,6 @@ SimulationTime schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host*
               eventTime, barrier);
     }
 
-    /* we want to track how long this thread spends idle waiting to push the event */
-    HostSingleThreadData* tdata =
-        g_hash_table_lookup(policy->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
-
     /* get the queue for the destination */
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, dstHost);
     utility_debugAssert(qdata);
@@ -196,11 +192,6 @@ Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
 
 EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* host) {
     MAGIC_ASSERT(policy);
-
-    /* figure out which hosts we should be checking */
-    HostSingleThreadData* tdata =
-        g_hash_table_lookup(policy->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
-    utility_debugAssert(tdata);
 
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
     utility_debugAssert(qdata);
