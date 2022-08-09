@@ -96,7 +96,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
     if (errcode < 0 || iovlen == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneI64(errcode);
     }
 
     /* Some logic depends on the descriptor type. */
@@ -141,7 +141,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    utility_debugAssert(0);
                     break;
                 }
                 case DT_TCPSOCKET:
@@ -149,7 +149,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     SysCallReturn scr = _syscallhandler_recvfromHelper(
                         sys, fd, bufPtr, bufSize, 0, (PluginPtr){0},
                         (PluginPtr){0});
-                    result = scr.retval.as_i64;
+                    result = syscallreturn_done(&scr)->retval.as_i64;
                     break;
                 }
                 case DT_TIMER:
@@ -187,12 +187,11 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         Trigger trigger =
             (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_READABLE};
 
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(desc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 static SysCallReturn
@@ -211,7 +210,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
     if (errcode < 0 || iovlen == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneI64(errcode);
     }
 
     /* Some logic depends on the descriptor type. */
@@ -255,14 +254,14 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    utility_debugAssert(0);
                     break;
                 }
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
                     SysCallReturn scr = _syscallhandler_sendtoHelper(
                         sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
-                    result = scr.retval.as_i64;
+                    result = syscallreturn_done(&scr)->retval.as_i64;
                     break;
                 }
                 case DT_TIMER:
@@ -300,12 +299,11 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         Trigger trigger =
             (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_WRITABLE};
 
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(desc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 ///////////////////////////////////////////////////////////

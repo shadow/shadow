@@ -33,7 +33,7 @@ Payload* payload_new(Thread* thread, PluginVirtualPtr data, gsize dataLength) {
             g_free(payload);
             return NULL;
         }
-        utility_assert(payload->data != NULL);
+        utility_debugAssert(payload->data != NULL);
         payload->length = dataLength;
     }
 
@@ -102,7 +102,7 @@ gssize payload_getData(Payload* payload, Thread* thread, gsize offset, PluginVir
 
     _payload_lock(payload);
 
-    utility_assert(offset <= payload->length);
+    utility_debugAssert(offset <= payload->length);
 
     gssize targetLength = payload->length - offset;
     gssize copyLength = MIN(targetLength, destBufferLength);
@@ -126,7 +126,7 @@ gsize payload_getDataShadow(Payload* payload, gsize offset, void* destBuffer,
 
     _payload_lock(payload);
 
-    utility_assert(offset <= payload->length);
+    utility_debugAssert(offset <= payload->length);
 
     gsize targetLength = payload->length - offset;
     gsize copyLength = MIN(targetLength, destBufferLength);

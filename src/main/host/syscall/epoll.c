@@ -50,7 +50,7 @@ SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
@@ -59,7 +59,7 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }
 
 SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
@@ -72,14 +72,14 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     /* Make sure they didn't pass a NULL pointer if EPOLL_CTL_DEL is not used. */
     if (!eventPtr.val && op != EPOLL_CTL_DEL) {
         trace("NULL event pointer passed for epoll %i", epfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     /* EINVAL if fd is the same as epfd, or the requested operation op is not
      * supported by this interface */
     if (epfd == fd) {
         trace("Epoll fd %i cannot be used to wait on itself.", epfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get and check the epoll descriptor. */
@@ -88,20 +88,19 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     if (errorCode) {
         trace("Error when trying to validate epoll %i", epfd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return syscallreturn_makeDoneErrno(-errorCode);
     }
 
     /* It's now safe to cast. */
     Epoll* epoll = (Epoll*)epollDescriptor;
-    utility_assert(epoll);
+    utility_debugAssert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
     const Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, fd);
 
     if (descriptor == NULL) {
         debug("Child %i is not a shadow descriptor", fd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+        return syscallreturn_makeDoneErrno(EBADF);
     }
 
     LegacyFile* legacyDescriptor = descriptor_asLegacyFile(descriptor);
@@ -117,7 +116,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
         if (errorCode) {
             debug("Child %i of epoll %i is closed", fd, epfd);
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+            return syscallreturn_makeDoneErrno(-errorCode);
         }
     }
 
@@ -129,7 +128,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
     errorCode = epoll_control(epoll, op, fd, descriptor, event, sys->host);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    return syscallreturn_makeDoneI64(errorCode);
 }
 
 SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
@@ -142,13 +141,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     /* Check input args. */
     if (maxevents <= 0) {
         trace("Maxevents %i is not greater than 0.", maxevents);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!eventsPtr.val) {
-        trace("NULL event pointer passed for epoll %i", epfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get and check the epoll descriptor. */
@@ -157,14 +150,13 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     if (errorCode) {
         trace("Error when trying to validate epoll %i", epfd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return syscallreturn_makeDoneErrno(-errorCode);
     }
-    utility_assert(desc);
+    utility_debugAssert(desc);
 
     /* It's now safe to cast. */
     Epoll* epoll = (Epoll*)desc;
-    utility_assert(epoll);
+    utility_debugAssert(epoll);
 
     /* figure out how many events we actually have so we can request
      * less memory than maxevents if possible. */
@@ -181,9 +173,9 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                   epfd);
 
             /* Return 0; no events are ready. */
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+            return syscallreturn_makeDoneI64(0);
         } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINTR};
+            return syscallreturn_makeInterrupted(false);
         } else {
             trace("No events are ready on epoll %i and we need to block", epfd);
 
@@ -201,7 +193,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                     worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
             }
 
-            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
+            return syscallreturn_makeBlocked(cond, false);
         }
     }
 
@@ -209,16 +201,19 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
     size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
     struct epoll_event* events = process_getWriteablePtr(sys->process, eventsPtr, sizeNeeded);
+    if (!events) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
     /* Retrieve the events. */
     gint nEvents = 0;
     gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
-    utility_assert(result == 0);
+    utility_debugAssert(result == 0);
 
     trace("Found %i ready events on epoll %i.", nEvents, epfd);
 
     /* Return the number of events that are ready. */
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = nEvents};
+    return syscallreturn_makeDoneI64(nEvents);
 }
 
 SysCallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
@@ -227,7 +222,7 @@ SysCallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs*
     if (sigmask.val != 0) {
         error("epoll_pwait called with non-null sigmask, which is not yet supported by shadow; "
               "returning ENOSYS");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     return syscallhandler_epoll_wait(sys, args);

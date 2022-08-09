@@ -179,7 +179,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
     LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     int result = 0;
@@ -205,5 +205,5 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
         }
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    return syscallreturn_makeDoneI64(result);
 }

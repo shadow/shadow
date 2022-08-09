@@ -117,7 +117,7 @@ ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConf
 
 /* this function is called by manager before the workers exist */
 Host* host_new(const HostParameters* params) {
-    utility_assert(params);
+    utility_debugAssert(params);
 
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
@@ -132,7 +132,7 @@ Host* host_new(const HostParameters* params) {
     host->params = *params;
 
     /* now dup the strings so we own them */
-    utility_assert(params->hostname);
+    utility_debugAssert(params->hostname);
     host->params.hostname = g_strdup(params->hostname);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
@@ -329,7 +329,7 @@ void host_shutdown(Host* host) {
     if(host->defaultAddress) address_unref(host->defaultAddress);
     if(host->params.hostname) g_free((gchar*)host->params.hostname);
 
-    utility_assert(host_getSharedMem(host));
+    utility_debugAssert(host_getSharedMem(host));
     shimshmemhost_destroy(host_getSharedMem(host));
     shmemallocator_globalFree(&host->shimSharedMemBlock);
 }
@@ -342,7 +342,7 @@ void host_ref(Host* host) {
 void host_unref(Host* host) {
     MAGIC_ASSERT(host);
     (host->referenceCount)--;
-    utility_assert(host->referenceCount >= 0);
+    utility_debugAssert(host->referenceCount >= 0);
     if(host->referenceCount == 0) {
         _host_free(host);
     }
@@ -514,7 +514,7 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
 Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     NetworkInterface* interface = g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
-    utility_assert(interface != NULL);
+    utility_debugAssert(interface != NULL);
     return networkinterface_getRouter(interface);
 }
 
@@ -640,7 +640,7 @@ static in_port_t _host_getRandomPort(Host* host) {
     /* make sure we don't assign any low privileged ports */
     randomHostPort += (in_port_t)MIN_RANDOM_PORT;
 
-    utility_assert(randomHostPort >= MIN_RANDOM_PORT);
+    utility_debugAssert(randomHostPort >= MIN_RANDOM_PORT);
     return htons(randomHostPort);
 }
 
@@ -770,7 +770,7 @@ pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
 
 ShimShmemHost* host_getSharedMem(Host* host) {
     MAGIC_ASSERT(host);
-    utility_assert(host->shimSharedMemBlock.p);
+    utility_debugAssert(host->shimSharedMemBlock.p);
     return host->shimSharedMemBlock.p;
 }
 

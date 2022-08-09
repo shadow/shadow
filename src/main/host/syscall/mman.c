@@ -113,7 +113,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 }
 
 static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFile* file) {
-    utility_assert(file);
+    utility_debugAssert(file);
 
     trace("Trying to open file %i in the plugin", fd);
 
@@ -129,7 +129,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
 
     /* We need enough mem for the string, but no more than PATH_MAX. */
     size_t maplen = strnlen(mmap_path, PATH_MAX - 1) + 1; // an extra 1 for null
-    utility_assert(maplen > 1);
+    utility_debugAssert(maplen > 1);
 
     trace("Opening path '%s' in plugin.", mmap_path);
 
@@ -203,7 +203,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     int errcode = _syscallhandler_validateMmapArgsHelper(
         sys, fd, len, prot, flags, &file_desc);
     if (errcode) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Now file_desc is null for an anonymous mapping, non-null otherwise. */
@@ -213,8 +213,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
         pluginFD = _syscallhandler_openPluginFile(sys, fd, file_desc);
         if (pluginFD < 0) {
             warning("mmap on fd %d for %zu bytes failed.", fd, len);
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -EACCES};
+            return syscallreturn_makeDoneErrno(EACCES);
         }
     }
 
@@ -223,15 +222,13 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     SysCallReturn result =
         memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
     if (result.state == SYSCALL_NATIVE) {
-        result = (SysCallReturn){.state = SYSCALL_DONE,
-                                 .retval = thread_nativeSyscall(sys->thread, SYS_mmap, addrPtr, len,
-                                                                prot, flags, pluginFD, offset)};
+        return syscallreturn_makeDoneI64(thread_nativeSyscall(
+            sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
     }
 
     trace("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
-          "%zu bytes returned %p (%s)",
-          (void*)addrPtr.val, pluginFD, len, (void*)result.retval.as_u64,
-          strerror(syscall_rawReturnValueToErrno(result.retval.as_i64)));
+          "%zu bytes returned %p",
+          (void*)addrPtr.val, pluginFD, len, (void*)syscallreturn_done(&result)->retval.as_u64);
 
     /* Close the file we asked them to open. */
     if (pluginFD >= 0) {
@@ -273,7 +270,7 @@ SysCallReturn syscallhandler_mmap2(SysCallHandler* sys, const SysCallArgs* args)
     int64_t pgoffset = args->args[5].as_i64;
 
     // As long as we're on a system where off_t is 64-bit, we can just remap to mmap.
-    utility_assert(sizeof(off_t) == sizeof(int64_t));
+    utility_debugAssert(sizeof(off_t) == sizeof(int64_t));
     return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, 4096 * pgoffset);
 }
 

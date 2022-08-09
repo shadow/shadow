@@ -750,11 +750,20 @@ impl CompatFile {
 
 impl std::fmt::Debug for c::SysCallReturn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SysCallReturn")
-            .field("state", &self.state)
-            .field("retval", &self.retval)
-            .field("cond", &self.cond)
-            .finish()
+        let mut ds = f.debug_struct("SysCallReturn");
+        ds.field("state", &self.state);
+        match self.state {
+            c::SysCallReturnState_SYSCALL_BLOCK => {
+                ds.field("cond", unsafe { &self.u.blocked.cond });
+                ds.field("restartable", unsafe { &self.u.blocked.restartable });
+            }
+            c::SysCallReturnState_SYSCALL_DONE => {
+                ds.field("retval", unsafe { &self.u.done.retval });
+                ds.field("restartable", unsafe { &self.u.done.restartable });
+            }
+            _ => {}
+        };
+        ds.finish()
     }
 }
 
@@ -1034,21 +1043,25 @@ mod tests {
         for val in vec![
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: 1.into(),
-                cond: std::ptr::null_mut(),
-                restartable: false,
+                u: c::SysCallReturnBody {
+                    done: c::SysCallReturnDone {
+                        retval: 1.into(),
+                        restartable: false,
+                    },
+                },
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
-                retval: 0.into(),
-                cond: condition.into_inner(),
-                restartable: true,
+                u: c::SysCallReturnBody {
+                    blocked: c::SysCallReturnBlocked {
+                        cond: condition.into_inner(),
+                        restartable: true,
+                    },
+                },
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
-                retval: 0.into(),
-                cond: std::ptr::null_mut(),
-                restartable: false,
+                u: unsafe { std::mem::zeroed::<c::SysCallReturnBody>() },
             },
         ]
         .drain(..)

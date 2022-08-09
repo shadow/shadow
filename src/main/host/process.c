@@ -169,7 +169,7 @@ static Thread* _process_threadLeader(Process* proc) {
 
 ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->shimSharedMemBlock.p);
+    utility_debugAssert(proc->shimSharedMemBlock.p);
     return proc->shimSharedMemBlock.p;
 }
 
@@ -183,7 +183,7 @@ static void _process_setSharedTime(Process* proc) {
 
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->processName->str);
+    utility_debugAssert(proc->processName->str);
     return proc->processName->str;
 }
 
@@ -199,7 +199,7 @@ int process_getStraceFd(Process* proc) {
 
 const gchar* process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->plugin.exeName->str);
+    utility_debugAssert(proc->plugin.exeName->str);
     return proc->plugin.exeName->str;
 }
 
@@ -219,7 +219,7 @@ pid_t process_getNativePid(const Process* proc) {
 }
 
 static void _process_reapThread(Process* process, Thread* thread) {
-    utility_assert(!thread_isRunning(thread));
+    utility_debugAssert(!thread_isRunning(thread));
 
     // If the `clear_child_tid` attribute on the thread is set, and there are
     // any other threads left alive in the process, perform a futex wake on
@@ -290,7 +290,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
         // flush.
 
         FutexTable* ftable = host_getFutexTable(process->host);
-        utility_assert(ftable);
+        utility_debugAssert(ftable);
         Futex* futex =
             futextable_get(ftable, process_getPhysicalAddress(process, clear_child_tid_pvp));
         if (futex) {
@@ -301,7 +301,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
 
 static void _process_handleProcessExit(Process* proc) {
     trace("handleProcessExit");
-    utility_assert(!process_isRunning(proc));
+    utility_debugAssert(!process_isRunning(proc));
 
     GHashTableIter iter;
     gpointer key, value;
@@ -309,7 +309,7 @@ static void _process_handleProcessExit(Process* proc) {
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
         thread_handleProcessExit(thread);
-        utility_assert(!thread_isRunning(thread));
+        utility_debugAssert(!thread_isRunning(thread));
         _process_reapThread(proc, thread);
 
         // Must be last, since it unrefs the thread.
@@ -496,14 +496,14 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
 
 static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
     MAGIC_ASSERT(proc);
-    utility_assert(fileName != NULL);
+    utility_debugAssert(fileName != NULL);
 
     RegularFile* stdfile = regularfile_new();
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
     Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
 
     // assume the fd was not previously in use
-    utility_assert(replacedDesc == NULL);
+    utility_debugAssert(replacedDesc == NULL);
 
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
@@ -814,8 +814,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->processID = processID;
 
     /* plugin name and path are required so we know what to execute */
-    utility_assert(pluginName);
-    utility_assert(pluginPath);
+    utility_debugAssert(pluginName);
+    utility_debugAssert(pluginPath);
     proc->plugin.exeName = g_string_new(pluginName);
     proc->plugin.exePath = g_string_new(pluginPath);
 
@@ -829,7 +829,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->cpuDelayTimer = g_timer_new();
 #endif
 
-    utility_assert(stopTime == 0 || stopTime > startTime);
+    utility_debugAssert(stopTime == 0 || stopTime > startTime);
     proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
     proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
 
@@ -986,7 +986,7 @@ void process_ref(Process* proc) {
 void process_unref(Process* proc) {
     MAGIC_ASSERT(proc);
     (proc->referenceCount)--;
-    utility_assert(proc->referenceCount >= 0);
+    utility_debugAssert(proc->referenceCount >= 0);
     if(proc->referenceCount == 0) {
         _process_free(proc);
     }
@@ -1007,7 +1007,7 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
 
 uint32_t process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->host);
+    utility_debugAssert(proc->host);
     return host_getID(proc->host);
 }
 
@@ -1037,10 +1037,10 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
     guint pid = process_getProcessID(proc);
     const int pid_shift = 64 - pid_bits;
     uint64_t high = (uint64_t)pid << pid_shift;
-    utility_assert(high >> pid_shift == pid);
+    utility_debugAssert(high >> pid_shift == pid);
 
     uint64_t low = vPtr.val;
-    utility_assert(low >> pid_shift == 0);
+    utility_debugAssert(low >> pid_shift == 0);
 
     return (PluginPhysicalPtr){.val = low | high};
 }
@@ -1049,7 +1049,7 @@ int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
 
     // Disallow additional references while there's a mutable reference.
-    utility_assert(!proc->memoryMutRef);
+    utility_debugAssert(!proc->memoryMutRef);
 
     return memorymanager_readPtr(proc->memoryManager, dst, src, n);
 }
@@ -1058,8 +1058,8 @@ int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_
     MAGIC_ASSERT(proc);
 
     // Disallow additional references when trying to get a mutable reference.
-    utility_assert(!proc->memoryMutRef);
-    utility_assert(proc->memoryRefs->len == 0);
+    utility_debugAssert(!proc->memoryMutRef);
+    utility_debugAssert(proc->memoryRefs->len == 0);
 
     return memorymanager_writePtr(proc->memoryManager, dst, src, n);
 }
@@ -1068,7 +1068,7 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
     MAGIC_ASSERT(proc);
 
     // Disallow additional references while there's a mutable reference.
-    utility_assert(!proc->memoryMutRef);
+    utility_debugAssert(!proc->memoryMutRef);
 
     ProcessMemoryRef_u8* ref = memorymanager_getReadablePtr(proc->memoryManager, plugin_src, n);
     if (!ref) {
@@ -1084,7 +1084,7 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
     MAGIC_ASSERT(proc);
 
     // Disallow additional references while there's a mutable reference.
-    utility_assert(!proc->memoryMutRef);
+    utility_debugAssert(!proc->memoryMutRef);
 
     ProcessMemoryRef_u8* ref =
         memorymanager_getReadablePtrPrefix(proc->memoryManager, plugin_src, n);
@@ -1101,7 +1101,7 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
         return -ENAMETOOLONG;
     }
 
-    utility_assert(out_str);
+    utility_debugAssert(out_str);
     *out_str = str;
     if (out_strlen) {
         *out_strlen = strlen;
@@ -1116,7 +1116,7 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
     MAGIC_ASSERT(proc);
 
     // Disallow additional references while there's a mutable reference.
-    utility_assert(!proc->memoryMutRef);
+    utility_debugAssert(!proc->memoryMutRef);
 
     return memorymanager_readString(proc->memoryManager, src, str, n);
 }
@@ -1129,8 +1129,8 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
 
     // Disallow additional references when trying to get a mutable reference.
-    utility_assert(!proc->memoryMutRef);
-    utility_assert(proc->memoryRefs->len == 0);
+    utility_debugAssert(!proc->memoryMutRef);
+    utility_debugAssert(proc->memoryRefs->len == 0);
 
     ProcessMemoryRefMut_u8* ref = memorymanager_getWritablePtr(proc->memoryManager, plugin_src, n);
     if (!ref) {
@@ -1149,8 +1149,8 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
 
     // Disallow additional references when trying to get a mutable reference.
-    utility_assert(!proc->memoryMutRef);
-    utility_assert(proc->memoryRefs->len == 0);
+    utility_debugAssert(!proc->memoryMutRef);
+    utility_debugAssert(proc->memoryRefs->len == 0);
 
     ProcessMemoryRefMut_u8* ref = memorymanager_getMutablePtr(proc->memoryManager, plugin_src, n);
     if (!ref) {
@@ -1182,7 +1182,10 @@ void process_flushPtrs(Process* proc) {
 
     // Flush and free any writers
     if (proc->memoryMutRef) {
-        memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
+        int rv = memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
+        if (rv) {
+            panic("Couldn't flush mutable reference");
+        }
         proc->memoryMutRef = NULL;
     }
 }
@@ -1256,9 +1259,9 @@ static void _process_interruptWithSignal(Process* process, ShimShmemHostLock* ho
 
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
     MAGIC_ASSERT(process);
-    utility_assert(siginfo->si_signo >= 0);
-    utility_assert(siginfo->si_signo <= SHD_SIGRT_MAX);
-    utility_assert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
+    utility_debugAssert(siginfo->si_signo >= 0);
+    utility_debugAssert(siginfo->si_signo <= SHD_SIGRT_MAX);
+    utility_debugAssert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
 
     if (siginfo->si_signo == 0) {
         return;

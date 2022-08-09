@@ -57,9 +57,9 @@ ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
-    utility_assert(host);
-    utility_assert(process);
-    utility_assert(thread);
+    utility_debugAssert(host);
+    utility_debugAssert(process);
+    utility_debugAssert(thread);
 
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
@@ -151,7 +151,7 @@ void syscallhandler_ref(SysCallHandler* sys) {
 void syscallhandler_unref(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
     (sys->referenceCount)--;
-    utility_assert(sys->referenceCount >= 0);
+    utility_debugAssert(sys->referenceCount >= 0);
     if(sys->referenceCount == 0) {
         _syscallhandler_free(sys);
     }
@@ -183,16 +183,26 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 #endif
+    if (logger_isEnabled(logger_getDefault(), LOGLEVEL_TRACE)) {
+        const char* errstr = "n/a";
+        char errstrbuf[100];
 
-    trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
-          "code=%d(%s)",
-          process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
-          _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
-          scr->state == SYSCALL_DONE
-              ? "DONE"
-              : scr->state == SYSCALL_BLOCK ? "BLOCK"
-                                            : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a");
+        const char* valstr = "n/a";
+        char valbuf[100];
+        if (scr->state == SYSCALL_DONE) {
+            SysCallReturnDone* done = syscallreturn_done(scr);
+            if (done->retval.as_i64 < 0) {
+                errstr = strerror_r(-done->retval.as_i64, errstrbuf, sizeof(errstrbuf));
+            }
+            snprintf(valbuf, sizeof(valbuf), "%" PRIi64, done->retval.as_i64);
+            valstr = valbuf;
+        }
+        trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
+              "val=%s(%s)",
+              process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
+              _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "", syscallreturnstate_str(scr->state),
+              valstr, errstr);
+    }
 
 #ifdef USE_PERF_TIMERS
     debug("handling syscall %ld %s took %f seconds", number, name, sys->perfSecondsCurrent);
@@ -225,7 +235,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 #define NATIVE(s)                                                                                  \
     case SYS_##s:                                                                                  \
         trace("native syscall %ld " #s, args->number);                                             \
-        scr = (SysCallReturn){.state = SYSCALL_NATIVE};                                            \
+        scr = syscallreturn_makeNative();                                                          \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
                 sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
@@ -234,7 +244,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 #define UNSUPPORTED(s)                                                                             \
     case SYS_##s:                                                                                  \
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
-        scr = (SysCallReturn){.state = -ENOSYS};                                                   \
+        scr = syscallreturn_makeErrno(ENOSYS);                                                     \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
                 sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
@@ -272,7 +282,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Return that response now.
         trace("Returning delayed result");
         sys->havePendingResult = false;
-        utility_assert(sys->pendingResult.state != SYSCALL_BLOCK);
+        utility_debugAssert(sys->pendingResult.state != SYSCALL_BLOCK);
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
     } else {
@@ -531,7 +541,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
                       "unusual behavior",
                       ENOSYS, args->number);
-                scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+                scr = syscallreturn_makeDoneI64(-ENOSYS);
 
                 if (straceLoggingMode != STRACE_FMT_MODE_OFF) {
                     char arg_str[20] = {0};
@@ -567,14 +577,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // transferred)."
     if (scr.state == SYSCALL_BLOCK &&
         thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
-        SysCallCondition* condition = scr.cond;
-        utility_assert(condition);
-        syscallcondition_unref(condition);
-        scr = (SysCallReturn){
-            .state = SYSCALL_DONE, .retval = -EINTR, .restartable = scr.restartable};
+        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+        syscallcondition_unref(blocked->cond);
+        scr = syscallreturn_makeInterrupted(blocked->restartable);
     }
 
-    if (!(scr.state == SYSCALL_DONE && syscall_rawReturnValueToErrno(scr.retval.as_i64) == 0)) {
+    if (!(scr.state == SYSCALL_DONE &&
+          syscall_rawReturnValueToErrno(syscallreturn_done(&scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
         process_freePtrsWithoutFlushing(sys->process);
@@ -607,13 +616,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 trace("Reached unblocked syscall limit. Yielding.");
                 // Block instead, but save the result so that we can return it
                 // later instead of re-executing the syscall.
-                utility_assert(!sys->havePendingResult);
+                utility_debugAssert(!sys->havePendingResult);
                 sys->havePendingResult = true;
                 sys->pendingResult = scr;
-                utility_assert(scr.cond == NULL);
-                scr.cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-                syscallcondition_setTimeout(scr.cond, sys->host, newTime);
-                scr.state = SYSCALL_BLOCK;
+                SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+                syscallcondition_setTimeout(cond, sys->host, newTime);
+                scr = syscallreturn_makeBlocked(cond, false);
             }
         }
     }

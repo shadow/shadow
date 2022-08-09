@@ -22,12 +22,12 @@ static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pi
     // RLIMIT_NOFILE. Some applications like Tor will change behavior depending on these limits.
     if (pid == 0) {
         // process is calling prlimit on itself
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
+        return syscallreturn_makeNative();
     } else {
         // TODO: we do not currently support adjusting other processes limits.
         // To support it, we just need to find the native pid associated
         // with pid, and call prlimit on the native pid instead.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 }
 
@@ -36,7 +36,7 @@ static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pi
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     int option = args->args[0].as_i64;
     trace("prctl called with option %i", option);
@@ -46,24 +46,18 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
 
         // Make sure we have somewhere to copy the output
         PluginPtr outptr = args->args[1].as_ptr;
-        if (!outptr.val) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        int res = process_writePtr(sys->process, outptr, &tid_addr.val, sizeof(tid_addr.val));
+        if (res) {
+            return syscallreturn_makeDoneErrno(-res);
         }
-
-        int** out = process_getWriteablePtr(sys->process, outptr, sizeof(*out));
-        if (!out) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-        }
-
-        *out = (int*)tid_addr.val;
-        return (SysCallReturn){.state = SYSCALL_DONE};
+        return syscallreturn_makeDoneU64(0);
     } else {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
+        return syscallreturn_makeNative();
     }
 }
 
 SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
@@ -73,7 +67,7 @@ SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* arg
 }
 
 SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
@@ -88,5 +82,5 @@ SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args
     process_setMemoryManager(sys->process, NULL);
 
     // Have the plugin execute it natively.
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    return syscallreturn_makeNative();
 }

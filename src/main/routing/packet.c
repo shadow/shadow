@@ -104,9 +104,9 @@ Packet* packet_new(Host* host) {
 void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength) {
     MAGIC_ASSERT(packet);
-    utility_assert(thread);
-    utility_assert(payload.val);
-    utility_assert(!packet->payload);
+    utility_debugAssert(thread);
+    utility_debugAssert(payload.val);
+    utility_debugAssert(!packet->payload);
 
     /* the payload starts with 1 ref, which we hold */
     packet->payload = payload_new(thread, payload, payloadLength);
@@ -232,10 +232,10 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
      * at once or a deadlock will occur */
     guint sequence1 = 0, sequence2 = 0;
 
-    utility_assert(packet1->protocol == PTCP);
+    utility_debugAssert(packet1->protocol == PTCP);
     sequence1 = ((PacketTCPHeader*)(packet1->header))->sequence;
 
-    utility_assert(packet2->protocol == PTCP);
+    utility_debugAssert(packet2->protocol == PTCP);
     sequence2 = ((PacketTCPHeader*)(packet2->header))->sequence;
 
     return sequence1 < sequence2 ? -1 : sequence1 > sequence2 ? 1 : 0;
@@ -244,8 +244,8 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
     MAGIC_ASSERT(packet);
-    utility_assert(!(packet->header) && packet->protocol == PNONE);
-    utility_assert(port > 0);
+    utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
+    utility_debugAssert(port > 0);
 
     PacketLocalHeader* header = g_new0(PacketLocalHeader, 1);
 
@@ -262,8 +262,8 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort) {
     MAGIC_ASSERT(packet);
-    utility_assert(!(packet->header) && packet->protocol == PNONE);
-    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+    utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
+    utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     PacketUDPHeader* header = g_new0(PacketUDPHeader, 1);
 
@@ -281,8 +281,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
     MAGIC_ASSERT(packet);
-    utility_assert(!(packet->header) && packet->protocol == PNONE);
-    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+    utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
+    utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     PacketTCPHeader* header = g_new0(PacketTCPHeader, 1);
 
@@ -300,7 +300,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
-    utility_assert(packet->header && (packet->protocol == PTCP));
+    utility_debugAssert(packet->header && (packet->protocol == PTCP));
 
     PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
@@ -507,7 +507,7 @@ guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* 
 
 GList* packet_copyTCPSelectiveACKs(Packet* packet) {
     MAGIC_ASSERT(packet);
-    utility_assert(packet->protocol == PTCP);
+    utility_debugAssert(packet->protocol == PTCP);
 
     PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
 
@@ -523,7 +523,7 @@ GList* packet_copyTCPSelectiveACKs(Packet* packet) {
 
 PacketTCPHeader* packet_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    utility_assert(packet->protocol == PTCP);
+    utility_debugAssert(packet->protocol == PTCP);
     return (PacketTCPHeader*)packet->header;
 }
 

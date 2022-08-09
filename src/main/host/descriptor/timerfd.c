@@ -28,7 +28,7 @@ struct _TimerFd {
 };
 
 static TimerFd* _timerfd_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_TIMER);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_TIMER);
     return (TimerFd*)descriptor;
 }
 
@@ -90,10 +90,10 @@ TimerFd* timerfd_new(HostId hostId) {
 
 void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timerfd);
-    utility_assert(curr_value);
+    utility_debugAssert(curr_value);
 
     SimulationTime remainingTime = timer_getRemainingTime(timerfd->timer);
-    utility_assert(remainingTime != SIMTIME_INVALID);
+    utility_debugAssert(remainingTime != SIMTIME_INVALID);
     if (!simtime_to_timespec(remainingTime, &curr_value->it_value)) {
         panic("Couldn't convert %ld", remainingTime);
     }
@@ -116,10 +116,10 @@ static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
 static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* config,
                          gint flags) {
     MAGIC_ASSERT(timerfd);
-    utility_assert(config);
+    utility_debugAssert(config);
 
     SimulationTime configSimTime = simtime_from_timespec(config->it_value);
-    utility_assert(configSimTime != SIMTIME_INVALID);
+    utility_debugAssert(configSimTime != SIMTIME_INVALID);
 
     EmulatedTime now = worker_getCurrentEmulatedTime();
     EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMUTIME_UNIX_EPOCH : now;
@@ -140,7 +140,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
 }
 
 static gboolean _timerfd_timeIsValid(const struct timespec* config) {
-    utility_assert(config);
+    utility_debugAssert(config);
     return (config->tv_nsec < 0 || config->tv_nsec >= SIMTIME_ONE_SECOND) ? FALSE : TRUE;
 }
 
@@ -148,7 +148,7 @@ gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itim
                      struct itimerspec* old_value) {
     MAGIC_ASSERT(timerfd);
 
-    utility_assert(new_value);
+    utility_debugAssert(new_value);
 
     if (!_timerfd_timeIsValid(&(new_value->it_value)) ||
         !_timerfd_timeIsValid(&(new_value->it_interval))) {

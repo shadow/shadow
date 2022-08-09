@@ -85,7 +85,7 @@ void thread_ref(Thread* thread) {
 void thread_unref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)--;
-    utility_assert(thread->referenceCount >= 0);
+    utility_debugAssert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
         managedthread_free(thread->mthread);
@@ -135,7 +135,7 @@ void thread_resume(Thread* thread) {
     if (thread->cond) {
         syscallcondition_waitNonblock(thread->cond, thread->host, thread->process, thread);
     } else {
-        utility_assert(!managedthread_isRunning(thread->mthread));
+        utility_debugAssert(!managedthread_isRunning(thread->mthread));
         if (thread->sys) {
             syscallhandler_unref(thread->sys);
             thread->sys = NULL;
@@ -175,7 +175,7 @@ ShMemBlock* thread_getShMBlock(Thread* thread) {
 
 ShimShmemThread* thread_sharedMem(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->shimSharedMemBlock.p);
+    utility_debugAssert(thread->shimSharedMemBlock.p);
     return thread->shimSharedMemBlock.p;
 }
 

@@ -39,12 +39,12 @@ struct _DNS {
 };
 
 static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
-    utility_assert(cidrStr);
+    utility_debugAssert(cidrStr);
 
     gchar** cidrParts = g_strsplit(cidrStr, "/", 0);
     gchar* cidrIPStr = cidrParts[0];
     gint cidrBits = atoi(cidrParts[1]);
-    utility_assert(cidrBits >= 0 && cidrBits <= 32);
+    utility_debugAssert(cidrBits >= 0 && cidrBits <= 32);
 
     /* first create the mask in host order */
     in_addr_t netmask = 0;
@@ -112,7 +112,7 @@ static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
 
 Address* dns_register(DNS* dns, GQuark id, const gchar* name, in_addr_t requestedIP) {
     MAGIC_ASSERT(dns);
-    utility_assert(name);
+    utility_debugAssert(name);
 
     g_mutex_lock(&dns->lock);
 
@@ -223,7 +223,7 @@ static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
 
 static bool _dns_writeNewHostsFile(DNS* dns) {
     MAGIC_ASSERT(dns);
-    utility_assert(!dns->hosts.path);
+    utility_debugAssert(!dns->hosts.path);
 
     dns->hosts.path = _dns_getHostsPath(dns);
     dns->hosts.filenum = mkstemp(dns->hosts.path);

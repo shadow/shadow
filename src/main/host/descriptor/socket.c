@@ -24,8 +24,8 @@
 #include "main/utility/utility.h"
 
 static LegacySocket* _legacysocket_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
-                   legacyfile_getType(descriptor) == DT_UDPSOCKET);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
+                        legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (LegacySocket*)descriptor;
 }
 
@@ -114,7 +114,7 @@ TransportFunctionTable socket_functions = {
 
 void legacysocket_init(LegacySocket* socket, Host* host, SocketFunctionTable* vtable,
                        LegacyFileType type, guint receiveBufferSize, guint sendBufferSize) {
-    utility_assert(socket && vtable);
+    utility_debugAssert(socket && vtable);
 
     transport_init(&(socket->super), &socket_functions, type);
 
@@ -281,7 +281,7 @@ gboolean legacysocket_isBound(LegacySocket* socket) {
 
 gsize legacysocket_getInputBufferSpace(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
-    utility_assert(socket->inputBufferSize >= socket->inputBufferLength);
+    utility_debugAssert(socket->inputBufferSize >= socket->inputBufferLength);
     gsize bufferSize = legacysocket_getInputBufferSize(socket);
     if(bufferSize < socket->inputBufferLength) {
         return 0;
@@ -292,7 +292,7 @@ gsize legacysocket_getInputBufferSpace(LegacySocket* socket) {
 
 gsize legacysocket_getOutputBufferSpace(LegacySocket* socket) {
     MAGIC_ASSERT(socket);
-    utility_assert(socket->outputBufferSize >= socket->outputBufferLength);
+    utility_debugAssert(socket->outputBufferSize >= socket->outputBufferLength);
     gsize bufferSize = legacysocket_getOutputBufferSize(socket);
     if(bufferSize < socket->outputBufferLength) {
         return 0;

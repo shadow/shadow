@@ -28,28 +28,28 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
                                                       PluginPtr remainder) {
     if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
         warning("Unsupported clock ID %d during nanosleep", clock_id);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     if (flags != 0) {
         warning("Unsupported flag %d during nanosleep", flags);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     /* Grab the arg from the syscall register. */
     struct timespec req;
     int rv = process_readPtr(sys->process, &req, request, sizeof(req));
     if (rv < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+        return syscallreturn_makeDoneErrno(-rv);
     }
     SimulationTime reqSimTime = simtime_from_timespec(req);
     if (reqSimTime == SIMTIME_INVALID) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Does the timeout request require us to block? */
     if (reqSimTime == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     /* Did we already block? */
@@ -60,18 +60,18 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
         syscallcondition_setTimeout(cond, sys->host, worker_getCurrentEmulatedTime() + reqSimTime);
 
         /* Block the thread, unblock when the timer expires. */
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
+        return syscallreturn_makeBlocked(cond, false);
     }
 
     if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
-        utility_assert(
+        utility_debugAssert(
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
         if (remainder.val) {
             EmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
-            utility_assert(nextExpireTime != EMUTIME_INVALID);
-            utility_assert(nextExpireTime >= worker_getCurrentEmulatedTime());
+            utility_debugAssert(nextExpireTime != EMUTIME_INVALID);
+            utility_debugAssert(nextExpireTime >= worker_getCurrentEmulatedTime());
             SimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
             struct timespec timer_val = {0};
             if (!simtime_to_timespec(remainingTime, &timer_val)) {
@@ -79,14 +79,14 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
             }
             int rv = process_writePtr(sys->process, remainder, &timer_val, sizeof(timer_val));
             if (rv != 0) {
-                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+                return syscallreturn_makeDoneErrno(-rv);
             }
         }
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINTR};
+        return syscallreturn_makeInterrupted(false);
     }
 
     /* The syscall is now complete. */
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0, .restartable = false};
+    return syscallreturn_makeDoneI64(0);
 }
 
 ///////////////////////////////////////////////////////////
@@ -118,22 +118,20 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
 
     if (clk_id == CLOCK_PROCESS_CPUTIME_ID || clk_id == CLOCK_THREAD_CPUTIME_ID) {
         warning("Unsupported clock ID %d during gettime", clk_id);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
-    }
-
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!args->args[1].as_ptr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     struct timespec* res_timespec =
         process_getWriteablePtr(sys->process, args->args[1].as_ptr, sizeof(*res_timespec));
+    if (!res_timespec) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
     res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
     res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
@@ -143,10 +141,13 @@ SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) 
 
     if (tlocPtr.val) {
         time_t* tloc = process_getWriteablePtr(sys->process, tlocPtr, sizeof(*tloc));
+        if (!tloc) {
+            return syscallreturn_makeDoneErrno(EFAULT);
+        }
         *tloc = seconds;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_u64 = seconds};
+    return syscallreturn_makeDoneU64(seconds);
 }
 
 SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
@@ -159,5 +160,5 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
         tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }

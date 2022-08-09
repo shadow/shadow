@@ -35,15 +35,15 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
 
     // Get the fd_set syscall args in our memory.
     if (readfds_ptr.val && process_readPtr(sys->process, &readfds, readfds_ptr, sizeof(readfds))) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
     if (writefds_ptr.val &&
         process_readPtr(sys->process, &writefds, writefds_ptr, sizeof(writefds))) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
     if (exceptfds_ptr.val &&
         process_readPtr(sys->process, &exceptfds, exceptfds_ptr, sizeof(exceptfds))) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     // Translate to pollfds so we can handle with our poll() handler. We don't use epoll here
@@ -76,13 +76,12 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
     }
 
     SysCallReturn scr = _syscallhandler_pollHelper(sys, pfds, (nfds_t)nfds_max, timeout);
-
-    if (scr.state == SYSCALL_BLOCK || scr.retval.as_i64 < 0) {
+    if (scr.state == SYSCALL_BLOCK ||
+        (scr.state == SYSCALL_DONE && syscallreturn_done(&scr)->retval.as_i64 < 0)) {
         goto done;
     }
 
     // Collect the pollfd results in our local fd sets
-    int num_ready_fds = scr.retval.as_i64;
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
     FD_ZERO(&exceptfds);
@@ -123,24 +122,24 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
 
     // Overwrite the return val set above by poll()
     if (num_bad_fds > 0) {
-        scr.retval.as_i64 = -EBADF;
+        scr = syscallreturn_makeDoneErrno(EBADF);
         goto done;
     }
 
     // OK now we know we have success; write back the result fd sets.
-    scr.retval.as_i64 = num_set_bits;
+    scr = syscallreturn_makeDoneI64(num_set_bits);
     if (readfds_ptr.val && process_writePtr(sys->process, readfds_ptr, &readfds, sizeof(readfds))) {
-        scr.retval.as_i64 = -EFAULT;
+        scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
     if (writefds_ptr.val &&
         process_writePtr(sys->process, writefds_ptr, &writefds, sizeof(writefds))) {
-        scr.retval.as_i64 = -EFAULT;
+        scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
     if (exceptfds_ptr.val &&
         process_writePtr(sys->process, exceptfds_ptr, &exceptfds, sizeof(exceptfds))) {
-        scr.retval.as_i64 = -EFAULT;
+        scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
 
@@ -189,7 +188,7 @@ SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
 
     int result = _syscallhandler_check_nfds(nfds);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     // Use timespec to match pselect.
@@ -202,7 +201,7 @@ SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
 
         if (process_readPtr(sys->process, &tv_timeout_val, timeout_ptr, sizeof(tv_timeout_val)) !=
             0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            return syscallreturn_makeDoneErrno(EFAULT);
         }
 
         // Convert timeval to timespec.
@@ -213,7 +212,7 @@ SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
 
     result = _syscallhandler_check_timeout(timeout_ptr.val ? &ts_timeout_val : NULL);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     return _syscallhandler_select_helper(sys, nfds, readfds_ptr, writefds_ptr, exceptfds_ptr,
@@ -234,7 +233,7 @@ SysCallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* ar
 
     int result = _syscallhandler_check_nfds(nfds);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     // We read the timeout struct into local memory to avoid holding a reference
@@ -244,13 +243,13 @@ SysCallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* ar
     if (timeout_ptr.val) {
         if (process_readPtr(sys->process, &ts_timeout_val, timeout_ptr, sizeof(ts_timeout_val)) !=
             0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            return syscallreturn_makeDoneErrno(EFAULT);
         }
     }
 
     result = _syscallhandler_check_timeout(timeout_ptr.val ? &ts_timeout_val : NULL);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     return _syscallhandler_select_helper(sys, nfds, readfds_ptr, writefds_ptr, exceptfds_ptr,

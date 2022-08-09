@@ -108,7 +108,7 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
 
 static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file, char* const argv[],
                                       char* const envp[], const char* workingDir) {
-    utility_assert(file != NULL);
+    utility_debugAssert(file != NULL);
 
     // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
     // "leaking" into a concurrently forked child.
@@ -185,7 +185,7 @@ void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, ch
     gchar** myenvv = g_strdupv(envv);
 
     mthread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
-    utility_assert(mthread->ipc_blk.p);
+    utility_debugAssert(mthread->ipc_blk.p);
     mthread->ipc_data = mthread->ipc_blk.p;
     ipcData_init(mthread->ipc_data, shimipc_spinMax());
 
@@ -230,7 +230,7 @@ void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, ch
 }
 
 static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimEvent* e) {
-    utility_assert(mthread->ipc_data);
+    utility_debugAssert(mthread->ipc_data);
     shimevent_recvEventFromPlugin(mthread->ipc_data, e);
     // The managed mthread has yielded control back to us. Reacquire the shared
     // memory lock, which we released in `_managedthread_continuePlugin`.
@@ -250,8 +250,8 @@ static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimE
 ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread) { return &mthread->ipc_blk; }
 
 SysCallCondition* managedthread_resume(ManagedThread* mthread) {
-    utility_assert(mthread->isRunning);
-    utility_assert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
+    utility_debugAssert(mthread->isRunning);
+    utility_debugAssert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
     _managedthread_syncAffinityWithWorker(mthread);
 
@@ -319,17 +319,18 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                         _managedthread_waitForNextEvent(mthread, &mthread->currentEvent);
                     }
 
-                    return result.cond;
+                    return syscallreturn_blocked(&result)->cond;
                 }
 
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
+                    SysCallReturnDone* done = syscallreturn_done(&result);
                     shim_result =
                         (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                                     .event_data = {
-                                        .syscall_complete = {.retval = result.retval,
-                                                             .restartable = result.restartable},
+                                        .syscall_complete = {.retval = done->retval,
+                                                             .restartable = done->restartable},
 
                                     }};
                 } else if (result.state == SYSCALL_NATIVE) {
@@ -350,7 +351,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 break;
             }
         }
-        utility_assert(mthread->isRunning);
+        utility_debugAssert(mthread->isRunning);
 
         /* previous event was handled, wait for next one */
         _managedthread_waitForNextEvent(mthread, &mthread->currentEvent);
@@ -368,7 +369,7 @@ void managedthread_handleProcessExit(ManagedThread* mthread) {
 
     int status = 0;
 
-    utility_assert(mthread->nativePid > 0);
+    utility_debugAssert(mthread->nativePid > 0);
 
     _managedthread_cleanup(mthread);
 }
@@ -381,7 +382,7 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
                           PluginPtr child_stack, PluginPtr ptid, PluginPtr ctid,
                           unsigned long newtls) {
     child->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
-    utility_assert(child->ipc_blk.p);
+    utility_debugAssert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
     childpidwatcher_watch(
@@ -395,7 +396,7 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
                                                        }});
     ShimEvent response = {0};
     _managedthread_waitForNextEvent(parent, &response);
-    utility_assert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
+    utility_debugAssert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
     pid_t childNativeTid =
@@ -438,7 +439,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
         // We have to return *something* here. Probably doesn't matter much what.
         return -ESRCH;
     }
-    utility_assert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+    utility_debugAssert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
     return res.event_data.syscall_complete.retval.as_i64;
 }
 

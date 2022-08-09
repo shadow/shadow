@@ -59,10 +59,10 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
         debug("Unsupported clockid %i, we support CLOCK_REALTIME and "
               "CLOCK_MONOTONIC.",
               clockid);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     } else if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
         debug("Unknown clockid %i.", clockid);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     int descFlags = 0;
@@ -81,7 +81,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     if (errcode != 0) {
         utility_panic("Unable to find timer %i that we just created.", tfd);
     }
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
 #endif
 
     /* Set any options that were given. */
@@ -91,7 +91,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     trace("timerfd_create() returning fd %i", tfd);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = tfd};
+    return syscallreturn_makeDoneI64(tfd);
 }
 
 SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
@@ -106,37 +106,37 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
 #define TFD_TIMER_CANCEL_ON_SET 0
 #endif
     if (flags & ~(TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET)) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get the corresponding descriptor. */
     TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     struct itimerspec newValue;
     if (process_readPtr(sys->process, &newValue, newValuePtr, sizeof(newValue)) != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     };
 
     /* Service the call in the timer module. */
     struct itimerspec oldValue;
     errcode = timerfd_setTime(timer, sys->host, flags, &newValue, &oldValue);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Old value is allowed to be null. */
     if (oldValuePtr.val) {
         errcode = process_writePtr(sys->process, oldValuePtr, &oldValue, sizeof(oldValue));
         if (errcode < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+            return syscallreturn_makeDoneErrno(-errcode);
         }
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
@@ -148,7 +148,7 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     TimerFd* timer = NULL;
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, &timer);
     if (errcode != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the timer value */
@@ -158,8 +158,8 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     /* Write the timer value */
     errcode = process_writePtr(sys->process, currValuePtr, &currValue, sizeof(currValue));
     if (errcode != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }

@@ -1434,17 +1434,174 @@ pub struct _SysCallCondition {
 pub type SysCallCondition = _SysCallCondition;
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct _SysCallReturn {
-    pub state: SysCallReturnState,
+pub struct SysCallReturnDone {
     pub retval: SysCallReg,
+    pub restartable: bool,
+}
+#[test]
+fn bindgen_test_layout_SysCallReturnDone() {
+    assert_eq!(
+        ::std::mem::size_of::<SysCallReturnDone>(),
+        16usize,
+        concat!("Size of: ", stringify!(SysCallReturnDone))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<SysCallReturnDone>(),
+        8usize,
+        concat!("Alignment of ", stringify!(SysCallReturnDone))
+    );
+    fn test_field_retval() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnDone>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).retval) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnDone),
+                "::",
+                stringify!(retval)
+            )
+        );
+    }
+    test_field_retval();
+    fn test_field_restartable() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnDone>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).restartable) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnDone),
+                "::",
+                stringify!(restartable)
+            )
+        );
+    }
+    test_field_restartable();
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct SysCallReturnBlocked {
     pub cond: *mut SysCallCondition,
     pub restartable: bool,
+}
+#[test]
+fn bindgen_test_layout_SysCallReturnBlocked() {
+    assert_eq!(
+        ::std::mem::size_of::<SysCallReturnBlocked>(),
+        16usize,
+        concat!("Size of: ", stringify!(SysCallReturnBlocked))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<SysCallReturnBlocked>(),
+        8usize,
+        concat!("Alignment of ", stringify!(SysCallReturnBlocked))
+    );
+    fn test_field_cond() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnBlocked>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cond) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnBlocked),
+                "::",
+                stringify!(cond)
+            )
+        );
+    }
+    test_field_cond();
+    fn test_field_restartable() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnBlocked>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).restartable) as usize - ptr as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnBlocked),
+                "::",
+                stringify!(restartable)
+            )
+        );
+    }
+    test_field_restartable();
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union SysCallReturnBody {
+    pub done: SysCallReturnDone,
+    pub blocked: SysCallReturnBlocked,
+}
+#[test]
+fn bindgen_test_layout_SysCallReturnBody() {
+    assert_eq!(
+        ::std::mem::size_of::<SysCallReturnBody>(),
+        16usize,
+        concat!("Size of: ", stringify!(SysCallReturnBody))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<SysCallReturnBody>(),
+        8usize,
+        concat!("Alignment of ", stringify!(SysCallReturnBody))
+    );
+    fn test_field_done() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnBody>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).done) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnBody),
+                "::",
+                stringify!(done)
+            )
+        );
+    }
+    test_field_done();
+    fn test_field_blocked() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<SysCallReturnBody>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).blocked) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(SysCallReturnBody),
+                "::",
+                stringify!(blocked)
+            )
+        );
+    }
+    test_field_blocked();
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _SysCallReturn {
+    pub state: SysCallReturnState,
+    pub u: SysCallReturnBody,
 }
 #[test]
 fn bindgen_test_layout__SysCallReturn() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallReturn>(),
-        32usize,
+        24usize,
         concat!("Size of: ", stringify!(_SysCallReturn))
     );
     assert_eq!(
@@ -1469,57 +1626,23 @@ fn bindgen_test_layout__SysCallReturn() {
         );
     }
     test_field_state();
-    fn test_field_retval() {
+    fn test_field_u() {
         assert_eq!(
             unsafe {
                 let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
                 let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).retval) as usize - ptr as usize
+                ::std::ptr::addr_of!((*ptr).u) as usize - ptr as usize
             },
             8usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_SysCallReturn),
                 "::",
-                stringify!(retval)
+                stringify!(u)
             )
         );
     }
-    test_field_retval();
-    fn test_field_cond() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).cond) as usize - ptr as usize
-            },
-            16usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_SysCallReturn),
-                "::",
-                stringify!(cond)
-            )
-        );
-    }
-    test_field_cond();
-    fn test_field_restartable() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_SysCallReturn>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).restartable) as usize - ptr as usize
-            },
-            24usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_SysCallReturn),
-                "::",
-                stringify!(restartable)
-            )
-        );
-    }
-    test_field_restartable();
+    test_field_u();
 }
 pub type SysCallReturn = _SysCallReturn;
 #[repr(C)]
@@ -3014,7 +3137,7 @@ pub struct _SysCallHandler {
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        136usize,
+        128usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -3250,7 +3373,7 @@ fn bindgen_test_layout__SysCallHandler() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).referenceCount) as usize - ptr as usize
             },
-            128usize,
+            120usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_SysCallHandler),
@@ -3267,7 +3390,7 @@ fn bindgen_test_layout__SysCallHandler() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).magic) as usize - ptr as usize
             },
-            132usize,
+            124usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_SysCallHandler),

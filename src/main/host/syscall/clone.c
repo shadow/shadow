@@ -15,7 +15,7 @@
 #include "main/utility/utility.h"
 
 SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
@@ -29,7 +29,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
     if ((flags & required_flags) != required_flags) {
         warning("Missing a required clone flag in 0x%lx", flags);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTSUP};
+        return syscallreturn_makeDoneErrno(ENOTSUP);
     }
 
     // Don't propagate flags to the real syscall that we'll handle ourselves.
@@ -40,10 +40,10 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         int res =
             thread_clone(sys->thread, filtered_flags, child_stack, ptid, ctid, newtls, &child);
         if (res < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
+            return syscallreturn_makeDoneI64(res);
         }
     }
-    utility_assert(child);
+    utility_debugAssert(child);
 
     unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
@@ -76,10 +76,10 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // calling thread.
     process_addThread(sys->process, child);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(child)};
+    return syscallreturn_makeDoneI64(thread_getID(child));
 }
 
 SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
+    utility_debugAssert(sys && args);
+    return syscallreturn_makeDoneI64(thread_getID(sys->thread));
 }

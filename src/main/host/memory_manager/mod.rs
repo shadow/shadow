@@ -220,6 +220,10 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
     /// overwritten, call `noflush` instead to avoid flushing back the
     /// unininitialized contents.
     pub fn flush(mut self) -> Result<(), Errno> {
+        // Whether the flush succeeds or not, the buffer is no longer considered
+        // dirty; the fact that it failed will be captured in an error result.
+        self.dirty = false;
+
         match &self.copied_or_mapped {
             CopiedOrMappedMut::Copied(copier, ptr, v) => {
                 trace!(
@@ -231,7 +235,6 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
             }
             CopiedOrMappedMut::Mapped(_) => (),
         };
-        self.dirty = false;
         Ok(())
     }
 

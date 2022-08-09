@@ -14,8 +14,8 @@
 #include "main/utility/utility.h"
 
 static Transport* _transport_fromLegacyFile(LegacyFile* descriptor) {
-    utility_assert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
-                   legacyfile_getType(descriptor) == DT_UDPSOCKET);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
+                        legacyfile_getType(descriptor) == DT_UDPSOCKET);
     return (Transport*)descriptor;
 }
 
@@ -52,7 +52,7 @@ LegacyFileFunctionTable transport_functions = {
     _transport_close, _transport_cleanup, _transport_free, MAGIC_VALUE};
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, LegacyFileType type) {
-    utility_assert(transport && vtable);
+    utility_debugAssert(transport && vtable);
 
     legacyfile_init(&(transport->super), type, &transport_functions);
 

@@ -123,17 +123,12 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
     return 0;
 }
 
-static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* saddr,
-                                                   size_t slen, PluginPtr addrPtr,
-                                                   PluginPtr addrlenPtr) {
-    if (!addrPtr.val || !addrlenPtr.val) {
-        debug("Cannot get name with NULL return address info.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
+static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* saddr, size_t slen,
+                                         PluginPtr addrPtr, PluginPtr addrlenPtr) {
     socklen_t addrlen;
     if (process_readPtr(sys->process, &addrlen, addrlenPtr, sizeof(addrlen)) != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        debug("Couldn't read addrlenPtr %p", (void*)addrlenPtr.val);
+        return -EFAULT;
     }
 
     /* The result is truncated if they didn't give us enough space. */
@@ -141,17 +136,19 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
 
     addrlen = slen;
     if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        debug("Couldn't write addrlenPtr %p", (void*)addrlenPtr.val);
+        return -EFAULT;
     }
 
     if (retSize > 0) {
         /* Return the results */
         if (process_writePtr(sys->process, addrPtr, saddr, retSize) != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            debug("Couldn't write addrPtr %p", (void*)addrPtr.val);
+            return -EFAULT;
         }
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE};
+    return 0;
 }
 
 static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
@@ -165,7 +162,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         debug("invalid flags \"%i\", only SOCK_NONBLOCK and SOCK_CLOEXEC are "
               "allowed",
               flags);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get and validate the TCP socket. */
@@ -174,20 +171,14 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
 
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(tcp_desc);
+    utility_debugAssert(tcp_desc);
 
     /* We must be listening in order to accept. */
     if (!tcp_isValidListener(tcp_desc)) {
         debug("socket %i is not listening", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* Make sure they supplied addrlen if they requested an addr. */
-    if (addrPtr.val && !addrlenPtr.val) {
-        debug("addrlen was NULL when addr was non-NULL");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* OK, now we can check if we have anything to accept. */
@@ -204,20 +195,19 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         trace("Listening socket %i waiting for acceptable connection.", sockfd);
         Trigger trigger = (Trigger){
             .type = TRIGGER_DESCRIPTOR, .object = legacyDesc, .status = STATUS_FILE_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(legacyDesc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(legacyDesc));
     } else if (errcode < 0) {
         trace("TCP error when accepting connection on socket %i", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* We accepted something! */
-    utility_assert(accepted_fd > 0);
+    utility_debugAssert(accepted_fd > 0);
     TCP* accepted_tcp_desc = NULL;
     errcode = _syscallhandler_validateTCPSocketHelper(
         sys, accepted_fd, &accepted_tcp_desc);
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
 
     trace("listening socket %i accepted fd %i", sockfd, accepted_fd);
 
@@ -235,11 +225,14 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* check if they wanted to know where we got the data from */
     if (addrPtr.val) {
-        _syscallhandler_getnameHelper(
+        errcode = _syscallhandler_getnameHelper(
             sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), addrPtr, addrlenPtr);
+        if (errcode != 0) {
+            return syscallreturn_makeDoneErrno(-errcode);
+        }
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = accepted_fd};
+    return syscallreturn_makeDoneI64(accepted_fd);
 }
 
 static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_desc,
@@ -438,7 +431,8 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
 
             // shadow doesn't support other congestion types, so do nothing
             const char* current_name = tcp_cong(tcp)->hooks->tcp_cong_name_str();
-            utility_assert(current_name != NULL && strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
+            utility_debugAssert(current_name != NULL &&
+                                strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
             return 0;
         }
         default: {
@@ -459,6 +453,9 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
     switch (optname) {
         case SO_SNDBUF: {
             const unsigned int* val = process_getReadablePtr(sys->process, optvalPtr, sizeof(int));
+            if (!val) {
+                return -EFAULT;
+            }
             size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
 
             // Linux also has limits SOCK_MIN_SNDBUF (slightly greater than 4096) and the sysctl max
@@ -552,12 +549,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     }
 
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    if (srcAddrPtr.val && !addrlenPtr.val) {
-        debug("Cannot get from address with NULL address length info.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     if (flags & ~MSG_DONTWAIT) {
@@ -571,7 +563,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
 
         if (errcode > 0) {
             /* connect() was not called yet. */
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+            return syscallreturn_makeDoneErrno(ENOTCONN);
         } else if (errcode == -EALREADY) {
             /* Connection in progress. */
             retval = -EWOULDBLOCK;
@@ -605,9 +597,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         /* We need to block until the descriptor is ready to read. */
         Trigger trigger =
             (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK,
-                               .cond = syscallcondition_new(trigger),
-                               .restartable = legacyfile_supportsSaRestart(desc)};
+        return syscallreturn_makeBlocked(
+            syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
 
     /* check if they wanted to know where we got the data from */
@@ -616,19 +607,21 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
 
         /* only write an address for UDP sockets */
         if (legacyfile_getType(desc) == DT_UDPSOCKET) {
-            _syscallhandler_getnameHelper(
+            errcode = _syscallhandler_getnameHelper(
                 sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), srcAddrPtr, addrlenPtr);
+            if (errcode) {
+                return syscallreturn_makeDoneErrno(-errcode);
+            }
         } else {
             /* set the address length as 0 */
             socklen_t addrlen = 0;
             if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
-                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+                return syscallreturn_makeDoneErrno(EFAULT);
             }
         }
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)retval};
+    return syscallreturn_makeDoneI64(retval);
 }
 
 SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
@@ -642,20 +635,24 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Need non-NULL buffer. */
+    /* FIXME: should push this check to the point the data is actually read,
+     * to correctly handle non-NULL pointers that aren't accessible.
+     * This is currently in the Payload code; need to bubble up errors from there.
+     */
     if (!bufPtr.val) {
         debug("Can't send from NULL buffer on socket %i", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     /* TODO: when we support AF_UNIX this could be sockaddr_un */
     size_t inet_len = sizeof(struct sockaddr_in);
     if (destAddrPtr.val && addrlen < inet_len) {
         debug("Address length %ld is too small on socket %i", (long int)addrlen, sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     if (flags & ~MSG_DONTWAIT) {
@@ -669,14 +666,13 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     if (destAddrPtr.val) {
         const struct sockaddr* dest_addr =
             process_getReadablePtr(sys->process, destAddrPtr, addrlen);
-        utility_assert(dest_addr);
+        utility_debugAssert(dest_addr);
 
         /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
         if (dest_addr->sa_family != AF_INET) {
             warning(
                 "We only support address family AF_INET on socket %i", sockfd);
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+            return syscallreturn_makeDoneErrno(EAFNOSUPPORT);
         }
 
         dest_ip = ((struct sockaddr_in*)dest_addr)->sin_addr.s_addr;
@@ -693,8 +689,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             legacysocket_getPeerName(socket_desc, &dest_ip, &dest_port);
             if (dest_ip == 0 || dest_port == 0) {
                 /* we have nowhere to send it */
-                return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EDESTADDRREQ};
+                return syscallreturn_makeDoneErrno(EDESTADDRREQ);
             }
         }
 
@@ -711,8 +706,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
                 host_getRandomFreePort(sys->host, ptype, bindAddr, 0, 0);
 
             if (!bindPort) {
-                return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EADDRNOTAVAIL};
+                return syscallreturn_makeDoneErrno(EADDRNOTAVAIL);
             }
 
             /* connect up socket layer */
@@ -732,8 +726,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             /* connect() was not called yet.
              * TODO: Can they can piggy back a connect() on sendto() if they
              * provide an address for the connection? */
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -EPIPE};
+            return syscallreturn_makeDoneErrno(EPIPE);
         } else if (errcode == 0) {
             /* They connected, but never read the success code with a second
              * call to connect(). That's OK, proceed to send as usual. */
@@ -774,17 +767,15 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             /* We need to block until the descriptor is ready to write. */
             Trigger trigger = (Trigger){
                 .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_FILE_WRITABLE};
-            return (SysCallReturn){.state = SYSCALL_BLOCK,
-                                   .cond = syscallcondition_new(trigger),
-                                   .restartable = legacyfile_supportsSaRestart(desc)};
+            return syscallreturn_makeBlocked(
+                syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
         } else {
             /* We attempted to write 0 bytes, so no need to block or return EWOULDBLOCK. */
             retval = 0;
         }
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)retval};
+    return syscallreturn_makeDoneI64(retval);
 }
 
 ///////////////////////////////////////////////////////////
@@ -818,20 +809,20 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* It's an error if it is already bound. */
     if (legacysocket_isBound(socket_desc)) {
         debug("socket descriptor %i is already bound to an address", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
     if (addr == NULL) {
         debug("Invalid bind address pointer");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -839,14 +830,14 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     size_t inet_len = sizeof(struct sockaddr_in);
     if (addrlen < inet_len) {
         debug("supplied address is not large enough for a inet address");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     if (addr->sa_family != AF_INET) {
         warning("binding to address family %i, but we only support AF_INET",
                 (int)addr->sa_family);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get the requested address and port. */
@@ -856,7 +847,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
 
     errcode =
         _syscallhandler_bindHelper(sys, socket_desc, bindAddr, bindPort, 0, 0);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    return syscallreturn_makeDoneI64(errcode);
 }
 
 SysCallReturn syscallhandler_connect(SysCallHandler* sys,
@@ -872,35 +863,31 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
-
-    /* Make sure the addr PluginPtr is not NULL. */
-    if (!addrPtr.val) {
-        debug("connecting to a NULL address is invalid");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
+    utility_debugAssert(socket_desc);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     // size_t unix_len = sizeof(struct sockaddr_un); // if sa_family==AF_UNIX
     size_t inet_len = sizeof(struct sockaddr_in);
     if (addrlen < inet_len) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
-    utility_assert(addr);
+    if (!addr) {
+        debug("Couldn't read addr %p", (void*)addrPtr.val);
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
+
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     if (addr->sa_family != AF_INET && addr->sa_family != AF_UNSPEC) {
         warning("connecting to address family %i, but we only support AF_INET",
                 (int)addr->sa_family);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+        return syscallreturn_makeDoneErrno(EAFNOSUPPORT);
     } else if (!legacysocket_isFamilySupported(socket_desc, addr->sa_family)) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+        return syscallreturn_makeDoneErrno(EAFNOSUPPORT);
     }
 
     /* TODO: update for AF_UNIX */
@@ -926,8 +913,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
                     "host exists",
                     peerAddressString, ntohs(peerPort));
             g_free(peerAddressString);
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -ECONNREFUSED};
+            return syscallreturn_makeDoneErrno(ECONNREFUSED);
         }
     }
 
@@ -940,8 +926,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
         errcode = _syscallhandler_bindHelper(
             sys, socket_desc, bindAddr, 0, peerAddr, peerPort);
         if (errcode < 0) {
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = errcode};
+            return syscallreturn_makeDoneErrno(-errcode);
         }
     } else {
         legacysocket_setPeerName(socket_desc, peerAddr, peerPort);
@@ -960,9 +945,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = desc,
                                         .status = STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE};
-            return (SysCallReturn){.state = SYSCALL_BLOCK,
-                                   .cond = syscallcondition_new(trigger),
-                                   .restartable = legacyfile_supportsSaRestart(desc)};
+            return syscallreturn_makeBlocked(
+                syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
         } else if (_syscallhandler_wasBlocked(sys) && errcode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errcode = 0;
@@ -979,7 +963,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     /* Return 0, -EINPROGRESS, etc. now. */
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    return syscallreturn_makeDoneI64(errcode);
 }
 
 SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
@@ -993,9 +977,9 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     // TODO I'm not sure if we should be able to get the peer name on UDP
     // sockets. If you call connect on it, then getpeername should probably
@@ -1006,8 +990,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     //    LegacyFileType type = legacyfile_getType((LegacyFile*)socket_desc);
     //    if(type != DT_TCPSOCKET) {
     //        info("descriptor %i is not a TCP socket", sockfd);
-    //        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 =
-    //        -ENOTCONN};
+    //        return syscallreturn_makeErrno(ENOTCONN);
     //    }
 
     /* Get the name of the connected peer.
@@ -1022,14 +1005,14 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
         legacysocket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
     if (!hasName) {
         debug("Socket %i has no peer name.", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+        return syscallreturn_makeDoneErrno(ENOTCONN);
     }
 
     slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
-    return _syscallhandler_getnameHelper(
-        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr);
+    return syscallreturn_makeDoneI64(_syscallhandler_getnameHelper(
+        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr));
 }
 
 SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
@@ -1043,9 +1026,9 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* Get the name of the socket.
      * TODO: Needs to be updated when we support AF_UNIX. */
@@ -1072,8 +1055,8 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
-    return _syscallhandler_getnameHelper(
-        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr);
+    return syscallreturn_makeDoneI64(_syscallhandler_getnameHelper(
+        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr));
 }
 
 SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
@@ -1092,31 +1075,31 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
-
-    /* The optlen pointer must be non-null. */
-    if (!optlenPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
+    utility_debugAssert(socket_desc);
 
     socklen_t optlen;
     if (process_readPtr(sys->process, &optlen, optlenPtr, sizeof(optlen)) != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EFAULT);
     }
 
     /* Return early if there are no bytes to store data. */
     if (optlen == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     /* The optval pointer must be non-null since optlen is non-zero. */
-    if (!optvalPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
 
-    void* optval = process_getWriteablePtr(sys->process, optvalPtr, optlen);
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    ProcessMemoryRefMut_u8* optvalref = memorymanager_getWritablePtr(mm, optvalPtr, optlen);
+    if (!optvalref) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
+    void* optval = memorymanagermut_ptr(optvalref);
+    if (!optval) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
 
     errcode = 0;
     switch (level) {
@@ -1141,12 +1124,22 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
             break;
     }
 
-    process_flushPtrs(sys->process);
-    if (process_writePtr(sys->process, optlenPtr, &optlen, sizeof(optlen)) != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (errcode) {
+        memorymanager_freeMutRefWithoutFlush(optvalref);
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    errcode = memorymanager_freeMutRefWithFlush(optvalref);
+    if (errcode) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    errcode = process_writePtr(sys->process, optlenPtr, &optlen, sizeof(optlen));
+    if (errcode) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_listen(SysCallHandler* sys,
@@ -1161,22 +1154,21 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(tcp_desc);
+    utility_debugAssert(tcp_desc);
 
     /* only listen on the socket if it is not used for other functions */
     if (!tcp_isListeningAllowed(tcp_desc)) {
         debug("Cannot listen on previously used socket %i", sockfd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
+        return syscallreturn_makeDoneErrno(EOPNOTSUPP);
     }
 
     /* if we are already listening, just update the backlog and return 0. */
     if (tcp_isValidListener(tcp_desc)) {
         trace("Socket %i already set up as a listener; updating backlog", sockfd);
         tcp_updateServerBacklog(tcp_desc, backlog);
-        return (SysCallReturn){.state = SYSCALL_DONE};
+        return syscallreturn_makeDoneU64(0);
     }
 
     /* We are allowed to listen but not already listening, start now. */
@@ -1186,13 +1178,12 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
         errcode =
             _syscallhandler_bindHelper(sys, (LegacySocket*)tcp_desc, htonl(INADDR_ANY), 0, 0, 0);
         if (errcode < 0) {
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = errcode};
+            return syscallreturn_makeDoneErrno(-errcode);
         }
     }
 
     tcp_enterServerMode(tcp_desc, sys->host, sys->process, backlog);
-    return (SysCallReturn){.state = SYSCALL_DONE};
+    return syscallreturn_makeDoneU64(0);
 }
 
 SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
@@ -1225,18 +1216,13 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
-    utility_assert(socket_desc);
+    utility_debugAssert(socket_desc);
 
     /* Return early if there is no data. */
     if (optlen == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* The pointer must be non-null. */
-    if (!optvalPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     errcode = 0;
@@ -1261,7 +1247,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
             errcode = -ENOPROTOOPT;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    return syscallreturn_makeDoneI64(errcode);
 }
 
 SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
@@ -1273,31 +1259,29 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
 
     if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
         debug("invalid how %i", how);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     /* Get and validate the socket. */
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     TCP* tcp_desc = NULL;
     errcode = _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
     if (errcode >= 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = tcp_shutdown(tcp_desc, sys->host, how)};
+        return syscallreturn_makeDoneI64(tcp_shutdown(tcp_desc, sys->host, how));
     }
 
     UDP* udp_desc = NULL;
     errcode = _syscallhandler_validateUDPSocketHelper(sys, sockfd, &udp_desc);
     if (errcode >= 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = udp_shutdown(udp_desc, how)};
+        return syscallreturn_makeDoneI64(udp_shutdown(udp_desc, how));
     }
 
     warning("socket %d is neither a TCP nor UDP socket", sockfd);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+    return syscallreturn_makeDoneErrno(ENOTCONN);
 }
 
 SysCallReturn syscallhandler_socket(SysCallHandler* sys,
@@ -1317,24 +1301,20 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     if (domain != AF_INET) {
         warning("unsupported socket domain \"%i\", we only support AF_INET",
                 domain);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+        return syscallreturn_makeDoneErrno(EAFNOSUPPORT);
     } else if (type_no_flags != SOCK_STREAM && type_no_flags != SOCK_DGRAM) {
         warning("unsupported socket type \"%i\", we only support SOCK_STREAM "
                 "and SOCK_DGRAM",
                 type_no_flags);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -ESOCKTNOSUPPORT};
+        return syscallreturn_makeDoneErrno(ESOCKTNOSUPPORT);
     } else if (type_no_flags == SOCK_STREAM && protocol != 0 && protocol != IPPROTO_TCP) {
         warning(
             "unsupported socket protocol \"%i\", we only support IPPROTO_TCP on sockets of type SOCK_STREAM", protocol);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+        return syscallreturn_makeDoneErrno(EPROTONOSUPPORT);
     } else if (type_no_flags == SOCK_DGRAM && protocol != 0 && protocol != IPPROTO_UDP) {
         warning(
             "unsupported socket protocol \"%i\", we only support IPPROTO_UDP on sockets of type SOCK_DGRAM", protocol);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+        return syscallreturn_makeDoneErrno(EPROTONOSUPPORT);
     }
 
     /* We are all set to create the socket. */
@@ -1361,7 +1341,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     if (errcode != 0) {
         utility_panic("Unable to find socket %i that we just created.", sockfd);
     }
-    utility_assert(errcode == 0);
+    utility_debugAssert(errcode == 0);
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
@@ -1370,5 +1350,5 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     trace("socket() returning fd %i", sockfd);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = sockfd};
+    return syscallreturn_makeDoneI64(sockfd);
 }

@@ -82,6 +82,7 @@ set(shadow_srcs
     host/futex_table.c
     host/shimipc.c
     host/syscall_handler.c
+    host/syscall_types.c
     host/syscall/protected.c
     host/syscall/clone.c
     host/syscall/epoll.c

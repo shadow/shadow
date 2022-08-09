@@ -24,8 +24,8 @@ struct _CPU {
 };
 
 CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, guint64 precision) {
-    utility_assert(frequencyKHz > 0);
-    utility_assert(rawFrequencyKHz > 0);
+    utility_debugAssert(frequencyKHz > 0);
+    utility_debugAssert(rawFrequencyKHz > 0);
     CPU* cpu = g_new0(CPU, 1);
     MAGIC_INIT(cpu);
 

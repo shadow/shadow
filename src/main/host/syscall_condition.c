@@ -211,7 +211,7 @@ void syscallcondition_ref(SysCallCondition* cond) {
 void syscallcondition_unref(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
     cond->referenceCount--;
-    utility_assert(cond->referenceCount >= 0);
+    utility_debugAssert(cond->referenceCount >= 0);
     if (cond->referenceCount == 0) {
         _syscallcondition_free(cond);
     }
@@ -261,7 +261,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
     }
 
     if (cond->timeoutExpiration != EMUTIME_INVALID) {
-        utility_assert(cond->timeoutExpiration >= worker_getCurrentEmulatedTime());
+        utility_debugAssert(cond->timeoutExpiration >= worker_getCurrentEmulatedTime());
         SimulationTime remainingTime = cond->timeoutExpiration - worker_getCurrentEmulatedTime();
         g_string_append_printf(string, "a timeout with %lu.%09lu seconds remaining",
                                remainingTime / SIMTIME_ONE_SECOND,
@@ -337,9 +337,9 @@ static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
 #endif
 
     if (!cond->proc || !cond->thread) {
-        utility_assert(!cond->proc);
-        utility_assert(!cond->thread);
-        utility_assert(!cond->triggerListener);
+        utility_debugAssert(!cond->proc);
+        utility_debugAssert(!cond->thread);
+        utility_debugAssert(!cond->triggerListener);
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "ignored (already cleaned up)");
 #endif
@@ -415,8 +415,8 @@ static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* 
 void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* proc,
                                    Thread* thread) {
     MAGIC_ASSERT(cond);
-    utility_assert(proc);
-    utility_assert(thread);
+    utility_debugAssert(proc);
+    utility_debugAssert(thread);
 
     /* Update the reference counts. */
     syscallcondition_cancel(cond);

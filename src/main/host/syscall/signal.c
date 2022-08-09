@@ -36,12 +36,12 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 
 static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys, Process* process, int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
         warning("Unimplemented signal %d", sig);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     siginfo_t siginfo = {
@@ -54,21 +54,21 @@ static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys, Process*
 
     process_signal(process, sys->thread, &siginfo);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* thread, int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
         warning("Unimplemented signal %d", sig);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
     if (sig == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     Process* process = thread_getProcess(thread);
@@ -77,7 +77,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
     if (action.ksa_handler == SIG_IGN ||
         (action.ksa_handler == SIG_DFL && shd_defaultAction(sig) == SHD_DEFAULT_ACTION_IGN)) {
         // Don't deliver ignored an signal.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     shd_kernel_sigset_t pending_signals = shimshmem_getThreadPendingSignals(
@@ -87,7 +87,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         // Signal is already pending. From signal(7):In the case where a standard signal is already
         // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
         // overwritten on arrival of subsequent instances of the same signal.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     shd_sigaddset(&pending_signals, sig);
@@ -105,7 +105,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
     if (thread == sys->thread) {
         // Target is the current thread. It'll be handled synchronously when the
         // current syscall returns (if it's unblocked).
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     shd_kernel_sigset_t blocked_signals =
@@ -115,7 +115,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         // need to schedule an event to process the signal. It'll get processed
         // synchronously when the thread executes a syscall that would unblock
         // the signal.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
 
     SysCallCondition* cond = thread_getSysCallCondition(thread);
@@ -123,11 +123,11 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         // We may be able to get here if a thread is signalled before it runs
         // for the first time. Just return; the signal will be delivered when
         // the thread runs.
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return syscallreturn_makeDoneI64(0);
     }
     syscallcondition_wakeupForSignal(cond, host_getShimShmemLock(sys->host), sig);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 ///////////////////////////////////////////////////////////
@@ -135,7 +135,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
@@ -149,7 +149,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
         // Currently unimplemented, and unlikely to be needed in the context of
         // a shadow simulation.
         warning("kill with pid=-1 unimplemented");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+        return syscallreturn_makeDoneErrno(ENOSYS);
     } else if (pid == 0) {
         // kill(2): If pid equals 0, then sig is sent to every process in the
         // process group of the calling process.
@@ -168,14 +168,14 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
     Process* process = host_getProcess(sys->host, pid);
     if (process == NULL) {
         debug("Process %d not found", pid);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+        return syscallreturn_makeDoneErrno(ESRCH);
     }
 
     return _syscallhandler_signalProcess(sys, process, sig);
 }
 
 SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     pid_t tgid = args->args[0].as_i64;
     pid_t tid = args->args[1].as_i64;
@@ -185,20 +185,20 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
 
     Thread* thread = host_getThread(sys->host, tid);
     if (thread == NULL) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+        return syscallreturn_makeDoneErrno(ESRCH);
     }
 
     Process* process = thread_getProcess(thread);
 
     if (process_getProcessID(process) != tgid) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+        return syscallreturn_makeDoneErrno(ESRCH);
     }
 
     return _syscallhandler_signalThread(sys, thread, sig);
 }
 
 SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     pid_t tid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
@@ -206,7 +206,7 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
 
     Thread* thread = host_getThread(sys->host, tid);
     if (thread == NULL) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+        return syscallreturn_makeDoneErrno(ESRCH);
     }
 
     SysCallReturn ret = _syscallhandler_signalThread(sys, thread, sig);
@@ -215,14 +215,14 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
 
 static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
                                    PluginPtr oldActPtr, size_t masksize) {
-    utility_assert(sys);
+    utility_debugAssert(sys);
 
     if (signum < 1 || signum > 64) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     if (masksize != 64 / 8) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     if (oldActPtr.val) {
@@ -230,29 +230,29 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
             host_getShimShmemLock(sys->host), process_getSharedMem(sys->process), signum);
         int rv = process_writePtr(sys->process, oldActPtr, &old_action, sizeof(old_action));
         if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
     }
 
     if (actPtr.val) {
         if (signum == SIGKILL || signum == SIGSTOP) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+            return syscallreturn_makeDoneErrno(EINVAL);
         }
 
         struct shd_kernel_sigaction new_action;
         int rv = process_readPtr(sys->process, &new_action, actPtr, sizeof(new_action));
         if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
         shimshmem_setSignalAction(host_getShimShmemLock(sys->host),
                                   process_getSharedMem(sys->process), signum, &new_action);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     SysCallReturn ret =
         _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
                       /*actPtr=*/args->args[1].as_ptr,
@@ -261,7 +261,7 @@ SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs
 }
 
 SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
     PluginPtr ss_ptr = args->args[0].as_ptr;
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
@@ -273,13 +273,13 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
         if (old_ss.ss_flags & SS_ONSTACK) {
             // sigaltstack(2):  EPERM  An attempt was made to change the
             // alternate signal stack while it was active.
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EPERM};
+            return syscallreturn_makeDoneErrno(EPERM);
         }
 
         stack_t new_ss;
         int rv = process_readPtr(sys->process, &new_ss, ss_ptr, sizeof(new_ss));
         if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
         if (new_ss.ss_flags & SS_DISABLE) {
             // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
@@ -289,7 +289,7 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
         }
         if (new_ss.ss_flags & ~(SS_DISABLE | SS_AUTODISARM)) {
             // Unrecognized flag.
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+            return syscallreturn_makeDoneErrno(EINVAL);
         }
         shimshmem_setSigAltStack(
             host_getShimShmemLock(sys->host), thread_sharedMem(sys->thread), new_ss);
@@ -298,22 +298,22 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     if (old_ss_ptr.val) {
         int rv = process_writePtr(sys->process, old_ss_ptr, &old_ss, sizeof(old_ss));
         if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
                                      PluginPtr oldSetPtr, size_t sigsetsize) {
-    utility_assert(sys);
+    utility_debugAssert(sys);
 
     // From sigprocmask(2): This argument is currently required to have a fixed architecture
     // specific value (equal to sizeof(kernel_sigset_t)).
     if (sigsetsize != (64 / 8)) {
         warning("Bad sigsetsize %zu", sigsetsize);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     shd_kernel_sigset_t current_set = shimshmem_getBlockedSignals(
@@ -322,7 +322,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
     if (oldSetPtr.val) {
         int rv = process_writePtr(sys->process, oldSetPtr, &current_set, sizeof(current_set));
         if (rv < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
     }
 
@@ -330,7 +330,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
         shd_kernel_sigset_t set;
         int rv = process_readPtr(sys->process, &set, setPtr, sizeof(set));
         if (rv < 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+            return syscallreturn_makeDoneErrno(-rv);
         }
 
         switch (how) {
@@ -348,7 +348,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
                 break;
             }
             default: {
-                return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+                return syscallreturn_makeDoneErrno(EINVAL);
             }
         }
 
@@ -356,11 +356,11 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
             host_getShimShmemLock(sys->host), thread_sharedMem(sys->thread), current_set);
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    utility_debugAssert(sys && args);
 
     SysCallReturn ret =
         _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,

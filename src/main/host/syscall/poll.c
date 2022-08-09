@@ -102,7 +102,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
-        utility_assert(desc); // we would have returned POLLNVAL in getPollEvents
+        utility_debugAssert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
         if (pfd->events & POLLIN) {
@@ -155,7 +155,7 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
             }
 
             // We either use our timer as a timeout, or no timeout
-            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond, .restartable = false};
+            return syscallreturn_makeBlocked(cond, false);
         }
     }
 
@@ -164,7 +164,7 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
 done:
     // Clear epoll for the next poll
     epoll_reset(sys->epoll);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = num_ready};
+    return syscallreturn_makeDoneI64(num_ready);
 }
 
 static SysCallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, PluginPtr fds_ptr,
@@ -175,7 +175,7 @@ static SysCallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, Pl
     if (nfds > 0) {
         fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
         if (!fds) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            return syscallreturn_makeDoneErrno(EFAULT);
         }
     }
 
@@ -204,7 +204,7 @@ SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
 
     int result = _syscallhandler_checkPollArgs(fds_ptr, nfds);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     } else {
         struct timespec timeout =
             (struct timespec){.tv_sec = timeout_millis / MILLIS_PER_SEC,
@@ -222,7 +222,7 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
 
     int result = _syscallhandler_checkPollArgs(fds_ptr, nfds);
     if (result != 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     // We read the timeout struct into local memory to avoid holding a reference
@@ -234,13 +234,13 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
     if (ts_timeout_ptr.val) {
         if (process_readPtr(
                 sys->process, &ts_timeout_val, ts_timeout_ptr, sizeof(ts_timeout_val)) != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            return syscallreturn_makeDoneErrno(EFAULT);
         }
 
         // Negative time values in the struct are invalid
         if (ts_timeout_val.tv_sec < 0 || ts_timeout_val.tv_nsec < 0) {
             trace("negative timeout given in timespec arg, returning EINVAL");
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+            return syscallreturn_makeDoneErrno(EINVAL);
         }
     }
 
