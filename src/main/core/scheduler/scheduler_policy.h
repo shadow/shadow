@@ -14,7 +14,7 @@
 
 typedef struct _SchedulerPolicy SchedulerPolicy;
 
-void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread);
+void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t assignedThread);
 GQueue* schedulerpolicy_getAssignedHosts(SchedulerPolicy* policy);
 SimulationTime schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost,
                                     Host* dstHost, SimulationTime barrier);

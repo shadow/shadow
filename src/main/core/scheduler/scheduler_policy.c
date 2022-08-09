@@ -62,8 +62,9 @@ static void _threaddata_free(HostSingleThreadData* tdata) {
 }
 
 /* this must be run synchronously, or the call must be protected by locks */
-void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
+void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t assignedThread) {
     MAGIC_ASSERT(policy);
+    utility_alwaysAssert(assignedThread != 0);
 
     /* each host has its own queue */
     if (!g_hash_table_lookup(policy->hostToQueueDataMap, host)) {
@@ -71,7 +72,6 @@ void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t rand
     }
 
     /* each thread keeps track of the hosts it needs to run */
-    pthread_t assignedThread = (randomThread != 0) ? randomThread : pthread_self();
     HostSingleThreadData* tdata =
         g_hash_table_lookup(policy->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread));
     if(!tdata) {
