@@ -56,14 +56,13 @@ struct _Scheduler {
 static void _scheduler_startHostsWorkerTaskFn(void* voidScheduler) {
     Scheduler* scheduler = voidScheduler;
     MAGIC_ASSERT(scheduler);
-    if(scheduler->policy->getAssignedHosts) {
-        GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
-        if(myHosts) {
-            guint nHosts = g_queue_get_length(myHosts);
-            info("starting to boot %u hosts", nHosts);
-            worker_bootHosts(myHosts);
-            info("%u hosts are booted", nHosts);
-        }
+
+    GQueue* myHosts = schedulerpolicy_getAssignedHosts(scheduler->policy);
+    if (myHosts) {
+        guint nHosts = g_queue_get_length(myHosts);
+        info("starting to boot %u hosts", nHosts);
+        worker_bootHosts(myHosts);
+        info("%u hosts are booted", nHosts);
     }
 }
 
@@ -74,8 +73,8 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     worker_setRoundEndTime(scheduler->currentRound.endTime);
 
     Event* event = NULL;
-    while ((event = scheduler->policy->pop(
-                scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
+    while ((event = schedulerpolicy_pop(scheduler->policy, scheduler->currentRound.endTime)) !=
+           NULL) {
         // get the host to run this event on
         Host* host = scheduler_getHost(scheduler, event_getHostID(event));
         host_lock(host);
@@ -88,7 +87,7 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     }
 
     // Gets the time of the event at the head of the event queue right now.
-    SimulationTime minQTime = scheduler->policy->getNextTime(scheduler->policy);
+    SimulationTime minQTime = schedulerpolicy_getNextTime(scheduler->policy);
 
     // We'll compute the global min time across all workers.
     worker_setMinEventTimeNextRound(minQTime);
@@ -109,9 +108,7 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
      * structs. so if we let a single thread free everything, we run into issues. */
 
     GQueue* myHosts = NULL;
-    if(scheduler->policy->getAssignedHosts) {
-        myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
-    }
+    myHosts = schedulerpolicy_getAssignedHosts(scheduler->policy);
     worker_finish(myHosts, scheduler->endTime);
 }
 
@@ -139,7 +136,7 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     utility_assert(nWorkers >= 1);
 
     /* create the configured policy to handle queues */
-    scheduler->policy = schedulerpolicyhostsingle_new();
+    scheduler->policy = schedulerpolicy_new();
     utility_assert(scheduler->policy);
 
     info("main scheduler thread will operate with %u worker threads", nWorkers);
@@ -165,7 +162,7 @@ void scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
     /* finish cleanup of shadow objects */
-    scheduler->policy->free(scheduler->policy);
+    schedulerpolicy_free(scheduler->policy);
     random_free(scheduler->random);
 
     g_mutex_clear(&(scheduler->globalLock));
@@ -191,7 +188,8 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     utility_assert(receiver);
 
     /* push to a queue based on the policy */
-    scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
+    schedulerpolicy_push(
+        scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
 
     // Store the minimum time of events that we are pushing between hosts. The
     // push operation may adjust the event time, so make sure we call this after
@@ -204,10 +202,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
 EmulatedTime scheduler_nextHostEventTime(Scheduler* scheduler, Host* host) {
     MAGIC_ASSERT(scheduler);
 
-    if (!scheduler->policy->nextHostEventTime) {
-        panic("scheduler_nextHostEventTime not implemented");
-    }
-    return scheduler->policy->nextHostEventTime(scheduler->policy, host);
+    return schedulerpolicy_nextHostEventTime(scheduler->policy, host);
 }
 
 int scheduler_addHost(Scheduler* scheduler, Host* host) {
@@ -281,7 +276,7 @@ static void _scheduler_assignHostsToThread(Scheduler* scheduler, GQueue* hosts, 
     while((maxAssignments == 0 || numAssignments < maxAssignments) && !g_queue_is_empty(hosts)) {
         Host* host = (Host*) g_queue_pop_head(hosts);
         utility_assert(host);
-        scheduler->policy->addHost(scheduler->policy, host, thread);
+        schedulerpolicy_addHost(scheduler->policy, host, thread);
         numAssignments++;
     }
 }
@@ -332,7 +327,7 @@ __attribute__((unused)) static void _scheduler_rebalanceHosts(Scheduler* schedul
         // pthread_t newThread = item->thread;
 
         //        TODO this needs to get uncommented/updated when migration code
-        //        is added scheduler->policy->migrateHost(scheduler->policy,
+        //        is added schedulerpolicy_migrateHost(scheduler->policy,
         //        host, newThread);
 
         // g_queue_push_tail(scheduler->threadItems, item);
