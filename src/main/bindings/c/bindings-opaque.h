@@ -133,6 +133,9 @@ typedef struct SyscallHandler SyscallHandler;
 // to directly use a `Fn(&mut Host)` trait object.
 typedef struct TaskRef TaskRef;
 
+// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
+typedef struct ThreadSafeEventQueue ThreadSafeEventQueue;
+
 typedef struct Timer Timer;
 
 typedef struct TokenBucket TokenBucket;

@@ -158,26 +158,6 @@ mod export {
         Box::into_raw(Box::new(event.task))
     }
 
-    // this follows the signature of 'GCompareDataFunc'
-    #[no_mangle]
-    pub unsafe extern "C" fn event_compare(
-        a: *const Event,
-        b: *const Event,
-        _user_data: *mut libc::c_void,
-    ) -> i32 {
-        let a = unsafe { a.as_ref() }.unwrap();
-        let b = unsafe { b.as_ref() }.unwrap();
-
-        match a.partial_cmp(b) {
-            Some(std::cmp::Ordering::Less) => -1,
-            Some(std::cmp::Ordering::Greater) => 1,
-            Some(std::cmp::Ordering::Equal) | None => {
-                log::warn!("Incomparable events a: {a:?}, b: {b:?}; Expect non-determinism");
-                0
-            }
-        }
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn event_getHostID(event: *mut Event) -> c::HostId {
         let event = unsafe { event.as_ref() }.unwrap();
