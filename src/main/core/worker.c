@@ -455,14 +455,6 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     return NULL;
 }
 
-void worker_runHost(Host* host, EmulatedTime until) {
-    worker_setActiveHost(host);
-
-    host_execute(host, until);
-
-    worker_setActiveHost(NULL);
-}
-
 void worker_finish(GQueue* hosts, SimulationTime time) {
     worker_setCurrentEmulatedTime(emutime_add_simtime(EMUTIME_SIMULATION_START, time));
 

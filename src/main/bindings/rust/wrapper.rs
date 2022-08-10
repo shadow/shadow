@@ -3021,9 +3021,6 @@ extern "C" {
     pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_runHost(host: *mut Host, until: EmulatedTime);
-}
-extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
 }
 extern "C" {

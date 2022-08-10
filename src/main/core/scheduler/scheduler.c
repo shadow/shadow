@@ -88,7 +88,10 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
         host_lock(host);
         host_lockShimShmemLock(host);
 
-        worker_runHost(host, barrier);
+        worker_setActiveHost(host);
+        host_execute(host, barrier);
+        worker_setActiveHost(NULL);
+
         EmulatedTime nextEventTime = host_nextEventTime(host);
 
         host_unlockShimShmemLock(host);
