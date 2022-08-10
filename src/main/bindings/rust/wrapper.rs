@@ -1892,7 +1892,7 @@ extern "C" {
     pub fn process_unref(proc_: *mut Process);
 }
 extern "C" {
-    pub fn process_schedule(proc_: *mut Process, nothing: gpointer);
+    pub fn process_schedule(proc_: *mut Process);
 }
 extern "C" {
     pub fn process_continue(proc_: *mut Process, thread: *mut Thread);
