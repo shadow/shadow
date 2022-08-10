@@ -148,16 +148,6 @@ mod export {
         event.execute(&mut host);
     }
 
-    /// Convert the event into its inner `TaskRef`. **This frees the event, and you must manually
-    /// free/drop the returned `TaskRef`.**
-    #[no_mangle]
-    pub unsafe extern "C" fn event_intoTask(event: *mut Event) -> *mut TaskRef {
-        assert!(!event.is_null());
-        let event = unsafe { Box::from_raw(event) };
-
-        Box::into_raw(Box::new(event.task))
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn event_getHostID(event: *mut Event) -> c::HostId {
         let event = unsafe { event.as_ref() }.unwrap();

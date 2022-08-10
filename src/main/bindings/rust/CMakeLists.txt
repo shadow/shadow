@@ -49,6 +49,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "host_.*"
         # Needs CompatSocket
         --blacklist-function "host_.*Interface"
+        --blacklist-function "host_getOwnedEventQueue"
 
         # used by shadow's main function
         --whitelist-function "main_.*"

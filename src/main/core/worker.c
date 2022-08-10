@@ -455,41 +455,12 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     return NULL;
 }
 
-void worker_runEvent(Event* event, Host* host) {
-    /* update cache, reset clocks */
-    worker_setCurrentEmulatedTime(
-        emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event)));
-
+void worker_runHost(Host* host, EmulatedTime until) {
     worker_setActiveHost(host);
 
-    /* check if we are allowed to execute or have to wait for cpu delays */
-    CPU* cpu = host_getCPU(host);
-    cpu_updateTime(cpu, event_getTime(event));
-
-    if(cpu_isBlocked(cpu)) {
-        SimulationTime cpuDelay = cpu_getDelay(cpu);
-        trace("event blocked on CPU, rescheduled for %" G_GUINT64_FORMAT " nanoseconds from now",
-              cpuDelay);
-
-        /* track the event delay time */
-        Tracker* tracker = host_getTracker(host);
-        if (tracker != NULL) {
-            tracker_addVirtualProcessingDelay(tracker, cpuDelay);
-        }
-
-        /* this event is delayed due to cpu, so reschedule it to ourselves */
-        TaskRef* task = event_intoTask(event);
-        host_scheduleTaskWithDelay(host, task, cpuDelay);
-        taskref_drop(task);
-    } else {
-        /* cpu is not blocked, its ok to execute the event */
-        event_executeAndFree(event, host);
-    }
+    host_execute(host, until);
 
     worker_setActiveHost(NULL);
-
-    /* update times */
-    worker_clearCurrentTime();
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {
@@ -514,35 +485,11 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     worker_addToGlobalSyscallCounter(_worker_syscallCounter());
 }
 
-gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t) {
-    utility_debugAssert(task);
-    utility_debugAssert(host);
-
-    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
-        return FALSE;
-    }
-
-    GQuark hostID = host_getID(host);
-    Event* event = event_new(task, emutime_sub_emutime(t, EMUTIME_SIMULATION_START), host, hostID);
-
-    return scheduler_push(_worker_pool()->scheduler, event, host, host);
-}
-
-gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay) {
-    utility_debugAssert(task);
-    utility_debugAssert(host);
-
-    EmulatedTime clock_now = worker_getCurrentEmulatedTime();
-    utility_debugAssert(clock_now != EMUTIME_INVALID);
-
-    return worker_scheduleTaskAtEmulatedTime(task, host, clock_now + nanoDelay);
-}
-
 EmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_debugAssert(host);
     EmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
-    EmulatedTime nextEventTime = scheduler_nextHostEventTime(_worker_pool()->scheduler, host);
+    EmulatedTime nextEventTime = host_nextEventTime(host);
     if (nextEventTime != 0) {
         max = MIN(max, nextEventTime);
     }
@@ -600,8 +547,6 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
         Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
-        Host* dstHost = scheduler_getHost(scheduler, dstHostID);
-        utility_debugAssert(dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
 
@@ -619,7 +564,19 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
         taskref_drop(packetTask);
 
-        scheduler_push(scheduler, packetEvent, srcHost, dstHost);
+        SimulationTime roundEndTime = _worker_getRoundEndTime();
+
+        // delay the packet until the next round
+        if (deliverTime < roundEndTime) {
+            event_setTime(packetEvent, roundEndTime);
+        }
+
+        // we may have sent this packet after the destination host finished running the current
+        // round and calculated its min event time, so we put this in our min event time instead
+        worker_setMinEventTimeNextRound(event_getTime(packetEvent));
+
+        const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
+        eventqueue_push(eventQueue, packetEvent);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }

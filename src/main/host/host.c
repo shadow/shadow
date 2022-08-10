@@ -52,6 +52,9 @@ struct _Host {
 
     HostParameters params;
 
+    /* for event scheduling */
+    const ThreadSafeEventQueue* eventQueue;
+
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
@@ -138,6 +141,8 @@ Host* host_new(const HostParameters* params) {
 
     /* thread-level event communication with other nodes */
     g_mutex_init(&(host->lock));
+
+    host->eventQueue = eventqueue_new();
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
@@ -278,6 +283,11 @@ void host_shutdown(Host* host) {
 
     debug("shutting down host %s", host->params.hostname);
 
+    if (host->eventQueue) {
+        eventqueue_drop(host->eventQueue);
+        host->eventQueue = NULL;
+    }
+
     if(host->processes) {
         g_queue_free(host->processes);
     }
@@ -377,6 +387,75 @@ void host_stopExecutionTimer(Host* host) {
 GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);
     return host->params.id;
+}
+
+bool host_pushLocalEvent(Host* host, Event* event) {
+    MAGIC_ASSERT(host);
+
+    EmulatedTime eventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event));
+
+    // if event time is greater than the simulation end time, then skip
+    if (eventTime >= host->params.simEndTime) {
+        event_free(event);
+        return false;
+    }
+
+    eventqueue_push(host->eventQueue, event);
+    return true;
+}
+
+void host_execute(Host* host, EmulatedTime until) {
+    MAGIC_ASSERT(host);
+
+    CPU* cpu = host_getCPU(host);
+
+    while (true) {
+        EmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
+        if (nextEventTime == EMUTIME_INVALID || nextEventTime >= until) {
+            break;
+        }
+
+        // get the next event
+        Event* event = eventqueue_pop(host->eventQueue);
+        cpu_updateTime(cpu, event_getTime(event));
+
+        // if blocked by the CPU, we'll reschedule it
+        if (cpu_isBlocked(cpu)) {
+            SimulationTime cpuDelay = cpu_getDelay(cpu);
+
+            trace("event blocked on CPU, rescheduled for %" G_GUINT64_FORMAT
+                  " nanoseconds from now",
+                  cpuDelay);
+
+            // track the event delay time
+            Tracker* tracker = host_getTracker(host);
+            if (tracker != NULL) {
+                tracker_addVirtualProcessingDelay(tracker, cpuDelay);
+            }
+
+            // reschedule the event after the CPU delay time
+            event_setTime(event, event_getTime(event) + cpuDelay);
+            host_pushLocalEvent(host, event);
+
+            // want to continue pushing back events until we reach the delay time
+            continue;
+        }
+
+        // run the event
+        worker_setCurrentEmulatedTime(nextEventTime);
+        event_executeAndFree(event, host);
+        worker_clearCurrentTime();
+    }
+}
+
+EmulatedTime host_nextEventTime(Host* host) {
+    MAGIC_ASSERT(host);
+    return eventqueue_nextEventTime(host->eventQueue);
+}
+
+const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host) {
+    MAGIC_ASSERT(host);
+    return eventqueue_cloneArc(host->eventQueue);
 }
 
 /* this function is called by worker after the workers exist */
@@ -795,9 +874,13 @@ guint64 host_getNextDeterministicSequenceValue(Host* host) {
 }
 
 gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime time) {
-    return worker_scheduleTaskAtEmulatedTime(task, host, time);
+    GQuark hostID = host_getID(host);
+    Event* event =
+        event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), host, hostID);
+    return host_pushLocalEvent(host, event) ? TRUE : FALSE;
 }
 
 gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay) {
-    return worker_scheduleTaskWithDelay(task, host, nanoDelay);
+    EmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
+    return host_scheduleTaskAtEmulatedTime(host, task, time);
 }

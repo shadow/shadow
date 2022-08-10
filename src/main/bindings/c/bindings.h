@@ -454,10 +454,6 @@ void event_free(struct Event *event);
 // Execute the event. **This frees the event.**
 void event_executeAndFree(struct Event *event, Host *host);
 
-// Convert the event into its inner `TaskRef`. **This frees the event, and you must manually
-// free/drop the returned `TaskRef`.**
-struct TaskRef *event_intoTask(struct Event *event);
-
 HostId event_getHostID(struct Event *event);
 
 SimulationTime event_getTime(const struct Event *event);

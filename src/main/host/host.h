@@ -39,6 +39,11 @@ Host* host_new(const HostParameters* params);
 void host_ref(Host* host);
 void host_unref(Host* host);
 
+bool host_pushLocalEvent(Host* host, Event* event);
+void host_execute(Host* host, EmulatedTime until);
+EmulatedTime host_nextEventTime(Host* host);
+const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
+
 void host_lock(Host* host);
 void host_unlock(Host* host);
 
