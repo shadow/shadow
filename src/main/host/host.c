@@ -227,10 +227,10 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
 
     /* virtual addresses and interfaces for managing network I/O */
     NetworkInterface* loopback =
-        networkinterface_new(host, loopbackAddress, pcapDir, host->params.pcapCaptureSize,
+        networkinterface_new(loopbackAddress, pcapDir, host->params.pcapCaptureSize,
                              host->params.qdisc, host->params.interfaceBufSize);
     NetworkInterface* ethernet =
-        networkinterface_new(host, ethernetAddress, pcapDir, host->params.pcapCaptureSize,
+        networkinterface_new(ethernetAddress, pcapDir, host->params.pcapCaptureSize,
                              host->params.qdisc, host->params.interfaceBufSize);
 
     g_free(pcapDir);
