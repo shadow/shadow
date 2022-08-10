@@ -635,7 +635,7 @@ Router* networkinterface_getRouter(NetworkInterface* interface) {
     return interface->router;
 }
 
-NetworkInterface* networkinterface_new(Host* host, Address* address, gchar* pcapDir,
+NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc,
                                        guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);

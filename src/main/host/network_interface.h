@@ -19,7 +19,7 @@ typedef struct _NetworkInterface NetworkInterface;
 #include "main/routing/address.h"
 #include "main/routing/router.h"
 
-NetworkInterface* networkinterface_new(Host* host, Address* address, gchar* pcapDir,
+NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc,
                                        guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
