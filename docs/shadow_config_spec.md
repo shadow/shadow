@@ -85,9 +85,9 @@ hosts:
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
 - [`experimental.use_extended_yaml`](#experimentaluse_extended_yaml)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
-- [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
+- [`experimental.use_preload_libc`](#experimentaluse_preload_libc)
 - [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
@@ -487,14 +487,6 @@ Type: Bool
 
 Don't adjust the working directories of the virtual processes.
 
-#### `experimental.use_libc_preload`
-
-Default: true  
-Type: Bool
-
-Preload our libc library for all managed processes for fast syscall
-interposition when possible.
-
 #### `experimental.use_memory_manager`
 
 Default: true  
@@ -510,6 +502,14 @@ Type: Bool
 
 Count object allocations and deallocations. If disabled, we will not be able to
 detect object memory leaks.
+
+#### `experimental.use_preload_libc`
+
+Default: true  
+Type: Bool
+
+Preload our libc library for all managed processes for fast syscall
+interposition when possible.
 
 #### `experimental.use_preload_openssl_crypto`
 
