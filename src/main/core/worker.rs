@@ -42,7 +42,6 @@ struct ThreadInfo {
 
 struct Clock {
     now: Option<EmulatedTime>,
-    last: Option<EmulatedTime>,
     barrier: Option<EmulatedTime>,
 }
 
@@ -99,7 +98,6 @@ impl Worker {
                 active_thread_info: None,
                 clock: Clock {
                     now: None,
-                    last: None,
                     barrier: None,
                 },
                 bootstrap_end_time,
@@ -215,10 +213,6 @@ impl Worker {
 
     pub fn current_time() -> Option<EmulatedTime> {
         Worker::with(|w| w.clock.now).flatten()
-    }
-
-    fn set_last_event_time(t: EmulatedTime) {
-        Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
     pub fn update_min_host_runahead(t: SimulationTime) {
@@ -466,11 +460,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
         Worker::update_min_host_runahead(SimulationTime::from_c_simtime(t).unwrap());
-    }
-
-    #[no_mangle]
-    pub extern "C" fn _worker_setLastEventTime(t: cshadow::EmulatedTime) {
-        Worker::set_last_event_time(EmulatedTime::from_c_emutime(t).unwrap())
     }
 
     #[no_mangle]

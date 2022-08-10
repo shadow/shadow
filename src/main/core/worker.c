@@ -489,7 +489,6 @@ void worker_runEvent(Event* event, Host* host) {
     worker_setActiveHost(NULL);
 
     /* update times */
-    _worker_setLastEventTime(worker_getCurrentEmulatedTime());
     worker_clearCurrentTime();
 }
 
@@ -504,7 +503,6 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
         info("%u hosts are shut down", nHosts);
     }
 
-    _worker_setLastEventTime(worker_getCurrentEmulatedTime());
     worker_clearCurrentTime();
 
     WorkerPool* pool = _worker_pool();
