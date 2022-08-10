@@ -162,18 +162,6 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     return scheduler;
 }
 
-void scheduler_shutdown(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-
-    info("scheduler is shutting down now");
-
-    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
-    workerpool_joinAll(scheduler->workerPool);
-
-    g_hash_table_destroy(scheduler->hostIDToHostMap);
-    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
-}
-
 void scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
@@ -343,6 +331,10 @@ SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
 }
 
 void scheduler_finish(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
+
+    info("scheduler is shutting down now");
+
     /* make sure when the workers wake up they know we are done */
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = FALSE;
@@ -357,4 +349,10 @@ void scheduler_finish(Scheduler* scheduler) {
         g_hash_table_remove_all(scheduler->hostIDToHostMap);
     }
     g_mutex_unlock(&scheduler->globalLock);
+
+    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
+    workerpool_joinAll(scheduler->workerPool);
+
+    g_hash_table_destroy(scheduler->hostIDToHostMap);
+    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }
