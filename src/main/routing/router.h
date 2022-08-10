@@ -17,6 +17,8 @@ typedef struct _Router Router;
 typedef enum _QueueManagerMode QueueManagerMode;
 typedef struct _QueueManagerHooks QueueManagerHooks;
 
+#include "main/host/network_interface.h"
+
 enum _QueueManagerMode {
     QUEUE_MANAGER_SINGLE, // buffers only a single packet
     QUEUE_MANAGER_STATIC, // a FIFO queue with a static size
@@ -37,7 +39,7 @@ struct _QueueManagerHooks {
     QueueManagerPeek peek;
 };
 
-Router* router_new(QueueManagerMode queueMode, void* interface);
+Router* router_new(QueueManagerMode queueMode, NetworkInterface* interface);
 void router_ref(Router* router);
 void router_unref(Router* router);
 

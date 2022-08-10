@@ -10,14 +10,14 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+typedef struct _NetworkInterface NetworkInterface;
+
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
 #include "main/routing/address.h"
 #include "main/routing/router.h"
-
-typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Host* host, Address* address, gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc,

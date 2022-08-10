@@ -28,6 +28,7 @@ typedef GQuark HostId;
 #include "main/host/futex_table.h"
 #include "main/host/host_parameters.h"
 #include "main/host/network_interface.h"
+#include "main/host/protocol.h"
 #include "main/host/thread.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/address.h"

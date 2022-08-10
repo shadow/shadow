@@ -26,6 +26,7 @@
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
+#include "main/host/protocol.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
 #include "main/utility/utility.h"

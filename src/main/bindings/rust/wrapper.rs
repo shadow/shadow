@@ -2764,16 +2764,16 @@ fn bindgen_test_layout__HostParameters() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Router {
-    _unused: [u8; 0],
-}
-pub type Router = _Router;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _NetworkInterface {
     _unused: [u8; 0],
 }
 pub type NetworkInterface = _NetworkInterface;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Router {
+    _unused: [u8; 0],
+}
+pub type Router = _Router;
 extern "C" {
     pub fn host_new(params: *const HostParameters) -> *mut Host;
 }

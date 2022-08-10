@@ -35,7 +35,7 @@ struct _Router {
     MAGIC_DECLARE;
 };
 
-Router* router_new(QueueManagerMode queueMode, void* interface) {
+Router* router_new(QueueManagerMode queueMode, NetworkInterface* interface) {
     utility_debugAssert(interface);
 
     Router* router = g_new0(Router, 1);
