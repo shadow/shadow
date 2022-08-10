@@ -473,7 +473,7 @@ void eventqueue_push(const struct ThreadSafeEventQueue *queue, struct Event *eve
 
 struct Event *eventqueue_pop(const struct ThreadSafeEventQueue *queue);
 
-SimulationTime eventqueue_nextEventTime(const struct ThreadSafeEventQueue *queue);
+EmulatedTime eventqueue_nextEventTime(const struct ThreadSafeEventQueue *queue);
 
 // Create a new reference-counted task that can only be executed on the
 // given host. The callbacks can safely assume that they will only be called

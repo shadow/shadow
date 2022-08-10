@@ -166,15 +166,17 @@ Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
         }
     }
 
+    EmulatedTime barrierEmuTime = emutime_add_simtime(EMUTIME_SIMULATION_START, barrier);
+
     while(!g_queue_is_empty(tdata->unprocessedHosts)) {
         Host* host = g_queue_peek_head(tdata->unprocessedHosts);
         ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
         utility_debugAssert(qdata);
 
         Event* nextEvent = NULL;
-        SimulationTime eventTime = eventqueue_nextEventTime(qdata);
+        EmulatedTime eventTime = eventqueue_nextEventTime(qdata);
 
-        if(eventTime != SIMTIME_INVALID && eventTime < barrier) {
+        if(eventTime != EMUTIME_INVALID && eventTime < barrierEmuTime) {
             nextEvent = eventqueue_pop(qdata);
         }
 
@@ -196,23 +198,18 @@ EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* ho
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
     utility_debugAssert(qdata);
 
-    SimulationTime nextEventSimTime = eventqueue_nextEventTime(qdata);
-    EmulatedTime nextEventEmuTime = EMUTIME_INVALID;
-    if (nextEventSimTime != SIMTIME_INVALID) {
-        nextEventEmuTime = emutime_add_simtime(EMUTIME_SIMULATION_START, nextEventSimTime);
-        utility_debugAssert(nextEventEmuTime != EMUTIME_INVALID);
-    }
-
-    return nextEventEmuTime;
+    return eventqueue_nextEventTime(qdata);
 }
 
 static void _schedulerpolicy_findMinTime(Host* host, HostSingleSearchState* state) {
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
     utility_debugAssert(qdata);
 
-    SimulationTime nextEventTime = eventqueue_nextEventTime(qdata);
-    if (nextEventTime != SIMTIME_INVALID) {
-        state->nextEventTime = MIN(state->nextEventTime, nextEventTime);
+    EmulatedTime nextEventTime = eventqueue_nextEventTime(qdata);
+    if (nextEventTime != EMUTIME_INVALID) {
+        SimulationTime nextEventSimTime =
+            emutime_sub_emutime(nextEventTime, EMUTIME_SIMULATION_START);
+        state->nextEventTime = MIN(state->nextEventTime, nextEventSimTime);
     }
 }
 

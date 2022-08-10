@@ -95,7 +95,6 @@ impl<T: PartialOrd + Eq> std::ops::DerefMut for PanickingOrd<T> {
 
 mod export {
     use super::*;
-    use crate::core::support::simulation_time::SimulationTime;
     use crate::cshadow as c;
 
     /// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
@@ -159,9 +158,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_nextEventTime(
         queue: *const ThreadSafeEventQueue,
-    ) -> c::SimulationTime {
+    ) -> c::EmulatedTime {
         let queue = unsafe { queue.as_ref() }.unwrap();
-        let time = queue.next_event_time().map(EmulatedTime::to_abs_simtime);
-        SimulationTime::to_c_simtime(time)
+        EmulatedTime::to_c_emutime(queue.next_event_time())
     }
 }
