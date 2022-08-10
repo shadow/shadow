@@ -111,8 +111,8 @@ GQueue* schedulerpolicy_getAssignedHosts(SchedulerPolicy* policy) {
     return tdata->allHosts;
 }
 
-void schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost,
-                          SimulationTime barrier) {
+SimulationTime schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost,
+                                    Host* dstHost, SimulationTime barrier) {
     MAGIC_ASSERT(policy);
 
     /* non-local events must be properly delayed so the event wont show up at another host
@@ -139,8 +139,12 @@ void schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host* srcHost, 
     ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, dstHost);
     utility_debugAssert(qdata);
 
+    eventTime = event_getTime(event);
+
     /* 'deliver' the event to the destination queue */
     eventqueue_push(qdata, event);
+
+    return eventTime;
 }
 
 Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
