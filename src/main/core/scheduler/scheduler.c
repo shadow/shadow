@@ -307,37 +307,6 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 }
 
-__attribute__((unused)) static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    utility_panic("Unimplemented");
-
-    // WARNING if this is run, then all existing eventSequenceCounters
-    // need to get set to the max of all existing counters to ensure order correctness
-
-    /* get queue of all hosts */
-    GQueue* hosts = g_queue_new();
-    g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
-
-    _scheduler_shuffleQueue(scheduler, hosts);
-
-    /* now that our host order has been randomized, assign them evenly to worker threads */
-    while(!g_queue_is_empty(hosts)) {
-        Host* host = g_queue_pop_head(hosts);
-        // SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
-        // pthread_t newThread = item->thread;
-
-        //        TODO this needs to get uncommented/updated when migration code
-        //        is added schedulerpolicy_migrateHost(scheduler->policy,
-        //        host, newThread);
-
-        // g_queue_push_tail(scheduler->threadItems, item);
-    }
-
-    if(hosts) {
-        g_queue_free(hosts);
-    }
-}
-
 gboolean scheduler_isRunning(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
     return scheduler->isRunning;
