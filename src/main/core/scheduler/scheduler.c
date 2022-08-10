@@ -145,7 +145,8 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
 
-    scheduler->hostIDToHostMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    scheduler->hostIDToHostMap =
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)host_unref);
     scheduler->hostIDToHostQueueMap =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_drop);
 
@@ -187,6 +188,9 @@ int scheduler_addHost(Scheduler* scheduler, Host* host) {
     /* save the host */
     GQuark hostID = host_getID(host);
     gpointer hostIDKey = GUINT_TO_POINTER(hostID);
+
+    /* we shouldn't be trying to add a host after we've already assigned hosts to worker threads */
+    utility_alwaysAssert(scheduler->hostIDToHostMap != NULL);
 
     if (g_hash_table_contains(scheduler->hostIDToHostMap, hostIDKey)) {
         // the host ID is derived from the hostname, so duplicate host IDs means duplicate hostnames
@@ -282,6 +286,13 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     if(hosts) {
         g_queue_free(hosts);
     }
+
+    /* we've passed ownership of these hosts into the worker threads, so don't need to keep
+     * references here */
+    g_hash_table_steal_all(scheduler->hostIDToHostMap);
+    g_hash_table_destroy(scheduler->hostIDToHostMap);
+    scheduler->hostIDToHostMap = NULL;
+
     g_mutex_unlock(&scheduler->globalLock);
 }
 
@@ -340,21 +351,15 @@ void scheduler_finish(Scheduler* scheduler) {
     scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
-    workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn,
-                           scheduler);
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn, scheduler);
     workerpool_awaitTaskFn(scheduler->workerPool);
-
-    g_mutex_lock(&scheduler->globalLock);
-    if(g_hash_table_size(scheduler->hostIDToHostMap) > 0) {
-        g_hash_table_remove_all(scheduler->hostIDToHostMap);
-    }
-    g_mutex_unlock(&scheduler->globalLock);
 
     info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_joinAll(scheduler->workerPool);
 
-    // _worker_shutdownHost() unrefs the host, so any host pointers in this table are probably
-    // dangling
-    g_hash_table_destroy(scheduler->hostIDToHostMap);
+    if (scheduler->hostIDToHostMap != NULL) {
+        g_hash_table_destroy(scheduler->hostIDToHostMap);
+    }
+
     g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }
