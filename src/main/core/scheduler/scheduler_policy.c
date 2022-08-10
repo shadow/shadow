@@ -67,8 +67,10 @@ void schedulerpolicy_addHost(SchedulerPolicy* policy, Host* host, pthread_t assi
     utility_alwaysAssert(assignedThread != 0);
 
     /* each host has its own queue */
-    if (!g_hash_table_lookup(policy->hostToQueueDataMap, host)) {
-        g_hash_table_replace(policy->hostToQueueDataMap, host, eventqueue_new());
+    if (!g_hash_table_contains(policy->hostToQueueDataMap, host)) {
+        // cast from const pointer to non-const pointer; we should always cast it back to a const
+        // pointer when using the queue
+        g_hash_table_replace(policy->hostToQueueDataMap, host, (void*)eventqueue_new());
     }
 
     /* each thread keeps track of the hosts it needs to run */
@@ -128,7 +130,7 @@ SimulationTime schedulerpolicy_push(SchedulerPolicy* policy, Event* event, Host*
     }
 
     /* get the queue for the destination */
-    ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, dstHost);
+    const ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, dstHost);
     utility_debugAssert(qdata);
 
     eventTime = event_getTime(event);
@@ -170,7 +172,7 @@ Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
 
     while(!g_queue_is_empty(tdata->unprocessedHosts)) {
         Host* host = g_queue_peek_head(tdata->unprocessedHosts);
-        ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
+        const ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
         utility_debugAssert(qdata);
 
         Event* nextEvent = NULL;
@@ -195,14 +197,14 @@ Event* schedulerpolicy_pop(SchedulerPolicy* policy, SimulationTime barrier) {
 EmulatedTime schedulerpolicy_nextHostEventTime(SchedulerPolicy* policy, Host* host) {
     MAGIC_ASSERT(policy);
 
-    ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
+    const ThreadSafeEventQueue* qdata = g_hash_table_lookup(policy->hostToQueueDataMap, host);
     utility_debugAssert(qdata);
 
     return eventqueue_nextEventTime(qdata);
 }
 
 static void _schedulerpolicy_findMinTime(Host* host, HostSingleSearchState* state) {
-    ThreadSafeEventQueue* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
+    const ThreadSafeEventQueue* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
     utility_debugAssert(qdata);
 
     EmulatedTime nextEventTime = eventqueue_nextEventTime(qdata);
@@ -249,7 +251,7 @@ SchedulerPolicy* schedulerpolicy_new() {
     MAGIC_INIT(policy);
 
     policy->hostToQueueDataMap =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_free);
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_drop);
     policy->threadToThreadDataMap = g_hash_table_new_full(
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_threaddata_free);
 

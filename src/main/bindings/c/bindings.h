@@ -464,9 +464,11 @@ SimulationTime event_getTime(const struct Event *event);
 
 void event_setTime(struct Event *event, SimulationTime time);
 
-struct ThreadSafeEventQueue *eventqueue_new(void);
+const struct ThreadSafeEventQueue *eventqueue_new(void);
 
-void eventqueue_free(struct ThreadSafeEventQueue *queue);
+void eventqueue_drop(const struct ThreadSafeEventQueue *queue);
+
+const struct ThreadSafeEventQueue *eventqueue_cloneArc(const struct ThreadSafeEventQueue *queue_ptr);
 
 // Takes ownership of the event.
 void eventqueue_push(const struct ThreadSafeEventQueue *queue, struct Event *event);
