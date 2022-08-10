@@ -353,6 +353,8 @@ void scheduler_finish(Scheduler* scheduler) {
     info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_joinAll(scheduler->workerPool);
 
+    // _worker_shutdownHost() unrefs the host, so any host pointers in this table are probably
+    // dangling
     g_hash_table_destroy(scheduler->hostIDToHostMap);
     g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }
