@@ -51,6 +51,7 @@ impl<'a> Controller<'a> {
 
         let end_time: Duration = config.general.stop_time.unwrap().into();
         let end_time: SimulationTime = end_time.try_into().unwrap();
+        let end_time = EmulatedTime::SIMULATION_START + end_time;
 
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
@@ -59,7 +60,7 @@ impl<'a> Controller<'a> {
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
         let status_logger = config.general.progress.unwrap().then(|| {
-            let state = ShadowStatusBarState::new(EmulatedTime::from_abs_simtime(end_time));
+            let state = ShadowStatusBarState::new(end_time);
 
             if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
                 let redraw_interval = Duration::from_millis(1000);
@@ -135,8 +136,8 @@ pub trait SimController {
     fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool;
     fn manager_finished_current_round(
         &self,
-        min_next_event_time: SimulationTime,
-    ) -> Option<(SimulationTime, SimulationTime)>;
+        min_next_event_time: EmulatedTime,
+    ) -> Option<(EmulatedTime, EmulatedTime)>;
     fn update_min_runahead(&self, min_path_latency: SimulationTime);
     fn increment_plugin_errors(&self);
 }
@@ -188,8 +189,8 @@ impl SimController for Controller<'_> {
 
     fn manager_finished_current_round(
         &self,
-        min_next_event_time: SimulationTime,
-    ) -> Option<(SimulationTime, SimulationTime)> {
+        min_next_event_time: EmulatedTime,
+    ) -> Option<(EmulatedTime, EmulatedTime)> {
         // TODO: once we get multiple managers, we have to block them here until they have all
         // notified us that they are finished
 
@@ -199,7 +200,6 @@ impl SimController for Controller<'_> {
         // update the status logger
         let display_time = std::cmp::min(new_start, new_end);
         if let Some(status_logger) = &self.status_logger {
-            let display_time = EmulatedTime::from_abs_simtime(display_time);
             status_logger.mutate_state(|state| {
                 state.current = display_time;
             });
@@ -289,14 +289,14 @@ struct ControllerScheduling {
     // minimum allowed runahead when sending events between nodes
     min_runahead: Option<SimulationTime>,
     // the simulator should attempt to end immediately after this time
-    end_time: SimulationTime,
+    end_time: EmulatedTime,
 }
 
 impl ControllerScheduling {
     fn next_interval_window(
         &self,
-        min_next_event_time: SimulationTime,
-    ) -> (SimulationTime, SimulationTime) {
+        min_next_event_time: EmulatedTime,
+    ) -> (EmulatedTime, EmulatedTime) {
         // If the min_runahead is None, we haven't yet been given a latency value to base our
         // runahead off of (or dynamic runahead is disabled). We use the smallest latency between
         // any in-use graph nodes to start.
@@ -313,7 +313,7 @@ impl ControllerScheduling {
         // run over the experiment end time
         let end = min_next_event_time
             .checked_add(runahead)
-            .unwrap_or(SimulationTime::MAX);
+            .unwrap_or(EmulatedTime::MAX);
         let end = std::cmp::min(end, self.end_time);
 
         (start, end)
@@ -474,12 +474,17 @@ mod export {
         let controller = unsafe { controller.as_ref() }.unwrap();
         let execute_window_start = unsafe { execute_window_start.as_mut() }.unwrap();
         let execute_window_end = unsafe { execute_window_end.as_mut() }.unwrap();
+
         let min_next_event_time = SimulationTime::from_c_simtime(min_next_event_time).unwrap();
+        let min_next_event_time = EmulatedTime::from_abs_simtime(min_next_event_time);
 
         let (start, end) = match controller.manager_finished_current_round(min_next_event_time) {
             Some(x) => x,
             None => return false,
         };
+
+        let start = EmulatedTime::to_abs_simtime(start);
+        let end = EmulatedTime::to_abs_simtime(end);
 
         *execute_window_start = SimulationTime::to_c_simtime(Some(start));
         *execute_window_end = SimulationTime::to_c_simtime(Some(end));

@@ -12,6 +12,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use crate::core::controller::{Controller, SimController};
 use crate::core::sim_config::HostInfo;
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
@@ -26,7 +27,7 @@ pub struct Manager<'a> {
     // manager random source, init from controller random, used to init host randoms
     random: Xoshiro256PlusPlus,
     raw_frequency_khz: u64,
-    end_time: SimulationTime,
+    end_time: EmulatedTime,
 
     hosts_path: PathBuf,
 
@@ -48,7 +49,7 @@ impl<'a> Manager<'a> {
         controller: &'a Controller<'a>,
         config: &'a ConfigOptions,
         hosts: Vec<HostInfo>,
-        end_time: SimulationTime,
+        end_time: EmulatedTime,
         random: Xoshiro256PlusPlus,
     ) -> anyhow::Result<Self> {
         // get the system's CPU frequency
@@ -218,7 +219,10 @@ impl<'a> Manager<'a> {
             // events
 
             // the current simulation interval
-            let mut window = Some((SimulationTime::ZERO, SimulationTime::NANOSECOND));
+            let mut window = Some((
+                EmulatedTime::SIMULATION_START,
+                EmulatedTime::SIMULATION_START + SimulationTime::NANOSECOND,
+            ));
 
             // how often to log heartbeat messages
             let heartbeat_interval = self
@@ -228,7 +232,7 @@ impl<'a> Manager<'a> {
                 .flatten()
                 .map(|x| Duration::from(x).try_into().unwrap());
 
-            let mut last_heartbeat = SimulationTime::ZERO;
+            let mut last_heartbeat = EmulatedTime::SIMULATION_START;
             let mut time_of_last_usage_check = std::time::Instant::now();
 
             scheduler.start();
@@ -254,15 +258,14 @@ impl<'a> Manager<'a> {
 
                 // wait for the workers to finish processing nodes before we update the execution
                 // window
-                let min_next_event_time =
-                    scheduler.await_next_round().unwrap_or(SimulationTime::MAX);
+                let min_next_event_time = scheduler.await_next_round().unwrap_or(EmulatedTime::MAX);
 
                 // we are in control now, the workers are waiting for the next round
                 log::debug!(
                     "Finished execution window [{}--{}], next event at {}",
-                    window_start.as_nanos(),
-                    window_end.as_nanos(),
-                    min_next_event_time.as_nanos(),
+                    (window_start - EmulatedTime::SIMULATION_START).as_nanos(),
+                    (window_end - EmulatedTime::SIMULATION_START).as_nanos(),
+                    (min_next_event_time - EmulatedTime::SIMULATION_START).as_nanos(),
                 );
 
                 // notify controller that we finished this round, and the time of our next event in
@@ -549,7 +552,7 @@ impl<'a> Manager<'a> {
             .collect()
     }
 
-    fn log_heartbeat(&self, now: SimulationTime) {
+    fn log_heartbeat(&self, now: EmulatedTime) {
         let mut resources: libc::rusage = unsafe { std::mem::zeroed() };
         if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut resources) } != 0 {
             let err = nix::errno::Errno::last();
@@ -573,7 +576,7 @@ impl<'a> Manager<'a> {
             ru_nvcsw={}, \
             ru_nivcsw={}, \
             _manager_heartbeat", // this is required for tornettools
-            now.as_nanos(),
+            (now - EmulatedTime::SIMULATION_START).as_nanos(),
             max_memory,
             user_time_minutes,
             system_time_minutes,
@@ -670,7 +673,7 @@ impl<'a> SchedulerWrapper<'a> {
         config: &'a ConfigOptions,
         num_workers: u32,
         scheduler_seed: u32,
-        end_time: SimulationTime,
+        end_time: EmulatedTime,
     ) -> Self {
         Self {
             ptr: unsafe {
@@ -680,7 +683,7 @@ impl<'a> SchedulerWrapper<'a> {
                     config,
                     num_workers,
                     scheduler_seed,
-                    end_time.into(),
+                    EmulatedTime::to_abs_simtime(end_time).into(),
                 )
             },
             _phantom_controller: Default::default(),
@@ -712,19 +715,17 @@ impl<'a> SchedulerWrapper<'a> {
         unsafe { c::scheduler_shutdown(self.ptr) }
     }
 
-    pub fn continue_next_round(
-        &mut self,
-        window_start: SimulationTime,
-        window_end: SimulationTime,
-    ) {
-        let window_start = window_start.into();
-        let window_end = window_end.into();
+    pub fn continue_next_round(&mut self, window_start: EmulatedTime, window_end: EmulatedTime) {
+        let window_start = EmulatedTime::to_abs_simtime(window_start).into();
+        let window_end = EmulatedTime::to_abs_simtime(window_end).into();
         unsafe { c::scheduler_continueNextRound(self.ptr, window_start, window_end) }
     }
 
-    pub fn await_next_round(&mut self) -> Option<SimulationTime> {
+    pub fn await_next_round(&mut self) -> Option<EmulatedTime> {
         let min_next_event_time = unsafe { c::scheduler_awaitNextRound(self.ptr) };
-        SimulationTime::from_c_simtime(min_next_event_time)
+        Some(EmulatedTime::from_abs_simtime(
+            SimulationTime::from_c_simtime(min_next_event_time)?,
+        ))
     }
 }
 
