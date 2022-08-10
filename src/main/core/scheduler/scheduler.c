@@ -188,13 +188,13 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     utility_debugAssert(receiver);
 
     /* push to a queue based on the policy */
-    schedulerpolicy_push(
+    eventTime = schedulerpolicy_push(
         scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
 
     // Store the minimum time of events that we are pushing between hosts. The
     // push operation may adjust the event time, so make sure we call this after
     // the push.
-    worker_setMinEventTimeNextRound(event_getTime(event));
+    worker_setMinEventTimeNextRound(eventTime);
 
     return TRUE;
 }
