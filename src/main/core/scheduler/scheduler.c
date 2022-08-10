@@ -167,14 +167,11 @@ void scheduler_shutdown(Scheduler* scheduler) {
 
     info("scheduler is shutting down now");
 
-    /* this launches delete on all the plugins and should be called before
-     * the engine is marked "killed" and workers are destroyed, so that
-     * each plug-in is able to destroy/free its virtual nodes properly */
-    g_hash_table_destroy(scheduler->hostIDToHostMap);
-    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
-
     info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_joinAll(scheduler->workerPool);
+
+    g_hash_table_destroy(scheduler->hostIDToHostMap);
+    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }
 
 void scheduler_free(Scheduler* scheduler) {
