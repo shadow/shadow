@@ -10,7 +10,7 @@ use crate::{
 /// to directly use a `Fn(&mut Host)` trait object.
 #[derive(Clone)]
 pub struct TaskRef {
-    magic: Magic<0xe0408897>,
+    magic: Magic<Self>,
     _counter: ObjectCounter,
     inner: Arc<dyn Fn(&mut Host) + Send + Sync>,
 }

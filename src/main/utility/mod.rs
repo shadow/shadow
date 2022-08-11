@@ -22,6 +22,7 @@ pub mod stream_len;
 pub mod syscall;
 pub mod time;
 
+use std::marker::PhantomData;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
@@ -107,26 +108,32 @@ pub trait IsSync: Sync {}
 /// validates that the `Magic` is valid before running `Drop` implementations of
 /// the other fields.
 ///
-/// The MAGIC parameter should ideally be unique for each type. Consider e.g.
-/// `python3 -c 'import random; print(random.randint(0, 2**32))'`
+/// T should be the type of the struct that contains the Magic.
 #[derive(Debug)]
-pub struct Magic<const MAGIC: u32> {
+pub struct Magic<T: 'static> {
     #[cfg(debug_assertions)]
-    magic: u32,
+    magic: std::any::TypeId,
+    // The PhantomData docs recommend using `* const T` here to avoid a drop
+    // check, but that would incorrectly make this type !Send and !Sync. As long
+    // as the drop check doesn't cause issue (i.e. cause the borrow checker to
+    // fail), it should be fine to just use T here.
+    // https://doc.rust-lang.org/nomicon/dropck.html
+    _phantom: PhantomData<T>,
 }
 
-impl<const MAGIC: u32> Magic<MAGIC> {
+impl<T> Magic<T> {
     pub fn new() -> Self {
         Self {
             #[cfg(debug_assertions)]
-            magic: MAGIC,
+            magic: std::any::TypeId::of::<T>(),
+            _phantom: PhantomData,
         }
     }
 
     pub fn debug_check(&self) {
         #[cfg(debug_assertions)]
         {
-            if unsafe { std::ptr::read_volatile(&self.magic) } != MAGIC {
+            if unsafe { std::ptr::read_volatile(&self.magic) } != std::any::TypeId::of::<T>() {
                 // Do not pass Go; do not collect $200... and do not run Drop
                 // implementations etc. after learning that Rust's soundness
                 // requirements have likely been violated.
@@ -138,23 +145,20 @@ impl<const MAGIC: u32> Magic<MAGIC> {
     }
 }
 
-impl<const MAGIC: u32> Drop for Magic<MAGIC> {
+impl<T> Drop for Magic<T> {
     fn drop(&mut self) {
         self.debug_check();
         #[cfg(debug_assertions)]
         unsafe {
-            std::ptr::write_volatile(&mut self.magic, 0)
+            std::ptr::write_volatile(&mut self.magic, std::any::TypeId::of::<()>())
         };
     }
 }
 
-impl<const MAGIC: u32> Clone for Magic<MAGIC> {
+impl<T> Clone for Magic<T> {
     fn clone(&self) -> Self {
         self.debug_check();
-        Self {
-            #[cfg(debug_assertions)]
-            magic: self.magic.clone(),
-        }
+        Self::new()
     }
 }
 
