@@ -95,8 +95,9 @@ impl<T: PartialOrd + Eq> std::ops::DerefMut for PanickingOrd<T> {
 
 mod export {
     use super::*;
-    use crate::core::support::simulation_time::SimulationTime;
     use crate::cshadow as c;
+
+    use std::sync::Arc;
 
     /// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
     pub struct ThreadSafeEventQueue {
@@ -124,14 +125,27 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_new() -> *mut ThreadSafeEventQueue {
-        Box::into_raw(Box::new(ThreadSafeEventQueue::new()))
+    pub unsafe extern "C" fn eventqueue_new() -> *const ThreadSafeEventQueue {
+        Arc::into_raw(Arc::new(ThreadSafeEventQueue::new()))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_free(queue: *mut ThreadSafeEventQueue) {
+    pub unsafe extern "C" fn eventqueue_drop(queue: *const ThreadSafeEventQueue) {
         assert!(!queue.is_null());
-        unsafe { Box::from_raw(queue) };
+        unsafe { Arc::from_raw(queue) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn eventqueue_cloneArc(
+        queue_ptr: *const ThreadSafeEventQueue,
+    ) -> *const ThreadSafeEventQueue {
+        assert!(!queue_ptr.is_null());
+
+        let queue_arc = unsafe { Arc::from_raw(queue_ptr) };
+        let queue_dup = Arc::clone(&queue_arc);
+
+        assert_eq!(Arc::into_raw(queue_arc), queue_ptr);
+        Arc::into_raw(queue_dup)
     }
 
     /// Takes ownership of the event.
@@ -159,9 +173,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_nextEventTime(
         queue: *const ThreadSafeEventQueue,
-    ) -> c::SimulationTime {
+    ) -> c::EmulatedTime {
         let queue = unsafe { queue.as_ref() }.unwrap();
-        let time = queue.next_event_time().map(EmulatedTime::to_abs_simtime);
-        SimulationTime::to_c_simtime(time)
+        EmulatedTime::to_c_emutime(queue.next_event_time())
     }
 }

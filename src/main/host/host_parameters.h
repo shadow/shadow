@@ -21,6 +21,7 @@ struct _HostParameters {
     const gchar* hostname;
     guint nodeId;
     in_addr_t ipAddr;
+    EmulatedTime simEndTime;
     guint64 requestedBwDownBits;
     guint64 requestedBwUpBits;
     guint64 cpuFrequency;

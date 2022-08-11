@@ -2357,6 +2357,7 @@ pub struct _HostParameters {
     pub hostname: *const gchar,
     pub nodeId: guint,
     pub ipAddr: in_addr_t,
+    pub simEndTime: EmulatedTime,
     pub requestedBwDownBits: guint64,
     pub requestedBwUpBits: guint64,
     pub cpuFrequency: guint64,
@@ -2379,7 +2380,7 @@ pub struct _HostParameters {
 fn bindgen_test_layout__HostParameters() {
     assert_eq!(
         ::std::mem::size_of::<_HostParameters>(),
-        144usize,
+        152usize,
         concat!("Size of: ", stringify!(_HostParameters))
     );
     assert_eq!(
@@ -2472,6 +2473,23 @@ fn bindgen_test_layout__HostParameters() {
         );
     }
     test_field_ipAddr();
+    fn test_field_simEndTime() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_HostParameters>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).simEndTime) as usize - ptr as usize
+            },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_HostParameters),
+                "::",
+                stringify!(simEndTime)
+            )
+        );
+    }
+    test_field_simEndTime();
     fn test_field_requestedBwDownBits() {
         assert_eq!(
             unsafe {
@@ -2479,7 +2497,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).requestedBwDownBits) as usize - ptr as usize
             },
-            24usize,
+            32usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2496,7 +2514,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).requestedBwUpBits) as usize - ptr as usize
             },
-            32usize,
+            40usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2513,7 +2531,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).cpuFrequency) as usize - ptr as usize
             },
-            40usize,
+            48usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2530,7 +2548,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).cpuThreshold) as usize - ptr as usize
             },
-            48usize,
+            56usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2547,7 +2565,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).cpuPrecision) as usize - ptr as usize
             },
-            56usize,
+            64usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2564,7 +2582,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).heartbeatInterval) as usize - ptr as usize
             },
-            64usize,
+            72usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2581,7 +2599,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).heartbeatLogLevel) as usize - ptr as usize
             },
-            72usize,
+            80usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2598,7 +2616,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).heartbeatLogInfo) as usize - ptr as usize
             },
-            76usize,
+            84usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2615,7 +2633,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).logLevel) as usize - ptr as usize
             },
-            80usize,
+            88usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2632,7 +2650,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).pcapDir) as usize - ptr as usize
             },
-            88usize,
+            96usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2649,7 +2667,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).pcapCaptureSize) as usize - ptr as usize
             },
-            96usize,
+            104usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2666,7 +2684,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).qdisc) as usize - ptr as usize
             },
-            100usize,
+            108usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2683,7 +2701,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).recvBufSize) as usize - ptr as usize
             },
-            104usize,
+            112usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2700,7 +2718,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).autotuneRecvBuf) as usize - ptr as usize
             },
-            112usize,
+            120usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2717,7 +2735,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).sendBufSize) as usize - ptr as usize
             },
-            120usize,
+            128usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2734,7 +2752,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).autotuneSendBuf) as usize - ptr as usize
             },
-            128usize,
+            136usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2751,7 +2769,7 @@ fn bindgen_test_layout__HostParameters() {
                 let ptr = uninit.as_ptr();
                 ::std::ptr::addr_of!((*ptr).interfaceBufSize) as usize - ptr as usize
             },
-            136usize,
+            144usize,
             concat!(
                 "Offset of field: ",
                 stringify!(_HostParameters),
@@ -2782,6 +2800,15 @@ extern "C" {
 }
 extern "C" {
     pub fn host_unref(host: *mut Host);
+}
+extern "C" {
+    pub fn host_pushLocalEvent(host: *mut Host, event: *mut Event) -> bool;
+}
+extern "C" {
+    pub fn host_execute(host: *mut Host, until: EmulatedTime);
+}
+extern "C" {
+    pub fn host_nextEventTime(host: *mut Host) -> EmulatedTime;
 }
 extern "C" {
     pub fn host_lock(host: *mut Host);
@@ -2994,7 +3021,7 @@ extern "C" {
     pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_runEvent(event: *mut Event, host: *mut Host);
+    pub fn worker_runHost(host: *mut Host, until: EmulatedTime);
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);

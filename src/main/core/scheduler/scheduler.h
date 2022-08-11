@@ -34,7 +34,7 @@ Event* scheduler_pop(Scheduler*);
 EmulatedTime scheduler_nextHostEventTime(Scheduler*, Host* host);
 
 int scheduler_addHost(Scheduler*, Host*);
-Host* scheduler_getHost(Scheduler*, GQuark);
+const ThreadSafeEventQueue* scheduler_getEventQueue(Scheduler* scheduler, HostId host);
 gboolean scheduler_isRunning(Scheduler* scheduler);
 
 #endif /* SHD_SCHEDULER_H_ */

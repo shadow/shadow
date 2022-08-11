@@ -30,7 +30,7 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/bindings/c/bindings.h"
 
 // To be called by scheduler. Consumes `event`
-void worker_runEvent(Event* event, Host* host);
+void worker_runHost(Host* host, EmulatedTime until);
 // To be called by worker thread
 void worker_finish(GQueue* hosts, SimulationTime time);
 
@@ -76,7 +76,8 @@ gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime 
 gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);
-// Maximum time that the current event may run ahead to.
+// Maximum time that the current event may run ahead to. Must only be called if we hold the host
+// lock.
 EmulatedTime worker_maxEventRunaheadTime(Host* host);
 
 /* Time from the  beginning of the simulation.

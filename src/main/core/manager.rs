@@ -327,6 +327,7 @@ impl<'a> Manager<'a> {
                     // the config only allows ipv4 addresses, so this shouldn't happen
                     std::net::IpAddr::V6(_) => unreachable!("IPv6 not supported"),
                 },
+                simEndTime: EmulatedTime::to_c_emutime(Some(self.end_time)),
                 requestedBwDownBits: host.bandwidth_down_bits.unwrap(),
                 requestedBwUpBits: host.bandwidth_up_bits.unwrap(),
                 cpuThreshold: host.cpu_threshold,
@@ -366,6 +367,7 @@ impl<'a> Manager<'a> {
 
             let c_host = unsafe { c::host_new(&params) };
             assert!(!c_host.is_null());
+
             unsafe {
                 c::host_setup(
                     c_host,
