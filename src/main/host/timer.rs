@@ -12,7 +12,7 @@ use crate::utility::{Magic, ObjectCounter};
 use super::host::Host;
 
 pub struct Timer {
-    magic: Magic<2537832161>,
+    magic: Magic<Self>,
     _counter: ObjectCounter,
     // Internals in an Arc so that we can schedule tasks that refer back to it.
     // This is the only persistent strong reference - callbacks use a Weak
