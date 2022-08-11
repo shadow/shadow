@@ -713,10 +713,6 @@ impl<'a> SchedulerWrapper<'a> {
         unsafe { c::scheduler_finish(self.ptr) }
     }
 
-    pub fn shutdown(&mut self) {
-        unsafe { c::scheduler_shutdown(self.ptr) }
-    }
-
     pub fn continue_next_round(&mut self, window_start: EmulatedTime, window_end: EmulatedTime) {
         let window_start = EmulatedTime::to_abs_simtime(window_start).into();
         let window_end = EmulatedTime::to_abs_simtime(window_end).into();
@@ -736,7 +732,6 @@ impl<'a> std::ops::Drop for SchedulerWrapper<'a> {
         // shadow requires that the work pool is properly shutdown before it's freed (will block
         // until worker threads are joined)
         self.finish();
-        self.shutdown();
 
         unsafe { c::scheduler_free(self.ptr) };
     }

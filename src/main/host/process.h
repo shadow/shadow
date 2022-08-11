@@ -46,7 +46,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 
-void process_schedule(Process* proc, gpointer nothing);
+void process_schedule(Process* proc);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 void process_detachPlugin(gpointer procptr, gpointer nothing);

@@ -88,7 +88,10 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
         host_lock(host);
         host_lockShimShmemLock(host);
 
-        worker_runHost(host, barrier);
+        worker_setActiveHost(host);
+        host_execute(host, barrier);
+        worker_setActiveHost(NULL);
+
         EmulatedTime nextEventTime = host_nextEventTime(host);
 
         host_unlockShimShmemLock(host);
@@ -145,7 +148,8 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
 
-    scheduler->hostIDToHostMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    scheduler->hostIDToHostMap =
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)host_unref);
     scheduler->hostIDToHostQueueMap =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_drop);
 
@@ -160,21 +164,6 @@ Scheduler* scheduler_new(const Controller* controller, const ChildPidWatcher* pi
     info("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
-}
-
-void scheduler_shutdown(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-
-    info("scheduler is shutting down now");
-
-    /* this launches delete on all the plugins and should be called before
-     * the engine is marked "killed" and workers are destroyed, so that
-     * each plug-in is able to destroy/free its virtual nodes properly */
-    g_hash_table_destroy(scheduler->hostIDToHostMap);
-    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
-
-    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
-    workerpool_joinAll(scheduler->workerPool);
 }
 
 void scheduler_free(Scheduler* scheduler) {
@@ -202,6 +191,9 @@ int scheduler_addHost(Scheduler* scheduler, Host* host) {
     /* save the host */
     GQuark hostID = host_getID(host);
     gpointer hostIDKey = GUINT_TO_POINTER(hostID);
+
+    /* we shouldn't be trying to add a host after we've already assigned hosts to worker threads */
+    utility_alwaysAssert(scheduler->hostIDToHostMap != NULL);
 
     if (g_hash_table_contains(scheduler->hostIDToHostMap, hostIDKey)) {
         // the host ID is derived from the hostname, so duplicate host IDs means duplicate hostnames
@@ -297,6 +289,13 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     if(hosts) {
         g_queue_free(hosts);
     }
+
+    /* we've passed ownership of these hosts into the worker threads, so don't need to keep
+     * references here */
+    g_hash_table_steal_all(scheduler->hostIDToHostMap);
+    g_hash_table_destroy(scheduler->hostIDToHostMap);
+    scheduler->hostIDToHostMap = NULL;
+
     g_mutex_unlock(&scheduler->globalLock);
 }
 
@@ -346,18 +345,24 @@ SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
 }
 
 void scheduler_finish(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
+
+    info("scheduler is shutting down now");
+
     /* make sure when the workers wake up they know we are done */
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
-    workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn,
-                           scheduler);
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn, scheduler);
     workerpool_awaitTaskFn(scheduler->workerPool);
 
-    g_mutex_lock(&scheduler->globalLock);
-    if(g_hash_table_size(scheduler->hostIDToHostMap) > 0) {
-        g_hash_table_remove_all(scheduler->hostIDToHostMap);
+    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
+    workerpool_joinAll(scheduler->workerPool);
+
+    if (scheduler->hostIDToHostMap != NULL) {
+        g_hash_table_destroy(scheduler->hostIDToHostMap);
     }
-    g_mutex_unlock(&scheduler->globalLock);
+
+    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }

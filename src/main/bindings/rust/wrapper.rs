@@ -1892,7 +1892,7 @@ extern "C" {
     pub fn process_unref(proc_: *mut Process);
 }
 extern "C" {
-    pub fn process_schedule(proc_: *mut Process, nothing: gpointer);
+    pub fn process_schedule(proc_: *mut Process);
 }
 extern "C" {
     pub fn process_continue(proc_: *mut Process, thread: *mut Thread);
@@ -3019,9 +3019,6 @@ extern "C" {
 }
 extern "C" {
     pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn worker_runHost(host: *mut Host, until: EmulatedTime);
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
