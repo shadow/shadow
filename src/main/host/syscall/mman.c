@@ -163,6 +163,9 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     flags |= regularfile_getShadowFlags(file);
     /* Be careful not to try re-creating or truncating it. */
     flags &= ~(O_CREAT | O_EXCL | O_TMPFILE | O_TRUNC);
+    /* Don't use O_NOFOLLOW since it will prevent the plugin from
+     * opening the /proc/<shadow-pid>/fd/<linux-fd> file, which is a symbolic link. */
+    flags &= ~O_NOFOLLOW;
 
     /* Instruct the plugin to open the file at the path we sent. */
     int result = thread_nativeSyscall(

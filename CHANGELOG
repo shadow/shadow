@@ -9,4 +9,6 @@ A list of user-facing changes since the latest Shadow release.
   as in a [guix](https://guix.gnu.org/) environment.
 * The `setup` script now has a `--search` option, which can be used to add additional directories
   to search for pkg-config files, C headers, and libraries. It obsoletes the options `--library` and `--include`.
+* Fixed a bug causing `mmap` to fail when called on a file descriptor that was
+opened with `O_NOFOLLOW`. https://github.com/shadow/shadow/pull/2353
 * (add entry here)
