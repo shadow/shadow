@@ -346,20 +346,21 @@ fn test_mmap_nofollow_file() -> Result<(), Box<dyn Error>> {
     nix::fcntl::posix_fallocate(temp_fd, 0, MAPLEN as i64)?;
 
     nix::unistd::close(temp_fd)?;
-    
+
     /* Open the file with O_NOFOLLOW flag. */
     let nofollow_fd = nix::fcntl::open(
         &path,
-        nix::fcntl::OFlag::O_RDWR|nix::fcntl::OFlag::O_NOFOLLOW,
+        nix::fcntl::OFlag::O_RDWR | nix::fcntl::OFlag::O_NOFOLLOW,
         nix::sys::stat::Mode::empty(),
-    ).unwrap();
+    )
+    .unwrap();
 
     /* Do the mmap. */
     let mapbuf = unsafe {
         libc::mmap(
             std::ptr::null_mut(),
             MAPLEN,
-            libc::PROT_READ|libc::PROT_WRITE,
+            libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_SHARED,
             nofollow_fd,
             0,
@@ -367,7 +368,7 @@ fn test_mmap_nofollow_file() -> Result<(), Box<dyn Error>> {
     };
 
     assert!(mapbuf != libc::MAP_FAILED);
-   
+
     nix::unistd::close(nofollow_fd)?;
     nix::unistd::unlink(&path)?;
 
