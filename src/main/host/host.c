@@ -480,9 +480,6 @@ void host_boot(Host* host) {
         NetworkInterface* interface = value;
         networkinterface_startRefillingTokenBuckets(interface, host, bwDownKiBps, bwUpKiBps);
     }
-
-    /* scheduling the starting and stopping of our virtual processes */
-    g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
 }
 
 guint host_getNewProcessID(Host* host) {
@@ -530,6 +527,9 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                                 argv,
                                 pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
+
+    /* schedule the start and stop events */
+    process_schedule(proc);
 
     g_strfreev(envv_dup);
 }

@@ -6,7 +6,7 @@ use super::task::TaskRef;
 
 #[derive(Debug)]
 pub struct Event {
-    magic: Magic<0x3adf260f>,
+    magic: Magic<Self>,
     task: TaskRef,
     time: EmulatedTime,
     src_host_id: HostId,

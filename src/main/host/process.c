@@ -751,7 +751,7 @@ static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
     process_stop(proc);
 }
 
-void process_schedule(Process* proc, gpointer nothing) {
+void process_schedule(Process* proc) {
     MAGIC_ASSERT(proc);
 
     if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
