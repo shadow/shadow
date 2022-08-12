@@ -335,6 +335,45 @@ fn test_mmap_file_high64(unlink_before_mmap: bool) -> Result<(), Box<dyn Error>>
     test_mmap_file(1 << 43, unlink_before_mmap)
 }
 
+fn test_mmap_nofollow_file() -> Result<(), Box<dyn Error>> {
+    let template = b"test_mmapXXXXXX";
+
+    /* Get a file that we can mmap. */
+    let (temp_fd, path) = nix::unistd::mkstemp(template.as_ref())?;
+    nix::errno::Errno::result(temp_fd)?;
+
+    /* Make sure there is enough space we can mmap. */
+    nix::fcntl::posix_fallocate(temp_fd, 0, MAPLEN as i64)?;
+
+    nix::unistd::close(temp_fd)?;
+    
+    /* Open the file with O_NOFOLLOW flag. */
+    let nofollow_fd = nix::fcntl::open(
+        &path,
+        nix::fcntl::OFlag::O_RDWR|nix::fcntl::OFlag::O_NOFOLLOW,
+        nix::sys::stat::Mode::empty(),
+    ).unwrap();
+
+    /* Do the mmap. */
+    let mapbuf = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            MAPLEN,
+            libc::PROT_READ|libc::PROT_WRITE,
+            libc::MAP_SHARED,
+            nofollow_fd,
+            0,
+        )
+    };
+
+    assert!(mapbuf != libc::MAP_FAILED);
+   
+    nix::unistd::close(nofollow_fd)?;
+    nix::unistd::unlink(&path)?;
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -371,6 +410,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_utils::ShadowTest::new(
             "test_mmap_prot_none_mprotect",
             test_mmap_prot_none_mprotect,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_mmap_nofollow_file",
+            test_mmap_nofollow_file,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
