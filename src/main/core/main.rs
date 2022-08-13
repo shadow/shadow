@@ -161,7 +161,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
         .context("Failed to initialize the simulation")?;
 
     // allocate and initialize our main simulation driver
-    let controller = Controller::new(sim_config, &shadow_config);
+    let controller = Controller::new(sim_config, shadow_config);
 
     // enable log buffering if not at trace level
     let buffer_log = log::max_level() < log::LevelFilter::Trace;

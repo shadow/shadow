@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
@@ -158,6 +159,33 @@ impl Host {
         };
         // Intentionally drop `task`. An eventual event_new clones.
         res != 0
+    }
+
+    pub fn boot(&mut self) {
+        unsafe { cshadow::host_boot(self.chost()) };
+    }
+
+    pub fn execute(&mut self, until: EmulatedTime) {
+        unsafe { cshadow::host_execute(self.chost(), EmulatedTime::to_c_emutime(Some(until))) };
+    }
+
+    pub fn next_event_time(&self) -> Option<EmulatedTime> {
+        EmulatedTime::from_c_emutime(unsafe { cshadow::host_nextEventTime(self.chost()) })
+    }
+
+    pub fn event_queue(&self) -> Arc<ThreadSafeEventQueue> {
+        let new_arc = unsafe { cshadow::host_getOwnedEventQueue(self.chost()) };
+        unsafe { Arc::from_raw(new_arc) }
+    }
+
+    pub unsafe fn lock(&mut self) {
+        unsafe { cshadow::host_lock(self.chost()) };
+        unsafe { cshadow::host_lockShimShmemLock(self.chost()) };
+    }
+
+    pub unsafe fn unlock(&mut self) {
+        unsafe { cshadow::host_unlockShimShmemLock(self.chost()) };
+        unsafe { cshadow::host_unlock(self.chost()) };
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {

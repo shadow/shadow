@@ -93,36 +93,36 @@ impl<T: PartialOrd + Eq> std::ops::DerefMut for PanickingOrd<T> {
     }
 }
 
+use std::sync::Arc;
+
+/// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
+pub struct ThreadSafeEventQueue {
+    event_queue: Mutex<EventQueue>,
+}
+
+impl ThreadSafeEventQueue {
+    pub fn new() -> Self {
+        Self {
+            event_queue: Mutex::new(EventQueue::new()),
+        }
+    }
+
+    pub fn push(&self, event: Event) {
+        self.event_queue.lock().unwrap().push(event);
+    }
+
+    pub fn pop(&self) -> Option<Event> {
+        self.event_queue.lock().unwrap().pop()
+    }
+
+    pub fn next_event_time(&self) -> Option<EmulatedTime> {
+        self.event_queue.lock().unwrap().next_event_time()
+    }
+}
+
 mod export {
     use super::*;
     use crate::cshadow as c;
-
-    use std::sync::Arc;
-
-    /// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
-    pub struct ThreadSafeEventQueue {
-        event_queue: Mutex<EventQueue>,
-    }
-
-    impl ThreadSafeEventQueue {
-        pub fn new() -> Self {
-            Self {
-                event_queue: Mutex::new(EventQueue::new()),
-            }
-        }
-
-        pub fn push(&self, event: Event) {
-            self.event_queue.lock().unwrap().push(event);
-        }
-
-        pub fn pop(&self) -> Option<Event> {
-            self.event_queue.lock().unwrap().pop()
-        }
-
-        pub fn next_event_time(&self) -> Option<EmulatedTime> {
-            self.event_queue.lock().unwrap().next_event_time()
-        }
-    }
 
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_new() -> *const ThreadSafeEventQueue {

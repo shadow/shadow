@@ -1,26 +1,32 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::marker::PhantomData;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{self, Context};
+use atomic_refcell::AtomicRefCell;
+use rand::seq::SliceRandom;
 use rand::Rng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, SimController};
+use crate::core::scheduler::scheduler::NewScheduler;
 use crate::core::sim_config::HostInfo;
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::utility;
+use crate::host::host::{Host, HostId};
 use crate::utility::childpid_watcher::ChildPidWatcher;
+use crate::utility::{self, SyncSendPointer};
 
 pub struct Manager<'a> {
-    controller: &'a Controller<'a>,
+    controller: &'static Controller,
     config: &'a ConfigOptions,
     hosts: Vec<HostInfo>,
 
@@ -46,7 +52,7 @@ pub struct Manager<'a> {
 
 impl<'a> Manager<'a> {
     pub fn new(
-        controller: &'a Controller<'a>,
+        controller: &'static Controller,
         config: &'a ConfigOptions,
         hosts: Vec<HostInfo>,
         end_time: EmulatedTime,
@@ -198,6 +204,107 @@ impl<'a> Manager<'a> {
             .unwrap_or_else(|| u32::try_from(self.hosts.len()).unwrap().try_into().unwrap())
             .get();
 
+        let parallelism = self.config.general.parallelism.unwrap().get();
+
+        let num_threads = std::cmp::min(num_workers, parallelism);
+
+        let hostnames: HashSet<_> = self.hosts.iter().map(|x| x.name.to_string()).collect();
+
+        if hostnames.len() != self.hosts.len() {
+            return Err(anyhow::anyhow!("Duplicate hostnames"));
+        }
+
+        let mut hosts: Vec<_> = self
+            .hosts
+            .iter()
+            .map(|x| self.build_host(x))
+            .collect::<anyhow::Result<_>>()?;
+
+        hosts.shuffle(&mut self.random);
+
+        let num_hosts = hosts.len();
+
+        // TODO: need to put controller in global scope
+
+        let event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>> =
+            hosts.iter().map(|x| (x.id(), x.event_queue())).collect();
+
+        assert!(worker::WORKER_GLOBAL
+            .set(AtomicRefCell::new(worker::GlobalWorker {
+                pid_watcher: ChildPidWatcher::new(),
+                config: self.config.clone(),
+                //dns: unsafe { SyncSendPointer::new(self.controller.get_dns()) },
+                controller: self.controller,
+                event_queues,
+            }))
+            .is_ok());
+
+        let bootstrap_end_time: Duration = self.config.general.bootstrap_end_time.unwrap().into();
+        let bootstrap_end_time: SimulationTime = bootstrap_end_time.try_into().unwrap();
+        let bootstrap_end_time = EmulatedTime::SIMULATION_START + bootstrap_end_time;
+
+        let mut scheduler = NewScheduler::new(num_threads, hosts, bootstrap_end_time);
+
+        scheduler.run(move |host| {
+            worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
+            unsafe { host.lock() };
+            worker::Worker::set_active_host(host);
+
+            host.boot();
+
+            worker::Worker::clear_active_host();
+            unsafe { host.unlock() };
+            worker::Worker::clear_current_time();
+        });
+
+        // the current simulation interval
+        let mut window = Some((
+            EmulatedTime::SIMULATION_START,
+            EmulatedTime::SIMULATION_START + SimulationTime::NANOSECOND,
+        ));
+
+        while let Some((window_start, window_end)) = window {
+            scheduler.run(move |host| {
+                worker::Worker::set_round_end_time(window_end);
+                unsafe { host.lock() };
+                worker::Worker::set_active_host(host);
+
+                host.execute(window_end);
+
+                worker::Worker::clear_active_host();
+                unsafe { host.unlock() };
+            });
+
+            let (results_send, results_recv) = crossbeam::channel::bounded(num_hosts);
+
+            scheduler.run(move |host| {
+                unsafe { host.lock() };
+                results_send.send(host.next_event_time()).unwrap();
+                unsafe { host.unlock() };
+            });
+
+            let min_next_event_time = results_recv
+                .iter()
+                .filter_map(|x| x)
+                .min()
+                .unwrap_or(EmulatedTime::MAX);
+
+            // we are in control now, the workers are waiting for the next round
+            log::debug!(
+                "Finished execution window [{}--{}], next event at {}",
+                (window_start - EmulatedTime::SIMULATION_START).as_nanos(),
+                (window_end - EmulatedTime::SIMULATION_START).as_nanos(),
+                (min_next_event_time - EmulatedTime::SIMULATION_START).as_nanos(),
+            );
+
+            // notify controller that we finished this round, and the time of our next event in
+            // order to fast-forward our execute window if possible
+            window = self
+                .controller
+                .manager_finished_current_round(min_next_event_time);
+        }
+
+        /*
         // scope used so that the scheduler is dropped before we log the global counters below
         {
             let pid_watcher = ChildPidWatcher::new();
@@ -300,11 +407,12 @@ impl<'a> Manager<'a> {
                 }
             });
         }
+        */
 
         Ok(())
     }
 
-    fn add_host(&self, scheduler: &mut SchedulerWrapper, host: &HostInfo) -> anyhow::Result<()> {
+    fn build_host(&self, host: &HostInfo) -> anyhow::Result<Host> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -450,7 +558,7 @@ impl<'a> Manager<'a> {
             }
         }
 
-        scheduler.add_host(c_host)
+        Ok(unsafe { Host::borrow_from_c(c_host) })
     }
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
@@ -663,7 +771,7 @@ impl<'a> Manager<'a> {
 
 struct SchedulerWrapper<'a> {
     pub ptr: *mut c::Scheduler,
-    _phantom_controller: PhantomData<&'a Controller<'a>>,
+    _phantom_controller: PhantomData<&'a Controller>,
     _phantom_pid_watcher: PhantomData<&'a ChildPidWatcher>,
     _phantom_config: PhantomData<&'a ConfigOptions>,
 }

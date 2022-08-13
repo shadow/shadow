@@ -49,7 +49,6 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "host_.*"
         # Needs CompatSocket
         --blacklist-function "host_.*Interface"
-        --blacklist-function "host_getOwnedEventQueue"
 
         # used by shadow's main function
         --whitelist-function "main_.*"
@@ -155,6 +154,7 @@ add_custom_command(OUTPUT wrapper.rs
         --raw-line "use crate::core::support::configuration::ConfigOptions;"
         --raw-line "use crate::core::support::configuration::QDiscMode;"
         --raw-line "use crate::core::work::event::Event;"
+		--raw-line "use crate::core::work::event_queue::ThreadSafeEventQueue;"
         --raw-line "use crate::core::work::task::TaskRef;"
         --raw-line "use crate::utility::childpid_watcher::ChildPidWatcher;"
         --raw-line "use crate::utility::counter::Counter;"

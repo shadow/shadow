@@ -1,23 +1,32 @@
+use atomic_refcell::AtomicRefCell;
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 
+use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow;
 use crate::host::host::Host;
+use crate::host::host::HostId;
 use crate::host::host::HostInfo;
 use crate::host::process::Process;
 use crate::host::process::ProcessId;
 use crate::host::thread::ThreadId;
 use crate::host::thread::{CThread, Thread};
+use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
+use crate::utility::SyncSendPointer;
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+use super::controller::Controller;
+use super::work::event_queue::ThreadSafeEventQueue;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -27,7 +36,7 @@ static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::
 static SYSCALL_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 
 #[derive(Copy, Clone, Debug)]
-pub struct WorkerThreadID(u32);
+pub struct WorkerThreadID(pub u32);
 
 struct ProcessInfo {
     id: ProcessId,
@@ -73,8 +82,7 @@ pub struct Worker {
     object_alloc_counter: Counter,
     // A counter for objects deallocated by this worker.
     object_dealloc_counter: Counter,
-
-    worker_pool: *mut cshadow::WorkerPool,
+    //worker_pool: *mut cshadow::WorkerPool,
 }
 
 std::thread_local! {
@@ -83,13 +91,20 @@ std::thread_local! {
     static WORKER: OnceCell<RefCell<Worker>> = OnceCell::new();
 }
 
+pub static WORKER_GLOBAL: once_cell::sync::OnceCell<AtomicRefCell<GlobalWorker>> =
+    once_cell::sync::OnceCell::new();
+
+pub struct GlobalWorker {
+    pub pid_watcher: ChildPidWatcher,
+    pub config: ConfigOptions,
+    //pub dns: SyncSendPointer<cshadow::DNS>,
+    pub controller: &'static Controller,
+    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
+}
+
 impl Worker {
     // Create worker for this thread.
-    pub unsafe fn new_for_this_thread(
-        worker_pool: *mut cshadow::WorkerPool,
-        worker_id: WorkerThreadID,
-        bootstrap_end_time: EmulatedTime,
-    ) {
+    pub unsafe fn new_for_this_thread(worker_id: WorkerThreadID, bootstrap_end_time: EmulatedTime) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
@@ -105,7 +120,6 @@ impl Worker {
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
-                worker_pool: notnull_mut(worker_pool),
             }));
             assert!(res.is_ok(), "Worker already initialized");
         });
@@ -195,7 +209,7 @@ impl Worker {
         Worker::with(|w| w.active_thread_info.as_ref().map(|t| t.native_tid)).flatten()
     }
 
-    fn set_round_end_time(t: EmulatedTime) {
+    pub fn set_round_end_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.barrier.replace(t)).unwrap();
     }
 
@@ -203,11 +217,11 @@ impl Worker {
         Worker::with(|w| w.clock.barrier).flatten()
     }
 
-    fn set_current_time(t: EmulatedTime) {
+    pub fn set_current_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.now.replace(t)).unwrap();
     }
 
-    fn clear_current_time() {
+    pub fn clear_current_time() {
         Worker::with_mut(|w| w.clock.now.take()).unwrap();
     }
 
@@ -218,6 +232,7 @@ impl Worker {
     pub fn update_min_host_runahead(t: SimulationTime) {
         assert!(t != SimulationTime::ZERO);
 
+        /*
         Worker::with(|w| {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
@@ -231,6 +246,9 @@ impl Worker {
             }
         })
         .unwrap();
+        */
+
+        panic!()
     }
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
@@ -319,6 +337,8 @@ pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -
 }
 
 mod export {
+    use crate::core::{controller::SimController, work::event_queue::ThreadSafeEventQueue};
+
     use super::*;
 
     /// Initialize a Worker for this thread.
@@ -328,6 +348,7 @@ mod export {
         worker_id: i32,
         bootstrap_end_time: cshadow::SimulationTime,
     ) {
+        /*
         let bootstrap_end_time = SimulationTime::from_c_simtime(bootstrap_end_time).unwrap();
         unsafe {
             Worker::new_for_this_thread(
@@ -336,6 +357,129 @@ mod export {
                 EmulatedTime::from_abs_simtime(bootstrap_end_time),
             )
         }
+        */
+        panic!();
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
+        &WORKER_GLOBAL.get().unwrap().borrow().pid_watcher
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getConfig() -> *const ConfigOptions {
+        &WORKER_GLOBAL.get().unwrap().borrow().config
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
+        unsafe { WORKER_GLOBAL.get().unwrap().borrow().controller.get_dns() }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getNodeBandwidthUpKiBps(ip: libc::in_addr_t) -> u32 {
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+        (WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .get_bandwidth(ip)
+            .unwrap()
+            .up_bytes
+            / 1024) as u32
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getNodeBandwidthDownKiBps(ip: libc::in_addr_t) -> u32 {
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+        (WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .get_bandwidth(ip)
+            .unwrap()
+            .down_bytes
+            / 1024) as u32
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _worker_getLatency(
+        src: libc::in_addr_t,
+        dst: libc::in_addr_t,
+    ) -> cshadow::SimulationTime {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+        SimulationTime::to_c_simtime(
+            WORKER_GLOBAL
+                .get()
+                .unwrap()
+                .borrow()
+                .controller
+                .get_latency(src, dst),
+        )
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _worker_getReliability(src: libc::in_addr_t, dst: libc::in_addr_t) -> f64 {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+        WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .get_reliability(src, dst)
+            .unwrap() as f64
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _worker_isRoutable(src: libc::in_addr_t, dst: libc::in_addr_t) -> bool {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+        WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .is_routable(src, dst)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _worker_incrementPacketCount(src: libc::in_addr_t, dst: libc::in_addr_t) {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+        WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .increment_packet_count(src, dst)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_incrementPluginError() {
+        WORKER_GLOBAL
+            .get()
+            .unwrap()
+            .borrow()
+            .controller
+            .increment_plugin_errors()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getEventQueue(host: cshadow::HostId) -> *const ThreadSafeEventQueue {
+        let host: HostId = host.into();
+        Arc::as_ptr(
+            WORKER_GLOBAL
+                .get()
+                .unwrap()
+                .borrow()
+                .event_queues
+                .get(&host)
+                .unwrap(),
+        )
     }
 
     /// Returns NULL if there is no live Worker.
@@ -469,7 +613,8 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
-        Worker::with_mut(|w| w.worker_pool).unwrap()
+        //Worker::with_mut(|w| w.worker_pool).unwrap()
+        panic!();
     }
 
     #[no_mangle]

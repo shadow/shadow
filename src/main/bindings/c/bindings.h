@@ -529,6 +529,28 @@ void worker_newForThisThread(WorkerPool *worker_pool,
                              int32_t worker_id,
                              SimulationTime bootstrap_end_time);
 
+const struct ChildPidWatcher *worker_getChildPidWatcher(void);
+
+const struct ConfigOptions *worker_getConfig(void);
+
+DNS *worker_getDNS(void);
+
+uint32_t worker_getNodeBandwidthUpKiBps(in_addr_t ip);
+
+uint32_t worker_getNodeBandwidthDownKiBps(in_addr_t ip);
+
+SimulationTime _worker_getLatency(in_addr_t src, in_addr_t dst);
+
+double _worker_getReliability(in_addr_t src, in_addr_t dst);
+
+bool _worker_isRoutable(in_addr_t src, in_addr_t dst);
+
+void _worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
+
+void worker_incrementPluginError(void);
+
+const struct ThreadSafeEventQueue *worker_getEventQueue(HostId host);
+
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectAllocCounter(void);
 

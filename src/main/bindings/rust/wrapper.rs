@@ -11,6 +11,7 @@ use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::event::Event;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::core::work::task::TaskRef;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
@@ -2811,6 +2812,9 @@ extern "C" {
     pub fn host_nextEventTime(host: *mut Host) -> EmulatedTime;
 }
 extern "C" {
+    pub fn host_getOwnedEventQueue(host: *mut Host) -> *const ThreadSafeEventQueue;
+}
+extern "C" {
     pub fn host_lock(host: *mut Host);
 }
 extern "C" {
@@ -3071,10 +3075,10 @@ extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthUpKiBps(ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthUpKiBps(ip: in_addr_t) -> u32;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthDownKiBps(ip: in_addr_t) -> guint32;
+    pub fn worker_getNodeBandwidthDownKiBps(ip: in_addr_t) -> u32;
 }
 extern "C" {
     pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);

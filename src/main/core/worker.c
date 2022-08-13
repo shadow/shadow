@@ -367,7 +367,7 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return controller_getDNS(_worker_pool()->controller); }
+//DNS* worker_getDNS() { return controller_getDNS(_worker_pool()->controller); }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
@@ -379,9 +379,9 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
+//const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
 
-const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
+//const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
@@ -500,10 +500,10 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 
-    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
-        /* the simulation is over, don't bother */
-        return;
-    }
+    //if (!scheduler_isRunning(_worker_pool()->scheduler)) {
+    //    /* the simulation is over, don't bother */
+    //    return;
+    //}
 
     in_addr_t srcIP = packet_getSourceIP(packet);
     in_addr_t dstIP = packet_getDestinationIP(packet);
@@ -529,7 +529,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
-        worker_updateMinHostRunahead(delay);
+        //worker_updateMinHostRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
@@ -537,7 +537,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = _worker_pool()->scheduler;
+        //Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -565,9 +565,10 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
         // we may have sent this packet after the destination host finished running the current
         // round and calculated its min event time, so we put this in our min event time instead
-        worker_setMinEventTimeNextRound(event_getTime(packetEvent));
+        //worker_setMinEventTimeNextRound(event_getTime(packetEvent));
 
-        const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
+        //const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
+        const ThreadSafeEventQueue* eventQueue = worker_getEventQueue(dstHostID);
         eventqueue_push(eventQueue, packetEvent);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
@@ -601,6 +602,7 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
+/*
 guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip) {
     return controller_getBandwidthUpBytes(_worker_pool()->controller, ip) / 1024;
 }
@@ -608,11 +610,13 @@ guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip) {
 guint32 worker_getNodeBandwidthDownKiBps(in_addr_t ip) {
     return controller_getBandwidthDownBytes(_worker_pool()->controller, ip) / 1024;
 }
+*/
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
     controller_updateMinRunahead(pool->controller, time);
 }
 
+/*
 SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
@@ -636,7 +640,32 @@ void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAdd
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
     controller_incrementPacketCount(_worker_pool()->controller, src, dst);
 }
+*/
+
+SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return _worker_getLatency(src, dst);
+}
+
+gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return _worker_getReliability(src, dst);
+}
+
+bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    return _worker_isRoutable(src, dst);
+}
+
+void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress) {
+    in_addr_t src = htonl(address_toHostIP(sourceAddress));
+    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
+    _worker_incrementPacketCount(src, dst);
+}
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
-void worker_incrementPluginError() { controller_incrementPluginErrors(_worker_pool()->controller); }
+//void worker_incrementPluginError() { controller_incrementPluginErrors(_worker_pool()->controller); }

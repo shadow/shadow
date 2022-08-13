@@ -179,7 +179,7 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
 
 void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, char** envv,
                        const char* workingDir) {
-    _managedthread_syncAffinityWithWorker(mthread);
+    //_managedthread_syncAffinityWithWorker(mthread);
 
     /* set the env for the child */
     gchar** myenvv = g_strdupv(envv);
@@ -253,7 +253,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     utility_debugAssert(mthread->isRunning);
     utility_debugAssert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
-    _managedthread_syncAffinityWithWorker(mthread);
+    //_managedthread_syncAffinityWithWorker(mthread);
 
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
     process_flushPtrs(thread_getProcess(mthread->base));

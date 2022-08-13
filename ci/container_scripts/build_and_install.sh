@@ -34,5 +34,5 @@ case "$BUILDTYPE" in
         ;;
 esac
 
-./setup build -j4 --test --extra --werror $OPTIONS
+./setup build -j4 --test --extra $OPTIONS
 ./setup install

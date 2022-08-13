@@ -17,10 +17,11 @@ use crate::cshadow as c;
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::status_bar::{StatusBar, StatusBarState, StatusPrinter};
 use crate::utility::time::TimeParts;
+use crate::utility::SyncSendPointer;
 
-pub struct Controller<'a> {
+pub struct Controller {
     // general options and user configuration for the simulation
-    config: &'a ConfigOptions,
+    config: ConfigOptions,
 
     // random source from which all node random sources originate
     random: Xoshiro256PlusPlus,
@@ -29,7 +30,7 @@ pub struct Controller<'a> {
     ip_assignment: IpAssignment<u32>,
     routing_info: RoutingInfo<u32>,
     host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
-    dns: *mut c::DNS,
+    dns: SyncSendPointer<c::DNS>,
     is_runahead_dynamic: bool,
 
     // number of plugins that failed with a non-zero exit code
@@ -37,13 +38,12 @@ pub struct Controller<'a> {
 
     // logs the status of the simulation
     status_logger: Option<StatusLogger<ShadowStatusBarState>>,
-
     hosts: Vec<HostInfo>,
     scheduling_data: RwLock<ControllerScheduling>,
 }
 
-impl<'a> Controller<'a> {
-    pub fn new(sim_config: SimConfig, config: &'a ConfigOptions) -> Self {
+impl Controller {
+    pub fn new(sim_config: SimConfig, config: ConfigOptions) -> Self {
         let min_runahead_config: Option<Duration> =
             config.experimental.runahead.flatten().map(|x| x.into());
         let min_runahead_config: Option<SimulationTime> =
@@ -53,8 +53,8 @@ impl<'a> Controller<'a> {
         let end_time: SimulationTime = end_time.try_into().unwrap();
         let end_time = EmulatedTime::SIMULATION_START + end_time;
 
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
+        let dns = unsafe { SyncSendPointer::new(c::dns_new()) };
+        assert!(!dns.ptr().is_null());
 
         let smallest_latency =
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
@@ -96,14 +96,24 @@ impl<'a> Controller<'a> {
 
         let manager_hosts = std::mem::take(&mut self.hosts);
         let manager_rand = Xoshiro256PlusPlus::seed_from_u64(self.random.gen());
-        let manager = Manager::new(&self, self.config, manager_hosts, end_time, manager_rand)
-            .context("Failed to initialize the manager")?;
+
+        let controller = Box::new(self);
+        let controller = Box::leak(controller);
+
+        let manager = Manager::new(
+            controller,
+            &controller.config,
+            manager_hosts,
+            end_time,
+            manager_rand,
+        )
+        .context("Failed to initialize the manager")?;
 
         log::info!("Running simulation");
         manager.run()?;
         log::info!("Finished simulation");
 
-        let num_plugin_errors = self
+        let num_plugin_errors = controller
             .num_plugin_errors
             .load(std::sync::atomic::Ordering::SeqCst);
         if num_plugin_errors > 0 {
@@ -116,10 +126,10 @@ impl<'a> Controller<'a> {
     }
 }
 
-impl std::ops::Drop for Controller<'_> {
+impl std::ops::Drop for Controller {
     fn drop(&mut self) {
-        unsafe { c::dns_free(self.dns) };
-        self.dns = std::ptr::null_mut();
+        unsafe { c::dns_free(self.dns.ptr()) };
+        self.dns = unsafe { SyncSendPointer::new(std::ptr::null_mut()) };
 
         // stop and clear the status logger
         self.status_logger.as_mut().map(|x| x.stop());
@@ -142,9 +152,9 @@ pub trait SimController {
     fn increment_plugin_errors(&self);
 }
 
-impl SimController for Controller<'_> {
+impl SimController for Controller {
     unsafe fn get_dns(&self) -> *mut c::DNS {
-        self.dns
+        self.dns.ptr()
     }
 
     fn get_latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {

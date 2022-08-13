@@ -112,7 +112,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
 
 pub struct StatusPrinter<T: StatusBarState> {
     state: Arc<RwLock<T>>,
-    stop_sender: Option<std::sync::mpsc::Sender<()>>,
+    stop_sender: Option<crossbeam::channel::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -120,7 +120,8 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
     /// Create and start printing the status.
     pub fn new(state: T) -> Self {
         let state = Arc::new(RwLock::new(state));
-        let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
+        //let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
+        let (stop_sender, stop_receiver) = crossbeam::channel::bounded(1);
 
         Self {
             state: Arc::clone(&state),
@@ -131,14 +132,14 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
         }
     }
 
-    fn print_loop(state: Arc<RwLock<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
+    fn print_loop(state: Arc<RwLock<T>>, stop_receiver: crossbeam::channel::Receiver<()>) {
         let print_interval = Duration::from_secs(60);
 
         loop {
             match stop_receiver.recv_timeout(print_interval) {
                 // the sender disconnects to signal that we should stop
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
+                Err(crossbeam::channel::RecvTimeoutError::Timeout) => {}
                 Ok(()) => unreachable!(),
             }
 
