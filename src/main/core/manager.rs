@@ -255,7 +255,7 @@ impl<'a> Manager<'a> {
             worker::Worker::clear_active_host();
             unsafe { host.unlock() };
             worker::Worker::clear_current_time();
-        });
+        }, |_host| true);
 
         // the current simulation interval
         let mut window = Some((
@@ -273,6 +273,8 @@ impl<'a> Manager<'a> {
 
                 worker::Worker::clear_active_host();
                 unsafe { host.unlock() };
+            }, |host| {
+                host.next_event_time().unwrap_or(EmulatedTime::MAX) < window_end
             });
 
             let (results_send, results_recv) = crossbeam::channel::bounded(num_hosts);
@@ -281,7 +283,7 @@ impl<'a> Manager<'a> {
                 unsafe { host.lock() };
                 results_send.send(host.next_event_time()).unwrap();
                 unsafe { host.unlock() };
-            });
+            }, |_host| true);
 
             let min_next_event_time = results_recv
                 .iter()
