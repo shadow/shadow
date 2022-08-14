@@ -2,6 +2,7 @@ use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::worker;
 use crate::host::host::Host;
 
+/*
 pub struct NewScheduler {
     pool: rayon::ThreadPool,
     hosts: Vec<Host>,
@@ -37,7 +38,7 @@ impl NewScheduler {
     }
 
     pub fn run(&mut self, f: impl Fn(&mut Host) + Send + Sync + Clone, f2: impl Fn(&Host) -> bool + Send + Sync + Clone) {
-        self.pool.scope(|scope| {
+        self.pool.in_place_scope(|scope| {
             for host in self.hosts.iter_mut() {
                 if !(f2)(host) {
                     continue;
@@ -50,8 +51,8 @@ impl NewScheduler {
         });
     }
 }
+*/
 
-/*
 pub struct NewScheduler {
     threads: Vec<ThreadInfo>,
     thread_hosts: Vec<Vec<Host>>,
@@ -112,7 +113,6 @@ impl NewScheduler {
         });
     }
 }
-*/
 
 struct ThreadInfo {
     thread: rayon::ThreadPool,
@@ -132,7 +132,7 @@ fn scope_all<'a, 'scope>(
         match pools.next() {
             None => return f(scopes),
             Some(pool) => {
-                pool.scope(move |s| {
+                pool.in_place_scope(move |s| {
                     let mut scopes = scopes;
                     scopes.push(s);
                     recursive_scope(pools, scopes, f);
