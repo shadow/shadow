@@ -7,6 +7,7 @@ use crate::core::support::simulation_time::SimulationTime;
 use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::utility::SyncSendPointer;
 
 use atomic_refcell::AtomicRefCell;
 
@@ -41,7 +42,7 @@ pub struct HostInfo {
 /// Eventually cshadow::Host's contents and functionality will be migrated into
 /// there though, and this will become the "real" Host object.
 pub struct Host {
-    chost: *mut cshadow::Host,
+    chost: SyncSendPointer<cshadow::Host>,
 
     // Store immutable info in an Arc, that we can safely clone into the Worker
     // and ShadowLogger.
@@ -52,6 +53,12 @@ pub struct Host {
     // TODO: Consider caching a couple copies that we can "lend" out by value,
     // without having to do any atomic operation?
     info: OnceCell<Arc<HostInfo>>,
+
+    // The C host has a lock so it could be thought of as Sync, but we may want to remove the host
+    // lock entirely in the future, which would make the host !Sync. If we decide to keep the host
+    // lock in the future, we can remove this and make the host Sync. Since Cell is !Sync, this will
+    // make Host !Sync.
+    _make_unsync: std::marker::PhantomData<std::cell::Cell<()>>,
 }
 
 impl Host {
@@ -64,8 +71,9 @@ impl Host {
     pub unsafe fn borrow_from_c(p: *mut cshadow::Host) -> Self {
         assert!(!p.is_null());
         Host {
-            chost: p,
+            chost: unsafe { SyncSendPointer::new(p) },
             info: OnceCell::new(),
+            _make_unsync: Default::default(),
         }
     }
 
@@ -85,47 +93,47 @@ impl Host {
     }
 
     pub fn id(&self) -> HostId {
-        HostId(unsafe { cshadow::host_getID(self.chost) })
+        HostId(unsafe { cshadow::host_getID(self.chost()) })
     }
 
     pub fn name(&self) -> &str {
-        let slice = unsafe { std::ffi::CStr::from_ptr(cshadow::host_getName(self.chost)) };
+        let slice = unsafe { std::ffi::CStr::from_ptr(cshadow::host_getName(self.chost())) };
         slice.to_str().unwrap()
     }
 
     pub fn default_ip(&self) -> std::net::IpAddr {
         use std::net;
-        let addr = unsafe { cshadow::host_getDefaultIP(self.chost) };
+        let addr = unsafe { cshadow::host_getDefaultIP(self.chost()) };
         net::IpAddr::V4(net::Ipv4Addr::from(addr.to_le_bytes()))
     }
 
     pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
-        let ptr = unsafe { cshadow::host_getAbstractUnixNamespace(self.chost) };
+        let ptr = unsafe { cshadow::host_getAbstractUnixNamespace(self.chost()) };
         assert!(!ptr.is_null());
         unsafe { &*ptr }
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
-        let level = unsafe { cshadow::host_getLogLevel(self.chost) };
+        let level = unsafe { cshadow::host_getLogLevel(self.chost()) };
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
     pub fn random(&mut self) -> &mut impl rand::Rng {
-        let ptr = unsafe { cshadow::host_getRandom(self.chost) };
+        let ptr = unsafe { cshadow::host_getRandom(self.chost()) };
         let random = unsafe { ptr.as_mut() }.unwrap();
         &mut random.0
     }
 
     pub fn get_new_event_id(&mut self) -> u64 {
-        unsafe { cshadow::host_getNewEventID(self.chost) }
+        unsafe { cshadow::host_getNewEventID(self.chost()) }
     }
 
     pub fn continue_execution_timer(&mut self) {
-        unsafe { cshadow::host_continueExecutionTimer(self.chost) };
+        unsafe { cshadow::host_continueExecutionTimer(self.chost()) };
     }
 
     pub fn stop_execution_timer(&mut self) {
-        unsafe { cshadow::host_stopExecutionTimer(self.chost) };
+        unsafe { cshadow::host_stopExecutionTimer(self.chost()) };
     }
 
     pub fn schedule_task_at_emulated_time(&mut self, mut task: TaskRef, t: EmulatedTime) -> bool {
@@ -153,6 +161,6 @@ impl Host {
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {
-        self.chost
+        self.chost.ptr()
     }
 }
