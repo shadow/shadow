@@ -993,6 +993,7 @@ dependencies = [
  "lzma-rs",
  "merge",
  "nix",
+ "objgraph",
  "once_cell",
  "petgraph",
  "rand",

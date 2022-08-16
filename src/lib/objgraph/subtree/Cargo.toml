@@ -27,7 +27,3 @@ harness = false
 [[bench]]
 name = "bench_rootedrefcell"
 harness = false
-
-[lib]
-path = "src/lib.rs"
-crate-type = ["staticlib"]

@@ -24,3 +24,8 @@ pub mod utility;
 pub mod core;
 pub mod host;
 pub mod network;
+
+// Re-export objgraph to ensure its C API's make it to the final library.
+// Alternatively we could build it as its own static library, but I haven't
+// been able to get cmake to handle the dependencies correctly that way.
+pub use objgraph;

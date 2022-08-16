@@ -131,7 +131,7 @@ target_link_libraries(shadow-c
    INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    PkgConfig::GLIB
-   shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc objgraph)
+   shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
 
 # All targets that our Rust project directly depends on.
 set(LIBS_TO_PROCESS "shadow-c")

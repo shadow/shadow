@@ -17,6 +17,7 @@
 #include <sys/time.h>
 #include <sys/un.h>
 
+#include "lib/objgraph/objgraph.h"
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "lib/tsc/tsc.h"
@@ -48,7 +49,8 @@
 struct _Host {
     /* general node lock. nothing that belongs to the node should be touched
      * unless holding this lock. everything following this falls under the lock. */
-    GMutex lock;
+    Root* lock;
+    RootGuard* guard;
 
     HostParameters params;
 
@@ -140,7 +142,7 @@ Host* host_new(const HostParameters* params) {
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
     /* thread-level event communication with other nodes */
-    g_mutex_init(&(host->lock));
+    host->lock = root_new();
 
     host->eventQueue = eventqueue_new();
 
@@ -321,7 +323,7 @@ void host_shutdown(Host* host) {
 
     if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
 
-    g_mutex_clear(&(host->lock));
+    root_free(host->lock);
 
     if(host->dataDirPath) {
         g_free(host->dataDirPath);
@@ -360,12 +362,14 @@ void host_unref(Host* host) {
 
 void host_lock(Host* host) {
     MAGIC_ASSERT(host);
-    g_mutex_lock(&(host->lock));
+    utility_alwaysAssert(host->guard == NULL);
+    host->guard = root_lock(host->lock);
 }
 
 void host_unlock(Host* host) {
     MAGIC_ASSERT(host);
-    g_mutex_unlock(&(host->lock));
+    rootguard_free(host->guard);
+    host->guard = NULL;
 }
 
 /* resumes the execution timer for this host */

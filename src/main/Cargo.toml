@@ -27,6 +27,7 @@ log-bindings = { path = "../lib/logger/rust_bindings" }
 lzma-rs = "0.2"
 merge = "0.1"
 nix = "0.24.2"
+objgraph = { path = "../lib/objgraph/subtree" }
 once_cell = "1.13"
 petgraph = "0.6"
 rand = "0.8.5"
