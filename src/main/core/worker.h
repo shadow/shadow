@@ -88,14 +88,8 @@ SimulationTime worker_getCurrentSimulationTime();
 EmulatedTime worker_getCurrentEmulatedTime();
 
 bool worker_isBootstrapActive(void);
-guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip);
-guint32 worker_getNodeBandwidthDownKiBps(in_addr_t ip);
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time);
-SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress);
-gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress);
-bool worker_isRoutableForAddresses(Address* sourceAddress, Address* destinationAddress);
-void worker_incrementPacketCountForAddresses(Address* sourceAddress, Address* destinationAddress);
 
 void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);

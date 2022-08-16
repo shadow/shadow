@@ -906,7 +906,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     if (peerAddr != loopbackAddr) {
         Address* myAddress = host_getDefaultAddress(sys->host);
         Address* peerAddress = worker_resolveIPToAddress(peerAddr);
-        if (!peerAddress || !worker_isRoutableForAddresses(myAddress, peerAddress)) {
+        in_addr_t myAddr = htonl(address_toHostIP(myAddress));
+        if (!peerAddress || !worker_isRoutable(myAddr, peerAddr)) {
             /* can't route it - there is no node with this address */
             gchar* peerAddressString = address_ipToNewString(peerAddr);
             warning("attempting to connect to address '%s:%u' for which no "
