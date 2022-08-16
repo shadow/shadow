@@ -5,5 +5,6 @@ members = [
     "test",
     "lib/gml-parser",
     "lib/logger/rust_bindings",
+    "lib/objgraph/subtree",
     "lib/syscall-logger",
 ]

@@ -127,10 +127,11 @@ set(shadow_srcs
     utility/utility.c
 )
 add_library(shadow-c STATIC ${shadow_srcs})
-target_link_libraries(shadow-c INTERFACE
+target_link_libraries(shadow-c
+   INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    PkgConfig::GLIB
-   shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
+   shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc objgraph)
 
 # All targets that our Rust project directly depends on.
 set(LIBS_TO_PROCESS "shadow-c")
@@ -150,17 +151,19 @@ while(NOT "${LIBS_TO_PROCESS}" STREQUAL "")
     else()
         get_target_property(TYPE ${INTERFACE_LINK_LIBRARY} TYPE)
 
-        get_target_property(IMPORTED ${INTERFACE_LINK_LIBRARY} IMPORTED)
-        if ("${IMPORTED}" STREQUAL "FALSE")
-            list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
-        endif()
+        list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
 
         if ("${TYPE}" STREQUAL "STATIC_LIBRARY")
-            get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
-            set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
-
-            get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
-            set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
+            get_target_property(IMPORTED_LOCATION ${INTERFACE_LINK_LIBRARY} IMPORTED_LOCATION)
+            if (IMPORTED_LOCATION MATCHES "(.*)/lib(.*)\.a")
+                set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_MATCH_1}")
+                set(RUSTFLAGS "${RUSTFLAGS} -l${CMAKE_MATCH_2}")
+            else()
+                get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
+                set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
+                get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
+                set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
+            endif()
         elseif("${TYPE}" STREQUAL "INTERFACE_LIBRARY")
             # Nothing to do for the target itself, but we'll recurse
             # into its dependencies below.
@@ -196,7 +199,7 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\" --features \"${RUST_FEATURES}\""
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} -p shadow-rs --all-targets --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\" --features \"${RUST_FEATURES}\""
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
