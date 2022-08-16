@@ -645,14 +645,11 @@ impl<'a> Manager<'a> {
             .context("Failed to get the page size")?
             .ok_or(anyhow::anyhow!("Failed to get the page size (no errno)"))?;
 
-        // can use nix once the following is in a released version:
-        // https://github.com/nix-rust/nix/pull/1761
-        let avl_pages = unsafe { libc::sysconf(libc::_SC_AVPHYS_PAGES) };
-        if avl_pages < 0 {
-            return Err(anyhow::anyhow!(
-                "Failed to get the number of available pages of physical memory"
-            ));
-        }
+        let avl_pages = nix::unistd::sysconf(nix::unistd::SysconfVar::_AVPHYS_PAGES)
+            .context("Failed to get the number of available pages of physical memory")?
+            .ok_or(anyhow::anyhow!(
+                "Failed to get the number of available pages of physical memory (no errno)"
+            ))?;
 
         let page_size: u64 = page_size.try_into().unwrap();
         let avl_pages: u64 = avl_pages.try_into().unwrap();

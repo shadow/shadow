@@ -280,7 +280,11 @@ where
 }
 
 fn page_size() -> usize {
-    unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
+    nix::unistd::sysconf(nix::unistd::SysconfVar::PAGE_SIZE)
+        .unwrap()
+        .unwrap()
+        .try_into()
+        .unwrap()
 }
 
 /// Provides accessors for reading and writing another process's memory.
