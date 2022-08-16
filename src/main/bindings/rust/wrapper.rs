@@ -3040,11 +3040,7 @@ extern "C" {
     ) -> gboolean;
 }
 extern "C" {
-    pub fn scheduler_new(
-        nWorkers: guint,
-        schedulerSeed: guint,
-        endTime: SimulationTime,
-    ) -> *mut Scheduler;
+    pub fn scheduler_new(nWorkers: guint, endTime: SimulationTime) -> *mut Scheduler;
 }
 extern "C" {
     pub fn scheduler_free(arg1: *mut Scheduler);

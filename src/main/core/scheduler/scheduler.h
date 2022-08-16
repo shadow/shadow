@@ -15,7 +15,7 @@ typedef struct _Scheduler Scheduler;
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
 
-Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime endTime);
+Scheduler* scheduler_new(guint nWorkers, SimulationTime endTime);
 void scheduler_free(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
 
