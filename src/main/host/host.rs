@@ -1,3 +1,4 @@
+use objgraph::{Root, RootGuard};
 use once_cell::unsync::OnceCell;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -162,5 +163,17 @@ impl Host {
 
     pub fn chost(&self) -> *mut cshadow::Host {
         self.chost.ptr()
+    }
+
+    pub fn root(&self) -> &Root {
+        unsafe { cshadow::host_root(self.chost.ptr()).as_ref()}.unwrap()
+    }
+
+    pub fn thread_root_guard() -> &'static RootGuard<'static> {
+        unsafe { cshadow::host_threadRootGuard().as_ref()}.unwrap()
+    }
+
+    pub fn root_guard(&self) -> &RootGuard {
+        unsafe { cshadow::host_rootGuard(self.chost.ptr()).as_ref()}.unwrap()
     }
 }

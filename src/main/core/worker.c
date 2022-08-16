@@ -587,17 +587,21 @@ static void _worker_bootHost(Host* host, void* _unused) {
 void worker_bootHosts(GQueue* hosts) { g_queue_foreach(hosts, (GFunc)_worker_bootHost, NULL); }
 
 static void _worker_freeHostProcesses(Host* host, void* _unused) {
+    host_lock(host);
     worker_setActiveHost(host);
     host_continueExecutionTimer(host);
     host_freeAllApplications(host);
     host_stopExecutionTimer(host);
     worker_setActiveHost(NULL);
+    host_unlock(host);
 }
 
 static void _worker_shutdownHost(Host* host, void* _unused) {
+    host_lock(host);
     worker_setActiveHost(host);
     host_shutdown(host);
     worker_setActiveHost(NULL);
+    host_unlock(host);
     host_unref(host);
 }
 

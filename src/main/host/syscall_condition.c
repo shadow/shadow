@@ -431,7 +431,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* 
             TaskRef* task = taskref_new_bound(thread_getHostId(cond->thread),
                                               _syscallcondition_notifyTimeoutExpired, cond, NULL,
                                               _syscallcondition_unrefcb, NULL);
-            cond->timeout = timer_new(task);
+            cond->timeout = timer_new(host, task);
             taskref_drop(task);
         }
 

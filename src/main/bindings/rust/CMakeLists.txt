@@ -160,12 +160,14 @@ add_custom_command(OUTPUT wrapper.rs
         --raw-line "use crate::utility::counter::Counter;"
         --raw-line "use crate::utility::random::Random;"
         --raw-line "use log_bindings::Logger;"
+        --raw-line "use objgraph::Root;"
         --raw-line "use std::sync::Arc;"
         --raw-line "use std::collections::HashSet;"
         --raw-line "use atomic_refcell::AtomicRefCell;"
         --raw-line "use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;"
         --raw-line "type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;"
         --raw-line "type HashSet_String = HashSet<String>;"
+        --raw-line "type RootGuard = objgraph::RootGuard<'static>;"
 
         # used to generate #[must_use] annotations
         --enable-function-attribute-detection
@@ -173,6 +175,7 @@ add_custom_command(OUTPUT wrapper.rs
         # don't generate rust bindings for c bindings of rust code
         --blocklist-file ".*/bindings-opaque.h"
         --blocklist-file ".*/bindings.h"
+        --blocklist-file ".*/objgraph.h"
 
         ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.h -o ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.rs -- ${LLVM_FLAGS}
     VERBATIM

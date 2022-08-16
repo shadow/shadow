@@ -46,6 +46,8 @@
 #include "main/routing/router.h"
 #include "main/utility/utility.h"
 
+static __thread RootGuard* _host_guard;
+
 struct _Host {
     /* general node lock. nothing that belongs to the node should be touched
      * unless holding this lock. everything following this falls under the lock. */
@@ -270,6 +272,11 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
 static void _host_free(Host* host) {
     MAGIC_ASSERT(host);
     MAGIC_CLEAR(host);
+
+    utility_alwaysAssert(host->lock);
+    root_free(host->lock);
+    host->lock = NULL;
+
     g_free(host);
 
     worker_count_deallocation(Host);
@@ -279,6 +286,8 @@ static void _host_free(Host* host) {
  * process that actually hold references to the host. if you just called host_unref instead
  * of this function, then host_free would never actually get called. */
 void host_shutdown(Host* host) {
+    MAGIC_ASSERT(host);
+
 #ifdef USE_PERF_TIMERS
     g_timer_continue(host->executionTimer);
 #endif
@@ -323,8 +332,6 @@ void host_shutdown(Host* host) {
 
     if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
 
-    root_free(host->lock);
-
     if(host->dataDirPath) {
         g_free(host->dataDirPath);
     }
@@ -362,14 +369,22 @@ void host_unref(Host* host) {
 
 void host_lock(Host* host) {
     MAGIC_ASSERT(host);
+
     utility_alwaysAssert(host->guard == NULL);
     host->guard = root_lock(host->lock);
+
+    utility_alwaysAssert(_host_guard  == NULL);
+    _host_guard = host->guard;
 }
 
 void host_unlock(Host* host) {
     MAGIC_ASSERT(host);
-    rootguard_free(host->guard);
+
+    utility_alwaysAssert(_host_guard);
+    utility_alwaysAssert(host->guard);
+    rootguard_free(_host_guard);
     host->guard = NULL;
+    _host_guard = NULL;
 }
 
 /* resumes the execution timer for this host */
@@ -887,4 +902,18 @@ gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime
 gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay) {
     EmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
     return host_scheduleTaskAtEmulatedTime(host, task, time);
+}
+
+RootGuard* host_rootGuard(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->guard;
+}
+
+RootGuard* host_threadRootGuard() {
+    return _host_guard;
+}
+
+Root* host_root(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->lock;
 }

@@ -897,7 +897,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     process_ref(proc);
     TaskRef* task = taskref_new_bound(
         host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
-    proc->itimerReal = timer_new(task);
+    proc->itimerReal = timer_new(host, task);
     // timer_new clones the task; we don't need our own reference anymore.
     taskref_drop(task);
 

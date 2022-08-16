@@ -15,7 +15,7 @@ typedef struct _TimerFd TimerFd;
 #include "main/core/support/definitions.h"
 
 /* free this with legacyfile_free() */
-TimerFd* timerfd_new(HostId hostId);
+TimerFd* timerfd_new(Host* host);
 gint timerfd_setTime(TimerFd* timer, Host* host, gint flags, const struct itimerspec* new_value,
                      struct itimerspec* old_value);
 void timerfd_getTime(const TimerFd* timer, struct itimerspec* curr_value);

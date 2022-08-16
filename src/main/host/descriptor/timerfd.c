@@ -70,7 +70,7 @@ static LegacyFileFunctionTable _timerfdFunctions = {
 
 static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
 
-TimerFd* timerfd_new(HostId hostId) {
+TimerFd* timerfd_new(Host* host) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
     MAGIC_INIT(timerfd);
 
@@ -79,8 +79,8 @@ TimerFd* timerfd_new(HostId hostId) {
 
     legacyfile_refWeak(timerfd);
     TaskRef* task =
-        taskref_new_bound(hostId, _timerfd_expire, timerfd, NULL, legacyfile_unrefWeak, NULL);
-    timerfd->timer = timer_new(task);
+        taskref_new_bound(host_getID(host), _timerfd_expire, timerfd, NULL, legacyfile_unrefWeak, NULL);
+    timerfd->timer = timer_new(host, task);
     taskref_drop(task);
 
     worker_count_allocation(TimerFd);

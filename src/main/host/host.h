@@ -21,6 +21,7 @@ typedef GQuark HostId;
 #include "lib/logger/log_level.h"
 #include "lib/shim/shim_shmem.h"
 #include "lib/tsc/tsc.h"
+#include "lib/objgraph/objgraph.h"
 #include "main/core/support/definitions.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
@@ -45,6 +46,9 @@ EmulatedTime host_nextEventTime(Host* host);
 const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
 
 void host_lock(Host* host);
+RootGuard* host_threadRootGuard();
+RootGuard* host_rootGuard(Host* host);
+Root* host_root(Host* host);
 void host_unlock(Host* host);
 
 void host_continueExecutionTimer(Host* host);

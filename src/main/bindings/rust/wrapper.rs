@@ -16,12 +16,14 @@ use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::random::Random;
 use log_bindings::Logger;
+use objgraph::Root;
 use std::sync::Arc;
 use std::collections::HashSet;
 use atomic_refcell::AtomicRefCell;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;
 type HashSet_String = HashSet<String>;
+type RootGuard = objgraph::RootGuard<'static>;
 
 pub const SHADOW_SOMAXCONN: u32 = 4096;
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
@@ -2812,6 +2814,15 @@ extern "C" {
 }
 extern "C" {
     pub fn host_lock(host: *mut Host);
+}
+extern "C" {
+    pub fn host_threadRootGuard() -> *mut RootGuard;
+}
+extern "C" {
+    pub fn host_rootGuard(host: *mut Host) -> *mut RootGuard;
+}
+extern "C" {
+    pub fn host_root(host: *mut Host) -> *mut Root;
 }
 extern "C" {
     pub fn host_unlock(host: *mut Host);

@@ -819,7 +819,7 @@ SysCallReturn rustsyscallhandler_syscall(struct SyscallHandler *sys,
 // Create a new Timer that synchronously executes `task` on expiration.
 // `task` should not call mutable methods of the enclosing `Timer`; if it needs
 // to do so it should schedule a new task to do so.
-struct Timer *timer_new(const struct TaskRef *task);
+struct Timer *timer_new(Host *host, const struct TaskRef *task);
 
 void timer_drop(struct Timer *timer);
 

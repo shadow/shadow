@@ -71,7 +71,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     }
 
     /* Create the timer and double check that it's valid. */
-    TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
+    TimerFd* timer = timerfd_new(sys->host);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)timer, descFlags);
     int tfd = process_registerDescriptor(sys->process, desc);
 

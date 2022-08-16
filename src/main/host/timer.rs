@@ -1,6 +1,5 @@
 use std::sync::{Arc, Weak};
 
-use atomic_refcell::AtomicRefCell;
 use log::trace;
 
 use crate::core::support::emulated_time::EmulatedTime;
@@ -8,6 +7,7 @@ use crate::core::support::simulation_time::SimulationTime;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::utility::{Magic, ObjectCounter};
+use objgraph::refcell::RootedRefCell;
 
 use super::host::Host;
 
@@ -19,7 +19,7 @@ pub struct Timer {
     // reference.  i.e. dropping the outer object will drop this field as well;
     // scheduled callbacks with weak references that can't be upgraded become
     // no-ops.
-    internal: Arc<AtomicRefCell<TimerInternal>>,
+    internal: Arc<RootedRefCell<TimerInternal>>,
 }
 
 struct TimerInternal {
@@ -45,11 +45,13 @@ impl Timer {
     /// expiration. `on_expire` will cause a panic if it calls mutable methods
     /// of the enclosing Timer.  If it may need to call mutable methods of the
     /// Timer, it should push a new task to the scheduler to do so.
-    pub fn new<F: 'static + Fn(&mut Host) + Send + Sync>(on_expire: F) -> Self {
+    pub fn new<F: 'static + Fn(&mut Host) + Send + Sync>(host: &Host, on_expire: F) -> Self {
         Self {
             magic: Magic::new(),
             _counter: ObjectCounter::new("Timer"),
-            internal: Arc::new(AtomicRefCell::new(TimerInternal {
+            internal: Arc::new(RootedRefCell::new(
+                host.root(),
+                TimerInternal {
                 next_expire_time: None,
                 expire_interval: SimulationTime::ZERO,
                 expiration_count: 0,
@@ -62,17 +64,17 @@ impl Timer {
 
     pub fn expiration_count(&self) -> u64 {
         self.magic.debug_check();
-        self.internal.borrow().expiration_count
+        self.internal.borrow(Host::thread_root_guard()).expiration_count
     }
 
     pub fn expire_interval(&self) -> SimulationTime {
         self.magic.debug_check();
-        self.internal.borrow().expire_interval
+        self.internal.borrow(Host::thread_root_guard()).expire_interval
     }
 
     pub fn consume_expiration_count(&mut self) -> u64 {
         self.magic.debug_check();
-        let mut internal = self.internal.borrow_mut();
+        let mut internal = self.internal.borrow_mut(Host::thread_root_guard());
         let e = internal.expiration_count;
         internal.expiration_count = 0;
         e
@@ -82,7 +84,7 @@ impl Timer {
     /// armed, or None otherwise.
     pub fn remaining_time(&self) -> Option<SimulationTime> {
         self.magic.debug_check();
-        let t = if let Some(t) = self.internal.borrow().next_expire_time {
+        let t = if let Some(t) = self.internal.borrow(Host::thread_root_guard()).next_expire_time {
             t
         } else {
             return None;
@@ -93,17 +95,17 @@ impl Timer {
 
     pub fn interval(&self) -> SimulationTime {
         self.magic.debug_check();
-        self.internal.borrow().expire_interval
+        self.internal.borrow(Host::thread_root_guard()).expire_interval
     }
 
     pub fn disarm(&mut self) {
         self.magic.debug_check();
-        let mut internal = self.internal.borrow_mut();
+        let mut internal = self.internal.borrow_mut(Host::thread_root_guard());
         internal.reset(None, SimulationTime::ZERO);
     }
 
     fn timer_expire(
-        internal_weak: &Weak<AtomicRefCell<TimerInternal>>,
+        internal_weak: &Weak<RootedRefCell<TimerInternal>>,
         host: &mut Host,
         expire_id: u64,
     ) {
@@ -113,7 +115,7 @@ impl Timer {
             trace!("Expired Timer no longer exists.");
             return;
         };
-        let mut internal_brw = internal.borrow_mut();
+        let mut internal_brw = internal.borrow_mut(Host::thread_root_guard());
         trace!(
             "timer expire check; expireID={} minValidExpireID={}",
             expire_id,
@@ -140,13 +142,13 @@ impl Timer {
 
         // Re-borrow as an immutable reference while executing the callback.
         drop(internal_brw);
-        let internal_brw = internal.borrow();
+        let internal_brw = internal.borrow(Host::thread_root_guard());
         (internal_brw.on_expire)(host);
     }
 
     fn schedule_new_expire_event(
         internal_ref: &mut TimerInternal,
-        internal_ptr: Weak<AtomicRefCell<TimerInternal>>,
+        internal_ptr: Weak<RootedRefCell<TimerInternal>>,
         host: &mut Host,
     ) {
         let now = Worker::current_time().unwrap();
@@ -169,7 +171,7 @@ impl Timer {
         self.magic.debug_check();
         debug_assert!(expire_time >= Worker::current_time().unwrap());
 
-        let mut internal = self.internal.borrow_mut();
+        let mut internal = self.internal.borrow_mut(Host::thread_root_guard());
         internal.reset(Some(expire_time), expire_interval);
         Self::schedule_new_expire_event(&mut *internal, Arc::downgrade(&self.internal), host);
     }
@@ -184,9 +186,10 @@ pub mod export {
     /// `task` should not call mutable methods of the enclosing `Timer`; if it needs
     /// to do so it should schedule a new task to do so.
     #[no_mangle]
-    pub unsafe extern "C" fn timer_new(task: *const TaskRef) -> *mut Timer {
+    pub unsafe extern "C" fn timer_new(host: *mut cshadow::Host, task: *const TaskRef) -> *mut Timer {
+        let host = unsafe { Host::borrow_from_c(host) };
         let task = unsafe { task.as_ref() }.unwrap().clone();
-        let timer = Timer::new(move |host| task.execute(host));
+        let timer = Timer::new(&host, move |host| task.execute(host));
         Box::into_raw(Box::new(timer))
     }
 
