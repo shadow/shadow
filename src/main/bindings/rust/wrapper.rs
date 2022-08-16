@@ -3092,11 +3092,13 @@ extern "C" {
     ) -> gdouble;
 }
 extern "C" {
-    pub fn worker_isRoutable(sourceAddress: *mut Address, destinationAddress: *mut Address)
-        -> bool;
+    pub fn worker_isRoutableForAddresses(
+        sourceAddress: *mut Address,
+        destinationAddress: *mut Address,
+    ) -> bool;
 }
 extern "C" {
-    pub fn worker_incrementPacketCount(
+    pub fn worker_incrementPacketCountForAddresses(
         sourceAddress: *mut Address,
         destinationAddress: *mut Address,
     );

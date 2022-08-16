@@ -532,7 +532,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         worker_updateMinHostRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
-        worker_incrementPacketCount(srcAddress, dstAddress);
+        worker_incrementPacketCountForAddresses(srcAddress, dstAddress);
 
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
@@ -625,13 +625,13 @@ gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* desti
     return controller_getReliability(_worker_pool()->controller, src, dst);
 }
 
-bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {
+bool worker_isRoutableForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
     return controller_isRoutable(_worker_pool()->controller, src, dst);
 }
 
-void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress) {
+void worker_incrementPacketCountForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
     controller_incrementPacketCount(_worker_pool()->controller, src, dst);
