@@ -3030,9 +3030,6 @@ extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_getDNS() -> *mut DNS;
-}
-extern "C" {
     pub fn worker_getChildPidWatcher() -> *const ChildPidWatcher;
 }
 extern "C" {

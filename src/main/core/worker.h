@@ -67,7 +67,6 @@ void worker_setMinEventTimeNextRound(SimulationTime simtime);
 void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 
 int worker_getAffinity();
-DNS* worker_getDNS();
 const ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay);

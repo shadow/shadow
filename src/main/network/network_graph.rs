@@ -420,6 +420,7 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
 }
 
 /// Routing information for paths between nodes.
+#[derive(Debug)]
 pub struct RoutingInfo<T: Eq + Hash + std::fmt::Display + Clone + Copy> {
     paths: HashMap<(T, T), PathProperties>,
     packet_counters: std::sync::RwLock<HashMap<(T, T), u64>>,

@@ -367,8 +367,6 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return controller_getDNS(_worker_pool()->controller); }
-
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
     return dns_resolveIPToAddress(dns, ip);
@@ -602,11 +600,11 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
 }
 
 guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip) {
-    return controller_getBandwidthUpBytes(_worker_pool()->controller, ip) / 1024;
+    return worker_getBandwidthUpBytes(ip) / 1024;
 }
 
 guint32 worker_getNodeBandwidthDownKiBps(in_addr_t ip) {
-    return controller_getBandwidthDownBytes(_worker_pool()->controller, ip) / 1024;
+    return worker_getBandwidthDownBytes(ip) / 1024;
 }
 
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
@@ -616,25 +614,25 @@ void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
 SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getLatency(_worker_pool()->controller, src, dst);
+    return worker_getLatency(src, dst);
 }
 
 gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getReliability(_worker_pool()->controller, src, dst);
+    return worker_getReliability(src, dst);
 }
 
 bool worker_isRoutableForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_isRoutable(_worker_pool()->controller, src, dst);
+    return worker_isRoutable(src, dst);
 }
 
 void worker_incrementPacketCountForAddresses(Address* sourceAddress, Address* destinationAddress) {
     in_addr_t src = htonl(address_toHostIP(sourceAddress));
     in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    controller_incrementPacketCount(_worker_pool()->controller, src, dst);
+    worker_incrementPacketCount(src, dst);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
