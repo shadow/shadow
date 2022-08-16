@@ -26,6 +26,12 @@ static ALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::ne
 static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 static SYSCALL_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 
+std::thread_local! {
+    // Initialized when the worker thread starts running. No shared ownership
+    // or access from outside of the current thread.
+    static WORKER: OnceCell<RefCell<Worker>> = OnceCell::new();
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
 
@@ -75,12 +81,6 @@ pub struct Worker {
     object_dealloc_counter: Counter,
 
     worker_pool: *mut cshadow::WorkerPool,
-}
-
-std::thread_local! {
-    // Initialized when the worker thread starts running. No shared ownership
-    // or access from outside of the current thread.
-    static WORKER: OnceCell<RefCell<Worker>> = OnceCell::new();
 }
 
 impl Worker {
