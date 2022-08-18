@@ -150,11 +150,12 @@ impl SimController for Controller<'_> {
 
         // update the status logger
         let display_time = std::cmp::min(new_start, new_end);
-        if let Some(status_logger) = &self.status_logger {
-            status_logger.status().update(|state| {
+        worker::WORKER_SHARED
+            .get()
+            .unwrap()
+            .update_status_logger(|state| {
                 state.current = display_time;
             });
-        };
 
         let continue_running = new_start < new_end;
         continue_running.then(|| (new_start, new_end))
@@ -222,13 +223,11 @@ impl SimController for Controller<'_> {
             .num_plugin_errors
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        if let Some(status_logger) = &self.status_logger {
-            status_logger.status().update(|state| {
-                // there is a race condition here, so use the max
-                let new_value = old_count + 1;
-                state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
-            });
-        }
+        worker::WORKER_SHARED.get().unwrap().update_status_logger(|state| {
+            // there is a race condition here, so use the max
+            let new_value = old_count + 1;
+            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
+        });
     }
 }
 
