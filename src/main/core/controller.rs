@@ -27,9 +27,6 @@ pub struct Controller<'a> {
     // global network connectivity info
     is_runahead_dynamic: bool,
 
-    // number of plugins that failed with a non-zero exit code
-    num_plugin_errors: AtomicU32,
-
     // logs the status of the simulation
     status_logger: Option<StatusLogger<ShadowStatusBarState>>,
 
@@ -65,7 +62,6 @@ impl<'a> Controller<'a> {
             is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
             sim_config: Some(sim_config),
-            num_plugin_errors: AtomicU32::new(0),
             status_logger,
             scheduling_data: RwLock::new(ControllerScheduling {
                 min_runahead_config,
@@ -93,6 +89,7 @@ impl<'a> Controller<'a> {
                 // safe since the DNS type has an internal mutex, and since global memory is leaked
                 // we don't ever need to free this
                 dns: unsafe { SyncSendPointer::new(dns) },
+                num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
                 status_logger_state: self.status_logger.as_ref().map(|x| Arc::clone(x.status())),
             })
@@ -107,9 +104,7 @@ impl<'a> Controller<'a> {
         manager.run()?;
         log::info!("Finished simulation");
 
-        let num_plugin_errors = self
-            .num_plugin_errors
-            .load(std::sync::atomic::Ordering::SeqCst);
+        let num_plugin_errors = worker::WORKER_SHARED.get().unwrap().plugin_error_count();
         if num_plugin_errors > 0 {
             return Err(anyhow::anyhow!(
                 "{num_plugin_errors} managed processes exited with a non-zero error code"
@@ -134,7 +129,6 @@ pub trait SimController {
         min_next_event_time: EmulatedTime,
     ) -> Option<(EmulatedTime, EmulatedTime)>;
     fn update_min_runahead(&self, min_path_latency: SimulationTime);
-    fn increment_plugin_errors(&self);
 }
 
 impl SimController for Controller<'_> {
@@ -217,18 +211,6 @@ impl SimController for Controller<'_> {
             min_runahead_config.map(|x| x.as_nanos())
         );
     }
-
-    fn increment_plugin_errors(&self) {
-        let old_count = self
-            .num_plugin_errors
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        worker::WORKER_SHARED.get().unwrap().update_status_logger(|state| {
-            // there is a race condition here, so use the max
-            let new_value = old_count + 1;
-            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
-        });
-    }
 }
 
 // the min runahead time is updated by workers, so needs to be locked
@@ -273,9 +255,9 @@ impl ControllerScheduling {
 #[derive(Debug)]
 pub struct ShadowStatusBarState {
     start: std::time::Instant,
-    current: EmulatedTime,
+    pub current: EmulatedTime,
     end: EmulatedTime,
-    num_failed_processes: u32,
+    pub num_failed_processes: u32,
 }
 
 impl std::fmt::Display for ShadowStatusBarState {
@@ -344,11 +326,5 @@ mod export {
         let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
 
         controller.update_min_runahead(min_path_latency);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_incrementPluginErrors(controller: *const Controller) {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        controller.increment_plugin_errors();
     }
 }

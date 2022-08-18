@@ -422,7 +422,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
         info("%s", mainResultString->str);
     } else {
         warning("%s", mainResultString->str);
-        worker_incrementPluginError();
+        worker_incrementPluginErrors();
     }
 
     g_string_free(mainResultString, TRUE);
