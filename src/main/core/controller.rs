@@ -1,4 +1,5 @@
 use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -14,7 +15,7 @@ use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::utility::status_bar::{StatusBar, StatusBarState, StatusPrinter};
+use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
 use crate::utility::time::TimeParts;
 use crate::utility::SyncSendPointer;
 
@@ -148,7 +149,7 @@ impl SimController for Controller<'_> {
         // update the status logger
         let display_time = std::cmp::min(new_start, new_end);
         if let Some(status_logger) = &self.status_logger {
-            status_logger.mutate_state(|state| {
+            status_logger.status().update(|state| {
                 state.current = display_time;
             });
         };
@@ -220,7 +221,7 @@ impl SimController for Controller<'_> {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         if let Some(status_logger) = &self.status_logger {
-            status_logger.mutate_state(|state| {
+            status_logger.status().update(|state| {
                 // there is a race condition here, so use the max
                 let new_value = old_count + 1;
                 state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
@@ -268,7 +269,8 @@ impl ControllerScheduling {
     }
 }
 
-struct ShadowStatusBarState {
+#[derive(Debug)]
+pub struct ShadowStatusBarState {
     start: std::time::Instant,
     current: EmulatedTime,
     end: EmulatedTime,
@@ -308,16 +310,16 @@ impl ShadowStatusBarState {
     }
 }
 
-enum StatusLogger<T: StatusBarState> {
+enum StatusLogger<T: status_bar::StatusBarState> {
     Printer(StatusPrinter<T>),
     Bar(StatusBar<T>),
 }
 
-impl<T: 'static + StatusBarState> StatusLogger<T> {
-    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+impl<T: 'static + status_bar::StatusBarState> StatusLogger<T> {
+    pub fn status(&self) -> &Arc<status_bar::Status<T>> {
         match self {
-            Self::Printer(x) => x.mutate_state(f),
-            Self::Bar(x) => x.mutate_state(f),
+            Self::Printer(x) => x.status(),
+            Self::Bar(x) => x.status(),
         }
     }
 

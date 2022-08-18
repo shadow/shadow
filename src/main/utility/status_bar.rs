@@ -15,7 +15,7 @@ pub trait StatusBarState: std::fmt::Display + std::marker::Send + std::marker::S
 impl<T> StatusBarState for T where T: std::fmt::Display + std::marker::Send + std::marker::Sync {}
 
 pub struct StatusBar<T: StatusBarState> {
-    state: Arc<RwLock<T>>,
+    state: Arc<Status<T>>,
     stop_flag: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -23,7 +23,7 @@ pub struct StatusBar<T: StatusBarState> {
 impl<T: 'static + StatusBarState> StatusBar<T> {
     /// Create and start drawing the status bar.
     pub fn new(state: T, redraw_interval: Duration) -> Self {
-        let state = Arc::new(RwLock::new(state));
+        let state = Arc::new(Status::new(state));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
         Self {
@@ -35,7 +35,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
         }
     }
 
-    fn redraw_loop(state: Arc<RwLock<T>>, stop_flag: Arc<AtomicBool>, redraw_interval: Duration) {
+    fn redraw_loop(state: Arc<Status<T>>, stop_flag: Arc<AtomicBool>, redraw_interval: Duration) {
         // we re-draw the status bar every interval, even if the state hasn't changed, since the
         // terminal might have been resized and the scroll region might have been reset
         while !stop_flag.load(std::sync::atomic::Ordering::Acquire) {
@@ -65,7 +65,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
                     // Set the scroll region to include all rows but the last.
                     &format!("\u{1B}[1;{}r", rows - 1),
                     // Move to the last row and write the message.
-                    LAST_LINE, &format!("{}", *state.read().unwrap()), CLEAR,
+                    LAST_LINE, &format!("{}", *state.inner.read().unwrap()), CLEAR,
                     // Restore the cursor position.
                     RESTORE_CURSOR,
                 ]
@@ -104,14 +104,13 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
         }
     }
 
-    /// Update the state of the status bar.
-    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
-        f(&mut *self.state.write().unwrap())
+    pub fn status(&self) -> &Arc<Status<T>> {
+        &self.state
     }
 }
 
 pub struct StatusPrinter<T: StatusBarState> {
-    state: Arc<RwLock<T>>,
+    state: Arc<Status<T>>,
     stop_sender: Option<std::sync::mpsc::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -119,7 +118,7 @@ pub struct StatusPrinter<T: StatusBarState> {
 impl<T: 'static + StatusBarState> StatusPrinter<T> {
     /// Create and start printing the status.
     pub fn new(state: T) -> Self {
-        let state = Arc::new(RwLock::new(state));
+        let state = Arc::new(Status::new(state));
         let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
 
         Self {
@@ -131,7 +130,7 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
         }
     }
 
-    fn print_loop(state: Arc<RwLock<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
+    fn print_loop(state: Arc<Status<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
         let print_interval = Duration::from_secs(60);
 
         loop {
@@ -145,7 +144,7 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
             // We want to write everything in as few write() syscalls as possible. Note that
             // if we were to use eprint! with a format string like "{}{}", eprint! would
             // always make at least two write() syscalls, which we wouldn't want.
-            let to_write = format!("Progress: {}\n", *state.read().unwrap());
+            let to_write = format!("Progress: {}\n", *state.inner.read().unwrap());
             std::io::stderr().write_all(to_write.as_bytes()).unwrap();
             let _ = std::io::stderr().flush();
         }
@@ -162,9 +161,30 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
         }
     }
 
-    /// Update the state of the status.
-    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
-        f(&mut *self.state.write().unwrap())
+    pub fn status(&self) -> &Arc<Status<T>> {
+        &self.state
+    }
+}
+
+/// The status bar's internal state.
+#[derive(Debug)]
+pub struct Status<T> {
+    // we wrap an RwLock to hide the implementation details, for example we might want to replace
+    // this with a faster-writing lock in the future
+    inner: RwLock<T>,
+}
+
+impl<T> Status<T> {
+    fn new(inner: T) -> Self {
+        Self {
+            inner: RwLock::new(inner),
+        }
+    }
+
+    /// Update the status bar's internal state. The status will be shown to the user the next time
+    /// that the status bar redraws.
+    pub fn update(&self, f: impl FnOnce(&mut T)) {
+        f(&mut *self.inner.write().unwrap())
     }
 }
 
