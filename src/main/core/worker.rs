@@ -1,6 +1,7 @@
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
+use crate::core::controller::ShadowStatusBarState;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -14,6 +15,7 @@ use crate::host::thread::{CThread, Thread};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
+use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
 
 use std::cell::{Cell, RefCell};
@@ -46,6 +48,8 @@ pub struct WorkerShared {
     pub routing_info: RoutingInfo<u32>,
     pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
     pub dns: SyncSendPointer<cshadow::DNS>,
+    // allows for easy updating of the status bar's state
+    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
 }
 
 impl WorkerShared {
@@ -91,6 +95,13 @@ impl WorkerShared {
 
         // the network graph is required to be a connected graph, so they must be routable
         true
+    }
+
+    /// Update the status logger. If the status logger is disabled, this will be a no-op.
+    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
+        if let Some(ref logger_state) = self.status_logger_state {
+            logger_state.update(f);
+        }
     }
 }
 

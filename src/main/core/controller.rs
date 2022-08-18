@@ -93,6 +93,8 @@ impl<'a> Controller<'a> {
                 // safe since the DNS type has an internal mutex, and since global memory is leaked
                 // we don't ever need to free this
                 dns: unsafe { SyncSendPointer::new(dns) },
+                // allow the status logger's state to be updated from anywhere
+                status_logger_state: self.status_logger.as_ref().map(|x| Arc::clone(x.status())),
             })
             .expect("The global state has already been set during the program's execution");
 
