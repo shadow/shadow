@@ -385,7 +385,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        unsafe { WORKER_SHARED.get().unwrap().dns() }
+        WORKER_SHARED.get().unwrap().dns()
     }
 
     #[no_mangle]
