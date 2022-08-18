@@ -27,9 +27,6 @@ pub struct Controller<'a> {
     // global network connectivity info
     is_runahead_dynamic: bool,
 
-    // logs the status of the simulation
-    status_logger: Option<StatusLogger<ShadowStatusBarState>>,
-
     scheduling_data: RwLock<ControllerScheduling>,
 }
 
@@ -47,22 +44,10 @@ impl<'a> Controller<'a> {
         let smallest_latency =
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
-        let status_logger = config.general.progress.unwrap().then(|| {
-            let state = ShadowStatusBarState::new(end_time);
-
-            if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
-                let redraw_interval = Duration::from_millis(1000);
-                StatusLogger::Bar(StatusBar::new(state, redraw_interval))
-            } else {
-                StatusLogger::Printer(StatusPrinter::new(state))
-            }
-        });
-
         Self {
             is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
             sim_config: Some(sim_config),
-            status_logger,
             scheduling_data: RwLock::new(ControllerScheduling {
                 min_runahead_config,
                 smallest_latency,
@@ -76,6 +61,17 @@ impl<'a> Controller<'a> {
     pub fn run(mut self) -> anyhow::Result<()> {
         let end_time = self.scheduling_data.read().unwrap().end_time;
         let mut sim_config = self.sim_config.take().unwrap();
+
+        let status_logger = self.config.general.progress.unwrap().then(|| {
+            let state = ShadowStatusBarState::new(end_time);
+
+            if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
+                let redraw_interval = Duration::from_millis(1000);
+                StatusLogger::Bar(StatusBar::new(state, redraw_interval))
+            } else {
+                StatusLogger::Printer(StatusPrinter::new(state))
+            }
+        });
 
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
@@ -91,7 +87,7 @@ impl<'a> Controller<'a> {
                 dns: unsafe { SyncSendPointer::new(dns) },
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
-                status_logger_state: self.status_logger.as_ref().map(|x| Arc::clone(x.status())),
+                status_logger_state: status_logger.as_ref().map(|x| Arc::clone(x.status())),
             })
             .expect("The global state has already been set during the program's execution");
 
