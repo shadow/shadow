@@ -115,13 +115,6 @@ impl<'a> Controller<'a> {
     }
 }
 
-impl std::ops::Drop for Controller<'_> {
-    fn drop(&mut self) {
-        // stop and clear the status logger
-        self.status_logger.as_mut().map(|x| x.stop());
-    }
-}
-
 /// Controller methods that are accessed by the manager.
 pub trait SimController {
     fn manager_finished_current_round(
@@ -293,7 +286,7 @@ impl ShadowStatusBarState {
     }
 }
 
-enum StatusLogger<T: status_bar::StatusBarState> {
+enum StatusLogger<T: 'static + status_bar::StatusBarState> {
     Printer(StatusPrinter<T>),
     Bar(StatusBar<T>),
 }
@@ -303,13 +296,6 @@ impl<T: 'static + status_bar::StatusBarState> StatusLogger<T> {
         match self {
             Self::Printer(x) => x.status(),
             Self::Bar(x) => x.status(),
-        }
-    }
-
-    pub fn stop(&mut self) {
-        match self {
-            Self::Printer(x) => x.stop(),
-            Self::Bar(x) => x.stop(),
         }
     }
 }

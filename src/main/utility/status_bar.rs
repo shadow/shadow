@@ -14,7 +14,7 @@ const LAST_LINE: &str = "\u{1B}[9999H";
 pub trait StatusBarState: std::fmt::Display + std::marker::Send + std::marker::Sync {}
 impl<T> StatusBarState for T where T: std::fmt::Display + std::marker::Send + std::marker::Sync {}
 
-pub struct StatusBar<T: StatusBarState> {
+pub struct StatusBar<T: 'static + StatusBarState> {
     state: Arc<Status<T>>,
     stop_flag: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -94,7 +94,17 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
     }
 
     /// Stop and remove the status bar.
-    pub fn stop(&mut self) {
+    pub fn stop(self) {
+        // will be stopped in the drop handler
+    }
+
+    pub fn status(&self) -> &Arc<Status<T>> {
+        &self.state
+    }
+}
+
+impl<T: 'static + StatusBarState> std::ops::Drop for StatusBar<T> {
+    fn drop(&mut self) {
         self.stop_flag
             .swap(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(handle) = self.thread.take() {
@@ -103,13 +113,9 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
             }
         }
     }
-
-    pub fn status(&self) -> &Arc<Status<T>> {
-        &self.state
-    }
 }
 
-pub struct StatusPrinter<T: StatusBarState> {
+pub struct StatusPrinter<T: 'static + StatusBarState> {
     state: Arc<Status<T>>,
     stop_sender: Option<std::sync::mpsc::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -151,7 +157,17 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
     }
 
     /// Stop printing the status.
-    pub fn stop(&mut self) {
+    pub fn stop(self) {
+        // will be stopped in the drop handler
+    }
+
+    pub fn status(&self) -> &Arc<Status<T>> {
+        &self.state
+    }
+}
+
+impl<T: 'static + StatusBarState> std::ops::Drop for StatusPrinter<T> {
+    fn drop(&mut self) {
         // drop the sender to disconnect it
         self.stop_sender.take();
         if let Some(handle) = self.thread.take() {
@@ -159,10 +175,6 @@ impl<T: 'static + StatusBarState> StatusPrinter<T> {
                 log::warn!("Progress thread did not exit cleanly: {:?}", e);
             }
         }
-    }
-
-    pub fn status(&self) -> &Arc<Status<T>> {
-        &self.state
     }
 }
 
