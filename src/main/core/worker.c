@@ -367,8 +367,6 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return controller_getDNS(_worker_pool()->controller); }
-
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
     return dns_resolveIPToAddress(dns, ip);
@@ -508,18 +506,17 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     in_addr_t srcIP = packet_getSourceIP(packet);
     in_addr_t dstIP = packet_getDestinationIP(packet);
 
-    Address* srcAddress = worker_resolveIPToAddress(srcIP);
     Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
-    if (!srcAddress || !dstAddress) {
-        utility_panic("unable to schedule packet because of null addresses");
+    if (!dstAddress) {
+        utility_panic("unable to schedule packet because of null address");
         return;
     }
 
     gboolean bootstrapping = worker_isBootstrapActive();
 
     /* check if network reliability forces us to 'drop' the packet */
-    gdouble reliability = worker_getReliabilityForAddresses(srcAddress, dstAddress);
+    gdouble reliability = worker_getReliability(srcIP, dstIP);
 
     Random* random = host_getRandom(srcHost);
     gdouble chance = random_nextDouble(random);
@@ -528,11 +525,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
      * control has problems responding to packet loss */
     if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
-        SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
+        SimulationTime delay = worker_getLatency(srcIP, dstIP);
         worker_updateMinHostRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
-        worker_incrementPacketCount(srcAddress, dstAddress);
+        worker_incrementPacketCount(srcIP, dstIP);
 
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
@@ -601,40 +598,8 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
-guint32 worker_getNodeBandwidthUpKiBps(in_addr_t ip) {
-    return controller_getBandwidthUpBytes(_worker_pool()->controller, ip) / 1024;
-}
-
-guint32 worker_getNodeBandwidthDownKiBps(in_addr_t ip) {
-    return controller_getBandwidthDownBytes(_worker_pool()->controller, ip) / 1024;
-}
-
 void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
     controller_updateMinRunahead(pool->controller, time);
-}
-
-SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getLatency(_worker_pool()->controller, src, dst);
-}
-
-gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_getReliability(_worker_pool()->controller, src, dst);
-}
-
-bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    return controller_isRoutable(_worker_pool()->controller, src, dst);
-}
-
-void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress) {
-    in_addr_t src = htonl(address_toHostIP(sourceAddress));
-    in_addr_t dst = htonl(address_toHostIP(destinationAddress));
-    controller_incrementPacketCount(_worker_pool()->controller, src, dst);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }

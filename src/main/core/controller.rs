@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -9,27 +8,22 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::manager::Manager;
-use crate::core::sim_config::{Bandwidth, HostInfo, SimConfig};
+use crate::core::sim_config::SimConfig;
 use crate::core::support::configuration::{ConfigOptions, Flatten};
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
+use crate::core::worker;
 use crate::cshadow as c;
-use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::status_bar::{StatusBar, StatusBarState, StatusPrinter};
 use crate::utility::time::TimeParts;
+use crate::utility::SyncSendPointer;
 
 pub struct Controller<'a> {
     // general options and user configuration for the simulation
     config: &'a ConfigOptions,
-
-    // random source from which all node random sources originate
-    random: Xoshiro256PlusPlus,
+    sim_config: Option<SimConfig>,
 
     // global network connectivity info
-    ip_assignment: IpAssignment<u32>,
-    routing_info: RoutingInfo<u32>,
-    host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
-    dns: *mut c::DNS,
     is_runahead_dynamic: bool,
 
     // number of plugins that failed with a non-zero exit code
@@ -38,7 +32,6 @@ pub struct Controller<'a> {
     // logs the status of the simulation
     status_logger: Option<StatusLogger<ShadowStatusBarState>>,
 
-    hosts: Vec<HostInfo>,
     scheduling_data: RwLock<ControllerScheduling>,
 }
 
@@ -52,9 +45,6 @@ impl<'a> Controller<'a> {
         let end_time: Duration = config.general.stop_time.unwrap().into();
         let end_time: SimulationTime = end_time.try_into().unwrap();
         let end_time = EmulatedTime::SIMULATION_START + end_time;
-
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
 
         let smallest_latency =
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
@@ -73,12 +63,7 @@ impl<'a> Controller<'a> {
         Self {
             is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
-            hosts: sim_config.hosts,
-            random: sim_config.random,
-            ip_assignment: sim_config.ip_assignment,
-            routing_info: sim_config.routing_info,
-            host_bandwidths: sim_config.host_bandwidths,
-            dns,
+            sim_config: Some(sim_config),
             num_plugin_errors: AtomicU32::new(0),
             status_logger,
             scheduling_data: RwLock::new(ControllerScheduling {
@@ -93,9 +78,25 @@ impl<'a> Controller<'a> {
 
     pub fn run(mut self) -> anyhow::Result<()> {
         let end_time = self.scheduling_data.read().unwrap().end_time;
+        let mut sim_config = self.sim_config.take().unwrap();
 
-        let manager_hosts = std::mem::take(&mut self.hosts);
-        let manager_rand = Xoshiro256PlusPlus::seed_from_u64(self.random.gen());
+        let dns = unsafe { c::dns_new() };
+        assert!(!dns.is_null());
+
+        // set the simulation's global state
+        worker::WORKER_SHARED
+            .set(worker::WorkerShared {
+                ip_assignment: sim_config.ip_assignment,
+                routing_info: sim_config.routing_info,
+                host_bandwidths: sim_config.host_bandwidths,
+                // safe since the DNS type has an internal mutex, and since global memory is leaked
+                // we don't ever need to free this
+                dns: unsafe { SyncSendPointer::new(dns) },
+            })
+            .expect("The global state has already been set during the program's execution");
+
+        let manager_hosts = std::mem::take(&mut sim_config.hosts);
+        let manager_rand = Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen());
         let manager = Manager::new(&self, self.config, manager_hosts, end_time, manager_rand)
             .context("Failed to initialize the manager")?;
 
@@ -118,9 +119,6 @@ impl<'a> Controller<'a> {
 
 impl std::ops::Drop for Controller<'_> {
     fn drop(&mut self) {
-        unsafe { c::dns_free(self.dns) };
-        self.dns = std::ptr::null_mut();
-
         // stop and clear the status logger
         self.status_logger.as_mut().map(|x| x.stop());
     }
@@ -128,12 +126,6 @@ impl std::ops::Drop for Controller<'_> {
 
 /// Controller methods that are accessed by the manager.
 pub trait SimController {
-    unsafe fn get_dns(&self) -> *mut c::DNS;
-    fn get_latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime>;
-    fn get_reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32>;
-    fn get_bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth>;
-    fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr);
-    fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool;
     fn manager_finished_current_round(
         &self,
         min_next_event_time: EmulatedTime,
@@ -143,50 +135,6 @@ pub trait SimController {
 }
 
 impl SimController for Controller<'_> {
-    unsafe fn get_dns(&self) -> *mut c::DNS {
-        self.dns
-    }
-
-    fn get_latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(SimulationTime::from_nanos(
-            self.routing_info.path(src, dst)?.latency_ns,
-        ))
-    }
-
-    fn get_reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
-    }
-
-    fn get_bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
-        self.host_bandwidths.get(&ip)
-    }
-
-    fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
-        let src = self.ip_assignment.get_node(src).unwrap();
-        let dst = self.ip_assignment.get_node(dst).unwrap();
-
-        self.routing_info.increment_packet_count(src, dst)
-    }
-
-    fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
-        if self.ip_assignment.get_node(src).is_none() {
-            return false;
-        }
-
-        if self.ip_assignment.get_node(dst).is_none() {
-            return false;
-        }
-
-        // the network graph is required to be a connected graph, so they must be routable
-        true
-    }
-
     fn manager_finished_current_round(
         &self,
         min_next_event_time: EmulatedTime,
@@ -383,86 +331,6 @@ impl<T: 'static + StatusBarState> StatusLogger<T> {
 
 mod export {
     use super::*;
-
-    #[no_mangle]
-    pub extern "C" fn controller_getDNS(controller: *const Controller) -> *mut c::DNS {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        unsafe { controller.get_dns() }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_getLatency(
-        controller: *const Controller,
-        src: libc::in_addr_t,
-        dst: libc::in_addr_t,
-    ) -> c::SimulationTime {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        SimulationTime::to_c_simtime(controller.get_latency(src, dst))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_getReliability(
-        controller: *const Controller,
-        src: libc::in_addr_t,
-        dst: libc::in_addr_t,
-    ) -> libc::c_float {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        controller.get_reliability(src, dst).unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_getBandwidthDownBytes(
-        controller: *const Controller,
-        ip: libc::in_addr_t,
-    ) -> u64 {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-
-        controller.get_bandwidth(ip).unwrap().down_bytes
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_getBandwidthUpBytes(
-        controller: *const Controller,
-        ip: libc::in_addr_t,
-    ) -> u64 {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-
-        controller.get_bandwidth(ip).unwrap().up_bytes
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_incrementPacketCount(
-        controller: *const Controller,
-        src: libc::in_addr_t,
-        dst: libc::in_addr_t,
-    ) {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        controller.increment_packet_count(src, dst)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_isRoutable(
-        controller: *const Controller,
-        src: libc::in_addr_t,
-        dst: libc::in_addr_t,
-    ) -> bool {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        controller.is_routable(src, dst)
-    }
 
     #[no_mangle]
     pub extern "C" fn controller_managerFinishedCurrentRound(

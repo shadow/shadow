@@ -3030,9 +3030,6 @@ extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_getDNS() -> *mut DNS;
-}
-extern "C" {
     pub fn worker_getChildPidWatcher() -> *const ChildPidWatcher;
 }
 extern "C" {
@@ -3071,35 +3068,7 @@ extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
 }
 extern "C" {
-    pub fn worker_getNodeBandwidthUpKiBps(ip: in_addr_t) -> guint32;
-}
-extern "C" {
-    pub fn worker_getNodeBandwidthDownKiBps(ip: in_addr_t) -> guint32;
-}
-extern "C" {
     pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);
-}
-extern "C" {
-    pub fn worker_getLatencyForAddresses(
-        sourceAddress: *mut Address,
-        destinationAddress: *mut Address,
-    ) -> SimulationTime;
-}
-extern "C" {
-    pub fn worker_getReliabilityForAddresses(
-        sourceAddress: *mut Address,
-        destinationAddress: *mut Address,
-    ) -> gdouble;
-}
-extern "C" {
-    pub fn worker_isRoutable(sourceAddress: *mut Address, destinationAddress: *mut Address)
-        -> bool;
-}
-extern "C" {
-    pub fn worker_incrementPacketCount(
-        sourceAddress: *mut Address,
-        destinationAddress: *mut Address,
-    );
 }
 extern "C" {
     pub fn worker_clearCurrentTime();

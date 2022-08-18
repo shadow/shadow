@@ -371,7 +371,7 @@ impl<'a> Manager<'a> {
             unsafe {
                 c::host_setup(
                     c_host,
-                    self.controller.get_dns(),
+                    worker::WORKER_SHARED.get().unwrap().dns(),
                     self.raw_frequency_khz,
                     hosts_path.as_ptr(),
                 )

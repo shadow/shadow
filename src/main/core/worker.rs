@@ -1,7 +1,7 @@
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
-use once_cell::unsync::OnceCell;
 
+use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow;
@@ -11,20 +11,88 @@ use crate::host::process::Process;
 use crate::host::process::ProcessId;
 use crate::host::thread::ThreadId;
 use crate::host::thread::{CThread, Thread};
+use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
+use crate::utility::SyncSendPointer;
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
-// counters to be used when there is no worker active
+// global counters to be used when there is no worker active
 static ALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
 static SYSCALL_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
+
+// thread-local global state
+std::thread_local! {
+    // Initialized when the worker thread starts running. No shared ownership
+    // or access from outside of the current thread.
+    static WORKER: once_cell::unsync::OnceCell<RefCell<Worker>> = once_cell::unsync::OnceCell::new();
+}
+
+// shared global state
+pub static WORKER_SHARED: once_cell::sync::OnceCell<WorkerShared> =
+    once_cell::sync::OnceCell::new();
+
+#[derive(Debug)]
+pub struct WorkerShared {
+    pub ip_assignment: IpAssignment<u32>,
+    pub routing_info: RoutingInfo<u32>,
+    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
+    pub dns: SyncSendPointer<cshadow::DNS>,
+}
+
+impl WorkerShared {
+    pub fn dns(&self) -> *mut cshadow::DNS {
+        self.dns.ptr()
+    }
+
+    pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(SimulationTime::from_nanos(
+            self.routing_info.path(src, dst)?.latency_ns,
+        ))
+    }
+
+    pub fn reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
+    }
+
+    pub fn bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
+        self.host_bandwidths.get(&ip)
+    }
+
+    pub fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
+        let src = self.ip_assignment.get_node(src).unwrap();
+        let dst = self.ip_assignment.get_node(dst).unwrap();
+
+        self.routing_info.increment_packet_count(src, dst)
+    }
+
+    pub fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
+        if self.ip_assignment.get_node(src).is_none() {
+            return false;
+        }
+
+        if self.ip_assignment.get_node(dst).is_none() {
+            return false;
+        }
+
+        // the network graph is required to be a connected graph, so they must be routable
+        true
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -75,12 +143,6 @@ pub struct Worker {
     object_dealloc_counter: Counter,
 
     worker_pool: *mut cshadow::WorkerPool,
-}
-
-std::thread_local! {
-    // Initialized when the worker thread starts running. No shared ownership
-    // or access from outside of the current thread.
-    static WORKER: OnceCell<RefCell<Worker>> = OnceCell::new();
 }
 
 impl Worker {
@@ -320,6 +382,69 @@ pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -
 
 mod export {
     use super::*;
+
+    #[no_mangle]
+    pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
+        unsafe { WORKER_SHARED.get().unwrap().dns() }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getLatency(
+        src: libc::in_addr_t,
+        dst: libc::in_addr_t,
+    ) -> cshadow::SimulationTime {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+
+        SimulationTime::to_c_simtime(WORKER_SHARED.get().unwrap().latency(src, dst))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getReliability(
+        src: libc::in_addr_t,
+        dst: libc::in_addr_t,
+    ) -> libc::c_float {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+
+        WORKER_SHARED.get().unwrap().reliability(src, dst).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+        WORKER_SHARED
+            .get()
+            .unwrap()
+            .bandwidth(ip)
+            .unwrap()
+            .down_bytes
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
+        let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
+        WORKER_SHARED.get().unwrap().bandwidth(ip).unwrap().up_bytes
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_isRoutable(src: libc::in_addr_t, dst: libc::in_addr_t) -> bool {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+
+        WORKER_SHARED.get().unwrap().is_routable(src, dst)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_incrementPacketCount(src: libc::in_addr_t, dst: libc::in_addr_t) {
+        let src = std::net::IpAddr::V4(u32::from_be(src).into());
+        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
+
+        WORKER_SHARED
+            .get()
+            .unwrap()
+            .increment_packet_count(src, dst)
+    }
 
     /// Initialize a Worker for this thread.
     #[no_mangle]

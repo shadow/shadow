@@ -294,24 +294,6 @@ char *backtrace(void);
 
 void backtrace_free(char *backtrace);
 
-DNS *controller_getDNS(const struct Controller *controller);
-
-SimulationTime controller_getLatency(const struct Controller *controller,
-                                     in_addr_t src,
-                                     in_addr_t dst);
-
-float controller_getReliability(const struct Controller *controller, in_addr_t src, in_addr_t dst);
-
-uint64_t controller_getBandwidthDownBytes(const struct Controller *controller, in_addr_t ip);
-
-uint64_t controller_getBandwidthUpBytes(const struct Controller *controller, in_addr_t ip);
-
-void controller_incrementPacketCount(const struct Controller *controller,
-                                     in_addr_t src,
-                                     in_addr_t dst);
-
-bool controller_isRoutable(const struct Controller *controller, in_addr_t src, in_addr_t dst);
-
 bool controller_managerFinishedCurrentRound(const struct Controller *controller,
                                             SimulationTime min_next_event_time,
                                             SimulationTime *execute_window_start,
@@ -523,6 +505,20 @@ struct TaskRef *taskref_new_unbound(TaskCallbackFunc callback,
 //
 // SAFETY: `task` must be legally dereferencable.
 void taskref_drop(struct TaskRef *task);
+
+DNS *worker_getDNS(void);
+
+SimulationTime worker_getLatency(in_addr_t src, in_addr_t dst);
+
+float worker_getReliability(in_addr_t src, in_addr_t dst);
+
+uint64_t worker_getBandwidthDownBytes(in_addr_t ip);
+
+uint64_t worker_getBandwidthUpBytes(in_addr_t ip);
+
+bool worker_isRoutable(in_addr_t src, in_addr_t dst);
+
+void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
