@@ -603,5 +603,3 @@ void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
-
-void worker_incrementPluginError() { controller_incrementPluginErrors(_worker_pool()->controller); }

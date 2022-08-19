@@ -241,6 +241,15 @@ impl<'a> Manager<'a> {
                 // release the workers and run next round
                 scheduler.continue_next_round(window_start, window_end);
 
+                // update the status logger
+                let display_time = std::cmp::min(window_start, window_end);
+                worker::WORKER_SHARED
+                    .get()
+                    .unwrap()
+                    .update_status_logger(|state| {
+                        state.current = display_time;
+                    });
+
                 // log a heartbeat message every 'heartbeat_interval' amount of simulated time
                 if let Some(heartbeat_interval) = heartbeat_interval {
                     if window_start > last_heartbeat + heartbeat_interval {
@@ -275,6 +284,14 @@ impl<'a> Manager<'a> {
                     .manager_finished_current_round(min_next_event_time);
             }
         }
+
+        // simulation is finished, so update the status logger
+        worker::WORKER_SHARED
+            .get()
+            .unwrap()
+            .update_status_logger(|state| {
+                state.current = self.end_time;
+            });
 
         // since the scheduler was dropped, all workers should have completed and the global object
         // and syscall counters should have been updated

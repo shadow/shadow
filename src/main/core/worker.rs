@@ -1,6 +1,7 @@
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
+use crate::core::controller::ShadowStatusBarState;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -14,11 +15,13 @@ use crate::host::thread::{CThread, Thread};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
+use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -46,6 +49,10 @@ pub struct WorkerShared {
     pub routing_info: RoutingInfo<u32>,
     pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
     pub dns: SyncSendPointer<cshadow::DNS>,
+    // allows for easy updating of the status bar's state
+    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
+    // number of plugins that failed with a non-zero exit code
+    pub num_plugin_errors: AtomicU32,
 }
 
 impl WorkerShared {
@@ -91,6 +98,30 @@ impl WorkerShared {
 
         // the network graph is required to be a connected graph, so they must be routable
         true
+    }
+
+    pub fn increment_plugin_error_count(&self) {
+        let old_count = self
+            .num_plugin_errors
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        self.update_status_logger(|state| {
+            // there is a race condition here, so use the max
+            let new_value = old_count + 1;
+            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
+        });
+    }
+
+    pub fn plugin_error_count(&self) -> u32 {
+        self.num_plugin_errors
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Update the status logger. If the status logger is disabled, this will be a no-op.
+    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
+        if let Some(ref logger_state) = self.status_logger_state {
+            logger_state.update(f);
+        }
     }
 }
 
@@ -444,6 +475,11 @@ mod export {
             .get()
             .unwrap()
             .increment_packet_count(src, dst)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_incrementPluginErrors() {
+        WORKER_SHARED.get().unwrap().increment_plugin_error_count();
     }
 
     /// Initialize a Worker for this thread.

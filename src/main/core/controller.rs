@@ -1,4 +1,5 @@
 use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -14,7 +15,7 @@ use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::utility::status_bar::{StatusBar, StatusBarState, StatusPrinter};
+use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
 use crate::utility::time::TimeParts;
 use crate::utility::SyncSendPointer;
 
@@ -25,12 +26,6 @@ pub struct Controller<'a> {
 
     // global network connectivity info
     is_runahead_dynamic: bool,
-
-    // number of plugins that failed with a non-zero exit code
-    num_plugin_errors: AtomicU32,
-
-    // logs the status of the simulation
-    status_logger: Option<StatusLogger<ShadowStatusBarState>>,
 
     scheduling_data: RwLock<ControllerScheduling>,
 }
@@ -49,23 +44,10 @@ impl<'a> Controller<'a> {
         let smallest_latency =
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
-        let status_logger = config.general.progress.unwrap().then(|| {
-            let state = ShadowStatusBarState::new(end_time);
-
-            if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
-                let redraw_interval = Duration::from_millis(1000);
-                StatusLogger::Bar(StatusBar::new(state, redraw_interval))
-            } else {
-                StatusLogger::Printer(StatusPrinter::new(state))
-            }
-        });
-
         Self {
             is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
             sim_config: Some(sim_config),
-            num_plugin_errors: AtomicU32::new(0),
-            status_logger,
             scheduling_data: RwLock::new(ControllerScheduling {
                 min_runahead_config,
                 smallest_latency,
@@ -80,6 +62,17 @@ impl<'a> Controller<'a> {
         let end_time = self.scheduling_data.read().unwrap().end_time;
         let mut sim_config = self.sim_config.take().unwrap();
 
+        let status_logger = self.config.general.progress.unwrap().then(|| {
+            let state = ShadowStatusBarState::new(end_time);
+
+            if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
+                let redraw_interval = Duration::from_millis(1000);
+                StatusLogger::Bar(StatusBar::new(state, redraw_interval))
+            } else {
+                StatusLogger::Printer(StatusPrinter::new(state))
+            }
+        });
+
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
 
@@ -92,6 +85,9 @@ impl<'a> Controller<'a> {
                 // safe since the DNS type has an internal mutex, and since global memory is leaked
                 // we don't ever need to free this
                 dns: unsafe { SyncSendPointer::new(dns) },
+                num_plugin_errors: AtomicU32::new(0),
+                // allow the status logger's state to be updated from anywhere
+                status_logger_state: status_logger.as_ref().map(|x| Arc::clone(x.status())),
             })
             .expect("The global state has already been set during the program's execution");
 
@@ -104,9 +100,7 @@ impl<'a> Controller<'a> {
         manager.run()?;
         log::info!("Finished simulation");
 
-        let num_plugin_errors = self
-            .num_plugin_errors
-            .load(std::sync::atomic::Ordering::SeqCst);
+        let num_plugin_errors = worker::WORKER_SHARED.get().unwrap().plugin_error_count();
         if num_plugin_errors > 0 {
             return Err(anyhow::anyhow!(
                 "{num_plugin_errors} managed processes exited with a non-zero error code"
@@ -117,13 +111,6 @@ impl<'a> Controller<'a> {
     }
 }
 
-impl std::ops::Drop for Controller<'_> {
-    fn drop(&mut self) {
-        // stop and clear the status logger
-        self.status_logger.as_mut().map(|x| x.stop());
-    }
-}
-
 /// Controller methods that are accessed by the manager.
 pub trait SimController {
     fn manager_finished_current_round(
@@ -131,7 +118,6 @@ pub trait SimController {
         min_next_event_time: EmulatedTime,
     ) -> Option<(EmulatedTime, EmulatedTime)>;
     fn update_min_runahead(&self, min_path_latency: SimulationTime);
-    fn increment_plugin_errors(&self);
 }
 
 impl SimController for Controller<'_> {
@@ -144,14 +130,6 @@ impl SimController for Controller<'_> {
 
         let scheduling_data = self.scheduling_data.read().unwrap();
         let (new_start, new_end) = scheduling_data.next_interval_window(min_next_event_time);
-
-        // update the status logger
-        let display_time = std::cmp::min(new_start, new_end);
-        if let Some(status_logger) = &self.status_logger {
-            status_logger.mutate_state(|state| {
-                state.current = display_time;
-            });
-        };
 
         let continue_running = new_start < new_end;
         continue_running.then(|| (new_start, new_end))
@@ -213,20 +191,6 @@ impl SimController for Controller<'_> {
             min_runahead_config.map(|x| x.as_nanos())
         );
     }
-
-    fn increment_plugin_errors(&self) {
-        let old_count = self
-            .num_plugin_errors
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        if let Some(status_logger) = &self.status_logger {
-            status_logger.mutate_state(|state| {
-                // there is a race condition here, so use the max
-                let new_value = old_count + 1;
-                state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
-            });
-        }
-    }
 }
 
 // the min runahead time is updated by workers, so needs to be locked
@@ -268,11 +232,12 @@ impl ControllerScheduling {
     }
 }
 
-struct ShadowStatusBarState {
+#[derive(Debug)]
+pub struct ShadowStatusBarState {
     start: std::time::Instant,
-    current: EmulatedTime,
+    pub current: EmulatedTime,
     end: EmulatedTime,
-    num_failed_processes: u32,
+    pub num_failed_processes: u32,
 }
 
 impl std::fmt::Display for ShadowStatusBarState {
@@ -289,7 +254,7 @@ impl std::fmt::Display for ShadowStatusBarState {
             f,
             "{}% — simulated: {}/{}, realtime: {}, processes failed: {}",
             (frac * 100.0).round() as i8,
-            sim_current.fmt_hr_min_sec(),
+            sim_current.fmt_hr_min_sec_milli(),
             sim_end.fmt_hr_min_sec(),
             realtime.fmt_hr_min_sec(),
             self.num_failed_processes,
@@ -308,23 +273,16 @@ impl ShadowStatusBarState {
     }
 }
 
-enum StatusLogger<T: StatusBarState> {
+enum StatusLogger<T: 'static + status_bar::StatusBarState> {
     Printer(StatusPrinter<T>),
     Bar(StatusBar<T>),
 }
 
-impl<T: 'static + StatusBarState> StatusLogger<T> {
-    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+impl<T: 'static + status_bar::StatusBarState> StatusLogger<T> {
+    pub fn status(&self) -> &Arc<status_bar::Status<T>> {
         match self {
-            Self::Printer(x) => x.mutate_state(f),
-            Self::Bar(x) => x.mutate_state(f),
-        }
-    }
-
-    pub fn stop(&mut self) {
-        match self {
-            Self::Printer(x) => x.stop(),
-            Self::Bar(x) => x.stop(),
+            Self::Printer(x) => x.status(),
+            Self::Bar(x) => x.status(),
         }
     }
 }
@@ -341,11 +299,5 @@ mod export {
         let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
 
         controller.update_min_runahead(min_path_latency);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn controller_incrementPluginErrors(controller: *const Controller) {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        controller.increment_plugin_errors();
     }
 }

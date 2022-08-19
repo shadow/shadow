@@ -297,8 +297,6 @@ void backtrace_free(char *backtrace);
 void controller_updateMinRunahead(const struct Controller *controller,
                                   SimulationTime min_path_latency);
 
-void controller_incrementPluginErrors(const struct Controller *controller);
-
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
 
@@ -514,6 +512,8 @@ uint64_t worker_getBandwidthUpBytes(in_addr_t ip);
 bool worker_isRoutable(in_addr_t src, in_addr_t dst);
 
 void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
+
+void worker_incrementPluginErrors(void);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,

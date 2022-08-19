@@ -99,8 +99,6 @@ gboolean worker_isFiltered(LogLevel level);
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);
 
-void worker_incrementPluginError();
-
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
 
