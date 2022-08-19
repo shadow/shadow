@@ -17,7 +17,6 @@ set(SHIM_HELPER_FILES
   shadow_sem.c
   shadow_spinlock.c
   shadow_signals.c
-  shim_event.c
   shim_shmem.c
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
