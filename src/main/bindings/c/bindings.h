@@ -294,11 +294,6 @@ char *backtrace(void);
 
 void backtrace_free(char *backtrace);
 
-bool controller_managerFinishedCurrentRound(const struct Controller *controller,
-                                            SimulationTime min_next_event_time,
-                                            SimulationTime *execute_window_start,
-                                            SimulationTime *execute_window_end);
-
 void controller_updateMinRunahead(const struct Controller *controller,
                                   SimulationTime min_path_latency);
 
