@@ -131,15 +131,6 @@ impl SimController for Controller<'_> {
         let scheduling_data = self.scheduling_data.read().unwrap();
         let (new_start, new_end) = scheduling_data.next_interval_window(min_next_event_time);
 
-        // update the status logger
-        let display_time = std::cmp::min(new_start, new_end);
-        worker::WORKER_SHARED
-            .get()
-            .unwrap()
-            .update_status_logger(|state| {
-                state.current = display_time;
-            });
-
         let continue_running = new_start < new_end;
         continue_running.then(|| (new_start, new_end))
     }
