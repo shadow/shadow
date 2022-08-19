@@ -762,9 +762,19 @@ dependencies = [
  "schemars",
  "serde",
  "serde_yaml",
+ "shadow-shim-helper-rs",
  "syscall-logger",
  "tempfile",
  "vsprintf",
+]
+
+[[package]]
+name = "shadow-shim-helper-rs"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "nix",
 ]
 
 [[package]]

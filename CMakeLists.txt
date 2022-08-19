@@ -212,6 +212,21 @@ if(SHADOW_TEST STREQUAL ON)
     enable_testing()
 endif(SHADOW_TEST STREQUAL ON)
 
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
+    message(STATUS "Building Rust library in debug mode.")
+    set(RUST_BUILD_TYPE "debug")
+    set(RUST_BUILD_FLAG "")
+else()
+    message(STATUS "Building Rust library in release mode.")
+    set(RUST_BUILD_TYPE "release")
+    set(RUST_BUILD_FLAG "--release")
+endif()
+
+if(SHADOW_COVERAGE STREQUAL ON)
+    # https://github.com/shadow/shadow/issues/1236
+    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
+endif()
+
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 

@@ -127,7 +127,8 @@ set(shadow_srcs
     utility/utility.c
 )
 add_library(shadow-c STATIC ${shadow_srcs})
-target_link_libraries(shadow-c INTERFACE
+target_link_libraries(shadow-c
+   INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    PkgConfig::GLIB
    shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
@@ -150,17 +151,20 @@ while(NOT "${LIBS_TO_PROCESS}" STREQUAL "")
     else()
         get_target_property(TYPE ${INTERFACE_LINK_LIBRARY} TYPE)
 
-        get_target_property(IMPORTED ${INTERFACE_LINK_LIBRARY} IMPORTED)
-        if ("${IMPORTED}" STREQUAL "FALSE")
-            list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
-        endif()
+        list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
 
         if ("${TYPE}" STREQUAL "STATIC_LIBRARY")
-            get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
-            set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
-
-            get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
-            set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
+            string(TOUPPER "${CMAKE_BUILD_TYPE}" UPPER_BUILD_TYPE)
+            get_target_property(IMPORTED_LOCATION ${INTERFACE_LINK_LIBRARY} IMPORTED_LOCATION_${UPPER_BUILD_TYPE})
+            if (IMPORTED_LOCATION MATCHES "(.*)/lib(.*)\.a")
+                set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_MATCH_1}")
+                set(RUSTFLAGS "${RUSTFLAGS} -l${CMAKE_MATCH_2}")
+            else()
+                get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
+                set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
+                get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
+                set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
+            endif()
         elseif("${TYPE}" STREQUAL "INTERFACE_LIBRARY")
             # Nothing to do for the target itself, but we'll recurse
             # into its dependencies below.

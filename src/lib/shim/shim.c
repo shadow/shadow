@@ -22,7 +22,6 @@
 #include "lib/shim/ipc.h"
 #include "lib/shim/patch_vdso.h"
 #include "lib/shim/shadow_sem.h"
-#include "lib/shim/shadow_signals.h"
 #include "lib/shim/shadow_spinlock.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"

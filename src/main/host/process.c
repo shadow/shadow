@@ -1269,9 +1269,9 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(process->host), process_getSharedMem(process), siginfo->si_signo);
-    if (action.ksa_handler == SIG_IGN ||
-        (action.ksa_handler == SIG_DFL &&
-         shd_defaultAction(siginfo->si_signo) == SHD_DEFAULT_ACTION_IGN)) {
+    if (action.u.ksa_handler == SIG_IGN ||
+        (action.u.ksa_handler == SIG_DFL &&
+         shd_defaultAction(siginfo->si_signo) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
         // Don't deliver an ignored signal.
         return;
     }

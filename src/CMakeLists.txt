@@ -32,6 +32,7 @@ endif(SHADOW_TEST STREQUAL ON)
 add_custom_target(bindings)
 add_dependencies(bindings bindings_main)
 add_dependencies(bindings bindings_logger)
+add_dependencies(bindings bindings_shim_helper)
 
 # Only re-generate bindings when explicititly requested, so that
 # our CI doesn't need to install the heavy bindgen dependency.

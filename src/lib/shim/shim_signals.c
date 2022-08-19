@@ -1,5 +1,6 @@
 #include "lib/shim/shim_signals.h"
 
+#include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 
 #include <ucontext.h>
@@ -8,9 +9,9 @@ static void _call_signal_handler(const struct shd_kernel_sigaction* action, int 
                                  siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
     if (action->ksa_flags & SA_SIGINFO) {
-        action->ksa_sigaction(signo, siginfo, ucontext);
+        action->u.ksa_sigaction(signo, siginfo, ucontext);
     } else {
-        action->ksa_handler(signo);
+        action->u.ksa_handler(signo);
     }
     shim_swapAllowNativeSyscalls(true);
 }
@@ -41,24 +42,24 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         struct shd_kernel_sigaction action =
             shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
 
-        if (action.ksa_handler == SIG_IGN) {
+        if (action.u.ksa_handler == SIG_IGN) {
             continue;
         }
 
-        if (action.ksa_handler == SIG_DFL) {
+        if (action.u.ksa_handler == SIG_DFL) {
             switch (shd_defaultAction(signo)) {
-                case SHD_DEFAULT_ACTION_IGN:
+                case SHD_KERNEL_DEFAULT_ACTION_IGN:
                     // Ignore
                     continue;
-                case SHD_DEFAULT_ACTION_CORE:
-                case SHD_DEFAULT_ACTION_TERM: {
+                case SHD_KERNEL_DEFAULT_ACTION_CORE:
+                case SHD_KERNEL_DEFAULT_ACTION_TERM: {
                     // Deliver natively to terminate/drop core.
                     shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
                     _die_with_fatal_signal(signo);
                     panic("Unreachable");
                 }
-                case SHD_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
-                case SHD_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
+                case SHD_KERNEL_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
+                case SHD_KERNEL_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
             };
             panic("Unreachable");
         }
@@ -74,7 +75,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         if (action.ksa_flags & SA_RESETHAND) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
+                                      &(struct shd_kernel_sigaction){.u.ksa_handler = SIG_DFL});
         }
         if (!(action.ksa_flags & SA_RESTART)) {
             restartable = false;
