@@ -333,33 +333,6 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn controller_managerFinishedCurrentRound(
-        controller: *const Controller,
-        min_next_event_time: c::SimulationTime,
-        execute_window_start: *mut c::SimulationTime,
-        execute_window_end: *mut c::SimulationTime,
-    ) -> bool {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let execute_window_start = unsafe { execute_window_start.as_mut() }.unwrap();
-        let execute_window_end = unsafe { execute_window_end.as_mut() }.unwrap();
-
-        let min_next_event_time = SimulationTime::from_c_simtime(min_next_event_time).unwrap();
-        let min_next_event_time = EmulatedTime::from_abs_simtime(min_next_event_time);
-
-        let (start, end) = match controller.manager_finished_current_round(min_next_event_time) {
-            Some(x) => x,
-            None => return false,
-        };
-
-        let start = EmulatedTime::to_abs_simtime(start);
-        let end = EmulatedTime::to_abs_simtime(end);
-
-        *execute_window_start = SimulationTime::to_c_simtime(Some(start));
-        *execute_window_end = SimulationTime::to_c_simtime(Some(end));
-        true
-    }
-
-    #[no_mangle]
     pub extern "C" fn controller_updateMinRunahead(
         controller: *const Controller,
         min_path_latency: c::SimulationTime,
