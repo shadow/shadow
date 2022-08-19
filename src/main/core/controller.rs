@@ -1,6 +1,5 @@
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -9,6 +8,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::manager::Manager;
+use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::SimConfig;
 use crate::core::support::configuration::{ConfigOptions, Flatten};
 use crate::core::support::emulated_time::EmulatedTime;
@@ -24,10 +24,11 @@ pub struct Controller<'a> {
     config: &'a ConfigOptions,
     sim_config: Option<SimConfig>,
 
-    // global network connectivity info
-    is_runahead_dynamic: bool,
+    // calculates the runahead for the next simulation round
+    runahead: Runahead,
 
-    scheduling_data: RwLock<ControllerScheduling>,
+    // the simulator should attempt to end immediately after this time
+    end_time: EmulatedTime,
 }
 
 impl<'a> Controller<'a> {
@@ -45,25 +46,22 @@ impl<'a> Controller<'a> {
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
         Self {
-            is_runahead_dynamic: config.experimental.use_dynamic_runahead.unwrap(),
             config,
             sim_config: Some(sim_config),
-            scheduling_data: RwLock::new(ControllerScheduling {
-                min_runahead_config,
+            runahead: Runahead::new(
+                config.experimental.use_dynamic_runahead.unwrap(),
                 smallest_latency,
-                // we don't know the min runahead yet
-                min_runahead: None,
-                end_time,
-            }),
+                min_runahead_config,
+            ),
+            end_time,
         }
     }
 
     pub fn run(mut self) -> anyhow::Result<()> {
-        let end_time = self.scheduling_data.read().unwrap().end_time;
         let mut sim_config = self.sim_config.take().unwrap();
 
         let status_logger = self.config.general.progress.unwrap().then(|| {
-            let state = ShadowStatusBarState::new(end_time);
+            let state = ShadowStatusBarState::new(self.end_time);
 
             if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
                 let redraw_interval = Duration::from_millis(1000);
@@ -93,8 +91,14 @@ impl<'a> Controller<'a> {
 
         let manager_hosts = std::mem::take(&mut sim_config.hosts);
         let manager_rand = Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen());
-        let manager = Manager::new(&self, self.config, manager_hosts, end_time, manager_rand)
-            .context("Failed to initialize the manager")?;
+        let manager = Manager::new(
+            &self,
+            self.config,
+            manager_hosts,
+            self.end_time,
+            manager_rand,
+        )
+        .context("Failed to initialize the manager")?;
 
         log::info!("Running simulation");
         manager.run()?;
@@ -128,107 +132,22 @@ impl SimController for Controller<'_> {
         // TODO: once we get multiple managers, we have to block them here until they have all
         // notified us that they are finished
 
-        let scheduling_data = self.scheduling_data.read().unwrap();
-        let (new_start, new_end) = scheduling_data.next_interval_window(min_next_event_time);
+        let runahead = self.runahead.get();
+        assert_ne!(runahead, SimulationTime::ZERO);
+
+        let new_start = min_next_event_time;
+
+        // update the new window end as one interval past the new window start, making sure we don't
+        // run over the experiment end time
+        let new_end = new_start.checked_add(runahead).unwrap_or(EmulatedTime::MAX);
+        let new_end = std::cmp::min(new_end, self.end_time);
 
         let continue_running = new_start < new_end;
         continue_running.then(|| (new_start, new_end))
     }
 
     fn update_min_runahead(&self, min_path_latency: SimulationTime) {
-        assert!(min_path_latency > SimulationTime::ZERO);
-
-        // if dynamic runahead is disabled, we don't update 'min_runahead'
-        if !self.is_runahead_dynamic {
-            return;
-        }
-
-        // helper function for checking if we should update the min_runahead
-        let should_update = |scheduling_data: &ControllerScheduling| {
-            if let Some(min_runahead) = scheduling_data.min_runahead {
-                if min_path_latency >= min_runahead {
-                    return false;
-                }
-            }
-            // true if runahead was never set before, or new latency is smaller than the old latency
-            true
-        };
-
-        // an initial check with only a read lock
-        {
-            let scheduling_data = self.scheduling_data.read().unwrap();
-
-            if !should_update(&scheduling_data) {
-                return;
-            }
-        }
-
-        let old_runahead;
-        let min_runahead_config;
-
-        // check the same condition again, but with a write lock
-        {
-            let mut scheduling_data = self.scheduling_data.write().unwrap();
-
-            if !should_update(&scheduling_data) {
-                return;
-            }
-
-            // cache the values for logging
-            old_runahead = scheduling_data.min_runahead;
-            min_runahead_config = scheduling_data.min_runahead_config;
-
-            // update the min runahead
-            scheduling_data.min_runahead = Some(min_path_latency);
-        }
-
-        // these info messages may appear out-of-order in the log
-        log::info!(
-            "Minimum time runahead for next scheduling round updated from {:?} \
-             to {} ns; the minimum config override is {:?} ns",
-            old_runahead.map(|x| x.as_nanos()),
-            min_path_latency.as_nanos(),
-            min_runahead_config.map(|x| x.as_nanos())
-        );
-    }
-}
-
-// the min runahead time is updated by workers, so needs to be locked
-struct ControllerScheduling {
-    // minimum allowed runahead when sending events between nodes
-    min_runahead_config: Option<SimulationTime>,
-    smallest_latency: SimulationTime,
-    // minimum allowed runahead when sending events between nodes
-    min_runahead: Option<SimulationTime>,
-    // the simulator should attempt to end immediately after this time
-    end_time: EmulatedTime,
-}
-
-impl ControllerScheduling {
-    fn next_interval_window(
-        &self,
-        min_next_event_time: EmulatedTime,
-    ) -> (EmulatedTime, EmulatedTime) {
-        // If the min_runahead is None, we haven't yet been given a latency value to base our
-        // runahead off of (or dynamic runahead is disabled). We use the smallest latency between
-        // any in-use graph nodes to start.
-        let runahead = self.min_runahead.unwrap_or(self.smallest_latency);
-
-        // the 'runahead' config option sets a lower bound for the runahead
-        let runahead_config = self.min_runahead_config.unwrap_or(SimulationTime::ZERO);
-        let runahead = std::cmp::max(runahead, runahead_config);
-        assert_ne!(runahead, SimulationTime::ZERO);
-
-        let start = min_next_event_time;
-
-        // update the new window end as one interval past the new window start, making sure we don't
-        // run over the experiment end time
-        let end = min_next_event_time
-            .checked_add(runahead)
-            .unwrap_or(EmulatedTime::MAX);
-        let end = std::cmp::min(end, self.end_time);
-
-        (start, end)
+        self.runahead.update_lowest_used_latency(min_path_latency);
     }
 }
 
