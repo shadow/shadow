@@ -43,88 +43,6 @@ std::thread_local! {
 pub static WORKER_SHARED: once_cell::sync::OnceCell<WorkerShared> =
     once_cell::sync::OnceCell::new();
 
-#[derive(Debug)]
-pub struct WorkerShared {
-    pub ip_assignment: IpAssignment<u32>,
-    pub routing_info: RoutingInfo<u32>,
-    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
-    pub dns: SyncSendPointer<cshadow::DNS>,
-    // allows for easy updating of the status bar's state
-    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
-    // number of plugins that failed with a non-zero exit code
-    pub num_plugin_errors: AtomicU32,
-}
-
-impl WorkerShared {
-    pub fn dns(&self) -> *mut cshadow::DNS {
-        self.dns.ptr()
-    }
-
-    pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(SimulationTime::from_nanos(
-            self.routing_info.path(src, dst)?.latency_ns,
-        ))
-    }
-
-    pub fn reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
-    }
-
-    pub fn bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
-        self.host_bandwidths.get(&ip)
-    }
-
-    pub fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
-        let src = self.ip_assignment.get_node(src).unwrap();
-        let dst = self.ip_assignment.get_node(dst).unwrap();
-
-        self.routing_info.increment_packet_count(src, dst)
-    }
-
-    pub fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
-        if self.ip_assignment.get_node(src).is_none() {
-            return false;
-        }
-
-        if self.ip_assignment.get_node(dst).is_none() {
-            return false;
-        }
-
-        // the network graph is required to be a connected graph, so they must be routable
-        true
-    }
-
-    pub fn increment_plugin_error_count(&self) {
-        let old_count = self
-            .num_plugin_errors
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        self.update_status_logger(|state| {
-            // there is a race condition here, so use the max
-            let new_value = old_count + 1;
-            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
-        });
-    }
-
-    pub fn plugin_error_count(&self) -> u32 {
-        self.num_plugin_errors
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Update the status logger. If the status logger is disabled, this will be a no-op.
-    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
-        if let Some(ref logger_state) = self.status_logger_state {
-            logger_state.update(f);
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
 
@@ -392,6 +310,88 @@ impl Worker {
             // code so panic only in debug builds
             debug_panic!("Trying to add syscall counts when there is no worker");
         });
+    }
+}
+
+#[derive(Debug)]
+pub struct WorkerShared {
+    pub ip_assignment: IpAssignment<u32>,
+    pub routing_info: RoutingInfo<u32>,
+    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
+    pub dns: SyncSendPointer<cshadow::DNS>,
+    // allows for easy updating of the status bar's state
+    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
+    // number of plugins that failed with a non-zero exit code
+    pub num_plugin_errors: AtomicU32,
+}
+
+impl WorkerShared {
+    pub fn dns(&self) -> *mut cshadow::DNS {
+        self.dns.ptr()
+    }
+
+    pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(SimulationTime::from_nanos(
+            self.routing_info.path(src, dst)?.latency_ns,
+        ))
+    }
+
+    pub fn reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
+    }
+
+    pub fn bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
+        self.host_bandwidths.get(&ip)
+    }
+
+    pub fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
+        let src = self.ip_assignment.get_node(src).unwrap();
+        let dst = self.ip_assignment.get_node(dst).unwrap();
+
+        self.routing_info.increment_packet_count(src, dst)
+    }
+
+    pub fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
+        if self.ip_assignment.get_node(src).is_none() {
+            return false;
+        }
+
+        if self.ip_assignment.get_node(dst).is_none() {
+            return false;
+        }
+
+        // the network graph is required to be a connected graph, so they must be routable
+        true
+    }
+
+    pub fn increment_plugin_error_count(&self) {
+        let old_count = self
+            .num_plugin_errors
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        self.update_status_logger(|state| {
+            // there is a race condition here, so use the max
+            let new_value = old_count + 1;
+            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
+        });
+    }
+
+    pub fn plugin_error_count(&self) -> u32 {
+        self.num_plugin_errors
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Update the status logger. If the status logger is disabled, this will be a no-op.
+    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
+        if let Some(ref logger_state) = self.status_logger_state {
+            logger_state.update(f);
+        }
     }
 }
 
