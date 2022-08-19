@@ -36,21 +36,6 @@ if(SHADOW_PROFILE STREQUAL ON)
     add_cflags(-pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 
-if(CMAKE_BUILD_TYPE STREQUAL Debug)
-    message(STATUS "Building Rust library in debug mode.")
-    set(RUST_BUILD_TYPE "debug")
-    set(RUST_BUILD_FLAG "")
-else()
-    message(STATUS "Building Rust library in release mode.")
-    set(RUST_BUILD_TYPE "release")
-    set(RUST_BUILD_FLAG "--release")
-endif()
-
-if(SHADOW_COVERAGE STREQUAL ON)
-    # https://github.com/shadow/shadow/issues/1236
-    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
-endif()
-
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
 target_link_libraries(shadow-remora INTERFACE "-lstdc++")
 
@@ -133,89 +118,12 @@ target_link_libraries(shadow-c
    PkgConfig::GLIB
    shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
 
-# All targets that our Rust project directly depends on.
-set(LIBS_TO_PROCESS "shadow-c")
-
-# Process each dependency, adding the compiler flags for individual libraries,
-# and recursively processing their dependencies.
-set(LIBS_SEEN "${LIBS_TO_PROCESS}")
-while(NOT "${LIBS_TO_PROCESS}" STREQUAL "")
-    # The list POP_FRONT operation would be a little nicer here, but it needs
-    # cmake 3.15.
-    list(GET LIBS_TO_PROCESS 0 INTERFACE_LINK_LIBRARY)
-    list(REMOVE_AT LIBS_TO_PROCESS 0)
-    if(INTERFACE_LINK_LIBRARY MATCHES "(.*)/lib(.*)\(.so|.a)")
-        set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_MATCH_1} -l${CMAKE_MATCH_2}")
-    elseif(INTERFACE_LINK_LIBRARY MATCHES "^-l.*")
-        set(RUSTFLAGS "${RUSTFLAGS} ${INTERFACE_LINK_LIBRARY}")
-    else()
-        get_target_property(TYPE ${INTERFACE_LINK_LIBRARY} TYPE)
-
-        list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
-
-        if ("${TYPE}" STREQUAL "STATIC_LIBRARY")
-            string(TOUPPER "${CMAKE_BUILD_TYPE}" UPPER_BUILD_TYPE)
-            get_target_property(IMPORTED_LOCATION ${INTERFACE_LINK_LIBRARY} IMPORTED_LOCATION_${UPPER_BUILD_TYPE})
-            if (IMPORTED_LOCATION MATCHES "(.*)/lib(.*)\.a")
-                set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_MATCH_1}")
-                set(RUSTFLAGS "${RUSTFLAGS} -l${CMAKE_MATCH_2}")
-            else()
-                get_target_property(BINARY_DIR ${INTERFACE_LINK_LIBRARY} BINARY_DIR)
-                set(RUSTFLAGS "${RUSTFLAGS} -L${BINARY_DIR}")
-                get_target_property(NAME ${INTERFACE_LINK_LIBRARY} NAME)
-                set(RUSTFLAGS "${RUSTFLAGS} -l${NAME}")
-            endif()
-        elseif("${TYPE}" STREQUAL "INTERFACE_LIBRARY")
-            # Nothing to do for the target itself, but we'll recurse
-            # into its dependencies below.
-        else()
-            message(FATAL_ERROR "Unhandled TYPE:${TYPE} for ${INTERFACE_LINK_LIBRARY}")
-        endif()
-        get_target_property(REC_INTERFACE_LINK_LIBRARIES ${INTERFACE_LINK_LIBRARY} INTERFACE_LINK_LIBRARIES)
-        if (NOT "${REC_INTERFACE_LINK_LIBRARIES}" STREQUAL "REC_INTERFACE_LINK_LIBRARIES-NOTFOUND")
-            foreach(REC_INTERFACE_LINK_LIBRARY IN LISTS REC_INTERFACE_LINK_LIBRARIES)
-                list(FIND LIBS_SEEN "${REC_INTERFACE_LINK_LIBRARY}" IDX)
-                if ("${IDX}" EQUAL "-1")
-                    list(APPEND LIBS_TO_PROCESS "${REC_INTERFACE_LINK_LIBRARY}")
-                    list(APPEND LIBS_SEEN "${REC_INTERFACE_LINK_LIBRARY}")
-                endif()
-            endforeach()
-        endif()
-    endif()
-endwhile()
-set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} SHADOW_VERSION=\"${SHADOW_VERSION_STRING_CONF}\"")
-
 set(RUST_FEATURES "")
 if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
   set(RUST_FEATURES "${RUST_FEATURES} perf_timers")
 endif()
-
-include(ExternalProject)
-## build the rust library
-ExternalProject_Add(
-    shadow-rust-project
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}
-    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-    BUILD_ALWAYS 1
-    DOWNLOAD_COMMAND ""
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\" --features \"${RUST_FEATURES}\""
-    BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
-    INSTALL_COMMAND ""
-    LOG_BUILD OFF
-    DEPENDS "${RUST_DEPENDS}"
-)
-## we can't predict exact executable names until this is fixed: https://github.com/rust-lang/cargo/issues/1924
-add_test(NAME rust-unit-tests COMMAND bash -c "exec \"$(find target/${RUST_BUILD_TYPE}/deps/ \
-                                               -type f -executable -name 'shadow_rs-*' -print | head -n 1)\" --color always")
-set_property(TEST rust-unit-tests PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
-
-## allow shadow to link to the static rust library
-add_library(shadow-rs STATIC IMPORTED)
-set_target_properties(shadow-rs PROPERTIES IMPORTED_LOCATION_DEBUG ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a)
-set_target_properties(shadow-rs PROPERTIES IMPORTED_LOCATION_RELEASE ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a)
-add_dependencies(shadow-rs shadow-rust-project)
+rust_static_lib(shadow-rs FEATURES "${RUST_FEATURES}" CARGO_ENV_VARS "${CARGO_ENV_VARS}" INTERFACE_LIBRARIES shadow-c)
 
 ## Allow circular dependencies between shadow-rs and shadow-c. Without
 #--start-group and --end-group, # the linker will drop object files in the first
