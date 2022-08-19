@@ -254,7 +254,7 @@ impl std::fmt::Display for ShadowStatusBarState {
             f,
             "{}% — simulated: {}/{}, realtime: {}, processes failed: {}",
             (frac * 100.0).round() as i8,
-            sim_current.fmt_hr_min_sec(),
+            sim_current.fmt_hr_min_sec_milli(),
             sim_end.fmt_hr_min_sec(),
             realtime.fmt_hr_min_sec(),
             self.num_failed_processes,
