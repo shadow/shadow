@@ -3,30 +3,33 @@ use std::ffi::{CStr, CString, OsStr, OsString};
 use std::marker::PhantomData;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{self, Context};
 use rand::Rng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-use crate::core::controller::{Controller, SimController};
-use crate::core::sim_config::HostInfo;
+use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
+use crate::core::scheduler::runahead::Runahead;
+use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
-use crate::utility;
+use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
+use crate::utility::status_bar::Status;
+use crate::utility::{self, SyncSendPointer};
 
 pub struct Manager<'a> {
+    manager_config: Option<ManagerConfig>,
     controller: &'a Controller<'a>,
     config: &'a ConfigOptions,
-    hosts: Vec<HostInfo>,
 
-    // manager random source, init from controller random, used to init host randoms
-    random: Xoshiro256PlusPlus,
     raw_frequency_khz: u64,
     end_time: EmulatedTime,
 
@@ -47,11 +50,10 @@ pub struct Manager<'a> {
 
 impl<'a> Manager<'a> {
     pub fn new(
+        manager_config: ManagerConfig,
         controller: &'a Controller<'a>,
         config: &'a ConfigOptions,
-        hosts: Vec<HostInfo>,
         end_time: EmulatedTime,
-        random: Xoshiro256PlusPlus,
     ) -> anyhow::Result<Self> {
         // get the system's CPU frequency
         let raw_frequency_khz = get_raw_cpu_frequency().unwrap_or_else(|e| {
@@ -175,10 +177,9 @@ impl<'a> Manager<'a> {
         })?;
 
         Ok(Self {
+            manager_config: Some(manager_config),
             controller,
             config,
-            hosts,
-            random,
             raw_frequency_khz,
             end_time,
             hosts_path,
@@ -191,26 +192,80 @@ impl<'a> Manager<'a> {
         })
     }
 
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(
+        mut self,
+        status_logger_state: Option<&Arc<Status<ShadowStatusBarState>>>,
+    ) -> anyhow::Result<u32> {
+        let mut manager_config = self.manager_config.take().unwrap();
+
+        let min_runahead_config: Option<Duration> = self
+            .config
+            .experimental
+            .runahead
+            .flatten()
+            .map(|x| x.into());
+        let min_runahead_config: Option<SimulationTime> =
+            min_runahead_config.map(|x| x.try_into().unwrap());
+
+        let bootstrap_end_time: Duration = self.config.general.bootstrap_end_time.unwrap().into();
+        let bootstrap_end_time: SimulationTime = bootstrap_end_time.try_into().unwrap();
+        let bootstrap_end_time = EmulatedTime::SIMULATION_START + bootstrap_end_time;
+
+        let smallest_latency = SimulationTime::from_nanos(
+            manager_config
+                .routing_info
+                .get_smallest_latency_ns()
+                .unwrap(),
+        );
+
+        let dns = unsafe { c::dns_new() };
+        assert!(!dns.is_null());
+
         let num_workers = self
             .config
             .experimental
             .worker_threads
-            .unwrap_or_else(|| u32::try_from(self.hosts.len()).unwrap().try_into().unwrap())
+            .unwrap_or_else(|| {
+                u32::try_from(manager_config.hosts.len())
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            })
             .get();
 
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
         // will go away when we move the hosts to rust, and if we don't add them to the scheduler
         // then it means there was an error and we're going to exit anyways
-        let hosts: Vec<_> = self
+        let hosts: Vec<_> = manager_config
             .hosts
             .iter()
             .map(|x| {
-                self.build_host(x)
+                self.build_host(x, dns)
                     .with_context(|| format!("Failed to build host '{}'", x.name))
             })
             .collect::<anyhow::Result<_>>()?;
+
+        // set the simulation's global state
+        worker::WORKER_SHARED
+            .borrow_mut()
+            .replace(worker::WorkerShared {
+                ip_assignment: manager_config.ip_assignment,
+                routing_info: manager_config.routing_info,
+                host_bandwidths: manager_config.host_bandwidths,
+                // safe since the DNS type has an internal mutex
+                dns: unsafe { SyncSendPointer::new(dns) },
+                num_plugin_errors: AtomicU32::new(0),
+                // allow the status logger's state to be updated from anywhere
+                status_logger_state: status_logger_state.map(|x| Arc::clone(x)),
+                runahead: Runahead::new(
+                    self.config.experimental.use_dynamic_runahead.unwrap(),
+                    smallest_latency,
+                    min_runahead_config,
+                ),
+                bootstrap_end_time,
+                sim_end_time: self.end_time,
+            });
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
@@ -219,7 +274,7 @@ impl<'a> Manager<'a> {
                 &pid_watcher,
                 self.config,
                 num_workers,
-                self.random.gen(),
+                manager_config.random.gen(),
                 self.end_time,
             );
 
@@ -334,10 +389,19 @@ impl<'a> Manager<'a> {
             });
         }
 
-        Ok(())
+        let num_plugin_errors = worker::WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .plugin_error_count();
+
+        // drop the simulation's global state
+        worker::WORKER_SHARED.borrow_mut().take();
+
+        Ok(num_plugin_errors)
     }
 
-    fn build_host(&self, host: &HostInfo) -> anyhow::Result<Host> {
+    fn build_host(&self, host: &HostInfo, dns: *mut c::DNS) -> anyhow::Result<Host> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -401,14 +465,7 @@ impl<'a> Manager<'a> {
             let c_host = unsafe { c::host_new(&params) };
             assert!(!c_host.is_null());
 
-            unsafe {
-                c::host_setup(
-                    c_host,
-                    worker::WORKER_SHARED.borrow().as_ref().unwrap().dns(),
-                    self.raw_frequency_khz,
-                    hosts_path.as_ptr(),
-                )
-            };
+            unsafe { c::host_setup(c_host, dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
 
             // make sure we never accidentally drop the following objects before running the
             // unsafe code (will be a compile-time error if they were dropped)
@@ -689,6 +746,23 @@ impl<'a> Manager<'a> {
 
         Ok(page_size * avl_pages)
     }
+}
+
+pub struct ManagerConfig {
+    // deterministic source of randomness for this manager
+    pub random: Xoshiro256PlusPlus,
+
+    // map of ip addresses to graph nodes
+    pub ip_assignment: IpAssignment<u32>,
+
+    // routing information for paths between graph nodes
+    pub routing_info: RoutingInfo<u32>,
+
+    // bandwidths of hosts at ip addresses
+    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
+
+    // a list of hosts and their processes
+    pub hosts: Vec<HostInfo>,
 }
 
 struct SchedulerWrapper<'a> {
