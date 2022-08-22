@@ -69,7 +69,9 @@ jobs:
             container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'debug'
-    runs-on: ${{ matrix.vm }}
+    # Map "oldest" and "newest" to oldest and newest images currently available.
+    # https://github.com/actions/virtual-environments
+    runs-on: ${{ fromJSON('{"oldest": "ubuntu-20.04", "newest": "ubuntu-22.04"}')[ matrix.vm ] }}
     container:
       image: ${{ matrix.container }}
       # the default shm-size for ubuntu:18.04, but with the size increased from
