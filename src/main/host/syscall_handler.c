@@ -491,6 +491,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             NATIVE(geteuid);
             NATIVE(getegid);
             NATIVE(getgid);
+            NATIVE(getgroups);
             NATIVE(getresgid);
             NATIVE(getresuid);
             NATIVE(getrlimit);
