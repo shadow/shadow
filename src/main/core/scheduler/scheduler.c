@@ -132,15 +132,14 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     worker_finish(myHosts, scheduler->endTime);
 }
 
-Scheduler* scheduler_new(const ConfigOptions* config, guint nWorkers, guint schedulerSeed,
-                         SimulationTime endTime) {
+Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
 
-    scheduler->workerPool = workerpool_new(config, /*nThreads=*/nWorkers,
+    scheduler->workerPool = workerpool_new(/*nThreads=*/nWorkers,
                                            /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;

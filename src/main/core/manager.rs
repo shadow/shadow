@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
-use std::marker::PhantomData;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
@@ -271,12 +270,8 @@ impl<'a> Manager<'a> {
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler = SchedulerWrapper::new(
-                self.config,
-                num_workers,
-                manager_config.random.gen(),
-                self.end_time,
-            );
+            let mut scheduler =
+                SchedulerWrapper::new(num_workers, manager_config.random.gen(), self.end_time);
 
             for host in hosts.into_iter() {
                 scheduler
@@ -766,28 +761,20 @@ pub struct ManagerConfig {
     pub hosts: Vec<HostInfo>,
 }
 
-struct SchedulerWrapper<'a> {
+struct SchedulerWrapper {
     pub ptr: *mut c::Scheduler,
-    _phantom_config: PhantomData<&'a ConfigOptions>,
 }
 
-impl<'a> SchedulerWrapper<'a> {
-    pub fn new(
-        config: &'a ConfigOptions,
-        num_workers: u32,
-        scheduler_seed: u32,
-        end_time: EmulatedTime,
-    ) -> Self {
+impl SchedulerWrapper {
+    pub fn new(num_workers: u32, scheduler_seed: u32, end_time: EmulatedTime) -> Self {
         Self {
             ptr: unsafe {
                 c::scheduler_new(
-                    config,
                     num_workers,
                     scheduler_seed,
                     EmulatedTime::to_abs_simtime(end_time).into(),
                 )
             },
-            _phantom_config: Default::default(),
         }
     }
 
@@ -824,7 +811,7 @@ impl<'a> SchedulerWrapper<'a> {
     }
 }
 
-impl<'a> std::ops::Drop for SchedulerWrapper<'a> {
+impl std::ops::Drop for SchedulerWrapper {
     fn drop(&mut self) {
         // shadow requires that the work pool is properly shutdown before it's freed (will block
         // until worker threads are joined)

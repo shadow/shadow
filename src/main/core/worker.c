@@ -39,9 +39,6 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the configuration options */
-    const ConfigOptions* config;
-
     /* Number of Worker threads */
     int nWorkers;
 
@@ -115,7 +112,7 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const ConfigOptions* config, int nWorkers, int nParallel) {
+WorkerPool* workerpool_new(int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -125,7 +122,6 @@ WorkerPool* workerpool_new(const ConfigOptions* config, int nWorkers, int nParal
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .config = config,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
@@ -360,8 +356,6 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     DNS* dns = worker_getDNS();
     return dns_resolveNameToAddress(dns, name);
 }
-
-const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */

@@ -1829,9 +1829,6 @@ extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_getConfig() -> *const ConfigOptions;
-}
-extern "C" {
     pub fn worker_scheduleTaskWithDelay(
         task: *mut TaskRef,
         host: *mut Host,
@@ -3053,7 +3050,6 @@ extern "C" {
 }
 extern "C" {
     pub fn scheduler_new(
-        config: *const ConfigOptions,
         nWorkers: guint,
         schedulerSeed: guint,
         endTime: SimulationTime,
