@@ -244,7 +244,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 #define UNSUPPORTED(s)                                                                             \
     case SYS_##s:                                                                                  \
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
-        scr = syscallreturn_makeErrno(ENOSYS);                                                     \
+        scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
                 sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
@@ -532,6 +532,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             NATIVE(unlink);
             NATIVE(utime);
             NATIVE(utimes);
+
+            // ***************************************
+            // Syscalls that aren't implemented yet. Listing them here gives the same behavior
+            // as the default case (returning ENOSYS), but allows the logging to include the
+            // syscall name instead of just the number.
+            // ***************************************
+
+            UNSUPPORTED(sched_getaffinity);
+            UNSUPPORTED(sched_setaffinity);
 
             default: {
                 warning(
