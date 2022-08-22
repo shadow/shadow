@@ -508,6 +508,9 @@ void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 
 void worker_incrementPluginErrors(void);
 
+// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+const struct ChildPidWatcher *worker_getChildPidWatcher(void);
+
 // Takes ownership of the event.
 void worker_pushToHost(HostId host, struct Event *event);
 

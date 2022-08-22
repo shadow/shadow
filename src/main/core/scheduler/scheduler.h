@@ -15,8 +15,8 @@ typedef struct _Scheduler Scheduler;
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
 
-Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions* config,
-                         guint nWorkers, guint schedulerSeed, SimulationTime endTime);
+Scheduler* scheduler_new(const ConfigOptions* config, guint nWorkers, guint schedulerSeed,
+                         SimulationTime endTime);
 void scheduler_free(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
 

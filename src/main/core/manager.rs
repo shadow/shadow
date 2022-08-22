@@ -263,6 +263,7 @@ impl<'a> Manager<'a> {
                     smallest_latency,
                     min_runahead_config,
                 ),
+                child_pid_watcher: ChildPidWatcher::new(),
                 event_queues: hosts.iter().map(|x| (x.id(), x.event_queue())).collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
@@ -270,9 +271,7 @@ impl<'a> Manager<'a> {
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let pid_watcher = ChildPidWatcher::new();
             let mut scheduler = SchedulerWrapper::new(
-                &pid_watcher,
                 self.config,
                 num_workers,
                 manager_config.random.gen(),
@@ -769,13 +768,11 @@ pub struct ManagerConfig {
 
 struct SchedulerWrapper<'a> {
     pub ptr: *mut c::Scheduler,
-    _phantom_pid_watcher: PhantomData<&'a ChildPidWatcher>,
     _phantom_config: PhantomData<&'a ConfigOptions>,
 }
 
 impl<'a> SchedulerWrapper<'a> {
     pub fn new(
-        pid_watcher: &'a ChildPidWatcher,
         config: &'a ConfigOptions,
         num_workers: u32,
         scheduler_seed: u32,
@@ -784,14 +781,12 @@ impl<'a> SchedulerWrapper<'a> {
         Self {
             ptr: unsafe {
                 c::scheduler_new(
-                    pid_watcher,
                     config,
                     num_workers,
                     scheduler_seed,
                     EmulatedTime::to_abs_simtime(end_time).into(),
                 )
             },
-            _phantom_pid_watcher: Default::default(),
             _phantom_config: Default::default(),
         }
     }

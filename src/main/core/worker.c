@@ -39,9 +39,6 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the PID watcher for managed processes */
-    const ChildPidWatcher* pidWatcher;
-
     /* Unowned pointer to the configuration options */
     const ConfigOptions* config;
 
@@ -118,8 +115,7 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, const ConfigOptions* config,
-                           int nWorkers, int nParallel) {
+WorkerPool* workerpool_new(const ConfigOptions* config, int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -129,7 +125,6 @@ WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, const ConfigOption
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .pidWatcher = pidWatcher,
         .config = config,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
@@ -365,8 +360,6 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     DNS* dns = worker_getDNS();
     return dns_resolveNameToAddress(dns, name);
 }
-
-const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
 
 const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
 

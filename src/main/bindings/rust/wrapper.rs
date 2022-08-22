@@ -1829,9 +1829,6 @@ extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn worker_getChildPidWatcher() -> *const ChildPidWatcher;
-}
-extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;
 }
 extern "C" {
@@ -3056,7 +3053,6 @@ extern "C" {
 }
 extern "C" {
     pub fn scheduler_new(
-        pidWatcher: *const ChildPidWatcher,
         config: *const ConfigOptions,
         nWorkers: guint,
         schedulerSeed: guint,

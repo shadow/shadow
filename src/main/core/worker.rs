@@ -14,6 +14,7 @@ use crate::host::host::{Host, HostId, HostInfo};
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
+use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use crate::utility::status_bar;
@@ -324,6 +325,7 @@ pub struct WorkerShared {
     pub num_plugin_errors: AtomicU32,
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
+    pub child_pid_watcher: ChildPidWatcher,
     pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
@@ -405,6 +407,11 @@ impl WorkerShared {
     /// Should only be called from the thread-local worker.
     fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
         self.runahead.update_lowest_used_latency(min_path_latency);
+    }
+
+    /// Get the pid watcher.
+    pub fn child_pid_watcher(&self) -> &ChildPidWatcher {
+        &self.child_pid_watcher
     }
 
     pub fn push_to_host(&self, host: HostId, event: Event) {
@@ -497,6 +504,12 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
         Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
+
+    /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
+        Worker::with_mut(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
     /// Takes ownership of the event.
