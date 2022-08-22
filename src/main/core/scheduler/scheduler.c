@@ -140,7 +140,7 @@ Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions*
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
 
-    scheduler->workerPool = workerpool_new(pidWatcher, scheduler, config, /*nThreads=*/nWorkers,
+    scheduler->workerPool = workerpool_new(pidWatcher, config, /*nThreads=*/nWorkers,
                                            /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;

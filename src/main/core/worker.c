@@ -20,7 +20,6 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/host/affinity.h"
@@ -45,10 +44,6 @@ struct _WorkerPool {
 
     /* Unowned pointer to the configuration options */
     const ConfigOptions* config;
-
-    /* Unowned pointer to the per-manager parallel scheduler object that feeds
-     * events to all workers */
-    Scheduler* scheduler;
 
     /* Number of Worker threads */
     int nWorkers;
@@ -123,8 +118,8 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
-                           const ConfigOptions* config, int nWorkers, int nParallel) {
+WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, const ConfigOptions* config,
+                           int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -136,7 +131,6 @@ WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* schedul
     *pool = (WorkerPool){
         .pidWatcher = pidWatcher,
         .config = config,
-        .scheduler = scheduler,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
