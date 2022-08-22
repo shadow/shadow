@@ -48,8 +48,6 @@ typedef struct CliOptions CliOptions;
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
-typedef struct Controller Controller;
-
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 

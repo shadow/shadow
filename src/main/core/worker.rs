@@ -2,6 +2,7 @@ use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
 use crate::core::controller::ShadowStatusBarState;
+use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -42,88 +43,6 @@ std::thread_local! {
 // shared global state
 pub static WORKER_SHARED: once_cell::sync::OnceCell<WorkerShared> =
     once_cell::sync::OnceCell::new();
-
-#[derive(Debug)]
-pub struct WorkerShared {
-    pub ip_assignment: IpAssignment<u32>,
-    pub routing_info: RoutingInfo<u32>,
-    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
-    pub dns: SyncSendPointer<cshadow::DNS>,
-    // allows for easy updating of the status bar's state
-    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
-    // number of plugins that failed with a non-zero exit code
-    pub num_plugin_errors: AtomicU32,
-}
-
-impl WorkerShared {
-    pub fn dns(&self) -> *mut cshadow::DNS {
-        self.dns.ptr()
-    }
-
-    pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(SimulationTime::from_nanos(
-            self.routing_info.path(src, dst)?.latency_ns,
-        ))
-    }
-
-    pub fn reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
-        let src = self.ip_assignment.get_node(src)?;
-        let dst = self.ip_assignment.get_node(dst)?;
-
-        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
-    }
-
-    pub fn bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
-        self.host_bandwidths.get(&ip)
-    }
-
-    pub fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
-        let src = self.ip_assignment.get_node(src).unwrap();
-        let dst = self.ip_assignment.get_node(dst).unwrap();
-
-        self.routing_info.increment_packet_count(src, dst)
-    }
-
-    pub fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
-        if self.ip_assignment.get_node(src).is_none() {
-            return false;
-        }
-
-        if self.ip_assignment.get_node(dst).is_none() {
-            return false;
-        }
-
-        // the network graph is required to be a connected graph, so they must be routable
-        true
-    }
-
-    pub fn increment_plugin_error_count(&self) {
-        let old_count = self
-            .num_plugin_errors
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        self.update_status_logger(|state| {
-            // there is a race condition here, so use the max
-            let new_value = old_count + 1;
-            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
-        });
-    }
-
-    pub fn plugin_error_count(&self) -> u32 {
-        self.num_plugin_errors
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Update the status logger. If the status logger is disabled, this will be a no-op.
-    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
-        if let Some(ref logger_state) = self.status_logger_state {
-            logger_state.update(f);
-        }
-    }
-}
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -308,19 +227,14 @@ impl Worker {
         Worker::with(|w| w.clock.now).flatten()
     }
 
-    pub fn update_min_host_runahead(t: SimulationTime) {
+    pub fn update_lowest_used_latency(t: SimulationTime) {
         assert!(t != SimulationTime::ZERO);
 
         Worker::with(|w| {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
-                unsafe {
-                    cshadow::workerpool_updateMinHostRunahead(
-                        w.worker_pool,
-                        SimulationTime::to_c_simtime(Some(t)),
-                    )
-                };
+                WORKER_SHARED.get().unwrap().update_lowest_used_latency(t);
             }
         })
         .unwrap();
@@ -392,6 +306,99 @@ impl Worker {
             // code so panic only in debug builds
             debug_panic!("Trying to add syscall counts when there is no worker");
         });
+    }
+}
+
+#[derive(Debug)]
+pub struct WorkerShared {
+    pub ip_assignment: IpAssignment<u32>,
+    pub routing_info: RoutingInfo<u32>,
+    pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
+    pub dns: SyncSendPointer<cshadow::DNS>,
+    // allows for easy updating of the status bar's state
+    pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
+    // number of plugins that failed with a non-zero exit code
+    pub num_plugin_errors: AtomicU32,
+    // calculates the runahead for the next simulation round
+    pub runahead: Runahead,
+}
+
+impl WorkerShared {
+    pub fn dns(&self) -> *mut cshadow::DNS {
+        self.dns.ptr()
+    }
+
+    pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(SimulationTime::from_nanos(
+            self.routing_info.path(src, dst)?.latency_ns,
+        ))
+    }
+
+    pub fn reliability(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<f32> {
+        let src = self.ip_assignment.get_node(src)?;
+        let dst = self.ip_assignment.get_node(dst)?;
+
+        Some(1.0 - self.routing_info.path(src, dst)?.packet_loss)
+    }
+
+    pub fn bandwidth(&self, ip: std::net::IpAddr) -> Option<&Bandwidth> {
+        self.host_bandwidths.get(&ip)
+    }
+
+    pub fn increment_packet_count(&self, src: std::net::IpAddr, dst: std::net::IpAddr) {
+        let src = self.ip_assignment.get_node(src).unwrap();
+        let dst = self.ip_assignment.get_node(dst).unwrap();
+
+        self.routing_info.increment_packet_count(src, dst)
+    }
+
+    pub fn is_routable(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
+        if self.ip_assignment.get_node(src).is_none() {
+            return false;
+        }
+
+        if self.ip_assignment.get_node(dst).is_none() {
+            return false;
+        }
+
+        // the network graph is required to be a connected graph, so they must be routable
+        true
+    }
+
+    pub fn increment_plugin_error_count(&self) {
+        let old_count = self
+            .num_plugin_errors
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        self.update_status_logger(|state| {
+            // there is a race condition here, so use the max
+            let new_value = old_count + 1;
+            state.num_failed_processes = std::cmp::max(state.num_failed_processes, new_value);
+        });
+    }
+
+    pub fn plugin_error_count(&self) -> u32 {
+        self.num_plugin_errors
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Update the status logger. If the status logger is disabled, this will be a no-op.
+    pub fn update_status_logger(&self, f: impl FnOnce(&mut ShadowStatusBarState)) {
+        if let Some(ref logger_state) = self.status_logger_state {
+            logger_state.update(f);
+        }
+    }
+
+    pub fn get_runahead(&self) -> SimulationTime {
+        self.runahead.get()
+    }
+
+    /// Should only be called from the thread-local worker.
+    fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
+        self.runahead.update_lowest_used_latency(min_path_latency);
     }
 }
 
@@ -619,8 +626,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
-        Worker::update_min_host_runahead(SimulationTime::from_c_simtime(t).unwrap());
+    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: cshadow::SimulationTime) {
+        let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
+        Worker::update_lowest_used_latency(min_path_latency);
     }
 
     #[no_mangle]
