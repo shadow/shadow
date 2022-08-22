@@ -11,6 +11,7 @@ use crate::core::controller::Controller;
 use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::event::Event;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::core::work::task::TaskRef;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
@@ -2815,6 +2816,9 @@ extern "C" {
 }
 extern "C" {
     pub fn host_nextEventTime(host: *mut Host) -> EmulatedTime;
+}
+extern "C" {
+    pub fn host_getOwnedEventQueue(host: *mut Host) -> *const ThreadSafeEventQueue;
 }
 extern "C" {
     pub fn host_lock(host: *mut Host);
