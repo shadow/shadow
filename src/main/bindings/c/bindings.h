@@ -52,8 +52,6 @@ typedef struct CliOptions CliOptions;
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
-typedef struct Controller Controller;
-
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
@@ -293,9 +291,6 @@ void random_nextNBytes(struct Random *rng, uint8_t *buf, uintptr_t len);
 char *backtrace(void);
 
 void backtrace_free(char *backtrace);
-
-void controller_updateMinRunahead(const struct Controller *controller,
-                                  SimulationTime min_path_latency);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -561,7 +556,7 @@ SimulationTime worker_getCurrentSimulationTime(void);
 
 EmulatedTime worker_getCurrentEmulatedTime(void);
 
-void worker_updateMinHostRunahead(SimulationTime t);
+void worker_updateLowestUsedLatency(SimulationTime min_path_latency);
 
 bool worker_isBootstrapActive(void);
 

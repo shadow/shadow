@@ -2987,7 +2987,6 @@ extern "C" {
 }
 extern "C" {
     pub fn scheduler_new(
-        controller: *const Controller,
         pidWatcher: *const ChildPidWatcher,
         config: *const ConfigOptions,
         nWorkers: guint,
@@ -3066,9 +3065,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
-}
-extern "C" {
-    pub fn workerpool_updateMinHostRunahead(pool: *mut WorkerPool, time: SimulationTime);
 }
 extern "C" {
     pub fn worker_clearCurrentTime();

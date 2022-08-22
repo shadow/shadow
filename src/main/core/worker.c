@@ -40,9 +40,6 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the object that communicates with the controller process */
-    const Controller* controller;
-
     /* Unowned pointer to the PID watcher for managed processes */
     const ChildPidWatcher* pidWatcher;
 
@@ -126,9 +123,8 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
-                           Scheduler* scheduler, const ConfigOptions* config, int nWorkers,
-                           int nParallel) {
+WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
+                           const ConfigOptions* config, int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -138,7 +134,6 @@ WorkerPool* workerpool_new(const Controller* controller, const ChildPidWatcher* 
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .controller = controller,
         .pidWatcher = pidWatcher,
         .config = config,
         .scheduler = scheduler,
@@ -526,7 +521,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         SimulationTime delay = worker_getLatency(srcIP, dstIP);
-        worker_updateMinHostRunahead(delay);
+        worker_updateLowestUsedLatency(delay);
         SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcIP, dstIP);
@@ -596,10 +591,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time) {
-    controller_updateMinRunahead(pool->controller, time);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }

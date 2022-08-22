@@ -202,7 +202,6 @@ impl<'a> Manager<'a> {
         {
             let pid_watcher = ChildPidWatcher::new();
             let mut scheduler = SchedulerWrapper::new(
-                self.controller,
                 &pid_watcher,
                 self.config,
                 num_workers,
@@ -677,14 +676,12 @@ impl<'a> Manager<'a> {
 
 struct SchedulerWrapper<'a> {
     pub ptr: *mut c::Scheduler,
-    _phantom_controller: PhantomData<&'a Controller<'a>>,
     _phantom_pid_watcher: PhantomData<&'a ChildPidWatcher>,
     _phantom_config: PhantomData<&'a ConfigOptions>,
 }
 
 impl<'a> SchedulerWrapper<'a> {
     pub fn new(
-        controller: &'a Controller,
         pid_watcher: &'a ChildPidWatcher,
         config: &'a ConfigOptions,
         num_workers: u32,
@@ -694,7 +691,6 @@ impl<'a> SchedulerWrapper<'a> {
         Self {
             ptr: unsafe {
                 c::scheduler_new(
-                    controller,
                     pid_watcher,
                     config,
                     num_workers,
@@ -702,7 +698,6 @@ impl<'a> SchedulerWrapper<'a> {
                     EmulatedTime::to_abs_simtime(end_time).into(),
                 )
             },
-            _phantom_controller: Default::default(),
             _phantom_pid_watcher: Default::default(),
             _phantom_config: Default::default(),
         }
