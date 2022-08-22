@@ -198,6 +198,19 @@ impl<'a> Manager<'a> {
             .unwrap_or_else(|| u32::try_from(self.hosts.len()).unwrap().try_into().unwrap())
             .get();
 
+        // note: there are several return points before we add these hosts to the scheduler and we
+        // would leak memory if we return before then, but not worrying about that since the issues
+        // will go away when we move the hosts to rust, and if we don't add them to the scheduler
+        // then it means there was an error and we're going to exit anyways
+        let hosts: Vec<_> = self
+            .hosts
+            .iter()
+            .map(|x| {
+                self.build_host(x)
+                    .with_context(|| format!("Failed to build host '{}'", x.name))
+            })
+            .collect::<anyhow::Result<_>>()?;
+
         // scope used so that the scheduler is dropped before we log the global counters below
         {
             let pid_watcher = ChildPidWatcher::new();
@@ -209,9 +222,10 @@ impl<'a> Manager<'a> {
                 self.end_time,
             );
 
-            for host in self.hosts.split_off(0) {
-                self.add_host(&mut scheduler, &host)
-                    .with_context(|| format!("Failed to add host '{}'", host.name))?;
+            for host in hosts.into_iter() {
+                scheduler
+                    .add_host(host)
+                    .with_context(|| format!("Failed to add host"))?;
             }
 
             // we are the main thread, we manage the execution window updates while the workers run
@@ -322,7 +336,7 @@ impl<'a> Manager<'a> {
         Ok(())
     }
 
-    fn add_host(&self, scheduler: &mut SchedulerWrapper, host: &HostInfo) -> anyhow::Result<()> {
+    fn build_host(&self, host: &HostInfo) -> anyhow::Result<*mut c::Host> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -468,7 +482,7 @@ impl<'a> Manager<'a> {
             }
         }
 
-        scheduler.add_host(c_host)
+        Ok(c_host)
     }
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
