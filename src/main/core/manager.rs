@@ -16,6 +16,7 @@ use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
+use crate::host::host::Host;
 use crate::utility;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 
@@ -224,8 +225,8 @@ impl<'a> Manager<'a> {
 
             for host in hosts.into_iter() {
                 scheduler
-                    .add_host(host)
-                    .with_context(|| format!("Failed to add host"))?;
+                    .add_host(host.chost())
+                    .with_context(|| format!("Failed to add host '{}'", host.name()))?;
             }
 
             // we are the main thread, we manage the execution window updates while the workers run
@@ -336,7 +337,7 @@ impl<'a> Manager<'a> {
         Ok(())
     }
 
-    fn build_host(&self, host: &HostInfo) -> anyhow::Result<*mut c::Host> {
+    fn build_host(&self, host: &HostInfo) -> anyhow::Result<Host> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -482,7 +483,7 @@ impl<'a> Manager<'a> {
             }
         }
 
-        Ok(c_host)
+        Ok(unsafe { Host::borrow_from_c(c_host) })
     }
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
