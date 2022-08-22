@@ -46,7 +46,6 @@ struct _Scheduler {
     Random* random;
 
     /* auxiliary information about current running state */
-    gboolean isRunning;
     SimulationTime endTime;
     struct {
         SimulationTime endTime;
@@ -303,18 +302,12 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 }
 
-gboolean scheduler_isRunning(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    return scheduler->isRunning;
-}
-
 void scheduler_start(Scheduler* scheduler) {
     /* Called by the scheduler thread. */
 
     _scheduler_assignHosts(scheduler);
 
     g_mutex_lock(&scheduler->globalLock);
-    scheduler->isRunning = TRUE;
     g_mutex_unlock(&scheduler->globalLock);
 
     workerpool_startTaskFn(scheduler->workerPool,
@@ -355,7 +348,6 @@ void scheduler_finish(Scheduler* scheduler) {
 
     /* make sure when the workers wake up they know we are done */
     g_mutex_lock(&scheduler->globalLock);
-    scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
     workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn, scheduler);

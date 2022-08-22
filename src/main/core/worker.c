@@ -492,7 +492,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 
-    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
+    if (worker_isSimCompleted()) {
         /* the simulation is over, don't bother */
         return;
     }

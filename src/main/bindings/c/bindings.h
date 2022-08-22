@@ -556,6 +556,8 @@ void worker_updateLowestUsedLatency(SimulationTime min_path_latency);
 
 bool worker_isBootstrapActive(void);
 
+bool worker_isSimCompleted(void);
+
 WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);

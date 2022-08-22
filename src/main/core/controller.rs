@@ -92,6 +92,7 @@ impl<'a> Controller<'a> {
                     min_runahead_config,
                 ),
                 bootstrap_end_time,
+                sim_end_time: self.end_time,
             });
 
         let manager_hosts = std::mem::take(&mut sim_config.hosts);

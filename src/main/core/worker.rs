@@ -326,6 +326,7 @@ pub struct WorkerShared {
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
     pub bootstrap_end_time: EmulatedTime,
+    pub sim_end_time: EmulatedTime,
 }
 
 impl WorkerShared {
@@ -635,6 +636,11 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_isBootstrapActive() -> bool {
         Worker::with(|w| w.clock.now.unwrap() < w.shared.bootstrap_end_time).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_isSimCompleted() -> bool {
+        Worker::with(|w| w.clock.now.unwrap() >= w.shared.sim_end_time).unwrap()
     }
 
     #[no_mangle]
