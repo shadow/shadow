@@ -528,7 +528,6 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -558,8 +557,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         // round and calculated its min event time, so we put this in our min event time instead
         worker_setMinEventTimeNextRound(event_getTime(packetEvent));
 
-        const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
-        eventqueue_push(eventQueue, packetEvent);
+        worker_pushToHost(dstHostID, packetEvent);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }

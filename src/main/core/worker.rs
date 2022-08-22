@@ -7,13 +7,12 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event::Event;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::Host;
-use crate::host::host::HostInfo;
-use crate::host::process::Process;
-use crate::host::process::ProcessId;
-use crate::host::thread::ThreadId;
-use crate::host::thread::{CThread, Thread};
+use crate::host::host::{Host, HostId, HostInfo};
+use crate::host::process::{Process, ProcessId};
+use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
@@ -325,6 +324,7 @@ pub struct WorkerShared {
     pub num_plugin_errors: AtomicU32,
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
+    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
 }
@@ -405,6 +405,11 @@ impl WorkerShared {
     /// Should only be called from the thread-local worker.
     fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
         self.runahead.update_lowest_used_latency(min_path_latency);
+    }
+
+    pub fn push_to_host(&self, host: HostId, event: Event) {
+        let event_queue = self.event_queues.get(&host).unwrap();
+        event_queue.0.lock().unwrap().push(event);
     }
 }
 
@@ -492,6 +497,15 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
         Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
+
+    /// Takes ownership of the event.
+    #[no_mangle]
+    pub extern "C" fn worker_pushToHost(host: cshadow::HostId, event: *mut Event) {
+        assert!(!event.is_null());
+        let event = unsafe { Box::from_raw(event) };
+        assert!(event.time() >= Worker::round_end_time().unwrap());
+        Worker::with_mut(|w| w.shared.push_to_host(host.into(), *event)).unwrap();
     }
 
     /// Initialize a Worker for this thread.

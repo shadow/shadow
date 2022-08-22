@@ -38,10 +38,6 @@ struct _Scheduler {
     /* we store the hosts here */
     GHashTable* hostIDToHostMap;
 
-    /* we store the host queues here (this is read-only once the simulation starts and is read by
-     * multiple threads) */
-    GHashTable* hostIDToHostQueueMap;
-
     /* used to randomize host-to-thread assignment */
     Random* random;
 
@@ -153,8 +149,6 @@ Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions*
 
     scheduler->hostIDToHostMap =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)host_unref);
-    scheduler->hostIDToHostQueueMap =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_drop);
 
     scheduler->random = random_new(schedulerSeed);
 
@@ -206,16 +200,7 @@ int scheduler_addHost(Scheduler* scheduler, Host* host) {
 
     g_hash_table_replace(scheduler->hostIDToHostMap, hostIDKey, host);
 
-    // casts const pointer to non-const
-    g_hash_table_replace(
-        scheduler->hostIDToHostQueueMap, hostIDKey, (void*)host_getOwnedEventQueue(host));
     return 0;
-}
-
-const ThreadSafeEventQueue* scheduler_getEventQueue(Scheduler* scheduler, HostId host) {
-    MAGIC_ASSERT(scheduler);
-    // cast back to const pointer
-    return g_hash_table_lookup(scheduler->hostIDToHostQueueMap, GUINT_TO_POINTER(host));
 }
 
 static void _scheduler_appendHostToQueue(gpointer uintKey, Host* host, GQueue* allHosts) {
@@ -359,6 +344,4 @@ void scheduler_finish(Scheduler* scheduler) {
     if (scheduler->hostIDToHostMap != NULL) {
         g_hash_table_destroy(scheduler->hostIDToHostMap);
     }
-
-    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }

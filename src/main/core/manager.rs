@@ -263,6 +263,7 @@ impl<'a> Manager<'a> {
                     smallest_latency,
                     min_runahead_config,
                 ),
+                event_queues: hosts.iter().map(|x| (x.id(), x.event_queue())).collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
             });
@@ -364,6 +365,16 @@ impl<'a> Manager<'a> {
                 state.current = self.end_time;
             });
 
+        let num_plugin_errors = worker::WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .plugin_error_count();
+
+        // drop the simulation's global state
+        // must drop before the allocation counters have been checked
+        worker::WORKER_SHARED.borrow_mut().take();
+
         // since the scheduler was dropped, all workers should have completed and the global object
         // and syscall counters should have been updated
 
@@ -388,15 +399,6 @@ impl<'a> Manager<'a> {
                 }
             });
         }
-
-        let num_plugin_errors = worker::WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .plugin_error_count();
-
-        // drop the simulation's global state
-        worker::WORKER_SHARED.borrow_mut().take();
 
         Ok(num_plugin_errors)
     }

@@ -508,6 +508,9 @@ void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 
 void worker_incrementPluginErrors(void);
 
+// Takes ownership of the event.
+void worker_pushToHost(HostId host, struct Event *event);
+
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
 
