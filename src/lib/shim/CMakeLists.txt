@@ -16,15 +16,13 @@ set(SHIM_HELPER_FILES
   ipc.cc
   shadow_sem.c
   shadow_spinlock.c
-  shadow_signals.c
-  shim_event.c
   shim_shmem.c
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
 # -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
 # -fPIC enables linking the static compile unit with a shared object library
 target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE -fPIC)
-target_link_libraries(${SHIM_HELPER_LIB} INTERFACE logger shadow-shmem)
+target_link_libraries(${SHIM_HELPER_LIB} INTERFACE logger shadow-shmem shadow-shim-helper-rs)
 
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES

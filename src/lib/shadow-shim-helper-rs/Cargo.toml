@@ -1,0 +1,15 @@
+[package]
+name = "shadow-shim-helper-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+libc = "0.2"
+nix = "0.25.0"
+# don't log debug or trace levels in release mode
+log = { version = "0.4", features = ["release_max_level_debug"] }

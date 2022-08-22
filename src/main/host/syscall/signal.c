@@ -74,8 +74,9 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
     Process* process = thread_getProcess(thread);
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(sys->host), process_getSharedMem(process), sig);
-    if (action.ksa_handler == SIG_IGN ||
-        (action.ksa_handler == SIG_DFL && shd_defaultAction(sig) == SHD_DEFAULT_ACTION_IGN)) {
+    if (action.u.ksa_handler == SIG_IGN ||
+        (action.u.ksa_handler == SIG_DFL &&
+         shd_defaultAction(sig) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
         // Don't deliver ignored an signal.
         return syscallreturn_makeDoneI64(0);
     }
