@@ -179,10 +179,6 @@ if(SHADOW_COVERAGE STREQUAL ON)
     add_compile_options(--coverage)
     add_definitions(-DSHADOW_COVERAGE)
     add_ldflags(--coverage)
-    ## from https://github.com/mozilla/grcov
-    set(RUSTFLAGS "-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
-                   -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
-    set(CARGO_ENV_VARS "CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
 else()
     set(RUSTFLAGS "-C force-frame-pointers=y")
     set(CARGO_ENV_VARS "")
@@ -220,11 +216,6 @@ else()
     message(STATUS "Building Rust library in release mode.")
     set(RUST_BUILD_TYPE "release")
     set(RUST_BUILD_FLAG "--release")
-endif()
-
-if(SHADOW_COVERAGE STREQUAL ON)
-    # https://github.com/shadow/shadow/issues/1236
-    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
 endif()
 
 ## recurse our project tree
