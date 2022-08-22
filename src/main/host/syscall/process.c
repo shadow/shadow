@@ -51,6 +51,17 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             return syscallreturn_makeDoneErrno(-res);
         }
         return syscallreturn_makeDoneU64(0);
+    } else if (option == PR_SET_DUMPABLE) {
+        int arg = args->args[1].as_i64;
+        switch (arg) {
+            case SUID_DUMP_DISABLE:
+            case SUID_DUMP_USER:
+                process_setDumpable(sys->process, arg);
+                return syscallreturn_makeDoneU64(0);
+        };
+        return syscallreturn_makeDoneErrno(EINVAL);
+    } else if (option == PR_GET_DUMPABLE) {
+        return syscallreturn_makeDoneI64(process_getDumpable(sys->process));
     } else {
         return syscallreturn_makeNative();
     }

@@ -152,6 +152,11 @@ struct _Process {
      */
     Timer* itimerReal;
 
+    /* "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
+     * and PR_GET_DUMPABLE.
+     */
+    int dumpable;
+
     /* Pause shadow after launching this process, to give the user time to attach gdb */
     bool pause_for_debugging;
 
@@ -894,6 +899,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->pause_for_debugging = pause_for_debugging;
 
+    proc->dumpable = SUID_DUMP_USER;
+
     process_ref(proc);
     TaskRef* task = taskref_new_bound(
         host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
@@ -1308,4 +1315,13 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 Timer* process_getRealtimeTimer(Process* process) {
     MAGIC_ASSERT(process);
     return process->itimerReal;
+}
+
+int process_getDumpable(Process* process) {
+    return process->dumpable;
+}
+
+void process_setDumpable(Process* process, int dumpable) {
+    utility_alwaysAssert(dumpable == SUID_DUMP_DISABLE || dumpable == SUID_DUMP_USER);
+    process->dumpable = dumpable;
 }
