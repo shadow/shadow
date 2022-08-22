@@ -29,7 +29,9 @@ jobs:
     strategy:
       matrix:
         vm:
-          - oldest
+          # Oldest-available kernel from
+          # https://github.com/actions/virtual-environments
+          - ubuntu-20.04
         container:
           # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
           - 'ubuntu:18.04'
@@ -51,11 +53,11 @@ jobs:
         include:
           # Run some tests on the newest-available base vm, and hence
           # newest-available kernel. https://github.com/actions/virtual-environments
-          - vm: newest
+          - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
             cc: 'gcc'
             buildtype: 'release'
-          - vm: newest
+          - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
             cc: 'gcc'
             buildtype: 'debug'
@@ -66,17 +68,15 @@ jobs:
           # clang's most recent diagnostics and optimizations.
           #
           # Also use the more-recent kernel here.
-          - vm: newest
+          - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'release'
-          - vm: newest
+          - vm: 'ubuntu-22.04'
             container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'debug'
-    # Map "oldest" and "newest" to oldest and newest images currently available.
-    # https://github.com/actions/virtual-environments
-    runs-on: ${{ fromJSON('{"oldest": "ubuntu-20.04", "newest": "ubuntu-22.04"}')[ matrix.vm ] }}
+    runs-on: ${{ matrix.vm }}
 
     env:
       # Assign these to env variables rather than using directly inline, to help
