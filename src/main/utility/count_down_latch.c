@@ -60,7 +60,9 @@ void countdownlatch_countDownAwait(CountDownLatch* latch) {
     if(latch->count == 0) {
         g_cond_broadcast(&(latch->waiters));
     } else {
-        g_cond_wait(&(latch->waiters), &(latch->lock));
+        while (latch->count > 0) {
+            g_cond_wait(&(latch->waiters), &(latch->lock));
+        }
     }
     g_mutex_unlock(&(latch->lock));
 }
