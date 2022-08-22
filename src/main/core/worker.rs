@@ -2,6 +2,7 @@ use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
 use crate::core::controller::ShadowStatusBarState;
+use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
@@ -226,19 +227,14 @@ impl Worker {
         Worker::with(|w| w.clock.now).flatten()
     }
 
-    pub fn update_min_host_runahead(t: SimulationTime) {
+    pub fn update_lowest_used_latency(t: SimulationTime) {
         assert!(t != SimulationTime::ZERO);
 
         Worker::with(|w| {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
-                unsafe {
-                    cshadow::workerpool_updateMinHostRunahead(
-                        w.worker_pool,
-                        SimulationTime::to_c_simtime(Some(t)),
-                    )
-                };
+                WORKER_SHARED.get().unwrap().update_lowest_used_latency(t);
             }
         })
         .unwrap();
@@ -323,6 +319,8 @@ pub struct WorkerShared {
     pub status_logger_state: Option<Arc<status_bar::Status<ShadowStatusBarState>>>,
     // number of plugins that failed with a non-zero exit code
     pub num_plugin_errors: AtomicU32,
+    // calculates the runahead for the next simulation round
+    pub runahead: Runahead,
 }
 
 impl WorkerShared {
@@ -392,6 +390,15 @@ impl WorkerShared {
         if let Some(ref logger_state) = self.status_logger_state {
             logger_state.update(f);
         }
+    }
+
+    pub fn get_runahead(&self) -> SimulationTime {
+        self.runahead.get()
+    }
+
+    /// Should only be called from the thread-local worker.
+    fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
+        self.runahead.update_lowest_used_latency(min_path_latency);
     }
 }
 
@@ -619,8 +626,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateMinHostRunahead(t: cshadow::SimulationTime) {
-        Worker::update_min_host_runahead(SimulationTime::from_c_simtime(t).unwrap());
+    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: cshadow::SimulationTime) {
+        let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
+        Worker::update_lowest_used_latency(min_path_latency);
     }
 
     #[no_mangle]

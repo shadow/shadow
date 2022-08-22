@@ -9,6 +9,7 @@ use crate::core::support::simulation_time::SimulationTime;
 /// the provided minimum possible latency when dynamic runahead is disabled, and otherwise uses a
 /// dynamic runahead of the minimum used latency. Both runahead calculations have a static lower
 /// bound.
+#[derive(Debug)]
 pub struct Runahead {
     /// The lowest packet latency that shadow has used so far in the simulation. For performance, is
     /// only updated if dynamic runahead is enabled for the simulation.

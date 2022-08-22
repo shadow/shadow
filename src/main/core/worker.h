@@ -34,9 +34,8 @@ void worker_finish(GQueue* hosts, SimulationTime time);
 
 // Create a workerpool with `nThreads` threads, allowing up to `nConcurrent` to
 // run at a time.
-WorkerPool* workerpool_new(const Controller* controller, const ChildPidWatcher* pidWatcher,
-                           Scheduler* scheduler, const ConfigOptions* config, int nWorkers,
-                           int nParallel);
+WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
+                           const ConfigOptions* config, int nWorkers, int nParallel);
 
 // Begin executing taskFn(data) on each worker thread in the pool.
 void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
@@ -88,8 +87,6 @@ SimulationTime worker_getCurrentSimulationTime();
 EmulatedTime worker_getCurrentEmulatedTime();
 
 bool worker_isBootstrapActive(void);
-
-void workerpool_updateMinHostRunahead(WorkerPool* pool, SimulationTime time);
 
 void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);

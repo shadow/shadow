@@ -24,41 +24,37 @@ pub struct Controller<'a> {
     config: &'a ConfigOptions,
     sim_config: Option<SimConfig>,
 
-    // calculates the runahead for the next simulation round
-    runahead: Runahead,
-
     // the simulator should attempt to end immediately after this time
     end_time: EmulatedTime,
 }
 
 impl<'a> Controller<'a> {
     pub fn new(sim_config: SimConfig, config: &'a ConfigOptions) -> Self {
-        let min_runahead_config: Option<Duration> =
-            config.experimental.runahead.flatten().map(|x| x.into());
-        let min_runahead_config: Option<SimulationTime> =
-            min_runahead_config.map(|x| x.try_into().unwrap());
-
         let end_time: Duration = config.general.stop_time.unwrap().into();
         let end_time: SimulationTime = end_time.try_into().unwrap();
         let end_time = EmulatedTime::SIMULATION_START + end_time;
 
-        let smallest_latency =
-            SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
-
         Self {
             config,
             sim_config: Some(sim_config),
-            runahead: Runahead::new(
-                config.experimental.use_dynamic_runahead.unwrap(),
-                smallest_latency,
-                min_runahead_config,
-            ),
             end_time,
         }
     }
 
     pub fn run(mut self) -> anyhow::Result<()> {
         let mut sim_config = self.sim_config.take().unwrap();
+
+        let min_runahead_config: Option<Duration> = self
+            .config
+            .experimental
+            .runahead
+            .flatten()
+            .map(|x| x.into());
+        let min_runahead_config: Option<SimulationTime> =
+            min_runahead_config.map(|x| x.try_into().unwrap());
+
+        let smallest_latency =
+            SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
         let status_logger = self.config.general.progress.unwrap().then(|| {
             let state = ShadowStatusBarState::new(self.end_time);
@@ -86,6 +82,11 @@ impl<'a> Controller<'a> {
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
                 status_logger_state: status_logger.as_ref().map(|x| Arc::clone(x.status())),
+                runahead: Runahead::new(
+                    self.config.experimental.use_dynamic_runahead.unwrap(),
+                    smallest_latency,
+                    min_runahead_config,
+                ),
             })
             .expect("The global state has already been set during the program's execution");
 
@@ -121,7 +122,6 @@ pub trait SimController {
         &self,
         min_next_event_time: EmulatedTime,
     ) -> Option<(EmulatedTime, EmulatedTime)>;
-    fn update_min_runahead(&self, min_path_latency: SimulationTime);
 }
 
 impl SimController for Controller<'_> {
@@ -132,7 +132,7 @@ impl SimController for Controller<'_> {
         // TODO: once we get multiple managers, we have to block them here until they have all
         // notified us that they are finished
 
-        let runahead = self.runahead.get();
+        let runahead = worker::WORKER_SHARED.get().unwrap().runahead.get();
         assert_ne!(runahead, SimulationTime::ZERO);
 
         let new_start = min_next_event_time;
@@ -144,10 +144,6 @@ impl SimController for Controller<'_> {
 
         let continue_running = new_start < new_end;
         continue_running.then(|| (new_start, new_end))
-    }
-
-    fn update_min_runahead(&self, min_path_latency: SimulationTime) {
-        self.runahead.update_lowest_used_latency(min_path_latency);
     }
 }
 
@@ -203,20 +199,5 @@ impl<T: 'static + status_bar::StatusBarState> StatusLogger<T> {
             Self::Printer(x) => x.status(),
             Self::Bar(x) => x.status(),
         }
-    }
-}
-
-mod export {
-    use super::*;
-
-    #[no_mangle]
-    pub extern "C" fn controller_updateMinRunahead(
-        controller: *const Controller,
-        min_path_latency: c::SimulationTime,
-    ) {
-        let controller = unsafe { controller.as_ref() }.unwrap();
-        let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
-
-        controller.update_min_runahead(min_path_latency);
     }
 }
