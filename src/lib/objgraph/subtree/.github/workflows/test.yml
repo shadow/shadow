@@ -1,0 +1,83 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Tests
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    container: rust:1.60.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: fmt
+        run: |
+          rustup component add rustfmt
+          ./maint/checks/fmt.sh
+
+      - name: clippy
+        run: |
+          rustup component add clippy
+          ./maint/checks/clippy.sh
+
+  test:
+    runs-on: ubuntu-latest
+    container: rust:1.60.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: test
+        run: ./maint/checks/test.sh
+
+  miri:
+    runs-on: ubuntu-latest
+    container: rust:1.60.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: miri
+        run: |
+          rustup toolchain install nightly-2022-08-16
+          rustup default nightly-2022-08-16
+          rustup component add miri
+          ./maint/checks/miri.sh
+
+  bench:
+    runs-on: ubuntu-latest
+    container: rust:1.60.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: bench
+        run: cargo bench
