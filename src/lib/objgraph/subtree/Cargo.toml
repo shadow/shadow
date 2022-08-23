@@ -31,3 +31,6 @@ harness = false
 [[bench]]
 name = "bench_rootedrefcell"
 harness = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
