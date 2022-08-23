@@ -80,7 +80,13 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     EmulatedTime barrier =
         emutime_add_simtime(EMUTIME_SIMULATION_START, scheduler->currentRound.endTime);
 
-    GList* nextHost = schedulerpolicy_getAssignedHosts(scheduler->policy)->head;
+    GQueue* hosts = schedulerpolicy_getAssignedHosts(scheduler->policy);
+
+    if (hosts == NULL) {
+        return;
+    }
+
+    GList* nextHost = hosts->head;
 
     while (nextHost != NULL) {
         Host* host = nextHost->data;
