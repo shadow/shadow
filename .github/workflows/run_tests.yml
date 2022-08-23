@@ -24,7 +24,7 @@ jobs:
         vm:
           # Oldest-available kernel from
           # https://github.com/actions/virtual-environments
-          - ubuntu-18.04
+          - ubuntu-20.04
         container:
           # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
           - 'ubuntu:18.04'
