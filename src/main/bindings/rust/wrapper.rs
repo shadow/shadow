@@ -2051,6 +2051,12 @@ extern "C" {
 extern "C" {
     pub fn process_getRealtimeTimer(process: *mut Process) -> *mut Timer;
 }
+extern "C" {
+    pub fn process_getDumpable(process: *mut Process) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_setDumpable(process: *mut Process, dumpable: ::std::os::raw::c_int);
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Tsc {

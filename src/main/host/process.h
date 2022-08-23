@@ -190,4 +190,9 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 // Access the process's realtime timer; e.g. corresponding to ITIMER_REAL.
 Timer* process_getRealtimeTimer(Process* process);
 
+// Process's "dumpable" state, as manipulated by the prctl operations
+// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
+int process_getDumpable(Process* process);
+void process_setDumpable(Process* process, int dumpable);
+
 #endif /* SHD_PROCESS_H_ */
