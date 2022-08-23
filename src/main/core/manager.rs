@@ -243,7 +243,8 @@ impl<'a> Manager<'a> {
                 // update the status logger
                 let display_time = std::cmp::min(window_start, window_end);
                 worker::WORKER_SHARED
-                    .get()
+                    .borrow()
+                    .as_ref()
                     .unwrap()
                     .update_status_logger(|state| {
                         state.current = display_time;
@@ -286,7 +287,8 @@ impl<'a> Manager<'a> {
 
         // simulation is finished, so update the status logger
         worker::WORKER_SHARED
-            .get()
+            .borrow()
+            .as_ref()
             .unwrap()
             .update_status_logger(|state| {
                 state.current = self.end_time;
@@ -387,7 +389,7 @@ impl<'a> Manager<'a> {
             unsafe {
                 c::host_setup(
                     c_host,
-                    worker::WORKER_SHARED.get().unwrap().dns(),
+                    worker::WORKER_SHARED.borrow().as_ref().unwrap().dns(),
                     self.raw_frequency_khz,
                     hosts_path.as_ptr(),
                 )
