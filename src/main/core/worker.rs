@@ -1,4 +1,4 @@
-use atomic_refcell::AtomicRefCell;
+use atomic_refcell::{AtomicRef, AtomicRefCell};
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
@@ -42,7 +42,8 @@ std::thread_local! {
 }
 
 // shared global state
-// must not mutably borrow when the simulation is running
+// Must not mutably borrow when the simulation is running. Worker threads should access it through
+// `Worker::shared`.
 pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
     Lazy::new(|| AtomicRefCell::new(None));
 
@@ -68,6 +69,9 @@ struct Clock {
 /// Worker context, containing 'global' information for the current thread.
 pub struct Worker {
     worker_id: WorkerThreadID,
+
+    // A shared reference to the state in `WORKER_SHARED`.
+    shared: AtomicRef<'static, WorkerShared>,
 
     // These store some information about the current Host, Process, and Thread,
     // when applicable. These are used to make this information available to
@@ -107,6 +111,7 @@ impl Worker {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
+                shared: AtomicRef::map(WORKER_SHARED.borrow(), |x| x.as_ref().unwrap()),
                 active_host_info: None,
                 active_process_info: None,
                 active_thread_info: None,
@@ -236,11 +241,7 @@ impl Worker {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
-                WORKER_SHARED
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .update_lowest_used_latency(t);
+                w.shared.update_lowest_used_latency(t);
             }
         })
         .unwrap();
@@ -435,7 +436,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        WORKER_SHARED.borrow().as_ref().unwrap().dns()
+        Worker::with_mut(|w| w.shared.dns()).unwrap()
     }
 
     #[no_mangle]
@@ -446,7 +447,8 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        SimulationTime::to_c_simtime(WORKER_SHARED.borrow().as_ref().unwrap().latency(src, dst))
+        let latency = Worker::with_mut(|w| w.shared.latency(src, dst)).unwrap();
+        SimulationTime::to_c_simtime(latency)
     }
 
     #[no_mangle]
@@ -457,36 +459,19 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .reliability(src, dst)
-            .unwrap()
+        Worker::with_mut(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .bandwidth(ip)
-            .unwrap()
-            .down_bytes
+        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .bandwidth(ip)
-            .unwrap()
-            .up_bytes
+        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
     }
 
     #[no_mangle]
@@ -494,11 +479,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .is_routable(src, dst)
+        Worker::with_mut(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
     #[no_mangle]
@@ -506,20 +487,12 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .increment_packet_count(src, dst)
+        Worker::with_mut(|w| w.shared.increment_packet_count(src, dst)).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .increment_plugin_error_count();
+        Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
     }
 
     /// Initialize a Worker for this thread.
