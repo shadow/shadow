@@ -376,8 +376,6 @@ SimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config
 
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
-SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
-
 bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
 bool config_getProgress(const struct ConfigOptions *config);
@@ -511,9 +509,7 @@ void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 void worker_incrementPluginErrors(void);
 
 // Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerPool *worker_pool,
-                             int32_t worker_id,
-                             SimulationTime bootstrap_end_time);
+void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
 
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectAllocCounter(void);

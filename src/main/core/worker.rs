@@ -85,7 +85,6 @@ pub struct Worker {
     active_thread_info: Option<ThreadInfo>,
 
     clock: Clock,
-    bootstrap_end_time: EmulatedTime,
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
@@ -106,7 +105,6 @@ impl Worker {
     pub unsafe fn new_for_this_thread(
         worker_pool: *mut cshadow::WorkerPool,
         worker_id: WorkerThreadID,
-        bootstrap_end_time: EmulatedTime,
     ) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
@@ -119,7 +117,6 @@ impl Worker {
                     now: None,
                     barrier: None,
                 },
-                bootstrap_end_time,
                 min_latency_cache: Cell::new(None),
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
@@ -328,6 +325,7 @@ pub struct WorkerShared {
     pub num_plugin_errors: AtomicU32,
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
+    pub bootstrap_end_time: EmulatedTime,
 }
 
 impl WorkerShared {
@@ -500,14 +498,11 @@ mod export {
     pub unsafe extern "C" fn worker_newForThisThread(
         worker_pool: *mut cshadow::WorkerPool,
         worker_id: i32,
-        bootstrap_end_time: cshadow::SimulationTime,
     ) {
-        let bootstrap_end_time = SimulationTime::from_c_simtime(bootstrap_end_time).unwrap();
         unsafe {
             Worker::new_for_this_thread(
                 notnull_mut(worker_pool),
                 WorkerThreadID(worker_id.try_into().unwrap()),
-                EmulatedTime::from_abs_simtime(bootstrap_end_time),
             )
         }
     }
@@ -639,7 +634,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::with(|w| w.clock.now.unwrap() < w.bootstrap_end_time).unwrap()
+        Worker::with(|w| w.clock.now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
 
     #[no_mangle]

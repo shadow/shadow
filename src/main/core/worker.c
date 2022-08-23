@@ -410,8 +410,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
 
     // Create the thread-local Worker object.
-    SimulationTime bootstrapEndTime = config_getBootstrapEndTime(workerPool->config);
-    worker_newForThisThread(workerPool, threadID, bootstrapEndTime);
+    worker_newForThisThread(workerPool, threadID);
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);
