@@ -72,12 +72,12 @@ impl<'a> Controller<'a> {
 
         // set the simulation's global state
         worker::WORKER_SHARED
-            .set(worker::WorkerShared {
+            .borrow_mut()
+            .replace(worker::WorkerShared {
                 ip_assignment: sim_config.ip_assignment,
                 routing_info: sim_config.routing_info,
                 host_bandwidths: sim_config.host_bandwidths,
-                // safe since the DNS type has an internal mutex, and since global memory is leaked
-                // we don't ever need to free this
+                // safe since the DNS type has an internal mutex
                 dns: unsafe { SyncSendPointer::new(dns) },
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
@@ -87,8 +87,7 @@ impl<'a> Controller<'a> {
                     smallest_latency,
                     min_runahead_config,
                 ),
-            })
-            .expect("The global state has already been set during the program's execution");
+            });
 
         let manager_hosts = std::mem::take(&mut sim_config.hosts);
         let manager_rand = Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen());
@@ -105,12 +104,20 @@ impl<'a> Controller<'a> {
         manager.run()?;
         log::info!("Finished simulation");
 
-        let num_plugin_errors = worker::WORKER_SHARED.get().unwrap().plugin_error_count();
+        let num_plugin_errors = worker::WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .plugin_error_count();
+
         if num_plugin_errors > 0 {
             return Err(anyhow::anyhow!(
                 "{num_plugin_errors} managed processes exited with a non-zero error code"
             ));
         }
+
+        // drop the simulation's global state
+        worker::WORKER_SHARED.borrow_mut().take();
 
         Ok(())
     }
@@ -132,7 +139,12 @@ impl SimController for Controller<'_> {
         // TODO: once we get multiple managers, we have to block them here until they have all
         // notified us that they are finished
 
-        let runahead = worker::WORKER_SHARED.get().unwrap().runahead.get();
+        let runahead = worker::WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .runahead
+            .get();
         assert_ne!(runahead, SimulationTime::ZERO);
 
         let new_start = min_next_event_time;

@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
@@ -41,8 +42,9 @@ std::thread_local! {
 }
 
 // shared global state
-pub static WORKER_SHARED: once_cell::sync::OnceCell<WorkerShared> =
-    once_cell::sync::OnceCell::new();
+// must not mutably borrow when the simulation is running
+pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
+    Lazy::new(|| AtomicRefCell::new(None));
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -234,7 +236,11 @@ impl Worker {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
-                WORKER_SHARED.get().unwrap().update_lowest_used_latency(t);
+                WORKER_SHARED
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .update_lowest_used_latency(t);
             }
         })
         .unwrap();
@@ -402,6 +408,12 @@ impl WorkerShared {
     }
 }
 
+impl std::ops::Drop for WorkerShared {
+    fn drop(&mut self) {
+        unsafe { cshadow::dns_free(self.dns.ptr()) };
+    }
+}
+
 /// Enable object counters. Should be called near the beginning of the program.
 pub fn enable_object_counters() {
     USE_OBJECT_COUNTERS.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -423,7 +435,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        WORKER_SHARED.get().unwrap().dns()
+        WORKER_SHARED.borrow().as_ref().unwrap().dns()
     }
 
     #[no_mangle]
@@ -434,7 +446,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        SimulationTime::to_c_simtime(WORKER_SHARED.get().unwrap().latency(src, dst))
+        SimulationTime::to_c_simtime(WORKER_SHARED.borrow().as_ref().unwrap().latency(src, dst))
     }
 
     #[no_mangle]
@@ -445,14 +457,20 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED.get().unwrap().reliability(src, dst).unwrap()
+        WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .reliability(src, dst)
+            .unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         WORKER_SHARED
-            .get()
+            .borrow()
+            .as_ref()
             .unwrap()
             .bandwidth(ip)
             .unwrap()
@@ -462,7 +480,13 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        WORKER_SHARED.get().unwrap().bandwidth(ip).unwrap().up_bytes
+        WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .bandwidth(ip)
+            .unwrap()
+            .up_bytes
     }
 
     #[no_mangle]
@@ -470,7 +494,11 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED.get().unwrap().is_routable(src, dst)
+        WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .is_routable(src, dst)
     }
 
     #[no_mangle]
@@ -479,14 +507,19 @@ mod export {
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
         WORKER_SHARED
-            .get()
+            .borrow()
+            .as_ref()
             .unwrap()
             .increment_packet_count(src, dst)
     }
 
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
-        WORKER_SHARED.get().unwrap().increment_plugin_error_count();
+        WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .increment_plugin_error_count();
     }
 
     /// Initialize a Worker for this thread.
