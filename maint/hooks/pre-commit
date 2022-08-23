@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+maint/checks/fmt.sh
+maint/checks/build_bench.sh
+maint/checks/clippy.sh
+maint/checks/miri.sh
+maint/checks/test.sh
