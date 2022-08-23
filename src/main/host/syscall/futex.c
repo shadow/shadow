@@ -44,15 +44,16 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // Normally, the load/compare is done atomically. Since Shadow does not run multiple
     // threads from the same plugin at the same time, we do not use atomic ops.
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
-    const uint32_t* futexVal = process_getReadablePtr(sys->process, futexVPtr, sizeof(uint32_t));
-    if (!futexVal) {
+    uint32_t futexVal;
+    int result = process_readPtr(sys->process, &futexVal, futexVPtr, sizeof(futexVal));
+    if (result) {
         warning("Couldn't read futex address %p", (void*)futexVPtr.val);
-        return syscallreturn_makeDoneErrno(EFAULT);
+        return syscallreturn_makeDoneErrno(-result);
     }
 
     trace(
-        "Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, (uint32_t)expectedVal);
-    if (!_syscallhandler_wasBlocked(sys) && *futexVal != (uint32_t)expectedVal) {
+        "Futex value is %" PRIu32 ", expected value is %" PRIu32, futexVal, (uint32_t)expectedVal);
+    if (!_syscallhandler_wasBlocked(sys) && futexVal != (uint32_t)expectedVal) {
         trace("Futex values don't match, try again later");
         return syscallreturn_makeDoneErrno(EAGAIN);
     }

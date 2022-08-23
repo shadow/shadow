@@ -121,15 +121,17 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    struct timespec* res_timespec =
-        process_getWriteablePtr(sys->process, args->args[1].as_ptr, sizeof(*res_timespec));
-    if (!res_timespec) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
     EmulatedTime now = _syscallhandler_getEmulatedTime();
-    res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
-    res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
+    struct timespec res_timespec = {
+        .tv_sec = now / SIMTIME_ONE_SECOND,
+        .tv_nsec = now % SIMTIME_ONE_SECOND,
+    };
+
+    int res =
+        process_writePtr(sys->process, args->args[1].as_ptr, &res_timespec, sizeof(res_timespec));
+    if (res) {
+        return syscallreturn_makeDoneErrno(-res);
+    }
 
     return syscallreturn_makeDoneI64(0);
 }
