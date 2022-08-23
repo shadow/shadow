@@ -4,6 +4,7 @@ members = [
     "main",
     "test",
     "lib/gml-parser",
+    "lib/objgraph/subtree",
     "lib/shadow-shim-helper-rs",
     "lib/logger/rust_bindings",
     "lib/syscall-logger",
