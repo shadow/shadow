@@ -1405,22 +1405,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getBootstrapEndTime(
-        config: *const ConfigOptions,
-    ) -> c::SimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config
-            .general
-            .bootstrap_end_time
-            .unwrap()
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };

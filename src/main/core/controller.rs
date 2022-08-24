@@ -53,6 +53,10 @@ impl<'a> Controller<'a> {
         let min_runahead_config: Option<SimulationTime> =
             min_runahead_config.map(|x| x.try_into().unwrap());
 
+        let bootstrap_end_time: Duration = self.config.general.bootstrap_end_time.unwrap().into();
+        let bootstrap_end_time: SimulationTime = bootstrap_end_time.try_into().unwrap();
+        let bootstrap_end_time = EmulatedTime::SIMULATION_START + bootstrap_end_time;
+
         let smallest_latency =
             SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
 
@@ -87,6 +91,7 @@ impl<'a> Controller<'a> {
                     smallest_latency,
                     min_runahead_config,
                 ),
+                bootstrap_end_time,
             });
 
         let manager_hosts = std::mem::take(&mut sim_config.hosts);
