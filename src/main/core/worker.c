@@ -441,8 +441,6 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
 
     worker_clearCurrentTime();
 
-    WorkerPool* pool = _worker_pool();
-
     /* send object counts to global counters */
     worker_addToGlobalAllocCounters(_worker_objectAllocCounter(), _worker_objectDeallocCounter());
 
