@@ -30,7 +30,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/utility/count_down_latch.h"
 #include "main/utility/utility.h"
 
 static void* _worker_run(void* voidWorker);
@@ -123,7 +122,7 @@ WorkerPool* workerpool_new(int nWorkers, int nParallel) {
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
         .nWorkers = nWorkers,
-        .finishLatch = countdownlatch_new(nWorkers),
+        .finishLatch = countdownlatch_new(nWorkers + 1),
         .joined = FALSE,
         .logicalProcessors = lps_new(nLogicalProcessors),
         .minEventTimes = g_new(SimulationTime, nLogicalProcessors),
@@ -152,8 +151,7 @@ WorkerPool* workerpool_new(int nWorkers, int nParallel) {
     }
 
     // Wait for all threads to set their tid
-    countdownlatch_await(pool->finishLatch);
-    countdownlatch_reset(pool->finishLatch);
+    countdownlatch_wait(pool->finishLatch);
 
     for (int workerID = 0; workerID < nWorkers; ++workerID) {
         int lpi = workerID % nLogicalProcessors;
@@ -274,8 +272,7 @@ void workerpool_awaitTaskFn(WorkerPool* pool) {
     if (pool->nWorkers == 0) {
         return;
     }
-    countdownlatch_await(pool->finishLatch);
-    countdownlatch_reset(pool->finishLatch);
+    countdownlatch_wait(pool->finishLatch);
     pool->taskFn = NULL;
     pool->taskData = NULL;
 
@@ -384,7 +381,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     worker_newForThisThread(workerPool, threadID);
 
     // Signal parent thread that we've set the nativeThreadID.
-    countdownlatch_countDown(workerPool->finishLatch);
+    countdownlatch_wait(workerPool->finishLatch);
 
     WorkerPoolTaskFn taskFn = NULL;
     do {
@@ -411,7 +408,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
             // No more workers to run; lpi is now idle.
             lps_idleTimerContinue(workerPool->logicalProcessors, lpi);
         }
-        countdownlatch_countDown(workerPool->finishLatch);
+        countdownlatch_wait(workerPool->finishLatch);
     } while (taskFn != NULL);
     trace("Worker finished");
 

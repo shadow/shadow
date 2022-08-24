@@ -7,6 +7,7 @@ pub mod macros;
 pub mod byte_queue;
 pub mod callback_queue;
 pub mod childpid_watcher;
+pub mod count_down_latch;
 pub mod counter;
 pub mod give;
 pub mod interval_map;
