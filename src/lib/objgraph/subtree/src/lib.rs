@@ -111,9 +111,9 @@ impl<'a> RootGuard<'a> {
         }
     }
 }
+mod mutex;
 pub mod rc;
 pub mod refcell;
-mod mutex;
 
 mod export {
     use super::*;
