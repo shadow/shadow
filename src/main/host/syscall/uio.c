@@ -166,12 +166,13 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             if (result > 0) {
                 totalBytesWritten += (size_t)result;
             } else {
-                if (result == -EWOULDBLOCK && totalBytesWritten > 0) {
-                    result = totalBytesWritten;
-                }
                 break;
             }
         }
+    }
+    
+    if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+        result = totalBytesWritten;
     }
 
     if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
@@ -278,11 +279,11 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             if (result > 0) {
                 totalBytesWritten += (size_t)result;
             } else {
-                if (result == -EWOULDBLOCK && totalBytesWritten > 0) {
-                    result = totalBytesWritten;
-                }
                 break;
             }
+        }
+        if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+            result = totalBytesWritten;
         }
     }
 
