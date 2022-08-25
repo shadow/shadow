@@ -30,7 +30,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/utility/count_down_latch.h"
 #include "main/utility/utility.h"
 
 static void* _worker_run(void* voidWorker);

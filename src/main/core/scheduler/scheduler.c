@@ -20,7 +20,6 @@
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
-#include "main/utility/count_down_latch.h"
 #include "main/utility/utility.h"
 
 static int _parallelism;

@@ -52,6 +52,8 @@ typedef struct CliOptions CliOptions;
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
+typedef struct CountDownLatch CountDownLatch;
+
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
@@ -236,6 +238,16 @@ WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
 //
 // Calling with pids or handles that no longer exist is safe.
 void childpidwatcher_unwatch(const struct ChildPidWatcher *watcher, pid_t pid, WatchHandle handle);
+
+struct CountDownLatch *countdownlatch_new(uintptr_t count);
+
+void countdownlatch_free(struct CountDownLatch *latch);
+
+void countdownlatch_reset(const struct CountDownLatch *latch);
+
+void countdownlatch_await(const struct CountDownLatch *latch);
+
+void countdownlatch_countDown(const struct CountDownLatch *latch);
 
 struct Counter *counter_new(void);
 

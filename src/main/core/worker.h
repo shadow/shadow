@@ -24,7 +24,6 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.minimal.h"
-#include "main/utility/count_down_latch.h"
 
 #include "main/bindings/c/bindings.h"
 

@@ -105,7 +105,6 @@ set(shadow_srcs
     routing/dns.c
 
     utility/async_priority_queue.c
-    utility/count_down_latch.c
     utility/priority_queue.c
     utility/rpath.c
     utility/tagged_ptr.c
