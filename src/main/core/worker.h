@@ -87,8 +87,6 @@ bool worker_isBootstrapActive(void);
 void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);
 
-gboolean worker_isFiltered(LogLevel level);
-
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);
 

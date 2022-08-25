@@ -568,5 +568,3 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     worker_setActiveHost(NULL);
     host_unref(host);
 }
-
-gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }

@@ -1867,9 +1867,6 @@ extern "C" {
     pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {
-    pub fn worker_isFiltered(level: LogLevel) -> gboolean;
-}
-extern "C" {
     pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *mut Address;
 }
 extern "C" {
