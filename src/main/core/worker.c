@@ -347,16 +347,6 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-const Address* worker_resolveIPToAddress(in_addr_t ip) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveIPToAddress(dns, ip);
-}
-
-const Address* worker_resolveNameToAddress(const gchar* name) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveNameToAddress(dns, name);
-}
-
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 void* _worker_run(void* voidWorkerThreadInfo) {

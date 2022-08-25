@@ -680,6 +680,26 @@ mod export {
         Worker::is_alive()
     }
 
+    #[no_mangle]
+    pub extern "C" fn worker_resolveIPToAddress(ip: libc::in_addr_t) -> *const cshadow::Address {
+        Worker::with(|w| {
+            let dns = w.shared.dns.ptr();
+            unsafe { cshadow::dns_resolveIPToAddress(dns, ip) }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_resolveNameToAddress(
+        name: *const libc::c_char,
+    ) -> *const cshadow::Address {
+        Worker::with(|w| {
+            let dns = w.shared.dns.ptr();
+            unsafe { cshadow::dns_resolveNameToAddress(dns, name) }
+        })
+        .unwrap()
+    }
+
     /// Add the counters to their global counterparts, and clear the provided counters.
     #[no_mangle]
     pub extern "C" fn worker_addToGlobalAllocCounters(
