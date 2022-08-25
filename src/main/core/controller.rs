@@ -1,23 +1,18 @@
-use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use rand::Rng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-use crate::core::manager::Manager;
-use crate::core::scheduler::runahead::Runahead;
+use crate::core::manager::{Manager, ManagerConfig};
 use crate::core::sim_config::SimConfig;
-use crate::core::support::configuration::{ConfigOptions, Flatten};
+use crate::core::support::configuration::ConfigOptions;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
-use crate::cshadow as c;
 use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
 use crate::utility::time::TimeParts;
-use crate::utility::SyncSendPointer;
 
 pub struct Controller<'a> {
     // general options and user configuration for the simulation
@@ -44,18 +39,6 @@ impl<'a> Controller<'a> {
     pub fn run(mut self) -> anyhow::Result<()> {
         let mut sim_config = self.sim_config.take().unwrap();
 
-        let min_runahead_config: Option<Duration> = self
-            .config
-            .experimental
-            .runahead
-            .flatten()
-            .map(|x| x.into());
-        let min_runahead_config: Option<SimulationTime> =
-            min_runahead_config.map(|x| x.try_into().unwrap());
-
-        let smallest_latency =
-            SimulationTime::from_nanos(sim_config.routing_info.get_smallest_latency_ns().unwrap());
-
         let status_logger = self.config.general.progress.unwrap().then(|| {
             let state = ShadowStatusBarState::new(self.end_time);
 
@@ -67,45 +50,21 @@ impl<'a> Controller<'a> {
             }
         });
 
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
+        let manager_config = ManagerConfig {
+            random: Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen()),
+            ip_assignment: sim_config.ip_assignment,
+            routing_info: sim_config.routing_info,
+            host_bandwidths: sim_config.host_bandwidths,
+            hosts: sim_config.hosts,
+        };
 
-        // set the simulation's global state
-        worker::WORKER_SHARED
-            .set(worker::WorkerShared {
-                ip_assignment: sim_config.ip_assignment,
-                routing_info: sim_config.routing_info,
-                host_bandwidths: sim_config.host_bandwidths,
-                // safe since the DNS type has an internal mutex, and since global memory is leaked
-                // we don't ever need to free this
-                dns: unsafe { SyncSendPointer::new(dns) },
-                num_plugin_errors: AtomicU32::new(0),
-                // allow the status logger's state to be updated from anywhere
-                status_logger_state: status_logger.as_ref().map(|x| Arc::clone(x.status())),
-                runahead: Runahead::new(
-                    self.config.experimental.use_dynamic_runahead.unwrap(),
-                    smallest_latency,
-                    min_runahead_config,
-                ),
-            })
-            .expect("The global state has already been set during the program's execution");
-
-        let manager_hosts = std::mem::take(&mut sim_config.hosts);
-        let manager_rand = Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen());
-        let manager = Manager::new(
-            &self,
-            self.config,
-            manager_hosts,
-            self.end_time,
-            manager_rand,
-        )
-        .context("Failed to initialize the manager")?;
+        let manager = Manager::new(manager_config, &self, self.config, self.end_time)
+            .context("Failed to initialize the manager")?;
 
         log::info!("Running simulation");
-        manager.run()?;
+        let num_plugin_errors = manager.run(status_logger.as_ref().map(|x| x.status()))?;
         log::info!("Finished simulation");
 
-        let num_plugin_errors = worker::WORKER_SHARED.get().unwrap().plugin_error_count();
         if num_plugin_errors > 0 {
             return Err(anyhow::anyhow!(
                 "{num_plugin_errors} managed processes exited with a non-zero error code"
@@ -132,7 +91,12 @@ impl SimController for Controller<'_> {
         // TODO: once we get multiple managers, we have to block them here until they have all
         // notified us that they are finished
 
-        let runahead = worker::WORKER_SHARED.get().unwrap().runahead.get();
+        let runahead = worker::WORKER_SHARED
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .runahead
+            .get();
         assert_ne!(runahead, SimulationTime::ZERO);
 
         let new_start = min_next_event_time;

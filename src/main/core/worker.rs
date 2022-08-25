@@ -1,3 +1,4 @@
+use atomic_refcell::{AtomicRef, AtomicRefCell};
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
 
@@ -6,14 +7,14 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event::Event;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::Host;
-use crate::host::host::HostInfo;
-use crate::host::process::Process;
-use crate::host::process::ProcessId;
-use crate::host::thread::ThreadId;
-use crate::host::thread::{CThread, Thread};
+use crate::host::host::{Host, HostId, HostInfo};
+use crate::host::process::{Process, ProcessId};
+use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
+use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use crate::utility::status_bar;
@@ -41,8 +42,10 @@ std::thread_local! {
 }
 
 // shared global state
-pub static WORKER_SHARED: once_cell::sync::OnceCell<WorkerShared> =
-    once_cell::sync::OnceCell::new();
+// Must not mutably borrow when the simulation is running. Worker threads should access it through
+// `Worker::shared`.
+pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
+    Lazy::new(|| AtomicRefCell::new(None));
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -67,6 +70,9 @@ struct Clock {
 pub struct Worker {
     worker_id: WorkerThreadID,
 
+    // A shared reference to the state in `WORKER_SHARED`.
+    shared: AtomicRef<'static, WorkerShared>,
+
     // These store some information about the current Host, Process, and Thread,
     // when applicable. These are used to make this information available to
     // code that might not have access to the objects themselves, such as the
@@ -79,7 +85,6 @@ pub struct Worker {
     active_thread_info: Option<ThreadInfo>,
 
     clock: Clock,
-    bootstrap_end_time: EmulatedTime,
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
@@ -100,11 +105,11 @@ impl Worker {
     pub unsafe fn new_for_this_thread(
         worker_pool: *mut cshadow::WorkerPool,
         worker_id: WorkerThreadID,
-        bootstrap_end_time: EmulatedTime,
     ) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
+                shared: AtomicRef::map(WORKER_SHARED.borrow(), |x| x.as_ref().unwrap()),
                 active_host_info: None,
                 active_process_info: None,
                 active_thread_info: None,
@@ -112,7 +117,6 @@ impl Worker {
                     now: None,
                     barrier: None,
                 },
-                bootstrap_end_time,
                 min_latency_cache: Cell::new(None),
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
@@ -234,7 +238,7 @@ impl Worker {
             let min_latency_cache = w.min_latency_cache.get();
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
-                WORKER_SHARED.get().unwrap().update_lowest_used_latency(t);
+                w.shared.update_lowest_used_latency(t);
             }
         })
         .unwrap();
@@ -321,6 +325,10 @@ pub struct WorkerShared {
     pub num_plugin_errors: AtomicU32,
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
+    pub child_pid_watcher: ChildPidWatcher,
+    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
+    pub bootstrap_end_time: EmulatedTime,
+    pub sim_end_time: EmulatedTime,
 }
 
 impl WorkerShared {
@@ -400,6 +408,22 @@ impl WorkerShared {
     fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
         self.runahead.update_lowest_used_latency(min_path_latency);
     }
+
+    /// Get the pid watcher.
+    pub fn child_pid_watcher(&self) -> &ChildPidWatcher {
+        &self.child_pid_watcher
+    }
+
+    pub fn push_to_host(&self, host: HostId, event: Event) {
+        let event_queue = self.event_queues.get(&host).unwrap();
+        event_queue.0.lock().unwrap().push(event);
+    }
+}
+
+impl std::ops::Drop for WorkerShared {
+    fn drop(&mut self) {
+        unsafe { cshadow::dns_free(self.dns.ptr()) };
+    }
 }
 
 /// Enable object counters. Should be called near the beginning of the program.
@@ -423,7 +447,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        WORKER_SHARED.get().unwrap().dns()
+        Worker::with_mut(|w| w.shared.dns()).unwrap()
     }
 
     #[no_mangle]
@@ -434,7 +458,8 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        SimulationTime::to_c_simtime(WORKER_SHARED.get().unwrap().latency(src, dst))
+        let latency = Worker::with_mut(|w| w.shared.latency(src, dst)).unwrap();
+        SimulationTime::to_c_simtime(latency)
     }
 
     #[no_mangle]
@@ -445,24 +470,19 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED.get().unwrap().reliability(src, dst).unwrap()
+        Worker::with_mut(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        WORKER_SHARED
-            .get()
-            .unwrap()
-            .bandwidth(ip)
-            .unwrap()
-            .down_bytes
+        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        WORKER_SHARED.get().unwrap().bandwidth(ip).unwrap().up_bytes
+        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
     }
 
     #[no_mangle]
@@ -470,7 +490,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED.get().unwrap().is_routable(src, dst)
+        Worker::with_mut(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
     #[no_mangle]
@@ -478,15 +498,27 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        WORKER_SHARED
-            .get()
-            .unwrap()
-            .increment_packet_count(src, dst)
+        Worker::with_mut(|w| w.shared.increment_packet_count(src, dst)).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
-        WORKER_SHARED.get().unwrap().increment_plugin_error_count();
+        Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
+
+    /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
+        Worker::with_mut(|w| w.shared.child_pid_watcher() as *const _).unwrap()
+    }
+
+    /// Takes ownership of the event.
+    #[no_mangle]
+    pub extern "C" fn worker_pushToHost(host: cshadow::HostId, event: *mut Event) {
+        assert!(!event.is_null());
+        let event = unsafe { Box::from_raw(event) };
+        assert!(event.time() >= Worker::round_end_time().unwrap());
+        Worker::with_mut(|w| w.shared.push_to_host(host.into(), *event)).unwrap();
     }
 
     /// Initialize a Worker for this thread.
@@ -494,14 +526,11 @@ mod export {
     pub unsafe extern "C" fn worker_newForThisThread(
         worker_pool: *mut cshadow::WorkerPool,
         worker_id: i32,
-        bootstrap_end_time: cshadow::SimulationTime,
     ) {
-        let bootstrap_end_time = SimulationTime::from_c_simtime(bootstrap_end_time).unwrap();
         unsafe {
             Worker::new_for_this_thread(
                 notnull_mut(worker_pool),
                 WorkerThreadID(worker_id.try_into().unwrap()),
-                EmulatedTime::from_abs_simtime(bootstrap_end_time),
             )
         }
     }
@@ -633,7 +662,12 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::with(|w| w.clock.now.unwrap() < w.bootstrap_end_time).unwrap()
+        Worker::with(|w| w.clock.now.unwrap() < w.shared.bootstrap_end_time).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_isSimCompleted() -> bool {
+        Worker::with(|w| w.clock.now.unwrap() >= w.shared.sim_end_time).unwrap()
     }
 
     #[no_mangle]

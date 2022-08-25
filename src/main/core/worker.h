@@ -17,7 +17,6 @@ typedef struct _WorkerPool WorkerPool;
 typedef void (*WorkerPoolTaskFn)(void*);
 
 #include "lib/logger/log_level.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
 #include "main/host/syscall_types.h"
@@ -34,8 +33,7 @@ void worker_finish(GQueue* hosts, SimulationTime time);
 
 // Create a workerpool with `nThreads` threads, allowing up to `nConcurrent` to
 // run at a time.
-WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
-                           const ConfigOptions* config, int nWorkers, int nParallel);
+WorkerPool* workerpool_new(int nWorkers, int nParallel);
 
 // Begin executing taskFn(data) on each worker thread in the pool.
 void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
@@ -66,8 +64,6 @@ void worker_setMinEventTimeNextRound(SimulationTime simtime);
 void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 
 int worker_getAffinity();
-const ChildPidWatcher* worker_getChildPidWatcher();
-const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay);
 gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);

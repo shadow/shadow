@@ -15,8 +15,7 @@ typedef struct _Scheduler Scheduler;
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
 
-Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions* config,
-                         guint nWorkers, guint schedulerSeed, SimulationTime endTime);
+Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime endTime);
 void scheduler_free(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
 
@@ -33,7 +32,6 @@ Event* scheduler_pop(Scheduler*);
 EmulatedTime scheduler_nextHostEventTime(Scheduler*, Host* host);
 
 int scheduler_addHost(Scheduler*, Host*);
-const ThreadSafeEventQueue* scheduler_getEventQueue(Scheduler* scheduler, HostId host);
 gboolean scheduler_isRunning(Scheduler* scheduler);
 
 #endif /* SHD_SCHEDULER_H_ */

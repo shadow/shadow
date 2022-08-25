@@ -15,6 +15,7 @@ use std::thread;
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
 /// when the object is dropped.
+#[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
     epoll: std::os::unix::io::RawFd,
@@ -22,6 +23,7 @@ pub struct ChildPidWatcher {
 
 pub type WatchHandle = u64;
 
+#[derive(Debug)]
 enum Command {
     RunCallbacks(Pid),
     Finish,
@@ -37,6 +39,7 @@ struct PidData {
     unregistered: bool,
 }
 
+#[derive(Debug)]
 struct Inner {
     // Next unique handle ID.
     next_handle: WatchHandle,
@@ -330,6 +333,15 @@ impl Drop for ChildPidWatcher {
         };
         handle.join().unwrap();
         nix::unistd::close(self.epoll).unwrap();
+    }
+}
+
+impl std::fmt::Debug for PidData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PidData")
+            .field("fd", &self.fd)
+            .field("unregistered", &self.unregistered)
+            .finish_non_exhaustive()
     }
 }
 

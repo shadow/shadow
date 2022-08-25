@@ -20,7 +20,6 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/host/affinity.h"
@@ -40,16 +39,6 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the PID watcher for managed processes */
-    const ChildPidWatcher* pidWatcher;
-
-    /* Unowned pointer to the configuration options */
-    const ConfigOptions* config;
-
-    /* Unowned pointer to the per-manager parallel scheduler object that feeds
-     * events to all workers */
-    Scheduler* scheduler;
-
     /* Number of Worker threads */
     int nWorkers;
 
@@ -123,8 +112,7 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
-                           const ConfigOptions* config, int nWorkers, int nParallel) {
+WorkerPool* workerpool_new(int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -134,9 +122,6 @@ WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* schedul
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .pidWatcher = pidWatcher,
-        .config = config,
-        .scheduler = scheduler,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
@@ -372,10 +357,6 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
-
-const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
-
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 void* _worker_run(void* voidWorkerThreadInfo) {
@@ -410,8 +391,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
 
     // Create the thread-local Worker object.
-    SimulationTime bootstrapEndTime = config_getBootstrapEndTime(workerPool->config);
-    worker_newForThisThread(workerPool, threadID, bootstrapEndTime);
+    worker_newForThisThread(workerPool, threadID);
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);
@@ -461,8 +441,6 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
 
     worker_clearCurrentTime();
 
-    WorkerPool* pool = _worker_pool();
-
     /* send object counts to global counters */
     worker_addToGlobalAllocCounters(_worker_objectAllocCounter(), _worker_objectDeallocCounter());
 
@@ -493,7 +471,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 
-    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
+    if (worker_isSimCompleted()) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -529,7 +507,6 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -559,8 +536,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         // round and calculated its min event time, so we put this in our min event time instead
         worker_setMinEventTimeNextRound(event_getTime(packetEvent));
 
-        const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
-        eventqueue_push(eventQueue, packetEvent);
+        worker_pushToHost(dstHostID, packetEvent);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }
