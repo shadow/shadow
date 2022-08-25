@@ -52,7 +52,7 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         return syscallreturn_makeDoneI64(0);
     }
 
-    Address* address;
+    const Address* address;
 
     if (strncasecmp(name, host_getName(sys->host), MIN(name_len, NI_MAXHOST)) == 0) {
         trace("Using default address for my own hostname %s", name);

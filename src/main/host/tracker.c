@@ -337,7 +337,7 @@ void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t 
             } else if (peerIP == htonl(INADDR_ANY)) {
                 g_string_printf(hostnameBuffer, "0.0.0.0");
             } else {
-                Address* address = worker_resolveIPToAddress( peerIP);
+                const Address* address = worker_resolveIPToAddress( peerIP);
                 const gchar* hostname = address ? address_toHostName(address) : NULL;
                 g_string_printf(hostnameBuffer, "%s", hostname);
             }

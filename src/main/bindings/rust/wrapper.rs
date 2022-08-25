@@ -1867,10 +1867,10 @@ extern "C" {
     pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
 extern "C" {
-    pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *mut Address;
+    pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *const Address;
 }
 extern "C" {
-    pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
+    pub fn worker_resolveNameToAddress(name: *const gchar) -> *const Address;
 }
 pub type LegacyFile = [u64; 5usize];
 pub use self::_Status as Status;
