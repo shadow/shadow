@@ -568,6 +568,10 @@ WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
 
+const Address *worker_resolveIPToAddress(in_addr_t ip);
+
+const Address *worker_resolveNameToAddress(const char *name);
+
 // Add the counters to their global counterparts, and clear the provided counters.
 void worker_addToGlobalAllocCounters(struct Counter *alloc_counter,
                                      struct Counter *dealloc_counter);

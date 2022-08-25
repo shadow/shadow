@@ -347,16 +347,6 @@ int worker_getAffinity() {
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-Address* worker_resolveIPToAddress(in_addr_t ip) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveIPToAddress(dns, ip);
-}
-
-Address* worker_resolveNameToAddress(const gchar* name) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveNameToAddress(dns, name);
-}
-
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 void* _worker_run(void* voidWorkerThreadInfo) {
@@ -479,7 +469,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     in_addr_t srcIP = packet_getSourceIP(packet);
     in_addr_t dstIP = packet_getDestinationIP(packet);
 
-    Address* dstAddress = worker_resolveIPToAddress(dstIP);
+    const Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
     if (!dstAddress) {
         utility_panic("unable to schedule packet because of null address");
@@ -568,5 +558,3 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     worker_setActiveHost(NULL);
     host_unref(host);
 }
-
-gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }

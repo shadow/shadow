@@ -87,13 +87,8 @@ bool worker_isBootstrapActive(void);
 void worker_clearCurrentTime();
 void worker_setCurrentEmulatedTime(EmulatedTime time);
 
-gboolean worker_isFiltered(LogLevel level);
-
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);
-
-Address* worker_resolveIPToAddress(in_addr_t ip);
-Address* worker_resolveNameToAddress(const gchar* name);
 
 // Increment a counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the

@@ -1866,15 +1866,6 @@ extern "C" {
 extern "C" {
     pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
 }
-extern "C" {
-    pub fn worker_isFiltered(level: LogLevel) -> gboolean;
-}
-extern "C" {
-    pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *mut Address;
-}
-extern "C" {
-    pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
-}
 pub type LegacyFile = [u64; 5usize];
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;

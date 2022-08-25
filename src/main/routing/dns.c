@@ -139,7 +139,8 @@ Address* dns_register(DNS* dns, GQuark id, const gchar* name, in_addr_t requeste
         g_hash_table_replace(
             dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)), address);
         address_ref(address);
-        g_hash_table_replace(dns->addressByName, address_toHostName(address), address);
+        /* cast the const pointer to non-const */
+        g_hash_table_replace(dns->addressByName, (gchar*)address_toHostName(address), address);
         address_ref(address);
     }
 
@@ -215,8 +216,8 @@ static char* _dns_getHostsPath(DNS* dns) {
 }
 
 static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
-    gchar* name = key;
-    Address* address = value;
+    const gchar* name = key;
+    const Address* address = value;
     GString* buf = data;
     g_string_append_printf(buf, "%s %s\n", address_toHostIPString(address), name);
 }
