@@ -508,6 +508,12 @@ void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 
 void worker_incrementPluginErrors(void);
 
+// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+const struct ChildPidWatcher *worker_getChildPidWatcher(void);
+
+// Takes ownership of the event.
+void worker_pushToHost(HostId host, struct Event *event);
+
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
 
@@ -555,6 +561,8 @@ EmulatedTime worker_getCurrentEmulatedTime(void);
 void worker_updateLowestUsedLatency(SimulationTime min_path_latency);
 
 bool worker_isBootstrapActive(void);
+
+bool worker_isSimCompleted(void);
 
 WorkerPool *_worker_pool(void);
 

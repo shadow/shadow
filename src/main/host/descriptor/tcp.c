@@ -2690,7 +2690,6 @@ TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     legacysocket_init(
         &(tcp->super), host, &tcp_functions, DT_TCPSOCKET, receiveBufferSize, sendBufferSize);
 
-    const ConfigOptions* config = worker_getConfig();
     guint32 initial_window = 10;
     gint tcpSSThresh = 0;
 

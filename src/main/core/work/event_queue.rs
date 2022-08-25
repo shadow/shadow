@@ -93,40 +93,21 @@ impl<T: PartialOrd + Eq> std::ops::DerefMut for PanickingOrd<T> {
     }
 }
 
+/// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
+#[derive(Debug)]
+pub struct ThreadSafeEventQueue(pub Mutex<EventQueue>);
+
 mod export {
     use super::*;
     use crate::cshadow as c;
 
     use std::sync::Arc;
 
-    /// A wrapper for [`EventQueue`] that uses interior mutability to make the ffi simpler.
-    pub struct ThreadSafeEventQueue {
-        event_queue: Mutex<EventQueue>,
-    }
-
-    impl ThreadSafeEventQueue {
-        pub fn new() -> Self {
-            Self {
-                event_queue: Mutex::new(EventQueue::new()),
-            }
-        }
-
-        pub fn push(&self, event: Event) {
-            self.event_queue.lock().unwrap().push(event);
-        }
-
-        pub fn pop(&self) -> Option<Event> {
-            self.event_queue.lock().unwrap().pop()
-        }
-
-        pub fn next_event_time(&self) -> Option<EmulatedTime> {
-            self.event_queue.lock().unwrap().next_event_time()
-        }
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_new() -> *const ThreadSafeEventQueue {
-        Arc::into_raw(Arc::new(ThreadSafeEventQueue::new()))
+        Arc::into_raw(Arc::new(ThreadSafeEventQueue(
+            Mutex::new(EventQueue::new()),
+        )))
     }
 
     #[no_mangle]
@@ -157,13 +138,16 @@ mod export {
         assert!(!event.is_null());
         let queue = unsafe { queue.as_ref() }.unwrap();
         let event = unsafe { Box::from_raw(event) };
-        queue.push(*event);
+        queue.0.lock().unwrap().push(*event);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_pop(queue: *const ThreadSafeEventQueue) -> *mut Event {
         let queue = unsafe { queue.as_ref() }.unwrap();
         queue
+            .0
+            .lock()
+            .unwrap()
             .pop()
             .map(Box::new)
             .map(Box::into_raw)
@@ -175,6 +159,6 @@ mod export {
         queue: *const ThreadSafeEventQueue,
     ) -> c::EmulatedTime {
         let queue = unsafe { queue.as_ref() }.unwrap();
-        EmulatedTime::to_c_emutime(queue.next_event_time())
+        EmulatedTime::to_c_emutime(queue.0.lock().unwrap().next_event_time())
     }
 }

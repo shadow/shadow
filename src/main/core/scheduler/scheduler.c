@@ -38,15 +38,10 @@ struct _Scheduler {
     /* we store the hosts here */
     GHashTable* hostIDToHostMap;
 
-    /* we store the host queues here (this is read-only once the simulation starts and is read by
-     * multiple threads) */
-    GHashTable* hostIDToHostQueueMap;
-
     /* used to randomize host-to-thread assignment */
     Random* random;
 
     /* auxiliary information about current running state */
-    gboolean isRunning;
     SimulationTime endTime;
     struct {
         SimulationTime endTime;
@@ -137,15 +132,14 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     worker_finish(myHosts, scheduler->endTime);
 }
 
-Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions* config,
-                         guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
+Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
 
-    scheduler->workerPool = workerpool_new(pidWatcher, scheduler, config, /*nThreads=*/nWorkers,
+    scheduler->workerPool = workerpool_new(/*nThreads=*/nWorkers,
                                            /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;
@@ -154,8 +148,6 @@ Scheduler* scheduler_new(const ChildPidWatcher* pidWatcher, const ConfigOptions*
 
     scheduler->hostIDToHostMap =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)host_unref);
-    scheduler->hostIDToHostQueueMap =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)eventqueue_drop);
 
     scheduler->random = random_new(schedulerSeed);
 
@@ -207,16 +199,7 @@ int scheduler_addHost(Scheduler* scheduler, Host* host) {
 
     g_hash_table_replace(scheduler->hostIDToHostMap, hostIDKey, host);
 
-    // casts const pointer to non-const
-    g_hash_table_replace(
-        scheduler->hostIDToHostQueueMap, hostIDKey, (void*)host_getOwnedEventQueue(host));
     return 0;
-}
-
-const ThreadSafeEventQueue* scheduler_getEventQueue(Scheduler* scheduler, HostId host) {
-    MAGIC_ASSERT(scheduler);
-    // cast back to const pointer
-    return g_hash_table_lookup(scheduler->hostIDToHostQueueMap, GUINT_TO_POINTER(host));
 }
 
 static void _scheduler_appendHostToQueue(gpointer uintKey, Host* host, GQueue* allHosts) {
@@ -303,18 +286,12 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 }
 
-gboolean scheduler_isRunning(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-    return scheduler->isRunning;
-}
-
 void scheduler_start(Scheduler* scheduler) {
     /* Called by the scheduler thread. */
 
     _scheduler_assignHosts(scheduler);
 
     g_mutex_lock(&scheduler->globalLock);
-    scheduler->isRunning = TRUE;
     g_mutex_unlock(&scheduler->globalLock);
 
     workerpool_startTaskFn(scheduler->workerPool,
@@ -355,7 +332,6 @@ void scheduler_finish(Scheduler* scheduler) {
 
     /* make sure when the workers wake up they know we are done */
     g_mutex_lock(&scheduler->globalLock);
-    scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
     workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn, scheduler);
@@ -367,6 +343,4 @@ void scheduler_finish(Scheduler* scheduler) {
     if (scheduler->hostIDToHostMap != NULL) {
         g_hash_table_destroy(scheduler->hostIDToHostMap);
     }
-
-    g_hash_table_destroy(scheduler->hostIDToHostQueueMap);
 }
