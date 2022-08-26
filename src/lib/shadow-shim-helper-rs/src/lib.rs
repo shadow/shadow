@@ -2,5 +2,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod emulated_time;
+pub mod scmutex;
 pub mod signals;
 pub mod simulation_time;
