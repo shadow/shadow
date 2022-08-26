@@ -19,6 +19,7 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
@@ -100,7 +101,7 @@ struct _WorkerPool {
     // can write to the entry in this array corresponding to their assigned lp
     // without using any locks. Computing the global minimum then only requires
     // a linear scan of O(num_lps) instead of O(num_workers).
-    SimulationTime* minEventTimes;
+    CSimulationTime* minEventTimes;
 
     MAGIC_DECLARE;
 };
@@ -126,7 +127,7 @@ WorkerPool* workerpool_new(int nWorkers, int nParallel) {
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
         .logicalProcessors = lps_new(nLogicalProcessors),
-        .minEventTimes = g_new(SimulationTime, nLogicalProcessors),
+        .minEventTimes = g_new(CSimulationTime, nLogicalProcessors),
         .workerBeginSems = g_new0(sem_t, nWorkers),
         .workerThreads = g_new0(pthread_t, nWorkers),
         .workerLogicalProcessorIdxs = g_new0(int, nWorkers),
@@ -309,13 +310,13 @@ static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerPool, int worke
     affinity_setProcessAffinity(workerPool->workerNativeThreadIDs[workerID], newCpuId, oldCpuId);
 }
 
-SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
+CSimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     MAGIC_ASSERT(workerPool);
 
     // Compute the min time for next round, and reset for the following round.
     // This is called by a single thread in-between rounds while the workers
     // are idle, so let's not do anything too expensive here.
-    SimulationTime minTime = SIMTIME_MAX;
+    CSimulationTime minTime = SIMTIME_MAX;
 
     for (int i = 0; i < lps_n(workerPool->logicalProcessors); ++i) {
         if (workerPool->minEventTimes[i] < minTime) {
@@ -327,7 +328,7 @@ SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     return minTime;
 }
 
-void worker_setMinEventTimeNextRound(SimulationTime simtime) {
+void worker_setMinEventTimeNextRound(CSimulationTime simtime) {
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
     if (simtime < _worker_getRoundEndTime()) {
@@ -418,7 +419,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     return NULL;
 }
 
-void worker_finish(GQueue* hosts, SimulationTime time) {
+void worker_finish(GQueue* hosts, CSimulationTime time) {
     worker_setCurrentEmulatedTime(emutime_add_simtime(EMUTIME_SIMULATION_START, time));
 
     if (hosts) {
@@ -438,11 +439,11 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     worker_addToGlobalSyscallCounter(_worker_syscallCounter());
 }
 
-EmulatedTime worker_maxEventRunaheadTime(Host* host) {
+CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_debugAssert(host);
-    EmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
+    CEmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
-    EmulatedTime nextEventTime = host_nextEventTime(host);
+    CEmulatedTime nextEventTime = host_nextEventTime(host);
     if (nextEventTime != 0) {
         max = MIN(max, nextEventTime);
     }
@@ -488,9 +489,9 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
      * control has problems responding to packet loss */
     if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
-        SimulationTime delay = worker_getLatency(srcIP, dstIP);
+        CSimulationTime delay = worker_getLatency(srcIP, dstIP);
         worker_updateLowestUsedLatency(delay);
-        SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
+        CSimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcIP, dstIP);
 
@@ -515,7 +516,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
         taskref_drop(packetTask);
 
-        SimulationTime roundEndTime = _worker_getRoundEndTime();
+        CSimulationTime roundEndTime = _worker_getRoundEndTime();
 
         // delay the packet until the next round
         if (deliverTime < roundEndTime) {

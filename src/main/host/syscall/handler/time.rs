@@ -1,10 +1,10 @@
-use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker::Worker;
 use crate::host::context::ThreadContext;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::SyscallResult;
 use crate::host::syscall_types::{SysCallArgs, TypedPluginPtr};
 use crate::host::timer::Timer;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use log::*;
 use nix::errno::Errno;

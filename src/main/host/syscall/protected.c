@@ -19,7 +19,7 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
-EmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
+CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
@@ -38,7 +38,7 @@ bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    EmulatedTime timeout = _syscallhandler_getTimeout(sys);
+    CEmulatedTime timeout = _syscallhandler_getTimeout(sys);
     return timeout != EMUTIME_INVALID && worker_getCurrentEmulatedTime() >= timeout;
 }
 

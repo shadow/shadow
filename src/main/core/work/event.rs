@@ -1,6 +1,6 @@
-use crate::core::support::emulated_time::EmulatedTime;
 use crate::host::host::{Host, HostId};
 use crate::utility::{Magic, ObjectCounter};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 use super::task::TaskRef;
 
@@ -110,13 +110,13 @@ impl PartialOrd for Event {
 mod export {
     use super::*;
 
-    use crate::core::support::simulation_time::SimulationTime;
     use crate::cshadow as c;
+    use shadow_shim_helper_rs::simulation_time::{CSimulationTime, SimulationTime};
 
     #[no_mangle]
     pub unsafe extern "C" fn event_new(
         task_ref: *mut TaskRef,
-        time: c::SimulationTime,
+        time: CSimulationTime,
         src_host: *mut c::Host,
         dst_host_id: c::HostId,
     ) -> *mut Event {
@@ -155,13 +155,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn event_getTime(event: *const Event) -> c::SimulationTime {
+    pub unsafe extern "C" fn event_getTime(event: *const Event) -> CSimulationTime {
         let event = unsafe { event.as_ref() }.unwrap();
         SimulationTime::to_c_simtime(Some(event.time().to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn event_setTime(event: *mut Event, time: c::SimulationTime) {
+    pub unsafe extern "C" fn event_setTime(event: *mut Event, time: CSimulationTime) {
         let event = unsafe { event.as_mut() }.unwrap();
         let time = EmulatedTime::from_abs_simtime(SimulationTime::from_c_simtime(time).unwrap());
 

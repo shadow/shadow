@@ -238,7 +238,7 @@ static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimE
     trace("received shim_event %d", mthread->currentEvent.event_id);
 
     // Update time, which may have been incremented in the shim.
-    EmulatedTime shimTime =
+    CEmulatedTime shimTime =
         shimshmem_getEmulatedTime(host_getSharedMem(thread_getHost(mthread->base)));
     if (shimTime != worker_getCurrentEmulatedTime()) {
         trace("Updating time from %ld to %ld (+%ld)", worker_getCurrentEmulatedTime(), shimTime,

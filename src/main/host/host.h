@@ -40,8 +40,8 @@ void host_ref(Host* host);
 void host_unref(Host* host);
 
 bool host_pushLocalEvent(Host* host, Event* event);
-void host_execute(Host* host, EmulatedTime until);
-EmulatedTime host_nextEventTime(Host* host);
+void host_execute(Host* host, CEmulatedTime until);
+CEmulatedTime host_nextEventTime(Host* host);
 const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
 
 void host_lock(Host* host);
@@ -57,7 +57,7 @@ void host_shutdown(Host* host);
 guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
-void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
+void host_addApplication(Host* host, CSimulationTime startTime, CSimulationTime stopTime,
                          const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging);
 void host_freeAllApplications(Host* host);
@@ -139,8 +139,8 @@ void host_unlockShimShmemLock(Host* host);
 guint64 host_getNextDeterministicSequenceValue(Host* host);
 
 // Schedule a task for this host at time 'time'.
-gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime time);
+gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, CEmulatedTime time);
 // Schedule a task for this host at a time 'nanoDelay' from now,.
-gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay);
+gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, CSimulationTime nanoDelay);
 
 #endif /* SHD_HOST_H_ */

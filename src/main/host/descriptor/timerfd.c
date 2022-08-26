@@ -92,13 +92,13 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timerfd);
     utility_debugAssert(curr_value);
 
-    SimulationTime remainingTime = timer_getRemainingTime(timerfd->timer);
+    CSimulationTime remainingTime = timer_getRemainingTime(timerfd->timer);
     utility_debugAssert(remainingTime != SIMTIME_INVALID);
     if (!simtime_to_timespec(remainingTime, &curr_value->it_value)) {
         panic("Couldn't convert %ld", remainingTime);
     }
 
-    SimulationTime interval = timer_getInterval(timerfd->timer);
+    CSimulationTime interval = timer_getInterval(timerfd->timer);
     if (!simtime_to_timespec(interval, &curr_value->it_interval)) {
         panic("Couldn't convert %ld", interval);
     }
@@ -118,12 +118,12 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
     MAGIC_ASSERT(timerfd);
     utility_debugAssert(config);
 
-    SimulationTime configSimTime = simtime_from_timespec(config->it_value);
+    CSimulationTime configSimTime = simtime_from_timespec(config->it_value);
     utility_debugAssert(configSimTime != SIMTIME_INVALID);
 
-    EmulatedTime now = worker_getCurrentEmulatedTime();
-    EmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMUTIME_UNIX_EPOCH : now;
-    EmulatedTime nextExpireTime = base + configSimTime;
+    CEmulatedTime now = worker_getCurrentEmulatedTime();
+    CEmulatedTime base = (flags == TFD_TIMER_ABSTIME) ? EMUTIME_UNIX_EPOCH : now;
+    CEmulatedTime nextExpireTime = base + configSimTime;
     /* the man page does not specify what happens if the time
      * they gave us is in the past. on linux, the result is an
      * immediate timer expiration. */
@@ -131,7 +131,7 @@ static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* 
         nextExpireTime = now;
     }
 
-    SimulationTime interval = simtime_from_timespec(config->it_interval);
+    CSimulationTime interval = simtime_from_timespec(config->it_interval);
 
     timer_arm(timerfd->timer, host, nextExpireTime, interval);
 

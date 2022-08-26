@@ -221,7 +221,7 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     utility_debugAssert(interface->pcap != NULL);
 
     /* get the current time that the packet is being sent/received */
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
     guint32 ts_sec = now / SIMTIME_ONE_SECOND;
     guint32 ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 
@@ -352,7 +352,8 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
                     TaskRef* recv_again =
                         taskref_new_bound(host_getID(host), _networkinterface_continue_receiving_CB,
                                           interface, NULL, NULL, NULL);
-                    host_scheduleTaskWithDelay(host, recv_again, (SimulationTime)next_refill_nanos);
+                    host_scheduleTaskWithDelay(
+                        host, recv_again, (CSimulationTime)next_refill_nanos);
                     taskref_drop(recv_again);
                     interface->tb_receive_refill_pending = true;
                 }
@@ -540,7 +541,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
                     TaskRef* send_again =
                         taskref_new_bound(host_getID(src), _networkinterface_continue_sending_CB,
                                           interface, NULL, NULL, NULL);
-                    host_scheduleTaskWithDelay(src, send_again, (SimulationTime)next_refill_nanos);
+                    host_scheduleTaskWithDelay(src, send_again, (CSimulationTime)next_refill_nanos);
                     taskref_drop(send_again);
                     interface->tb_send_refill_pending = true;
                 }

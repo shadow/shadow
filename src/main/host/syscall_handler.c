@@ -602,7 +602,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(sys->host)) &&
         process_isRunning(sys->process) &&
         (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
-        SimulationTime maxUnappliedCpuLatency =
+        CSimulationTime maxUnappliedCpuLatency =
             shimshmem_maxUnappliedCpuLatency(host_getSharedMem(sys->host));
         // Increment unblocked syscall latency, but only for
         // non-shadow-syscalls, since the latter are part of Shadow's
@@ -612,12 +612,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 host_getShimShmemLock(sys->host),
                 shimshmem_unblockedSyscallLatency(host_getSharedMem(sys->host)));
         }
-        const SimulationTime unappliedCpuLatency =
+        const CSimulationTime unappliedCpuLatency =
             shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(sys->host));
         trace("Unapplied CPU latency amt=%ld max=%ld", unappliedCpuLatency, maxUnappliedCpuLatency);
         if (unappliedCpuLatency > maxUnappliedCpuLatency) {
-            EmulatedTime newTime = worker_getCurrentEmulatedTime() + unappliedCpuLatency;
-            EmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
+            CEmulatedTime newTime = worker_getCurrentEmulatedTime() + unappliedCpuLatency;
+            CEmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");
                 shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(sys->host));

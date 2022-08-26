@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::binary_heap::BinaryHeap;
 use std::sync::Mutex;
 
-use crate::core::support::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 use super::event::Event;
 
@@ -99,7 +99,7 @@ pub struct ThreadSafeEventQueue(pub Mutex<EventQueue>);
 
 mod export {
     use super::*;
-    use crate::cshadow as c;
+    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
 
     use std::sync::Arc;
 
@@ -157,7 +157,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn eventqueue_nextEventTime(
         queue: *const ThreadSafeEventQueue,
-    ) -> c::EmulatedTime {
+    ) -> CEmulatedTime {
         let queue = unsafe { queue.as_ref() }.unwrap();
         EmulatedTime::to_c_emutime(queue.0.lock().unwrap().next_event_time())
     }

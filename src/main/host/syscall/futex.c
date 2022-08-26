@@ -28,7 +28,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
                                                      TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
     // Check if a timeout was given in the syscall args.
-    SimulationTime timeoutSimTime = SIMTIME_INVALID;
+    CSimulationTime timeoutSimTime = SIMTIME_INVALID;
     if (timeoutVPtr.val) {
         struct timespec ts = {0};
         int rv = process_readPtr(sys->process, &ts, timeoutVPtr, sizeof(ts));
@@ -108,9 +108,9 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
     SysCallCondition* cond = syscallcondition_new(trigger);
     if (timeoutSimTime != SIMTIME_INVALID) {
-        EmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
-                                               ? timeoutSimTime + worker_getCurrentEmulatedTime()
-                                               : timeoutSimTime;
+        CEmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
+                                                ? timeoutSimTime + worker_getCurrentEmulatedTime()
+                                                : timeoutSimTime;
         syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
     }
     return syscallreturn_makeBlocked(cond, true);

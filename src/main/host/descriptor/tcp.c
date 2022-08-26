@@ -20,6 +20,7 @@
 #include <sys/types.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -140,7 +141,7 @@ struct _TCP {
         /* acknowledgment needed to get out of fast recovery */
         guint32 recoveryPoint;
         /* last timestamp received in timestamp value field */
-        SimulationTime lastTimestamp;
+        CSimulationTime lastTimestamp;
         /* the last advertisements to us */
         guint32 lastWindow;
         guint32 lastAcknowledgment;
@@ -185,7 +186,7 @@ struct _TCP {
         /* when the scheduled timer events will expire; empty if no retransmit is scheduled */
         PriorityQueue* scheduledTimerExpirations;
         /* our updated expiration time, to determine if previous events are still valid */
-        SimulationTime desiredTimerExpiration;
+        CSimulationTime desiredTimerExpiration;
         /* number of times we backed off due to congestion */
         guint backoffCount;
 
@@ -199,7 +200,7 @@ struct _TCP {
         gboolean userDisabledSend;
         gboolean userDisabledReceive;
         gsize bytesCopied;
-        EmulatedTime lastAdjustment;
+        CEmulatedTime lastAdjustment;
         gsize space;
     } autotune;
 
@@ -214,10 +215,10 @@ struct _TCP {
     /* TODO: these should probably be stamped when the network interface sends
      * instead of when the tcp layer sends down to the socket layer */
     struct {
-        SimulationTime lastDataSent;
-        SimulationTime lastAckSent;
-        SimulationTime lastDataReceived;
-        SimulationTime lastAckReceived;
+        CSimulationTime lastDataSent;
+        CSimulationTime lastAckSent;
+        CSimulationTime lastDataReceived;
+        CSimulationTime lastAckReceived;
         gsize retransmitCount;
         guint32 rtt;
     } info;
@@ -431,8 +432,8 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
 
     if(sourceIP != destinationIP) {
         /* these sim time values are a duration and not an absolute time */
-        SimulationTime srcLatency = worker_getLatency(sourceIP, destinationIP);
-        SimulationTime dstLatency = worker_getLatency(destinationIP, sourceIP);
+        CSimulationTime srcLatency = worker_getLatency(sourceIP, destinationIP);
+        CSimulationTime dstLatency = worker_getLatency(destinationIP, sourceIP);
 
         /* find latency in milliseconds */
         guint sendLatency = (guint)ceil((gdouble)srcLatency / SIMTIME_ONE_MILLISECOND);
@@ -585,11 +586,12 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) 
         }
     }
 
-    EmulatedTime now = worker_getCurrentEmulatedTime();
+    CEmulatedTime now = worker_getCurrentEmulatedTime();
     if(tcp->autotune.lastAdjustment == 0) {
         tcp->autotune.lastAdjustment = now;
     } else if(tcp->timing.rttSmoothed > 0) {
-        SimulationTime threshold = ((SimulationTime)tcp->timing.rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
+        CSimulationTime threshold =
+            ((CSimulationTime)tcp->timing.rttSmoothed) * ((CSimulationTime)SIMTIME_ONE_MILLISECOND);
         if((now - tcp->autotune.lastAdjustment) > threshold) {
             tcp->autotune.lastAdjustment = now;
             tcp->autotune.bytesCopied = 0;
@@ -714,7 +716,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
             legacyfile_ref(tcp);
             TaskRef* closeTask = taskref_new_bound(
                 host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, legacyfile_unref, NULL);
-            SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
+            CSimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
             /* if a child of a server initiated the close, close more quickly */
             if(tcp->child && tcp->child->parent) {
@@ -1014,11 +1016,11 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
 static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer /*TCP*/ tcp,
                                                gpointer /*Thread*/ thread);
 
-static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime now,
-                                         SimulationTime delay) {
+static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, CSimulationTime now,
+                                         CSimulationTime delay) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime* expireTimePtr = g_new0(SimulationTime, 1);
+    CSimulationTime* expireTimePtr = g_new0(CSimulationTime, 1);
     *expireTimePtr = now + delay;
     gboolean success = priorityqueue_push(tcp->retransmit.scheduledTimerExpirations, expireTimePtr);
 
@@ -1039,26 +1041,26 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime no
     }
 }
 
-static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, Host* host, SimulationTime now) {
+static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, Host* host, CSimulationTime now) {
     /* logic for scheduling retransmission events. we only need to schedule one if
      * we have no events that will allow us to schedule one later. */
-    SimulationTime* nextTimePtr = priorityqueue_peek(tcp->retransmit.scheduledTimerExpirations);
+    CSimulationTime* nextTimePtr = priorityqueue_peek(tcp->retransmit.scheduledTimerExpirations);
     if(nextTimePtr && *nextTimePtr <= tcp->retransmit.desiredTimerExpiration) {
         /* another event will fire before the RTO expires, check again then */
         return;
     }
 
     /* no existing timer will expire as early as desired */
-    SimulationTime delay = tcp->retransmit.desiredTimerExpiration - now;
+    CSimulationTime delay = tcp->retransmit.desiredTimerExpiration - now;
     _tcp_scheduleRetransmitTimer(tcp, host, now, delay);
 }
 
-static void _tcp_setRetransmitTimer(TCP* tcp, Host* host, SimulationTime now) {
+static void _tcp_setRetransmitTimer(TCP* tcp, Host* host, CSimulationTime now) {
     MAGIC_ASSERT(tcp);
 
     /* our retransmission timer needs to change
      * track the new expiration time based on the current RTO */
-    SimulationTime delay = tcp->retransmit.timeout * SIMTIME_ONE_MILLISECOND;
+    CSimulationTime delay = tcp->retransmit.timeout * SIMTIME_ONE_MILLISECOND;
     tcp->retransmit.desiredTimerExpiration = now + delay;
 
     _tcp_scheduleRetransmitTimerIfNeeded(tcp, host, now);
@@ -1082,10 +1084,10 @@ static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
     tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, CONFIG_TCP_RTO_MIN);
 }
 
-static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, SimulationTime timestamp) {
+static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, CSimulationTime timestamp) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
     gint rtt = (gint)((now - timestamp) / SIMTIME_ONE_MILLISECOND);
 
     if(rtt <= 0) {
@@ -1184,7 +1186,7 @@ static void _tcp_sendShutdownFin(TCP* tcp, Host* host) {
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
 
     /* update TCP header to our current advertised window and acknowledgment and timestamps */
     packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
@@ -1219,7 +1221,7 @@ static void _tcp_flush(TCP* tcp, Host* host) {
     _tcp_updateReceiveWindow(tcp);
     _tcp_updateSendWindow(tcp);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
     double dtime = (double)(now) / (1.0E9);
 
     size_t num_lost_ranges =
@@ -1380,8 +1382,9 @@ static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpo
     MAGIC_ASSERT(tcp);
 
     /* a timer expired, update our timer tracking state */
-    SimulationTime now = worker_getCurrentSimulationTime();
-    SimulationTime* scheduledTimerExpirationPtr = priorityqueue_pop(tcp->retransmit.scheduledTimerExpirations);
+    CSimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime* scheduledTimerExpirationPtr =
+        priorityqueue_pop(tcp->retransmit.scheduledTimerExpirations);
     utility_debugAssert(scheduledTimerExpirationPtr);
     g_free(scheduledTimerExpirationPtr);
 
@@ -1729,7 +1732,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
     trace("processing data");
 
     TCPProcessFlags flags = TCP_PF_NONE;
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
     gsize packetLength = packet_getPayloadSize(packet);
 
     /* it has data, check if its in the correct range */
@@ -1798,7 +1801,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Host* host, Packet* packet, PacketT
     trace("processing acks");
 
     TCPProcessFlags flags = TCP_PF_PROCESSED;
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
 
     guint32 prevAck = tcp->receive.lastAcknowledgment;
     guint32 prevWin = tcp->receive.lastWindow;
@@ -2248,7 +2251,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
                 legacyfile_ref(tcp);
 
                 /* figure out what we should use as delay */
-                SimulationTime delay = 0;
+                CSimulationTime delay = 0;
                 /* "quick acknowledgments" happen at the beginning of a connection */
                 if(tcp->send.numQuickACKsSent < 1000) {
                     /* we want the other side to get the ACKs sooner so we don't throttle its sending rate */

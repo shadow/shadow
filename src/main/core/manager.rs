@@ -14,8 +14,6 @@ use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
@@ -23,6 +21,8 @@ use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
 use crate::utility::{self, SyncSendPointer};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 pub struct Manager<'a> {
     manager_config: Option<ManagerConfig>,

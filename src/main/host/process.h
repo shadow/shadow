@@ -40,9 +40,10 @@ typedef struct _Process Process;
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
-                     const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
-                     gchar** envv, const gchar* const* argv, bool pause_for_debugging);
+Process* process_new(Host* host, guint processID, CSimulationTime startTime,
+                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
+                     const gchar* pluginPath, gchar** envv, const gchar* const* argv,
+                     bool pause_for_debugging);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 

@@ -2,33 +2,47 @@
 Deals with instances of time in a Shadow simulation.
 */
 
-use crate::core::support::simulation_time;
-use crate::core::support::simulation_time::SimulationTime;
-use crate::cshadow as c;
+use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 
 /// An instant in time (analagous to std::time::Instant) in the Shadow
 /// simulation.
 // Internally represented as Duration since the Unix Epoch.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
-pub struct EmulatedTime(c::EmulatedTime);
+pub struct EmulatedTime(CEmulatedTime);
+
+/// Emulation time in nanoseconds. Allows for a consistent representation
+/// of time throughput the simulator. Emulation time is the simulation time
+/// plus the EMULATION_TIME_OFFSET. This type allows us to explicitly
+/// distinguish each type of time in the code.
+pub type CEmulatedTime = u64;
 
 // Duplicated from the EMULATED_TIME_OFFSET macro in definitions.h.
-pub(super) const SIMULATION_START_SEC: u64 = 946684800;
-pub const EMUTIME_INVALID: c::EmulatedTime = u64::MAX;
-pub const EMUTIME_MAX: c::EmulatedTime = u64::MAX - 1;
-pub const EMUTIME_MIN: c::EmulatedTime = 0;
+pub const SIMULATION_START_SEC: u64 = 946684800u64;
+pub const EMUTIME_INVALID: CEmulatedTime = u64::MAX;
+pub const EMUTIME_MAX: CEmulatedTime = u64::MAX - 1;
+pub const EMUTIME_MIN: CEmulatedTime = 0u64;
+
+/// The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
+/// This is used to emulate to applications that we are in a recent time.
+// cbindgen won't do the constant propagation here. We use the static assertion below
+// to ensure this definition is equal to the intended canonical definition.
+pub const EMUTIME_SIMULATION_START: CEmulatedTime = 946684800u64 * 1_000_000_000u64;
+const _: () =
+    assert!(EMUTIME_SIMULATION_START == SIMULATION_START_SEC * simulation_time::SIMTIME_ONE_SECOND);
+
+/// Duplicated as EmulatedTime::UNIX_EPOCH
+pub const EMUTIME_UNIX_EPOCH: CEmulatedTime = 0u64;
 
 impl EmulatedTime {
     /// The start time of the simulation - 00:00:00 UTC on 1 January, 2000.
-    pub const SIMULATION_START: Self =
-        Self(SIMULATION_START_SEC * simulation_time::SIMTIME_ONE_SECOND);
+    pub const SIMULATION_START: Self = Self(EMUTIME_SIMULATION_START);
     /// The  Unix epoch (00:00:00 UTC on 1 January 1970)
     pub const UNIX_EPOCH: Self = Self(0);
 
     pub const MAX: Self = Self(EMUTIME_MAX);
 
     /// Get the instance corresponding to `val` SimulationTime units since the Unix Epoch.
-    pub fn from_c_emutime(val: c::EmulatedTime) -> Option<Self> {
+    pub const fn from_c_emutime(val: CEmulatedTime) -> Option<Self> {
         if val == EMUTIME_INVALID {
             None
         } else if val > EMUTIME_MAX {
@@ -39,7 +53,7 @@ impl EmulatedTime {
     }
 
     /// Convert to number of SimulationTime units since the Unix Epoch.
-    pub fn to_c_emutime(val: Option<Self>) -> c::EmulatedTime {
+    pub const fn to_c_emutime(val: Option<Self>) -> CEmulatedTime {
         match val {
             Some(v) => v.0,
             None => EMUTIME_INVALID,
@@ -75,11 +89,11 @@ impl EmulatedTime {
     }
 
     pub fn checked_add(&self, duration: SimulationTime) -> Option<EmulatedTime> {
-        EmulatedTime::from_c_emutime(self.0.checked_add(c::SimulationTime::from(duration))?)
+        EmulatedTime::from_c_emutime(self.0.checked_add(CSimulationTime::from(duration))?)
     }
 
     pub fn checked_sub(&self, duration: SimulationTime) -> Option<EmulatedTime> {
-        EmulatedTime::from_c_emutime(self.0.checked_sub(c::SimulationTime::from(duration))?)
+        EmulatedTime::from_c_emutime(self.0.checked_sub(CSimulationTime::from(duration))?)
     }
 
     pub fn saturating_add(&self, duration: SimulationTime) -> EmulatedTime {
@@ -126,9 +140,9 @@ pub mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn emutime_add_simtime(
-        lhs: c::EmulatedTime,
-        rhs: c::SimulationTime,
-    ) -> c::EmulatedTime {
+        lhs: CEmulatedTime,
+        rhs: CSimulationTime,
+    ) -> CEmulatedTime {
         let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
             e
         } else {
@@ -145,9 +159,9 @@ pub mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn emutime_sub_emutime(
-        lhs: c::EmulatedTime,
-        rhs: c::EmulatedTime,
-    ) -> c::SimulationTime {
+        lhs: CEmulatedTime,
+        rhs: CEmulatedTime,
+    ) -> CSimulationTime {
         let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
             e
         } else {
@@ -166,6 +180,7 @@ pub mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::simulation_time;
 
     #[test]
     fn test_from_emu_time() {

@@ -17,7 +17,7 @@
 #include "main/core/support/definitions.h" // for SIMTIME definitions
 #include "main/host/syscall_numbers.h"
 
-static EmulatedTime _shim_sys_get_time() {
+static CEmulatedTime _shim_sys_get_time() {
     ShimShmemHost* mem = shim_hostSharedMem();
 
     // If that's unavailable, fail. This can happen during early init.
@@ -30,7 +30,7 @@ static EmulatedTime _shim_sys_get_time() {
 
 uint64_t shim_sys_get_simtime_nanos() { return _shim_sys_get_time() / SIMTIME_ONE_NANOSECOND; }
 
-static SimulationTime _shim_sys_latency_for_syscall(long n) {
+static CSimulationTime _shim_sys_latency_for_syscall(long n) {
     switch (n) {
         case SYS_clock_gettime:
         case SYS_time:
@@ -56,7 +56,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
 
     switch (syscall_num) {
         case SYS_clock_gettime: {
-            EmulatedTime emulated_time = _shim_sys_get_time();
+            CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
                 return false;
@@ -83,7 +83,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_time: {
-            EmulatedTime emulated_time = _shim_sys_get_time();
+            CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
                 return false;
@@ -104,7 +104,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_gettimeofday: {
-            EmulatedTime emulated_time = _shim_sys_get_time();
+            CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
                 return false;
@@ -143,7 +143,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
         shimshmem_incrementUnappliedCpuLatency(
             host_lock, _shim_sys_latency_for_syscall(syscall_num));
-        SimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
+        CSimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
         // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
         // avoid having to reacquire it below. We currently can't hold the lock
         // over when any syscalls would be made though, since those result in a
@@ -152,7 +152,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
 
         // Count the syscall and check whether we ought to yield.
-        SimulationTime maxUnappliedCpuLatency =
+        CSimulationTime maxUnappliedCpuLatency =
             shimshmem_maxUnappliedCpuLatency(shim_hostSharedMem());
         trace("unappliedCpuLatency=%ld maxUnappliedCpuLatency=%ld", unappliedCpuLatency,
               maxUnappliedCpuLatency);
@@ -167,9 +167,9 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             // Since this is a Shadow syscall, it will always be passed through
             // to Shadow instead of being executed natively.
 
-            EmulatedTime newTime = _shim_sys_get_time() + unappliedCpuLatency;
+            CEmulatedTime newTime = _shim_sys_get_time() + unappliedCpuLatency;
             host_lock = shimshmemhost_lock(shim_hostSharedMem());
-            EmulatedTime maxTime = shimshmem_getMaxRunaheadTime(host_lock);
+            CEmulatedTime maxTime = shimshmem_getMaxRunaheadTime(host_lock);
             if (newTime <= maxTime) {
                 shimshmem_setEmulatedTime(shim_hostSharedMem(), newTime);
                 shimshmem_resetUnappliedCpuLatency(host_lock);

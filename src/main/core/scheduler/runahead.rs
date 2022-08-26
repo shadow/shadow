@@ -1,6 +1,6 @@
 use std::sync::RwLock;
 
-use crate::core::support::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 /// Decides on the runahead for the next simulation round (the duration of the round). Having a
 /// larger runahead improves performance since more hosts and more events can be run in parallel

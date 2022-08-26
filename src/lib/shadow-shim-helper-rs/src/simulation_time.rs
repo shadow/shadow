@@ -12,10 +12,10 @@ This module contains some identically-named constants defined as C macros in
 use super::emulated_time;
 use std::time::Duration;
 
-use crate::cshadow as c;
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
-pub struct SimulationTime(c::SimulationTime);
+pub struct SimulationTime(CSimulationTime);
+
+pub type CSimulationTime = u64;
 
 impl SimulationTime {
     /// Maximum value. Currently equivalent to SIMTIME_MAX to avoid surprises
@@ -28,7 +28,7 @@ impl SimulationTime {
     pub const MICROSECOND: SimulationTime = SimulationTime(SIMTIME_ONE_MICROSECOND);
     pub const NANOSECOND: SimulationTime = SimulationTime(SIMTIME_ONE_NANOSECOND);
 
-    pub fn from_c_simtime(val: c::SimulationTime) -> Option<Self> {
+    pub fn from_c_simtime(val: CSimulationTime) -> Option<Self> {
         if val == SIMTIME_INVALID {
             return None;
         }
@@ -40,7 +40,7 @@ impl SimulationTime {
         Some(Self(val / SIMTIME_ONE_NANOSECOND))
     }
 
-    pub fn to_c_simtime(val: Option<Self>) -> c::SimulationTime {
+    pub fn to_c_simtime(val: Option<Self>) -> CSimulationTime {
         if let Some(val) = val {
             val.0
         } else {
@@ -213,8 +213,8 @@ impl std::convert::From<SimulationTime> for std::time::Duration {
     }
 }
 
-impl std::convert::From<SimulationTime> for c::SimulationTime {
-    fn from(val: SimulationTime) -> c::SimulationTime {
+impl std::convert::From<SimulationTime> for CSimulationTime {
+    fn from(val: SimulationTime) -> CSimulationTime {
         val.0
     }
 }
@@ -268,57 +268,53 @@ impl std::convert::TryFrom<SimulationTime> for libc::timeval {
 }
 
 /// Invalid simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_INVALID: c::SimulationTime = u64::MAX;
+pub const SIMTIME_INVALID: CSimulationTime = u64::MAX;
 
 /// Maximum and minimum valid values.
-/// cbindgen:ignore
-pub const SIMTIME_MAX: c::SimulationTime =
-    emulated_time::EMUTIME_MAX - (emulated_time::SIMULATION_START_SEC * SIMTIME_ONE_SECOND);
-/// cbindgen:ignore
-pub const SIMTIME_MIN: c::SimulationTime = 0;
+//
+// cbindgen refuses to do the arithmetic here, so we we pre-compute,
+// and validate in the static assertion below.
+pub const SIMTIME_MAX: CSimulationTime = 17500059273709551614u64;
+const _: () =
+    assert!(SIMTIME_MAX == emulated_time::EMUTIME_MAX - emulated_time::EMUTIME_SIMULATION_START);
+
+pub const SIMTIME_MIN: CSimulationTime = 0u64;
 
 /// Represents one nanosecond in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_NANOSECOND: c::SimulationTime = 1;
+pub const SIMTIME_ONE_NANOSECOND: CSimulationTime = 1u64;
 
 /// Represents one microsecond in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_MICROSECOND: c::SimulationTime = 1000;
+pub const SIMTIME_ONE_MICROSECOND: CSimulationTime = 1000u64;
 
 /// Represents one millisecond in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_MILLISECOND: c::SimulationTime = 1000000;
+pub const SIMTIME_ONE_MILLISECOND: CSimulationTime = 1000000u64;
 
 /// Represents one second in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_SECOND: c::SimulationTime = 1000000000;
+pub const SIMTIME_ONE_SECOND: CSimulationTime = 1000000000u64;
 
 /// Represents one minute in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_MINUTE: c::SimulationTime = 60000000000;
+pub const SIMTIME_ONE_MINUTE: CSimulationTime = 60000000000u64;
 
 /// Represents one hour in simulation time.
-/// cbindgen:ignore
-pub const SIMTIME_ONE_HOUR: c::SimulationTime = 3600000000000;
+pub const SIMTIME_ONE_HOUR: CSimulationTime = 3600000000000u64;
 
 pub mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> c::SimulationTime {
+    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> c::SimulationTime {
+    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
 
     #[must_use]
     #[no_mangle]
     pub unsafe extern "C" fn simtime_to_timeval(
-        val: c::SimulationTime,
+        val: CSimulationTime,
         out: *mut libc::timeval,
     ) -> bool {
         let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
@@ -338,7 +334,7 @@ pub mod export {
     #[must_use]
     #[no_mangle]
     pub unsafe extern "C" fn simtime_to_timespec(
-        val: c::SimulationTime,
+        val: CSimulationTime,
         out: *mut libc::timespec,
     ) -> bool {
         let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {

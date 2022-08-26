@@ -5,8 +5,6 @@ use once_cell::sync::Lazy;
 use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
 use crate::core::work::event::Event;
 use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
@@ -19,6 +17,8 @@ use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -445,6 +445,9 @@ pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -
 mod export {
     use super::*;
 
+    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+    use shadow_shim_helper_rs::simulation_time::CSimulationTime;
+
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
         Worker::with_mut(|w| w.shared.dns()).unwrap()
@@ -454,7 +457,7 @@ mod export {
     pub extern "C" fn worker_getLatency(
         src: libc::in_addr_t,
         dst: libc::in_addr_t,
-    ) -> cshadow::SimulationTime {
+    ) -> CSimulationTime {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
@@ -623,19 +626,19 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
+    pub extern "C" fn worker_setRoundEndTime(t: CSimulationTime) {
         Worker::set_round_end_time(EmulatedTime::from_abs_simtime(
             SimulationTime::from_c_simtime(t).unwrap(),
         ));
     }
 
     #[no_mangle]
-    pub extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
+    pub extern "C" fn _worker_getRoundEndTime() -> CSimulationTime {
         SimulationTime::to_c_simtime(Worker::round_end_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentEmulatedTime(t: cshadow::EmulatedTime) {
+    pub extern "C" fn worker_setCurrentEmulatedTime(t: CEmulatedTime) {
         Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }
 
@@ -645,17 +648,17 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentSimulationTime() -> cshadow::SimulationTime {
+    pub extern "C" fn worker_getCurrentSimulationTime() -> CSimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentEmulatedTime() -> cshadow::EmulatedTime {
+    pub extern "C" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
         EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: cshadow::SimulationTime) {
+    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: CSimulationTime) {
         let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
         Worker::update_lowest_used_latency(min_path_latency);
     }

@@ -21,7 +21,7 @@
 
 /* make sure we return the 'emulated' time, and not the actual simulation clock
  */
-static EmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
+static CEmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
 
 static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
                                                       int flags, PluginPtr request,
@@ -42,7 +42,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     if (rv < 0) {
         return syscallreturn_makeDoneErrno(-rv);
     }
-    SimulationTime reqSimTime = simtime_from_timespec(req);
+    CSimulationTime reqSimTime = simtime_from_timespec(req);
     if (reqSimTime == SIMTIME_INVALID) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
@@ -69,10 +69,10 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
             thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
 
         if (remainder.val) {
-            EmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
+            CEmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
             utility_debugAssert(nextExpireTime != EMUTIME_INVALID);
             utility_debugAssert(nextExpireTime >= worker_getCurrentEmulatedTime());
-            SimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
+            CSimulationTime remainingTime = nextExpireTime - worker_getCurrentEmulatedTime();
             struct timespec timer_val = {0};
             if (!simtime_to_timespec(remainingTime, &timer_val)) {
                 panic("Couldn't convert %lu", remainingTime);
@@ -121,7 +121,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    EmulatedTime now = _syscallhandler_getEmulatedTime();
+    CEmulatedTime now = _syscallhandler_getEmulatedTime();
     struct timespec res_timespec = {
         .tv_sec = now / SIMTIME_ONE_SECOND,
         .tv_nsec = now % SIMTIME_ONE_SECOND,
@@ -156,7 +156,7 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
     PluginPtr tvPtr = args->args[0].as_ptr; // struct timeval*
 
     if (tvPtr.val) {
-        EmulatedTime now = _syscallhandler_getEmulatedTime();
+        CEmulatedTime now = _syscallhandler_getEmulatedTime();
         struct timeval* tv = process_getWriteablePtr(sys->process, tvPtr, sizeof(*tv));
         tv->tv_sec = now / SIMTIME_ONE_SECOND;
         tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;

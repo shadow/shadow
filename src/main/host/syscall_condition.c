@@ -23,7 +23,7 @@ struct _SysCallCondition {
     // A trigger to unblock the syscall.
     Trigger trigger;
     // Time at which the condition will expire, or EMUTIME_INVALID if no timeout.
-    EmulatedTime timeoutExpiration;
+    CEmulatedTime timeoutExpiration;
     // Timeout object waiting for timeoutExpiration.
     Timer* timeout;
     // The active file in the blocked syscall. This is state used when resuming a blocked syscall.
@@ -85,7 +85,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     return cond;
 }
 
-void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t) {
+void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, CEmulatedTime t) {
     MAGIC_ASSERT(cond);
 
     cond->timeoutExpiration = t;
@@ -262,8 +262,8 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
 
     if (cond->timeoutExpiration != EMUTIME_INVALID) {
         utility_debugAssert(cond->timeoutExpiration >= worker_getCurrentEmulatedTime());
-        SimulationTime remainingTime = cond->timeoutExpiration - worker_getCurrentEmulatedTime();
-        g_string_append_printf(string, "a timeout with %lu.%09lu seconds remaining",
+        CSimulationTime remainingTime = cond->timeoutExpiration - worker_getCurrentEmulatedTime();
+        g_string_append_printf(string, "a timeout with %llu.%09llu seconds remaining",
                                remainingTime / SIMTIME_ONE_SECOND,
                                (remainingTime % SIMTIME_ONE_SECOND) / SIMTIME_ONE_NANOSECOND);
     }
@@ -515,6 +515,8 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock*
     return true;
 }
 
-EmulatedTime syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeoutExpiration; }
+CEmulatedTime syscallcondition_getTimeout(SysCallCondition* cond) {
+    return cond->timeoutExpiration;
+}
 
 OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond) { return cond->activeFile; }
