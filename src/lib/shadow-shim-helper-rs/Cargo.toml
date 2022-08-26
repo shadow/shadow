@@ -9,6 +9,7 @@ edition = "2021"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
+rkyv = "0.7.39"
 libc = "0.2"
 nix = "0.25.0"
 # don't log debug or trace levels in release mode
