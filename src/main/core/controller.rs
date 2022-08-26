@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::manager::{Manager, ManagerConfig};
@@ -51,7 +51,7 @@ impl<'a> Controller<'a> {
         });
 
         let manager_config = ManagerConfig {
-            random: Xoshiro256PlusPlus::seed_from_u64(sim_config.random.gen()),
+            random: Xoshiro256PlusPlus::from_rng(&mut sim_config.random).unwrap(),
             ip_assignment: sim_config.ip_assignment,
             routing_info: sim_config.routing_info,
             host_bandwidths: sim_config.host_bandwidths,

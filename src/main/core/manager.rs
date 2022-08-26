@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{self, Context};
-use rand::Rng;
+use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
@@ -236,7 +236,7 @@ impl<'a> Manager<'a> {
         // would leak memory if we return before then, but not worrying about that since the issues
         // will go away when we move the hosts to rust, and if we don't add them to the scheduler
         // then it means there was an error and we're going to exit anyways
-        let hosts: Vec<_> = manager_config
+        let mut hosts: Vec<_> = manager_config
             .hosts
             .iter()
             .map(|x| {
@@ -244,6 +244,9 @@ impl<'a> Manager<'a> {
                     .with_context(|| format!("Failed to build host '{}'", x.name))
             })
             .collect::<anyhow::Result<_>>()?;
+
+        // shuffle the list of hosts to make sure that they are randomly assigned by the scheduler
+        hosts.shuffle(&mut manager_config.random);
 
         // set the simulation's global state
         worker::WORKER_SHARED
@@ -270,8 +273,7 @@ impl<'a> Manager<'a> {
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler =
-                SchedulerWrapper::new(num_workers, manager_config.random.gen(), self.end_time);
+            let mut scheduler = SchedulerWrapper::new(num_workers, self.end_time);
 
             for host in hosts.into_iter() {
                 scheduler
@@ -766,14 +768,10 @@ struct SchedulerWrapper {
 }
 
 impl SchedulerWrapper {
-    pub fn new(num_workers: u32, scheduler_seed: u32, end_time: EmulatedTime) -> Self {
+    pub fn new(num_workers: u32, end_time: EmulatedTime) -> Self {
         Self {
             ptr: unsafe {
-                c::scheduler_new(
-                    num_workers,
-                    scheduler_seed,
-                    EmulatedTime::to_abs_simtime(end_time).into(),
-                )
+                c::scheduler_new(num_workers, EmulatedTime::to_abs_simtime(end_time).into())
             },
         }
     }

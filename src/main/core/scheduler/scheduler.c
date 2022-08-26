@@ -38,9 +38,6 @@ struct _Scheduler {
     /* we store the hosts here */
     GHashTable* hostIDToHostMap;
 
-    /* used to randomize host-to-thread assignment */
-    Random* random;
-
     /* auxiliary information about current running state */
     SimulationTime endTime;
     struct {
@@ -132,7 +129,7 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     worker_finish(myHosts, scheduler->endTime);
 }
 
-Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime endTime) {
+Scheduler* scheduler_new(guint nWorkers, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
@@ -148,8 +145,6 @@ Scheduler* scheduler_new(guint nWorkers, guint schedulerSeed, SimulationTime end
 
     scheduler->hostIDToHostMap =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)host_unref);
-
-    scheduler->random = random_new(schedulerSeed);
 
     utility_debugAssert(nWorkers >= 1);
 
@@ -167,7 +162,6 @@ void scheduler_free(Scheduler* scheduler) {
 
     /* finish cleanup of shadow objects */
     schedulerpolicy_free(scheduler->policy);
-    random_free(scheduler->random);
 
     g_mutex_clear(&(scheduler->globalLock));
 
@@ -206,39 +200,6 @@ static void _scheduler_appendHostToQueue(gpointer uintKey, Host* host, GQueue* a
     g_queue_push_tail(allHosts, host);
 }
 
-static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
-    if(queue == NULL) {
-        return;
-    }
-
-    /* convert queue to array */
-    guint length = g_queue_get_length(queue);
-    gpointer array[length];
-
-    for(guint i = 0; i < length; i++) {
-        array[i] = g_queue_pop_head(queue);
-    }
-
-    /* we now should have moved all elements from the queue to the array */
-    utility_debugAssert(g_queue_is_empty(queue));
-
-    /* shuffle array - Fisher-Yates shuffle */
-    for(guint i = 0; i < length-1; i++) {
-        gdouble randomFraction = random_nextDouble(scheduler->random);
-        gdouble maxRange = (gdouble) length-i;
-        guint j = (guint)floor(randomFraction * maxRange);
-
-        gpointer temp = array[i];
-        array[i] = array[i+j];
-        array[i+j] = temp;
-    }
-
-    /* reload the queue with the newly shuffled ordering */
-    for(guint i = 0; i < length; i++) {
-        g_queue_push_tail(queue, array[i]);
-    }
-}
-
 static void _scheduler_assignHostsToThread(Scheduler* scheduler, GQueue* hosts, pthread_t thread, uint maxAssignments) {
     MAGIC_ASSERT(scheduler);
     utility_debugAssert(hosts);
@@ -263,10 +224,8 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
 
     int nWorkers = workerpool_getNWorkers(scheduler->workerPool);
-    /* we need to shuffle the list of hosts to make sure they are randomly assigned */
-    _scheduler_shuffleQueue(scheduler, hosts);
 
-    /* now that our host order has been randomized, assign them evenly to worker threads */
+    /* assign hosts evenly to worker threads */
     int workeri = 0;
     while (!g_queue_is_empty(hosts)) {
         pthread_t nextThread = workerpool_getThread(scheduler->workerPool, workeri++ % nWorkers);
