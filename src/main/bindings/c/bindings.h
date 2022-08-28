@@ -514,8 +514,10 @@ const struct ChildPidWatcher *worker_getChildPidWatcher(void);
 // Takes ownership of the event.
 void worker_pushToHost(HostId host, struct Event *event);
 
+void worker_setMinEventTimeNextRound(SimulationTime time);
+
 // Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
+void worker_newForThisThread(int32_t worker_id);
 
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectAllocCounter(void);
@@ -564,13 +566,13 @@ bool worker_isBootstrapActive(void);
 
 bool worker_isSimCompleted(void);
 
-WorkerPool *_worker_pool(void);
-
 bool worker_isAlive(void);
 
 const Address *worker_resolveIPToAddress(in_addr_t ip);
 
 const Address *worker_resolveNameToAddress(const char *name);
+
+int32_t worker_getAffinity(void);
 
 // Add the counters to their global counterparts, and clear the provided counters.
 void worker_addToGlobalAllocCounters(struct Counter *alloc_counter,

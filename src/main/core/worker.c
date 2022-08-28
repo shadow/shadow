@@ -327,6 +327,7 @@ SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     return minTime;
 }
 
+/*
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
@@ -341,15 +342,21 @@ void worker_setMinEventTimeNextRound(SimulationTime simtime) {
         pool->minEventTimes[lpi] = simtime;
     }
 }
+*/
 
+/*
 int worker_getAffinity() {
     WorkerPool* pool = _worker_pool();
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
+*/
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 void* _worker_run(void* voidWorkerThreadInfo) {
+    utility_panic("POOL");
+
+    /*
     // WorkerPool, owned by the Shadow main thread (Initialized below).
     // See thread-safety comments in struct _WorkerPool definition.
     WorkerPool* workerPool = NULL;
@@ -416,6 +423,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     trace("Worker finished");
 
     return NULL;
+    */
 }
 
 void worker_finish(GQueue* hosts, SimulationTime time) {

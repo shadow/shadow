@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::{self, Context};
@@ -12,6 +12,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
+use crate::core::scheduler::scheduler::NewScheduler;
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::support::emulated_time::EmulatedTime;
@@ -21,6 +22,7 @@ use crate::cshadow as c;
 use crate::host::host::Host;
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
+use crate::utility::counter::Counter;
 use crate::utility::status_bar::Status;
 use crate::utility::{self, SyncSendPointer};
 
@@ -232,6 +234,10 @@ impl<'a> Manager<'a> {
             })
             .get();
 
+        let parallelism = self.config.general.parallelism.unwrap().get();
+
+        let num_threads = std::cmp::min(num_workers, parallelism);
+
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
         // will go away when we move the hosts to rust, and if we don't add them to the scheduler
@@ -247,6 +253,13 @@ impl<'a> Manager<'a> {
 
         // shuffle the list of hosts to make sure that they are randomly assigned by the scheduler
         hosts.shuffle(&mut manager_config.random);
+
+        let num_hosts = hosts.len();
+
+        let hostnames: HashSet<_> = hosts.iter().map(|x| x.name().to_string()).collect();
+        if hostnames.len() != hosts.len() {
+            return Err(anyhow::anyhow!("Duplicate hostnames"));
+        }
 
         // set the simulation's global state
         worker::WORKER_SHARED
@@ -269,17 +282,50 @@ impl<'a> Manager<'a> {
                 event_queues: hosts.iter().map(|x| (x.id(), x.event_queue())).collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
+                next_event_time: RwLock::new(None),
             });
+
+        let num_cpus = num_cpus::get() as u32;
+
+        let mut cpus: Vec<_> = (0..num_cpus).collect();
+        cpus.sort_by_key(|&x| x % 2 == 1);
+
+        let use_cpu_pinning = self.config.experimental.use_cpu_pinning.unwrap();
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler = SchedulerWrapper::new(num_workers, self.end_time);
+            //let mut scheduler = SchedulerWrapper::new(num_workers, self.end_time);
+            let mut scheduler = NewScheduler::new(num_threads, hosts);
 
+            scheduler.run_on_threads(|thread_index| unsafe {
+                worker::Worker::new_for_this_thread(
+                    worker::WorkerThreadID(thread_index),
+                    use_cpu_pinning.then_some(cpus[thread_index as usize]),
+                )
+            });
+
+            scheduler.run(
+                move |host| {
+                    worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
+                    unsafe { host.lock() };
+                    worker::Worker::set_active_host(host);
+
+                    host.boot();
+
+                    worker::Worker::clear_active_host();
+                    unsafe { host.unlock() };
+                    worker::Worker::clear_current_time();
+                },
+                || {},
+            );
+
+            /*
             for host in hosts.into_iter() {
                 scheduler
                     .add_host(host.chost())
                     .with_context(|| format!("Failed to add host '{}'", host.name()))?;
             }
+            */
 
             // we are the main thread, we manage the execution window updates while the workers run
             // events
@@ -301,11 +347,15 @@ impl<'a> Manager<'a> {
             let mut last_heartbeat = EmulatedTime::SIMULATION_START;
             let mut time_of_last_usage_check = std::time::Instant::now();
 
+            /*
             scheduler.start();
+            */
 
             while let Some((window_start, window_end)) = window {
+                /*
                 // release the workers and run next round
                 scheduler.continue_next_round(window_start, window_end);
+                */
 
                 // update the status logger
                 let display_time = std::cmp::min(window_start, window_end);
@@ -317,24 +367,75 @@ impl<'a> Manager<'a> {
                         state.current = display_time;
                     });
 
-                // log a heartbeat message every 'heartbeat_interval' amount of simulated time
-                if let Some(heartbeat_interval) = heartbeat_interval {
-                    if window_start > last_heartbeat + heartbeat_interval {
-                        last_heartbeat = window_start;
-                        self.log_heartbeat(window_start);
-                    }
-                }
-
-                // check resource usage every 30 real seconds
-                let current_time = std::time::Instant::now();
-                if current_time.duration_since(time_of_last_usage_check) > Duration::from_secs(30) {
-                    time_of_last_usage_check = current_time;
-                    self.check_resource_usage();
-                }
-
+                /*
                 // wait for the workers to finish processing nodes before we update the execution
                 // window
                 let min_next_event_time = scheduler.await_next_round().unwrap_or(EmulatedTime::MAX);
+                */
+
+                worker::WORKER_SHARED
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .reset_next_event_time();
+
+                scheduler.run(
+                    move |host| {
+                        worker::Worker::set_round_end_time(window_end);
+                        unsafe { host.lock() };
+                        worker::Worker::set_active_host(host);
+
+                        host.execute(window_end);
+
+                        if let Some(host_next_event_time) = host.next_event_time() {
+                            worker::Worker::update_next_event_time(host_next_event_time);
+                        }
+
+                        worker::Worker::clear_active_host();
+                        unsafe { host.unlock() };
+                    },
+                    || {
+                        // log a heartbeat message every 'heartbeat_interval' amount of simulated time
+                        if let Some(heartbeat_interval) = heartbeat_interval {
+                            if window_start > last_heartbeat + heartbeat_interval {
+                                last_heartbeat = window_start;
+                                self.log_heartbeat(window_start);
+                            }
+                        }
+
+                        // check resource usage every 30 real seconds
+                        let current_time = std::time::Instant::now();
+                        if current_time.duration_since(time_of_last_usage_check)
+                            > Duration::from_secs(30)
+                        {
+                            time_of_last_usage_check = current_time;
+                            self.check_resource_usage();
+                        }
+                    },
+                );
+
+                let min_next_event_time = worker::WORKER_SHARED
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .next_event_time();
+                let min_next_event_time = min_next_event_time.unwrap_or(EmulatedTime::MAX);
+
+                /*
+                let (results_send, results_recv) = crossbeam::channel::bounded(num_hosts);
+
+                scheduler.run(move |host| {
+                    unsafe { host.lock() };
+                    results_send.send(host.next_event_time()).unwrap();
+                    unsafe { host.unlock() };
+                });
+
+                let min_next_event_time = results_recv
+                    .iter()
+                    .filter_map(|x| x)
+                    .min()
+                    .unwrap_or(EmulatedTime::MAX);
+                */
 
                 // we are in control now, the workers are waiting for the next round
                 log::debug!(
@@ -350,6 +451,28 @@ impl<'a> Manager<'a> {
                     .controller
                     .manager_finished_current_round(min_next_event_time);
             }
+
+            scheduler.run(
+                move |host| {
+                    worker::Worker::set_current_time(self.end_time);
+                    //unsafe { host.lock() };
+                    worker::Worker::set_active_host(host);
+
+                    host.free_all_applications();
+                    host.shutdown();
+
+                    worker::Worker::clear_active_host();
+                    //unsafe { host.unlock() };
+                    worker::Worker::clear_current_time();
+                },
+                || {},
+            );
+
+            scheduler.run_on_threads(|thread_id| {
+                worker::Worker::add_to_global_alloc_counters();
+            });
+
+            scheduler.join();
         }
 
         // simulation is finished, so update the status logger

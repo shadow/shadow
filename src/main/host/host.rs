@@ -166,6 +166,36 @@ impl Host {
         unsafe { Arc::from_raw(new_arc) }
     }
 
+    pub fn boot(&mut self) {
+        unsafe { cshadow::host_boot(self.chost()) };
+    }
+
+    pub fn shutdown(&mut self) {
+        unsafe { cshadow::host_shutdown(self.chost()) };
+    }
+
+    pub fn free_all_applications(&mut self) {
+        unsafe { cshadow::host_freeAllApplications(self.chost()) };
+    }
+
+    pub fn execute(&mut self, until: EmulatedTime) {
+        unsafe { cshadow::host_execute(self.chost(), EmulatedTime::to_c_emutime(Some(until))) };
+    }
+
+    pub fn next_event_time(&self) -> Option<EmulatedTime> {
+        EmulatedTime::from_c_emutime(unsafe { cshadow::host_nextEventTime(self.chost()) })
+    }
+
+    pub unsafe fn lock(&mut self) {
+        unsafe { cshadow::host_lock(self.chost()) };
+        unsafe { cshadow::host_lockShimShmemLock(self.chost()) };
+    }
+
+    pub unsafe fn unlock(&mut self) {
+        unsafe { cshadow::host_unlockShimShmemLock(self.chost()) };
+        unsafe { cshadow::host_unlock(self.chost()) };
+    }
+
     pub fn chost(&self) -> *mut cshadow::Host {
         self.chost.ptr()
     }
