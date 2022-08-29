@@ -9,6 +9,7 @@
 
 #include <glib.h>
 
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/core/support/definitions.h"
 
 typedef struct _CPU CPU;
@@ -17,8 +18,8 @@ CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, g
 void cpu_free(CPU* cpu);
 
 gboolean cpu_isBlocked(CPU* cpu);
-void cpu_updateTime(CPU* cpu, SimulationTime now);
-void cpu_addDelay(CPU* cpu, SimulationTime delay);
-SimulationTime cpu_getDelay(CPU* cpu);
+void cpu_updateTime(CPU* cpu, CSimulationTime now);
+void cpu_addDelay(CPU* cpu, CSimulationTime delay);
+CSimulationTime cpu_getDelay(CPU* cpu);
 
 #endif /* SHD_CPU_H_ */

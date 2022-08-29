@@ -4,13 +4,13 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::num::NonZeroU8;
 
-use crate::core::support::emulated_time::EmulatedTime;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
     PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
 };
 use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FmtOptions {

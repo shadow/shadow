@@ -29,7 +29,7 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/bindings/c/bindings.h"
 
 // To be called by worker thread
-void worker_finish(GQueue* hosts, SimulationTime time);
+void worker_finish(GQueue* hosts, CSimulationTime time);
 
 // Create a workerpool with `nThreads` threads, allowing up to `nConcurrent` to
 // run at a time.
@@ -54,38 +54,38 @@ pthread_t workerpool_getThread(WorkerPool* pool, int threadId);
 //
 // This func is not thread safe, so only call from the scheduler thread when the
 // workers are idle.
-SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool);
+CSimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool);
 
 // The worker either pushed an event or finished executing its events and is
 // reporting the min time of events in their event queue.
-void worker_setMinEventTimeNextRound(SimulationTime simtime);
+void worker_setMinEventTimeNextRound(CSimulationTime simtime);
 
 // When a new scheduling round starts, set the end time of the new round.
-void worker_setRoundEndTime(SimulationTime newRoundEndTime);
+void worker_setRoundEndTime(CSimulationTime newRoundEndTime);
 
 int worker_getAffinity();
-gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, SimulationTime nanoDelay);
-gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, EmulatedTime t);
+gboolean worker_scheduleTaskWithDelay(TaskRef* task, Host* host, CSimulationTime nanoDelay);
+gboolean worker_scheduleTaskAtEmulatedTime(TaskRef* task, Host* host, CEmulatedTime t);
 void worker_sendPacket(Host* src, Packet* packet);
 bool worker_isAlive(void);
 // Maximum time that the current event may run ahead to. Must only be called if we hold the host
 // lock.
-EmulatedTime worker_maxEventRunaheadTime(Host* host);
+CEmulatedTime worker_maxEventRunaheadTime(Host* host);
 
 /* Time from the  beginning of the simulation.
  * Deprecated - prefer `worker_getCurrentEmulatedTime`.
  */
-SimulationTime worker_getCurrentSimulationTime();
+CSimulationTime worker_getCurrentSimulationTime();
 
 /* The emulated time starts at January 1st, 2000. This time should be used
  * in any places where time is returned to the application, to handle code
  * that assumes the world is in a relatively recent time. */
-EmulatedTime worker_getCurrentEmulatedTime();
+CEmulatedTime worker_getCurrentEmulatedTime();
 
 bool worker_isBootstrapActive(void);
 
 void worker_clearCurrentTime();
-void worker_setCurrentEmulatedTime(EmulatedTime time);
+void worker_setCurrentEmulatedTime(CEmulatedTime time);
 
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);

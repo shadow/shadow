@@ -1,4 +1,3 @@
-use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::worker::Worker;
 use crate::host::host::HostInfo;
 use crate::utility::time::TimeParts;
@@ -6,6 +5,7 @@ use crossbeam::queue::ArrayQueue;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 use log_bindings as c_log;
 use once_cell::sync::Lazy;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;

@@ -28,8 +28,8 @@ struct _PacketTCPHeader {
     guint acknowledgment;
     GList* selectiveACKs;
     guint window;
-    SimulationTime timestampValue;
-    SimulationTime timestampEcho;
+    CSimulationTime timestampValue;
+    CSimulationTime timestampEcho;
 };
 
 const gchar* protocol_toString(ProtocolType type);
@@ -55,8 +55,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
-        guint window, SimulationTime timestampValue, SimulationTime timestampEcho);
+void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
+                      CSimulationTime timestampValue, CSimulationTime timestampEcho);
 
 gsize packet_getTotalSize(const Packet* packet);
 gsize packet_getPayloadSize(const Packet* packet);

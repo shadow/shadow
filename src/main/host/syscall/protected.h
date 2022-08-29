@@ -93,7 +93,7 @@ struct _SysCallHandler {
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);
 
-EmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
+CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);

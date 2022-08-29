@@ -38,9 +38,9 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 
 size_t shimshmemhost_size();
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
-                        SimulationTime maxUnappliedCpuLatency,
-                        SimulationTime unblockedSyscallLatency,
-                        SimulationTime unblockedVdsoLatency);
+                        CSimulationTime maxUnappliedCpuLatency,
+                        CSimulationTime unblockedSyscallLatency,
+                        CSimulationTime unblockedVdsoLatency);
 void shimshmemhost_destroy(ShimShmemHost* hostMem);
 
 ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
@@ -52,13 +52,13 @@ size_t shimshmemprocess_size();
 void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process);
 
 // Get and set the emulated time.
-EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
-void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t);
+CEmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
+void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, CEmulatedTime t);
 
 // Get and set the *max* emulated time to which the current time can be incremented.
 // Moving time beyond this value requires the current thread to be rescheduled.
-EmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem);
-void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, EmulatedTime t);
+CEmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem);
+void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, CEmulatedTime t);
 
 // Get and set the process's pending signal set.
 shd_kernel_sigset_t shimshmem_getProcessPendingSignals(const ShimShmemHostLock* host,
@@ -117,8 +117,8 @@ int shimshmem_takePendingUnblockedSignal(const ShimShmemHostLock* lock, ShimShme
                                          ShimShmemThread* thread, siginfo_t* info);
 
 // Track the number of consecutive unblocked syscalls.
-void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, SimulationTime dt);
-SimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host);
+void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, CSimulationTime dt);
+CSimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host);
 void shimshmem_resetUnappliedCpuLatency(ShimShmemHostLock* host);
 
 // Get whether to model latency of unblocked syscalls.
@@ -129,10 +129,10 @@ bool shimshmem_getModelUnblockedSyscallLatency(ShimShmemHost* host);
 uint32_t shimshmem_maxUnappliedCpuLatency(ShimShmemHost* host);
 
 // Get the configured latency to emulate for each unblocked syscall.
-SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host);
+CSimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host);
 
 // Get the configured latency to emulate for each unblocked vdso "syscall".
-SimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host);
+CSimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host);
 
 // Handle SHD_SHIM_EVENT_CLONE_REQ
 void shim_shmemHandleClone(const ShimEvent* ev);

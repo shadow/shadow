@@ -13,75 +13,9 @@ typedef struct _Process Process;
 typedef struct _Host Host;
 
 /**
- * Simulation time in nanoseconds. Allows for a consistent representation
- * of time throughput the simulator.
- */
-typedef guint64 SimulationTime;
-
-/**
  * Unique object id reference
  */
 typedef guint ShadowID;
-
-/**
- * Represents an invalid simulation time.
- */
-#define SIMTIME_INVALID G_MAXUINT64
-
-/**
- * Represents one nanosecond in simulation time.
- */
-#define SIMTIME_ONE_NANOSECOND G_GUINT64_CONSTANT(1)
-
-/**
- * Represents one microsecond in simulation time.
- */
-#define SIMTIME_ONE_MICROSECOND G_GUINT64_CONSTANT(1000)
-
-/**
- * Represents one millisecond in simulation time.
- */
-#define SIMTIME_ONE_MILLISECOND G_GUINT64_CONSTANT(1000000)
-
-/**
- * Represents one second in simulation time.
- */
-#define SIMTIME_ONE_SECOND G_GUINT64_CONSTANT(1000000000)
-
-/**
- * Represents one minute in simulation time.
- */
-#define SIMTIME_ONE_MINUTE G_GUINT64_CONSTANT(60000000000)
-
-/**
- * Represents one hour in simulation time.
- */
-#define SIMTIME_ONE_HOUR G_GUINT64_CONSTANT(3600000000000)
-
-/**
- * Emulation time in nanoseconds. Allows for a consistent representation
- * of time throughput the simulator. Emulation time is the simulation time
- * plus the EMULATION_TIME_OFFSET. This type allows us to explicitly
- * distinguish each type of time in the code.,
- */
-typedef guint64 EmulatedTime;
-
-/**
- * The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
- * This is used to emulate to applications that we are in a recent time.
- *
- * Duplicated as SIMULATION_START_SEC in `emulated_time.rs`.
- */
-#define EMUTIME_SIMULATION_START (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
-
-/**
- * The Unix Epoch as EmulatedTime
- */
-#define EMUTIME_UNIX_EPOCH (0)
-
-/* Ensure it can be converted to EmulatedTime */
-#define SIMTIME_MAX (EMUTIME_MAX - EMUTIME_SIMULATION_START)
-#define SIMTIME_MIN 0
 
 /**
  * The start of our random port range in host order, used if application doesn't

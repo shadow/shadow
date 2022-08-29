@@ -16,10 +16,10 @@ struct _CPU {
     guint64 frequencyKHz;
     guint64 rawFrequencyKHz;
     gdouble frequencyRatio;
-    SimulationTime threshold;
-    SimulationTime precision;
-    SimulationTime now;
-    SimulationTime timeCPUAvailable;
+    CSimulationTime threshold;
+    CSimulationTime precision;
+    CSimulationTime now;
+    CSimulationTime timeCPUAvailable;
     MAGIC_DECLARE;
 };
 
@@ -46,11 +46,11 @@ void cpu_free(CPU* cpu) {
     g_free(cpu);
 }
 
-SimulationTime cpu_getDelay(CPU* cpu) {
+CSimulationTime cpu_getDelay(CPU* cpu) {
     MAGIC_ASSERT(cpu);
 
     /* we only have delay if we've crossed the threshold */
-    SimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
+    CSimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
     if(builtUpDelay > cpu->threshold) {
         return builtUpDelay;
     }
@@ -66,30 +66,30 @@ gboolean cpu_isBlocked(CPU* cpu) {
     }
 }
 
-void cpu_updateTime(CPU* cpu, SimulationTime now) {
+void cpu_updateTime(CPU* cpu, CSimulationTime now) {
     MAGIC_ASSERT(cpu);
     cpu->now = now;
     /* the time available is now if we have no delay, otherwise no change
      * this is important so that our delay is added from now or into the future
      */
-    cpu->timeCPUAvailable = (SimulationTime) MAX(cpu->timeCPUAvailable, now);
+    cpu->timeCPUAvailable = (CSimulationTime)MAX(cpu->timeCPUAvailable, now);
 }
 
-void cpu_addDelay(CPU* cpu, SimulationTime delay) {
+void cpu_addDelay(CPU* cpu, CSimulationTime delay) {
     MAGIC_ASSERT(cpu);
 
     /* first normalize the physical CPU to the virtual CPU */
-    SimulationTime adjustedDelay = (SimulationTime) (cpu->frequencyRatio * delay);
+    CSimulationTime adjustedDelay = (CSimulationTime)(cpu->frequencyRatio * delay);
 
     /* round the adjusted delay to the nearest precision if needed */
     if(cpu->precision != SIMTIME_INVALID) {
-        SimulationTime remainder = (SimulationTime) (adjustedDelay % cpu->precision);
+        CSimulationTime remainder = (CSimulationTime)(adjustedDelay % cpu->precision);
 
         /* first round down (this is also the first step to rounding up) */
         adjustedDelay -= remainder;
 
         /* now check if we should round up */
-        SimulationTime halfPrecision = (SimulationTime) (cpu->precision / 2);
+        CSimulationTime halfPrecision = (CSimulationTime)(cpu->precision / 2);
         if(remainder >= halfPrecision) {
             /* we should have rounded up, so adjust up by one interval */
             adjustedDelay += cpu->precision;

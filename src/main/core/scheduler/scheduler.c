@@ -39,10 +39,10 @@ struct _Scheduler {
     GHashTable* hostIDToHostMap;
 
     /* auxiliary information about current running state */
-    SimulationTime endTime;
+    CSimulationTime endTime;
     struct {
-        SimulationTime endTime;
-        SimulationTime minNextEventTime;
+        CSimulationTime endTime;
+        CSimulationTime minNextEventTime;
     } currentRound;
 
     /* for memory management */
@@ -68,8 +68,8 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     // Reset the round end time before starting the new round.
     worker_setRoundEndTime(scheduler->currentRound.endTime);
 
-    EmulatedTime minEventTime = EMUTIME_INVALID;
-    EmulatedTime barrier =
+    CEmulatedTime minEventTime = EMUTIME_INVALID;
+    CEmulatedTime barrier =
         emutime_add_simtime(EMUTIME_SIMULATION_START, scheduler->currentRound.endTime);
 
     GQueue* hosts = schedulerpolicy_getAssignedHosts(scheduler->policy);
@@ -90,7 +90,7 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
         host_execute(host, barrier);
         worker_setActiveHost(NULL);
 
-        EmulatedTime nextEventTime = host_nextEventTime(host);
+        CEmulatedTime nextEventTime = host_nextEventTime(host);
 
         host_unlockShimShmemLock(host);
         host_unlock(host);
@@ -104,7 +104,7 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
 
     if (minEventTime != EMUTIME_INVALID) {
         // this min event time will contain all local events, and some packet events
-        SimulationTime minEventSimTime =
+        CSimulationTime minEventSimTime =
             emutime_sub_emutime(minEventTime, EMUTIME_SIMULATION_START);
         worker_setMinEventTimeNextRound(minEventSimTime);
     }
@@ -129,7 +129,7 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     worker_finish(myHosts, scheduler->endTime);
 }
 
-Scheduler* scheduler_new(guint nWorkers, SimulationTime endTime) {
+Scheduler* scheduler_new(guint nWorkers, CSimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
@@ -258,7 +258,8 @@ void scheduler_start(Scheduler* scheduler) {
     workerpool_awaitTaskFn(scheduler->workerPool);
 }
 
-void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStart, SimulationTime windowEnd) {
+void scheduler_continueNextRound(Scheduler* scheduler, CSimulationTime windowStart,
+                                 CSimulationTime windowEnd) {
     /* Called by the scheduler thread. */
 
     g_mutex_lock(&scheduler->globalLock);
@@ -270,7 +271,7 @@ void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStar
                            _scheduler_runEventsWorkerTaskFn, scheduler);
 }
 
-SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
+CSimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
     /* Called by the scheduler thread. */
 
     // Await completion of _scheduler_runEventsWorkerTaskFn

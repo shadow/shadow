@@ -16,11 +16,11 @@
 #include "main/host/tracker_types.h"
 #include "main/routing/packet.minimal.h"
 
-Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
+Tracker* tracker_new(Host* host, CSimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);
 
-void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime);
-void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay);
+void tracker_addProcessingTime(Tracker* tracker, CSimulationTime processingTime);
+void tracker_addVirtualProcessingDelay(Tracker* tracker, CSimulationTime delay);
 void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);
 void tracker_addOutputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);

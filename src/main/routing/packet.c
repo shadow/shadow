@@ -298,8 +298,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
     packet->protocol = PTCP;
 }
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
-        guint window, SimulationTime timestampValue, SimulationTime timestampEcho) {
+void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
+                      CSimulationTime timestampValue, CSimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->header && (packet->protocol == PTCP));
 

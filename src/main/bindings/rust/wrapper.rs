@@ -1644,18 +1644,17 @@ fn bindgen_test_layout__SysCallReturn() {
 pub type SysCallReturn = _SysCallReturn;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct SimulationTime {
+    _unused: [u8; 0],
+}
+pub type CEmulatedTime = u64;
+pub type CSimulationTime = u64;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct _Process {
     _unused: [u8; 0],
 }
 pub type Process = _Process;
-#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
-#[doc = " of time throughput the simulator."]
-pub type SimulationTime = guint64;
-#[doc = " Emulation time in nanoseconds. Allows for a consistent representation"]
-#[doc = " of time throughput the simulator. Emulation time is the simulation time"]
-#[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
-#[doc = " distinguish each type of time in the code.,"]
-pub type EmulatedTime = guint64;
 pub type WorkerPool = u8;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1820,10 +1819,10 @@ pub struct _Packet {
 pub type Packet = _Packet;
 pub type PacketTCPHeader = _PacketTCPHeader;
 extern "C" {
-    pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
+    pub fn worker_setMinEventTimeNextRound(simtime: CSimulationTime);
 }
 extern "C" {
-    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
+    pub fn worker_setRoundEndTime(newRoundEndTime: CSimulationTime);
 }
 extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
@@ -1832,14 +1831,14 @@ extern "C" {
     pub fn worker_scheduleTaskWithDelay(
         task: *mut TaskRef,
         host: *mut Host,
-        nanoDelay: SimulationTime,
+        nanoDelay: CSimulationTime,
     ) -> gboolean;
 }
 extern "C" {
     pub fn worker_scheduleTaskAtEmulatedTime(
         task: *mut TaskRef,
         host: *mut Host,
-        t: EmulatedTime,
+        t: CEmulatedTime,
     ) -> gboolean;
 }
 extern "C" {
@@ -1849,13 +1848,13 @@ extern "C" {
     pub fn worker_isAlive() -> bool;
 }
 extern "C" {
-    pub fn worker_maxEventRunaheadTime(host: *mut Host) -> EmulatedTime;
+    pub fn worker_maxEventRunaheadTime(host: *mut Host) -> CEmulatedTime;
 }
 extern "C" {
-    pub fn worker_getCurrentSimulationTime() -> SimulationTime;
+    pub fn worker_getCurrentSimulationTime() -> CSimulationTime;
 }
 extern "C" {
-    pub fn worker_getCurrentEmulatedTime() -> EmulatedTime;
+    pub fn worker_getCurrentEmulatedTime() -> CEmulatedTime;
 }
 extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
@@ -1864,9 +1863,15 @@ extern "C" {
     pub fn worker_clearCurrentTime();
 }
 extern "C" {
-    pub fn worker_setCurrentEmulatedTime(time: EmulatedTime);
+    pub fn worker_setCurrentEmulatedTime(time: CEmulatedTime);
 }
 pub type LegacyFile = [u64; 5usize];
+pub type LegacyFileCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
+pub type LegacyFileCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+pub type LegacyFileFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
@@ -1879,12 +1884,6 @@ pub type _Status = i32;
 extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-pub type LegacyFileCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
-pub type LegacyFileCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
-pub type LegacyFileFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
@@ -1920,8 +1919,8 @@ extern "C" {
     pub fn process_new(
         host: *mut Host,
         processID: guint,
-        startTime: SimulationTime,
-        stopTime: SimulationTime,
+        startTime: CSimulationTime,
+        stopTime: CSimulationTime,
         hostName: *const gchar,
         pluginName: *const gchar,
         pluginPath: *const gchar,
@@ -2408,13 +2407,13 @@ pub struct _HostParameters {
     pub hostname: *const gchar,
     pub nodeId: guint,
     pub ipAddr: in_addr_t,
-    pub simEndTime: EmulatedTime,
+    pub simEndTime: CEmulatedTime,
     pub requestedBwDownBits: guint64,
     pub requestedBwUpBits: guint64,
     pub cpuFrequency: guint64,
     pub cpuThreshold: guint64,
     pub cpuPrecision: guint64,
-    pub heartbeatInterval: SimulationTime,
+    pub heartbeatInterval: CSimulationTime,
     pub heartbeatLogLevel: LogLevel,
     pub heartbeatLogInfo: LogInfoFlags,
     pub logLevel: LogLevel,
@@ -2856,10 +2855,10 @@ extern "C" {
     pub fn host_pushLocalEvent(host: *mut Host, event: *mut Event) -> bool;
 }
 extern "C" {
-    pub fn host_execute(host: *mut Host, until: EmulatedTime);
+    pub fn host_execute(host: *mut Host, until: CEmulatedTime);
 }
 extern "C" {
-    pub fn host_nextEventTime(host: *mut Host) -> EmulatedTime;
+    pub fn host_nextEventTime(host: *mut Host) -> CEmulatedTime;
 }
 extern "C" {
     pub fn host_getOwnedEventQueue(host: *mut Host) -> *const ThreadSafeEventQueue;
@@ -2902,8 +2901,8 @@ extern "C" {
 extern "C" {
     pub fn host_addApplication(
         host: *mut Host,
-        startTime: SimulationTime,
-        stopTime: SimulationTime,
+        startTime: CSimulationTime,
+        stopTime: CSimulationTime,
         pluginName: *const gchar,
         pluginPath: *const gchar,
         envv: *const *const gchar,
@@ -3029,18 +3028,18 @@ extern "C" {
     pub fn host_scheduleTaskAtEmulatedTime(
         host: *mut Host,
         task: *mut TaskRef,
-        time: EmulatedTime,
+        time: CEmulatedTime,
     ) -> gboolean;
 }
 extern "C" {
     pub fn host_scheduleTaskWithDelay(
         host: *mut Host,
         task: *mut TaskRef,
-        nanoDelay: SimulationTime,
+        nanoDelay: CSimulationTime,
     ) -> gboolean;
 }
 extern "C" {
-    pub fn scheduler_new(nWorkers: guint, endTime: SimulationTime) -> *mut Scheduler;
+    pub fn scheduler_new(nWorkers: guint, endTime: CSimulationTime) -> *mut Scheduler;
 }
 extern "C" {
     pub fn scheduler_free(arg1: *mut Scheduler);
@@ -3054,12 +3053,12 @@ extern "C" {
 extern "C" {
     pub fn scheduler_continueNextRound(
         arg1: *mut Scheduler,
-        arg2: SimulationTime,
-        arg3: SimulationTime,
+        arg2: CSimulationTime,
+        arg3: CSimulationTime,
     );
 }
 extern "C" {
-    pub fn scheduler_awaitNextRound(arg1: *mut Scheduler) -> SimulationTime;
+    pub fn scheduler_awaitNextRound(arg1: *mut Scheduler) -> CSimulationTime;
 }
 extern "C" {
     pub fn scheduler_finish(arg1: *mut Scheduler);
@@ -3714,8 +3713,8 @@ pub struct _PacketTCPHeader {
     pub acknowledgment: guint,
     pub selectiveACKs: *mut GList,
     pub window: guint,
-    pub timestampValue: SimulationTime,
-    pub timestampEcho: SimulationTime,
+    pub timestampValue: CSimulationTime,
+    pub timestampEcho: CSimulationTime,
 }
 #[test]
 fn bindgen_test_layout__PacketTCPHeader() {

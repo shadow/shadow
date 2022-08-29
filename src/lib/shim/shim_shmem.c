@@ -15,11 +15,11 @@ struct _ShimHostProtectedSharedMem {
     GQuark host_id;
 
     // Modeled CPU latency that hasn't been applied to the clock yet.
-    SimulationTime unapplied_cpu_latency;
+    CSimulationTime unapplied_cpu_latency;
 
     // Max simulation time to which sim_time may be incremented.  Moving time
     // beyond this value requires the current thread to be rescheduled.
-    EmulatedTime max_runahead_time;
+    CEmulatedTime max_runahead_time;
 };
 
 struct _ShimShmemHost {
@@ -44,7 +44,7 @@ struct _ShimShmemHost {
     // per-process option.
     //
     // Thread Safety: immutable after initialization.
-    const SimulationTime max_unapplied_cpu_latency;
+    const CSimulationTime max_unapplied_cpu_latency;
 
     // How much to move time forward for each unblocked syscall.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
@@ -52,7 +52,7 @@ struct _ShimShmemHost {
     // per-process option.
     //
     // Thread Safety: immutable after initialization.
-    const SimulationTime unblocked_syscall_latency;
+    const CSimulationTime unblocked_syscall_latency;
 
     // How much to move time forward for each unblocked vdso "syscall".
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
@@ -60,10 +60,10 @@ struct _ShimShmemHost {
     // per-process option.
     //
     // Thread Safety: immutable after initialization.
-    const SimulationTime unblocked_vdso_latency;
+    const CSimulationTime unblocked_vdso_latency;
 
     // Current simulation time.
-    _Atomic EmulatedTime sim_time;
+    _Atomic CEmulatedTime sim_time;
 };
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
@@ -119,9 +119,9 @@ struct _ShimShmemThread {
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
 void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
-                        SimulationTime maxUnappliedCpuLatency,
-                        SimulationTime unblockedSyscallLatency,
-                        SimulationTime unblockedVdsoLatency) {
+                        CSimulationTime maxUnappliedCpuLatency,
+                        CSimulationTime unblockedSyscallLatency,
+                        CSimulationTime unblockedVdsoLatency) {
     assert(hostMem);
     // We use `memcpy` instead of struct assignment here to allow us to
     // initialize the const members of `hostMem`.
@@ -146,12 +146,12 @@ void shimshmemhost_destroy(ShimShmemHost* hostMem) {
     pthread_mutex_destroy(&hostMem->mutex);
 }
 
-void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, SimulationTime dt) {
+void shimshmem_incrementUnappliedCpuLatency(ShimShmemHostLock* host, CSimulationTime dt) {
     assert(host);
     host->unapplied_cpu_latency += dt;
 }
 
-SimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host) {
+CSimulationTime shimshmem_getUnappliedCpuLatency(ShimShmemHostLock* host) {
     assert(host);
     return host->unapplied_cpu_latency;
 }
@@ -166,12 +166,12 @@ uint32_t shimshmem_maxUnappliedCpuLatency(ShimShmemHost* host) {
     return host->max_unapplied_cpu_latency;
 }
 
-SimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
+CSimulationTime shimshmem_unblockedSyscallLatency(ShimShmemHost* host) {
     assert(host);
     return host->unblocked_syscall_latency;
 }
 
-SimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host) {
+CSimulationTime shimshmem_unblockedVdsoLatency(ShimShmemHost* host) {
     assert(host);
     return host->unblocked_vdso_latency;
 }
@@ -249,22 +249,22 @@ void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process) {
     };
 }
 
-EmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem) {
+CEmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem) {
     assert(hostMem);
     return atomic_load(&hostMem->sim_time);
 }
 
-void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, EmulatedTime t) {
+void shimshmem_setEmulatedTime(ShimShmemHost* hostMem, CEmulatedTime t) {
     assert(hostMem);
     atomic_store(&hostMem->sim_time, t);
 }
 
-EmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem) {
+CEmulatedTime shimshmem_getMaxRunaheadTime(ShimShmemHostLock* hostMem) {
     assert(hostMem);
     return hostMem->max_runahead_time;
 }
 
-void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, EmulatedTime t) {
+void shimshmem_setMaxRunaheadTime(ShimShmemHostLock* hostMem, CEmulatedTime t) {
     assert(hostMem);
     hostMem->max_runahead_time = t;
 }
