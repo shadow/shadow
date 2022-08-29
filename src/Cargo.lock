@@ -93,8 +93,8 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "1.1.0"
-source = "git+https://github.com/shadow/bytes?rev=cc32de596039e0b1d5c2e349e9ab17e6a98a5074#cc32de596039e0b1d5c2e349e9ab17e6a98a5074"
+version = "1.2.1"
+source = "git+https://github.com/shadow/bytes?rev=c48bd4439e7e043300521925524ecdcce7ff6bcc#c48bd4439e7e043300521925524ecdcce7ff6bcc"
 
 [[package]]
 name = "cc"
