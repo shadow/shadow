@@ -11,14 +11,14 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 
+typedef struct _LegacySocket LegacySocket;
+typedef struct _SocketFunctionTable SocketFunctionTable;
+
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/protocol.h"
 #include "main/routing/packet.minimal.h"
-
-typedef struct _LegacySocket LegacySocket;
-typedef struct _SocketFunctionTable SocketFunctionTable;
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);
 typedef gint (*SocketConnectToPeerFunc)(LegacySocket* socket, Host* host, in_addr_t ip,

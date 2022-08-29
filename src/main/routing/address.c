@@ -74,7 +74,7 @@ static void _address_free(Address* address) {
     g_free(address);
 }
 
-ShadowID address_getID(Address* address) {
+ShadowID address_getID(const Address* address) {
     MAGIC_ASSERT(address);
     return (ShadowID) address->hostID;
 }
@@ -92,7 +92,7 @@ void address_unref(Address* address) {
     }
 }
 
-gboolean address_isLocal(Address* address) {
+gboolean address_isLocal(const Address* address) {
     MAGIC_ASSERT(address);
     return address->isLocal;
 }
@@ -109,27 +109,27 @@ gboolean address_isEqual(Address* a, Address* b) {
     }
 }
 
-guint32 address_toHostIP(Address* address) {
+guint32 address_toHostIP(const Address* address) {
     MAGIC_ASSERT(address);
     return ntohl(address->ip);
 }
 
-gchar* address_toHostIPString(Address* address) {
+const gchar* address_toHostIPString(const Address* address) {
     MAGIC_ASSERT(address);
     return address->ipString;
 }
 
-guint32 address_toNetworkIP(Address* address) {
+guint32 address_toNetworkIP(const Address* address) {
     MAGIC_ASSERT(address);
     return address->ip;
 }
 
-gchar* address_toHostName(Address* address) {
+const gchar* address_toHostName(const Address* address) {
     MAGIC_ASSERT(address);
     return address->name;
 }
 
-gchar* address_toString(Address* address) {
+const gchar* address_toString(const Address* address) {
     MAGIC_ASSERT(address);
     return address->idString;
 }

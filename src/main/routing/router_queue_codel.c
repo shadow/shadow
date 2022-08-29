@@ -57,7 +57,7 @@ enum _CoDelMode {
 typedef struct _CoDelEntry CoDelEntry;
 struct _CoDelEntry {
     Packet* packet;
-    SimulationTime enqueueTS;
+    CSimulationTime enqueueTS;
 };
 
 typedef struct _QueueManagerCoDel QueueManagerCoDel;
@@ -70,9 +70,9 @@ struct _QueueManagerCoDel {
     /* if we are in dropping mode or not */
     CoDelMode mode;
     /* if nonzero, this is an interval worth of time after delays rose above target */
-    SimulationTime intervalExpireTS;
+    CSimulationTime intervalExpireTS;
     /* the next time we should drop a packet */
-    SimulationTime nextDropTS;
+    CSimulationTime nextDropTS;
     /* number of packets dropped since entering drop mode */
     guint dropCount;
     guint dropCountLast;
@@ -146,11 +146,11 @@ static void _routerqueuecodel_drop(Packet* packet) {
     packet_unref(packet);
 }
 
-static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
-        SimulationTime now, gboolean* okToDrop) {
+static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager, CSimulationTime now,
+                                               gboolean* okToDrop) {
     *okToDrop = FALSE;
     Packet* packet = NULL;
-    SimulationTime ts = 0;
+    CSimulationTime ts = 0;
 
     CoDelEntry* entry = g_queue_pop_head(queueManager->entries);
     if(entry) {
@@ -171,7 +171,7 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
     queueManager->totalSize -= length;
 
     utility_debugAssert(now >= ts);
-    SimulationTime sojournTime = now - ts;
+    CSimulationTime sojournTime = now - ts;
 
     if(sojournTime < CODEL_PARAM_TARGET_DELAY_SIMTIME || queueManager->totalSize < CONFIG_MTU) {
         /* We are in a good state, i.e., below the target delay. We reset the interval
@@ -196,19 +196,19 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
     return packet;
 }
 
-static SimulationTime _routerqueuecodel_controlLaw(guint count, SimulationTime ts) {
-    SimulationTime newTS = ts + CODEL_PARAM_INTERVAL_SIMTIME;
+static CSimulationTime _routerqueuecodel_controlLaw(guint count, CSimulationTime ts) {
+    CSimulationTime newTS = ts + CODEL_PARAM_INTERVAL_SIMTIME;
 
     double result = ((double)newTS) / sqrt((double)count);
     double rounded = round(result);
 
-    return (SimulationTime) rounded;
+    return (CSimulationTime)rounded;
 }
 
 static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
     utility_debugAssert(queueManager);
 
-    SimulationTime now = worker_getCurrentSimulationTime();
+    CSimulationTime now = worker_getCurrentSimulationTime();
 
     gboolean okToDrop = FALSE;
     Packet* packet = _routerqueuecodel_dequeueHelper(queueManager, now, &okToDrop);

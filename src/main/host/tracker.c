@@ -48,7 +48,7 @@ typedef struct {
 
 struct _Tracker {
     /* our personal settings as configured in the shadow xml config file */
-    SimulationTime interval;
+    CSimulationTime interval;
     LogLevel loglevel;
     LogInfoFlags loginfo;
 
@@ -56,13 +56,13 @@ struct _Tracker {
     gboolean didLogRAMHeader;
     gboolean didLogSocketHeader;
 
-    SimulationTime processingTimeTotal;
-    SimulationTime processingTimeLastInterval;
+    CSimulationTime processingTimeTotal;
+    CSimulationTime processingTimeLastInterval;
 
     gsize numDelayedTotal;
-    SimulationTime delayTimeTotal;
+    CSimulationTime delayTimeTotal;
     gsize numDelayedLastInterval;
-    SimulationTime delayTimeLastInterval;
+    CSimulationTime delayTimeLastInterval;
 
     IFaceCounters local;
     IFaceCounters remote;
@@ -75,7 +75,7 @@ struct _Tracker {
 
     GHashTable* socketStats;
 
-    EmulatedTime lastHeartbeat;
+    CEmulatedTime lastHeartbeat;
 
     MAGIC_DECLARE;
 };
@@ -127,7 +127,8 @@ static void _socketstats_free(SocketStats* ss) {
 
 static guintptr _tracker_socketHandle(LegacySocket* sock) { return (guintptr)sock; }
 
-Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo) {
+Tracker* tracker_new(Host* host, CSimulationTime interval, LogLevel loglevel,
+                     LogInfoFlags loginfo) {
     Tracker* tracker = g_new0(Tracker, 1);
     MAGIC_INIT(tracker);
 
@@ -161,7 +162,7 @@ void tracker_free(Tracker* tracker) {
     g_free(tracker);
 }
 
-void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) {
+void tracker_addProcessingTime(Tracker* tracker, CSimulationTime processingTime) {
     MAGIC_ASSERT(tracker);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
@@ -170,7 +171,7 @@ void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) 
     }
 }
 
-void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay) {
+void tracker_addVirtualProcessingDelay(Tracker* tracker, CSimulationTime delay) {
     MAGIC_ASSERT(tracker);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
@@ -337,7 +338,7 @@ void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t 
             } else if (peerIP == htonl(INADDR_ANY)) {
                 g_string_printf(hostnameBuffer, "0.0.0.0");
             } else {
-                Address* address = worker_resolveIPToAddress( peerIP);
+                const Address* address = worker_resolveIPToAddress( peerIP);
                 const gchar* hostname = address ? address_toHostName(address) : NULL;
                 g_string_printf(hostnameBuffer, "%s", hostname);
             }
@@ -428,7 +429,7 @@ static gchar* _tracker_getCounterString(Counters* c) {
     return g_string_free(buffer, FALSE);
 }
 
-static void _tracker_logNode(Tracker* tracker, LogLevel level, SimulationTime interval) {
+static void _tracker_logNode(Tracker* tracker, LogLevel level, CSimulationTime interval) {
     guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
     gdouble cpuutil = (gdouble)(((gdouble)tracker->processingTimeLastInterval) / ((gdouble)interval));
     gdouble avgdelayms = 0.0;
@@ -476,7 +477,7 @@ static void _tracker_logNode(Tracker* tracker, LogLevel level, SimulationTime in
     g_string_free(buffer, TRUE);
 }
 
-static void _tracker_logSocket(Tracker* tracker, LogLevel level, SimulationTime interval) {
+static void _tracker_logSocket(Tracker* tracker, LogLevel level, CSimulationTime interval) {
     if(!tracker->didLogSocketHeader) {
         tracker->didLogSocketHeader = TRUE;
         logger_log(logger_getDefault(), level, __FILE__, __FUNCTION__, __LINE__,
@@ -559,7 +560,7 @@ static void _tracker_logSocket(Tracker* tracker, LogLevel level, SimulationTime 
     g_string_free(msg, TRUE);
 }
 
-static void _tracker_logRAM(Tracker* tracker, LogLevel level, SimulationTime interval) {
+static void _tracker_logRAM(Tracker* tracker, LogLevel level, CSimulationTime interval) {
     guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
     guint numptrs = g_hash_table_size(tracker->allocatedLocations);
 

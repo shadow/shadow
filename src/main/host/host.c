@@ -109,13 +109,13 @@ struct _Host {
 static bool _modelUnblockedSyscallLatencyConfig = false;
 ADD_CONFIG_HANDLER(config_getModelUnblockedSyscallLatency, _modelUnblockedSyscallLatencyConfig)
 
-static SimulationTime _unblockedSyscallLatencyConfig;
+static CSimulationTime _unblockedSyscallLatencyConfig;
 ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatencyConfig)
 
-static SimulationTime _unblockedVdsoLatencyConfig;
+static CSimulationTime _unblockedVdsoLatencyConfig;
 ADD_CONFIG_HANDLER(config_getUnblockedVdsoLatency, _unblockedVdsoLatencyConfig)
 
-static SimulationTime _maxUnappliedCpuLatencyConfig;
+static CSimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
@@ -392,7 +392,7 @@ GQuark host_getID(Host* host) {
 bool host_pushLocalEvent(Host* host, Event* event) {
     MAGIC_ASSERT(host);
 
-    EmulatedTime eventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event));
+    CEmulatedTime eventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event));
 
     // if event time is greater than the simulation end time, then skip
     if (eventTime >= host->params.simEndTime) {
@@ -404,13 +404,13 @@ bool host_pushLocalEvent(Host* host, Event* event) {
     return true;
 }
 
-void host_execute(Host* host, EmulatedTime until) {
+void host_execute(Host* host, CEmulatedTime until) {
     MAGIC_ASSERT(host);
 
     CPU* cpu = host_getCPU(host);
 
     while (true) {
-        EmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
+        CEmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
         if (nextEventTime == EMUTIME_INVALID || nextEventTime >= until) {
             break;
         }
@@ -421,7 +421,7 @@ void host_execute(Host* host, EmulatedTime until) {
 
         // if blocked by the CPU, we'll reschedule it
         if (cpu_isBlocked(cpu)) {
-            SimulationTime cpuDelay = cpu_getDelay(cpu);
+            CSimulationTime cpuDelay = cpu_getDelay(cpu);
 
             trace("event blocked on CPU, rescheduled for %" G_GUINT64_FORMAT
                   " nanoseconds from now",
@@ -448,7 +448,7 @@ void host_execute(Host* host, EmulatedTime until) {
     }
 }
 
-EmulatedTime host_nextEventTime(Host* host) {
+CEmulatedTime host_nextEventTime(Host* host) {
     MAGIC_ASSERT(host);
     return eventqueue_nextEventTime(host->eventQueue);
 }
@@ -497,7 +497,7 @@ guint64 host_getNewPacketID(Host* host) {
     return host->packetIDCounter++;
 }
 
-void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
+void host_addApplication(Host* host, CSimulationTime startTime, CSimulationTime stopTime,
                          const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
                          const gchar* const* argv, bool pause_for_debugging) {
     MAGIC_ASSERT(host);
@@ -873,14 +873,14 @@ guint64 host_getNextDeterministicSequenceValue(Host* host) {
     return host->determinismSequenceCounter++;
 }
 
-gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, EmulatedTime time) {
+gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, CEmulatedTime time) {
     GQuark hostID = host_getID(host);
     Event* event =
         event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), host, hostID);
     return host_pushLocalEvent(host, event) ? TRUE : FALSE;
 }
 
-gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, SimulationTime nanoDelay) {
-    EmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
+gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, CSimulationTime nanoDelay) {
+    CEmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
     return host_scheduleTaskAtEmulatedTime(host, task, time);
 }

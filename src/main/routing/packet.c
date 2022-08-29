@@ -10,6 +10,7 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
@@ -297,8 +298,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
     packet->protocol = PTCP;
 }
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
-        guint window, SimulationTime timestampValue, SimulationTime timestampEcho) {
+void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
+                      CSimulationTime timestampValue, CSimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->header && (packet->protocol == PTCP));
 
@@ -688,7 +689,7 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     packet->allStatus |= status;
 
-    if(!worker_isFiltered(LOGLEVEL_TRACE)) {
+    if(rustlogger_isEnabled(LOGLEVEL_TRACE)) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);
         trace("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);

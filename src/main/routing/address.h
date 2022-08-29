@@ -34,10 +34,10 @@ typedef struct _Address Address;
  */
 Address* address_new(GQuark hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
 
-ShadowID address_getID(Address* address);
+ShadowID address_getID(const Address* address);
 void address_ref(Address* address);
 void address_unref(Address* address);
-gboolean address_isLocal(Address* address);
+gboolean address_isLocal(const Address* address);
 
 /**
  * Checks if the given addresses are equal. This function is NULL safe, so
@@ -57,7 +57,7 @@ gboolean address_isEqual(Address* a, Address* b);
  * with address_new()
  * @return the host-order IP
  */
-guint32 address_toHostIP(Address* address);
+guint32 address_toHostIP(const Address* address);
 
 /**
  * Retrieves the dot-and-decimal string representation of the host-order version
@@ -67,7 +67,7 @@ guint32 address_toHostIP(Address* address);
  * with address_new()
  * @return an address pointing to the internal memory holding the string
  */
-gchar* address_toHostIPString(Address* address);
+const gchar* address_toHostIPString(const Address* address);
 
 /**
  * Retrieve the network-order integer version of this address
@@ -75,7 +75,7 @@ gchar* address_toHostIPString(Address* address);
  * with address_new()
  * @return the network-order IP
  */
-guint32 address_toNetworkIP(Address* address);
+guint32 address_toNetworkIP(const Address* address);
 
 /**
  * Retrieves the hostname of this address. The caller does not own and should
@@ -84,7 +84,7 @@ guint32 address_toNetworkIP(Address* address);
  * with address_new()
  * @return an address pointing to the internal memory holding the string
  */
-gchar* address_toHostName(Address* address);
+const gchar* address_toHostName(const Address* address);
 
 /**
  * Turns the IPv4 address into a newly allocated string that should be freed by the caller.
@@ -93,6 +93,6 @@ gchar* address_ipToNewString(in_addr_t ip);
 
 in_addr_t address_stringToIP(const gchar* ipString);
 
-gchar* address_toString(Address* address);
+const gchar* address_toString(const Address* address);
 
 #endif /* SHD_ADDRESS_H_ */

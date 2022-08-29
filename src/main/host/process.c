@@ -110,8 +110,8 @@ struct _Process {
 #endif
 
     /* process boot and shutdown variables */
-    EmulatedTime startTime;
-    EmulatedTime stopTime;
+    CEmulatedTime startTime;
+    CEmulatedTime stopTime;
 
     /* absolute path to the process's working directory */
     char* workingDir;
@@ -347,7 +347,7 @@ static void _process_terminate(Process* proc) {
 
 #ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
-    SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
+    CSimulationTime delay = (CSimulationTime)(elapsedTimeSec * SIMTIME_ONE_SECOND);
     cpu_addDelay(host_getCPU(proc->host), delay);
     Tracker* tracker = host_getTracker(proc->host);
     if (tracker != NULL) {
@@ -807,9 +807,10 @@ static void _process_itimer_real_expiration(Host* host, void* voidProcess, void*
     process_signal(process, NULL, &siginfo);
 }
 
-Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
-                     const gchar* hostName, const gchar* pluginName, const gchar* pluginPath,
-                     gchar** envv, const gchar* const* argv, bool pause_for_debugging) {
+Process* process_new(Host* host, guint processID, CSimulationTime startTime,
+                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
+                     const gchar* pluginPath, gchar** envv, const gchar* const* argv,
+                     bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 

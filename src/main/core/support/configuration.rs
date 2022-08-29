@@ -11,10 +11,12 @@ use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 
-use super::simulation_time::{SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::format::StraceFmtMode;
+use shadow_shim_helper_rs::simulation_time::{
+    CSimulationTime, SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND,
+};
 
 use log_bindings as c_log;
 
@@ -1374,7 +1376,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn config_getUnblockedSyscallLatency(
         config: *const ConfigOptions,
-    ) -> c::SimulationTime {
+    ) -> CSimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match config.experimental.unblocked_syscall_latency {
@@ -1387,7 +1389,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn config_getUnblockedVdsoLatency(
         config: *const ConfigOptions,
-    ) -> c::SimulationTime {
+    ) -> CSimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match config.experimental.unblocked_vdso_latency {
@@ -1462,7 +1464,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn config_getHostHeartbeatInterval(
         config: *const ConfigOptions,
-    ) -> c::SimulationTime {
+    ) -> CSimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config

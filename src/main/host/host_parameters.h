@@ -21,13 +21,13 @@ struct _HostParameters {
     const gchar* hostname;
     guint nodeId;
     in_addr_t ipAddr;
-    EmulatedTime simEndTime;
+    CEmulatedTime simEndTime;
     guint64 requestedBwDownBits;
     guint64 requestedBwUpBits;
     guint64 cpuFrequency;
     guint64 cpuThreshold;
     guint64 cpuPrecision;
-    SimulationTime heartbeatInterval;
+    CSimulationTime heartbeatInterval;
     LogLevel heartbeatLogLevel;
     LogInfoFlags heartbeatLogInfo;
     LogLevel logLevel;

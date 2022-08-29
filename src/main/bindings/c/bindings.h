@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -151,28 +152,6 @@ typedef void (*TaskCallbackFunc)(Host*, void*, void*);
 typedef void (*TaskObjectFreeFunc)(void*);
 
 typedef void (*TaskArgumentFreeFunc)(void*);
-
-#define EMUTIME_INVALID UINT64_MAX
-
-#define EMUTIME_MAX (UINT64_MAX - 1)
-
-#define EMUTIME_MIN 0
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 
@@ -370,9 +349,9 @@ int32_t config_getPreloadSpinMax(const struct ConfigOptions *config);
 
 uint64_t config_getMaxUnappliedCpuLatency(const struct ConfigOptions *config);
 
-SimulationTime config_getUnblockedSyscallLatency(const struct ConfigOptions *config);
+CSimulationTime config_getUnblockedSyscallLatency(const struct ConfigOptions *config);
 
-SimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config);
+CSimulationTime config_getUnblockedVdsoLatency(const struct ConfigOptions *config);
 
 uint32_t config_getParallelism(const struct ConfigOptions *config);
 
@@ -386,7 +365,7 @@ LogLevel config_getHostHeartbeatLogLevel(const struct ConfigOptions *config);
 
 LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
 
-SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
+CSimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
 
 enum StraceFmtMode config_getStraceLoggingMode(const struct ConfigOptions *config);
 
@@ -396,24 +375,8 @@ int64_t parse_bandwidth(const char *s);
 // Parses a string as a time in nanoseconds. Returns '-1' on error.
 int64_t parse_time_nanosec(const char *s);
 
-EmulatedTime emutime_add_simtime(EmulatedTime lhs, SimulationTime rhs);
-
-SimulationTime emutime_sub_emutime(EmulatedTime lhs, EmulatedTime rhs);
-
-SimulationTime simtime_from_timeval(struct timeval val);
-
-SimulationTime simtime_from_timespec(struct timespec val);
-
-__attribute__((warn_unused_result))
-bool simtime_to_timeval(SimulationTime val,
-                        struct timeval *out);
-
-__attribute__((warn_unused_result))
-bool simtime_to_timespec(SimulationTime val,
-                         struct timespec *out);
-
 struct Event *event_new(struct TaskRef *task_ref,
-                        SimulationTime time,
+                        CSimulationTime time,
                         Host *src_host,
                         HostId dst_host_id);
 
@@ -424,9 +387,9 @@ void event_executeAndFree(struct Event *event, Host *host);
 
 HostId event_getHostID(struct Event *event);
 
-SimulationTime event_getTime(const struct Event *event);
+CSimulationTime event_getTime(const struct Event *event);
 
-void event_setTime(struct Event *event, SimulationTime time);
+void event_setTime(struct Event *event, CSimulationTime time);
 
 const struct ThreadSafeEventQueue *eventqueue_new(void);
 
@@ -439,7 +402,7 @@ void eventqueue_push(const struct ThreadSafeEventQueue *queue, struct Event *eve
 
 struct Event *eventqueue_pop(const struct ThreadSafeEventQueue *queue);
 
-EmulatedTime eventqueue_nextEventTime(const struct ThreadSafeEventQueue *queue);
+CEmulatedTime eventqueue_nextEventTime(const struct ThreadSafeEventQueue *queue);
 
 // Create a new reference-counted task that can only be executed on the
 // given host. The callbacks can safely assume that they will only be called
@@ -494,7 +457,7 @@ void taskref_drop(struct TaskRef *task);
 
 DNS *worker_getDNS(void);
 
-SimulationTime worker_getLatency(in_addr_t src, in_addr_t dst);
+CSimulationTime worker_getLatency(in_addr_t src, in_addr_t dst);
 
 float worker_getReliability(in_addr_t src, in_addr_t dst);
 
@@ -507,6 +470,12 @@ bool worker_isRoutable(in_addr_t src, in_addr_t dst);
 void worker_incrementPacketCount(in_addr_t src, in_addr_t dst);
 
 void worker_incrementPluginErrors(void);
+
+// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+const struct ChildPidWatcher *worker_getChildPidWatcher(void);
+
+// Takes ownership of the event.
+void worker_pushToHost(HostId host, struct Event *event);
 
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
@@ -540,25 +509,31 @@ void worker_setActiveProcess(Process *process);
 
 void worker_setActiveThread(Thread *thread);
 
-void worker_setRoundEndTime(SimulationTime t);
+void worker_setRoundEndTime(CSimulationTime t);
 
-SimulationTime _worker_getRoundEndTime(void);
+CSimulationTime _worker_getRoundEndTime(void);
 
-void worker_setCurrentEmulatedTime(EmulatedTime t);
+void worker_setCurrentEmulatedTime(CEmulatedTime t);
 
 void worker_clearCurrentTime(void);
 
-SimulationTime worker_getCurrentSimulationTime(void);
+CSimulationTime worker_getCurrentSimulationTime(void);
 
-EmulatedTime worker_getCurrentEmulatedTime(void);
+CEmulatedTime worker_getCurrentEmulatedTime(void);
 
-void worker_updateLowestUsedLatency(SimulationTime min_path_latency);
+void worker_updateLowestUsedLatency(CSimulationTime min_path_latency);
 
 bool worker_isBootstrapActive(void);
+
+bool worker_isSimCompleted(void);
 
 WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
+
+const Address *worker_resolveIPToAddress(in_addr_t ip);
+
+const Address *worker_resolveNameToAddress(const char *name);
 
 // Add the counters to their global counterparts, and clear the provided counters.
 void worker_addToGlobalAllocCounters(struct Counter *alloc_counter,
@@ -811,14 +786,14 @@ uint64_t timer_consumeExpirationCount(struct Timer *timer);
 
 // Returns the remaining time until the next expiration. Returns 0 if the
 // timer isn't armed.
-SimulationTime timer_getRemainingTime(const struct Timer *timer);
+CSimulationTime timer_getRemainingTime(const struct Timer *timer);
 
-SimulationTime timer_getInterval(const struct Timer *timer);
+CSimulationTime timer_getInterval(const struct Timer *timer);
 
 void timer_arm(struct Timer *timer,
                Host *host,
-               EmulatedTime nextExpireTime,
-               SimulationTime expireInterval);
+               CEmulatedTime nextExpireTime,
+               CSimulationTime expireInterval);
 
 void timer_disarm(struct Timer *timer);
 

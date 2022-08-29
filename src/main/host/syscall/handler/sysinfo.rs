@@ -1,9 +1,9 @@
-use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::worker::Worker;
 use crate::host::context::ThreadContext;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 use crate::utility::pod;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 use syscall_logger::log_syscall;
 

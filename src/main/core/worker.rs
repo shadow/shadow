@@ -5,20 +5,20 @@ use once_cell::sync::Lazy;
 use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event::Event;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::Host;
-use crate::host::host::HostInfo;
-use crate::host::process::Process;
-use crate::host::process::ProcessId;
-use crate::host::thread::ThreadId;
-use crate::host::thread::{CThread, Thread};
+use crate::host::host::{Host, HostId, HostInfo};
+use crate::host::process::{Process, ProcessId};
+use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
+use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -325,7 +325,10 @@ pub struct WorkerShared {
     pub num_plugin_errors: AtomicU32,
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
+    pub child_pid_watcher: ChildPidWatcher,
+    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
     pub bootstrap_end_time: EmulatedTime,
+    pub sim_end_time: EmulatedTime,
 }
 
 impl WorkerShared {
@@ -405,6 +408,16 @@ impl WorkerShared {
     fn update_lowest_used_latency(&self, min_path_latency: SimulationTime) {
         self.runahead.update_lowest_used_latency(min_path_latency);
     }
+
+    /// Get the pid watcher.
+    pub fn child_pid_watcher(&self) -> &ChildPidWatcher {
+        &self.child_pid_watcher
+    }
+
+    pub fn push_to_host(&self, host: HostId, event: Event) {
+        let event_queue = self.event_queues.get(&host).unwrap();
+        event_queue.0.lock().unwrap().push(event);
+    }
 }
 
 impl std::ops::Drop for WorkerShared {
@@ -432,6 +445,9 @@ pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -
 mod export {
     use super::*;
 
+    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+    use shadow_shim_helper_rs::simulation_time::CSimulationTime;
+
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
         Worker::with_mut(|w| w.shared.dns()).unwrap()
@@ -441,7 +457,7 @@ mod export {
     pub extern "C" fn worker_getLatency(
         src: libc::in_addr_t,
         dst: libc::in_addr_t,
-    ) -> cshadow::SimulationTime {
+    ) -> CSimulationTime {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
@@ -491,6 +507,21 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
         Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
+
+    /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
+        Worker::with_mut(|w| w.shared.child_pid_watcher() as *const _).unwrap()
+    }
+
+    /// Takes ownership of the event.
+    #[no_mangle]
+    pub extern "C" fn worker_pushToHost(host: cshadow::HostId, event: *mut Event) {
+        assert!(!event.is_null());
+        let event = unsafe { Box::from_raw(event) };
+        assert!(event.time() >= Worker::round_end_time().unwrap());
+        Worker::with_mut(|w| w.shared.push_to_host(host.into(), *event)).unwrap();
     }
 
     /// Initialize a Worker for this thread.
@@ -595,19 +626,19 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
+    pub extern "C" fn worker_setRoundEndTime(t: CSimulationTime) {
         Worker::set_round_end_time(EmulatedTime::from_abs_simtime(
             SimulationTime::from_c_simtime(t).unwrap(),
         ));
     }
 
     #[no_mangle]
-    pub extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
+    pub extern "C" fn _worker_getRoundEndTime() -> CSimulationTime {
         SimulationTime::to_c_simtime(Worker::round_end_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentEmulatedTime(t: cshadow::EmulatedTime) {
+    pub extern "C" fn worker_setCurrentEmulatedTime(t: CEmulatedTime) {
         Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }
 
@@ -617,17 +648,17 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentSimulationTime() -> cshadow::SimulationTime {
+    pub extern "C" fn worker_getCurrentSimulationTime() -> CSimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentEmulatedTime() -> cshadow::EmulatedTime {
+    pub extern "C" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
         EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: cshadow::SimulationTime) {
+    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: CSimulationTime) {
         let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
         Worker::update_lowest_used_latency(min_path_latency);
     }
@@ -638,6 +669,11 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn worker_isSimCompleted() -> bool {
+        Worker::with(|w| w.clock.now.unwrap() >= w.shared.sim_end_time).unwrap()
+    }
+
+    #[no_mangle]
     pub extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
         Worker::with_mut(|w| w.worker_pool).unwrap()
     }
@@ -645,6 +681,26 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_isAlive() -> bool {
         Worker::is_alive()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_resolveIPToAddress(ip: libc::in_addr_t) -> *const cshadow::Address {
+        Worker::with(|w| {
+            let dns = w.shared.dns.ptr();
+            unsafe { cshadow::dns_resolveIPToAddress(dns, ip) }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_resolveNameToAddress(
+        name: *const libc::c_char,
+    ) -> *const cshadow::Address {
+        Worker::with(|w| {
+            let dns = w.shared.dns.ptr();
+            unsafe { cshadow::dns_resolveNameToAddress(dns, name) }
+        })
+        .unwrap()
     }
 
     /// Add the counters to their global counterparts, and clear the provided counters.

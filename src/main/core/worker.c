@@ -19,8 +19,8 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/host/affinity.h"
@@ -40,16 +40,6 @@ static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
 
 struct _WorkerPool {
-    /* Unowned pointer to the PID watcher for managed processes */
-    const ChildPidWatcher* pidWatcher;
-
-    /* Unowned pointer to the configuration options */
-    const ConfigOptions* config;
-
-    /* Unowned pointer to the per-manager parallel scheduler object that feeds
-     * events to all workers */
-    Scheduler* scheduler;
-
     /* Number of Worker threads */
     int nWorkers;
 
@@ -111,7 +101,7 @@ struct _WorkerPool {
     // can write to the entry in this array corresponding to their assigned lp
     // without using any locks. Computing the global minimum then only requires
     // a linear scan of O(num_lps) instead of O(num_workers).
-    SimulationTime* minEventTimes;
+    CSimulationTime* minEventTimes;
 
     MAGIC_DECLARE;
 };
@@ -123,8 +113,7 @@ struct WorkerConstructorParams {
     int threadID;
 };
 
-WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* scheduler,
-                           const ConfigOptions* config, int nWorkers, int nParallel) {
+WorkerPool* workerpool_new(int nWorkers, int nParallel) {
     // Should have been ensured earlier by `config_getParallelism`.
     utility_debugAssert(nParallel >= 1);
     utility_debugAssert(nWorkers >= 1);
@@ -134,14 +123,11 @@ WorkerPool* workerpool_new(const ChildPidWatcher* pidWatcher, Scheduler* schedul
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){
-        .pidWatcher = pidWatcher,
-        .config = config,
-        .scheduler = scheduler,
         .nWorkers = nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
         .logicalProcessors = lps_new(nLogicalProcessors),
-        .minEventTimes = g_new(SimulationTime, nLogicalProcessors),
+        .minEventTimes = g_new(CSimulationTime, nLogicalProcessors),
         .workerBeginSems = g_new0(sem_t, nWorkers),
         .workerThreads = g_new0(pthread_t, nWorkers),
         .workerLogicalProcessorIdxs = g_new0(int, nWorkers),
@@ -324,13 +310,13 @@ static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerPool, int worke
     affinity_setProcessAffinity(workerPool->workerNativeThreadIDs[workerID], newCpuId, oldCpuId);
 }
 
-SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
+CSimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     MAGIC_ASSERT(workerPool);
 
     // Compute the min time for next round, and reset for the following round.
     // This is called by a single thread in-between rounds while the workers
     // are idle, so let's not do anything too expensive here.
-    SimulationTime minTime = SIMTIME_MAX;
+    CSimulationTime minTime = SIMTIME_MAX;
 
     for (int i = 0; i < lps_n(workerPool->logicalProcessors); ++i) {
         if (workerPool->minEventTimes[i] < minTime) {
@@ -342,7 +328,7 @@ SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     return minTime;
 }
 
-void worker_setMinEventTimeNextRound(SimulationTime simtime) {
+void worker_setMinEventTimeNextRound(CSimulationTime simtime) {
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
     if (simtime < _worker_getRoundEndTime()) {
@@ -361,20 +347,6 @@ int worker_getAffinity() {
     WorkerPool* pool = _worker_pool();
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
-
-Address* worker_resolveIPToAddress(in_addr_t ip) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveIPToAddress(dns, ip);
-}
-
-Address* worker_resolveNameToAddress(const gchar* name) {
-    DNS* dns = worker_getDNS();
-    return dns_resolveNameToAddress(dns, name);
-}
-
-const ChildPidWatcher* worker_getChildPidWatcher() { return _worker_pool()->pidWatcher; }
-
-const ConfigOptions* worker_getConfig() { return _worker_pool()->config; }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
@@ -447,7 +419,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     return NULL;
 }
 
-void worker_finish(GQueue* hosts, SimulationTime time) {
+void worker_finish(GQueue* hosts, CSimulationTime time) {
     worker_setCurrentEmulatedTime(emutime_add_simtime(EMUTIME_SIMULATION_START, time));
 
     if (hosts) {
@@ -460,8 +432,6 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
 
     worker_clearCurrentTime();
 
-    WorkerPool* pool = _worker_pool();
-
     /* send object counts to global counters */
     worker_addToGlobalAllocCounters(_worker_objectAllocCounter(), _worker_objectDeallocCounter());
 
@@ -469,11 +439,11 @@ void worker_finish(GQueue* hosts, SimulationTime time) {
     worker_addToGlobalSyscallCounter(_worker_syscallCounter());
 }
 
-EmulatedTime worker_maxEventRunaheadTime(Host* host) {
+CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
     utility_debugAssert(host);
-    EmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
+    CEmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
-    EmulatedTime nextEventTime = host_nextEventTime(host);
+    CEmulatedTime nextEventTime = host_nextEventTime(host);
     if (nextEventTime != 0) {
         max = MIN(max, nextEventTime);
     }
@@ -492,7 +462,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 
-    if (!scheduler_isRunning(_worker_pool()->scheduler)) {
+    if (worker_isSimCompleted()) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -500,7 +470,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     in_addr_t srcIP = packet_getSourceIP(packet);
     in_addr_t dstIP = packet_getDestinationIP(packet);
 
-    Address* dstAddress = worker_resolveIPToAddress(dstIP);
+    const Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
     if (!dstAddress) {
         utility_panic("unable to schedule packet because of null address");
@@ -519,16 +489,15 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
      * control has problems responding to packet loss */
     if (bootstrapping || chance <= reliability || packet_getPayloadSize(packet) == 0) {
         /* the sender's packet will make it through, find latency */
-        SimulationTime delay = worker_getLatency(srcIP, dstIP);
+        CSimulationTime delay = worker_getLatency(srcIP, dstIP);
         worker_updateLowestUsedLatency(delay);
-        SimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
+        CSimulationTime deliverTime = worker_getCurrentSimulationTime() + delay;
 
         worker_incrementPacketCount(srcIP, dstIP);
 
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstHostID = (GQuark)address_getID(dstAddress);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -547,7 +516,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
         taskref_drop(packetTask);
 
-        SimulationTime roundEndTime = _worker_getRoundEndTime();
+        CSimulationTime roundEndTime = _worker_getRoundEndTime();
 
         // delay the packet until the next round
         if (deliverTime < roundEndTime) {
@@ -558,8 +527,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         // round and calculated its min event time, so we put this in our min event time instead
         worker_setMinEventTimeNextRound(event_getTime(packetEvent));
 
-        const ThreadSafeEventQueue* eventQueue = scheduler_getEventQueue(scheduler, dstHostID);
-        eventqueue_push(eventQueue, packetEvent);
+        worker_pushToHost(dstHostID, packetEvent);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }
@@ -591,5 +559,3 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     worker_setActiveHost(NULL);
     host_unref(host);
 }
-
-gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }

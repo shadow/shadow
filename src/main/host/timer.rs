@@ -3,11 +3,11 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use log::trace;
 
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::utility::{Magic, ObjectCounter};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use super::host::Host;
 
@@ -177,6 +177,8 @@ impl Timer {
 
 pub mod export {
     use crate::cshadow;
+    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+    use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     use super::*;
 
@@ -210,9 +212,7 @@ pub mod export {
     /// Returns the remaining time until the next expiration. Returns 0 if the
     /// timer isn't armed.
     #[no_mangle]
-    pub unsafe extern "C" fn timer_getRemainingTime(
-        timer: *const Timer,
-    ) -> cshadow::SimulationTime {
+    pub unsafe extern "C" fn timer_getRemainingTime(timer: *const Timer) -> CSimulationTime {
         let timer = unsafe { timer.as_ref() }.unwrap();
         let remaining = if let Some(t) = timer.remaining_time() {
             t
@@ -223,7 +223,7 @@ pub mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> cshadow::SimulationTime {
+    pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> CSimulationTime {
         let timer = unsafe { timer.as_ref() }.unwrap();
         timer.interval().into()
     }
@@ -233,8 +233,8 @@ pub mod export {
     pub unsafe extern "C" fn timer_arm(
         timer: *mut Timer,
         host: *mut cshadow::Host,
-        nextExpireTime: cshadow::EmulatedTime,
-        expireInterval: cshadow::SimulationTime,
+        nextExpireTime: CEmulatedTime,
+        expireInterval: CSimulationTime,
     ) {
         let timer = unsafe { timer.as_mut() }.unwrap();
         let mut host = unsafe { Host::borrow_from_c(host) };

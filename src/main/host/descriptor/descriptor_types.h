@@ -22,14 +22,20 @@ enum _LegacyFileType {
 typedef struct _LegacyFile LegacyFile;
 typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
 
-#include "main/core/support/definitions.h"
-#include "main/host/status.h"
-#include "main/utility/utility.h"
+/* Including host.h here would introduce a circular dependency.
+ * We work around it by forward declaring Host here, and including host.h below
+ * to ensure we get an error if host.h's forward declaration somehow changes.
+ */
+typedef struct _Host Host;
 
 /* required functions */
 typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, Host* host);
 typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
 typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
+
+#include "main/core/support/definitions.h"
+#include "main/host/status.h"
+#include "main/utility/utility.h"
 
 /*
  * Virtual function table for base descriptor, storing pointers to required
@@ -54,5 +60,11 @@ struct _LegacyFile {
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;
 };
+
+/* Included to ensure our forward declaration of Host is compatible with
+ * the canonical one. We can't include this sooner without causing the  build to fail
+ * due to circular dependencies.
+ */
+#include "main/host/host.h"
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_ */

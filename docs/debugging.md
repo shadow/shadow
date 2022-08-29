@@ -31,6 +31,22 @@ $ gdb --pid=1234
 > continue
 ```
 
+### Troubleshooting
+
+If when loading the shadow binary in gdb you see the error:
+
+```text
+Reading symbols from /my/binary...
+Dwarf Error: DW_FORM_strx1 found in non-DWO CU [in module /my/binary]
+(No debugging symbols found in /my/binary)
+```
+
+It's likely that the version of Rust that you're building Shadow with is
+incompatible with your version of GDB. You can read more at
+[Rust issue #98746][rust-98746].
+
+[rust-98746]: https://github.com/rust-lang/rust/issues/98746#issuecomment-1224954019
+
 ## Debugging managed processes
 
 A simulation's managed processes are implemented as native OS processes, with

@@ -2,12 +2,13 @@ use once_cell::unsync::OnceCell;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use crate::core::support::emulated_time::EmulatedTime;
-use crate::core::support::simulation_time::SimulationTime;
+use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::utility::SyncSendPointer;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use atomic_refcell::AtomicRefCell;
 
@@ -158,6 +159,11 @@ impl Host {
         };
         // Intentionally drop `task`. An eventual event_new clones.
         res != 0
+    }
+
+    pub fn event_queue(&self) -> Arc<ThreadSafeEventQueue> {
+        let new_arc = unsafe { cshadow::host_getOwnedEventQueue(self.chost()) };
+        unsafe { Arc::from_raw(new_arc) }
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {

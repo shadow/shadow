@@ -86,7 +86,7 @@ struct _EpollWatch {
     EpollWatchFlags flags;
     /* The last time we reported an event on this watch.
      * This is used to ensure fairness across watches when reporting events. */
-    EmulatedTime last_reported_event_time;
+    CEmulatedTime last_reported_event_time;
     gint referenceCount;
     MAGIC_DECLARE;
 };

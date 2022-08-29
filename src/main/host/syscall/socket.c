@@ -904,8 +904,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
 
     /* make sure we will be able to route this later */
     if (peerAddr != loopbackAddr) {
-        Address* myAddress = host_getDefaultAddress(sys->host);
-        Address* peerAddress = worker_resolveIPToAddress(peerAddr);
+        const Address* myAddress = host_getDefaultAddress(sys->host);
+        const Address* peerAddress = worker_resolveIPToAddress(peerAddr);
         in_addr_t myAddr = htonl(address_toHostIP(myAddress));
         if (!peerAddress || !worker_isRoutable(myAddr, peerAddr)) {
             /* can't route it - there is no node with this address */
