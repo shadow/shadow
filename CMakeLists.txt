@@ -58,7 +58,10 @@ endforeach(library)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 ## use the installed shim path only when shadow is installed
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+##
+## We use "$ORIGIN" here to make the shadow installation directory relocatable.
+## See also "Rpath token expansion" in ls.do(8).
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 
 ## get general includes
 include(CheckIncludeFile)
