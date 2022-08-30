@@ -34,5 +34,6 @@ case "$BUILDTYPE" in
         ;;
 esac
 
-./setup build -j4 --test --extra --werror $OPTIONS
+./setup build -j4 --test --extra --werror --prefix=/opt/shadow $OPTIONS
 ./setup install
+stow -d /opt -t /usr shadow

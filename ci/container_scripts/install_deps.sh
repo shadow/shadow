@@ -15,6 +15,7 @@ APT_PACKAGES="
   pkg-config
   python3
   python3-pip
+  stow
   xz-utils
   util-linux
   "
@@ -35,6 +36,7 @@ RPM_PACKAGES="
   pkg-config
   python3
   python3-pip
+  stow
   xz
   xz-devel
   yum-utils
