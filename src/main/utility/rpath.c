@@ -8,6 +8,8 @@
 #include <glib.h>
 #include <link.h>
 
+#include "main/utility/utility.h"
+
 static gchar* _getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
     const ElfW(Dyn) *rpath = NULL;
@@ -40,10 +42,38 @@ static gboolean _isValidPathToPreloadLib(const gchar* path, const gchar* libname
     return FALSE;
 }
 
+static gchar* _getOrigin() {
+    gchar* exePath = g_file_read_link("/proc/self/exe", NULL);
+    utility_alwaysAssert(exePath);
+    gchar* dirName = g_path_get_dirname(exePath);
+    utility_alwaysAssert(dirName);
+    g_free(exePath);
+    return dirName;
+}
+
+// Replace the string "$ORIGIN" with the directory of the current-running executable.
+// See "Rpath token expansion" in ls.do(8).
+//
+// This mechanism allows us to set an rpath in shadow relative to the shadow binary,
+// which in turn makes the shadow installation directory relocatable.
+static gchar* _substituteOrigin(const gchar* in) {
+    gchar* origin = _getOrigin();
+    GRegex* originRegex = g_regex_new("\\$ORIGIN\\b", 0, 0, NULL);
+    utility_alwaysAssert(originRegex);
+    gchar* out = g_regex_replace(originRegex, in, strlen(in), 0, origin, 0, NULL);
+    utility_alwaysAssert(out);
+    g_free(origin);
+    g_regex_unref(originRegex);
+    return out;
+}
+
 gchar* scanRpathForLib(const gchar* libname) {
     gchar* preloadArgValue = NULL;
 
-    gchar* rpathStr = _getRPath();
+    gchar* originalRpathStr = _getRPath();
+    gchar* rpathStr = _substituteOrigin(originalRpathStr);
+    g_free(originalRpathStr);
+
     if(rpathStr != NULL) {
         gchar** tokens = g_strsplit(rpathStr, ":", 0);
 
