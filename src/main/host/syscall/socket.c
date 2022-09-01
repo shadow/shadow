@@ -372,6 +372,34 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket*
             *optlen = num_bytes;
             return 0;
         }
+        case SO_TYPE: {
+            int sock_type = -1;
+
+            switch (legacysocket_getProtocol(sock)) {
+                case PNONE: {
+                    panic("Socket has no protocol");
+                }
+                case PLOCAL: {
+                    /* what is a PLOCAL socket? shadow doesn't seem to use it anywhere */
+                    panic("Socket is a PLOCAL socket");
+                }
+                case PTCP: {
+                    sock_type = SOCK_STREAM;
+                    break;
+                }
+                case PUDP: {
+                    sock_type = SOCK_DGRAM;
+                    break;
+                }
+            }
+
+            utility_alwaysAssert(sock_type >= 0);
+
+            int num_bytes = MIN(*optlen, sizeof(sock_type));
+            memcpy(optval, &sock_type, num_bytes);
+            *optlen = num_bytes;
+            return 0;
+        }
         default: {
             warning("getsockopt at level SOL_SOCKET called with unsupported "
                     "option %i",
