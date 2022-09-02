@@ -247,6 +247,7 @@ where
 /// Similar to the `vec!` macro, `set!` will create a `HashSet` with the given elements.
 ///
 /// ```
+/// # use test_utils::*;
 /// let s = set![1, 2, 3, 1];
 /// assert_eq!(s.len(), 3);
 /// ```
@@ -357,15 +358,21 @@ pub fn nop_sig_handler() -> nix::sys::signal::SigHandler {
 /// Example:
 ///
 /// ```
-/// let x = 2;
-/// let y = 3;
-/// ensure_ord!(x, >, y);
-/// ```
+/// # use test_utils::*;
+/// # use anyhow::anyhow;
+/// fn fn1() -> Result<(), anyhow::Error> {
+///     let x = 2;
+///     let y = 3;
+///     ensure_ord!(x, >, y);
+///     Ok(())
+/// }
 ///
-/// Will evaluate to the same error as:
+/// fn fn2() -> Result<(), anyhow::Error> {
+///     return Err(anyhow!("!(2 > 3)"));
+/// }
 ///
-/// ```
-/// anyhow!("!(3 > 2)");
+/// assert_eq!(format!("{}", fn1().unwrap_err()),
+///            format!("{}", fn2().unwrap_err()));
 /// ```
 #[macro_export]
 macro_rules! ensure_ord {
