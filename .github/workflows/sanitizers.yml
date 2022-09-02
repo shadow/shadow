@@ -1,0 +1,43 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Rust Sanitizers
+permissions: read-all
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+
+jobs:
+  miri:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        # Run on PR head instead of merge result. Running on the merge
+        # result can give confusing results, and we require PR to be up to
+        # date with target branch before merging, anyway.
+        # See https://github.com/shadow/shadow/issues/2166
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    # From https://github.com/rust-lang/miri#running-miri-on-ci
+    - name: Install miri
+      run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+
+    - name: Test
+      run: |
+        cd src
+        # Disable isolation for some tests that use the current time (Instant::now).
+        # 
+        # Disable leak-checking for now. Some tests intentionally panic, causing leaks.
+        export MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks"
+
+        cargo miri test --workspace
