@@ -760,10 +760,16 @@ mod tests {
     #[test]
     fn test_time_conversion() {
         let time = Time::<TimePrefixUpper>::from_str("70 min").unwrap();
-        assert_eq!(std::time::Duration::from_secs(70 * 60), time.into());
+        assert_eq!(
+            std::time::Duration::from_secs(70 * 60),
+            std::time::Duration::from(time)
+        );
 
         let time = Time::new(1_000_000_123, TimePrefix::Nano);
-        assert_eq!(std::time::Duration::new(1, 123), time.into());
+        assert_eq!(
+            std::time::Duration::new(1, 123),
+            std::time::Duration::from(time)
+        );
     }
 }
 
