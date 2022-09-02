@@ -187,6 +187,29 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Test an anonymous mapping with `PROT_EXEC` set. This is to catch environments where the /dev/shm
+/// mount was not mounted with the "exec" option. See #2400.
+fn test_mmap_anon_exec() -> Result<(), Box<dyn Error>> {
+    let size = 2 * page_size();
+    let buf_ptr = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            size,
+            libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        )
+    };
+    test_utils::assert_true_else_errno(buf_ptr != libc::MAP_FAILED);
+
+    // Unmap allocated memory
+    let rv = unsafe { libc::munmap(buf_ptr, size) };
+    nix::errno::Errno::result(rv)?;
+
+    Ok(())
+}
+
 /// Exercise the MemoryManager logic for unmapping the front of a mapped region, validating that
 /// the still-mapped part of the region is still accessible.  Regression test for #1188.
 fn test_munmap_front() -> Result<(), Box<dyn Error>> {
@@ -386,6 +409,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_utils::ShadowTest::new(
             "test_mmap_anon",
             test_mmap_anon,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_mmap_anon_exec",
+            test_mmap_anon_exec,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
