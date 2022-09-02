@@ -29,4 +29,4 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
     - run: |
         docker build . -t shadow --shm-size="1g"
-        docker run --shm-size="1g" --privileged --rm --entrypoint /src/ci/container_scripts/test.sh shadow
+        docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --privileged --rm --entrypoint /src/ci/container_scripts/test.sh shadow

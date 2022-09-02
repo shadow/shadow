@@ -12,7 +12,7 @@ docker build . -t shadow --shm-size="1g"
 ```
 3. Run tests:
 ```
-docker run --shm-size="1g" --privileged --rm --entrypoint /src/ci/container_scripts/test.sh shadow
+docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --privileged --rm --entrypoint /src/ci/container_scripts/test.sh shadow
 ```
 
 ## Run a simulation
@@ -24,5 +24,5 @@ owned by `root`.
 For example, the next command runs the `shadow.config.yaml` simulation present in
 the current path:
 ```
-docker run --shm-size="1g" --privileged --rm --log-driver=none -v $(pwd):/src/ shadow -l debug shadow.config.yaml
+docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --privileged --rm --log-driver=none -v $(pwd):/src/ shadow -l debug shadow.config.yaml
 ```
