@@ -996,6 +996,8 @@ mod tests {
     use crate::host::syscall_types::{Blocked, Failed, SyscallError};
 
     #[test]
+    // can't call foreign function: syscallcondition_new
+    #[cfg_attr(miri, ignore)]
     fn test_syscallresult_roundtrip() {
         for val in vec![
             Ok(1.into()),
@@ -1032,6 +1034,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: syscallcondition_new
+    #[cfg_attr(miri, ignore)]
     fn test_syscallreturn_roundtrip() {
         let condition = SysCallCondition::new(Trigger::from(c::Trigger {
             type_: 1,

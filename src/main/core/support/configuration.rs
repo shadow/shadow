@@ -1089,6 +1089,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // can't call foreign function: process_parseArgStr
+    #[cfg_attr(miri, ignore)]
     fn test_parse_args() {
         let arg_str = r#"the quick brown fox "jumped over" the "\"lazy\" dog""#;
         let expected_args = &[
@@ -1108,6 +1110,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: process_parseArgStr
+    #[cfg_attr(miri, ignore)]
     fn test_parse_args_empty() {
         let arg_str = "";
         let expected_args: &[&str] = &[];
@@ -1119,6 +1123,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: process_parseArgStr
+    #[cfg_attr(miri, ignore)]
     fn test_parse_args_error() {
         let arg_str = r#"hello "world"#;
 
@@ -1129,6 +1135,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: process_parseArgStr
+    #[cfg_attr(miri, ignore)]
     fn test_nullable_option() {
         // format the yaml with an optional general option
         let yaml_fmt_fn = |option| {
