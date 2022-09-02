@@ -237,6 +237,7 @@ pub fn defaultaction(sig: Signal) -> ShdKernelDefaultAction {
     }
 }
 
+#[cfg(feature = "c_apis")]
 mod export {
     use super::*;
 

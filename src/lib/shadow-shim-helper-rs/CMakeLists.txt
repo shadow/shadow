@@ -1,4 +1,4 @@
-rust_static_lib(shadow-shim-helper-rs)
+rust_static_lib(shadow-shim-helper-rs FEATURES c_apis)
 
 # Generate bindings.h in the source tree.
 add_custom_command(OUTPUT shim_helper.h

@@ -14,3 +14,8 @@ nix = "0.25.0"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 rkyv = "0.7.39"
+
+[features]
+# Whether to generate C APIs. Generally this should only be enabled
+# when compiling as a staticlib, to prevent duplicate symbols.
+c_apis = []

@@ -135,6 +135,7 @@ impl std::ops::Sub<EmulatedTime> for EmulatedTime {
     }
 }
 
+#[cfg(feature = "c_apis")]
 pub mod export {
     use super::*;
 

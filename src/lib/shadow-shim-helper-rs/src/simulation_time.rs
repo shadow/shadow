@@ -298,60 +298,6 @@ pub const SIMTIME_ONE_MINUTE: CSimulationTime = 60000000000u64;
 /// Represents one hour in simulation time.
 pub const SIMTIME_ONE_HOUR: CSimulationTime = 3600000000000u64;
 
-pub mod export {
-    use super::*;
-
-    #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
-        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
-        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
-    }
-
-    #[must_use]
-    #[no_mangle]
-    pub unsafe extern "C" fn simtime_to_timeval(
-        val: CSimulationTime,
-        out: *mut libc::timeval,
-    ) -> bool {
-        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
-            s
-        } else {
-            return false;
-        };
-        let tv: libc::timeval = if let Ok(tv) = libc::timeval::try_from(simtime) {
-            tv
-        } else {
-            return false;
-        };
-        *unsafe { out.as_mut() }.unwrap() = tv;
-        true
-    }
-
-    #[must_use]
-    #[no_mangle]
-    pub unsafe extern "C" fn simtime_to_timespec(
-        val: CSimulationTime,
-        out: *mut libc::timespec,
-    ) -> bool {
-        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
-            s
-        } else {
-            return false;
-        };
-        let ts: libc::timespec = if let Ok(ts) = libc::timespec::try_from(simtime) {
-            ts
-        } else {
-            return false;
-        };
-        *unsafe { out.as_mut() }.unwrap() = ts;
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -456,6 +402,193 @@ mod tests {
     }
 
     #[test]
+    fn test_to_timeval() {
+        use libc::timeval;
+
+        assert_eq!(
+            timeval::try_from(SimulationTime::ZERO),
+            Ok(timeval {
+                tv_sec: 0,
+                tv_usec: 0
+            })
+        );
+        assert_eq!(
+            timeval::try_from(
+                SimulationTime::try_from(Duration::from_secs(1) + Duration::from_micros(2))
+                    .unwrap()
+            ),
+            Ok(timeval {
+                tv_sec: 1,
+                tv_usec: 2
+            })
+        );
+        assert_eq!(
+            timeval::try_from(SimulationTime::MAX),
+            Ok(timeval {
+                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
+                tv_usec: SimulationTime::MAX.subsec_micros().try_into().unwrap(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_from_timespec() {
+        use libc::timespec;
+
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: 0
+            }),
+            Ok(SimulationTime::ZERO)
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 1,
+                tv_nsec: 2
+            }),
+            Ok(SimulationTime::try_from(Duration::from_secs(1) + Duration::from_nanos(2)).unwrap())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: (SIMTIME_MAX / SIMTIME_ONE_SECOND).try_into().unwrap(),
+                tv_nsec: 0,
+            }),
+            Ok(
+                SimulationTime::try_from(Duration::from_secs(SIMTIME_MAX / SIMTIME_ONE_SECOND))
+                    .unwrap()
+            )
+        );
+
+        // The C SimulatedTime type is too small to represent this value.
+        // The Rust SimulationTime *could* represent it if we widen it.
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: libc::time_t::MAX,
+                tv_nsec: 999_999_999
+            }),
+            Err(())
+        );
+
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: 1_000_000_000
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: 0,
+                tv_nsec: -1
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: -1,
+                tv_nsec: 0
+            }),
+            Err(())
+        );
+        assert_eq!(
+            SimulationTime::try_from(timespec {
+                tv_sec: -1,
+                tv_nsec: -1
+            }),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn test_to_timespec() {
+        use libc::timespec;
+
+        assert_eq!(
+            timespec::try_from(SimulationTime::ZERO),
+            Ok(timespec {
+                tv_sec: 0,
+                tv_nsec: 0
+            })
+        );
+        assert_eq!(
+            timespec::try_from(SimulationTime::from_secs(1) + SimulationTime::from_nanos(2)),
+            Ok(timespec {
+                tv_sec: 1,
+                tv_nsec: 2
+            })
+        );
+
+        assert_eq!(
+            timespec::try_from(SimulationTime::MAX),
+            Ok(timespec {
+                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
+                tv_nsec: SimulationTime::MAX.subsec_nanos().into(),
+            })
+        );
+    }
+}
+
+#[cfg(feature = "c_apis")]
+pub mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
+        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
+        SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
+    }
+
+    #[must_use]
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_to_timeval(
+        val: CSimulationTime,
+        out: *mut libc::timeval,
+    ) -> bool {
+        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
+            s
+        } else {
+            return false;
+        };
+        let tv: libc::timeval = if let Ok(tv) = libc::timeval::try_from(simtime) {
+            tv
+        } else {
+            return false;
+        };
+        *unsafe { out.as_mut() }.unwrap() = tv;
+        true
+    }
+
+    #[must_use]
+    #[no_mangle]
+    pub unsafe extern "C" fn simtime_to_timespec(
+        val: CSimulationTime,
+        out: *mut libc::timespec,
+    ) -> bool {
+        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
+            s
+        } else {
+            return false;
+        };
+        let ts: libc::timespec = if let Ok(ts) = libc::timespec::try_from(simtime) {
+            ts
+        } else {
+            return false;
+        };
+        *unsafe { out.as_mut() }.unwrap() = ts;
+        true
+    }
+}
+
+#[cfg(feature = "c_apis")]
+mod export_tests {
+    use super::*;
+
+    #[test]
     fn test_c_from_timeval() {
         use export::simtime_from_timeval;
         use libc::timeval;
@@ -529,36 +662,6 @@ mod tests {
     }
 
     #[test]
-    fn test_to_timeval() {
-        use libc::timeval;
-
-        assert_eq!(
-            timeval::try_from(SimulationTime::ZERO),
-            Ok(timeval {
-                tv_sec: 0,
-                tv_usec: 0
-            })
-        );
-        assert_eq!(
-            timeval::try_from(
-                SimulationTime::try_from(Duration::from_secs(1) + Duration::from_micros(2))
-                    .unwrap()
-            ),
-            Ok(timeval {
-                tv_sec: 1,
-                tv_usec: 2
-            })
-        );
-        assert_eq!(
-            timeval::try_from(SimulationTime::MAX),
-            Ok(timeval {
-                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
-                tv_usec: SimulationTime::MAX.subsec_micros().try_into().unwrap(),
-            })
-        );
-    }
-
-    #[test]
     fn test_c_to_timeval() {
         use export::simtime_to_timeval;
         use libc::timeval;
@@ -596,75 +699,6 @@ mod tests {
                 }
             );
         }
-    }
-
-    #[test]
-    fn test_from_timespec() {
-        use libc::timespec;
-
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: 0,
-                tv_nsec: 0
-            }),
-            Ok(SimulationTime::ZERO)
-        );
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: 1,
-                tv_nsec: 2
-            }),
-            Ok(SimulationTime::try_from(Duration::from_secs(1) + Duration::from_nanos(2)).unwrap())
-        );
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: (SIMTIME_MAX / SIMTIME_ONE_SECOND).try_into().unwrap(),
-                tv_nsec: 0,
-            }),
-            Ok(
-                SimulationTime::try_from(Duration::from_secs(SIMTIME_MAX / SIMTIME_ONE_SECOND))
-                    .unwrap()
-            )
-        );
-
-        // The C SimulatedTime type is too small to represent this value.
-        // The Rust SimulationTime *could* represent it if we widen it.
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: libc::time_t::MAX,
-                tv_nsec: 999_999_999
-            }),
-            Err(())
-        );
-
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: 0,
-                tv_nsec: 1_000_000_000
-            }),
-            Err(())
-        );
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: 0,
-                tv_nsec: -1
-            }),
-            Err(())
-        );
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: -1,
-                tv_nsec: 0
-            }),
-            Err(())
-        );
-        assert_eq!(
-            SimulationTime::try_from(timespec {
-                tv_sec: -1,
-                tv_nsec: -1
-            }),
-            Err(())
-        );
     }
 
     #[test]
@@ -737,34 +771,6 @@ mod tests {
                 })
             },
             SIMTIME_INVALID
-        );
-    }
-
-    #[test]
-    fn test_to_timespec() {
-        use libc::timespec;
-
-        assert_eq!(
-            timespec::try_from(SimulationTime::ZERO),
-            Ok(timespec {
-                tv_sec: 0,
-                tv_nsec: 0
-            })
-        );
-        assert_eq!(
-            timespec::try_from(SimulationTime::from_secs(1) + SimulationTime::from_nanos(2)),
-            Ok(timespec {
-                tv_sec: 1,
-                tv_nsec: 2
-            })
-        );
-
-        assert_eq!(
-            timespec::try_from(SimulationTime::MAX),
-            Ok(timespec {
-                tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
-                tv_nsec: SimulationTime::MAX.subsec_nanos().into(),
-            })
         );
     }
 
