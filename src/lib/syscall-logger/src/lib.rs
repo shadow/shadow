@@ -1,27 +1,44 @@
 use proc_macro::*;
 use quote::ToTokens;
 
-/// This macro wraps a syscall handler function by renaming the original function and making a new
+// FIXME: These doctests are effectively disabled via `compile_fail`.
+// For them to work, this crate would need to depend on shadow_rs. We can't do that though,
+// since shadow_rs depends on this crate. This could perhaps be fixed by moving the parts
+// of shadow_rs neede by this crate out to a separate crate to break the cycle.
+/// This macro wraps a syscall handler by renaming the original function and making a new
 /// function with the original name that calls the original function. When the syscall handler
 /// function is called, it will log the syscall if syscall logging is enabled in Shadow.
 ///
 /// For example,
 ///
-/// ```
-/// #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-/// pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {}
+/// ```compile_fail
+/// # use syscall_logger::log_syscall;
+/// # use shadow_rs::host::context::ThreadContext;
+/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
+/// struct MyHandler {}
+///
+/// impl MyHandler {
+///     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
+///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {}
+/// }
 /// ```
 ///
 /// will become,
 ///
-/// ```
-/// pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-///     ...
-///     let rv = close_original(ctx, args);
-///     ...
-///     rv
-/// }
-/// fn close_original(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+/// ```compile_fail
+/// # use shadow_rs::host::context::ThreadContext;
+/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
+/// struct MyHandler {}
+///
+/// impl MyHandler {
+///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///         // ...
+///         let rv = close_original(ctx, args);
+///         // ...
+///         rv
+///     }
+///     fn close_original(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///     }
 /// }
 /// ```
 #[proc_macro_attribute]
