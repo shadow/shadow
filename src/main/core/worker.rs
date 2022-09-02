@@ -22,10 +22,8 @@ use crate::utility::SyncSendPointer;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU32;
-use std::sync::Mutex;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::{Arc, Mutex};
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -120,6 +118,7 @@ impl Worker {
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
                 // is None if cpu pinning is disabled
+                // initialize to an invalid cpu number so that set_affinity() below will run
                 cpu_affinity: cpu_affinity.map(|_| u32::MAX),
                 next_event_time: None,
             }));
@@ -133,11 +132,15 @@ impl Worker {
 
     pub fn set_affinity(cpu: u32) {
         Worker::with_mut(|w| {
-            if cpu != w.cpu_affinity.unwrap_or(u32::MAX) {
-                let mut cpu_set = nix::sched::CpuSet::new();
-                cpu_set.set(cpu as usize).unwrap();
-                nix::sched::sched_setaffinity(nix::unistd::Pid::from_raw(0), &cpu_set).unwrap();
-                w.cpu_affinity = Some(cpu);
+            // if pinning is enabled
+            if let Some(current_affinity) = w.cpu_affinity {
+                // if not already pinned to that cpu
+                if cpu != current_affinity {
+                    let mut cpu_set = nix::sched::CpuSet::new();
+                    cpu_set.set(cpu as usize).unwrap();
+                    nix::sched::sched_setaffinity(nix::unistd::Pid::from_raw(0), &cpu_set).unwrap();
+                    w.cpu_affinity = Some(cpu);
+                }
             }
         })
         .unwrap();
@@ -261,12 +264,14 @@ impl Worker {
     }
 
     pub fn reset_next_event_time() {
-        //NOTE: skipping unwrap
-        Worker::with_mut(|w| w.next_event_time = None);
+        Worker::with_mut(|w| w.next_event_time = None).unwrap();
+    }
+
+    pub fn get_next_event_time() -> Option<EmulatedTime> {
+        Worker::with(|w| w.next_event_time).unwrap()
     }
 
     pub fn update_next_event_time(t: EmulatedTime) {
-        //Worker::with(|w| w.shared.update_next_event_time(t)).unwrap();
         Worker::with_mut(|w| {
             if w.next_event_time.is_none() || t < w.next_event_time.unwrap() {
                 w.next_event_time = Some(t);
@@ -275,6 +280,7 @@ impl Worker {
         .unwrap();
     }
 
+    /*
     pub fn update_global_next_event_time() {
         Worker::with(|w| {
             if let Some(next_event_time) = w.next_event_time {
@@ -283,6 +289,7 @@ impl Worker {
         })
         .unwrap();
     }
+    */
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
     // None if this thread has no Worker object.
@@ -383,7 +390,7 @@ pub struct WorkerShared {
     pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
-    pub next_event_time: RwLock<Option<EmulatedTime>>,
+    //pub next_event_time: RwLock<Option<EmulatedTime>>,
 }
 
 impl WorkerShared {
@@ -474,6 +481,7 @@ impl WorkerShared {
         event_queue.0.lock().unwrap().push(event);
     }
 
+    /*
     /// Reset the next event time. Should be called at the start of a scheduling round.
     pub fn reset_next_event_time(&self) {
         *self.next_event_time.write().unwrap() = None;
@@ -496,6 +504,7 @@ impl WorkerShared {
     pub fn next_event_time(&self) -> Option<EmulatedTime> {
         *self.next_event_time.read().unwrap()
     }
+    */
 }
 
 impl std::ops::Drop for WorkerShared {
@@ -604,7 +613,7 @@ mod export {
         let time = SimulationTime::from_c_simtime(time).unwrap();
         let time = EmulatedTime::from_abs_simtime(time);
 
-        Worker::with(|w| w.shared.update_next_event_time(time)).unwrap();
+        Worker::update_next_event_time(time);
     }
 
     /// Initialize a Worker for this thread.
@@ -775,6 +784,8 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getAffinity() -> i32 {
+        // if pinning is disabled (`w.cpu_affinity` is None), just return an invalid CPU number and
+        // hopefully the calling code won't try to set the affinity (_affinity_enabled should be 0)
         Worker::with(|w| w.cpu_affinity.unwrap_or(i32::MAX as u32) as i32).unwrap()
     }
 

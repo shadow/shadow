@@ -42,6 +42,7 @@ pub struct HostInfo {
 /// This is currently an ephemeral proxy object a C Host (cshadow::Host).
 /// Eventually cshadow::Host's contents and functionality will be migrated into
 /// there though, and this will become the "real" Host object.
+#[derive(Debug)]
 pub struct Host {
     chost: SyncSendPointer<cshadow::Host>,
 

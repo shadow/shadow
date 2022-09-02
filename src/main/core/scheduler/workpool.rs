@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Barrier};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
-use crossbeam::queue::SegQueue;
 
 pub trait TaskFn: Fn(u32) + Send + Sync {}
 impl<T> TaskFn for T where T: Fn(u32) + Send + Sync {}
@@ -172,8 +170,6 @@ fn work_loop(
 
         // SAFETY: scope used to make sure we drop the task before waiting
         {
-            crate::core::worker::Worker::reset_next_event_time();
-
             match thread_control.task.borrow().deref() {
                 Some(task) => (task)(thread_index),
                 None => {
@@ -182,8 +178,6 @@ fn work_loop(
                     break;
                 }
             };
-
-            crate::core::worker::Worker::update_global_next_event_time();
         }
 
         // task didn't panic, so forget the poison handler and continue like normal
@@ -214,6 +208,20 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
             semaphore.post();
         }
     }
+
+    /*
+    pub fn run_with_slice<T>(self, slice: &mut [T], f: impl TaskFn + 'scope) {
+        let f = Box::new(f);
+
+        // SAFETY: the closure f has a lifetime of at least the scope's lifetime 'scope
+        // SAFETY: TODO
+        let f = unsafe { std::mem::transmute::<Box<dyn TaskFn>, Box<dyn TaskFn + 'static>>(f) };
+
+        *self.scope.pool.thread_control.task.borrow_mut() = Some(f);
+        //self.scope.pool.thread_control.start_barrier.count_down();
+        self.scope.pool.start_counter.count_down();
+    }
+    */
 }
 
 use std::cell::UnsafeCell;
