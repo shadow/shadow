@@ -20,9 +20,15 @@ guarantees"](semver.md).
 ## Docker
 
 If you are installing Shadow within a Docker container, you must increase the
-size of the container's `/dev/shm` mount and disable the seccomp security
-profile. You can do this by passing `--shm-size="1024g" --security-opt
-seccomp=unconfined` to `docker run`.
+size of the container's `/dev/shm` mount, add the "exec" mount option, and
+disable the seccomp security profile. You can do this by passing additional
+flags to `docker run`.
+
+Example:
+
+```bash
+docker run -it --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined ubuntu:22.04
+```
 
 ## Known incompatible platforms
 
