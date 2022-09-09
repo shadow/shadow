@@ -1,28 +1,20 @@
 [package]
-name = "shadow-shim-helper-rs"
+name = "shadow_tsc"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-bindings = ["dep:cbindgen"]
-
-[lib]
-crate-type = ["rlib", "staticlib"]
-
 [dependencies]
-libc = "0.2"
-nix = "0.25.0"
-# don't log debug or trace levels in release mode
-log = { version = "0.4", features = ["release_max_level_debug"] }
-rkyv = "0.7.39"
+logger = { path = "../logger" }
 
 [build-dependencies]
 cc = "1.0"
 shadow-build-common = { path = "../shadow-build-common" }
 system-deps = "2.0"
-cbindgen = { version = "0.24.3", optional = true }
+
+[lib]
+crate-type = ["staticlib", "rlib"]
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in src/CMakeLists.txt

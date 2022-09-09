@@ -1,9 +1,9 @@
+
 /*
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
 // clang-format off
-
 
 #ifndef shim_helpers_h
 #define shim_helpers_h

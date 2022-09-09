@@ -4,7 +4,7 @@
 #include <stdatomic.h>
 #include <sys/types.h>
 
-#include "lib/shim/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/support/definitions.h"
 

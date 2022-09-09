@@ -23,7 +23,7 @@ gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
-log-bindings = { path = "../lib/logger/rust_bindings" }
+logger = { path = "../lib/logger" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
 lzma-rs = "0.2"
 merge = "0.1"
@@ -39,6 +39,8 @@ regex = "1"
 schemars = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+shadow_shmem = { path = "../lib/shmem" }
+shadow_tsc = { path = "../lib/tsc" }
 syscall-logger = { path = "../lib/syscall-logger" }
 tempfile = "3.3"
 # TODO: switch to upstream crate if/when they merge and release
@@ -51,3 +53,15 @@ vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972
 
 [features]
 perf_timers = []
+bindings = ["dep:bindgen", "dep:cbindgen"]
+
+[build-dependencies]
+shadow-build-common = { path = "../lib/shadow-build-common" }
+bindgen = { version = "0.60.1", optional = true }
+cbindgen = { version = "0.24.3", optional = true }
+cc = "1.0"
+system-deps = "2.0"
+
+[package.metadata.system-deps]
+# Keep consistent with the minimum version number in src/CMakeLists.txt
+glib = { name = "glib-2.0", version = "2.32" }

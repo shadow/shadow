@@ -15,7 +15,7 @@
 #include <sys/wait.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shim/shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/managed_thread.h"
 #include "main/host/syscall/kernel_types.h"

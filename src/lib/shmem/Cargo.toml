@@ -1,0 +1,20 @@
+[package]
+name = "shadow_shmem"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+logger = { path = "../logger" }
+
+[features]
+bindings = ["dep:bindgen"]
+
+[build-dependencies]
+bindgen = { version = "0.60.1", optional = true }
+cc = "1.0"
+shadow-build-common = { path = "../shadow-build-common" }
+
+[lib]
+crate-type = ["staticlib", "rlib"]

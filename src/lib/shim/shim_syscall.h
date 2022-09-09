@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
-#include "lib/shim/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 
 // Ask the shim to handle a syscall. Internally decides whether to execute a
 // native syscall or to emulate the syscall through Shadow.

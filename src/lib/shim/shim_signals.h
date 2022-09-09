@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "lib/shim/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 
 // Handle pending unblocked signals, and return whether *all* corresponding
 // signal actions had the SA_RESTART flag set.

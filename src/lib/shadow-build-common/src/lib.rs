@@ -10,10 +10,6 @@ pub struct ShadowBuildCommon {
 
 impl ShadowBuildCommon {
     pub fn new(repo_root: &Path, system_deps: HashMap<String, Library>) -> Self {
-        // Conservatively re-run build scripts if anything in their package directory
-        // changes.
-        println!("cargo:rerun-if-changed=.");
-
         let src_root = {
             let mut p = repo_root.to_path_buf();
             p.push("src");
@@ -27,6 +23,18 @@ impl ShadowBuildCommon {
             p.into_boxed_path()
         };
 
+        // Conservatively re-run build scripts if anything in their package directory
+        // changes.
+        println!("cargo:rerun-if-changed=.");
+
+        // *Very* conservatively re-run build script if shd-config.h changes.
+        // It currently ~always changes, particularly since it includes a build
+        // timestamp.
+        println!(
+            "cargo:rerun-if-changed={}/shd-config.h",
+            build_src_root.to_str().unwrap()
+        );
+
         Self {
             deps: system_deps,
             build_src_root,
@@ -36,6 +44,8 @@ impl ShadowBuildCommon {
 
     pub fn cc_build(&self) -> cc::Build {
         let mut b = cc::Build::new();
+        println!("cargo:rerun-if-env-changed=CC");
+        println!("cargo:rerun-if-env-changed=CXX");
         println!("cargo:rerun-if-env-changed=CFLAGS");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
 
@@ -52,15 +62,21 @@ impl ShadowBuildCommon {
             // Enable some select extra warnings
             .flag("-Wreturn-type")
             .flag("-Wswitch")
-            // Convert any remaining warnings into errors (-Werror)
-            .warnings_into_errors(true);
+            // By default, *don't* convert any remaining warnings into errors (-Werror).
+            // -Werror is currently enabled here via CFLAGS, which
+            // cmake sets depending on the option SHADOW_WERROR.
+            .warnings_into_errors(false);
 
         for lib in self.deps.values() {
             b.includes(&lib.include_paths);
         }
 
         if let Some("true") = std::env::var("DEBUG").ok().as_ref().map(|s| s.as_str()) {
-            b.flag("-DDEBUG");
+            b.flag("-DDEBUG")
+                // we only check for unused functions when builing in debug mode since some
+                // functions are only called when logging, which can be #ifdef'd out in
+                // release mode
+                .flag("-Wunused-function");
         } else {
             b.flag("-DNDEBUG");
         }

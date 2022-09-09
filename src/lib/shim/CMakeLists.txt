@@ -10,20 +10,6 @@
 find_package(RT REQUIRED)
 include_directories(${GLIB_INCLUDE_DIRS})
 
-set(SHIM_HELPER_LIB shadow-shim-helper)
-set(SHIM_HELPER_FILES
-  binary_spinning_sem.cc
-  ipc.cc
-  shadow_sem.c
-  shadow_spinlock.c
-  shim_shmem.c
-)
-add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
-# -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
-# -fPIC enables linking the static compile unit with a shared object library
-target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE -fPIC)
-target_link_libraries(${SHIM_HELPER_LIB} INTERFACE logger shadow-shmem shadow-shim-helper-rs)
-
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
   patch_vdso.c
@@ -42,7 +28,7 @@ set(SHIM_FILES
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
 target_compile_options(${SHIM_LIB} PRIVATE -fPIC -pthread -D_GNU_SOURCE)
-target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem shadow-tsc logger
-  ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl)
+target_link_libraries(${SHIM_LIB} shadow-shim-helper-rs shadow-shmem shadow-tsc logger
+  ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl -lstdc++)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 

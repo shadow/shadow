@@ -13,8 +13,8 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shim/ipc.h"
-#include "lib/shim/shim_event.h"
+#include "lib/shadow-shim-helper-rs/ipc.h"
+#include "lib/shadow-shim-helper-rs/shim_event.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"

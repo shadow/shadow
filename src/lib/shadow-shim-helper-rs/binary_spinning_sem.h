@@ -25,7 +25,7 @@ class BinarySpinningSem {
      */
     BinarySpinningSem(ssize_t spin_max);
 
-    /* 
+    /*
      * Initialize the semaphore to the zero state.
      *
      * THREAD SAFETY: not thread-safe.
@@ -74,8 +74,8 @@ class BinarySpinningSem {
      */
     int trywait();
 
-    BinarySpinningSem(const BinarySpinningSem &rhs) = delete;
-    BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
+    BinarySpinningSem(const BinarySpinningSem& rhs) = delete;
+    BinarySpinningSem& operator=(const BinarySpinningSem& rhs) = delete;
 
   private:
     /* We use shadow_sem_t (which implements the same interface as sem_t) instead of sem_t

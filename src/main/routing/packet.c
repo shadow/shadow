@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
+#include "shd-config.h"
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
@@ -23,7 +24,7 @@
  * https://gitlab.gnome.org/GNOME/glib/-/issues/2319
  */
 
-#ifdef HAS_MEMDUP2
+#if HAS_MEMDUP2
 #define compat_static_g_memdup g_memdup2
 #else
 #define compat_static_g_memdup(mem, byte_size)                                                     \

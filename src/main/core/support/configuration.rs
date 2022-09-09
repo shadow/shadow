@@ -18,7 +18,7 @@ use shadow_shim_helper_rs::simulation_time::{
     CSimulationTime, SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND,
 };
 
-use log_bindings as c_log;
+use logger as c_log;
 
 const START_HELP_TEXT: &str = "\
     Run real applications over simulated networks.\n\n\

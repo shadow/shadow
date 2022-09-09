@@ -13,7 +13,7 @@
 
 typedef struct _Thread Thread;
 
-#include "lib/shim/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"

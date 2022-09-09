@@ -89,6 +89,14 @@ compile_test(HAVE_STRUCT_LINUX_DIRENT
 compile_test(HAVE_STRUCT_LINUX_DIRENT64 
             ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
+include(FindPkgConfig)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.32)
+
+include(CheckSymbolExists)
+list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDE_DIRS})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${GLIB_LIBRARIES})
+check_symbol_exists(g_memdup2 "glib.h" HAS_MEMDUP2)
+
 ## construct info/version strings
 string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
 string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MINOR ${SHADOW_VERSION_FULL})
@@ -146,35 +154,12 @@ MESSAGE(STATUS)
 ## now handle the options, set up our own flags
 set(CMAKE_C_FLAGS_DEBUG "")
 set(CMAKE_C_FLAGS_RELEASE "")
-add_compile_options(-ggdb)
-add_compile_options(-fno-omit-frame-pointer)
-add_compile_options(-Wreturn-type)
-add_compile_options(-Wswitch)
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    # we only check for unused functions when builing in debug mode since some
-    # functions are only called when logging, which can be #ifdef'd out in
-    # release mode
-    add_compile_options(-Wunused-function)
-endif()
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
 message(STATUS "Found CMAKE_BUILD_TYPE='${CMAKE_BUILD_TYPE}'")
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    message(STATUS "Debug build enabled.")
-    add_definitions(-DDEBUG)
-    add_compile_options(-O0)
-elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    message(STATUS "Release build enabled.")
-    add_definitions(-DNDEBUG)
-    add_compile_options(-O3)
-else()
-    MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
-endif()
 
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
