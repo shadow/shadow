@@ -18,7 +18,9 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
 ## building with support for C11 on platforms that default to C99 or C89
-set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
