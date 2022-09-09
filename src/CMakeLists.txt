@@ -4,6 +4,10 @@ if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
   set(RUST_FEATURES "${RUST_FEATURES} perf_timers")
 endif()
 
+if(SHADOW_BINDINGS STREQUAL ON)
+  set(RUST_FEATURES "${RUST_FEATURES} bindings")
+endif()
+
 # Propagate global C and C++ flags to the Rust build
 set(RUST_CFLAGS "${CMAKE_C_FLAGS}")
 set(RUST_CXXFLAGS "${CMAKE_CXX_FLAGS}")

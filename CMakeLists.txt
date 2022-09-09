@@ -138,6 +138,7 @@ option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of various internal operations. (default: OFF)" OFF)
+option(SHADOW_BINDINGS "regenerate C <-> Rust bindings (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)

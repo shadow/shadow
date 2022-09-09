@@ -105,11 +105,14 @@ jobs:
           key: cargo-registry-${{ steps.get-month.outputs.month }}
           restore-keys: |
             cargo-registry-
+      # bindgen uses rustfmt if present; otherwise generates an unformatted token tree.
+      - name: Install rustfmt
+        run: rustup component add rustfmt
       - name: Check bindings (release)
         run: |
-          (cd src && cargo build --release --features bindings)
+          ./setup build --bindings
           git diff --exit-code
       - name: Check bindings (debug)
         run: |
-          (cd src && cargo build --features bindings)
+          ./setup build --bindings --debug
           git diff --exit-code
