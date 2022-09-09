@@ -199,6 +199,8 @@ if($ENV{VERBOSE})
 endif()
 
 if(SHADOW_PROFILE STREQUAL ON)
+    message(STATUS "Building Shadow core with profiling support using '-pg'")
+    add_cflags(-pg)
     add_definitions(-DDEBUG)
     ## see src/main/CMakeLists.txt, where we add the -pg flags
 endif(SHADOW_PROFILE STREQUAL ON)

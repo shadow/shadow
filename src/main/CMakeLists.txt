@@ -31,11 +31,6 @@ add_cflags(-fPIC)
 add_cflags(-std=gnu11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} $ENV{CXXFLAGS} -std=c++11 -fPIC")
 
-if(SHADOW_PROFILE STREQUAL ON)
-    message(STATUS "Building Shadow core with profiling support using '-pg'")
-    add_cflags(-pg)
-endif(SHADOW_PROFILE STREQUAL ON)
-
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
 target_link_libraries(shadow-remora INTERFACE "-lstdc++")
 
