@@ -134,6 +134,7 @@ impl Worker {
         Worker::with_mut(|w| {
             // if pinning is enabled
             if let Some(current_affinity) = w.cpu_affinity {
+                /*
                 // if not already pinned to that cpu
                 if cpu != current_affinity {
                     let mut cpu_set = nix::sched::CpuSet::new();
@@ -141,9 +142,12 @@ impl Worker {
                     nix::sched::sched_setaffinity(nix::unistd::Pid::from_raw(0), &cpu_set).unwrap();
                     w.cpu_affinity = Some(cpu);
                 }
+                */
+                w.cpu_affinity = Some(cpu);
             }
-        })
-        .unwrap();
+        });
+        // TODO: skip unwrap because this is sometimes called before the worker is initialized
+        //.unwrap();
     }
 
     /// Run `f` with a reference to the current Host, or return None if there is no current Host.

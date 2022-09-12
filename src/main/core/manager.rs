@@ -287,21 +287,22 @@ impl<'a> Manager<'a> {
         // the order of cpus to assign threads to
         // TODO: consider original affinity and be smarter about what cores threads are assigned to
         // (see affinity.c)
-        let mut cpus: Vec<_> = (0..num_cpus).collect();
+        //let mut cpus: Vec<_> = (0..num_cpus).collect();
         //cpus.sort_by_key(|&x| x % 2 == 1);
 
         let use_cpu_pinning = self.config.experimental.use_cpu_pinning.unwrap();
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler = NewScheduler::new(num_threads, hosts);
+            let mut scheduler = NewScheduler::new(num_threads, hosts, use_cpu_pinning);
 
             // initialize the thread-local Worker
             scheduler.scope(|s| {
                 s.run(|thread_id| unsafe {
                     worker::Worker::new_for_this_thread(
                         worker::WorkerThreadID(thread_id as u32),
-                        use_cpu_pinning.then_some(cpus[thread_id]),
+                        //use_cpu_pinning.then_some(cpus[thread_id]),
+                        use_cpu_pinning.then_some(999999),
                     )
                 });
             });
