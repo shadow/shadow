@@ -19,6 +19,7 @@ pub mod random;
 pub mod shm_cleanup;
 pub mod status_bar;
 pub mod stream_len;
+pub mod synchronization;
 pub mod syscall;
 pub mod time;
 
