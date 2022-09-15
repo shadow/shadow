@@ -359,6 +359,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: pipe
+    #[cfg_attr(miri, ignore)]
     fn register_before_exit() {
         let notifier = nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::empty()).unwrap();
 
@@ -412,6 +414,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: pipe
+    #[cfg_attr(miri, ignore)]
     fn register_after_exit() {
         let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
         let child = match unsafe { nix::unistd::fork() }.unwrap() {
@@ -463,6 +467,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: pipe
+    #[cfg_attr(miri, ignore)]
     fn register_multiple() {
         let cb1_ran = Arc::new((Mutex::new(false), Condvar::new()));
         let cb2_ran = Arc::new((Mutex::new(false), Condvar::new()));
@@ -502,6 +508,8 @@ mod tests {
     }
 
     #[test]
+    // can't call foreign function: pipe
+    #[cfg_attr(miri, ignore)]
     fn unregister_one() {
         let cb1_ran = Arc::new((Mutex::new(false), Condvar::new()));
         let cb2_ran = Arc::new((Mutex::new(false), Condvar::new()));

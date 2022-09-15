@@ -515,6 +515,9 @@ mod tests {
     }
 
     #[test]
+    // Hangs in miri. Not sure why, but also not surpring in general that this
+    // test would be incompatible.
+    #[cfg_attr(miri, ignore)]
     fn test_mappings_for_pid() {
         // Difficult to write a precise test here; just try to read our own mappings and validate
         // that it parses and is non-empty.

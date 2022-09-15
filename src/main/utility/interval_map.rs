@@ -346,6 +346,8 @@ mod tests {
     }
 
     #[test]
+    // Too slow for miri
+    #[cfg_attr(miri, ignore)]
     fn test_insert_random() {
         use rand::Rng;
         use rand_core::SeedableRng;
@@ -576,6 +578,8 @@ mod tests {
     }
 
     #[test]
+    // Too slow for miri
+    #[cfg_attr(miri, ignore)]
     fn test_clear_random() {
         use rand::Rng;
         use rand_core::SeedableRng;

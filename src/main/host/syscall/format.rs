@@ -614,6 +614,8 @@ mod test {
     use std::process::Command;
 
     #[test]
+    // can't call foreign function: gnu_get_libc_version
+    #[cfg_attr(miri, ignore)]
     fn test_no_args() {
         let args = SysCallArgs {
             number: 100,
