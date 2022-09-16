@@ -148,6 +148,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_clone() {
         let sem = LibcSemaphore::new(0);
         let sem_clone = sem.clone();
@@ -160,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_single_thread() {
         let sem = LibcSemaphore::new(0);
         sem.post();
@@ -188,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_multi_thread() {
         let sem = LibcSemaphore::new(0);
         let sem_clone = sem.clone();
