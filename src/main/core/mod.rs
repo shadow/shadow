@@ -1,6 +1,5 @@
 pub mod controller;
 pub mod logger;
-pub mod logical_processor;
 pub mod main;
 pub mod manager;
 pub mod scheduler;

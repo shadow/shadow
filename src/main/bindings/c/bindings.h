@@ -293,6 +293,10 @@ void rustlogger_log(LogLevel level,
 // record actually being written, though.
 void shadow_logger_setEnableBuffering(int32_t buffering_enabled);
 
+int main_runShadow(int argc, const char *const *argv);
+
+int manager_saveProcessedConfigYaml(const struct ConfigOptions *config, const char *filename);
+
 struct LogicalProcessors *lps_new(int n);
 
 void lps_free(struct LogicalProcessors *lps);
@@ -314,10 +318,6 @@ double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
 void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
 
 void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
-
-int main_runShadow(int argc, const char *const *argv);
-
-int manager_saveProcessedConfigYaml(const struct ConfigOptions *config, const char *filename);
 
 void clioptions_freeString(char *string);
 
