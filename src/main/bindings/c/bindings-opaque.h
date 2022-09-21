@@ -66,9 +66,6 @@ typedef struct File File;
 // Tool for assigning IP addresses to graph nodes.
 typedef struct IpAssignment_u32 IpAssignment_u32;
 
-// A set of `n` logical processors
-typedef struct LogicalProcessors LogicalProcessors;
-
 // Provides accessors for reading and writing another process's memory.
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.

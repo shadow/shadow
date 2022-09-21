@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -7,11 +7,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{self, Context};
+use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
+use crate::core::scheduler::scheduler::Scheduler;
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
@@ -220,17 +222,14 @@ impl<'a> Manager<'a> {
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
 
-        let num_workers = self
+        let parallelism: usize = self
             .config
-            .experimental
-            .worker_threads
-            .unwrap_or_else(|| {
-                u32::try_from(manager_config.hosts.len())
-                    .unwrap()
-                    .try_into()
-                    .unwrap()
-            })
-            .get();
+            .general
+            .parallelism
+            .unwrap()
+            .get()
+            .try_into()
+            .unwrap();
 
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
@@ -247,6 +246,38 @@ impl<'a> Manager<'a> {
 
         // shuffle the list of hosts to make sure that they are randomly assigned by the scheduler
         hosts.shuffle(&mut manager_config.random);
+
+        // the configuration file's yaml format generally prevents duplicate hostnames, but using
+        // the `quantity` field can lead to hosts with the same name
+        let duplicate_hostnames = find_duplicates(hosts.iter().map(|x| x.name()));
+        if duplicate_hostnames.len() > 0 {
+            return Err(anyhow::anyhow!(
+                "Duplicate hostnames: {:?}",
+                duplicate_hostnames
+            ));
+        }
+
+        let use_cpu_pinning = self.config.experimental.use_cpu_pinning.unwrap();
+
+        // an infinite iterator that always returns `<Option<Option<u32>>>::Some`
+        let cpu_iter =
+            std::iter::from_fn(|| {
+                // if cpu pinning is enabled, return Some(Some(cpu_id)), otherwise return Some(None)
+                Some(use_cpu_pinning.then(|| {
+                    u32::try_from(unsafe { c::affinity_getGoodWorkerAffinity() }).unwrap()
+                }))
+            });
+
+        // should have either all `Some` values, or all `None` values
+        let cpus: Vec<Option<u32>> = cpu_iter.take(parallelism).collect();
+        if cpus[0].is_some() {
+            log::debug!("Pinning to cpus: {:?}", cpus);
+            assert!(cpus.iter().all(|x| x.is_some()));
+        } else {
+            log::debug!("Not pinning to CPUs");
+            assert!(cpus.iter().all(|x| x.is_none()));
+        }
+        assert_eq!(cpus.len(), parallelism);
 
         // set the simulation's global state
         worker::WORKER_SHARED
@@ -273,22 +304,42 @@ impl<'a> Manager<'a> {
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler = SchedulerWrapper::new(num_workers, self.end_time);
+            let mut scheduler = Scheduler::new(&cpus, hosts);
 
-            for host in hosts.into_iter() {
-                scheduler
-                    .add_host(host.chost())
-                    .with_context(|| format!("Failed to add host '{}'", host.name()))?;
-            }
+            // initialize the thread-local Worker
+            scheduler.scope(|s| {
+                s.run(|thread_id| unsafe {
+                    worker::Worker::new_for_this_thread(worker::WorkerThreadID(thread_id as u32))
+                });
+            });
 
-            // we are the main thread, we manage the execution window updates while the workers run
-            // events
+            // boot each host
+            scheduler.scope(|s| {
+                s.run_with_hosts(move |_, hosts| {
+                    while let Some(host) = hosts.next() {
+                        worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
+                        unsafe { host.lock() };
+                        worker::Worker::set_active_host(host);
+
+                        host.boot();
+
+                        worker::Worker::clear_active_host();
+                        unsafe { host.unlock() };
+                        worker::Worker::clear_current_time();
+                    }
+                });
+            });
 
             // the current simulation interval
             let mut window = Some((
                 EmulatedTime::SIMULATION_START,
                 EmulatedTime::SIMULATION_START + SimulationTime::NANOSECOND,
             ));
+
+            // the next event times for each thread; allocated here to avoid re-allocating each
+            // scheduling loop
+            let thread_next_event_times: Vec<AtomicRefCell<Option<EmulatedTime>>> =
+                vec![AtomicRefCell::new(None); scheduler.parallelism()];
 
             // how often to log heartbeat messages
             let heartbeat_interval = self
@@ -301,12 +352,8 @@ impl<'a> Manager<'a> {
             let mut last_heartbeat = EmulatedTime::SIMULATION_START;
             let mut time_of_last_usage_check = std::time::Instant::now();
 
-            scheduler.start();
-
+            // the scheduling loop
             while let Some((window_start, window_end)) = window {
-                // release the workers and run next round
-                scheduler.continue_next_round(window_start, window_end);
-
                 // update the status logger
                 let display_time = std::cmp::min(window_start, window_end);
                 worker::WORKER_SHARED
@@ -317,26 +364,72 @@ impl<'a> Manager<'a> {
                         state.current = display_time;
                     });
 
-                // log a heartbeat message every 'heartbeat_interval' amount of simulated time
-                if let Some(heartbeat_interval) = heartbeat_interval {
-                    if window_start > last_heartbeat + heartbeat_interval {
-                        last_heartbeat = window_start;
-                        self.log_heartbeat(window_start);
+                // run the events
+                scheduler.scope(|s| {
+                    // run the closure on each of the scheduler's threads
+                    s.run_with_data(
+                        &thread_next_event_times,
+                        // each call of the closure is given an abstract thread-specific host
+                        // iterator, and an element of 'thread_next_event_times'
+                        move |_, hosts, next_event_time| {
+                            let mut next_event_time = next_event_time.borrow_mut();
+
+                            worker::Worker::reset_next_event_time();
+                            worker::Worker::set_round_end_time(window_end);
+
+                            // get the next host for this thread from the scheduler
+                            while let Some(host) = hosts.next() {
+                                unsafe { host.lock() };
+                                worker::Worker::set_active_host(host);
+
+                                host.execute(window_end);
+                                let host_next_event_time = host.next_event_time();
+
+                                worker::Worker::clear_active_host();
+                                unsafe { host.unlock() };
+
+                                *next_event_time = [*next_event_time, host_next_event_time]
+                                    .into_iter()
+                                    .filter_map(std::convert::identity)
+                                    .reduce(std::cmp::min);
+                            }
+
+                            let packet_next_event_time = worker::Worker::get_next_event_time();
+
+                            *next_event_time = [*next_event_time, packet_next_event_time]
+                                .into_iter()
+                                .filter_map(std::convert::identity)
+                                .reduce(std::cmp::min);
+                        },
+                    );
+
+                    // log a heartbeat message every 'heartbeat_interval' amount of simulated time
+                    if let Some(heartbeat_interval) = heartbeat_interval {
+                        if window_start > last_heartbeat + heartbeat_interval {
+                            last_heartbeat = window_start;
+                            self.log_heartbeat(window_start);
+                        }
                     }
-                }
 
-                // check resource usage every 30 real seconds
-                let current_time = std::time::Instant::now();
-                if current_time.duration_since(time_of_last_usage_check) > Duration::from_secs(30) {
-                    time_of_last_usage_check = current_time;
-                    self.check_resource_usage();
-                }
+                    // check resource usage every 30 real seconds
+                    let current_time = std::time::Instant::now();
+                    if current_time.duration_since(time_of_last_usage_check)
+                        > Duration::from_secs(30)
+                    {
+                        time_of_last_usage_check = current_time;
+                        self.check_resource_usage();
+                    }
+                });
 
-                // wait for the workers to finish processing nodes before we update the execution
-                // window
-                let min_next_event_time = scheduler.await_next_round().unwrap_or(EmulatedTime::MAX);
+                // get the minimum next event time for all threads (also resets the next event times
+                // to None while we have them borrowed)
+                let min_next_event_time = thread_next_event_times
+                    .iter()
+                    // the take() resets it to None for the next scheduling loop
+                    .filter_map(|x| x.borrow_mut().take())
+                    .reduce(std::cmp::min)
+                    .unwrap_or(EmulatedTime::MAX);
 
-                // we are in control now, the workers are waiting for the next round
                 log::debug!(
                     "Finished execution window [{}--{}], next event at {}",
                     (window_start - EmulatedTime::SIMULATION_START).as_nanos(),
@@ -350,6 +443,32 @@ impl<'a> Manager<'a> {
                     .controller
                     .manager_finished_current_round(min_next_event_time);
             }
+
+            scheduler.scope(|s| {
+                s.run_with_hosts(move |_, hosts| {
+                    while let Some(host) = hosts.next() {
+                        worker::Worker::set_current_time(self.end_time);
+                        //unsafe { host.lock() };
+                        worker::Worker::set_active_host(host);
+
+                        host.free_all_applications();
+                        host.shutdown();
+
+                        worker::Worker::clear_active_host();
+                        //unsafe { host.unlock() };
+                        worker::Worker::clear_current_time();
+                    }
+                });
+            });
+
+            // add each thread's local allocation counters to the global allocation counter
+            scheduler.scope(|s| {
+                s.run(|_| {
+                    worker::Worker::add_to_global_alloc_counters();
+                });
+            });
+
+            scheduler.join();
         }
 
         // simulation is finished, so update the status logger
@@ -763,62 +882,6 @@ pub struct ManagerConfig {
     pub hosts: Vec<HostInfo>,
 }
 
-struct SchedulerWrapper {
-    pub ptr: *mut c::Scheduler,
-}
-
-impl SchedulerWrapper {
-    pub fn new(num_workers: u32, end_time: EmulatedTime) -> Self {
-        Self {
-            ptr: unsafe {
-                c::scheduler_new(num_workers, EmulatedTime::to_abs_simtime(end_time).into())
-            },
-        }
-    }
-
-    pub fn add_host(&mut self, host: *mut c::Host) -> anyhow::Result<()> {
-        let rv = unsafe { c::scheduler_addHost(self.ptr, host) };
-        if rv != 0 {
-            return Err(anyhow::anyhow!(
-                "Failed to add host to scheduler (see the log for details)"
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub fn start(&mut self) {
-        unsafe { c::scheduler_start(self.ptr) }
-    }
-
-    pub fn finish(&mut self) {
-        unsafe { c::scheduler_finish(self.ptr) }
-    }
-
-    pub fn continue_next_round(&mut self, window_start: EmulatedTime, window_end: EmulatedTime) {
-        let window_start = EmulatedTime::to_abs_simtime(window_start).into();
-        let window_end = EmulatedTime::to_abs_simtime(window_end).into();
-        unsafe { c::scheduler_continueNextRound(self.ptr, window_start, window_end) }
-    }
-
-    pub fn await_next_round(&mut self) -> Option<EmulatedTime> {
-        let min_next_event_time = unsafe { c::scheduler_awaitNextRound(self.ptr) };
-        Some(EmulatedTime::from_abs_simtime(
-            SimulationTime::from_c_simtime(min_next_event_time)?,
-        ))
-    }
-}
-
-impl std::ops::Drop for SchedulerWrapper {
-    fn drop(&mut self) {
-        // shadow requires that the work pool is properly shutdown before it's freed (will block
-        // until worker threads are joined)
-        self.finish();
-
-        unsafe { c::scheduler_free(self.ptr) };
-    }
-}
-
 /// Get the raw speed of the experiment machine.
 fn get_raw_cpu_frequency() -> anyhow::Result<u64> {
     const CONFIG_CPU_MAX_FREQ_FILE: &str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
@@ -849,6 +912,25 @@ fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
     );
 
     Ok(libpath)
+}
+
+/// Find duplicates in an iterator. This is not meant to have good performance.
+fn find_duplicates<I>(a: I) -> HashSet<<I as Iterator>::Item>
+where
+    I: Iterator,
+    <I as Iterator>::Item: std::cmp::Eq + std::hash::Hash + Copy,
+{
+    let mut seen = HashSet::new();
+    let mut duplicates = HashSet::new();
+
+    for name in a {
+        let new = seen.insert(name);
+        if !new {
+            duplicates.insert(name);
+        }
+    }
+
+    duplicates
 }
 
 mod export {

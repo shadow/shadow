@@ -376,14 +376,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("interface_qdisc").unwrap().as_str())]
     pub interface_qdisc: Option<QDiscMode>,
 
-    /// Create N worker threads. Note though, that `--parallelism` of them will
-    /// be allowed to run simultaneously. If unset, will create a thread for
-    /// each simulated Host.
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "N")]
-    #[clap(help = EXP_HELP.get("worker_threads").unwrap().as_str())]
-    pub worker_threads: Option<NonZeroU32>,
-
     /// Don't adjust the working directories of the plugins
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
@@ -490,7 +482,6 @@ impl Default for ExperimentalOptions {
             socket_recv_autotune: Some(true),
             interface_buffer: Some(units::Bytes::new(1_024_000, units::SiPrefixUpper::Base)),
             interface_qdisc: Some(QDiscMode::Fifo),
-            worker_threads: None,
             use_legacy_working_dir: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),

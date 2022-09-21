@@ -7,7 +7,6 @@
 
 #include "main/core/logger/log_wrapper.h"
 #include "main/core/main.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"

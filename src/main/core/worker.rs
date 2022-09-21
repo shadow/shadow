@@ -22,10 +22,8 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::{Arc, Mutex};
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -48,7 +46,7 @@ pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
     Lazy::new(|| AtomicRefCell::new(None));
 
 #[derive(Copy, Clone, Debug)]
-pub struct WorkerThreadID(u32);
+pub struct WorkerThreadID(pub u32);
 
 struct ProcessInfo {
     id: ProcessId,
@@ -97,15 +95,12 @@ pub struct Worker {
     // A counter for objects deallocated by this worker.
     object_dealloc_counter: Counter,
 
-    worker_pool: *mut cshadow::WorkerPool,
+    next_event_time: Option<EmulatedTime>,
 }
 
 impl Worker {
     // Create worker for this thread.
-    pub unsafe fn new_for_this_thread(
-        worker_pool: *mut cshadow::WorkerPool,
-        worker_id: WorkerThreadID,
-    ) {
+    pub unsafe fn new_for_this_thread(worker_id: WorkerThreadID) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
@@ -121,7 +116,7 @@ impl Worker {
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
-                worker_pool: notnull_mut(worker_pool),
+                next_event_time: None,
             }));
             assert!(res.is_ok(), "Worker already initialized");
         });
@@ -211,7 +206,7 @@ impl Worker {
         Worker::with(|w| w.active_thread_info.as_ref().map(|t| t.native_tid)).flatten()
     }
 
-    fn set_round_end_time(t: EmulatedTime) {
+    pub fn set_round_end_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.barrier.replace(t)).unwrap();
     }
 
@@ -219,11 +214,11 @@ impl Worker {
         Worker::with(|w| w.clock.barrier).flatten()
     }
 
-    fn set_current_time(t: EmulatedTime) {
+    pub fn set_current_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.now.replace(t)).unwrap();
     }
 
-    fn clear_current_time() {
+    pub fn clear_current_time() {
         Worker::with_mut(|w| w.clock.now.take()).unwrap();
     }
 
@@ -239,6 +234,23 @@ impl Worker {
             if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
                 w.min_latency_cache.set(Some(t));
                 w.shared.update_lowest_used_latency(t);
+            }
+        })
+        .unwrap();
+    }
+
+    pub fn reset_next_event_time() {
+        Worker::with_mut(|w| w.next_event_time = None).unwrap();
+    }
+
+    pub fn get_next_event_time() -> Option<EmulatedTime> {
+        Worker::with(|w| w.next_event_time).unwrap()
+    }
+
+    pub fn update_next_event_time(t: EmulatedTime) {
+        Worker::with_mut(|w| {
+            if w.next_event_time.is_none() || t < w.next_event_time.unwrap() {
+                w.next_event_time = Some(t);
             }
         })
         .unwrap();
@@ -296,6 +308,20 @@ impl Worker {
             // no live worker; fall back to the shared counter
             DEALLOC_COUNTER.lock().unwrap().add_one(s);
         });
+    }
+
+    pub fn add_to_global_alloc_counters() {
+        Worker::with_mut(|w| {
+            let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
+            let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
+
+            global_alloc_counter.add_counter(&w.object_alloc_counter);
+            global_dealloc_counter.add_counter(&w.object_dealloc_counter);
+
+            w.object_alloc_counter = Counter::new();
+            w.object_dealloc_counter = Counter::new();
+        })
+        .unwrap()
     }
 
     pub fn worker_add_syscall_counts(syscall_counts: &Counter) {
@@ -524,18 +550,12 @@ mod export {
         Worker::with_mut(|w| w.shared.push_to_host(host.into(), *event)).unwrap();
     }
 
-    /// Initialize a Worker for this thread.
     #[no_mangle]
-    pub unsafe extern "C" fn worker_newForThisThread(
-        worker_pool: *mut cshadow::WorkerPool,
-        worker_id: i32,
-    ) {
-        unsafe {
-            Worker::new_for_this_thread(
-                notnull_mut(worker_pool),
-                WorkerThreadID(worker_id.try_into().unwrap()),
-            )
-        }
+    pub extern "C" fn worker_setMinEventTimeNextRound(time: cshadow::CSimulationTime) {
+        let time = SimulationTime::from_c_simtime(time).unwrap();
+        let time = EmulatedTime::from_abs_simtime(time);
+
+        Worker::update_next_event_time(time);
     }
 
     /// Returns NULL if there is no live Worker.
@@ -671,11 +691,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_isSimCompleted() -> bool {
         Worker::with(|w| w.clock.now.unwrap() >= w.shared.sim_end_time).unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
-        Worker::with_mut(|w| w.worker_pool).unwrap()
     }
 
     #[no_mangle]
