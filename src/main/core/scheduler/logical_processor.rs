@@ -6,10 +6,6 @@
 use crate::cshadow;
 use crate::utility::notnull::*;
 use crossbeam::queue::SegQueue;
-use std::time::Duration;
-
-#[cfg(feature = "perf_timers")]
-use {crate::utility::perf_timer::PerfTimer, std::sync::Mutex};
 
 /// A set of `n` logical processors
 pub struct LogicalProcessors {
@@ -24,8 +20,6 @@ impl LogicalProcessors {
                 cpu_id: unsafe { cshadow::affinity_getGoodWorkerAffinity() },
                 ready_workers: SegQueue::new(),
                 done_workers: SegQueue::new(),
-                #[cfg(feature = "perf_timers")]
-                idle_timer: Mutex::new(PerfTimer::new()),
             });
         }
         Self { lps }
@@ -70,42 +64,15 @@ impl LogicalProcessors {
     pub fn cpu_id(&self, lpi: usize) -> libc::c_int {
         self.lps[lpi].cpu_id
     }
-
-    #[cfg(feature = "perf_timers")]
-    pub fn idle_timer_continue(&self, lpi: usize) {
-        self.lps[lpi].idle_timer.lock().unwrap().start();
-    }
-    #[cfg(not(feature = "perf_timers"))]
-    pub fn idle_timer_continue(&self, _lpi: usize) {}
-
-    #[cfg(feature = "perf_timers")]
-    pub fn idle_timer_stop(&self, lpi: usize) {
-        self.lps[lpi].idle_timer.lock().unwrap().stop();
-    }
-    #[cfg(not(feature = "perf_timers"))]
-    pub fn idle_timer_stop(&self, _lpi: usize) {}
-
-    #[cfg(feature = "perf_timers")]
-    pub fn idle_timer_elapsed(&self, lpi: usize) -> Duration {
-        self.lps[lpi].idle_timer.lock().unwrap().elapsed()
-    }
-    #[cfg(not(feature = "perf_timers"))]
-    pub fn idle_timer_elapsed(&self, _lpi: usize) -> Duration {
-        Duration::new(0, 0)
-    }
 }
 
 pub struct LogicalProcessor {
     cpu_id: libc::c_int,
     ready_workers: SegQueue<usize>,
     done_workers: SegQueue<usize>,
-    #[cfg(feature = "perf_timers")]
-    idle_timer: Mutex<PerfTimer>,
 }
 
 mod export {
-    use libc::c_double;
-
     use super::*;
 
     #[no_mangle]
@@ -166,30 +133,5 @@ mod export {
         unsafe { lps.as_ref() }
             .unwrap()
             .cpu_id(lpi.try_into().unwrap())
-    }
-    #[no_mangle]
-    pub unsafe extern "C" fn lps_idleTimerElapsed(
-        lps: *const LogicalProcessors,
-        lpi: libc::c_int,
-    ) -> c_double {
-        unsafe { lps.as_ref() }
-            .unwrap()
-            .idle_timer_elapsed(lpi.try_into().unwrap())
-            .as_secs_f64()
-    }
-    #[no_mangle]
-    pub unsafe extern "C" fn lps_idleTimerContinue(
-        lps: *const LogicalProcessors,
-        lpi: libc::c_int,
-    ) {
-        unsafe { lps.as_ref() }
-            .unwrap()
-            .idle_timer_continue(lpi.try_into().unwrap())
-    }
-    #[no_mangle]
-    pub unsafe extern "C" fn lps_idleTimerStop(lps: *const LogicalProcessors, lpi: libc::c_int) {
-        unsafe { lps.as_ref() }
-            .unwrap()
-            .idle_timer_stop(lpi.try_into().unwrap())
     }
 }

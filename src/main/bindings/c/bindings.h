@@ -313,12 +313,6 @@ void lps_finishTask(struct LogicalProcessors *lps);
 
 int lps_cpuId(const struct LogicalProcessors *lps, int lpi);
 
-double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
-
-void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
-
-void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
-
 void clioptions_freeString(char *string);
 
 bool clioptions_getGdb(const struct CliOptions *options);

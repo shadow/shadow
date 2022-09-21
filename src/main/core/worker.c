@@ -201,7 +201,6 @@ void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
     for (int i = 0; i < lps_n(pool->logicalProcessors); ++i) {
         int workerID = _workerpool_getNextWorkerForLogicalProcessorIdx(pool, i);
         if (workerID >= 0) {
-            lps_idleTimerStop(pool->logicalProcessors, i);
             if (sem_post(&pool->workerBeginSems[workerID]) != 0) {
                 utility_panic("sem_post: %s", g_strerror(errno));
             }
@@ -221,13 +220,6 @@ void workerpool_joinAll(WorkerPool* pool) {
 
     // Not strictly necessary, but could help clarity/debugging.
     workerpool_awaitTaskFn(pool);
-
-#ifdef USE_PERF_TIMERS
-    for (int i = 0; i < lps_n(pool->logicalProcessors); ++i) {
-        info("Logical Processor %d total idle time was %f seconds", i,
-             lps_idleTimerElapsed(pool->logicalProcessors, i));
-    }
-#endif
 
     // Join each pthread. (Alternatively we could use pthread_detach on startup)
     for (int i = 0; i < pool->nWorkers; ++i) {
@@ -408,9 +400,6 @@ void* _worker_run(void* voidWorkerThreadInfo) {
             if (sem_post(&workerPool->workerBeginSems[nextWorkerID]) != 0) {
                 utility_panic("sem_post: %s", g_strerror(errno));
             }
-        } else {
-            // No more workers to run; lpi is now idle.
-            lps_idleTimerContinue(workerPool->logicalProcessors, lpi);
         }
         countdownlatch_countDown(workerPool->finishLatch);
     } while (taskFn != NULL);
