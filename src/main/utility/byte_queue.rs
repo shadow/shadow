@@ -407,9 +407,7 @@ mod export {
         if bq_ptr.is_null() {
             return;
         }
-        unsafe {
-            Box::from_raw(bq_ptr);
-        }
+        unsafe { Box::from_raw(bq_ptr) };
     }
 
     #[no_mangle]

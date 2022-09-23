@@ -118,9 +118,7 @@ mod export {
         if handler_ptr.is_null() {
             return;
         }
-        unsafe {
-            Box::from_raw(handler_ptr);
-        }
+        unsafe { Box::from_raw(handler_ptr) };
     }
 
     #[no_mangle]

@@ -182,9 +182,7 @@ mod export {
         if counter_ptr.is_null() {
             return;
         }
-        unsafe {
-            Box::from_raw(counter_ptr);
-        }
+        unsafe { Box::from_raw(counter_ptr) };
     }
 
     #[no_mangle]
