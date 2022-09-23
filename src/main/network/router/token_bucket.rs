@@ -102,9 +102,7 @@ mod export {
         if tokenbucket_ptr.is_null() {
             return;
         }
-        unsafe {
-            Box::from_raw(tokenbucket_ptr);
-        }
+        unsafe { Box::from_raw(tokenbucket_ptr) };
     }
 
     #[no_mangle]
