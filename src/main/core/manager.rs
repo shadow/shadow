@@ -13,9 +13,9 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
-use crate::core::scheduler::scheduler::Scheduler;
+use crate::core::scheduler::{Scheduler, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
-use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
+use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
@@ -304,7 +304,11 @@ impl<'a> Manager<'a> {
 
         // scope used so that the scheduler is dropped before we log the global counters below
         {
-            let mut scheduler = Scheduler::new(&cpus, hosts);
+            let mut scheduler = match self.config.experimental.scheduler.unwrap() {
+                configuration::Scheduler::ThreadPerHost => {
+                    Scheduler::ThreadPerHost(ThreadPerHostSched::new(&cpus, hosts))
+                }
+            };
 
             // initialize the thread-local Worker
             scheduler.scope(|s| {

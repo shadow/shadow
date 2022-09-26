@@ -30,9 +30,11 @@ pub struct TaskData {
 trait TaskFn: Fn(&TaskData) + Send + Sync {}
 impl<T> TaskFn for T where T: Fn(&TaskData) + Send + Sync {}
 
-/// A work pool that runs tasks on threads. A task will run once on each thread. Threads are
-/// assigned to logical processors, which can be bound to operating system processors.
-pub struct WorkPool {
+/// A thread pool that runs a task on many threads. A task will run once on each thread. Each
+/// logical processor will run threads sequentially, meaning that the thread pool's parallelism
+/// depends on the number of processors, not the number of threads. Threads are assigned to logical
+/// processors, which can be bound to operating system processors.
+pub struct ParallelismBoundedThreadPool {
     /// Handles for joining threads when they've exited.
     thread_handles: Vec<std::thread::JoinHandle<()>>,
     /// State shared between all threads.
@@ -62,7 +64,7 @@ pub struct ThreadScheduling {
     logical_processor_idx: AtomicUsize,
 }
 
-impl WorkPool {
+impl ParallelismBoundedThreadPool {
     /// A new work pool with logical processors that are pinned to the provided OS processors.
     /// Each logical processor is assigned many threads.
     pub fn new(cpu_ids: &[Option<u32>], num_threads: usize, thread_name: &str) -> Self {
@@ -199,14 +201,14 @@ impl WorkPool {
     }
 }
 
-impl std::ops::Drop for WorkPool {
+impl std::ops::Drop for ParallelismBoundedThreadPool {
     fn drop(&mut self) {
         self.join_internal();
     }
 }
 
 struct WorkerScope<'scope> {
-    pool: &'scope mut WorkPool,
+    pool: &'scope mut ParallelismBoundedThreadPool,
     // when we are dropped, it's like dropping the task
     _phantom: PhantomData<Box<dyn TaskFn + 'scope>>,
 }
@@ -429,7 +431,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         let mut counter = 0u32;
         for _ in 0..3 {
@@ -444,7 +446,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_run() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -461,7 +463,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_pinning() {
-        let mut pool = WorkPool::new(&[Some(0), Some(1)], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[Some(0), Some(1)], 4, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -478,7 +480,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_large_parallelism() {
-        let mut pool = WorkPool::new(&vec![None; 100], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&vec![None; 100], 4, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -495,7 +497,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_large_num_threads() {
-        let mut pool = WorkPool::new(&[None, None], 100, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 100, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -512,7 +514,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope_runner_order() {
-        let mut pool = WorkPool::new(&[None], 1, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None], 1, "worker");
 
         let flag = AtomicBool::new(false);
         pool.scope(|s| {
@@ -530,7 +532,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_non_aliasing_borrows() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         let mut counter = 0;
         pool.scope(|s| {
@@ -548,7 +550,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_aliasing_borrows() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         let mut counter = 0;
         pool.scope(|s| {
@@ -566,7 +568,7 @@ mod tests {
     #[should_panic]
     #[cfg_attr(miri, ignore)]
     fn test_panic_all() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         pool.scope(|s| {
             s.run(|t| {
@@ -580,7 +582,7 @@ mod tests {
     #[should_panic]
     #[cfg_attr(miri, ignore)]
     fn test_panic_single() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         pool.scope(|s| {
             s.run(|t| {
@@ -597,7 +599,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_panic_any() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         let x = 5;
         pool.scope(|s| {
@@ -614,7 +616,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope_lifetime() {
-        let mut pool = WorkPool::new(&[None, None], 4, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
         pool.scope(|s| {
             // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
@@ -630,7 +632,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn test_queues() {
         let num_threads = 4;
-        let mut pool = WorkPool::new(&[None, None], num_threads, "worker");
+        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], num_threads, "worker");
 
         // a non-copy usize wrapper
         struct Wrapper(usize);

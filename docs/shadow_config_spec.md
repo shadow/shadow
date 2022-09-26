@@ -73,6 +73,7 @@ hosts:
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
 - [`experimental.runahead`](#experimentalrunahead)
+- [`experimental.scheduler`](#experimentalscheduler)
 - [`experimental.socket_recv_autotune`](#experimentalsocket_recv_autotune)
 - [`experimental.socket_recv_buffer`](#experimentalsocket_recv_buffer)
 - [`experimental.socket_send_autotune`](#experimentalsocket_send_autotune)
@@ -367,6 +368,14 @@ Type: String OR null
 
 If set, overrides the automatically calculated minimum time workers may run
 ahead when sending events between virtual hosts.
+
+#### `experimental.scheduler`
+
+Default: "thread-per-host"  
+Type: "thread-per-host"
+
+The host scheduler implementation, which decides how to assign hosts to threads
+and threads to CPU cores.
 
 #### `experimental.socket_recv_autotune`
 
