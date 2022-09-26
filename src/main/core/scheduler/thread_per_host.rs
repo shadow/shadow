@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::Mutex;
 
-use crate::core::scheduler::pools::bounded::{TaskRunner, WorkPool};
+use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -13,11 +13,11 @@ std::thread_local! {
 }
 
 /// A host scheduler.
-pub struct Scheduler {
-    pool: WorkPool,
+pub struct ThreadPerHostSched {
+    pool: ParallelismBoundedThreadPool,
 }
 
-impl Scheduler {
+impl ThreadPerHostSched {
     /// A new host scheduler with logical processors that are pinned to the provided OS processors.
     /// Each logical processor is assigned many threads, and each thread is given a single host.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
@@ -27,7 +27,7 @@ impl Scheduler {
     {
         let hosts = hosts.into_iter();
 
-        let mut pool = WorkPool::new(cpu_ids, hosts.len(), "shadow-worker");
+        let mut pool = ParallelismBoundedThreadPool::new(cpu_ids, hosts.len(), "shadow-worker");
 
         // for determinism, threads will take hosts from a vec rather than a queue
         let hosts: Vec<Mutex<Option<Host>>> = hosts.map(|x| Mutex::new(Some(x))).collect();
@@ -45,19 +45,18 @@ impl Scheduler {
         Self { pool }
     }
 
-    /// The maximum number of threads that will ever be run in parallel.
+    /// See [`crate::core::scheduler::Scheduler::parallelism`].
     pub fn parallelism(&self) -> usize {
         self.pool.num_processors()
     }
 
-    /// A scope for any task run on the scheduler. The current thread will block at the end of the
-    /// scope until the task has completed.
+    /// See [`crate::core::scheduler::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
-        f: impl for<'a, 'b> FnOnce(SchedScope<'a, 'b, 'scope>) + 'scope,
+        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope>) + 'scope,
     ) {
         self.pool.scope(move |s| {
-            let sched_scope = SchedScope {
+            let sched_scope = SchedulerScope {
                 runner: s,
                 marker: Default::default(),
             };
@@ -66,7 +65,7 @@ impl Scheduler {
         });
     }
 
-    /// Join all threads started by the scheduler.
+    /// See [`crate::core::scheduler::Scheduler::join`].
     pub fn join(mut self) {
         let hosts: Vec<Mutex<Option<Host>>> = (0..self.pool.num_threads())
             .map(|_| Mutex::new(None))
@@ -95,7 +94,7 @@ impl Scheduler {
 }
 
 /// A wrapper around the work pool's scoped runner.
-pub struct SchedScope<'sched, 'pool, 'scope>
+pub struct SchedulerScope<'sched, 'pool, 'scope>
 where
     'sched: 'scope,
 {
@@ -105,9 +104,8 @@ where
     marker: PhantomData<&'sched Host>,
 }
 
-impl<'sched, 'pool, 'scope> SchedScope<'sched, 'pool, 'scope> {
-    /// Run the closure on all threads. The closure is given an index of the currently running
-    /// thread.
+impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
+    /// See [`crate::core::scheduler::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
@@ -119,12 +117,7 @@ impl<'sched, 'pool, 'scope> SchedScope<'sched, 'pool, 'scope> {
         });
     }
 
-    /// Run the closure on all threads. The closure is given an index of the currently running
-    /// thread and a host iterator.
-    ///
-    /// The closure must iterate over the provided `HostIter` to completion (until `next()` returns
-    /// `None`), otherwise this may panic. The host iterator is not a real [`std::iter::Iterator`],
-    /// but rather a fake iterator that behaves like a streaming iterator.
+    /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
     pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter) + Send + Sync + 'scope) {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
@@ -144,20 +137,7 @@ impl<'sched, 'pool, 'scope> SchedScope<'sched, 'pool, 'scope> {
         });
     }
 
-    /// Run the closure on all threads. The closure is given an index of the currently running
-    /// thread, a host iterator, and an element of `data`.
-    ///
-    /// The closure must iterate over the provided `HostIter` to completion (until `next()` returns
-    /// `None`), otherwise this may panic. The host iterator is not a real [`std::iter::Iterator`],
-    /// but rather a fake iterator that behaves like a streaming iterator.
-    ///
-    /// Each call of the closure will be given an element of `data`, and this element will not be
-    /// given to any other thread while this closure is running, which means you should not expect
-    /// any contention on this element if using interior mutability.  The provided slice **must**
-    /// have a length of at least [`Scheduler::parallelism`]. If the data needs to be initialized,
-    /// it should be initialized before calling this function and not at the beginning of the
-    /// closure. The element may be given to multiple threads, but never two threads at the same
-    /// time.
+    /// See [`crate::core::scheduler::SchedulerScope::run_with_data`].
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
@@ -193,7 +173,7 @@ pub struct HostIter<'a> {
 }
 
 impl<'a> HostIter<'a> {
-    /// Get the next host.
+    /// See [`crate::core::scheduler::HostIter::next`].
     pub fn next(&mut self) -> Option<&mut Host> {
         self.host.take()
     }

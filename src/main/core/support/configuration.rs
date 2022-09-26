@@ -439,6 +439,13 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_extended_yaml").unwrap().as_str())]
     pub use_extended_yaml: Option<bool>,
+
+    /// The host scheduler implementation, which decides how to assign hosts to threads and threads
+    /// to CPU cores
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "name")]
+    #[clap(help = EXP_HELP.get("scheduler").unwrap().as_str())]
+    pub scheduler: Option<Scheduler>,
 }
 
 impl ExperimentalOptions {
@@ -488,6 +495,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
             use_extended_yaml: Some(false),
+            scheduler: Some(Scheduler::ThreadPerHost),
         }
     }
 }
@@ -641,6 +649,20 @@ impl From<LogLevel> for log::Level {
             LogLevel::Debug => log::Level::Debug,
             LogLevel::Trace => log::Level::Trace,
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Scheduler {
+    ThreadPerHost,
+}
+
+impl FromStr for Scheduler {
+    type Err = serde_yaml::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_yaml::from_str(s)
     }
 }
 
