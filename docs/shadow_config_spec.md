@@ -93,7 +93,6 @@ hosts:
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
-- [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.log_level`](#host_defaultslog_level)
 - [`host_defaults.pcap_capture_size`](#host_defaultspcap_capture_size)
@@ -552,15 +551,6 @@ Default: true
 Type: Bool
 
 Count the number of occurrences for individual syscalls.
-
-#### `experimental.worker_threads`
-
-Default: # of hosts in the simulation  
-Type: Integer
-
-Create N worker threads. Note though, that `general.parallelism` of them will be
-allowed to run simultaneously. If unset, will create a thread for each simulated
-Host.
 
 #### `host_defaults`
 

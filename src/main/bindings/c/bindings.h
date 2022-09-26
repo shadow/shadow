@@ -71,9 +71,6 @@ typedef struct File File;
 // Tool for assigning IP addresses to graph nodes.
 typedef struct IpAssignment_u32 IpAssignment_u32;
 
-// A set of `n` logical processors
-typedef struct LogicalProcessors LogicalProcessors;
-
 // Provides accessors for reading and writing another process's memory.
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
@@ -293,31 +290,13 @@ void rustlogger_log(LogLevel level,
 // record actually being written, though.
 void shadow_logger_setEnableBuffering(int32_t buffering_enabled);
 
-struct LogicalProcessors *lps_new(int n);
-
-void lps_free(struct LogicalProcessors *lps);
-
-int lps_n(const struct LogicalProcessors *lps);
-
-void lps_readyPush(const struct LogicalProcessors *lps, int lpi, int worker);
-
-int lps_popWorkerToRunOn(const struct LogicalProcessors *lps, int lpi);
-
-void lps_donePush(const struct LogicalProcessors *lps, int lpi, int worker);
-
-void lps_finishTask(struct LogicalProcessors *lps);
-
-int lps_cpuId(const struct LogicalProcessors *lps, int lpi);
-
-double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
-
-void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
-
-void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
-
 int main_runShadow(int argc, const char *const *argv);
 
 int manager_saveProcessedConfigYaml(const struct ConfigOptions *config, const char *filename);
+
+// Get the core affinity of the current thread, as set by the active scheduler. Returns `-1` if
+// the affinity is not set.
+int32_t scheduler_getAffinity(void);
 
 void clioptions_freeString(char *string);
 
@@ -477,8 +456,7 @@ const struct ChildPidWatcher *worker_getChildPidWatcher(void);
 // Takes ownership of the event.
 void worker_pushToHost(HostId host, struct Event *event);
 
-// Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerPool *worker_pool, int32_t worker_id);
+void worker_setMinEventTimeNextRound(CSimulationTime time);
 
 // Returns NULL if there is no live Worker.
 struct Counter *_worker_objectAllocCounter(void);
@@ -526,8 +504,6 @@ void worker_updateLowestUsedLatency(CSimulationTime min_path_latency);
 bool worker_isBootstrapActive(void);
 
 bool worker_isSimCompleted(void);
-
-WorkerPool *_worker_pool(void);
 
 bool worker_isAlive(void);
 

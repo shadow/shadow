@@ -42,8 +42,6 @@ target_link_libraries(shadow-remora INTERFACE "-lstdc++")
 ## sources for our main shadow program
 set(shadow_srcs
     core/logger/log_wrapper.c
-    core/scheduler/scheduler.c
-    core/scheduler/scheduler_policy.c
     core/support/config_handlers.c
     core/main.c
     core/worker.c

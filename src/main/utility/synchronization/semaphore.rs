@@ -204,10 +204,18 @@ mod tests {
         });
 
         sem.wait();
-        assert!((0..10).contains(&t0.elapsed().as_millis()));
+        let elapsed = t0.elapsed().as_millis();
+        assert!(
+            (0..30).contains(&elapsed),
+            "Unexpected elapsed time: {elapsed}"
+        );
 
         sem.wait();
-        assert!((50..60).contains(&t0.elapsed().as_millis()));
+        let elapsed = t0.elapsed().as_millis();
+        assert!(
+            (50..80).contains(&elapsed),
+            "Unexpected elapsed time: {elapsed}"
+        );
 
         handle.join().unwrap();
     }

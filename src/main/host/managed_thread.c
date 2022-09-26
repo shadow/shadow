@@ -57,8 +57,12 @@ typedef struct _ShMemWriteBlock {
  * Helper function. Sets the thread's CPU affinity to the worker's affinity.
  */
 static void _managedthread_syncAffinityWithWorker(ManagedThread* mthread) {
+    int current_affinity = scheduler_getAffinity();
+    if (current_affinity < 0) {
+        current_affinity = AFFINITY_UNINIT;
+    }
     mthread->affinity =
-        affinity_setProcessAffinity(mthread->nativeTid, worker_getAffinity(), mthread->affinity);
+        affinity_setProcessAffinity(mthread->nativeTid, current_affinity, mthread->affinity);
 }
 
 static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent* event) {

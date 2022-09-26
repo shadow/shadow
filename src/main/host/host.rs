@@ -42,6 +42,7 @@ pub struct HostInfo {
 /// This is currently an ephemeral proxy object a C Host (cshadow::Host).
 /// Eventually cshadow::Host's contents and functionality will be migrated into
 /// there though, and this will become the "real" Host object.
+#[derive(Debug)]
 pub struct Host {
     chost: SyncSendPointer<cshadow::Host>,
 
@@ -164,6 +165,36 @@ impl Host {
     pub fn event_queue(&self) -> Arc<ThreadSafeEventQueue> {
         let new_arc = unsafe { cshadow::host_getOwnedEventQueue(self.chost()) };
         unsafe { Arc::from_raw(new_arc) }
+    }
+
+    pub fn boot(&mut self) {
+        unsafe { cshadow::host_boot(self.chost()) };
+    }
+
+    pub fn shutdown(&mut self) {
+        unsafe { cshadow::host_shutdown(self.chost()) };
+    }
+
+    pub fn free_all_applications(&mut self) {
+        unsafe { cshadow::host_freeAllApplications(self.chost()) };
+    }
+
+    pub fn execute(&mut self, until: EmulatedTime) {
+        unsafe { cshadow::host_execute(self.chost(), EmulatedTime::to_c_emutime(Some(until))) };
+    }
+
+    pub fn next_event_time(&self) -> Option<EmulatedTime> {
+        EmulatedTime::from_c_emutime(unsafe { cshadow::host_nextEventTime(self.chost()) })
+    }
+
+    pub unsafe fn lock(&mut self) {
+        unsafe { cshadow::host_lock(self.chost()) };
+        unsafe { cshadow::host_lockShimShmemLock(self.chost()) };
+    }
+
+    pub unsafe fn unlock(&mut self) {
+        unsafe { cshadow::host_unlockShimShmemLock(self.chost()) };
+        unsafe { cshadow::host_unlock(self.chost()) };
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {

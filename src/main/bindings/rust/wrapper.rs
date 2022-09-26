@@ -101,6 +101,9 @@ extern "C" {
 extern "C" {
     pub fn main_logBuildInfo();
 }
+extern "C" {
+    pub fn runConfigHandlers(config: *const ConfigOptions);
+}
 pub type guint32 = ::std::os::raw::c_uint;
 pub type guint64 = ::std::os::raw::c_ulong;
 pub type gssize = ::std::os::raw::c_long;
@@ -1131,7 +1134,6 @@ pub struct _GTimer {
     _unused: [u8; 0],
 }
 pub type GTimer = _GTimer;
-pub type Scheduler = u8;
 pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
@@ -1655,14 +1657,51 @@ pub struct _Process {
     _unused: [u8; 0],
 }
 pub type Process = _Process;
-pub type WorkerPool = u8;
+pub type LegacyFile = [u64; 5usize];
+pub type LegacyFileCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
+pub type LegacyFileCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+pub type LegacyFileFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
+pub const _Status_STATUS_FILE_READABLE: _Status = 2;
+pub const _Status_STATUS_FILE_WRITABLE: _Status = 4;
+pub const _Status_STATUS_FILE_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
+pub type _Status = i32;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
+extern "C" {
+    pub fn statuslistener_ref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_unref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_onStatusChanged(
+        listener: *mut StatusListener,
+        currentStatus: Status,
+        transitions: Status,
+    );
+}
+pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Thread {
     _unused: [u8; 0],
 }
 pub type Thread = _Thread;
-pub type SysCallHandler = _SysCallHandler;
 extern "C" {
     pub fn thread_new(
         host: *mut Host,
@@ -1771,6 +1810,18 @@ extern "C" {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct _Tracker {
+    _unused: [u8; 0],
+}
+pub type Tracker = _Tracker;
+pub use self::_LogInfoFlags as LogInfoFlags;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
+pub type _LogInfoFlags = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct _Address {
     _unused: [u8; 0],
 }
@@ -1818,103 +1869,6 @@ pub struct _Packet {
 }
 pub type Packet = _Packet;
 pub type PacketTCPHeader = _PacketTCPHeader;
-extern "C" {
-    pub fn worker_setMinEventTimeNextRound(simtime: CSimulationTime);
-}
-extern "C" {
-    pub fn worker_setRoundEndTime(newRoundEndTime: CSimulationTime);
-}
-extern "C" {
-    pub fn worker_getAffinity() -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn worker_scheduleTaskWithDelay(
-        task: *mut TaskRef,
-        host: *mut Host,
-        nanoDelay: CSimulationTime,
-    ) -> gboolean;
-}
-extern "C" {
-    pub fn worker_scheduleTaskAtEmulatedTime(
-        task: *mut TaskRef,
-        host: *mut Host,
-        t: CEmulatedTime,
-    ) -> gboolean;
-}
-extern "C" {
-    pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
-}
-extern "C" {
-    pub fn worker_isAlive() -> bool;
-}
-extern "C" {
-    pub fn worker_maxEventRunaheadTime(host: *mut Host) -> CEmulatedTime;
-}
-extern "C" {
-    pub fn worker_getCurrentSimulationTime() -> CSimulationTime;
-}
-extern "C" {
-    pub fn worker_getCurrentEmulatedTime() -> CEmulatedTime;
-}
-extern "C" {
-    pub fn worker_isBootstrapActive() -> bool;
-}
-extern "C" {
-    pub fn worker_clearCurrentTime();
-}
-extern "C" {
-    pub fn worker_setCurrentEmulatedTime(time: CEmulatedTime);
-}
-pub type LegacyFile = [u64; 5usize];
-pub type LegacyFileCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
-pub type LegacyFileCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
-pub type LegacyFileFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile)>;
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_FILE_ACTIVE: _Status = 1;
-pub const _Status_STATUS_FILE_READABLE: _Status = 2;
-pub const _Status_STATUS_FILE_WRITABLE: _Status = 4;
-pub const _Status_STATUS_FILE_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub const _Status_STATUS_SOCKET_ALLOWING_CONNECT: _Status = 32;
-pub type _Status = i32;
-extern "C" {
-    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _StatusListener {
-    _unused: [u8; 0],
-}
-pub type StatusListener = _StatusListener;
-extern "C" {
-    pub fn statuslistener_ref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_unref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_onStatusChanged(
-        listener: *mut StatusListener,
-        currentStatus: Status,
-        transitions: Status,
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Tracker {
-    _unused: [u8; 0],
-}
-pub type Tracker = _Tracker;
-pub use self::_LogInfoFlags as LogInfoFlags;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
-pub type _LogInfoFlags = i32;
 extern "C" {
     pub fn process_new(
         host: *mut Host,
@@ -3039,35 +2993,10 @@ extern "C" {
     ) -> gboolean;
 }
 extern "C" {
-    pub fn scheduler_new(nWorkers: guint, endTime: CSimulationTime) -> *mut Scheduler;
+    pub fn worker_maxEventRunaheadTime(host: *mut Host) -> CEmulatedTime;
 }
 extern "C" {
-    pub fn scheduler_free(arg1: *mut Scheduler);
-}
-extern "C" {
-    pub fn scheduler_shutdown(scheduler: *mut Scheduler);
-}
-extern "C" {
-    pub fn scheduler_start(arg1: *mut Scheduler);
-}
-extern "C" {
-    pub fn scheduler_continueNextRound(
-        arg1: *mut Scheduler,
-        arg2: CSimulationTime,
-        arg3: CSimulationTime,
-    );
-}
-extern "C" {
-    pub fn scheduler_awaitNextRound(arg1: *mut Scheduler) -> CSimulationTime;
-}
-extern "C" {
-    pub fn scheduler_finish(arg1: *mut Scheduler);
-}
-extern "C" {
-    pub fn scheduler_addHost(arg1: *mut Scheduler, arg2: *mut Host) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn runConfigHandlers(config: *const ConfigOptions);
+    pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
 }
 extern "C" {
     pub fn affinity_getGoodWorkerAffinity() -> ::std::os::raw::c_int;
