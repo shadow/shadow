@@ -1,7 +1,7 @@
 mod logical_processor;
+mod pools;
 pub mod runahead;
-pub mod scheduler;
-mod workpool;
+pub mod thread_per_host;
 
 use std::cell::RefCell;
 

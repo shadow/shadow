@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::Mutex;
 
-use crate::core::scheduler::workpool::{TaskRunner, WorkPool};
+use crate::core::scheduler::pools::bounded::{TaskRunner, WorkPool};
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;

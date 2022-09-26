@@ -13,7 +13,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
-use crate::core::scheduler::scheduler::Scheduler;
+use crate::core::scheduler::thread_per_host::Scheduler;
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
