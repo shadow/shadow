@@ -195,6 +195,13 @@ endif(SHADOW_PROFILE STREQUAL ON)
 #    cmake_policy(SET  CMP0026  OLD)
 #endif()
 
+# Explicitly opt into new behavior "Include file check macros honor
+# ``CMAKE_REQUIRED_LIBRARIES``" to silence cmake warning. See `cmake
+# --help-policy CMP0075`
+if(POLICY CMP0075)
+    cmake_policy(SET  CMP0075  NEW)
+endif()
+
 if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
     message(STATUS "SHADOW_TEST enabled")
