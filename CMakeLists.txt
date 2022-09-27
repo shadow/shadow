@@ -18,6 +18,12 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 ## ensure cmake version
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
+## Opt into policy-changes introduced since 3.2, our minimum cmake version.
+## TODO: Also set a maximum version here, to explicitly *not* opt into newer
+## optional policies, so that we always use the same policy set.
+## Doing so requires cmake 3.12, though. https://github.com/shadow/shadow/issues/2418
+cmake_policy(VERSION 3.2)
+
 ## building with support for C11 on platforms that default to C99 or C89
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
 
