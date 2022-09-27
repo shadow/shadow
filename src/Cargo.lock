@@ -1108,6 +1108,7 @@ dependencies = [
  "log",
  "logger",
  "nix",
+ "once_cell",
  "rand",
  "rkyv",
  "shadow-build-common",
