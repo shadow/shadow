@@ -1,5 +1,4 @@
 use log::log_enabled;
-use log_bindings as c_log;
 use std::os::raw::{c_char, c_int, c_void};
 use vsprintf::vsprintf_raw;
 
@@ -22,29 +21,29 @@ unsafe fn optional_str(ptr: *const c_char) -> Option<&'static str> {
     }
 }
 
-pub fn c_to_rust_log_level(level: log_bindings::LogLevel) -> Option<log::Level> {
+pub fn c_to_rust_log_level(level: logger::LogLevel) -> Option<log::Level> {
     use log::Level::*;
     match level {
-        c_log::_LogLevel_LOGLEVEL_ERROR => Some(Error),
-        c_log::_LogLevel_LOGLEVEL_WARNING => Some(Warn),
-        c_log::_LogLevel_LOGLEVEL_INFO => Some(Info),
-        c_log::_LogLevel_LOGLEVEL_DEBUG => Some(Debug),
-        c_log::_LogLevel_LOGLEVEL_TRACE => Some(Trace),
-        c_log::_LogLevel_LOGLEVEL_UNSET => None,
+        logger::_LogLevel_LOGLEVEL_ERROR => Some(Error),
+        logger::_LogLevel_LOGLEVEL_WARNING => Some(Warn),
+        logger::_LogLevel_LOGLEVEL_INFO => Some(Info),
+        logger::_LogLevel_LOGLEVEL_DEBUG => Some(Debug),
+        logger::_LogLevel_LOGLEVEL_TRACE => Some(Trace),
+        logger::_LogLevel_LOGLEVEL_UNSET => None,
         _ => panic!("Unexpected log level {}", level),
     }
 }
 
 /// Set the max (noisiest) logging level to `level`.
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_setLevel(level: log_bindings::LogLevel) {
+pub unsafe extern "C" fn rustlogger_setLevel(level: logger::LogLevel) {
     let level = c_to_rust_log_level(level).unwrap();
     log::set_max_level(level.to_level_filter());
 }
 
 /// Whether logging is currently enabled for `level`.
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_isEnabled(level: log_bindings::LogLevel) -> c_int {
+pub unsafe extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
     let level = c_to_rust_log_level(level).unwrap();
     log_enabled!(level).into()
 }
@@ -52,7 +51,7 @@ pub unsafe extern "C" fn rustlogger_isEnabled(level: log_bindings::LogLevel) -> 
 /// Log to Rust's log::logger().
 #[no_mangle]
 pub unsafe extern "C" fn rustlogger_log(
-    level: log_bindings::LogLevel,
+    level: logger::LogLevel,
     file_name: *const c_char,
     fn_name: *const c_char,
     line: i32,

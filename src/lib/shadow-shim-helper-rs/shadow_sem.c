@@ -1,4 +1,4 @@
-#include "lib/shim/shadow_sem.h"
+#include "shadow_sem.h"
 
 #include "lib/logger/logger.h"
 
@@ -13,7 +13,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-static _Atomic(uint32_t) * _shadow_sem_futex_addr(shadow_sem_t* s) {
+static _Atomic(uint32_t)* _shadow_sem_futex_addr(shadow_sem_t* s) {
     static_assert(sizeof(s->_value) == 4, "futex must be exactly 4 bytes large");
     static_assert(alignof(typeof(s->_value)) >= 4, "futex must be >= 4 aligned");
     return &s->_value;

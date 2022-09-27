@@ -18,7 +18,9 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
 ## building with support for C11 on platforms that default to C99 or C89
-set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
@@ -87,6 +89,14 @@ compile_test(HAVE_STRUCT_LINUX_DIRENT
 compile_test(HAVE_STRUCT_LINUX_DIRENT64 
             ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
+include(FindPkgConfig)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.32)
+
+include(CheckSymbolExists)
+list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDE_DIRS})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${GLIB_LIBRARIES})
+check_symbol_exists(g_memdup2 "glib.h" HAS_MEMDUP2)
+
 ## construct info/version strings
 string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
 string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MINOR ${SHADOW_VERSION_FULL})
@@ -128,6 +138,7 @@ option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of various internal operations. (default: OFF)" OFF)
+option(SHADOW_BINDINGS "regenerate C <-> Rust bindings (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -144,35 +155,12 @@ MESSAGE(STATUS)
 ## now handle the options, set up our own flags
 set(CMAKE_C_FLAGS_DEBUG "")
 set(CMAKE_C_FLAGS_RELEASE "")
-add_compile_options(-ggdb)
-add_compile_options(-fno-omit-frame-pointer)
-add_compile_options(-Wreturn-type)
-add_compile_options(-Wswitch)
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    # we only check for unused functions when builing in debug mode since some
-    # functions are only called when logging, which can be #ifdef'd out in
-    # release mode
-    add_compile_options(-Wunused-function)
-endif()
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
 message(STATUS "Found CMAKE_BUILD_TYPE='${CMAKE_BUILD_TYPE}'")
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    message(STATUS "Debug build enabled.")
-    add_definitions(-DDEBUG)
-    add_compile_options(-O0)
-elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    message(STATUS "Release build enabled.")
-    add_definitions(-DNDEBUG)
-    add_compile_options(-O3)
-else()
-    MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
-endif()
 
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
@@ -197,6 +185,8 @@ if($ENV{VERBOSE})
 endif()
 
 if(SHADOW_PROFILE STREQUAL ON)
+    message(STATUS "Building Shadow core with profiling support using '-pg'")
+    add_cflags(-pg)
     add_definitions(-DDEBUG)
     ## see src/main/CMakeLists.txt, where we add the -pg flags
 endif(SHADOW_PROFILE STREQUAL ON)
@@ -204,6 +194,13 @@ endif(SHADOW_PROFILE STREQUAL ON)
 #if(POLICY  CMP0026)
 #    cmake_policy(SET  CMP0026  OLD)
 #endif()
+
+# Explicitly opt into new behavior "Include file check macros honor
+# ``CMAKE_REQUIRED_LIBRARIES``" to silence cmake warning. See `cmake
+# --help-policy CMP0075`
+if(POLICY CMP0075)
+    cmake_policy(SET  CMP0075  NEW)
+endif()
 
 if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest

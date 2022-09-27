@@ -1,0 +1,18 @@
+[package]
+name = "shadow-build-common"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+bindings = ["dep:bindgen", "dep:cbindgen"]
+
+[dependencies]
+bindgen = { version = "0.60.1", optional = true }
+cbindgen = { version = "0.24.3", optional = true }
+cc = "1.0"
+system-deps = "2.0"
+
+[package.metadata.system-deps]
+glib = { name = "glib-2.0", version = "2.32" }

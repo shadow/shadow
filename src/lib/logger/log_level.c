@@ -5,8 +5,8 @@
 
 #include "lib/logger/log_level.h"
 
-#include <glib.h>
 #include <stddef.h>
+#include <string.h>
 
 const char* loglevel_toStr(LogLevel level) {
     switch (level) {
@@ -23,15 +23,15 @@ const char* loglevel_toStr(LogLevel level) {
 LogLevel loglevel_fromStr(const char* levelStr) {
     if (levelStr == NULL) {
         return LOGLEVEL_UNSET;
-    } else if (g_ascii_strcasecmp(levelStr, "error") == 0) {
+    } else if (strcmp(levelStr, "error") == 0) {
         return LOGLEVEL_ERROR;
-    } else if (g_ascii_strcasecmp(levelStr, "warning") == 0) {
+    } else if (strcmp(levelStr, "warning") == 0) {
         return LOGLEVEL_WARNING;
-    } else if (g_ascii_strcasecmp(levelStr, "info") == 0) {
+    } else if (strcmp(levelStr, "info") == 0) {
         return LOGLEVEL_INFO;
-    } else if (g_ascii_strcasecmp(levelStr, "debug") == 0) {
+    } else if (strcmp(levelStr, "debug") == 0) {
         return LOGLEVEL_DEBUG;
-    } else if (g_ascii_strcasecmp(levelStr, "trace") == 0) {
+    } else if (strcmp(levelStr, "trace") == 0) {
         return LOGLEVEL_TRACE;
     } else {
         return LOGLEVEL_UNSET;

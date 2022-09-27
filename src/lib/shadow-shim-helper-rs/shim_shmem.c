@@ -1,4 +1,4 @@
-#include "lib/shim/shim_shmem.h"
+#include "shim_shmem.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -6,10 +6,11 @@
 #include <string.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shim/ipc.h"
-#include "lib/shim/shim_event.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/host/host.h"
+
+#include "ipc.h"
+#include "shim_event.h"
 
 struct _ShimHostProtectedSharedMem {
     GQuark host_id;
@@ -426,35 +427,29 @@ int shimshmem_takePendingUnblockedSignal(const ShimShmemHostLock* lock, ShimShme
 void shim_shmemHandleClone(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_REQ);
 
-    ShMemBlock blk = shmemserializer_globalBlockDeserialize(
-        &ev->event_data.shmem_blk.serial);
+    ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
-    memcpy(blk.p, (void*)ev->event_data.shmem_blk.plugin_ptr.val,
-           ev->event_data.shmem_blk.n);
+    memcpy(blk.p, (void*)ev->event_data.shmem_blk.plugin_ptr.val, ev->event_data.shmem_blk.n);
 }
 
 void shim_shmemHandleCloneString(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_STRING_REQ);
 
-    ShMemBlock blk = shmemserializer_globalBlockDeserialize(
-        &ev->event_data.shmem_blk.serial);
+    ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
-    strncpy(blk.p, (void*)ev->event_data.shmem_blk.plugin_ptr.val,
-            ev->event_data.shmem_blk.n);
+    strncpy(blk.p, (void*)ev->event_data.shmem_blk.plugin_ptr.val, ev->event_data.shmem_blk.n);
     // TODO: Shrink buffer to what's actually needed?
 }
 
 void shim_shmemHandleWrite(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_WRITE_REQ);
 
-    ShMemBlock blk = shmemserializer_globalBlockDeserialize(
-        &ev->event_data.shmem_blk.serial);
+    ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
-    memcpy((void*)ev->event_data.shmem_blk.plugin_ptr.val, blk.p,
-           ev->event_data.shmem_blk.n);
+    memcpy((void*)ev->event_data.shmem_blk.plugin_ptr.val, blk.p, ev->event_data.shmem_blk.n);
 }
 
-void shim_shmemNotifyComplete(struct IPCData *data) {
+void shim_shmemNotifyComplete(struct IPCData* data) {
     ShimEvent ev = {
         .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
     };

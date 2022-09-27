@@ -144,6 +144,6 @@ void shim_shmemHandleCloneString(const ShimEvent* ev);
 void shim_shmemHandleWrite(const ShimEvent* ev);
 
 // Notify Shadow that a shared memory event has been handled.
-void shim_shmemNotifyComplete(struct IPCData *data);
+void shim_shmemNotifyComplete(struct IPCData* data);
 
 #endif // SHD_SHIM_SHMEM_H_

@@ -88,7 +88,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     // start up the logging subsystem to handle all future messages
     shadow_logger::init().unwrap();
     // register the C logger
-    unsafe { log_bindings::logger_setDefault(c::rustlogger_new()) };
+    unsafe { logger::logger_setDefault(c::rustlogger_new()) };
 
     // disable log buffering during startup so that we see every message immediately in the terminal
     shadow_logger::set_buffering_enabled(false);

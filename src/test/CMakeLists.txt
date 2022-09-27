@@ -1,4 +1,26 @@
 ## testing for the shadow simulator
+
+add_compile_options(-ggdb)
+add_compile_options(-fno-omit-frame-pointer)
+add_compile_options(-Wreturn-type)
+add_compile_options(-Wswitch)
+
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    # we only check for unused functions when builing in debug mode since some
+    # functions are only called when logging, which can be #ifdef'd out in
+    # release mode
+    add_compile_options(-Wunused-function)
+endif()
+
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    message(STATUS "Debug build enabled.")
+    add_definitions(-DDEBUG)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    message(STATUS "Release build enabled.")
+    add_definitions(-DNDEBUG)
+else()
+    MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
+endif()
     
 ## these are common flags that are needed for shadow plugins
 add_cflags("-fPIC -fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE -Wno-unused-command-line-argument")

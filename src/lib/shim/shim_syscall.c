@@ -5,11 +5,11 @@
 #include <sys/syscall.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shim/ipc.h"
+#include "lib/shadow-shim-helper-rs/ipc.h"
+#include "lib/shadow-shim-helper-rs/shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_event.h"
 #include "lib/shim/shim_seccomp.h"
-#include "lib/shim/shim_shmem.h"
 #include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"

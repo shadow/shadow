@@ -1,9 +1,9 @@
+
 /*
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
 // clang-format off
-
 
 #ifndef main_bindings_h
 #define main_bindings_h

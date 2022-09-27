@@ -10,7 +10,7 @@ extern "C" {
 #include "lib/logger/logger.h"
 }
 
-#include "lib/shim/shadow_sem.h"
+#include "shadow_sem.h"
 
 BinarySpinningSem::BinarySpinningSem(ssize_t spin_max) : _thresh(spin_max) {
     shadow_sem_init(&_semaphore, 1, 0);

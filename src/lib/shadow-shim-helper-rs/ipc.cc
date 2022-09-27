@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "lib/shim/binary_spinning_sem.h"
+#include "binary_spinning_sem.h"
 
 extern "C" {
 #include "lib/logger/logger.h"
@@ -28,9 +28,7 @@ struct IPCData {
 
 extern "C" {
 
-void ipcData_init(IPCData* ipc_data, ssize_t spin_max) {
-    new (ipc_data) IPCData(spin_max);
-}
+void ipcData_init(IPCData* ipc_data, ssize_t spin_max) { new (ipc_data) IPCData(spin_max); }
 
 void ipcData_destroy(struct IPCData* ipc_data) {
     // Call any C++ destructors.

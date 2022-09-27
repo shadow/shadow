@@ -1,9 +1,5 @@
 include_directories(${GLIB_INCLUDE_DIRS})
 
-add_library(shadow-tsc STATIC tsc.c)
-target_compile_options(shadow-tsc PRIVATE -D_GNU_SOURCE -fPIC)
-target_link_libraries(shadow-tsc logger)
-
 add_executable(tsc_test tsc_test.c)
-target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
+target_link_libraries(tsc_test shadow-tsc logger ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 add_test(NAME tsc_test COMMAND tsc_test)

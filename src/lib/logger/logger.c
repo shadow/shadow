@@ -1,6 +1,5 @@
 #include "lib/logger/logger.h"
 
-#include <glib.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -8,7 +7,10 @@
 #include <stdlib.h>
 #include <sys/param.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
+
+#define USEC_PER_SEC 1000000ULL
 
 // Process start time, initialized explicitly or on first use.
 static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
@@ -25,7 +27,9 @@ static void _init_start_time() {
 }
 
 int64_t logger_now_micros() {
-    return g_get_monotonic_time();
+    struct timespec res;
+    clock_gettime(CLOCK_REALTIME, &res);
+    return (res.tv_sec * USEC_PER_SEC) + (res.tv_nsec / 1000);
 }
 
 int64_t logger_get_global_start_time_micros() {
@@ -49,12 +53,12 @@ int64_t logger_elapsed_micros() {
 size_t logger_elapsed_string(char* dst, size_t size) {
     int64_t unaccounted_micros = logger_elapsed_micros();
 
-    int hours = unaccounted_micros / (3600LL * G_USEC_PER_SEC);
-    unaccounted_micros %= (3600LL * G_USEC_PER_SEC);
-    int minutes = unaccounted_micros / (60 * G_USEC_PER_SEC);
-    unaccounted_micros %= (60 * G_USEC_PER_SEC);
-    int secs = unaccounted_micros / G_USEC_PER_SEC;
-    unaccounted_micros %= G_USEC_PER_SEC;
+    int hours = unaccounted_micros / (3600LL * USEC_PER_SEC);
+    unaccounted_micros %= (3600LL * USEC_PER_SEC);
+    int minutes = unaccounted_micros / (60 * USEC_PER_SEC);
+    unaccounted_micros %= (60 * USEC_PER_SEC);
+    int secs = unaccounted_micros / USEC_PER_SEC;
+    unaccounted_micros %= USEC_PER_SEC;
     int micros = unaccounted_micros;
 
     return snprintf(dst, size, "%02d:%02d:%02d.%06d", hours, minutes, secs, micros);
@@ -160,9 +164,8 @@ void logger_setDefault(Logger* logger) {
 
 Logger* logger_getDefault() { return defaultLogger; }
 
-void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
-                const gchar* functionName, const gint lineNumber,
-                const gchar* format, ...) {
+void logger_log(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
+                const int lineNumber, const char* format, ...) {
     if (!logger) {
         return;
     }

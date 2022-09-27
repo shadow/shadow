@@ -12,8 +12,8 @@ typedef struct {
 
 #define SHADOW_SPINLOCK_STATICALLY_INITD ((shadow_spinlock_t){._locked = ATOMIC_VAR_INIT(false)})
 
-int shadow_spin_init(shadow_spinlock_t *lock);
-int shadow_spin_lock(shadow_spinlock_t *lock);
-int shadow_spin_unlock(shadow_spinlock_t *lock);
+int shadow_spin_init(shadow_spinlock_t* lock);
+int shadow_spin_lock(shadow_spinlock_t* lock);
+int shadow_spin_unlock(shadow_spinlock_t* lock);
 
 #endif
