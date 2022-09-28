@@ -16,3 +16,9 @@ pub mod utility;
 pub mod core;
 pub mod host;
 pub mod network;
+
+// cargo spuriously drops the dependency on this crate if we don't reference it
+// from our Rust code (it's otherwise currently only referenced from our C
+// code).
+#[allow(unused)]
+use shadow_shmem;
