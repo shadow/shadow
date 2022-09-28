@@ -213,11 +213,7 @@ def build(args, remaining):
     if not os.path.exists(installdir): os.makedirs(installdir)
 
     # build up args string for the cmake command
-    cmake_cmd = ""
-    if args.do_compile_commands:
-        cmake_cmd += "bear --"
-
-    cmake_cmd += " cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
     # other cmake options
     cmake_cmd += " -DCMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")
@@ -278,7 +274,11 @@ def build(args, remaining):
         return retcode
 
     # call make, wait for it to finish
-    make = f"make -j{args.njobs}"
+    make = ""
+    if args.do_compile_commands:
+        make += "bear --"
+    make += f" make -j{args.njobs}"
+
     logging.info("calling " + make)
     retcode = subprocess.call(shlex.split(make), cwd=builddir)
     logging.debug("make returned " + str(retcode))
@@ -287,7 +287,7 @@ def build(args, remaining):
         return retcode
 
     if args.do_extra_test:
-        make = f"make -j{args.njobs} golang_tests"
+        make += " golang_tests"
         logging.info("calling " + make)
         retcode = subprocess.call(shlex.split(make), cwd=builddir)
         logging.debug("make returned " + str(retcode))
