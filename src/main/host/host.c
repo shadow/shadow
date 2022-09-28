@@ -154,7 +154,7 @@ Host* host_new(const HostParameters* params) {
          g_quark_to_string(host->params.id));
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(host_getSharedMem(host), host, _modelUnblockedSyscallLatencyConfig,
+    shimshmemhost_init(host_getSharedMem(host), host->params.id, _modelUnblockedSyscallLatencyConfig,
                        _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig,
                        _unblockedVdsoLatencyConfig);
 
