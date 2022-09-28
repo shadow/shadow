@@ -121,6 +121,11 @@ def main():
         action="store_true", dest="do_werror",
         default=False)
 
+    parser_build.add_argument('--compile-commands',
+        help="Generate compile_commands.json, which is useful to IDEs and analyzers",
+        action="store_true", dest="do_compile_commands",
+        default=False)
+
     # configure test subcommand
     parser_test = subparsers_main.add_parser('test', add_help=False, help='Run Shadow tests.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -199,12 +204,20 @@ def build(args, remaining):
     # clear cmake cache
     if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
 
+    if args.do_compile_commands and os.path.exists(builddir):
+        logging.error("Generating compile_commands.json on a non-clean build may miss some files")
+        return -1
+
     # create directories
     if not os.path.exists(builddir): os.makedirs(builddir)
     if not os.path.exists(installdir): os.makedirs(installdir)
 
     # build up args string for the cmake command
-    cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = ""
+    if args.do_compile_commands:
+        cmake_cmd += "bear --"
+
+    cmake_cmd += " cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
     # other cmake options
     cmake_cmd += " -DCMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")

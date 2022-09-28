@@ -19,6 +19,21 @@ cargo install mdbook
 firefox build/guide/index.html
 ```
 
+## Generating compiler command database
+
+Many tools benefit from a [compiler command
+database](https://clangd.llvm.org/design/compile-commands), conventionally in a
+file called `compile_commands.json`. To generate such a database, use the
+`setup` script's `--compile-commands` option when building. This must be done
+with a clean build, so as not to miss any files.
+
+```bash
+./setup build --clean --compile-commands
+```
+
+This uses the [bear](https://github.com/rizsotto/Bear) tool, which must already
+be installed.
+
 ## Files and descriptors
 
 <img class="color-adapting-image" style="width: 100%;" src="assets/files-and-descriptors.svg">
