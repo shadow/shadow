@@ -17,8 +17,9 @@ pub mod core;
 pub mod host;
 pub mod network;
 
-// cargo spuriously drops the dependency on this crate if we don't reference it
-// from our Rust code (it's otherwise currently only referenced from our C
-// code).
+// Force cargo to link against crates that aren't (yet) referenced from Rust code (but are referenced
+// from this crate's C code).
 #[allow(unused)]
 use shadow_shmem;
+#[allow(unused)]
+use shadow_tsc;
