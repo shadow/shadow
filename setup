@@ -80,11 +80,6 @@ def main():
         action="store_true", dest="do_coverage",
         default=False)
 
-    parser_build.add_argument('-B', '--bindings',
-        help="Regenerate C <-> Rust bindings.",
-        action="store_true", dest="do_bindings",
-        default=False)
-
     parser_build.add_argument('--use-perf-timers',
         help="Compile in timers for tracking the run time of various internal operations.",
         action="store_true", dest="do_use_perf_timers",
@@ -228,9 +223,6 @@ def build(args, remaining):
             logging.warning("You usually want to enable --debug for coverage"
                     + " builds")
         cmake_cmd += " -DSHADOW_COVERAGE=ON"
-
-    if args.do_bindings:
-        cmake_cmd += " -DSHADOW_BINDINGS=ON"
 
     # we will run from build directory
     calledDirectory = os.getcwd()

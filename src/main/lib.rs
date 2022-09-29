@@ -7,7 +7,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 /// cbindgen:ignore
-pub mod cshadow;
+pub mod cshadow {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    // https://github.com/rust-lang/rust/issues/66220
+    #![allow(improper_ctypes)]
+    include!("cshadow.rs");
+}
 
 // modules with macros must be included before other modules
 #[macro_use]

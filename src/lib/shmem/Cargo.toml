@@ -8,11 +8,8 @@ edition = "2021"
 [dependencies]
 logger = { path = "../logger" }
 
-[features]
-bindings = ["dep:bindgen"]
-
 [build-dependencies]
-bindgen = { version = "0.60.1", optional = true }
+bindgen = { version = "0.60.1" }
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common" }
 

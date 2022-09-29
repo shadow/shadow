@@ -5,9 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-bindings = ["dep:cbindgen"]
-
 [lib]
 crate-type = ["rlib", "staticlib"]
 
@@ -24,7 +21,7 @@ rkyv = "0.7.39"
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common" }
 system-deps = "6.0"
-cbindgen = { version = "0.24.3", optional = true }
+cbindgen = { version = "0.24.3" }
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in src/CMakeLists.txt

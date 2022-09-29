@@ -1,6 +1,5 @@
 use shadow_build_common::ShadowBuildCommon;
 
-#[cfg(feature = "bindings")]
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = {
         let mut c = build_common.cbindgen_base_config();
@@ -77,7 +76,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         .write_to_file("./bindings/c/bindings-opaque.h");
 }
 
-#[cfg(feature = "bindings")]
 fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common.bindgen_builder()
         .header("core/logger/log_wrapper.h")
@@ -345,10 +343,7 @@ fn main() {
     // generated first, then there will be no way to correct the C bindings
     // since the Rust binding generation will always fail before the C bindings
     // can be corrected.
-    #[cfg(feature = "bindings")]
     run_cbindgen(&build_common);
-
-    #[cfg(feature = "bindings")]
     run_bindgen(&build_common);
 
     build_remora(&build_common);
