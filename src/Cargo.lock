@@ -1023,9 +1023,11 @@ dependencies = [
  "cc",
  "libc",
  "log",
+ "logger",
  "nix",
  "rkyv",
  "shadow-build-common",
+ "shadow_shmem",
  "system-deps",
 ]
 

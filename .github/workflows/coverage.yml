@@ -41,6 +41,16 @@ jobs:
       RUSTPROFILE: minimal
 
     steps:
+      # The coverage uploader wants git metadata.
+      # For that we need to install the git binary so that the
+      # checkout action will use that instead of the github API.
+      - name: Install git
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
+      # Work around https://github.com/actions/checkout/issues/760
+      - name: add safe.directory
+        run: git config --global --add safe.directory $PWD
       - name: Checkout
         uses: actions/checkout@v3
         with:

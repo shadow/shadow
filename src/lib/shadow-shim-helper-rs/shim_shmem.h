@@ -14,11 +14,8 @@ typedef struct _ShimShmemThread ShimShmemThread;
 typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 
 #include "ipc.h"
-#include "lib/shadow-shim-helper-rs/shim_helper.h"
+#include "shim_helper.h"
 #include "main/core/support/definitions.h"
-#include "main/host/host.h"
-#include "main/host/process.h"
-#include "main/host/thread.h"
 #include "shim_event.h"
 
 // Data structures kept in memory shared between Shadow and its managed processes.
@@ -37,7 +34,7 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 // parameter are still thread-safe, and internally use atomics.
 
 size_t shimshmemhost_size();
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
+void shimshmemhost_init(ShimShmemHost* hostMem, GQuark hostId, bool modelUnblockedSyscallLatency,
                         CSimulationTime maxUnappliedCpuLatency,
                         CSimulationTime unblockedSyscallLatency,
                         CSimulationTime unblockedVdsoLatency);
@@ -49,7 +46,7 @@ ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
 void shimshmemhost_unlock(ShimShmemHost* host, ShimShmemHostLock** protected);
 
 size_t shimshmemprocess_size();
-void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process);
+void shimshmemprocess_init(ShimShmemProcess* processMem, GQuark hostId);
 
 // Get and set the emulated time.
 CEmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
@@ -80,7 +77,7 @@ void shimshmem_setSignalAction(const ShimShmemHostLock* host, ShimShmemProcess* 
                                const struct shd_kernel_sigaction* action);
 
 size_t shimshmemthread_size();
-void shimshmemthread_init(ShimShmemThread* threadMem, Thread* thread);
+void shimshmemthread_init(ShimShmemThread* threadMem, GQuark hostId);
 
 bool shimshmem_getPtraceAllowNativeSyscalls(ShimShmemThread* thread);
 void shimshmem_setPtraceAllowNativeSyscalls(ShimShmemThread* thread, bool allow);

@@ -16,6 +16,8 @@ libc = "0.2"
 nix = "0.25.0"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
+logger = { path = "../logger" }
+shadow_shmem = { path = "../shmem" }
 rkyv = "0.7.39"
 
 [build-dependencies]

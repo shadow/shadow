@@ -27,11 +27,26 @@ if(SHADOW_TEST STREQUAL ON)
   set(RUST_TARGETS "${RUST_TARGETS} --tests")
 endif()
 
+if(SHADOW_COVERAGE STREQUAL ON)
+    # https://github.com/shadow/shadow/issues/1236
+    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
+
+    ## from https://github.com/mozilla/grcov
+    set(RUSTFLAGS "${RUSTFLAGS} -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
+                -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
+    set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
+endif()
+
 ## build the rust library
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CFLAGS=\"${RUST_CFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXXFLAGS=\"${RUST_CXXFLAGS}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CC=\"${CMAKE_C_COMPILER}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXX=\"${CMAKE_CXX_COMPILER}\"")
 set(TARGETDIR "${CMAKE_CURRENT_BINARY_DIR}/target")
+# Use an explicit target to workaround incompatibility of -Cpanic=abort with procmacro crates.
+# See https://github.com/intellij-rust/intellij-rust/issues/5973#issuecomment-684867383
+set(TARGET x86_64-unknown-linux-gnu)
 include(ExternalProject)
 ExternalProject_Add(
     rust-workspace-project
@@ -40,9 +55,9 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} ${RUST_TARGETS} --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\""
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build --target ${TARGET} ${RUST_BUILD_FLAG} ${RUST_TARGETS} --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\""
     BUILD_BYPRODUCTS
-      ${TARGETDIR}/debug/libshadow_shim_helper_rs.a ${TARGETDIR}/release/libshadow_shim_helper_rs.a
+      ${TARGETDIR}/debug/${TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${TARGET}/libshadow_shim_helper_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
@@ -50,8 +65,8 @@ foreach(LIBRARY shadow-shim-helper-rs logger shadow-shmem shadow-tsc shadow-rs)
   add_library(${LIBRARY} STATIC IMPORTED GLOBAL)
   add_dependencies(${LIBRARY} rust-workspace-project)
   string(REPLACE "-" "_" LIBRARY_FILE "lib${LIBRARY}.a")
-  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/debug/${LIBRARY_FILE})
-  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/release/${LIBRARY_FILE})
+  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${TARGET}/debug/${LIBRARY_FILE})
+  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${TARGET}/release/${LIBRARY_FILE})
 endforeach()
 
 # Unit test executables don't have predictable names: https://github.com/rust-lang/cargo/issues/1924
@@ -66,7 +81,7 @@ endforeach()
 # better than trying to fight the "rust way" here. It also includes doc tests,
 # which normally don't have persistent executables at all.
 add_test(NAME rust-unit-tests
-         COMMAND bash -c "${CARGO_ENV_VARS} cargo test ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
+         COMMAND bash -c "${CARGO_ENV_VARS} cargo test --target ${TARGET} ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
 set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE)

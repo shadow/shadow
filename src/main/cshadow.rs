@@ -1656,6 +1656,48 @@ pub struct _Process {
     _unused: [u8; 0],
 }
 pub type Process = _Process;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Tsc {
+    pub cyclesPerSecond: u64,
+}
+#[test]
+fn bindgen_test_layout__Tsc() {
+    assert_eq!(
+        ::std::mem::size_of::<_Tsc>(),
+        8usize,
+        concat!("Size of: ", stringify!(_Tsc))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_Tsc>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_Tsc))
+    );
+    fn test_field_cyclesPerSecond() {
+        assert_eq!(
+            unsafe {
+                let uninit = ::std::mem::MaybeUninit::<_Tsc>::uninit();
+                let ptr = uninit.as_ptr();
+                ::std::ptr::addr_of!((*ptr).cyclesPerSecond) as usize - ptr as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(_Tsc),
+                "::",
+                stringify!(cyclesPerSecond)
+            )
+        );
+    }
+    test_field_cyclesPerSecond();
+}
+pub type Tsc = _Tsc;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _CPU {
+    _unused: [u8; 0],
+}
+pub type CPU = _CPU;
 pub type LegacyFile = [u64; 5usize];
 pub type LegacyFileCloseFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyFile, host: *mut Host)>;
@@ -2054,48 +2096,6 @@ extern "C" {
 extern "C" {
     pub fn process_setDumpable(process: *mut Process, dumpable: ::std::os::raw::c_int);
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Tsc {
-    pub cyclesPerSecond: u64,
-}
-#[test]
-fn bindgen_test_layout__Tsc() {
-    assert_eq!(
-        ::std::mem::size_of::<_Tsc>(),
-        8usize,
-        concat!("Size of: ", stringify!(_Tsc))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_Tsc>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_Tsc))
-    );
-    fn test_field_cyclesPerSecond() {
-        assert_eq!(
-            unsafe {
-                let uninit = ::std::mem::MaybeUninit::<_Tsc>::uninit();
-                let ptr = uninit.as_ptr();
-                ::std::ptr::addr_of!((*ptr).cyclesPerSecond) as usize - ptr as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(_Tsc),
-                "::",
-                stringify!(cyclesPerSecond)
-            )
-        );
-    }
-    test_field_cyclesPerSecond();
-}
-pub type Tsc = _Tsc;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _CPU {
-    _unused: [u8; 0],
-}
-pub type CPU = _CPU;
 extern "C" {
     pub fn legacyfile_ref(data: gpointer);
 }

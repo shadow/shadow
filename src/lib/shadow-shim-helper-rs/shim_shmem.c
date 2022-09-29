@@ -7,7 +7,6 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shmem/shmem_allocator.h"
-#include "main/host/host.h"
 
 #include "ipc.h"
 #include "shim_event.h"
@@ -119,7 +118,7 @@ struct _ShimShmemThread {
 
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
-void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedSyscallLatency,
+void shimshmemhost_init(ShimShmemHost* hostMem, GQuark hostId, bool modelUnblockedSyscallLatency,
                         CSimulationTime maxUnappliedCpuLatency,
                         CSimulationTime unblockedSyscallLatency,
                         CSimulationTime unblockedVdsoLatency) {
@@ -128,7 +127,7 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedS
     // initialize the const members of `hostMem`.
     memcpy(hostMem,
            &(ShimShmemHost){
-               .host_id = host_getID(host),
+               .host_id = hostId,
                .mutex = PTHREAD_MUTEX_INITIALIZER,
                .model_unblocked_syscall_latency = modelUnblockedSyscallLatency,
                .max_unapplied_cpu_latency = maxUnappliedCpuLatency,
@@ -136,7 +135,7 @@ void shimshmemhost_init(ShimShmemHost* hostMem, Host* host, bool modelUnblockedS
                .unblocked_vdso_latency = unblockedVdsoLatency,
                .protected =
                    {
-                       .host_id = host_getID(host),
+                       .host_id = hostId,
                    },
            },
            sizeof(ShimShmemHost));
@@ -240,12 +239,12 @@ void shimshmem_setSignalAction(const ShimShmemHostLock* host, ShimShmemProcess* 
 
 size_t shimshmemprocess_size() { return sizeof(ShimShmemProcess); }
 
-void shimshmemprocess_init(ShimShmemProcess* processMem, Process* process) {
+void shimshmemprocess_init(ShimShmemProcess* processMem, GQuark hostId) {
     *processMem = (ShimShmemProcess){
-        .host_id = process_getHostId(process),
+        .host_id = hostId,
         .protected =
             {
-                .host_id = process_getHostId(process),
+                .host_id = hostId,
             },
     };
 }
@@ -339,12 +338,12 @@ void shimshmem_setBlockedSignals(const ShimShmemHostLock* host, ShimShmemThread*
 
 size_t shimshmemthread_size() { return sizeof(ShimShmemThread); }
 
-void shimshmemthread_init(ShimShmemThread* threadMem, Thread* thread) {
+void shimshmemthread_init(ShimShmemThread* threadMem, GQuark hostId) {
     *threadMem = (ShimShmemThread){
-        .host_id = thread_getHostId(thread),
+        .host_id = hostId,
         .protected =
             {
-                .host_id = thread_getHostId(thread),
+                .host_id = hostId,
                 .sigaltstack.ss_flags = SS_DISABLE,
             },
     };
