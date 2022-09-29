@@ -17,9 +17,8 @@ pub mod core;
 pub mod host;
 pub mod network;
 
-// Force cargo to link against crates that aren't (yet) referenced from Rust code (but are referenced
-// from this crate's C code).
-#[allow(unused)]
-use shadow_shmem;
-#[allow(unused)]
-use shadow_tsc;
+// Force cargo to link against crates that aren't (yet) referenced from Rust
+// code (but are referenced from this crate's C code).
+// https://github.com/rust-lang/cargo/issues/9391
+extern crate shadow_shmem;
+extern crate shadow_tsc;
