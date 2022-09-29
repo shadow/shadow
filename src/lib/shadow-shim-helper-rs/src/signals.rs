@@ -158,7 +158,7 @@ fn test_not() {
 }
 
 /// In C this is conventioanlly an anonymous union, but those aren't supported
-/// in Rust. https://github.com/rust-lang/rust/issues/49804
+/// in Rust. <https://github.com/rust-lang/rust/issues/49804>
 #[repr(C)]
 pub union ShdKernelSigactionUnion {
     ksa_handler: fn(i32),

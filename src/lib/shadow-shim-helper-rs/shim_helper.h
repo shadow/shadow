@@ -53,6 +53,7 @@ typedef struct SimulationTime SimulationTime;
 // distinguish each type of time in the code.
 typedef uint64_t CEmulatedTime;
 
+// The same as the type alias in the 'main/cshadow.rs' bindings.
 typedef uint64_t CSimulationTime;
 
 // Compatible with the Linux kernel's definition of sigset_t on x86_64.
@@ -65,7 +66,7 @@ typedef struct shd_kernel_sigset_t {
 #define shd_kernel_sigset_t_FULL (shd_kernel_sigset_t){ .val = ~0 }
 
 // In C this is conventioanlly an anonymous union, but those aren't supported
-// in Rust. https://github.com/rust-lang/rust/issues/49804
+// in Rust. <https://github.com/rust-lang/rust/issues/49804>
 typedef union ShdKernelSigactionUnion {
   void (*ksa_handler)(int32_t);
   void (*ksa_sigaction)(int32_t, siginfo_t*, void*);

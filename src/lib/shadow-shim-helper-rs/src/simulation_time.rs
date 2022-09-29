@@ -3,7 +3,7 @@ Values for working with a simulated duration. Use `EmulatedTime` to represent an
 
 In Rust, use `EmulatedTime` to represent an instant in time, or
 `SimulationTime` to represent a time interval. `SimulationTime` is meant to
-replace [`c::SimulationTime`] from the C APIs.
+replace [`SimulationTime`] from the C APIs.
 
 This module contains some identically-named constants defined as C macros in
 `main/core/support/definitions.h`.
@@ -15,6 +15,7 @@ use std::time::Duration;
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub struct SimulationTime(CSimulationTime);
 
+/// The same as the type alias in the 'main/cshadow.rs' bindings.
 pub type CSimulationTime = u64;
 
 impl SimulationTime {

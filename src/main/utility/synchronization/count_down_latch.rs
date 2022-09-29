@@ -87,7 +87,7 @@ impl LatchState {
 impl LatchCounter {
     /// Decrement the latch count and wake the waiters if the count reaches 0. This must not be
     /// called more than once per generation (must not be called again until all of the waiters have
-    /// returned from their [`wait`] calls), otherwise it will panic.
+    /// returned from their [`LatchWaiter::wait()`] calls), otherwise it will panic.
     pub fn count_down(&mut self) {
         let counters;
         {
