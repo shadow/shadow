@@ -56,6 +56,21 @@ jobs:
           # if the Shadow version is bumped without using Cargo to update the lock file.
           (cd src && cargo update --locked --workspace)
 
+  lint-cargo-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Cargo doc check
+        run: |
+          cmake -S . -B build
+          (cd src && RUSTDOCFLAGS='-D warnings' cargo doc)
+
   lint-bindings:
     runs-on: ubuntu-latest
     container:
