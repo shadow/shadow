@@ -18,6 +18,20 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 ## ensure cmake version
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
+## Opt into policy-changes introduced since 3.2, our minimum cmake version.
+## TODO: Also set a maximum version here, to explicitly *not* opt into newer
+## optional policies, so that we always use the same policy set.
+## Doing so requires cmake 3.12, though. https://github.com/shadow/shadow/issues/2418
+cmake_policy(VERSION 3.2)
+
+# Explicitly opt out of new behavior "Include file check macros honor
+# ``CMAKE_REQUIRED_LIBRARIES``". It wasn't added until 3.12,
+# which is > our minimum cmake version.
+# https://github.com/shadow/shadow/issues/2418
+if(POLICY CMP0075)
+    cmake_policy(SET CMP0075 OLD)
+endif()
+
 ## building with support for C11 on platforms that default to C99 or C89
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
 
@@ -195,13 +209,6 @@ endif(SHADOW_PROFILE STREQUAL ON)
 #if(POLICY  CMP0026)
 #    cmake_policy(SET  CMP0026  OLD)
 #endif()
-
-# Explicitly opt into new behavior "Include file check macros honor
-# ``CMAKE_REQUIRED_LIBRARIES``" to silence cmake warning. See `cmake
-# --help-policy CMP0075`
-if(POLICY CMP0075)
-    cmake_policy(SET  CMP0075  NEW)
-endif()
 
 if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
