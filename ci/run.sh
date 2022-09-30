@@ -132,11 +132,18 @@ EOF
     # Mount the source directory. This allows us to perform incremental builds in
     # a locally modified source dir without rebuilding the docker container.
     DOCKER_CREATE_FLAGS+=("--mount=src=$(realpath .),target=/mnt/shadow,type=bind,readonly")
+    # In most cases running install_deps.sh and install_extra_deps.sh isn't
+    # needed, since we already ran them when building the base image. Running
+    # them here allows tests to pass in cases where new system dependencies have
+    # been added without having to rebuild the base images. In the common case
+    # where nothing new is installed they are usually fairly fast no-ops.
     CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
          && echo '' \
+         && ci/container_scripts/install_deps.sh \
+         && ci/container_scripts/install_extra_deps.sh \
          && ci/container_scripts/build_and_install.sh \
          && ci/container_scripts/test.sh")"
 
