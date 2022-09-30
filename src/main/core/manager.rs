@@ -322,13 +322,13 @@ impl<'a> Manager<'a> {
                 s.run_with_hosts(move |_, hosts| {
                     while let Some(host) = hosts.next() {
                         worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
-                        unsafe { host.lock() };
+                        unsafe { host.lock_shmem() };
                         worker::Worker::set_active_host(host);
 
                         host.boot();
 
                         worker::Worker::clear_active_host();
-                        unsafe { host.unlock() };
+                        unsafe { host.unlock_shmem() };
                         worker::Worker::clear_current_time();
                     }
                 });
@@ -383,14 +383,14 @@ impl<'a> Manager<'a> {
 
                             // get the next host for this thread from the scheduler
                             while let Some(host) = hosts.next() {
-                                unsafe { host.lock() };
+                                unsafe { host.lock_shmem() };
                                 worker::Worker::set_active_host(host);
 
                                 host.execute(window_end);
                                 let host_next_event_time = host.next_event_time();
 
                                 worker::Worker::clear_active_host();
-                                unsafe { host.unlock() };
+                                unsafe { host.unlock_shmem() };
 
                                 *next_event_time = [*next_event_time, host_next_event_time]
                                     .into_iter()

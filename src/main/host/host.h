@@ -44,9 +44,6 @@ void host_execute(Host* host, CEmulatedTime until);
 CEmulatedTime host_nextEventTime(Host* host);
 const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
 
-void host_lock(Host* host);
-void host_unlock(Host* host);
-
 void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);
 

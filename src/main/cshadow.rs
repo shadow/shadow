@@ -2817,12 +2817,6 @@ extern "C" {
     pub fn host_getOwnedEventQueue(host: *mut Host) -> *const ThreadSafeEventQueue;
 }
 extern "C" {
-    pub fn host_lock(host: *mut Host);
-}
-extern "C" {
-    pub fn host_unlock(host: *mut Host);
-}
-extern "C" {
     pub fn host_continueExecutionTimer(host: *mut Host);
 }
 extern "C" {
