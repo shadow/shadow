@@ -28,8 +28,11 @@ jobs:
     # From https://github.com/rust-lang/miri#running-miri-on-ci
     - name: Install miri
       run: |
-          rustup toolchain install nightly --component miri
-          rustup override set nightly
+          # Must be a version built with miri; check
+          # https://rust-lang.github.io/rustup-components-history/
+          TOOLCHAIN=nightly-2022-09-24
+          rustup toolchain install ${TOOLCHAIN} --component miri
+          rustup override set ${TOOLCHAIN}
           cargo miri setup
 
     # No need to fully build shadow, but we need to run cmake to generate shd-config.h,
