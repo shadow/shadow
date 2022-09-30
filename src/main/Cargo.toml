@@ -59,7 +59,7 @@ bindings = ["dep:bindgen", "dep:cbindgen"]
 shadow-build-common = { path = "../lib/shadow-build-common" }
 bindgen = { version = "0.60.1", optional = true }
 cbindgen = { version = "0.24.3", optional = true }
-cc = "1.0"
+cc = { version = "1.0", features = ["parallel"] }
 system-deps = "2.0"
 
 [package.metadata.system-deps]
