@@ -32,11 +32,14 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     let options = match CliOptions::try_parse_from(args.clone()) {
         Ok(x) => x,
         Err(e) => {
+            // will print to either stdout or stderr with formatting
+            e.print().unwrap();
             if e.use_stderr() {
-                eprint!("{}", e);
+                // the `clap::Error` represents an error (ex: invalid flag)
                 std::process::exit(1);
             } else {
-                print!("{}", e);
+                // the `clap::Error` represents a non-error, but we'll want to exit anyways (ex:
+                // '--help')
                 std::process::exit(0);
             }
         }
