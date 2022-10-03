@@ -1,15 +1,13 @@
-use std::{collections::HashMap, path::Path};
-
-use system_deps::Library;
+use std::path::Path;
 
 pub struct ShadowBuildCommon {
-    deps: HashMap<String, Library>,
+    deps: Option<system_deps::Dependencies>,
     build_src_root: Box<Path>,
     src_root: Box<Path>,
 }
 
 impl ShadowBuildCommon {
-    pub fn new(repo_root: &Path, system_deps: HashMap<String, Library>) -> Self {
+    pub fn new(repo_root: &Path, system_deps: Option<system_deps::Dependencies>) -> Self {
         let src_root = {
             let mut p = repo_root.to_path_buf();
             p.push("src");
@@ -67,8 +65,8 @@ impl ShadowBuildCommon {
             // cmake sets depending on the option SHADOW_WERROR.
             .warnings_into_errors(false);
 
-        for lib in self.deps.values() {
-            b.includes(&lib.include_paths);
+        if let Some(deps) = &self.deps {
+            b.includes(deps.all_include_paths());
         }
 
         if let Some("true") = std::env::var("DEBUG").ok().as_ref().map(|s| s.as_str()) {
@@ -103,9 +101,10 @@ impl ShadowBuildCommon {
             .raw_line("#![allow(non_snake_case)]")
             // https://github.com/rust-lang/rust/issues/66220
             .raw_line("#![allow(improper_ctypes)]");
-        for lib in self.deps.values() {
-            for include_path in &lib.include_paths {
-                builder = builder.clang_args(&[format!("-I{}", include_path.to_str().unwrap())]);
+
+        if let Some(deps) = &self.deps {
+            for path in deps.all_include_paths() {
+                builder = builder.clang_args(&[format!("-I{}", path.to_str().unwrap())]);
             }
         }
         builder
@@ -138,7 +137,7 @@ impl ShadowBuildCommon {
                 ..cbindgen::FunctionConfig::default()
             },
             export: cbindgen::ExportConfig {
-                rename: HashMap::from([
+                rename: std::collections::HashMap::from([
                     ("timeval".into(), "struct timeval".into()),
                     ("timespec".into(), "struct timespec".into()),
                 ]),

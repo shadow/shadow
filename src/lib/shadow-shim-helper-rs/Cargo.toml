@@ -23,7 +23,7 @@ rkyv = "0.7.39"
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common" }
-system-deps = "2.0"
+system-deps = "6.0"
 cbindgen = { version = "0.24.3", optional = true }
 
 [package.metadata.system-deps]

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use shadow_build_common::ShadowBuildCommon;
 
@@ -16,7 +16,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 }
 
 fn main() {
-    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), HashMap::new());
+    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), None);
 
     #[cfg(feature = "bindings")]
     run_bindgen(&build_common);

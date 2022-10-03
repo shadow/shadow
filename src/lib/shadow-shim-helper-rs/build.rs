@@ -24,7 +24,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 
 fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
-    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), deps);
+    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), Some(deps));
 
     #[cfg(feature = "bindings")]
     run_cbindgen(&build_common);
