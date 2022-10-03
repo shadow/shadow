@@ -1,6 +1,7 @@
 #ifndef SHD_SHIM_SHMEM_H_
 #define SHD_SHIM_SHMEM_H_
 
+#include <glib.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <time.h>

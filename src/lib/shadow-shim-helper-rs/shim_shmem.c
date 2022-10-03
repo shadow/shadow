@@ -1,6 +1,7 @@
 #include "shim_shmem.h"
 
 #include <assert.h>
+#include <glib.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>

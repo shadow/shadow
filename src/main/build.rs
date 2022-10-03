@@ -337,7 +337,7 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
 fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common =
-        shadow_build_common::ShadowBuildCommon::new(&std::path::Path::new("../.."), deps);
+        shadow_build_common::ShadowBuildCommon::new(&std::path::Path::new("../.."), Some(deps));
 
     // The C bindings should be generated first since cbindgen doesn't require
     // the Rust code to be valid, whereas bindgen does require the C code to be
