@@ -12,16 +12,6 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     add_compile_options(-Wunused-function)
 endif()
 
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    message(STATUS "Debug build enabled.")
-    add_definitions(-DDEBUG)
-elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    message(STATUS "Release build enabled.")
-    add_definitions(-DNDEBUG)
-else()
-    MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
-endif()
-    
 ## these are common flags that are needed for shadow plugins
 add_cflags("-fPIC -fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE -Wno-unused-command-line-argument")
 add_cflags(-std=gnu99)

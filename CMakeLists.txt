@@ -177,6 +177,20 @@ endif()
 
 message(STATUS "Found CMAKE_BUILD_TYPE='${CMAKE_BUILD_TYPE}'")
 
+# These are redundant for the C code built via Cargo, but still needed for a few
+# remaining C modules built by cmake.
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    message(STATUS "Debug build enabled.")
+    add_definitions(-DDEBUG)
+    add_compile_options(-O0)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    message(STATUS "Release build enabled.")
+    add_definitions(-DNDEBUG)
+    add_compile_options(-O3)
+else()
+    MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
+endif()
+
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
