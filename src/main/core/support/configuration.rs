@@ -4,7 +4,6 @@ use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
 use std::str::FromStr;
 
-use clap::ArgEnum;
 use clap::Parser;
 use merge::Merge;
 use once_cell::sync::Lazy;
@@ -33,9 +32,10 @@ const END_HELP_TEXT: &str = "\
 #[derive(Debug, Clone, Parser)]
 #[clap(name = "Shadow", about = START_HELP_TEXT, after_help = END_HELP_TEXT)]
 #[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
+#[clap(next_display_order = None)]
 pub struct CliOptions {
     /// Path to the Shadow configuration file. Use '-' to read from stdin
-    #[clap(required_unless_present_any(&["show-build-info", "shm-cleanup"]))]
+    #[clap(required_unless_present_any(&["show_build_info", "shm_cleanup"]))]
     pub config: Option<String>,
 
     /// Pause to allow gdb to attach
@@ -43,7 +43,7 @@ pub struct CliOptions {
     pub gdb: bool,
 
     /// Pause after starting any processes on the comma-delimited list of hostnames
-    #[clap(parse(try_from_str = parse_set_str))]
+    #[clap(value_parser = parse_set_str)]
     #[clap(long, value_name = "hostnames")]
     pub debug_hosts: Option<HashSet<String>>,
 
@@ -140,7 +140,8 @@ static GENERAL_HELP: Lazy<std::collections::HashMap<String, String>> =
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(next_help_heading = "GENERAL (Override configuration file options)")]
+#[clap(next_help_heading = "General (Override configuration file options)")]
+#[clap(next_display_order = None)]
 #[serde(deny_unknown_fields)]
 pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
@@ -225,7 +226,8 @@ static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(next_help_heading = "NETWORK (Override network options)")]
+#[clap(next_help_heading = "Network (Override network options)")]
+#[clap(next_display_order = None)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkOptions {
     /// The network topology graph
@@ -255,8 +257,9 @@ static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
 
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(
-    next_help_heading = "EXPERIMENTAL (Unstable and may change or be removed at any time, regardless of Shadow version)"
+    next_help_heading = "Experimental (Unstable and may change or be removed at any time, regardless of Shadow version)"
 )]
+#[clap(next_display_order = None)]
 #[serde(default, deny_unknown_fields)]
 pub struct ExperimentalOptions {
     /// Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)
@@ -390,7 +393,7 @@ pub struct ExperimentalOptions {
 
     /// List of information to show in the host's heartbeat message
     #[clap(hide_short_help = true)]
-    #[clap(parse(try_from_str = parse_set_log_info_flags))]
+    #[clap(value_parser = parse_set_log_info_flags)]
     #[clap(long, value_name = "options")]
     #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap().as_str())]
     pub host_heartbeat_log_info: Option<HashSet<LogInfoFlag>>,
@@ -506,7 +509,8 @@ static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
     Lazy::new(|| generate_help_strs(schema_for!(HostDefaultOptions)));
 
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(next_help_heading = "HOST DEFAULTS (Default options for hosts)")]
+#[clap(next_help_heading = "Host Defaults (Default options for hosts)")]
+#[clap(next_display_order = None)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostDefaultOptions {
     /// Log level at which to print node messages
@@ -670,7 +674,7 @@ fn default_data_directory() -> Option<String> {
     Some("shadow.data".into())
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum LogInfoFlag {
     Node,
@@ -716,7 +720,7 @@ fn parse_set_str(s: &str) -> Result<HashSet<String>, <String as FromStr>::Err> {
     parse_set(s)
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[repr(C)]
 pub enum QDiscMode {
