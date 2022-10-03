@@ -12,7 +12,7 @@ bindings = ["dep:bindgen", "dep:cbindgen"]
 bindgen = { version = "0.60.1", optional = true }
 cbindgen = { version = "0.24.3", optional = true }
 cc = { version = "1.0", features = ["parallel"] }
-system-deps = "2.0"
+system-deps = "6.0"
 
 [package.metadata.system-deps]
 glib = { name = "glib-2.0", version = "2.32" }
