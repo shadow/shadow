@@ -35,6 +35,19 @@ if(SHADOW_COVERAGE STREQUAL ON)
     set(RUSTFLAGS "${RUSTFLAGS} -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
                 -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
     set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
+
+    # Use an explicit target to workaround incompatibility of -Cpanic=abort with
+    # procmacro crates. See
+    # https://github.com/intellij-rust/intellij-rust/issues/5973#issuecomment-684867383
+    #
+    # Avoid using in non-coverage builds in case it inadvertently disables
+    # native CPU features, though we haven't confirmed whether it does or not.
+    set(RUST_TARGET "x86_64-unknown-linux-gnu")
+    set(RUST_TARGET_FLAG "--target=${RUST_TARGET}")
+else()
+    # With no explicit target, cargo will build for the host platform.
+    set(RUST_TARGET "")
+    set(RUST_TARGET_FLAG "")
 endif()
 
 ## build the rust library
@@ -44,9 +57,6 @@ set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXXFLAGS=\"${RUST_CXXFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CC=\"${CMAKE_C_COMPILER}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXX=\"${CMAKE_CXX_COMPILER}\"")
 set(TARGETDIR "${CMAKE_CURRENT_BINARY_DIR}/target")
-# Use an explicit target to workaround incompatibility of -Cpanic=abort with procmacro crates.
-# See https://github.com/intellij-rust/intellij-rust/issues/5973#issuecomment-684867383
-set(TARGET x86_64-unknown-linux-gnu)
 include(ExternalProject)
 ExternalProject_Add(
     rust-workspace-project
@@ -55,9 +65,9 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build --target ${TARGET} ${RUST_BUILD_FLAG} ${RUST_TARGETS} --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\""
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_TARGET_FLAG} ${RUST_BUILD_FLAG} ${RUST_TARGETS} --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\""
     BUILD_BYPRODUCTS
-      ${TARGETDIR}/debug/${TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${TARGET}/libshadow_shim_helper_rs.a
+      ${TARGETDIR}/debug/${RUST_TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${RUST_TARGET}/libshadow_shim_helper_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
@@ -65,8 +75,8 @@ foreach(LIBRARY shadow-shim-helper-rs logger shadow-shmem shadow-tsc shadow-rs)
   add_library(${LIBRARY} STATIC IMPORTED GLOBAL)
   add_dependencies(${LIBRARY} rust-workspace-project)
   string(REPLACE "-" "_" LIBRARY_FILE "lib${LIBRARY}.a")
-  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${TARGET}/debug/${LIBRARY_FILE})
-  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${TARGET}/release/${LIBRARY_FILE})
+  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/${LIBRARY_FILE})
+  set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${RUST_TARGET}/release/${LIBRARY_FILE})
 endforeach()
 
 # Unit test executables don't have predictable names: https://github.com/rust-lang/cargo/issues/1924
@@ -81,7 +91,7 @@ endforeach()
 # better than trying to fight the "rust way" here. It also includes doc tests,
 # which normally don't have persistent executables at all.
 add_test(NAME rust-unit-tests
-         COMMAND bash -c "${CARGO_ENV_VARS} cargo test --target ${TARGET} ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
+         COMMAND bash -c "${CARGO_ENV_VARS} cargo test ${RUST_TARGET_FLAG} ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
 set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE)
