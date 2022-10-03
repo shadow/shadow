@@ -1,5 +1,6 @@
 use crate::cshadow as c;
 use crate::host::host::Host;
+use crate::utility::{Magic, ObjectCounter};
 
 use self::codel_queue::CoDelQueue;
 use super::packet::Packet;
@@ -7,28 +8,35 @@ use super::packet::Packet;
 mod codel_queue;
 
 pub struct Router {
+    magic: Magic<Self>,
+    _counter: ObjectCounter,
     inbound_packets: CoDelQueue,
 }
 
 impl Router {
     fn new() -> Router {
         Router {
+            magic: Magic::new(),
+            _counter: ObjectCounter::new("Router"),
             inbound_packets: CoDelQueue::new(),
         }
     }
 
     // Return true if the router changed from empty to non-empty.
     fn push(&mut self, packet: Packet) -> bool {
+        self.magic.debug_check();
         let was_empty = self.inbound_packets.len() == 0;
         self.inbound_packets.push(packet);
         was_empty && self.inbound_packets.len() > 0
     }
 
     fn peek(&self) -> Option<&Packet> {
+        self.magic.debug_check();
         self.inbound_packets.peek()
     }
 
     fn pop(&mut self) -> Option<Packet> {
+        self.magic.debug_check();
         self.inbound_packets.pop()
     }
 
