@@ -187,14 +187,12 @@ impl Host {
         EmulatedTime::from_c_emutime(unsafe { cshadow::host_nextEventTime(self.chost()) })
     }
 
-    pub unsafe fn lock(&mut self) {
-        unsafe { cshadow::host_lock(self.chost()) };
+    pub unsafe fn lock_shmem(&mut self) {
         unsafe { cshadow::host_lockShimShmemLock(self.chost()) };
     }
 
-    pub unsafe fn unlock(&mut self) {
+    pub unsafe fn unlock_shmem(&mut self) {
         unsafe { cshadow::host_unlockShimShmemLock(self.chost()) };
-        unsafe { cshadow::host_unlock(self.chost()) };
     }
 
     pub fn chost(&self) -> *mut cshadow::Host {
