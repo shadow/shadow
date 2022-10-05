@@ -550,7 +550,9 @@ mod tests {
         }
     }
 
+    // disabled under miri due to https://github.com/rayon-rs/rayon/issues/952
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_shortest_path() {
         for directed in &[true, false] {
             let graph = format!(
