@@ -1,8 +1,8 @@
 #include "shim_shmem.h"
 
 #include <assert.h>
-#include <glib.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -13,7 +13,7 @@
 #include "shim_event.h"
 
 struct _ShimHostProtectedSharedMem {
-    GQuark host_id;
+    HostId host_id;
 
     // Modeled CPU latency that hasn't been applied to the clock yet.
     CSimulationTime unapplied_cpu_latency;
@@ -24,7 +24,7 @@ struct _ShimHostProtectedSharedMem {
 };
 
 struct _ShimShmemHost {
-    GQuark host_id;
+    HostId host_id;
 
     // The host lock. Guards _ShimShmemHost.protected,
     // _ShimShmemProcess.protected, and _ShimShmemThread.protected.
@@ -69,7 +69,7 @@ struct _ShimShmemHost {
 
 typedef struct _ShimProcessProtectedSharedMem ShimProcessProtectedSharedMem;
 struct _ShimProcessProtectedSharedMem {
-    GQuark host_id;
+    HostId host_id;
 
     // Process-directed pending signals.
     shd_kernel_sigset_t pending_signals;
@@ -85,7 +85,7 @@ struct _ShimProcessProtectedSharedMem {
 };
 
 struct _ShimShmemProcess {
-    GQuark host_id;
+    HostId host_id;
 
     // Guarded by ShimShmemHost.mutex.
     ShimProcessProtectedSharedMem protected;
@@ -93,7 +93,7 @@ struct _ShimShmemProcess {
 
 typedef struct _ShimThreadProtectedSharedMem ShimThreadProtectedSharedMem;
 struct _ShimThreadProtectedSharedMem {
-    GQuark host_id;
+    HostId host_id;
 
     // Thread-directed pending signals.
     shd_kernel_sigset_t pending_signals;
@@ -111,7 +111,7 @@ struct _ShimThreadProtectedSharedMem {
 };
 
 struct _ShimShmemThread {
-    GQuark host_id;
+    HostId host_id;
 
     // Guarded by ShimShmemHost.mutex.
     ShimThreadProtectedSharedMem protected;
@@ -119,7 +119,7 @@ struct _ShimShmemThread {
 
 size_t shimshmemhost_size() { return sizeof(ShimShmemHost); }
 
-void shimshmemhost_init(ShimShmemHost* hostMem, GQuark hostId, bool modelUnblockedSyscallLatency,
+void shimshmemhost_init(ShimShmemHost* hostMem, HostId hostId, bool modelUnblockedSyscallLatency,
                         CSimulationTime maxUnappliedCpuLatency,
                         CSimulationTime unblockedSyscallLatency,
                         CSimulationTime unblockedVdsoLatency) {
@@ -240,7 +240,7 @@ void shimshmem_setSignalAction(const ShimShmemHostLock* host, ShimShmemProcess* 
 
 size_t shimshmemprocess_size() { return sizeof(ShimShmemProcess); }
 
-void shimshmemprocess_init(ShimShmemProcess* processMem, GQuark hostId) {
+void shimshmemprocess_init(ShimShmemProcess* processMem, HostId hostId) {
     *processMem = (ShimShmemProcess){
         .host_id = hostId,
         .protected =
@@ -339,7 +339,7 @@ void shimshmem_setBlockedSignals(const ShimShmemHostLock* host, ShimShmemThread*
 
 size_t shimshmemthread_size() { return sizeof(ShimShmemThread); }
 
-void shimshmemthread_init(ShimShmemThread* threadMem, GQuark hostId) {
+void shimshmemthread_init(ShimShmemThread* threadMem, HostId hostId) {
     *threadMem = (ShimShmemThread){
         .host_id = hostId,
         .protected =

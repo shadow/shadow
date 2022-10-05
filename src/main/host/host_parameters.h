@@ -10,13 +10,14 @@
 #include <glib.h>
 
 #include "lib/logger/log_level.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/core/support/definitions.h"
 #include "main/host/tracker_types.h"
-#include "main/bindings/c/bindings-opaque.h"
 
 typedef struct _HostParameters HostParameters;
 struct _HostParameters {
-    GQuark id;
+    HostId id;
     guint nodeSeed;
     const gchar* hostname;
     guint nodeId;

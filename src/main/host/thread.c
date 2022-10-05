@@ -221,7 +221,7 @@ uint32_t thread_getProcessId(Thread* thread) {
     return process_getProcessID(thread->process);
 }
 
-uint32_t thread_getHostId(Thread* thread) {
+HostId thread_getHostId(Thread* thread) {
     MAGIC_ASSERT(thread);
     return host_getID(thread->host);
 }

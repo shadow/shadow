@@ -1,10 +1,10 @@
-use super::host::HostId;
 use super::process::ProcessId;
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::syscall;
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::HostId;
 
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
@@ -215,7 +215,7 @@ impl Thread for CThread {
 
     fn host_id(&self) -> HostId {
         // Safety: self.cthread initialized in CThread::new.
-        HostId::from(unsafe { c::thread_getHostId(self.cthread) })
+        unsafe { c::thread_getHostId(self.cthread) }
     }
 
     fn system_pid(&self) -> Pid {

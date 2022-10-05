@@ -329,9 +329,9 @@ impl Drop for MemoryMapper {
 impl MemoryMapper {
     pub fn new(memory_manager: &mut MemoryManager, thread: &mut impl Thread) -> MemoryMapper {
         let shm_path = format!(
-            "/dev/shm/shadow_memory_manager_{}_{}_{}",
+            "/dev/shm/shadow_memory_manager_{}_{:?}_{}",
             process::id(),
-            u32::from(thread.host_id()),
+            thread.host_id(),
             u32::from(thread.process_id())
         );
         let shm_file = OpenOptions::new()

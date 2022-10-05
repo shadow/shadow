@@ -10,6 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/core/support/definitions.h"
 
 /**
@@ -32,9 +33,9 @@ typedef struct _Address Address;
  *
  * @see address_free()
  */
-Address* address_new(GQuark hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
+Address* address_new(HostId hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
 
-ShadowID address_getID(const Address* address);
+HostId address_getID(const Address* address);
 void address_ref(Address* address);
 void address_unref(Address* address);
 gboolean address_isLocal(const Address* address);

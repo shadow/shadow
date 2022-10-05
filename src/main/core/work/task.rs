@@ -63,9 +63,10 @@ pub mod export {
 
     use crate::{
         cshadow,
-        host::host::{Host, HostId},
+        host::host::Host,
         utility::{notnull::notnull_mut, HostTreePointer, SyncSendPointer},
     };
+    use shadow_shim_helper_rs::HostId;
 
     pub type TaskCallbackFunc =
         extern "C" fn(*mut cshadow::Host, *mut libc::c_void, *mut libc::c_void);

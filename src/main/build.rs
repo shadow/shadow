@@ -112,8 +112,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("_?ShimThreadSharedMem")
         .blocklist_type("_?ShimProcessSharedMem")
         .blocklist_function("thread_sharedMem")
-        // glib functions
-        .allowlist_function("g_quark_from_string")
 
         .allowlist_function("affinity_.*")
         .allowlist_function("thread_.*")
@@ -204,6 +202,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("Controller")
         .blocklist_type("Counter")
         .blocklist_type("Descriptor")
+        .blocklist_type("HostId")
         .blocklist_type("TaskRef")
         .allowlist_type("WorkerC")
         .opaque_type("WorkerC")
@@ -232,6 +231,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 
         .raw_line("use atomic_refcell::AtomicRefCell;")
         .raw_line("use logger::Logger;")
+        .raw_line("use shadow_shim_helper_rs::HostId;")
         .raw_line("use std::sync::Arc;")
         .raw_line("type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;")
 

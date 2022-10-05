@@ -16,9 +16,9 @@
 #include <sys/socket.h>
 
 typedef struct _Host Host;
-typedef GQuark HostId;
 
 #include "lib/logger/log_level.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"

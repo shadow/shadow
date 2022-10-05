@@ -81,7 +81,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        GQuark dstHostID = (GQuark)address_getID(dstAddress);
+        HostId dstHostID = address_getID(dstAddress);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
 

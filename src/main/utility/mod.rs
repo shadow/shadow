@@ -27,7 +27,8 @@ use std::marker::PhantomData;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
-use crate::{core::worker::Worker, host::host::HostId};
+use crate::core::worker::Worker;
+use shadow_shim_helper_rs::HostId;
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.
