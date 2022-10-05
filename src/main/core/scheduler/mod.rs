@@ -64,7 +64,7 @@ impl Scheduler {
 }
 
 pub enum SchedulerScope<'sched, 'pool, 'scope> {
-    ThreadPerHost(thread_per_host::SchedulerScope<'sched, 'pool, 'scope>),
+    ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope>),
     ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope>),
 }
 
