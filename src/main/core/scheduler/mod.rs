@@ -1,10 +1,12 @@
 pub mod runahead;
 
-// re-export scheduler
+// re-export schedulers
+pub use thread_per_core::ThreadPerCoreSched;
 pub use thread_per_host::ThreadPerHostSched;
 
 mod logical_processor;
 mod pools;
+mod thread_per_core;
 mod thread_per_host;
 
 use std::cell::RefCell;
@@ -28,6 +30,7 @@ pub fn core_affinity() -> Option<u32> {
 /// require support for GATs.
 pub enum Scheduler {
     ThreadPerHost(thread_per_host::ThreadPerHostSched),
+    ThreadPerCore(thread_per_core::ThreadPerCoreSched),
 }
 
 impl Scheduler {
@@ -35,6 +38,7 @@ impl Scheduler {
     pub fn parallelism(&self) -> usize {
         match self {
             Self::ThreadPerHost(sched) => sched.parallelism(),
+            Self::ThreadPerCore(sched) => sched.parallelism(),
         }
     }
 
@@ -46,6 +50,7 @@ impl Scheduler {
     ) {
         match self {
             Self::ThreadPerHost(sched) => sched.scope(move |s| f(SchedulerScope::ThreadPerHost(s))),
+            Self::ThreadPerCore(sched) => sched.scope(move |s| f(SchedulerScope::ThreadPerCore(s))),
         }
     }
 
@@ -53,12 +58,14 @@ impl Scheduler {
     pub fn join(self) {
         match self {
             Self::ThreadPerHost(sched) => sched.join(),
+            Self::ThreadPerCore(sched) => sched.join(),
         }
     }
 }
 
 pub enum SchedulerScope<'sched, 'pool, 'scope> {
     ThreadPerHost(thread_per_host::SchedulerScope<'sched, 'pool, 'scope>),
+    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope>),
 }
 
 impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
@@ -67,6 +74,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         match self {
             Self::ThreadPerHost(scope) => scope.run(f),
+            Self::ThreadPerCore(scope) => scope.run(f),
         }
     }
 
@@ -80,6 +88,10 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
         match self {
             Self::ThreadPerHost(scope) => scope.run_with_hosts(move |idx, iter| {
                 let mut iter = HostIter::ThreadPerHost(iter);
+                f(idx, &mut iter)
+            }),
+            Self::ThreadPerCore(scope) => scope.run_with_hosts(move |idx, iter| {
+                let mut iter = HostIter::ThreadPerCore(iter);
                 f(idx, &mut iter)
             }),
         }
@@ -111,6 +123,10 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 let mut iter = HostIter::ThreadPerHost(iter);
                 f(idx, &mut iter, elem)
             }),
+            Self::ThreadPerCore(scope) => scope.run_with_data(data, move |idx, iter, elem| {
+                let mut iter = HostIter::ThreadPerCore(iter);
+                f(idx, &mut iter, elem)
+            }),
         }
     }
 }
@@ -118,6 +134,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 /// Supports iterating over all hosts assigned to this thread.
 pub enum HostIter<'a, 'b> {
     ThreadPerHost(&'a mut thread_per_host::HostIter<'b>),
+    ThreadPerCore(&'a mut thread_per_core::HostIter<'b>),
 }
 
 impl<'a, 'b> HostIter<'a, 'b> {
@@ -125,6 +142,7 @@ impl<'a, 'b> HostIter<'a, 'b> {
     pub fn next(&mut self) -> Option<&mut Host> {
         match self {
             Self::ThreadPerHost(x) => x.next(),
+            Self::ThreadPerCore(x) => x.next(),
         }
     }
 }
