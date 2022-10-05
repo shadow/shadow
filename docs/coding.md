@@ -1,16 +1,5 @@
 # Coding
 
-## Building the C-Rust bindings
-
-Shadow contains both C and Rust code, and we automatically generate bindings
-for both languages so that they can interoperate. Changing function or type
-definitions may require you to rebuild the bindings. This can be done using
-the `--bindings` option to the `setup` script's `build` command:
-
-```bash
-./setup build --bindings
-```
-
 ## Building the guide
 
 ```bash

@@ -10,6 +10,7 @@
   + xz-utils
   + lscpu
   + cargo, rustc (version \~ latest)
+  + libclang (version >= 9)
 
 Notice: Clang 13.0 is unsupported as it has a miscompilation bug that affects
         Shadow (see [issue #1741](https://github.com/shadow/shadow/issues/1741)).
@@ -27,6 +28,7 @@ Notice: Clang 13.0 is unsupported as it has a miscompilation bug that affects
 sudo apt-get install -y \
     cmake \
     findutils \
+    libclang-dev \
     libc-dbg \
     libglib2.0-0 \
     libglib2.0-dev \
@@ -58,6 +60,12 @@ sudo apt-get install -y \
     tmux
 ```
 
+On older versions of Debian or Ubuntu, the default version of libclang is too
+old, which may cause bindgen to have errors finding system header files,
+particularly when compiling with gcc. In this case you will need to explicitly
+install a newer-than-default version of libclang. e.g. on `debian-10` install
+`libclang-13-dev`, and on `ubuntu-18.04` install `libclang-9-dev`.
+
 ## YUM (Fedora/CentOS):
 
 **Warning:** `dnf` often installs 32-bit (`i686`) versions of
@@ -69,6 +77,7 @@ installing the 64-bit (`x86_64`) versions, which are required by Shadow.
 sudo dnf install -y \
     cmake \
     findutils \
+    clang-devel \
     glib2 \
     glib2-devel \
     make \

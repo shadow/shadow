@@ -2,7 +2,6 @@ use std::path::Path;
 
 use shadow_build_common::ShadowBuildCommon;
 
-#[cfg(feature = "bindings")]
 fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
@@ -28,7 +27,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 fn main() {
     let build_common = ShadowBuildCommon::new(&Path::new("../../.."), None);
 
-    #[cfg(feature = "bindings")]
     run_bindgen(&build_common);
 
     build_common

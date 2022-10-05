@@ -82,7 +82,6 @@ impl ShadowBuildCommon {
         b
     }
 
-    #[cfg(feature = "bindings")]
     pub fn bindgen_builder(&self) -> bindgen::Builder {
         let mut builder = bindgen::Builder::default()
             // Tell cargo to invalidate the built crate whenever any of the
@@ -94,13 +93,7 @@ impl ShadowBuildCommon {
                 "-D_GNU_SOURCE",
             ])
             //# used to generate #[must_use] annotations)
-            .enable_function_attribute_detection()
-            //.raw_line("#![allow(unused)]")
-            .raw_line("#![allow(non_upper_case_globals)]")
-            .raw_line("#![allow(non_camel_case_types)]")
-            .raw_line("#![allow(non_snake_case)]")
-            // https://github.com/rust-lang/rust/issues/66220
-            .raw_line("#![allow(improper_ctypes)]");
+            .enable_function_attribute_detection();
 
         if let Some(deps) = &self.deps {
             for path in deps.all_include_paths() {
@@ -110,7 +103,6 @@ impl ShadowBuildCommon {
         builder
     }
 
-    #[cfg(feature = "bindings")]
     pub fn cbindgen_base_config(&self) -> cbindgen::Config {
         let header = "
 /*

@@ -2,7 +2,6 @@ use std::path::Path;
 
 use shadow_build_common::ShadowBuildCommon;
 
-#[cfg(feature = "bindings")]
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = build_common.cbindgen_base_config();
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -26,7 +25,6 @@ fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common = ShadowBuildCommon::new(&Path::new("../../.."), Some(deps));
 
-    #[cfg(feature = "bindings")]
     run_cbindgen(&build_common);
 
     build_common
