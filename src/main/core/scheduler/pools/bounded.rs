@@ -175,6 +175,25 @@ impl ParallelismBoundedThreadPool {
 
     /// Create a new scope for the pool. The scope will ensure that any task run on the pool within
     /// this scope has completed before leaving the scope.
+    //
+    // SAFETY: This works because:
+    //
+    // 1. WorkerScope<'scope> is covariant over 'scope.
+    // 2. TaskRunner<'a, 'scope> is invariant over WorkerScope<'scope>, so TaskRunner<'a, 'scope>
+    //    is invariant over 'scope.
+    // 3. FnOnce(TaskRunner<'a, 'scope>) is contravariant over TaskRunner<'a, 'scope>, so
+    //    FnOnce(TaskRunner<'a, 'scope>) is invariant over 'scope.
+    //
+    // This means that the provided scope closure cannot take a TaskRunner<'a, 'scope2> where
+    // 'scope2 is shorter than 'scope, and therefore 'scope must be as long as this function call.
+    //
+    // If TaskRunner<'a, 'scope> was covariant over 'scope, then FnOnce(TaskRunner<'a, 'scope>)
+    // would have been contravariant over 'scope. This would have allowed the user to provide a
+    // scope closure that could take a TaskRunner<'a, 'scope2> where 'scope2 is shorter than 'scope.
+    // Then when TaskRunner<'a, 'scope2>::run(...) would eventually be called, the run closure would
+    // capture data with a lifetime of only 'scope2, which would be a shorter lifetime than the
+    // scope closure's lifetime of 'scope. Then, any captured mutable references would be accessible
+    // from both the run closure and the scope closure, leading to mutable aliasing.
     pub fn scope<'scope>(
         &'scope mut self,
         f: impl for<'a> FnOnce(TaskRunner<'a, 'scope>) + 'scope,
@@ -193,8 +212,6 @@ impl ParallelismBoundedThreadPool {
             _phantom: Default::default(),
         };
 
-        // SAFETY: TaskRunner has a lifetime at least as large as the current function, and
-        // TaskRunner is invariant so it's lifetime shouldn't be shortened within f
         let runner = TaskRunner { scope: &mut scope };
 
         f(runner);
@@ -247,8 +264,8 @@ impl<'a> std::ops::Drop for WorkerScope<'a> {
 
 /// Allows a single task to run per pool scope.
 pub struct TaskRunner<'a, 'scope> {
-    // SAFETY: this must be a &mut so that Self is invariant over 'scope, and so that rust does not
-    // allow lifetimes shorter than 'scope
+    // SAFETY: Self must be invariant over 'scope, which is why we use &mut here. See the
+    // documentation for scope() above for details.
     scope: &'a mut WorkerScope<'scope>,
 }
 
@@ -259,9 +276,7 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
     pub fn run(self, f: impl Fn(&TaskData) + Send + Sync + 'scope) {
         let f = Box::new(f);
 
-        // SAFETY: the closure f has a lifetime of at least the WorkerScope's lifetime 'scope,
-        // WorkerScope is invariant over the lifetime 'scope so the lifetime should not be
-        // shortened, and WorkerScope will set the task to None when it's dropped
+        // SAFETY: WorkerScope will drop this TaskFn before the end of 'scope
         let f = unsafe {
             std::mem::transmute::<Box<dyn TaskFn + 'scope>, Box<dyn TaskFn + 'static>>(f)
         };
