@@ -64,11 +64,6 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
             debug("Invalid NULL pointer in iovec[%ld]", i);
             return -EFAULT;
         }
-
-        if (!bufSize) {
-            debug("Invalid size 0 in iovec[%ld]", i);
-            return -EINVAL;
-        }
     }
 
     if (desc_out) {
@@ -137,6 +132,11 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         for (unsigned long i = 0; i < iovlen; i++) {
             PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
             size_t bufSize = iov[i].iov_len;
+
+            if (bufSize == 0) {
+                /* Nothing to do if the buffer is empty. */
+                continue;
+            }
 
             switch (dType) {
                 case DT_FILE: {
@@ -251,6 +251,11 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         for (unsigned long i = 0; i < iovlen; i++) {
             PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
             size_t bufSize = iov[i].iov_len;
+
+            if (bufSize == 0) {
+                /* Nothing to do if the buffer is empty. */
+                continue;
+            }
 
             switch (dType) {
                 case DT_FILE: {
