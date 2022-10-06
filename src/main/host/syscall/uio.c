@@ -154,7 +154,24 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     SysCallReturn scr = _syscallhandler_recvfromHelper(
                         sys, fd, bufPtr, bufSize, 0, (PluginPtr){0},
                         (PluginPtr){0});
-                    result = syscallreturn_done(&scr)->retval.as_i64;
+
+                    switch (scr.state) {
+                        case SYSCALL_DONE: {
+                            result = syscallreturn_done(&scr)->retval.as_i64;
+                            break;
+                        }
+                        case SYSCALL_BLOCK: {
+                            // assume that there was no timer, and that we're blocked on this socket
+                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                            syscallcondition_unref(blocked->cond);
+                            result = -EWOULDBLOCK;
+                            break;
+                        }
+                        case SYSCALL_NATIVE: {
+                            panic("recv() returned SYSCALL_NATIVE");
+                        }
+                    }
+
                     break;
                 }
                 case DT_TIMER:
@@ -276,7 +293,24 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                 case DT_UDPSOCKET: {
                     SysCallReturn scr = _syscallhandler_sendtoHelper(
                         sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
-                    result = syscallreturn_done(&scr)->retval.as_i64;
+
+                    switch (scr.state) {
+                        case SYSCALL_DONE: {
+                            result = syscallreturn_done(&scr)->retval.as_i64;
+                            break;
+                        }
+                        case SYSCALL_BLOCK: {
+                            // assume that there was no timer, and that we're blocked on this socket
+                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                            syscallcondition_unref(blocked->cond);
+                            result = -EWOULDBLOCK;
+                            break;
+                        }
+                        case SYSCALL_NATIVE: {
+                            panic("send() returned SYSCALL_NATIVE");
+                        }
+                    }
+
                     break;
                 }
                 case DT_TIMER:
