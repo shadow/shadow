@@ -24,7 +24,7 @@
 
 static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
-                                             LegacyFile** desc_out, const struct iovec** iov_out) {
+                                             LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
     LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
     if (!desc) {
@@ -49,9 +49,10 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
     }
 
     /* Get the vector of pointers. */
-    const struct iovec* iov = process_getReadablePtr(sys->process, iovPtr, iovlen * sizeof(*iov));
-    if (!iov) {
+    struct iovec* iov = malloc(iovlen * sizeof(*iov));
+    if (process_readPtr(sys->process, iov, iovPtr, iovlen * sizeof(*iov)) != 0) {
         warning("Got unreadable pointer [%p..+%zu]", (void*)iovPtr.val, iovlen * sizeof(*iov));
+        free(iov);
         return -EFAULT;
     }
 
@@ -62,6 +63,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
 
         if (!bufPtr.val) {
             debug("Invalid NULL pointer in iovec[%ld]", i);
+            free(iov);
             return -EFAULT;
         }
     }
@@ -87,10 +89,13 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
     LegacyFile* desc = NULL;
-    const struct iovec* iov;
+    struct iovec* iov = NULL;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
     if (errcode < 0 || iovlen == 0) {
+        if (iov != NULL) {
+            free(iov);
+        }
         return syscallreturn_makeDoneI64(errcode);
     }
 
@@ -174,6 +179,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
     }
 
+    free(iov);
 
     if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
@@ -207,10 +213,13 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
     LegacyFile* desc = NULL;
-    const struct iovec* iov;
+    struct iovec* iov = NULL;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
     if (errcode < 0 || iovlen == 0) {
+        if (iov != NULL) {
+            free(iov);
+        }
         return syscallreturn_makeDoneI64(errcode);
     }
 
@@ -291,6 +300,8 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             result = totalBytesWritten;
         }
     }
+
+    free(iov);
 
     if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
