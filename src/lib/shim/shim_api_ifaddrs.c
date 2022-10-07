@@ -17,6 +17,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+void shim_api_freeifaddrs(struct ifaddrs* ifa);
+
 int shim_api_getifaddrs(struct ifaddrs** ifap) {
     if (!ifap) {
         errno = EFAULT;
@@ -32,12 +34,13 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
     i->ifa_addr->sa_family = AF_INET;
 
     struct in_addr addr_buf;
-    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) == 1) {
-        ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
-    } else {
+    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) != 1) {
+        shim_api_freeifaddrs(i);
         errno = EADDRNOTAVAIL;
         return -1;
     }
+
+    ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
 
     /* get the hostname so we can use it to lookup the default net address */
     char hostname_buf[HOST_NAME_MAX] = {};
