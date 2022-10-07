@@ -371,8 +371,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(munmap);
             HANDLE_C(nanosleep);
             HANDLE_C(newfstatat);
-            HANDLE_C(open);
-            HANDLE_C(openat);
+            HANDLE_RUST(open);
+            HANDLE_RUST(openat);
             HANDLE_RUST(pipe);
             HANDLE_RUST(pipe2);
             HANDLE_C(poll);

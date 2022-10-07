@@ -9,6 +9,7 @@ use nix::errno::Errno;
 
 mod eventfd;
 mod fcntl;
+mod file;
 mod ioctl;
 mod random;
 mod sched;
@@ -46,6 +47,8 @@ impl SyscallHandler {
             libc::SYS_getsockopt => self.getsockopt(ctx, args),
             libc::SYS_ioctl => self.ioctl(ctx, args),
             libc::SYS_listen => self.listen(ctx, args),
+            libc::SYS_open => self.open(ctx, args),
+            libc::SYS_openat => self.openat(ctx, args),
             libc::SYS_pipe => self.pipe(ctx, args),
             libc::SYS_pipe2 => self.pipe2(ctx, args),
             libc::SYS_pread64 => self.pread64(ctx, args),
