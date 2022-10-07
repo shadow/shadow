@@ -1013,7 +1013,7 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
     proc->memoryManager = memoryManager;
 }
 
-uint32_t process_getHostId(const Process* proc) {
+HostId process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
     utility_debugAssert(proc->host);
     return host_getID(proc->host);

@@ -8,7 +8,7 @@ use crate::core::sim_config::Bandwidth;
 use crate::core::work::event::Event;
 use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::{Host, HostId, HostInfo};
+use crate::host::host::{Host, HostInfo};
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
@@ -19,6 +19,7 @@ use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::HostId;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -543,11 +544,11 @@ mod export {
 
     /// Takes ownership of the event.
     #[no_mangle]
-    pub extern "C" fn worker_pushToHost(host: cshadow::HostId, event: *mut Event) {
+    pub extern "C" fn worker_pushToHost(host_id: HostId, event: *mut Event) {
         assert!(!event.is_null());
         let event = unsafe { Box::from_raw(event) };
         assert!(event.time() >= Worker::round_end_time().unwrap());
-        Worker::with_mut(|w| w.shared.push_to_host(host.into(), *event)).unwrap();
+        Worker::with_mut(|w| w.shared.push_to_host(host_id, *event)).unwrap();
     }
 
     #[no_mangle]

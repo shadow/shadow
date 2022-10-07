@@ -10,6 +10,7 @@ use anyhow::{self, Context};
 use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
@@ -238,8 +239,9 @@ impl<'a> Manager<'a> {
         let mut hosts: Vec<_> = manager_config
             .hosts
             .iter()
-            .map(|x| {
-                self.build_host(x, dns)
+            .enumerate()
+            .map(|(i, x)| {
+                self.build_host(HostId::from(u32::try_from(i).unwrap()), x, dns)
                     .with_context(|| format!("Failed to build host '{}'", x.name))
             })
             .collect::<anyhow::Result<_>>()?;
@@ -522,7 +524,12 @@ impl<'a> Manager<'a> {
         Ok(num_plugin_errors)
     }
 
-    fn build_host(&self, host: &HostInfo, dns: *mut c::DNS) -> anyhow::Result<Host> {
+    fn build_host(
+        &self,
+        host_id: HostId,
+        host: &HostInfo,
+        dns: *mut c::DNS,
+    ) -> anyhow::Result<Host> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -533,7 +540,7 @@ impl<'a> Manager<'a> {
         let c_host = {
             let params = c::HostParameters {
                 // the manager sets this ID
-                id: unsafe { c::g_quark_from_string(hostname.as_ptr()) },
+                id: host_id,
                 // the manager sets this CPU frequency
                 cpuFrequency: self.raw_frequency_khz,
                 // cast the u64 to a u32, ignoring truncated bits

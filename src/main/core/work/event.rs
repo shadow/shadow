@@ -1,6 +1,7 @@
-use crate::host::host::{Host, HostId};
+use crate::host::host::Host;
 use crate::utility::{Magic, ObjectCounter};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::HostId;
 
 use super::task::TaskRef;
 
@@ -118,7 +119,7 @@ mod export {
         task_ref: *mut TaskRef,
         time: CSimulationTime,
         src_host: *mut c::Host,
-        dst_host_id: c::HostId,
+        dst_host_id: HostId,
     ) -> *mut Event {
         let task_ref = unsafe { task_ref.as_mut() }.unwrap();
         let mut src_host = unsafe { Host::borrow_from_c(src_host) };
@@ -128,7 +129,7 @@ mod export {
             task_ref.clone(),
             time,
             &mut src_host,
-            dst_host_id.into(),
+            dst_host_id,
         )))
     }
 
@@ -149,9 +150,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn event_getHostID(event: *mut Event) -> c::HostId {
+    pub unsafe extern "C" fn event_getHostID(event: *mut Event) -> HostId {
         let event = unsafe { event.as_ref() }.unwrap();
-        event.host_id().into()
+        event.host_id()
     }
 
     #[no_mangle]

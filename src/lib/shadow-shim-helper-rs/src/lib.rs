@@ -6,6 +6,22 @@ pub mod scmutex;
 pub mod signals;
 pub mod simulation_time;
 
+#[repr(transparent)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
+pub struct HostId(u32);
+
+impl From<u32> for HostId {
+    fn from(i: u32) -> Self {
+        HostId(i)
+    }
+}
+
+impl From<HostId> for u32 {
+    fn from(i: HostId) -> Self {
+        i.0
+    }
+}
+
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
 // https://github.com/rust-lang/cargo/issues/9391

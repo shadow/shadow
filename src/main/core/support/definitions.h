@@ -6,16 +6,9 @@
 #ifndef SHD_DEFINITIONS_H_
 #define SHD_DEFINITIONS_H_
 
-#include <glib.h>
-
 // TODO put into a shd-types.h file
 typedef struct _Process Process;
 typedef struct _Host Host;
-
-/**
- * Unique object id reference
- */
-typedef guint ShadowID;
 
 /**
  * The start of our random port range in host order, used if application doesn't

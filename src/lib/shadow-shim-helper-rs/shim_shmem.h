@@ -1,7 +1,6 @@
 #ifndef SHD_SHIM_SHMEM_H_
 #define SHD_SHIM_SHMEM_H_
 
-#include <glib.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <time.h>
@@ -35,7 +34,7 @@ typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 // parameter are still thread-safe, and internally use atomics.
 
 size_t shimshmemhost_size();
-void shimshmemhost_init(ShimShmemHost* hostMem, GQuark hostId, bool modelUnblockedSyscallLatency,
+void shimshmemhost_init(ShimShmemHost* hostMem, HostId hostId, bool modelUnblockedSyscallLatency,
                         CSimulationTime maxUnappliedCpuLatency,
                         CSimulationTime unblockedSyscallLatency,
                         CSimulationTime unblockedVdsoLatency);
@@ -47,7 +46,7 @@ ShimShmemHostLock* shimshmemhost_lock(ShimShmemHost* host);
 void shimshmemhost_unlock(ShimShmemHost* host, ShimShmemHostLock** protected);
 
 size_t shimshmemprocess_size();
-void shimshmemprocess_init(ShimShmemProcess* processMem, GQuark hostId);
+void shimshmemprocess_init(ShimShmemProcess* processMem, HostId hostId);
 
 // Get and set the emulated time.
 CEmulatedTime shimshmem_getEmulatedTime(ShimShmemHost* hostMem);
@@ -78,7 +77,7 @@ void shimshmem_setSignalAction(const ShimShmemHostLock* host, ShimShmemProcess* 
                                const struct shd_kernel_sigaction* action);
 
 size_t shimshmemthread_size();
-void shimshmemthread_init(ShimShmemThread* threadMem, GQuark hostId);
+void shimshmemthread_init(ShimShmemThread* threadMem, HostId hostId);
 
 bool shimshmem_getPtraceAllowNativeSyscalls(ShimShmemThread* thread);
 void shimshmem_setPtraceAllowNativeSyscalls(ShimShmemThread* thread, bool allow);

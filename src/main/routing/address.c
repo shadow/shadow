@@ -39,11 +39,11 @@ struct _Address {
 
     gboolean isLocal;
 
-    GQuark hostID;
+    HostId hostID;
     MAGIC_DECLARE;
 };
 
-Address* address_new(GQuark hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal) {
+Address* address_new(HostId hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal) {
     Address* address = g_new0(Address, 1);
     MAGIC_INIT(address);
 
@@ -74,9 +74,9 @@ static void _address_free(Address* address) {
     g_free(address);
 }
 
-ShadowID address_getID(const Address* address) {
+HostId address_getID(const Address* address) {
     MAGIC_ASSERT(address);
-    return (ShadowID) address->hostID;
+    return address->hostID;
 }
 
 void address_ref(Address* address) {

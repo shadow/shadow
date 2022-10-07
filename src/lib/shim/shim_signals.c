@@ -4,6 +4,7 @@
 #include "lib/shim/shim.h"
 
 #include <ucontext.h>
+#include <string.h>
 
 static void _call_signal_handler(const struct shd_kernel_sigaction* action, int signo,
                                  siginfo_t* siginfo, ucontext_t* ucontext) {

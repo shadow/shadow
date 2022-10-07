@@ -172,7 +172,7 @@ void process_freePtrsWithoutFlushing(Process* proc);
 MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
 
-uint32_t process_getHostId(const Process* proc);
+HostId process_getHostId(const Process* proc);
 
 // A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned
 // pointers must be freed using `process_parseArgStrFree()`.

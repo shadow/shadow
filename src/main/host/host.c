@@ -365,7 +365,7 @@ void host_stopExecutionTimer(Host* host) {
 #endif
 }
 
-GQuark host_getID(Host* host) {
+HostId host_getID(Host* host) {
     MAGIC_ASSERT(host);
     return host->params.id;
 }
@@ -855,7 +855,7 @@ guint64 host_getNextDeterministicSequenceValue(Host* host) {
 }
 
 gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, CEmulatedTime time) {
-    GQuark hostID = host_getID(host);
+    HostId hostID = host_getID(host);
     Event* event =
         event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), host, hostID);
     return host_pushLocalEvent(host, event) ? TRUE : FALSE;

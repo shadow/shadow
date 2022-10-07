@@ -6,8 +6,10 @@ use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::format::{FmtOptions, StraceFmtMode};
 
+use super::memory_manager::MemoryManager;
 use super::timer::Timer;
-use super::{host::HostId, memory_manager::MemoryManager};
+
+use shadow_shim_helper_rs::HostId;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ProcessId(u32);
@@ -50,7 +52,7 @@ impl Process {
     }
 
     pub fn host_id(&self) -> HostId {
-        HostId::from(unsafe { cshadow::process_getHostId(self.cprocess) })
+        unsafe { cshadow::process_getHostId(self.cprocess) }
     }
 
     fn memory_manager_ptr(&self) -> *mut MemoryManager {

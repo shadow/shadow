@@ -9,24 +9,9 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::HostId;
 
 use atomic_refcell::AtomicRefCell;
-
-#[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
-pub struct HostId(cshadow::HostId);
-
-impl From<cshadow::HostId> for HostId {
-    fn from(val: cshadow::HostId) -> Self {
-        HostId(val)
-    }
-}
-
-impl From<HostId> for cshadow::HostId {
-    fn from(val: HostId) -> Self {
-        val.0
-    }
-}
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -95,7 +80,7 @@ impl Host {
     }
 
     pub fn id(&self) -> HostId {
-        HostId(unsafe { cshadow::host_getID(self.chost()) })
+        unsafe { cshadow::host_getID(self.chost()) }
     }
 
     pub fn name(&self) -> &str {
