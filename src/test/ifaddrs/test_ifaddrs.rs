@@ -29,11 +29,20 @@ fn main() {
                 continue;
             }
         };
+
+        // if there was an ipv4 address, the netmask should also be an ipv4 address
+        let netmask: nix::sys::socket::SockaddrStorage = ifaddr.netmask.unwrap();
+        let netmask: &nix::sys::socket::SockaddrIn = netmask.as_sockaddr_in().unwrap();
+
         let address_str = address.to_string();
         let ip = address_str.split(":").collect::<Vec<&str>>()[0];
+
+        let netmask = netmask.to_string();
+        let netmask = netmask.split(":").collect::<Vec<&str>>()[0];
+
         println!(
-            "found ifaddr interface {} address {}",
-            ifaddr.interface_name, ip
+            "found ifaddr interface {} address {} netmask {:?}",
+            ifaddr.interface_name, ip, netmask
         );
         ip_vec.push(String::from(ip));
     }
