@@ -17,6 +17,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+void shim_api_freeifaddrs(struct ifaddrs* ifa);
+
 int shim_api_getifaddrs(struct ifaddrs** ifap) {
     if (!ifap) {
         errno = EFAULT;
@@ -30,11 +32,30 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
 
     i->ifa_addr = calloc(1, sizeof(struct sockaddr));
     i->ifa_addr->sa_family = AF_INET;
+    i->ifa_netmask = calloc(1, sizeof(struct sockaddr));
+    i->ifa_netmask->sa_family = AF_INET;
 
     struct in_addr addr_buf;
-    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) == 1) {
-        ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
-    } else {
+    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) != 1) {
+        shim_api_freeifaddrs(i);
+        errno = EADDRNOTAVAIL;
+        return -1;
+    }
+
+    ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
+
+    if (inet_pton(AF_INET, "255.0.0.0", &addr_buf) != 1) {
+        shim_api_freeifaddrs(i);
+        errno = EADDRNOTAVAIL;
+        return -1;
+    }
+
+    ((struct sockaddr_in*)i->ifa_netmask)->sin_addr = addr_buf;
+
+    /* a /24 netmask */
+    struct in_addr netmask_24;
+    if (inet_pton(AF_INET, "255.255.255.0", &netmask_24) != 1) {
+        shim_api_freeifaddrs(i);
         errno = EADDRNOTAVAIL;
         return -1;
     }
@@ -54,6 +75,12 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
             j->ifa_addr = calloc(1, sizeof(struct sockaddr));
             memcpy(j->ifa_addr, host_ai->ai_addr, (unsigned long)host_ai->ai_addrlen);
 
+            /* assign it a /24 netmask */
+            /* some applications/libraries like libuv assume this will be non-null */
+            j->ifa_netmask = calloc(1, sizeof(struct sockaddr));
+            j->ifa_netmask->sa_family = AF_INET;
+            ((struct sockaddr_in*)j->ifa_netmask)->sin_addr = netmask_24;
+
             i->ifa_next = j;
 
             freeaddrinfo(host_ai);
@@ -70,6 +97,9 @@ void shim_api_freeifaddrs(struct ifaddrs* ifa) {
         struct ifaddrs* next = iter->ifa_next;
         if (iter->ifa_addr) {
             free(iter->ifa_addr);
+        }
+        if (iter->ifa_netmask) {
+            free(iter->ifa_netmask);
         }
         if (iter->ifa_name) {
             free(iter->ifa_name);
