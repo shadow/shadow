@@ -89,6 +89,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/status.h")
         .header("host/status_listener.h")
         .header("host/syscall/fcntl.h")
+        .header("host/syscall/file.h")
+        .header("host/syscall/fileat.h")
         .header("host/syscall/ioctl.h")
         .header("host/syscall/socket.h")
         .header("host/syscall/unistd.h")

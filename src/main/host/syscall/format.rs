@@ -198,6 +198,12 @@ impl TryFromSyscallReg for nix::sys::socket::MsgFlags {
     }
 }
 
+impl TryFromSyscallReg for nix::sys::stat::Mode {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::from_bits(reg.into())
+    }
+}
+
 // implement display formatting
 
 simple_display_impl!(i8, i16, i32, i64, isize);
@@ -218,6 +224,7 @@ simple_debug_impl!(nix::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
+simple_debug_impl!(nix::sys::stat::Mode);
 
 impl SyscallPtrDisplay for SyscallPtr<*const i8> {
     fn fmt(
