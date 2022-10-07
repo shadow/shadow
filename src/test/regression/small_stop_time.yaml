@@ -11,12 +11,12 @@ hosts:
   b:
     network_node_id: 0
     processes:
-    - path: /bin/sleep
+    - path: "sleep"
       args: "30"
       start_time: 10s
   a:
     network_node_id: 0
     processes:
-    - path: /bin/sleep
+    - path: "sleep"
       args: "30"
       start_time: 20s

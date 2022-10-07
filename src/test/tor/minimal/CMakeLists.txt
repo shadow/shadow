@@ -5,8 +5,8 @@ add_custom_target(tor-minimal-shadow-conf ALL
                     ${CMAKE_CURRENT_BINARY_DIR}/conf
                   # older tor versions don't support the AuthDirTestReachability torrc option,
                   # so comment out those lines if not supported
-                  COMMAND /bin/bash -c
-                    "(~/.local/bin/tor --list-torrc-options | grep -q 'AuthDirTestReachability') \
+                  COMMAND bash -c
+                    "(tor --list-torrc-options | grep -q 'AuthDirTestReachability') \
                     || find ${CMAKE_CURRENT_BINARY_DIR}/conf -type f -print0 \
                       | xargs -0 sed -i '/AuthDirTestReachability/s/^/#/g'"
                   VERBATIM)

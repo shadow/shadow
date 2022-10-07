@@ -342,20 +342,34 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
             .with_context(|| format!("Failed to parse arguments: {x}"))?,
     };
 
-    // perform shell expansion
-    let plugin = tilde_expansion(proc.path.to_str().unwrap());
+    let proc_path = proc.path.to_str().unwrap();
 
-    // set argv[0] as the user-provided expanded string, not the canonicalized version
-    args.insert(0, plugin.clone().into());
+    // Check if the path has no '/' where it is likely to be a executable that should be sourced from $PATH
+    // TODO: In next breaking release, if likely_not_path is true, source from $PATH by default and remove deprecation warning below. Also make sure to fix all the broken tests that will result.
+    let likely_not_path = proc_path.chars().find(|c|*c == '/').is_none();
+    
+    let expanded_path = tilde_expansion(proc_path);
 
-    // get the full canonical path
-    let plugin = plugin
-        .canonicalize()
-        .with_context(|| format!("Failed to canonicalize plugin path '{}'", plugin.display()))?;
+    let plugin = match expanded_path
+        .canonicalize().with_context(|| format!("Failed to canonicalize plugin path '{}'", expanded_path.display())) {
+        Ok(plugin) => { // Warn that relative path "thing" should be changed to "./thing" 
+            if likely_not_path { log::warn!("The relative path \"{0}\" will be deprecated in favor of \"./{0}\"", proc_path) }
+            plugin
+        }
+        Err(_) if likely_not_path => {
+            let plugin = which::which(proc_path).with_context(|| format!("Failed to resolve \"{proc_path}\" from $PATH"))?;
+            log::info!("Resolved process path \"{proc_path}\" to \"{}\"", plugin.display());
+            plugin
+        }
+        Err(err) => Err(err)?,
+    };
 
     // verify that the path is a file and is executable
     verify_plugin_path(&plugin)
         .with_context(|| format!("Failed to verify plugin path '{}'", plugin.display()))?;
+
+    // set argv[0] as the user-provided expanded string, not the canonicalized version
+    args.insert(0, expanded_path.into());
 
     Ok(vec![
         ProcessInfo {
@@ -438,7 +452,7 @@ fn generate_routing_info(
 /// Check that the plugin path is valid.
 fn verify_plugin_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
-    let metadata = std::fs::metadata(&path).unwrap();
+    let metadata = std::fs::metadata(&path)?;
 
     if !metadata.is_file() {
         return Err(anyhow::anyhow!("The path is not a file"));
