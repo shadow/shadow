@@ -80,7 +80,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
 static SysCallReturn
 _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                             unsigned long iovlen, unsigned long pos_l,
-                            unsigned long pos_h, int flags) {
+                            unsigned long pos_h, int flags, bool doPreadv) {
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) | pos_l);
 
@@ -123,7 +123,14 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             case DT_FILE:
             case DT_TCPSOCKET:
             case DT_UDPSOCKET: {
-                SysCallReturn scr = _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, 0, false);
+                off_t thisOffset = offset;
+
+                if (doPreadv) {
+                    thisOffset += totalBytesWritten;
+                }
+
+                SysCallReturn scr =
+                    _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, thisOffset, doPreadv);
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
@@ -192,7 +199,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 static SysCallReturn
 _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                              unsigned long iovlen, unsigned long pos_l,
-                             unsigned long pos_h, int flags) {
+                             unsigned long pos_h, int flags, bool doPwritev) {
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) | pos_l);
 
@@ -235,7 +242,14 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             case DT_FILE:
             case DT_TCPSOCKET:
             case DT_UDPSOCKET: {
-                SysCallReturn scr = _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, 0, false);
+                off_t thisOffset = offset;
+
+                if (doPwritev) {
+                    thisOffset += totalBytesWritten;
+                }
+
+                SysCallReturn scr =
+                    _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, thisOffset, doPwritev);
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
@@ -307,42 +321,40 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
 SysCallReturn syscallhandler_readv(SysCallHandler* sys,
                                    const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(sys, args->args[0].as_i64,
-                                       args->args[1].as_ptr,
-                                       args->args[2].as_u64, 0, 0, 0);
+    return _syscallhandler_readvHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, 0, 0, false);
 }
 
 SysCallReturn syscallhandler_preadv(SysCallHandler* sys,
                                     const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, 0);
+    return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                       args->args[2].as_u64, args->args[3].as_u64,
+                                       args->args[4].as_u64, 0, true);
 }
 
 SysCallReturn syscallhandler_preadv2(SysCallHandler* sys,
                                      const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, args->args[5].as_i64);
+    return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                       args->args[2].as_u64, args->args[3].as_u64,
+                                       args->args[4].as_u64, args->args[5].as_i64, true);
 }
 
 SysCallReturn syscallhandler_writev(SysCallHandler* sys,
                                     const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(sys, args->args[0].as_i64,
-                                        args->args[1].as_ptr,
-                                        args->args[2].as_u64, 0, 0, 0);
+    return _syscallhandler_writevHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, 0, 0, false);
 }
 
 SysCallReturn syscallhandler_pwritev(SysCallHandler* sys,
                                      const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, 0);
+    return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                        args->args[2].as_u64, args->args[3].as_u64,
+                                        args->args[4].as_u64, 0, true);
 }
 
 SysCallReturn syscallhandler_pwritev2(SysCallHandler* sys,
                                       const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, args->args[5].as_i64);
+    return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                        args->args[2].as_u64, args->args[3].as_u64,
+                                        args->args[4].as_u64, args->args[5].as_i64, true);
 }
