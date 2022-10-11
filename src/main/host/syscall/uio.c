@@ -61,7 +61,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
         PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
-        if (!bufPtr.val) {
+        if (!bufPtr.val && bufSize != 0) {
             debug("Invalid NULL pointer in iovec[%ld]", i);
             free(iov);
             return -EFAULT;
