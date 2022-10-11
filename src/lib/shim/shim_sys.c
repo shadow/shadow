@@ -12,9 +12,9 @@
 #include <time.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_sys.h"
-#include "main/core/support/definitions.h" // for SIMTIME definitions
 #include "main/host/syscall_numbers.h"
 
 static CEmulatedTime _shim_sys_get_time() {
