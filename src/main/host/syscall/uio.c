@@ -14,7 +14,7 @@
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/socket.h"
+#include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
@@ -151,9 +151,13 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                 }
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
-                    SysCallReturn scr = _syscallhandler_recvfromHelper(
-                        sys, fd, bufPtr, bufSize, 0, (PluginPtr){0},
-                        (PluginPtr){0});
+                    SysCallReturn scr =
+                        _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, 0, false);
+
+                    // if the above syscall handler created any pointers, we
+                    // may need to flush them before calling the syscall
+                    // handler again
+                    process_flushPtrs(sys->process);
 
                     switch (scr.state) {
                         case SYSCALL_DONE: {
@@ -291,8 +295,13 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                 }
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
-                    SysCallReturn scr = _syscallhandler_sendtoHelper(
-                        sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
+                    SysCallReturn scr =
+                        _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, 0, false);
+
+                    // if the above syscall handler created any pointers, we
+                    // may need to flush them before calling the syscall
+                    // handler again
+                    process_flushPtrs(sys->process);
 
                     switch (scr.state) {
                         case SYSCALL_DONE: {

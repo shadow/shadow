@@ -30,8 +30,8 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
-                                                size_t bufSize, off_t offset, bool doPread) {
+SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                         size_t bufSize, off_t offset, bool doPread) {
     trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
@@ -121,8 +121,8 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     return syscallreturn_makeDoneI64(result);
 }
 
-static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
-                                                 size_t bufSize, off_t offset, bool doPwrite) {
+SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                          size_t bufSize, off_t offset, bool doPwrite) {
     trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
 
