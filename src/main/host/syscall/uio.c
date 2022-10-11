@@ -104,32 +104,8 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
     ssize_t result = 0;
 
-    /* Now we can perform the write operations. */
-    if (dType == DT_FILE) {
-        /* For files, we read all of the buffers from the plugin and then
-         * let file pwritev handle it. */
-        struct iovec* buffersv = malloc(iovlen * sizeof(*iov));
-
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
-
-            buffersv[i].iov_base = process_getWriteablePtr(sys->process, bufPtr, bufSize);
-            buffersv[i].iov_len = bufSize;
-        }
-
-#ifdef SYS_preadv2
-        result =
-            regularfile_preadv2((RegularFile*)desc, sys->host, buffersv, iovlen, offset, flags);
-#else
-        if (flags) {
-            warning("Ignoring flags");
-        }
-        result = regularfile_preadv((RegularFile*)desc, sys->host, buffersv, iovlen, offset);
-#endif
-
-        free(buffersv);
-    } else {
+    /* Now we can perform the read operations. */
+    {
         /* For non-files, we only read one buffer at a time to avoid
          * unnecessary data transfer between the plugin and Shadow. */
         size_t totalBytesWritten = 0;
@@ -144,11 +120,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             }
 
             switch (dType) {
-                case DT_FILE: {
-                    /* Handled above. */
-                    utility_debugAssert(0);
-                    break;
-                }
+                case DT_FILE:
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
                     SysCallReturn scr =
@@ -250,30 +222,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     ssize_t result = 0;
 
     /* Now we can perform the write operations. */
-    if (dType == DT_FILE) {
-        /* For files, we read all of the buffers from the plugin and then
-         * let file pwritev handle it. */
-        struct iovec* buffersv = malloc(iovlen * sizeof(*iov));
-
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
-
-            buffersv[i].iov_base = (void*)process_getReadablePtr(sys->process, bufPtr, bufSize);
-            buffersv[i].iov_len = bufSize;
-        }
-
-#ifdef SYS_pwritev2
-        result = regularfile_pwritev2((RegularFile*)desc, buffersv, iovlen, offset, flags);
-#else
-        if (flags) {
-            warning("Ignoring flags");
-        }
-        result = regularfile_pwritev((RegularFile*)desc, buffersv, iovlen, offset);
-#endif
-
-        free(buffersv);
-    } else {
+    {
         /* For non-files, we only read one buffer at a time to avoid
          * unnecessary data transfer between the plugin and Shadow. */
         size_t totalBytesWritten = 0;
@@ -288,11 +237,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             }
 
             switch (dType) {
-                case DT_FILE: {
-                    /* Handled above. */
-                    utility_debugAssert(0);
-                    break;
-                }
+                case DT_FILE:
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
                     SysCallReturn scr =
