@@ -152,6 +152,34 @@ static void _test_pwrite() {
     assert_nonneg_errno(close(fd));
 }
 
+static void _test_writev() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd, rv;
+
+    char buf_1[] = "test ";
+    char buf_2[] = "file writev";
+
+    struct iovec iov[3] = {0};
+    iov[0].iov_base = buf_1;
+    iov[0].iov_len = sizeof(buf_1);
+    iov[2].iov_base = buf_2;
+    iov[2].iov_len = sizeof(buf_2);
+
+    assert_nonneg_errno(fd = open(adf.name, O_WRONLY));
+    assert_nonneg_errno(rv = writev(fd, iov, sizeof(iov) / sizeof(*iov)));
+    g_assert_cmpint(rv, ==, sizeof(buf_1) + sizeof(buf_2));
+
+    // position should be updated
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(buf_1) + sizeof(buf_2));
+
+    // check that 0 bytes is allowed
+    assert_nonneg_errno(rv = writev(fd, iov, 0));
+    g_assert_cmpint(rv, ==, 0);
+
+    assert_nonneg_errno(close(fd));
+}
+
 static void _test_read() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
     const char wbuf[] = "test file read";
@@ -209,6 +237,37 @@ static void _test_pread() {
     // Should still be at EOF
     assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
     g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_readv() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file readv";
+    int fd, rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+
+    // the total buffer size should not be larger than the number of bytes available to read
+    char buf_1[5] = {0};
+    char buf_2[10] = {0};
+    g_assert_cmpint(sizeof(wbuf), >=, sizeof(buf_1) + sizeof(buf_2));
+
+    struct iovec iov[3] = {0};
+    iov[0].iov_base = buf_1;
+    iov[0].iov_len = sizeof(buf_1);
+    iov[2].iov_base = buf_2;
+    iov[2].iov_len = sizeof(buf_2);
+
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(rv = readv(fd, iov, sizeof(iov) / sizeof(*iov)));
+
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
+    g_assert_cmpmem(iov[0].iov_base, iov[0].iov_len, wbuf, iov[0].iov_len);
+    g_assert_cmpmem(iov[2].iov_base, iov[2].iov_len, wbuf + iov[0].iov_len, iov[2].iov_len);
+
+    // position should be updated
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
 
     assert_nonneg_errno(close(fd));
 }
@@ -658,8 +717,10 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/close_nonexistent", _test_close_nonexistent);
     g_test_add_func("/file/write", _test_write);
     g_test_add_func("/file/pwrite", _test_pwrite);
+    g_test_add_func("/file/writev", _test_writev);
     g_test_add_func("/file/read", _test_read);
     g_test_add_func("/file/pread", _test_pread);
+    g_test_add_func("/file/readv", _test_readv);
     g_test_add_func("/file/lseek", _test_lseek);
     g_test_add_func("/file/fopen", _test_fopen);
     g_test_add_func("/file/fclose", _test_fclose);
