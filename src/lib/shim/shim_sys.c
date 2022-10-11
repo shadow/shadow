@@ -12,9 +12,9 @@
 #include <time.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_sys.h"
-#include "main/core/support/definitions.h" // for SIMTIME definitions
 #include "main/host/syscall_numbers.h"
 
 static CEmulatedTime _shim_sys_get_time() {
@@ -28,7 +28,10 @@ static CEmulatedTime _shim_sys_get_time() {
     return shimshmem_getEmulatedTime(mem);
 }
 
-uint64_t shim_sys_get_simtime_nanos() { return _shim_sys_get_time() / SIMTIME_ONE_NANOSECOND; }
+uint64_t shim_sys_get_simtime_nanos() {
+    return emutime_sub_emutime(_shim_sys_get_time(), EMUTIME_SIMULATION_START) /
+           SIMTIME_ONE_NANOSECOND;
+}
 
 static CSimulationTime _shim_sys_latency_for_syscall(long n) {
     switch (n) {

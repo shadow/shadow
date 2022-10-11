@@ -22,14 +22,18 @@ typedef struct _ShimLogger {
 } ShimLogger;
 
 static size_t _simulation_nanos_string(char* dst, size_t size) {
-    uint64_t simulation_nanos = shim_sys_get_simtime_nanos();
     const long nanos_per_sec = 1000000000l;
-    time_t seconds = simulation_nanos / nanos_per_sec;
-    uint64_t nanos = simulation_nanos % nanos_per_sec;
-    struct tm tm;
-    gmtime_r(&seconds, &tm);
-    return snprintf(
-        dst, size, "%02d:%02d:%02d.%09" PRIu64, tm.tm_hour, tm.tm_min, tm.tm_sec, nanos);
+
+    uint64_t nanos = shim_sys_get_simtime_nanos();
+    uint32_t seconds = nanos / nanos_per_sec;
+    nanos = nanos % nanos_per_sec;
+    uint32_t mins = seconds / 60;
+    seconds = seconds % 60;
+    uint32_t hours = mins / 60;
+    mins = mins % 60;
+
+    return snprintf(dst, size, "%02" PRIu32 ":%02" PRIu32 ":%02" PRIu32 ".%09" PRIu64, hours, mins,
+                    seconds, nanos);
 }
 
 void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const char* functionName,
