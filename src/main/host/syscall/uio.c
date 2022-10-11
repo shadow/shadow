@@ -105,71 +105,66 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     ssize_t result = 0;
 
     /* Now we can perform the read operations. */
-    {
-        /* For non-files, we only read one buffer at a time to avoid
-         * unnecessary data transfer between the plugin and Shadow. */
-        size_t totalBytesWritten = 0;
 
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
+    /* For non-files, we only read one buffer at a time to avoid
+     * unnecessary data transfer between the plugin and Shadow. */
+    size_t totalBytesWritten = 0;
 
-            if (bufSize == 0) {
-                /* Nothing to do if the buffer is empty. */
-                continue;
-            }
+    for (unsigned long i = 0; i < iovlen; i++) {
+        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        size_t bufSize = iov[i].iov_len;
 
-            switch (dType) {
-                case DT_FILE:
-                case DT_TCPSOCKET:
-                case DT_UDPSOCKET: {
-                    SysCallReturn scr =
-                        _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, 0, false);
+        if (bufSize == 0) {
+            /* Nothing to do if the buffer is empty. */
+            continue;
+        }
 
-                    // if the above syscall handler created any pointers, we
-                    // may need to flush them before calling the syscall
-                    // handler again
-                    process_flushPtrs(sys->process);
+        switch (dType) {
+            case DT_FILE:
+            case DT_TCPSOCKET:
+            case DT_UDPSOCKET: {
+                SysCallReturn scr = _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, 0, false);
 
-                    switch (scr.state) {
-                        case SYSCALL_DONE: {
-                            result = syscallreturn_done(&scr)->retval.as_i64;
-                            break;
-                        }
-                        case SYSCALL_BLOCK: {
-                            // assume that there was no timer, and that we're blocked on this socket
-                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
-                            syscallcondition_unref(blocked->cond);
-                            result = -EWOULDBLOCK;
-                            break;
-                        }
-                        case SYSCALL_NATIVE: {
-                            panic("recv() returned SYSCALL_NATIVE");
-                        }
+                // if the above syscall handler created any pointers, we may
+                // need to flush them before calling the syscall handler again
+                process_flushPtrs(sys->process);
+
+                switch (scr.state) {
+                    case SYSCALL_DONE: {
+                        result = syscallreturn_done(&scr)->retval.as_i64;
+                        break;
                     }
+                    case SYSCALL_BLOCK: {
+                        // assume that there was no timer, and that we're blocked on this socket
+                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        syscallcondition_unref(blocked->cond);
+                        result = -EWOULDBLOCK;
+                        break;
+                    }
+                    case SYSCALL_NATIVE: {
+                        panic("recv() returned SYSCALL_NATIVE");
+                    }
+                }
 
-                    break;
-                }
-                case DT_TIMER:
-                case DT_EPOLL:
-                default: {
-                    warning(
-                        "readv() not yet implemented for descriptor type %i",
-                        (int)dType);
-                    result = -ENOTSUP;
-                    break;
-                }
+                break;
             }
-
-            if (result > 0) {
-                totalBytesWritten += (size_t)result;
-            } else {
+            case DT_TIMER:
+            case DT_EPOLL:
+            default: {
+                warning("readv() not yet implemented for descriptor type %i", (int)dType);
+                result = -ENOTSUP;
                 break;
             }
         }
-        if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
-            result = totalBytesWritten;
+
+        if (result > 0) {
+            totalBytesWritten += (size_t)result;
+        } else {
+            break;
         }
+    }
+    if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+        result = totalBytesWritten;
     }
 
     free(iov);
@@ -222,71 +217,66 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     ssize_t result = 0;
 
     /* Now we can perform the write operations. */
-    {
-        /* For non-files, we only read one buffer at a time to avoid
-         * unnecessary data transfer between the plugin and Shadow. */
-        size_t totalBytesWritten = 0;
 
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
+    /* For non-files, we only read one buffer at a time to avoid
+     * unnecessary data transfer between the plugin and Shadow. */
+    size_t totalBytesWritten = 0;
 
-            if (bufSize == 0) {
-                /* Nothing to do if the buffer is empty. */
-                continue;
-            }
+    for (unsigned long i = 0; i < iovlen; i++) {
+        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        size_t bufSize = iov[i].iov_len;
 
-            switch (dType) {
-                case DT_FILE:
-                case DT_TCPSOCKET:
-                case DT_UDPSOCKET: {
-                    SysCallReturn scr =
-                        _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, 0, false);
+        if (bufSize == 0) {
+            /* Nothing to do if the buffer is empty. */
+            continue;
+        }
 
-                    // if the above syscall handler created any pointers, we
-                    // may need to flush them before calling the syscall
-                    // handler again
-                    process_flushPtrs(sys->process);
+        switch (dType) {
+            case DT_FILE:
+            case DT_TCPSOCKET:
+            case DT_UDPSOCKET: {
+                SysCallReturn scr = _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, 0, false);
 
-                    switch (scr.state) {
-                        case SYSCALL_DONE: {
-                            result = syscallreturn_done(&scr)->retval.as_i64;
-                            break;
-                        }
-                        case SYSCALL_BLOCK: {
-                            // assume that there was no timer, and that we're blocked on this socket
-                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
-                            syscallcondition_unref(blocked->cond);
-                            result = -EWOULDBLOCK;
-                            break;
-                        }
-                        case SYSCALL_NATIVE: {
-                            panic("send() returned SYSCALL_NATIVE");
-                        }
+                // if the above syscall handler created any pointers, we may
+                // need to flush them before calling the syscall handler again
+                process_flushPtrs(sys->process);
+
+                switch (scr.state) {
+                    case SYSCALL_DONE: {
+                        result = syscallreturn_done(&scr)->retval.as_i64;
+                        break;
                     }
+                    case SYSCALL_BLOCK: {
+                        // assume that there was no timer, and that we're blocked on this socket
+                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        syscallcondition_unref(blocked->cond);
+                        result = -EWOULDBLOCK;
+                        break;
+                    }
+                    case SYSCALL_NATIVE: {
+                        panic("send() returned SYSCALL_NATIVE");
+                    }
+                }
 
-                    break;
-                }
-                case DT_TIMER:
-                case DT_EPOLL:
-                default: {
-                    warning(
-                        "writev() not yet implemented for descriptor type %i",
-                        (int)dType);
-                    result = -ENOTSUP;
-                    break;
-                }
+                break;
             }
-
-            if (result > 0) {
-                totalBytesWritten += (size_t)result;
-            } else {
+            case DT_TIMER:
+            case DT_EPOLL:
+            default: {
+                warning("writev() not yet implemented for descriptor type %i", (int)dType);
+                result = -ENOTSUP;
                 break;
             }
         }
-        if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
-            result = totalBytesWritten;
+
+        if (result > 0) {
+            totalBytesWritten += (size_t)result;
+        } else {
+            break;
         }
+    }
+    if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+        result = totalBytesWritten;
     }
 
     free(iov);
