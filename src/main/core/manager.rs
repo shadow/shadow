@@ -606,6 +606,8 @@ impl<'a> Manager<'a> {
             c_host
         };
 
+        unsafe { c::host_lockShimShmemLock(c_host) };
+
         for proc in &host.processes {
             let plugin_path =
                 CString::new(proc.plugin.clone().into_os_string().as_bytes()).unwrap();
@@ -670,6 +672,8 @@ impl<'a> Manager<'a> {
                 let _ = &argv_ptrs;
             }
         }
+
+        unsafe { c::host_unlockShimShmemLock(c_host) };
 
         Ok(unsafe { Host::borrow_from_c(c_host) })
     }

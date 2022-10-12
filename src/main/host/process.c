@@ -854,7 +854,7 @@ Process* process_new(Host* host, guint processID, CSimulationTime startTime,
     }
 
     proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
-    shimshmemprocess_init(proc->shimSharedMemBlock.p, host_getID(host));
+    shimshmemprocess_init(proc->shimSharedMemBlock.p, host_getShimShmemLock(host));
 
     envv = g_strdupv(envv);
 

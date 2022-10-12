@@ -31,7 +31,7 @@
 
 typedef struct _Process Process;
 
-#include "lib/shadow-shim-helper-rs/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
