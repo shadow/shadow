@@ -443,6 +443,8 @@ mod tests {
 
     use super::*;
 
+    // these tests don't use miri since they use `LibcSemaphoreArc` and `nix::unistd::gettid()`
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope() {

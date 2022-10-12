@@ -269,6 +269,8 @@ mod tests {
 
     use super::*;
 
+    // these tests don't use miri since they use `LibcSemaphoreArc`
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope() {
