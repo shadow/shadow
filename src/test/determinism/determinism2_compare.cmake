@@ -17,15 +17,31 @@ foreach(LOOPIDX RANGE 1 10)
         ${CMAKE_BINARY_DIR}/determinism2b-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.stdout
     )
     exec_diff_check(
+        ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.stdout
+        ${CMAKE_BINARY_DIR}/determinism2c-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.stdout
+    )
+    exec_diff_check(
         ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.strace
         ${CMAKE_BINARY_DIR}/determinism2b-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.strace
+    )
+    exec_diff_check(
+        ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.strace
+        ${CMAKE_BINARY_DIR}/determinism2c-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.strace
     )
     exec_diff_check(
         ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-127.0.0.1.pcap
         ${CMAKE_BINARY_DIR}/determinism2b-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-127.0.0.1.pcap
     )
     exec_diff_check(
+        ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-127.0.0.1.pcap
+        ${CMAKE_BINARY_DIR}/determinism2c-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-127.0.0.1.pcap
+    )
+    exec_diff_check(
         ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
         ${CMAKE_BINARY_DIR}/determinism2b-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
+    )
+    exec_diff_check(
+        ${CMAKE_BINARY_DIR}/determinism2a-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
+        ${CMAKE_BINARY_DIR}/determinism2c-shadow.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
     )
 endforeach(LOOPIDX)

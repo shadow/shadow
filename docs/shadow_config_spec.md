@@ -372,7 +372,7 @@ ahead when sending events between virtual hosts.
 #### `experimental.scheduler`
 
 Default: "thread-per-host"  
-Type: "thread-per-host"
+Type: "thread-per-host" OR "thread-per-core"
 
 The host scheduler implementation, which decides how to assign hosts to threads
 and threads to CPU cores.

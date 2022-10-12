@@ -14,7 +14,7 @@ use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
-use crate::core::scheduler::{Scheduler, ThreadPerHostSched};
+use crate::core::scheduler::{Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
@@ -309,6 +309,9 @@ impl<'a> Manager<'a> {
             let mut scheduler = match self.config.experimental.scheduler.unwrap() {
                 configuration::Scheduler::ThreadPerHost => {
                     Scheduler::ThreadPerHost(ThreadPerHostSched::new(&cpus, hosts))
+                }
+                configuration::Scheduler::ThreadPerCore => {
+                    Scheduler::ThreadPerCore(ThreadPerCoreSched::new(&cpus, hosts))
                 }
             };
 

@@ -660,6 +660,7 @@ impl From<LogLevel> for log::Level {
 #[serde(rename_all = "kebab-case")]
 pub enum Scheduler {
     ThreadPerHost,
+    ThreadPerCore,
 }
 
 impl FromStr for Scheduler {

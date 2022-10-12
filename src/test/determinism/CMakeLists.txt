@@ -42,23 +42,32 @@ add_shadow_tests(
     BASENAME determinism2a
     LOGLEVEL debug
     SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-    ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
+    ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic --scheduler thread-per-host
     PROPERTIES RUN_SERIAL TRUE)
 add_shadow_tests(
     BASENAME determinism2b
     LOGLEVEL debug
     SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-    ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic
+    ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic --scheduler thread-per-host
     PROPERTIES RUN_SERIAL TRUE)
+
+## also test with a different scheduler
+add_shadow_tests(
+    BASENAME determinism2c
+    LOGLEVEL debug
+    SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
+    ARGS --use-cpu-pinning true --parallelism 2 --strace-logging-mode deterministic --scheduler thread-per-core
+    PROPERTIES RUN_SERIAL TRUE)
+
 ## Now compare the output
 add_test(
     NAME determinism2-shadow-compare
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
+
 ## Make sure the tests that produce output finish before we compare the output,
 ## and make sure the test-phold binary was already built, because this test uses it.
 set_tests_properties(determinism2-shadow-compare
-    PROPERTIES DEPENDS "determinism2a-shadow;determinism2b-shadow;test-phold")
+    PROPERTIES DEPENDS "determinism2a-shadow;determinism2b-shadow;determinism2c-shadow;test-phold")
 
 ## copy the file to the build test dir so that the relative path to it is correct
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DIR}/weights.txt COPYONLY)
-

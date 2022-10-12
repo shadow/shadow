@@ -1,11 +1,10 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::core::scheduler::logical_processor::LogicalProcessors;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
@@ -19,26 +18,18 @@ use crate::utility::synchronization::semaphore::LibcSemaphore;
 // tests check to make sure the closures are invariant over the lifetime and that the usage is
 // sound.
 
-/// Context information provided to each task closure.
-pub struct TaskData {
-    pub thread_idx: usize,
-    pub processor_idx: usize,
-    pub cpu_id: Option<u32>,
-}
-
 /// A task that is run by the pool threads.
-trait TaskFn: Fn(&TaskData) + Send + Sync {}
-impl<T> TaskFn for T where T: Fn(&TaskData) + Send + Sync {}
+pub trait TaskFn: Fn(usize) + Send + Sync {}
+impl<T> TaskFn for T where T: Fn(usize) + Send + Sync {}
 
-/// A thread pool that runs a task on many threads. A task will run once on each thread. Each
-/// logical processor will run threads sequentially, meaning that the thread pool's parallelism
-/// depends on the number of processors, not the number of threads. Threads are assigned to logical
-/// processors, which can be bound to operating system processors.
-pub struct ParallelismBoundedThreadPool {
+/// A thread pool that runs a task on many threads. A task will run once on each thread.
+pub struct UnboundedThreadPool {
     /// Handles for joining threads when they've exited.
     thread_handles: Vec<std::thread::JoinHandle<()>>,
     /// State shared between all threads.
     shared_state: Arc<SharedState>,
+    /// Semaphores used by work threads to wait for a new task.
+    task_start_semaphores: Vec<LibcSemaphore>,
     /// The main thread uses this to wait for the threads to finish running the task.
     task_end_waiter: LatchWaiter,
 }
@@ -48,101 +39,48 @@ pub struct SharedState {
     task: AtomicRefCell<Option<Box<dyn TaskFn>>>,
     /// Has a thread panicked?
     has_thread_panicked: AtomicBool,
-    /// The logical processors.
-    logical_processors: AtomicRefCell<LogicalProcessors>,
-    /// The threads which run on logical processors.
-    threads: Vec<ThreadScheduling>,
 }
 
-/// Scheduling state for a thread.
-pub struct ThreadScheduling {
-    /// Semaphore used to wait for a new task.
-    task_start_semaphore: LibcSemaphore,
-    /// The OS pid for this thread.
-    tid: nix::unistd::Pid,
-    /// The logical processor index that this thread is assigned to.
-    logical_processor_idx: AtomicUsize,
-}
-
-impl ParallelismBoundedThreadPool {
-    /// A new work pool with logical processors that are pinned to the provided OS processors.
-    /// Each logical processor is assigned many threads.
-    pub fn new(cpu_ids: &[Option<u32>], num_threads: usize, thread_name: &str) -> Self {
-        // we don't need more logical processors than threads
-        let cpu_ids = &cpu_ids[..std::cmp::min(cpu_ids.len(), num_threads)];
-
-        let logical_processors = LogicalProcessors::new(cpu_ids, num_threads);
+impl UnboundedThreadPool {
+    pub fn new(num_threads: usize, thread_name: &str) -> Self {
+        let shared_state = Arc::new(SharedState {
+            task: AtomicRefCell::new(None),
+            has_thread_panicked: AtomicBool::new(false),
+        });
 
         let (task_end_counter, task_end_waiter) = build_count_down_latch();
 
         let mut thread_handles = Vec::new();
-        let mut shared_state_senders = Vec::new();
-        let mut tids = Vec::new();
+        let mut task_start_semaphores = Vec::new();
 
-        // start the threads
         for i in 0..num_threads {
-            // the thread will send us the tid, then we'll later send the shared state to the thread
-            let (tid_send, tid_recv) = crossbeam::channel::bounded(1);
-            let (shared_state_send, shared_state_recv) = crossbeam::channel::bounded(1);
-
+            let task_start_semaphore = LibcSemaphore::new(0);
+            let shared_state_clone = Arc::clone(&shared_state);
+            let task_start_semaphore_clone = task_start_semaphore.clone();
             let task_end_counter_clone = task_end_counter.clone();
 
             let handle = std::thread::Builder::new()
                 .name(thread_name.to_string())
-                .spawn(move || work_loop(i, tid_send, shared_state_recv, task_end_counter_clone))
+                .spawn(move || {
+                    work_loop(
+                        i,
+                        shared_state_clone,
+                        task_start_semaphore_clone,
+                        task_end_counter_clone,
+                    )
+                })
                 .unwrap();
 
             thread_handles.push(handle);
-            shared_state_senders.push(shared_state_send);
-            tids.push(tid_recv.recv().unwrap());
-        }
-
-        // build the scheduling data for the threads
-        let thread_data: Vec<ThreadScheduling> = logical_processors
-            .iter()
-            .cycle()
-            .zip(&tids)
-            .map(|(processor_idx, tid)| ThreadScheduling {
-                task_start_semaphore: LibcSemaphore::new(0),
-                tid: *tid,
-                logical_processor_idx: AtomicUsize::new(processor_idx),
-            })
-            .collect();
-
-        // add each thread to its logical processor
-        for (thread_idx, thread) in thread_data.iter().enumerate() {
-            let logical_processor_idx = thread.logical_processor_idx.load(Ordering::Relaxed);
-            logical_processors.add_worker(logical_processor_idx, thread_idx);
-        }
-
-        // state shared between all threads
-        let shared_state = Arc::new(SharedState {
-            task: AtomicRefCell::new(None),
-            has_thread_panicked: AtomicBool::new(false),
-            logical_processors: AtomicRefCell::new(logical_processors),
-            threads: thread_data,
-        });
-
-        // send the shared state to each thread
-        for s in shared_state_senders.into_iter() {
-            s.send(Arc::clone(&shared_state)).unwrap();
+            task_start_semaphores.push(task_start_semaphore);
         }
 
         Self {
             thread_handles,
             shared_state,
+            task_start_semaphores,
             task_end_waiter,
         }
-    }
-
-    /// The total number of logical processors.
-    pub fn num_processors(&self) -> usize {
-        self.shared_state.logical_processors.borrow().iter().len()
-    }
-
-    /// The total number of threads.
-    pub fn num_threads(&self) -> usize {
-        self.thread_handles.len()
     }
 
     /// Stop and join the threads.
@@ -161,8 +99,8 @@ impl ParallelismBoundedThreadPool {
             .load(Ordering::Relaxed);
 
         // send the sentinel task to all threads
-        for thread in &self.shared_state.threads {
-            thread.task_start_semaphore.post();
+        for semaphore in &self.task_start_semaphores {
+            semaphore.post();
         }
 
         for handle in self.thread_handles.drain(..) {
@@ -218,14 +156,14 @@ impl ParallelismBoundedThreadPool {
     }
 }
 
-impl std::ops::Drop for ParallelismBoundedThreadPool {
+impl std::ops::Drop for UnboundedThreadPool {
     fn drop(&mut self) {
         self.join_internal();
     }
 }
 
 struct WorkerScope<'scope> {
-    pool: &'scope mut ParallelismBoundedThreadPool,
+    pool: &'scope mut UnboundedThreadPool,
     // when we are dropped, it's like dropping the task
     _phantom: PhantomData<Box<dyn TaskFn + 'scope>>,
 }
@@ -239,13 +177,6 @@ impl<'a> std::ops::Drop for WorkerScope<'a> {
 
             // clear the task
             *self.pool.shared_state.task.borrow_mut() = None;
-
-            // we should have run every thread, so swap the logical processors' internal queues
-            self.pool
-                .shared_state
-                .logical_processors
-                .borrow_mut()
-                .reset();
 
             // generally following https://docs.rs/rayon/latest/rayon/fn.scope.html#panics
             if self
@@ -271,9 +202,7 @@ pub struct TaskRunner<'a, 'scope> {
 
 impl<'a, 'scope> TaskRunner<'a, 'scope> {
     /// Run a task on the pool's threads.
-    // unfortunately we need to use `Fn(&TaskData) + Send + Sync` and not `TaskFn` here, otherwise
-    // rust's type inference doesn't work nicely in the calling code
-    pub fn run(self, f: impl Fn(&TaskData) + Send + Sync + 'scope) {
+    pub fn run(self, f: impl TaskFn + 'scope) {
         let f = Box::new(f);
 
         // SAFETY: WorkerScope will drop this TaskFn before the end of 'scope
@@ -283,23 +212,17 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
 
         *self.scope.pool.shared_state.task.borrow_mut() = Some(f);
 
-        let logical_processors = self.scope.pool.shared_state.logical_processors.borrow();
-
-        // start the first thread for each logical processor
-        for processor_idx in logical_processors.iter() {
-            start_next_thread(
-                processor_idx,
-                &self.scope.pool.shared_state,
-                &logical_processors,
-            );
+        // start the threads
+        for semaphore in &self.scope.pool.task_start_semaphores {
+            semaphore.post();
         }
     }
 }
 
 fn work_loop(
-    thread_idx: usize,
-    tid_send: crossbeam::channel::Sender<nix::unistd::Pid>,
-    shared_state_recv: crossbeam::channel::Receiver<Arc<SharedState>>,
+    thread_index: usize,
+    shared_state: Arc<SharedState>,
+    task_start_semaphore: LibcSemaphore,
     mut end_counter: LatchCounter,
 ) {
     // this will poison the workpool when it's dropped
@@ -313,68 +236,18 @@ fn work_loop(
         }
     }
 
-    // this will start the next thread when it's dropped
-    struct StartNextThreadOnDrop<'a> {
-        shared_state: &'a SharedState,
-        logical_processors: &'a LogicalProcessors,
-        current_processor_idx: usize,
-    }
-
-    impl<'a> std::ops::Drop for StartNextThreadOnDrop<'a> {
-        fn drop(&mut self) {
-            start_next_thread(
-                self.current_processor_idx,
-                &self.shared_state,
-                &self.logical_processors,
-            );
-        }
-    }
-
-    // send this thread's tid to the main thread
-    tid_send.send(nix::unistd::gettid()).unwrap();
-
-    // get the shared state
-    let shared_state = shared_state_recv.recv().unwrap();
     let shared_state = shared_state.as_ref();
-
     let poison_when_dropped = PoisonWhenDropped(shared_state);
-
-    let thread_data = &shared_state.threads[thread_idx];
-    let start_semaphore = &thread_data.task_start_semaphore;
 
     loop {
         // wait for a new task
-        start_semaphore.wait();
+        task_start_semaphore.wait();
 
-        // scope used to make sure we drop everything (including the task) before counting down
+        // scope used to make sure we drop the task before counting down
         {
-            let logical_processors = &shared_state.logical_processors.borrow();
-
-            // the logical processor for this thread may have been changed by the previous thread if
-            // the thread was stolen from another logical processor
-            let current_processor_idx = thread_data.logical_processor_idx.load(Ordering::Relaxed);
-
-            // this will start the next thread even if the below task panics or we break from the
-            // loop
-            //
-            // we must start the next thread before we count down, otherwise we'll have runtime
-            // panics due to simultaneous exclusive and shared borrows of `logical_processors`
-            let _start_next_thread_when_dropped = StartNextThreadOnDrop {
-                shared_state,
-                logical_processors,
-                current_processor_idx,
-            };
-
-            // context information for the task
-            let task_data = TaskData {
-                thread_idx,
-                processor_idx: current_processor_idx,
-                cpu_id: logical_processors.cpu_id(current_processor_idx),
-            };
-
             // run the task
             match shared_state.task.borrow().deref() {
-                Some(task) => (task)(&task_data),
+                Some(task) => (task)(thread_index),
                 None => {
                     // received the sentinel value
                     break;
@@ -390,53 +263,6 @@ fn work_loop(
     std::mem::forget(poison_when_dropped);
 }
 
-/// Choose the next thread to run on the logical processor, and then start it.
-fn start_next_thread(
-    processor_idx: usize,
-    shared_state: &SharedState,
-    logical_processors: &LogicalProcessors,
-) {
-    // if there is a thread to run on this logical processor, then start it
-    if let Some((next_thread_idx, from_processor_idx)) =
-        logical_processors.next_worker(processor_idx)
-    {
-        let next_thread = &shared_state.threads[next_thread_idx];
-
-        debug_assert_eq!(
-            from_processor_idx,
-            next_thread.logical_processor_idx.load(Ordering::Relaxed)
-        );
-
-        // if the next thread is assigned to a different processor
-        if processor_idx != from_processor_idx {
-            assign_to_processor(next_thread, processor_idx, logical_processors);
-        }
-
-        // start the thread
-        next_thread.task_start_semaphore.post();
-    }
-}
-
-/// Assigns the thread to the logical processor.
-fn assign_to_processor(
-    thread: &ThreadScheduling,
-    processor_idx: usize,
-    logical_processors: &LogicalProcessors,
-) {
-    // set thread's affinity if the logical processor has a cpu ID
-    if let Some(cpu_id) = logical_processors.cpu_id(processor_idx) {
-        let mut cpus = nix::sched::CpuSet::new();
-        cpus.set(cpu_id as usize).unwrap();
-
-        nix::sched::sched_setaffinity(thread.tid, &cpus).unwrap();
-    }
-
-    // set thread's processor
-    thread
-        .logical_processor_idx
-        .store(processor_idx, Ordering::Release);
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU32};
@@ -446,7 +272,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         let mut counter = 0u32;
         for _ in 0..3 {
@@ -461,41 +287,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_run() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        let counter = AtomicU32::new(0);
-        for _ in 0..3 {
-            pool.scope(|s| {
-                s.run(|_| {
-                    counter.fetch_add(1, Ordering::SeqCst);
-                });
-            });
-        }
-
-        assert_eq!(counter.load(Ordering::SeqCst), 12);
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_pinning() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[Some(0), Some(1)], 4, "worker");
-
-        let counter = AtomicU32::new(0);
-        for _ in 0..3 {
-            pool.scope(|s| {
-                s.run(|_| {
-                    counter.fetch_add(1, Ordering::SeqCst);
-                });
-            });
-        }
-
-        assert_eq!(counter.load(Ordering::SeqCst), 12);
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_large_parallelism() {
-        let mut pool = ParallelismBoundedThreadPool::new(&vec![None; 100], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -512,7 +304,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_large_num_threads() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 100, "worker");
+        let mut pool = UnboundedThreadPool::new(100, "worker");
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -529,7 +321,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope_runner_order() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None], 1, "worker");
+        let mut pool = UnboundedThreadPool::new(1, "worker");
 
         let flag = AtomicBool::new(false);
         pool.scope(|s| {
@@ -547,7 +339,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_non_aliasing_borrows() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         let mut counter = 0;
         pool.scope(|s| {
@@ -565,7 +357,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_aliasing_borrows() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         let mut counter = 0;
         pool.scope(|s| {
@@ -583,12 +375,12 @@ mod tests {
     #[should_panic]
     #[cfg_attr(miri, ignore)]
     fn test_panic_all() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         pool.scope(|s| {
-            s.run(|t| {
+            s.run(|i| {
                 // all threads panic
-                panic!("{}", t.thread_idx);
+                panic!("{}", i);
             });
         });
     }
@@ -597,13 +389,13 @@ mod tests {
     #[should_panic]
     #[cfg_attr(miri, ignore)]
     fn test_panic_single() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         pool.scope(|s| {
-            s.run(|t| {
+            s.run(|i| {
                 // one thread panics
-                if t.thread_idx == 2 {
-                    panic!("{}", t.thread_idx);
+                if i == 2 {
+                    panic!("{}", i);
                 }
             });
         });
@@ -614,7 +406,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_panic_any() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         let x = 5;
         pool.scope(|s| {
@@ -631,7 +423,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_scope_lifetime() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker");
 
         pool.scope(|s| {
             // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
@@ -647,7 +439,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn test_queues() {
         let num_threads = 4;
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], num_threads, "worker");
+        let mut pool = UnboundedThreadPool::new(num_threads, "worker");
 
         // a non-copy usize wrapper
         struct Wrapper(usize);
@@ -664,10 +456,10 @@ mod tests {
         let num_iters = 3;
         for _ in 0..num_iters {
             pool.scope(|s| {
-                s.run(|t| {
+                s.run(|i: usize| {
                     // take item from queue n and push it to queue n+1
-                    let wrapper = queues[t.thread_idx].pop().unwrap();
-                    queues[(t.thread_idx + 1) % num_threads].push(wrapper);
+                    let wrapper = queues[i].pop().unwrap();
+                    queues[(i + 1) % num_threads].push(wrapper);
                 });
             });
         }

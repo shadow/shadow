@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::marker::PhantomData;
 use std::sync::Mutex;
 
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
@@ -53,13 +52,10 @@ impl ThreadPerHostSched {
     /// See [`crate::core::scheduler::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
-        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope>) + 'scope,
+        f: impl for<'a> FnOnce(SchedulerScope<'a, 'scope>) + 'scope,
     ) {
         self.pool.scope(move |s| {
-            let sched_scope = SchedulerScope {
-                runner: s,
-                marker: Default::default(),
-            };
+            let sched_scope = SchedulerScope { runner: s };
 
             (f)(sched_scope);
         });
@@ -94,17 +90,11 @@ impl ThreadPerHostSched {
 }
 
 /// A wrapper around the work pool's scoped runner.
-pub struct SchedulerScope<'sched, 'pool, 'scope>
-where
-    'sched: 'scope,
-{
+pub struct SchedulerScope<'pool, 'scope> {
     runner: TaskRunner<'pool, 'scope>,
-    // TODO: other schedulers (such as a thread-per-core scheduler) may need this, so leaving this
-    // here for now in case we need to provide an interface that has a 'sched lifetime
-    marker: PhantomData<&'sched Host>,
 }
 
-impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
+impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
     /// See [`crate::core::scheduler::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(move |task_context| {
