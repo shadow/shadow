@@ -4,13 +4,20 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
+use vasi::VirtualAddressSpaceIndependent;
 
 /// Every object root is assigned a [Tag], which we ensure is globally unique.
 /// Each [Tag] value uniquely identifies a [Root].
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-struct Tag {
-    prefix: TagPrefixType,
-    suffix: TagSuffixType,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, VirtualAddressSpaceIndependent)]
+// Ensure consistent layout, since we use it in shared memory.
+#[repr(C)]
+pub struct Tag {
+    // Intended to be unique on a machine. We use a random number here.
+    global_id: TagGlobalId,
+    // Only unique within a process. We *could* just use global_id, and perhaps
+    // make it bigger, but having a local_id that we increment from 0 might be
+    // helpful for debugging.
+    local_id: TagLocalId,
 }
 
 /// Larger sizes here reduce the chance of collision, which could lead to
@@ -20,14 +27,14 @@ struct Tag {
 ///
 /// Increasing the size introduces some runtime overhead for storing, copying,
 /// and comparing tag values.
-type TagPrefixType = u32;
+type TagGlobalId = u32;
 
 /// Larger sizes here support a greater number of tags within a given prefix.
 ///
 /// Increasing the size introduces some runtime overhead for storing, copying,
 /// and comparing tag values.
-type TagSuffixType = u32;
-type TagSuffixAtomicType = AtomicU32;
+type TagLocalId = u32;
+type TagLocallyUniquePartAtomicType = AtomicU32;
 
 impl Tag {
     pub fn new() -> Self {
@@ -35,24 +42,40 @@ impl Tag {
         // handle both the case where this module is used from multiple processes that
         // share memory, and to handle the case where multiple instances of this module
         // end up within a single process.
-        static TAG_PREFIX: OnceCell<TagPrefixType> = OnceCell::new();
+        static TAG_PREFIX: OnceCell<TagGlobalId> = OnceCell::new();
         let prefix = *TAG_PREFIX.get_or_init(rand::prelude::random);
 
-        static NEXT_TAG_SUFFIX: TagSuffixAtomicType = TagSuffixAtomicType::new(0);
-        let suffix: TagSuffixType = NEXT_TAG_SUFFIX.fetch_add(1, Ordering::Relaxed);
+        static NEXT_TAG_SUFFIX: TagLocallyUniquePartAtomicType =
+            TagLocallyUniquePartAtomicType::new(0);
+        let suffix: TagLocalId = NEXT_TAG_SUFFIX.fetch_add(1, Ordering::Relaxed);
 
         // Detect overflow
-        assert!(suffix != TagSuffixType::MAX);
+        assert!(suffix != TagLocalId::MAX);
 
-        Self { prefix, suffix }
+        Self {
+            global_id: prefix,
+            local_id: suffix,
+        }
     }
 }
 
-/// [Root] is a `!Sync` token. [rc::RootedRc] and [refcell::RootedRefCell] use
-/// it to prove no other threads currently have access to their resources.
+impl Default for Tag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A [Root] is a `![Sync]` token. Proof of access to a [Root] is used
+/// to inexpensively ensure safety of safety in [rc::RootedRc] and
+/// [refcell::RootedRefCell].
+#[derive(Debug, VirtualAddressSpaceIndependent)]
+// Ensure consistent layout, since this is an Archive type.
+#[repr(C)]
 pub struct Root {
     tag: Tag,
 
+    // SAFETY: Marker doesn't affect VAS-independence
+    #[UnsafeAssertVirtualAddressSpaceIndependent]
     _notsync: std::marker::PhantomData<std::cell::Cell<()>>,
 }
 
