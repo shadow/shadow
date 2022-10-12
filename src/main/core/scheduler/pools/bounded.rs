@@ -9,7 +9,7 @@ use crate::core::scheduler::logical_processor::LogicalProcessors;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
-use crate::utility::synchronization::semaphore::LibcSemaphore;
+use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
 
 // If making substantial changes to this scheduler, you should uncomment each test at the end of
 // this file to make sure that they correctly cause a compilation error. This work pool unsafely
@@ -57,7 +57,7 @@ pub struct SharedState {
 /// Scheduling state for a thread.
 pub struct ThreadScheduling {
     /// Semaphore used to wait for a new task.
-    task_start_semaphore: LibcSemaphore,
+    task_start_semaphore: LibcSemaphoreArc,
     /// The OS pid for this thread.
     tid: nix::unistd::Pid,
     /// The logical processor index that this thread is assigned to.
@@ -103,7 +103,7 @@ impl ParallelismBoundedThreadPool {
             .cycle()
             .zip(&tids)
             .map(|(processor_idx, tid)| ThreadScheduling {
-                task_start_semaphore: LibcSemaphore::new(0),
+                task_start_semaphore: LibcSemaphoreArc::new(0),
                 tid: *tid,
                 logical_processor_idx: AtomicUsize::new(processor_idx),
             })

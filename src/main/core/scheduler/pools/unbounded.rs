@@ -8,7 +8,7 @@ use atomic_refcell::AtomicRefCell;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
-use crate::utility::synchronization::semaphore::LibcSemaphore;
+use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
 
 // If making substantial changes to this scheduler, you should uncomment each test at the end of
 // this file to make sure that they correctly cause a compilation error. This work pool unsafely
@@ -29,7 +29,7 @@ pub struct UnboundedThreadPool {
     /// State shared between all threads.
     shared_state: Arc<SharedState>,
     /// Semaphores used by work threads to wait for a new task.
-    task_start_semaphores: Vec<LibcSemaphore>,
+    task_start_semaphores: Vec<LibcSemaphoreArc>,
     /// The main thread uses this to wait for the threads to finish running the task.
     task_end_waiter: LatchWaiter,
 }
@@ -54,7 +54,7 @@ impl UnboundedThreadPool {
         let mut task_start_semaphores = Vec::new();
 
         for i in 0..num_threads {
-            let task_start_semaphore = LibcSemaphore::new(0);
+            let task_start_semaphore = LibcSemaphoreArc::new(0);
             let shared_state_clone = Arc::clone(&shared_state);
             let task_start_semaphore_clone = task_start_semaphore.clone();
             let task_end_counter_clone = task_end_counter.clone();
@@ -222,7 +222,7 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
 fn work_loop(
     thread_index: usize,
     shared_state: Arc<SharedState>,
-    task_start_semaphore: LibcSemaphore,
+    task_start_semaphore: LibcSemaphoreArc,
     mut end_counter: LatchCounter,
 ) {
     // this will poison the workpool when it's dropped
