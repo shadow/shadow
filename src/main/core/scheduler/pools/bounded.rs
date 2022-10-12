@@ -11,13 +11,13 @@ use crate::utility::synchronization::count_down_latch::{
 };
 use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
 
-// If making substantial changes to this scheduler, you should uncomment each test at the end of
-// this file to make sure that they correctly cause a compilation error. This work pool unsafely
-// transmutes the task closure lifetime, and the commented tests are meant to make sure that the
-// work pool does not allow unsound code to compile. Due to lifetime sub-typing/variance, rust will
-// sometimes allow closures with shorter or longer lifetimes than we specify in the API, so the
-// tests check to make sure the closures are invariant over the lifetime and that the usage is
-// sound.
+// If making substantial changes to this scheduler, you should verify the compilation error message
+// for each test at the end of this file to make sure that they correctly cause the expected
+// compilation error. This work pool unsafely transmutes the task closure lifetime, and the
+// commented tests are meant to make sure that the work pool does not allow unsound code to compile.
+// Due to lifetime sub-typing/variance, rust will sometimes allow closures with shorter or longer
+// lifetimes than we specify in the API, so the tests check to make sure the closures are invariant
+// over the lifetime and that the usage is sound.
 
 /// Context information provided to each task closure.
 pub struct TaskData {
@@ -455,7 +455,7 @@ fn assign_to_processor(
         .store(processor_idx, Ordering::Release);
 }
 
-#[cfg(test)]
+#[cfg(any(test, doctest))]
 mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU32};
 
@@ -581,23 +581,21 @@ mod tests {
     }
 
     // should not compile: "cannot assign to `counter` because it is borrowed"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_aliasing_borrows() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        let mut counter = 0;
-        pool.scope(|s| {
-            s.run(|_| {
-                let _x = counter;
-            });
-            counter += 1;
-        });
-
-        assert_eq!(counter, 1);
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// let mut counter = 0;
+    /// pool.scope(|s| {
+    ///     s.run(|_| {
+    ///         let _x = counter;
+    ///     });
+    ///     counter += 1;
+    /// });
+    ///
+    /// assert_eq!(counter, 1);
+    /// ```
+    fn _test_aliasing_borrows() {}
 
     #[test]
     #[should_panic]
@@ -630,38 +628,34 @@ mod tests {
     }
 
     // should not compile: "`x` does not live long enough"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_panic_any() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        let x = 5;
-        pool.scope(|s| {
-            s.run(|_| {
-                std::panic::panic_any(&x);
-            });
-        });
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// let x = 5;
+    /// pool.scope(|s| {
+    ///     s.run(|_| {
+    ///         std::panic::panic_any(&x);
+    ///     });
+    /// });
+    /// ```
+    fn _test_panic_any() {}
 
     // should not compile: "closure may outlive the current function, but it borrows `x`, which is
     // owned by the current function"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_scope_lifetime() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        pool.scope(|s| {
-            // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
-            let x = 5;
-            s.run(|_| {
-                let _x = x;
-            });
-        });
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// pool.scope(|s| {
+    ///     // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
+    ///     let x = 5;
+    ///     s.run(|_| {
+    ///         let _x = x;
+    ///     });
+    /// });
+    /// ```
+    fn _test_scope_lifetime() {}
 
     #[test]
     #[cfg_attr(miri, ignore)]
