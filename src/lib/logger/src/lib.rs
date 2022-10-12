@@ -4,7 +4,7 @@ mod bindings {
     #![allow(non_snake_case)]
     // https://github.com/rust-lang/rust/issues/66220
     #![allow(improper_ctypes)]
-    include!("bindings.rs");
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
 // For legacy compatibility.
