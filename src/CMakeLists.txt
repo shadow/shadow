@@ -90,7 +90,7 @@ add_test(NAME rust-unit-tests
          COMMAND bash -c "${CARGO_ENV_VARS} cargo test ${RUST_TARGET_FLAG} ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
-set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE)
+set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE)
 
 # Outside of external, inclusion of headers within the project should be
 # relative to this directory.
