@@ -19,7 +19,6 @@ typedef struct _Host Host;
 
 #include "lib/logger/log_level.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
 #include "main/host/cpu.h"

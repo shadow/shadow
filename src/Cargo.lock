@@ -1113,6 +1113,7 @@ dependencies = [
  "rkyv",
  "shadow-build-common",
  "shadow_shmem",
+ "static_assertions",
  "system-deps",
  "vasi",
 ]

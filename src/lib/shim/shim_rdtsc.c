@@ -9,6 +9,7 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/ucontext.h>
+#include <time.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"

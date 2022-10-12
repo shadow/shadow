@@ -9,6 +9,7 @@
 #include <sys/prctl.h>
 
 #include "lib/logger/logger.h"
+#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 

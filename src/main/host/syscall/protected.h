@@ -15,7 +15,7 @@
 
 #include <stdbool.h>
 
-#include "lib/shadow-shim-helper-rs/shim_shmem.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
