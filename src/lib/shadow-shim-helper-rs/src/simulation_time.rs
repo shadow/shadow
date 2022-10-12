@@ -11,8 +11,10 @@ This module contains some identically-named constants defined as C macros in
 
 use super::emulated_time;
 use std::time::Duration;
+use vasi::VirtualAddressSpaceIndependent;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, VirtualAddressSpaceIndependent)]
+#[repr(C)]
 pub struct SimulationTime(CSimulationTime);
 
 /// The same as the type alias in the 'main/cshadow.rs' bindings.
