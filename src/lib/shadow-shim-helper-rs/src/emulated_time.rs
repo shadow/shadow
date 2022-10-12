@@ -2,6 +2,8 @@
 Deals with instances of time in a Shadow simulation.
 */
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -42,6 +44,7 @@ impl EmulatedTime {
     pub const UNIX_EPOCH: Self = Self(0);
 
     pub const MAX: Self = Self(EMUTIME_MAX);
+    pub const MIN: Self = Self(0);
 
     /// Get the instance corresponding to `val` SimulationTime units since the Unix Epoch.
     pub const fn from_c_emutime(val: CEmulatedTime) -> Option<Self> {
@@ -240,5 +243,23 @@ mod tests {
             (EmulatedTime::SIMULATION_START + SimulationTime::SECOND).to_abs_simtime(),
             SimulationTime::SECOND
         );
+    }
+}
+
+#[derive(VirtualAddressSpaceIndependent)]
+#[repr(C)]
+pub struct AtomicEmulatedTime(AtomicU64);
+
+impl AtomicEmulatedTime {
+    pub fn new(t: EmulatedTime) -> Self {
+        Self(AtomicU64::new(t.0))
+    }
+
+    pub fn load(&self, order: Ordering) -> EmulatedTime {
+        EmulatedTime(self.0.load(order))
+    }
+
+    pub fn store(&self, val: EmulatedTime, order: Ordering) {
+        self.0.store(val.0, order)
     }
 }
