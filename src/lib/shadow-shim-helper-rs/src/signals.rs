@@ -1,4 +1,5 @@
 use nix::sys::signal::Signal;
+use vasi::VirtualAddressSpaceIndependent;
 
 pub const SHD_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
@@ -18,7 +19,7 @@ pub const SS_AUTODISARM: i32 = 1 << 31;
 ///
 /// This is analagous to, but typically smaller than, libc's sigset_t.
 #[repr(C)]
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, VirtualAddressSpaceIndependent)]
 pub struct shd_kernel_sigset_t {
     val: u64,
 }
@@ -46,6 +47,20 @@ impl shd_kernel_sigset_t {
 
     pub fn is_empty(&self) -> bool {
         *self == shd_kernel_sigset_t::EMPTY
+    }
+
+    pub fn del(&mut self, sig: Signal) {
+        *self &= !shd_kernel_sigset_t::from(sig);
+    }
+
+    pub fn add(&mut self, sig: Signal) {
+        *self |= shd_kernel_sigset_t::from(sig);
+    }
+}
+
+impl Default for shd_kernel_sigset_t {
+    fn default() -> Self {
+        Self { val: 0 }
     }
 }
 
@@ -157,12 +172,15 @@ fn test_not() {
     assert!(set.has(Signal::SIGALRM));
 }
 
-/// In C this is conventioanlly an anonymous union, but those aren't supported
+/// In C this is conventionally an anonymous union, but those aren't supported
 /// in Rust. <https://github.com/rust-lang/rust/issues/49804>
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub union ShdKernelSigactionUnion {
-    ksa_handler: fn(i32),
-    ksa_sigaction: fn(i32, *mut libc::siginfo_t, *mut libc::c_void),
+    // Rust guarantees that the outer Option doesn't change the size:
+    // https://doc.rust-lang.org/std/option/index.html#representation
+    ksa_handler: Option<extern "C" fn(i32)>,
+    ksa_sigaction: Option<extern "C" fn(i32, *mut libc::siginfo_t, *mut libc::c_void)>,
 }
 
 /// Compatible with kernel's definition of `struct sigaction`. Different from
@@ -172,12 +190,32 @@ pub union ShdKernelSigactionUnion {
 ///
 /// We use the field prefix ksa_ to avoid conflicting with macros defined for
 /// the corresponding field names in glibc.
+#[derive(VirtualAddressSpaceIndependent, Copy, Clone)]
 #[repr(C)]
 pub struct shd_kernel_sigaction {
+    // SAFETY: We do not dereference the pointers in this union, except from the
+    // shim, where it is valid to do so.
+    #[unsafe_assume_virtual_address_space_independent]
     u: ShdKernelSigactionUnion,
     ksa_flags: i32,
-    ksa_restorer: fn(),
+    // Rust guarantees that the outer Option doesn't change the size:
+    // https://doc.rust-lang.org/std/option/index.html#representation
+    //
+    // SAFETY: We never dereference this field.
+    #[unsafe_assume_virtual_address_space_independent]
+    ksa_restorer: Option<extern "C" fn()>,
     ksa_mask: shd_kernel_sigset_t,
+}
+
+impl Default for shd_kernel_sigaction {
+    fn default() -> Self {
+        Self {
+            u: ShdKernelSigactionUnion { ksa_handler: None },
+            ksa_flags: Default::default(),
+            ksa_restorer: Default::default(),
+            ksa_mask: Default::default(),
+        }
+    }
 }
 
 // Corresponds to default actions documented in signal(7).
@@ -254,14 +292,14 @@ mod export {
     pub unsafe extern "C" fn shd_sigaddset(set: *mut shd_kernel_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
-        *set |= shd_kernel_sigset_t::from(signo);
+        set.add(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shd_sigdelset(set: *mut shd_kernel_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
-        *set &= !shd_kernel_sigset_t::from(signo);
+        set.del(signo);
     }
 
     #[no_mangle]
