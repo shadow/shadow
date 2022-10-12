@@ -1,5 +1,6 @@
 use super::{Root, Tag};
 use std::cell::{Cell, UnsafeCell};
+use vasi::VirtualAddressSpaceIndependent;
 
 /// Analagous to [std::cell::RefCell]. In particular like [std::cell::RefCell]
 /// and unlike [std::sync::Mutex], it  doesn't perform any atomic operations
@@ -8,11 +9,19 @@ use std::cell::{Cell, UnsafeCell};
 /// Unlike [std::cell::RefCell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to borrow.
+#[repr(C)]
 pub struct RootedRefCell<T> {
     tag: Tag,
     val: UnsafeCell<T>,
     reader_count: Cell<u32>,
     writer: Cell<bool>,
+}
+
+// SAFETY: RootedRefCell is VirtualAddressSpaceIndependent as long as T is.
+// e.g. UnsafeCell and Cell are `repr(transparent)`.
+unsafe impl<T> VirtualAddressSpaceIndependent for RootedRefCell<T> where
+    T: VirtualAddressSpaceIndependent
+{
 }
 
 impl<T> RootedRefCell<T> {
@@ -117,8 +126,8 @@ impl<'a, T> Drop for RootedRefCellRefMut<'a, T> {
 mod test_rooted_refcell {
     use super::*;
 
-    use std::thread;
     use crate::rootedcell::rc::RootedRc;
+    use std::thread;
 
     #[test]
     fn construct_and_drop() {

@@ -40,3 +40,26 @@ unsafe impl<T, const N: usize> VirtualAddressSpaceIndependent for [T; N] where
     T: VirtualAddressSpaceIndependent
 {
 }
+
+// PhantomData is intrinsically VirtualAddressSpaceIndependent.
+//
+// Conservatively only implement when T is VirtualAddressSpaceIndependent,
+// but unclear whether this restriction is necessary.
+unsafe impl<T> VirtualAddressSpaceIndependent for core::marker::PhantomData<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+// Cell is `repr(transparent)` around an `UnsafeCell<T>`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::cell::Cell<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+// UnsafeCell is `repr(transparent)` around a `T`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::cell::UnsafeCell<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+unsafe impl VirtualAddressSpaceIndependent for () {}
