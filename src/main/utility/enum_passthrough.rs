@@ -2,7 +2,7 @@
 
 For example, the usage:
 
-```rust
+```ignore
 enum_passthrough!(self, (cb_queue), Pipe, Socket;
     pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult
 );
@@ -10,7 +10,7 @@ enum_passthrough!(self, (cb_queue), Pipe, Socket;
 
 expands to:
 
-```rust
+```ignore
 pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult {
     match self {
         Self::Pipe(x) => x.close(cb_queue),
@@ -33,7 +33,7 @@ macro_rules! enum_passthrough {
 
 /** Like [`enum_passthrough!`], but allows generics. For example:
 
-```rust
+```ignore
 enum_passthrough_generic!(self, (bytes, offset, cb_queue), Pipe, Socket;
     pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut EventQueue) -> SyscallResult
     where W: std::io::Write + std::io::Seek
@@ -55,7 +55,7 @@ macro_rules! enum_passthrough_generic {
 
 /** Like [`enum_passthrough!`], but calls `into()` on the return value. For example:
 
-```rust
+```ignore
 enum_passthrough_into!(self, (cb_queue), Pipe, Socket;
     pub fn close(&mut self, cb_queue: &mut EventQueue) -> SyscallResult
 );

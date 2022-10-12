@@ -124,7 +124,7 @@ enum CopiedOrMapped<'a, T: Debug + Pod> {
 /// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 /// allowing, e.g.:
 ///
-/// ```
+/// ```ignore
 /// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref(ptr);
 /// assert_eq!(pmr.len(), 10);
@@ -182,7 +182,7 @@ enum CopiedOrMappedMut<'a, T: Debug + Pod> {
 /// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 /// allowing, e.g.:
 ///
-/// ```
+/// ```ignore
 /// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref_mut(ptr);
 /// assert_eq!(pmr.len(), 10);
