@@ -2,6 +2,8 @@
 Types for parsing/deserializing unit values.
 
 ```
+# use shadow_rs::core::support::units::*;
+# use std::str::FromStr;
 let time = Time::from_str("10 min").unwrap();
 assert_eq!(time, Time::new(10, TimePrefix::Min));
 

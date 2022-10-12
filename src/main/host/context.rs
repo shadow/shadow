@@ -16,7 +16,7 @@
 //! plan is that they'll be temporarily removed from their collections. e.g. something
 //! conceptually like:
 //!
-//! ```
+//! ```ignore
 //! impl Process {
 //!     pub fn continue_thread(&mut self, host_ctx: &mut HostContext, tid: ThreadId) {
 //!         let thread = self.threads.get_mut(tid).take();

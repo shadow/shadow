@@ -5,28 +5,38 @@ pub type Interval = Range<usize>;
 /// Describes modifications of an IntervalMap after overwriting an interval.
 #[derive(PartialEq, Eq, Debug)]
 pub enum Mutation<V> {
+    /// ```text
     ///       b     e
     /// from: |---v-|
     /// to:     |-v-|
     ///         b'
+    /// ```
+    ///
     /// Contains: ((b,e), b')
     ModifiedBegin(Interval, usize),
+    /// ```text
     ///       b     e
     /// from: |---v-|
     /// to:   |-v-|
     ///           e'
+    /// ```
+    ///
     /// Contains: ((b,e), e')
     ModifiedEnd(Interval, usize),
+    /// ```text
     ///        b             e
     /// from:  |-----v-------|
     /// to:    |-v--|  |--v--|
     ///        b   e'  b'    e
+    /// ```
     ///
     /// Contains: ((b,e), (b,e'), (b',e)
     Split(Interval, Interval, Interval),
+    /// ```text
     ///       b     e
     /// from: |---v-|
     /// to:
+    /// ```
     ///
     /// Contains: (b,e), v
     Removed(Interval, V),

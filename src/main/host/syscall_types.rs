@@ -198,7 +198,7 @@ impl std::fmt::Debug for c::SysCallReg {
 ///
 /// Example:
 ///
-/// ```
+/// ```ignore
 /// let x: TypedPluginPtr<u8>;
 ///
 /// // normally the `<u8>` wouldn't be required since Rust would infer it from the type of `x`, but
