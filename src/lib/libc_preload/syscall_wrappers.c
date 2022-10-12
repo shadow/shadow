@@ -623,12 +623,8 @@ INTERPOSE(prctl);
 #ifdef SYS_pread64 // kernel entry: num=17 func=sys_pread64
 INTERPOSE(pread64);
 #endif
-#ifdef SYS_preadv // kernel entry: num=295 func=sys_preadv
-INTERPOSE(preadv);
-#endif
-#ifdef SYS_preadv2 // kernel entry: num=327 func=sys_preadv2
-INTERPOSE(preadv2);
-#endif
+// Skipping SYS_preadv
+// Skipping SYS_preadv2
 #ifdef SYS_prlimit64 // kernel entry: num=302 func=sys_prlimit64
 INTERPOSE(prlimit64);
 #endif
@@ -653,12 +649,8 @@ INTERPOSE(ptrace);
 #ifdef SYS_pwrite64 // kernel entry: num=18 func=sys_pwrite64
 INTERPOSE(pwrite64);
 #endif
-#ifdef SYS_pwritev // kernel entry: num=296 func=sys_pwritev
-INTERPOSE(pwritev);
-#endif
-#ifdef SYS_pwritev2 // kernel entry: num=328 func=sys_pwritev2
-INTERPOSE(pwritev2);
-#endif
+// Skipping SYS_pwritev
+// Skipping SYS_pwritev2
 #ifdef SYS_quotactl // kernel entry: num=179 func=sys_quotactl
 INTERPOSE(quotactl);
 #endif

@@ -18,4 +18,10 @@ SYSCALL_HANDLER(set_tid_address);
 SYSCALL_HANDLER(uname);
 SYSCALL_HANDLER(write);
 
+SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                         size_t bufSize, off_t offset, bool doPread);
+
+SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                          size_t bufSize, off_t offset, bool doPwrite);
+
 #endif /* SRC_MAIN_HOST_SYSCALL_UNISTD_H_ */

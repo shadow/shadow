@@ -14,7 +14,7 @@
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/socket.h"
+#include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
@@ -61,7 +61,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
         PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
-        if (!bufPtr.val) {
+        if (!bufPtr.val && bufSize != 0) {
             debug("Invalid NULL pointer in iovec[%ld]", i);
             free(iov);
             return -EFAULT;
@@ -80,9 +80,11 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
 static SysCallReturn
 _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                             unsigned long iovlen, unsigned long pos_l,
-                            unsigned long pos_h, int flags) {
+                            unsigned long pos_h, int flags, bool doPreadv) {
     /* Reconstruct the offset from the high and low bits */
-    off_t offset = (off_t)((pos_h << 32) & pos_l);
+    pos_h = pos_h & UINT32_MAX;
+    pos_l = pos_l & UINT32_MAX;
+    off_t offset = (off_t)((pos_h << 32) | pos_l);
 
     trace("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
@@ -104,96 +106,74 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
     ssize_t result = 0;
 
-    /* Now we can perform the write operations. */
-    if (dType == DT_FILE) {
-        /* For files, we read all of the buffers from the plugin and then
-         * let file pwritev handle it. */
-        struct iovec* buffersv = malloc(iovlen * sizeof(*iov));
+    /* Now we can perform the read operations. */
 
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
+    /* For non-files, we only read one buffer at a time to avoid
+     * unnecessary data transfer between the plugin and Shadow. */
+    size_t totalBytesWritten = 0;
 
-            buffersv[i].iov_base = process_getWriteablePtr(sys->process, bufPtr, bufSize);
-            buffersv[i].iov_len = bufSize;
+    for (unsigned long i = 0; i < iovlen; i++) {
+        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        size_t bufSize = iov[i].iov_len;
+
+        if (bufSize == 0) {
+            /* Nothing to do if the buffer is empty. */
+            continue;
         }
 
-#ifdef SYS_preadv2
-        result =
-            regularfile_preadv2((RegularFile*)desc, sys->host, buffersv, iovlen, offset, flags);
-#else
-        if (flags) {
-            warning("Ignoring flags");
-        }
-        result = regularfile_preadv((RegularFile*)desc, sys->host, buffersv, iovlen, offset);
-#endif
+        switch (dType) {
+            case DT_FILE:
+            case DT_TCPSOCKET:
+            case DT_UDPSOCKET: {
+                off_t thisOffset = offset;
 
-        free(buffersv);
-    } else {
-        /* For non-files, we only read one buffer at a time to avoid
-         * unnecessary data transfer between the plugin and Shadow. */
-        size_t totalBytesWritten = 0;
-
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
-
-            if (bufSize == 0) {
-                /* Nothing to do if the buffer is empty. */
-                continue;
-            }
-
-            switch (dType) {
-                case DT_FILE: {
-                    /* Handled above. */
-                    utility_debugAssert(0);
-                    break;
+                if (doPreadv) {
+                    thisOffset += totalBytesWritten;
                 }
-                case DT_TCPSOCKET:
-                case DT_UDPSOCKET: {
-                    SysCallReturn scr = _syscallhandler_recvfromHelper(
-                        sys, fd, bufPtr, bufSize, 0, (PluginPtr){0},
-                        (PluginPtr){0});
 
-                    switch (scr.state) {
-                        case SYSCALL_DONE: {
-                            result = syscallreturn_done(&scr)->retval.as_i64;
-                            break;
-                        }
-                        case SYSCALL_BLOCK: {
-                            // assume that there was no timer, and that we're blocked on this socket
-                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
-                            syscallcondition_unref(blocked->cond);
-                            result = -EWOULDBLOCK;
-                            break;
-                        }
-                        case SYSCALL_NATIVE: {
-                            panic("recv() returned SYSCALL_NATIVE");
-                        }
+                SysCallReturn scr =
+                    _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, thisOffset, doPreadv);
+
+                // if the above syscall handler created any pointers, we may
+                // need to flush them before calling the syscall handler again
+                process_flushPtrs(sys->process);
+
+                switch (scr.state) {
+                    case SYSCALL_DONE: {
+                        result = syscallreturn_done(&scr)->retval.as_i64;
+                        break;
                     }
+                    case SYSCALL_BLOCK: {
+                        // assume that there was no timer, and that we're blocked on this socket
+                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        syscallcondition_unref(blocked->cond);
+                        result = -EWOULDBLOCK;
+                        break;
+                    }
+                    case SYSCALL_NATIVE: {
+                        panic("recv() returned SYSCALL_NATIVE");
+                    }
+                }
 
-                    break;
-                }
-                case DT_TIMER:
-                case DT_EPOLL:
-                default: {
-                    warning(
-                        "readv() not yet implemented for descriptor type %i",
-                        (int)dType);
-                    result = -ENOTSUP;
-                    break;
-                }
+                break;
             }
-
-            if (result > 0) {
-                totalBytesWritten += (size_t)result;
-            } else {
+            case DT_TIMER:
+            case DT_EPOLL:
+            default: {
+                warning("readv() not yet implemented for descriptor type %i", (int)dType);
+                result = -ENOTSUP;
                 break;
             }
         }
-        if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
-            result = totalBytesWritten;
+
+        if (result > 0) {
+            totalBytesWritten += (size_t)result;
+        } else {
+            break;
         }
+    }
+    if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+        result = totalBytesWritten;
     }
 
     free(iov);
@@ -221,9 +201,11 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 static SysCallReturn
 _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                              unsigned long iovlen, unsigned long pos_l,
-                             unsigned long pos_h, int flags) {
+                             unsigned long pos_h, int flags, bool doPwritev) {
     /* Reconstruct the offset from the high and low bits */
-    off_t offset = (off_t)((pos_h << 32) & pos_l);
+    pos_h = pos_h & UINT32_MAX;
+    pos_l = pos_l & UINT32_MAX;
+    off_t offset = (off_t)((pos_h << 32) | pos_l);
 
     trace("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
@@ -246,93 +228,73 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     ssize_t result = 0;
 
     /* Now we can perform the write operations. */
-    if (dType == DT_FILE) {
-        /* For files, we read all of the buffers from the plugin and then
-         * let file pwritev handle it. */
-        struct iovec* buffersv = malloc(iovlen * sizeof(*iov));
 
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
+    /* For non-files, we only read one buffer at a time to avoid
+     * unnecessary data transfer between the plugin and Shadow. */
+    size_t totalBytesWritten = 0;
 
-            buffersv[i].iov_base = (void*)process_getReadablePtr(sys->process, bufPtr, bufSize);
-            buffersv[i].iov_len = bufSize;
+    for (unsigned long i = 0; i < iovlen; i++) {
+        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        size_t bufSize = iov[i].iov_len;
+
+        if (bufSize == 0) {
+            /* Nothing to do if the buffer is empty. */
+            continue;
         }
 
-#ifdef SYS_pwritev2
-        result = regularfile_pwritev2((RegularFile*)desc, buffersv, iovlen, offset, flags);
-#else
-        if (flags) {
-            warning("Ignoring flags");
-        }
-        result = regularfile_pwritev((RegularFile*)desc, buffersv, iovlen, offset);
-#endif
+        switch (dType) {
+            case DT_FILE:
+            case DT_TCPSOCKET:
+            case DT_UDPSOCKET: {
+                off_t thisOffset = offset;
 
-        free(buffersv);
-    } else {
-        /* For non-files, we only read one buffer at a time to avoid
-         * unnecessary data transfer between the plugin and Shadow. */
-        size_t totalBytesWritten = 0;
-
-        for (unsigned long i = 0; i < iovlen; i++) {
-            PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
-            size_t bufSize = iov[i].iov_len;
-
-            if (bufSize == 0) {
-                /* Nothing to do if the buffer is empty. */
-                continue;
-            }
-
-            switch (dType) {
-                case DT_FILE: {
-                    /* Handled above. */
-                    utility_debugAssert(0);
-                    break;
+                if (doPwritev) {
+                    thisOffset += totalBytesWritten;
                 }
-                case DT_TCPSOCKET:
-                case DT_UDPSOCKET: {
-                    SysCallReturn scr = _syscallhandler_sendtoHelper(
-                        sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
 
-                    switch (scr.state) {
-                        case SYSCALL_DONE: {
-                            result = syscallreturn_done(&scr)->retval.as_i64;
-                            break;
-                        }
-                        case SYSCALL_BLOCK: {
-                            // assume that there was no timer, and that we're blocked on this socket
-                            SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
-                            syscallcondition_unref(blocked->cond);
-                            result = -EWOULDBLOCK;
-                            break;
-                        }
-                        case SYSCALL_NATIVE: {
-                            panic("send() returned SYSCALL_NATIVE");
-                        }
+                SysCallReturn scr =
+                    _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, thisOffset, doPwritev);
+
+                // if the above syscall handler created any pointers, we may
+                // need to flush them before calling the syscall handler again
+                process_flushPtrs(sys->process);
+
+                switch (scr.state) {
+                    case SYSCALL_DONE: {
+                        result = syscallreturn_done(&scr)->retval.as_i64;
+                        break;
                     }
+                    case SYSCALL_BLOCK: {
+                        // assume that there was no timer, and that we're blocked on this socket
+                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        syscallcondition_unref(blocked->cond);
+                        result = -EWOULDBLOCK;
+                        break;
+                    }
+                    case SYSCALL_NATIVE: {
+                        panic("send() returned SYSCALL_NATIVE");
+                    }
+                }
 
-                    break;
-                }
-                case DT_TIMER:
-                case DT_EPOLL:
-                default: {
-                    warning(
-                        "writev() not yet implemented for descriptor type %i",
-                        (int)dType);
-                    result = -ENOTSUP;
-                    break;
-                }
+                break;
             }
-
-            if (result > 0) {
-                totalBytesWritten += (size_t)result;
-            } else {
+            case DT_TIMER:
+            case DT_EPOLL:
+            default: {
+                warning("writev() not yet implemented for descriptor type %i", (int)dType);
+                result = -ENOTSUP;
                 break;
             }
         }
-        if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
-            result = totalBytesWritten;
+
+        if (result > 0) {
+            totalBytesWritten += (size_t)result;
+        } else {
+            break;
         }
+    }
+    if (result >= 0 || (result == -EWOULDBLOCK && totalBytesWritten > 0)) {
+        result = totalBytesWritten;
     }
 
     free(iov);
@@ -363,42 +325,40 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
 SysCallReturn syscallhandler_readv(SysCallHandler* sys,
                                    const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(sys, args->args[0].as_i64,
-                                       args->args[1].as_ptr,
-                                       args->args[2].as_u64, 0, 0, 0);
+    return _syscallhandler_readvHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, 0, 0, false);
 }
 
 SysCallReturn syscallhandler_preadv(SysCallHandler* sys,
                                     const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, 0);
+    return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                       args->args[2].as_u64, args->args[3].as_u64,
+                                       args->args[4].as_u64, 0, true);
 }
 
 SysCallReturn syscallhandler_preadv2(SysCallHandler* sys,
                                      const SysCallArgs* args) {
-    return _syscallhandler_readvHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, args->args[5].as_i64);
+    return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                       args->args[2].as_u64, args->args[3].as_u64,
+                                       args->args[4].as_u64, args->args[5].as_i64, true);
 }
 
 SysCallReturn syscallhandler_writev(SysCallHandler* sys,
                                     const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(sys, args->args[0].as_i64,
-                                        args->args[1].as_ptr,
-                                        args->args[2].as_u64, 0, 0, 0);
+    return _syscallhandler_writevHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, 0, 0, false);
 }
 
 SysCallReturn syscallhandler_pwritev(SysCallHandler* sys,
                                      const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, 0);
+    return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                        args->args[2].as_u64, args->args[3].as_u64,
+                                        args->args[4].as_u64, 0, true);
 }
 
 SysCallReturn syscallhandler_pwritev2(SysCallHandler* sys,
                                       const SysCallArgs* args) {
-    return _syscallhandler_writevHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_u64, args->args[4].as_u64, args->args[5].as_i64);
+    return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                        args->args[2].as_u64, args->args[3].as_u64,
+                                        args->args[4].as_u64, args->args[5].as_i64, true);
 }
