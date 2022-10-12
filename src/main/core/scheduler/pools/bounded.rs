@@ -302,6 +302,24 @@ fn work_loop(
     shared_state_recv: crossbeam::channel::Receiver<Arc<SharedState>>,
     mut end_counter: LatchCounter,
 ) {
+    // we don't use `catch_unwind` here for two main reasons:
+    //
+    // 1. `catch_unwind` requires that the closure is `UnwindSafe`, which means that `TaskFn` also
+    // needs to be `UnwindSafe`. This is a big restriction on the types of tasks that we could run,
+    // since it requires that there's no interior mutability in the closure. rayon seems to get
+    // around this by wrapping the closure in `AssertUnwindSafe`, under the assumption that the
+    // panic will be propagated later with `resume_unwinding`, but this is a little more difficult
+    // to reason about compared to simply avoiding `catch_unwind` altogether.
+    // https://github.com/rayon-rs/rayon/blob/c571f8ffb4f74c8c09b4e1e6d9979b71b4414d07/rayon-core/src/unwind.rs#L9
+    //
+    // 2. There is a footgun with `catch_unwind` that could cause unexpected behaviour. If the
+    // closure called `panic_any()` with a type that has a Drop implementation, and that Drop
+    // implementation panics, it will cause a panic that is not caught by the `catch_unwind`,
+    // causing the thread to panic again with no chance to clean up properly. The work pool would
+    // then deadlock. Since we don't use `catch_unwind`, the thread will instead "panic when
+    // panicking" and abort, which is a more ideal outcome.
+    // https://github.com/rust-lang/rust/issues/86027
+
     // this will poison the workpool when it's dropped
     struct PoisonWhenDropped<'a>(&'a SharedState);
 
