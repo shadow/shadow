@@ -19,6 +19,11 @@ remap['eventfd'] = 'eventfd2' # libc eventfd() calls SYS_eventfd2
 skip = set()
 # libc doesn't have an eventfd2() wrapper
 skip.add('eventfd2')
+# the offset is split into two arguments
+skip.add('preadv')
+skip.add('preadv2')
+skip.add('pwritev')
+skip.add('pwritev2')
 # `exit` has a non-trivial wrapper that calls `atexit` hooks, flushes open
 # `FILE*` objects, etc.
 skip.add('exit')
