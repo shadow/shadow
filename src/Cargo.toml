@@ -9,5 +9,7 @@ members = [
     "lib/shmem",
     "lib/shadow-shim-helper-rs",
     "lib/syscall-logger",
-    "lib/tsc"
+    "lib/tsc",
+    "lib/vasi",
+    "lib/vasi-macro",
 ]
