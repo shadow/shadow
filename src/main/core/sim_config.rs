@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
+use log::warn;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 
@@ -342,38 +343,56 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
             .with_context(|| format!("Failed to parse arguments: {x}"))?,
     };
 
-    let proc_path = proc.path.to_str().unwrap();
+    let expanded_path = tilde_expansion(proc.path.to_str().unwrap());
 
-    // Check if the path has no '/' where it is likely to be a executable that should be sourced from $PATH
-    // TODO: In next breaking release, if likely_not_path is true, source from $PATH by default and remove deprecation warning below. Also make sure to fix all the broken tests that will result.
-    let likely_not_path = proc_path.chars().find(|c|*c == '/').is_none();
-    
-    let expanded_path = tilde_expansion(proc_path);
+    // We currently use `which::which`, which searches the `PATH` similarly to a
+    // shell.
+    let new_canonical_path: Result<PathBuf, anyhow::Error> = which::which(&expanded_path)
+        .map_err(anyhow::Error::from)
+        // `which` returns an absolute path, but it may still contain
+        // symbolic links, .., etc.
+        .and_then(|p| p.canonicalize().map_err(anyhow::Error::from));
+    // We previously used only `std::fs::canonicalize`, which doesn't search
+    // `PATH`, and *does* search the current directory.
+    let legacy_canonical_path: Result<PathBuf, anyhow::Error> = expanded_path
+        .canonicalize()
+        .map_err(|e| anyhow::Error::from(e));
 
-    let plugin = match expanded_path
-        .canonicalize().with_context(|| format!("Failed to canonicalize plugin path '{}'", expanded_path.display())) {
-        Ok(plugin) => { // Warn that relative path "thing" should be changed to "./thing" 
-            if likely_not_path { log::warn!("The relative path \"{0}\" will be deprecated in favor of \"./{0}\"", proc_path) }
-            plugin
-        }
-        Err(_) if likely_not_path => {
-            let plugin = which::which(proc_path).with_context(|| format!("Failed to resolve \"{proc_path}\" from $PATH"))?;
-            log::info!("Resolved process path \"{proc_path}\" to \"{}\"", plugin.display());
-            plugin
-        }
-        Err(err) => Err(err)?,
+    let canonical_path = if new_canonical_path.is_ok()
+        && legacy_canonical_path.is_ok()
+        && *new_canonical_path.as_ref().unwrap() != *legacy_canonical_path.as_ref().unwrap()
+    {
+        warn!("Ambiguous path: {:?} resolves to either {:?} or {:?}. Using {:?} for backards compatibility, but a future version of shadow will not implicitly search the current working directory. Consider making absolute or prefixing with './'",
+            expanded_path,
+            legacy_canonical_path.as_ref().unwrap(),
+            new_canonical_path.as_ref().unwrap(),
+            legacy_canonical_path.as_ref().unwrap());
+        legacy_canonical_path.as_ref().unwrap()
+    } else if let Ok(p) = new_canonical_path.as_ref() {
+        p
+    } else if let Ok(p) = legacy_canonical_path.as_ref() {
+        warn!("Expanded path {:?} only via legacy fallback search, which implicitly searched current working dir. Consider prefixing with './'", proc.path.to_str().unwrap());
+        p
+    } else {
+        return Err(new_canonical_path
+            .with_context(|| format!("Failed to resolve plugin path '{:?}'", expanded_path))
+            .unwrap_err());
     };
 
-    // verify that the path is a file and is executable
-    verify_plugin_path(&plugin)
-        .with_context(|| format!("Failed to verify plugin path '{}'", plugin.display()))?;
+    verify_plugin_path(&canonical_path)
+        .with_context(|| format!("Failed to verify plugin path '{:?}'", canonical_path))?;
+    log::info!(
+        "Resolved binary path {:?} to {:?}",
+        proc.path,
+        canonical_path
+    );
 
     // set argv[0] as the user-provided expanded string, not the canonicalized version
     args.insert(0, expanded_path.into());
 
     Ok(vec![
         ProcessInfo {
-            plugin: plugin,
+            plugin: canonical_path.clone(),
             start_time,
             stop_time,
             args: args,
