@@ -5,6 +5,7 @@
  */
 
 #include "main/bindings/c/bindings.h"
+#include "shd-build-info.h"
 
 int main(int argc, char* argv[]) {
     ShadowBuildInfo info = {
