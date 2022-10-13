@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
     ops::Deref,
     pin::Pin,
-    sync::atomic::{AtomicI32, Ordering},
+    sync::atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
 /// Simple mutex that is suitable for use in shared memory:
@@ -15,6 +15,7 @@ use std::{
 #[repr(C)]
 pub struct SelfContainedMutex<T> {
     futex: AtomicI32,
+    sleepers: AtomicU32,
     val: UnsafeCell<T>,
 }
 
@@ -29,6 +30,7 @@ impl<T> SelfContainedMutex<T> {
     pub fn new(val: T) -> Self {
         Self {
             futex: AtomicI32::new(UNLOCKED),
+            sleepers: AtomicU32::new(0),
             val: UnsafeCell::new(val),
         }
     }
@@ -57,9 +59,12 @@ impl<T> SelfContainedMutex<T> {
     pub fn lock(&self) -> SelfContainedMutexGuard<T> {
         loop {
             // Try to take the lock.
+            //
+            // We use `Acquire` on the failure path as well to ensure that the
+            // `sleepers.fetch_add` is observed strictly after this operation.
             let prev =
                 self.futex
-                    .compare_exchange(UNLOCKED, LOCKED, Ordering::Acquire, Ordering::Relaxed);
+                    .compare_exchange(UNLOCKED, LOCKED, Ordering::Acquire, Ordering::Acquire);
             let prev = match prev {
                 Ok(_) => {
                     // We successfully took the lock.
@@ -68,6 +73,10 @@ impl<T> SelfContainedMutex<T> {
                 // We weren't able to take the lock.
                 Err(i) => i,
             };
+            // Mark ourselves as waiting on the futex. No need for stronger
+            // ordering here; the Acquire on the failure path above ensures
+            // this happens after.
+            self.sleepers.fetch_add(1, Ordering::Relaxed);
             // Sleep until unlocked.
             let res = unsafe {
                 self.futex(
@@ -78,6 +87,7 @@ impl<T> SelfContainedMutex<T> {
                     0,
                 )
             };
+            self.sleepers.fetch_sub(1, Ordering::Relaxed);
             if res.is_err()
                 && res != Err(nix::errno::Errno::EAGAIN)
                 && res != Err(nix::errno::Errno::EINTR)
@@ -99,16 +109,30 @@ impl<T> SelfContainedMutex<T> {
 
     fn unlock(&self) {
         self.futex.store(UNLOCKED, Ordering::Release);
-        unsafe {
-            self.futex(
-                libc::FUTEX_WAKE,
-                1,
-                std::ptr::null(),
-                std::ptr::null_mut(),
-                0,
-            )
-            .unwrap()
-        };
+
+        // Ensure that the `futex.store` above can't be moved after the
+        // `sleepers.load` below.
+        std::sync::atomic::compiler_fence(Ordering::Acquire);
+
+        // Only perform a FUTEX_WAKE operation if other threads are actually
+        // sleeping on the lock.
+        //
+        // Another thread that's about to `FUTEX_WAIT` on the futex but that hasn't yet
+        // incremented `sleepers` will not result in deadlock: since we've already released
+        // the futex, their `FUTEX_WAIT` operation will fail, and the other thread will correctly
+        // retry to take the lock instead of waiting.
+        if self.sleepers.load(Ordering::Acquire) > 0 {
+            unsafe {
+                self.futex(
+                    libc::FUTEX_WAKE,
+                    1,
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    0,
+                )
+                .unwrap()
+            };
+        }
     }
 }
 
