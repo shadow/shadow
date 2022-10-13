@@ -39,7 +39,7 @@ jobs:
         # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
         # when changing the tor versions, make sure to also update the
         # required CI tests in the GitHub repository settings
-        tor: ['tor-0.4.5.12', 'tor-0.4.6.10', 'tor-0.4.7.8']
+        tor: ['tor-0.4.5.14', 'tor-0.4.6.12', 'tor-0.4.7.10']
 
     env:
       CC: 'clang'
@@ -74,7 +74,7 @@ jobs:
         with:
           path: tgen
           repository: shadow/tgen
-          ref: 4f55d55632ca7358fb5245551561cafbc027c5a7
+          ref: 7a5cf4554f813cc996637d942f169aeb745e37ff
           persist-credentials: false
 
       - name: Get month
