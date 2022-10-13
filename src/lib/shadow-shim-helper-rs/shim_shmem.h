@@ -14,7 +14,7 @@ typedef struct _ShimShmemThread ShimShmemThread;
 typedef struct _ShimHostProtectedSharedMem ShimShmemHostLock;
 
 #include "ipc.h"
-#include "shim_helper.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/core/support/definitions.h"
 #include "shim_event.h"
 

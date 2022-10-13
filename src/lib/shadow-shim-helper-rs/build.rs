@@ -18,7 +18,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         })
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file("./shim_helper.h");
+        .write_to_file("../../../build/src/lib/shadow-shim-helper-rs/shim_helper.h");
 }
 
 fn main() {

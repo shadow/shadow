@@ -1,3 +1,5 @@
+use std::{env, path::PathBuf};
+
 use shadow_build_common::ShadowBuildCommon;
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
@@ -57,7 +59,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         })
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file("./bindings/c/bindings.h");
+        .write_to_file("../../build/src/main/bindings/c/bindings.h");
 
     cbindgen::Builder::new()
         .with_crate(crate_dir.clone())
@@ -73,7 +75,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         })
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file("./bindings/c/bindings-opaque.h");
+        .write_to_file("../../build/src/main/bindings/c/bindings-opaque.h");
 }
 
 fn run_bindgen(build_common: &ShadowBuildCommon) {
@@ -248,8 +250,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // Unwrap the Result and panic on failure.
         .expect("Unable to generate bindings");
 
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
-        .write_to_file("cshadow.rs")
+        .write_to_file(out_path.join("cshadow.rs"))
         .expect("Couldn't write bindings!");
 }
 

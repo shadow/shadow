@@ -13,7 +13,7 @@ pub mod cshadow {
     #![allow(non_snake_case)]
     // https://github.com/rust-lang/rust/issues/66220
     #![allow(improper_ctypes)]
-    include!("cshadow.rs");
+    include!(concat!(env!("OUT_DIR"), "/cshadow.rs"));
 }
 
 // modules with macros must be included before other modules
