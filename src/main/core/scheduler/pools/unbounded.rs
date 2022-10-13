@@ -8,7 +8,9 @@ use atomic_refcell::AtomicRefCell;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
-use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
+use crate::utility::synchronization::thread_parking::{
+    ThreadParker, ThreadUnparker, ThreadUnparkerUnassigned,
+};
 
 // If making substantial changes to this scheduler, you should verify the compilation error message
 // for each test at the end of this file to make sure that they correctly cause the expected
@@ -26,10 +28,10 @@ impl<T> TaskFn for T where T: Fn(usize) + Send + Sync {}
 pub struct UnboundedThreadPool {
     /// Handles for joining threads when they've exited.
     thread_handles: Vec<std::thread::JoinHandle<()>>,
+    /// Used to unpark threads that are waiting for a new task.
+    thread_unparkers: Vec<ThreadUnparker>,
     /// State shared between all threads.
     shared_state: Arc<SharedState>,
-    /// Semaphores used by work threads to wait for a new task.
-    task_start_semaphores: Vec<LibcSemaphoreArc>,
     /// The main thread uses this to wait for the threads to finish running the task.
     task_end_waiter: LatchWaiter,
 }
@@ -51,34 +53,30 @@ impl UnboundedThreadPool {
         let (task_end_counter, task_end_waiter) = build_count_down_latch();
 
         let mut thread_handles = Vec::new();
-        let mut task_start_semaphores = Vec::new();
+        let mut thread_unparkers = Vec::new();
 
         for i in 0..num_threads {
-            let task_start_semaphore = LibcSemaphoreArc::new(0);
             let shared_state_clone = Arc::clone(&shared_state);
-            let task_start_semaphore_clone = task_start_semaphore.clone();
             let task_end_counter_clone = task_end_counter.clone();
+
+            let thread_unparker = ThreadUnparkerUnassigned::new();
+            let thread_parker = thread_unparker.parker();
 
             let handle = std::thread::Builder::new()
                 .name(thread_name.to_string())
                 .spawn(move || {
-                    work_loop(
-                        i,
-                        shared_state_clone,
-                        task_start_semaphore_clone,
-                        task_end_counter_clone,
-                    )
+                    work_loop(i, shared_state_clone, thread_parker, task_end_counter_clone)
                 })
                 .unwrap();
 
+            thread_unparkers.push(thread_unparker.assign(handle.thread().clone()));
             thread_handles.push(handle);
-            task_start_semaphores.push(task_start_semaphore);
         }
 
         Self {
             thread_handles,
+            thread_unparkers,
             shared_state,
-            task_start_semaphores,
             task_end_waiter,
         }
     }
@@ -98,9 +96,9 @@ impl UnboundedThreadPool {
             .has_thread_panicked
             .load(Ordering::Relaxed);
 
-        // send the sentinel task to all threads
-        for semaphore in &self.task_start_semaphores {
-            semaphore.post();
+        // start the threads
+        for unparker in &self.thread_unparkers {
+            unparker.unpark();
         }
 
         for handle in self.thread_handles.drain(..) {
@@ -213,8 +211,8 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
         *self.scope.pool.shared_state.task.borrow_mut() = Some(f);
 
         // start the threads
-        for semaphore in &self.scope.pool.task_start_semaphores {
-            semaphore.post();
+        for unparker in &self.scope.pool.thread_unparkers {
+            unparker.unpark();
         }
     }
 }
@@ -222,7 +220,7 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
 fn work_loop(
     thread_index: usize,
     shared_state: Arc<SharedState>,
-    task_start_semaphore: LibcSemaphoreArc,
+    thread_parker: ThreadParker,
     mut end_counter: LatchCounter,
 ) {
     // we don't use `catch_unwind` here for two main reasons:
@@ -259,7 +257,7 @@ fn work_loop(
 
     loop {
         // wait for a new task
-        task_start_semaphore.wait();
+        thread_parker.park();
 
         // scope used to make sure we drop the task before counting down
         {
@@ -287,10 +285,7 @@ mod tests {
 
     use super::*;
 
-    // these tests don't use miri since they use `LibcSemaphoreArc`
-
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_scope() {
         let mut pool = UnboundedThreadPool::new(4, "worker");
 
@@ -305,7 +300,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_run() {
         let mut pool = UnboundedThreadPool::new(4, "worker");
 
@@ -322,7 +316,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_large_num_threads() {
         let mut pool = UnboundedThreadPool::new(100, "worker");
 
@@ -339,7 +332,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_scope_runner_order() {
         let mut pool = UnboundedThreadPool::new(1, "worker");
 
@@ -357,7 +349,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_non_aliasing_borrows() {
         let mut pool = UnboundedThreadPool::new(4, "worker");
 
@@ -392,7 +383,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[cfg_attr(miri, ignore)]
     fn test_panic_all() {
         let mut pool = UnboundedThreadPool::new(4, "worker");
 
@@ -406,7 +396,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[cfg_attr(miri, ignore)]
     fn test_panic_single() {
         let mut pool = UnboundedThreadPool::new(4, "worker");
 
@@ -451,7 +440,6 @@ mod tests {
     fn _test_scope_lifetime() {}
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_queues() {
         let num_threads = 4;
         let mut pool = UnboundedThreadPool::new(num_threads, "worker");
