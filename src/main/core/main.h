@@ -7,9 +7,13 @@
 #ifndef SHD_MAIN_H_
 #define SHD_MAIN_H_
 
+#include <stdbool.h>
+
+#include "main/bindings/c/bindings.h"
+
 bool main_sidechannelMitigationsEnabled();
 int main_checkGlibVersion();
-void main_printBuildInfo();
-void main_logBuildInfo();
+void main_printBuildInfo(const ShadowBuildInfo* shadowBuildInfo);
+void main_logBuildInfo(const ShadowBuildInfo* shadowBuildInfo);
 
 #endif /* SHD_MAIN_H_ */
