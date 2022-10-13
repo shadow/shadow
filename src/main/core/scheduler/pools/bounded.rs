@@ -9,15 +9,15 @@ use crate::core::scheduler::logical_processor::LogicalProcessors;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
-use crate::utility::synchronization::semaphore::LibcSemaphore;
+use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
 
-// If making substantial changes to this scheduler, you should uncomment each test at the end of
-// this file to make sure that they correctly cause a compilation error. This work pool unsafely
-// transmutes the task closure lifetime, and the commented tests are meant to make sure that the
-// work pool does not allow unsound code to compile. Due to lifetime sub-typing/variance, rust will
-// sometimes allow closures with shorter or longer lifetimes than we specify in the API, so the
-// tests check to make sure the closures are invariant over the lifetime and that the usage is
-// sound.
+// If making substantial changes to this scheduler, you should verify the compilation error message
+// for each test at the end of this file to make sure that they correctly cause the expected
+// compilation error. This work pool unsafely transmutes the task closure lifetime, and the
+// commented tests are meant to make sure that the work pool does not allow unsound code to compile.
+// Due to lifetime sub-typing/variance, rust will sometimes allow closures with shorter or longer
+// lifetimes than we specify in the API, so the tests check to make sure the closures are invariant
+// over the lifetime and that the usage is sound.
 
 /// Context information provided to each task closure.
 pub struct TaskData {
@@ -57,7 +57,7 @@ pub struct SharedState {
 /// Scheduling state for a thread.
 pub struct ThreadScheduling {
     /// Semaphore used to wait for a new task.
-    task_start_semaphore: LibcSemaphore,
+    task_start_semaphore: LibcSemaphoreArc,
     /// The OS pid for this thread.
     tid: nix::unistd::Pid,
     /// The logical processor index that this thread is assigned to.
@@ -103,7 +103,7 @@ impl ParallelismBoundedThreadPool {
             .cycle()
             .zip(&tids)
             .map(|(processor_idx, tid)| ThreadScheduling {
-                task_start_semaphore: LibcSemaphore::new(0),
+                task_start_semaphore: LibcSemaphoreArc::new(0),
                 tid: *tid,
                 logical_processor_idx: AtomicUsize::new(processor_idx),
             })
@@ -302,6 +302,24 @@ fn work_loop(
     shared_state_recv: crossbeam::channel::Receiver<Arc<SharedState>>,
     mut end_counter: LatchCounter,
 ) {
+    // we don't use `catch_unwind` here for two main reasons:
+    //
+    // 1. `catch_unwind` requires that the closure is `UnwindSafe`, which means that `TaskFn` also
+    // needs to be `UnwindSafe`. This is a big restriction on the types of tasks that we could run,
+    // since it requires that there's no interior mutability in the closure. rayon seems to get
+    // around this by wrapping the closure in `AssertUnwindSafe`, under the assumption that the
+    // panic will be propagated later with `resume_unwinding`, but this is a little more difficult
+    // to reason about compared to simply avoiding `catch_unwind` altogether.
+    // https://github.com/rayon-rs/rayon/blob/c571f8ffb4f74c8c09b4e1e6d9979b71b4414d07/rayon-core/src/unwind.rs#L9
+    //
+    // 2. There is a footgun with `catch_unwind` that could cause unexpected behaviour. If the
+    // closure called `panic_any()` with a type that has a Drop implementation, and that Drop
+    // implementation panics, it will cause a panic that is not caught by the `catch_unwind`,
+    // causing the thread to panic again with no chance to clean up properly. The work pool would
+    // then deadlock. Since we don't use `catch_unwind`, the thread will instead "panic when
+    // panicking" and abort, which is a more ideal outcome.
+    // https://github.com/rust-lang/rust/issues/86027
+
     // this will poison the workpool when it's dropped
     struct PoisonWhenDropped<'a>(&'a SharedState);
 
@@ -437,11 +455,13 @@ fn assign_to_processor(
         .store(processor_idx, Ordering::Release);
 }
 
-#[cfg(test)]
+#[cfg(any(test, doctest))]
 mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU32};
 
     use super::*;
+
+    // these tests don't use miri since they use `LibcSemaphoreArc` and `nix::unistd::gettid()`
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -561,23 +581,21 @@ mod tests {
     }
 
     // should not compile: "cannot assign to `counter` because it is borrowed"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_aliasing_borrows() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        let mut counter = 0;
-        pool.scope(|s| {
-            s.run(|_| {
-                let _x = counter;
-            });
-            counter += 1;
-        });
-
-        assert_eq!(counter, 1);
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// let mut counter = 0;
+    /// pool.scope(|s| {
+    ///     s.run(|_| {
+    ///         let _x = counter;
+    ///     });
+    ///     counter += 1;
+    /// });
+    ///
+    /// assert_eq!(counter, 1);
+    /// ```
+    fn _test_aliasing_borrows() {}
 
     #[test]
     #[should_panic]
@@ -610,38 +628,34 @@ mod tests {
     }
 
     // should not compile: "`x` does not live long enough"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_panic_any() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        let x = 5;
-        pool.scope(|s| {
-            s.run(|_| {
-                std::panic::panic_any(&x);
-            });
-        });
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// let x = 5;
+    /// pool.scope(|s| {
+    ///     s.run(|_| {
+    ///         std::panic::panic_any(&x);
+    ///     });
+    /// });
+    /// ```
+    fn _test_panic_any() {}
 
     // should not compile: "closure may outlive the current function, but it borrows `x`, which is
     // owned by the current function"
-    /*
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_scope_lifetime() {
-        let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
-
-        pool.scope(|s| {
-            // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
-            let x = 5;
-            s.run(|_| {
-                let _x = x;
-            });
-        });
-    }
-    */
+    /// ```compile_fail
+    /// # use shadow_rs::core::scheduler::pools::bounded::*;
+    /// let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
+    ///
+    /// pool.scope(|s| {
+    ///     // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
+    ///     let x = 5;
+    ///     s.run(|_| {
+    ///         let _x = x;
+    ///     });
+    /// });
+    /// ```
+    fn _test_scope_lifetime() {}
 
     #[test]
     #[cfg_attr(miri, ignore)]

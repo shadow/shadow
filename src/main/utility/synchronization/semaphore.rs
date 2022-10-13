@@ -9,13 +9,19 @@ use std::sync::Arc;
 /// async context, don't have the ability to block/wait, or are intended to protect some resource
 /// like a lock. We also are already familiar with the performance charactersitics of the libc
 /// semaphore.
+///
+/// This type uses an [`Arc`] internally so that we can share the semaphore without needing a second
+/// allocation. If we didn't use an `Arc` here, we'd still need to use a `Box` to prevent the
+/// internal `LibcSemWrapper` from moving, in which case we'd have an `Arc<LibcSemaphore>` and
+/// `LibcSemaphore` would contain a `Box<LibcSemWrapper>`, requiring two levels of pointer
+/// indirection.
 #[derive(Clone)]
-pub struct LibcSemaphore {
+pub struct LibcSemaphoreArc {
     // SAFETY: the `LibcSemWrapper` must not be moved
     inner: Arc<LibcSemWrapper>,
 }
 
-impl LibcSemaphore {
+impl LibcSemaphoreArc {
     /// Create a new semaphore. See `sem_init(3)` for details.
     pub fn new(val: libc::c_uint) -> Self {
         let rv = Self {
@@ -48,9 +54,9 @@ impl LibcSemaphore {
     }
 }
 
-impl std::fmt::Debug for LibcSemaphore {
+impl std::fmt::Debug for LibcSemaphoreArc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LibcSemaphore")
+        f.debug_struct("LibcSemaphoreArc")
             // it should have been initialized by this point
             .field("value", unsafe { &self.inner.get() })
             .finish()
@@ -150,7 +156,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_clone() {
-        let sem = LibcSemaphore::new(0);
+        let sem = LibcSemaphoreArc::new(0);
         let sem_clone = sem.clone();
 
         assert_eq!(sem.get(), 0);
@@ -163,24 +169,24 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_single_thread() {
-        let sem = LibcSemaphore::new(0);
+        let sem = LibcSemaphoreArc::new(0);
         sem.post();
         sem.wait();
 
-        let sem = LibcSemaphore::new(0);
+        let sem = LibcSemaphoreArc::new(0);
         sem.post();
         sem.post();
         sem.post();
-        sem.wait();
-        sem.wait();
-        sem.wait();
-
-        let sem = LibcSemaphore::new(3);
         sem.wait();
         sem.wait();
         sem.wait();
 
-        let sem = LibcSemaphore::new(0);
+        let sem = LibcSemaphoreArc::new(3);
+        sem.wait();
+        sem.wait();
+        sem.wait();
+
+        let sem = LibcSemaphoreArc::new(0);
         sem.post();
         sem.wait();
         sem.post();
@@ -192,7 +198,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_multi_thread() {
-        let sem = LibcSemaphore::new(0);
+        let sem = LibcSemaphoreArc::new(0);
         let sem_clone = sem.clone();
 
         let t0 = std::time::Instant::now();
