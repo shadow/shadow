@@ -13,6 +13,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -194,4 +195,42 @@ int __fxstat64(int ver, int a, struct stat64* b) {
     int rv = syscall(SYS_fstat, a, &s);
     _convert_stat_to_stat64(&s, b);
     return rv;
+}
+
+int open(const char* pathname, int flags, ...) {
+    va_list(args);
+    va_start(args, flags);
+    mode_t mode = va_arg(args, mode_t);
+    va_end(args);
+
+    // "If neither O_CREAT nor O_TMPFILE is specified in flags, then mode is
+    // ignored"
+    //
+    // We explicitly set to 0 here so that strace logging doesn't log an
+    // arbitrary value for `mode` when it wasn't explicitly provided by the
+    // caller.
+    if (!(flags & (O_CREAT | O_TMPFILE))) {
+        mode = 0;
+    }
+
+    return (int)syscall(SYS_open, pathname, flags, mode);
+}
+
+int openat(int dirfd, const char* pathname, int flags, ...) {
+    va_list(args);
+    va_start(args, flags);
+    mode_t mode = va_arg(args, mode_t);
+    va_end(args);
+
+    // "If neither O_CREAT nor O_TMPFILE is specified in flags, then mode is
+    // ignored"
+    //
+    // We explicitly set to 0 here so that strace logging doesn't log an
+    // arbitrary value for `mode` when it wasn't explicitly provided by the
+    // caller.
+    if (!(flags & (O_CREAT | O_TMPFILE))) {
+        mode = 0;
+    }
+
+    return (int)syscall(SYS_openat, dirfd, pathname, flags, mode);
 }
