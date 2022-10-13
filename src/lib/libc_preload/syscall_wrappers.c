@@ -560,18 +560,14 @@ INTERPOSE(nanosleep);
 #ifdef SYS_newfstatat // kernel entry: num=262 func=sys_newfstatat
 INTERPOSE(newfstatat);
 #endif
-#ifdef SYS_open // kernel entry: num=2 func=sys_open
-INTERPOSE(open);
-#endif
+// Skipping SYS_open
 #ifdef SYS_open_by_handle_at // kernel entry: num=304 func=sys_open_by_handle_at
 INTERPOSE(open_by_handle_at);
 #endif
 #ifdef SYS_open_tree // kernel entry: num=428 func=sys_open_tree
 INTERPOSE(open_tree);
 #endif
-#ifdef SYS_openat // kernel entry: num=257 func=sys_openat
-INTERPOSE(openat);
-#endif
+// Skipping SYS_openat
 #ifdef SYS_openat2 // kernel entry: num=437 func=sys_openat2
 INTERPOSE(openat2);
 #endif

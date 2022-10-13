@@ -28,6 +28,11 @@ skip.add('pwritev2')
 # `FILE*` objects, etc.
 skip.add('exit')
 
+# These have an optional `mode` argument, which the wrappers should initialize
+# to 0 when not provided by the caller.
+skip.add('open')
+skip.add('openat')
+
 # syscall wrappers that return errors directly instead of through errno.
 direct_errors = set()
 direct_errors.add('clock_nanosleep')
