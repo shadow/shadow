@@ -11,6 +11,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "PluginPtr".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
+            "Packet".into(),
             "Process".into(),
             "Host".into(),
             "Thread".into(),
@@ -162,6 +163,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("packet_getProtocol")
         .allowlist_function("packet_getTCPHeader")
         .allowlist_function("packet_copyPayloadShadow")
+        .allowlist_function("packet_unref")
         //# Needs GQueue
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")

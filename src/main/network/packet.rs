@@ -3,6 +3,60 @@ use std::io::Write;
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
 
+pub struct Packet {
+    c_ptr: *mut c::Packet,
+}
+
+impl Packet {
+    pub fn size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getTotalSize(self.c_ptr) };
+        sz as usize
+    }
+
+    fn _header_size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getHeaderSize(self.c_ptr) };
+        sz as usize
+    }
+
+    fn _payload_size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getPayloadSize(self.c_ptr) };
+        sz as usize
+    }
+
+    /// Transfers ownership of the given c_ptr reference into a new rust packet
+    /// object.
+    pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
+        assert!(!c_ptr.is_null());
+        Self { c_ptr }
+    }
+
+    /// Transfers ownership of the inner c_ptr reference to the caller while
+    /// dropping the rust packet object.
+    pub fn into_inner(mut self) -> *mut c::Packet {
+        // We want to keep the c ref when the rust packet is dropped.
+        let c_ptr = self.c_ptr;
+        self.c_ptr = std::ptr::null_mut();
+        c_ptr
+    }
+
+    pub fn borrow_inner(&self) -> *mut c::Packet {
+        self.c_ptr
+    }
+}
+
+impl Drop for Packet {
+    fn drop(&mut self) {
+        if !self.c_ptr.is_null() {
+            // If the rust packet is dropped before into_inner() is called,
+            // we also drop the c packet ref to free it.
+            unsafe { c::packet_unref(self.c_ptr) }
+        }
+    }
+}
+
 impl PacketDisplay for *const c::Packet {
     fn display_bytes(&self, mut writer: impl Write) -> std::io::Result<()> {
         assert!(!self.is_null());
