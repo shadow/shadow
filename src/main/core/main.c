@@ -8,11 +8,14 @@
 #define _GNU_SOURCE
 #endif
 
+#include "main/core/main.h"
+
 #include <errno.h>
 #include <glib.h>
 #include <sys/prctl.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "shd-config.h"
 
 bool main_sidechannelMitigationsEnabled() {
@@ -54,22 +57,22 @@ int main_checkGlibVersion() {
     return 0;
 }
 
-void main_printBuildInfo() {
-    g_printerr("Shadow %s running GLib v%u.%u.%u\n%s\n%s\n", SHADOW_VERSION_STRING,
+void main_printBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
+    g_printerr("Shadow %s running GLib v%u.%u.%u\n%s\n%s\n", shadowBuildInfo->version,
                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-               SHADOW_BUILD_STRING, SHADOW_INFO_STRING);
+               shadowBuildInfo->build, shadowBuildInfo->info);
 }
 
-void main_logBuildInfo(char** argv) {
+void main_logBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
     gchar* startupStr = g_strdup_printf("Starting Shadow %s with GLib v%u.%u.%u",
-                                        SHADOW_VERSION_STRING, (guint)GLIB_MAJOR_VERSION,
+                                        shadowBuildInfo->version, (guint)GLIB_MAJOR_VERSION,
                                         (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
 
     info("%s", startupStr);
     g_printerr("** %s\n", startupStr);
     g_free(startupStr);
 
-    info("%s", SHADOW_BUILD_STRING);
-    info("%s", SHADOW_INFO_STRING);
+    info("%s", shadowBuildInfo->build);
+    info("%s", shadowBuildInfo->info);
     info("Logging current startup arguments and environment");
 }

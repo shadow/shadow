@@ -15,7 +15,7 @@ use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
 /// Main entry point for the simulator.
-pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
+pub fn run_shadow<'a>(build_info: &ShadowBuildInfo, args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     if unsafe { c::main_checkGlibVersion() } != 0 {
         return Err(anyhow::anyhow!("Unsupported GLib version"));
     }
@@ -46,7 +46,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     };
 
     if options.show_build_info {
-        unsafe { c::main_printBuildInfo() };
+        unsafe { c::main_printBuildInfo(build_info) };
         std::process::exit(0);
     }
 
@@ -150,7 +150,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // log some information
-    unsafe { c::main_logBuildInfo() };
+    unsafe { c::main_logBuildInfo(build_info) };
     log_environment(args.clone());
 
     log::debug!("Startup checks passed, we are ready to start the simulation");
@@ -284,18 +284,27 @@ fn log_environment<'a>(args: Vec<&'a OsStr>) {
     }
 }
 
+#[repr(C)]
+pub struct ShadowBuildInfo {
+    version: *const libc::c_char,
+    build: *const libc::c_char,
+    info: *const libc::c_char,
+}
+
 mod export {
     use super::*;
 
     #[no_mangle]
     pub extern "C" fn main_runShadow(
+        build_info: *const ShadowBuildInfo,
         argc: libc::c_int,
         argv: *const *const libc::c_char,
     ) -> libc::c_int {
         let args = (0..argc).map(|x| unsafe { CStr::from_ptr(*argv.add(x as usize)) });
         let args = args.map(|x| OsStr::from_bytes(x.to_bytes()));
+        let build_info = unsafe { build_info.as_ref().unwrap() };
 
-        let result = run_shadow(args.collect());
+        let result = run_shadow(build_info, args.collect());
         log::logger().flush();
 
         if let Err(e) = result {
