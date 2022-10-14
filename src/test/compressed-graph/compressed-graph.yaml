@@ -10,5 +10,5 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: /bin/true
+    - path: "true"
       start_time: 1

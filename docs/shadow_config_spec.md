@@ -720,6 +720,13 @@ Type: String
 If the path begins with `~/`, it will be considered relative to the current
 user's home directory.
 
+Bare file basenames like `sleep` will be located using Shadow's `PATH`
+environment variable (e.g. to `/usr/bin/sleep`). For backwards compatibility, if
+that path is also found relative to shadow's working directory, *that* binary
+will be used instead. This behavior is expected to be dropped in *the next major
+Shadow release; users should disambiguate by prefixing with `./` or using an
+absolute path as appropriate.
+
 #### `hosts.<hostname>.processes[*].quantity`
 
 Default: 1  
