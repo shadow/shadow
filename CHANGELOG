@@ -11,4 +11,8 @@ A list of user-facing changes since the latest Shadow release.
   to search for pkg-config files, C headers, and libraries. It obsoletes the options `--library` and `--include`.
 * Fixed a bug causing `mmap` to fail when called on a file descriptor that was
 opened with `O_NOFOLLOW`. https://github.com/shadow/shadow/pull/2353
+* Bare executable names are now resolved by searching shadow's `PATH`. Previously these were
+interpreted as relative to the current directory. For backwards compatibility, Shadow will currently
+prefer a binary in that location if one is found but log a warning. Such cases should be disambiguated
+by using an absolute path or prefixing with `./`.
 * (add entry here)
