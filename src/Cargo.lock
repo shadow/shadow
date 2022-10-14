@@ -1106,6 +1106,7 @@ dependencies = [
  "log",
  "logger",
  "nix",
+ "rand",
  "rkyv",
  "shadow-build-common",
  "shadow_shmem",

@@ -255,6 +255,10 @@ mod tests {
                 let mutex = mutex.clone();
                 std::thread::spawn(move || {
                     let mut guard = mutex.lock();
+                    // Hold the lock for up to 10 ms; checking for races
+                    std::thread::sleep(std::time::Duration::from_nanos(
+                        rand::random::<u64>() % 10_000_000,
+                    ));
                     *guard += 1;
                 })
             })
