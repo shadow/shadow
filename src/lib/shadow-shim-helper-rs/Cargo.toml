@@ -23,6 +23,9 @@ shadow-build-common = { path = "../shadow-build-common" }
 system-deps = "6.0"
 cbindgen = { version = "0.24.3" }
 
+[dev-dependencies]
+rand = "0.8.5"
+
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in src/CMakeLists.txt
 glib = { name = "glib-2.0", version = "2.32" }
