@@ -163,6 +163,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("packet_getProtocol")
         .allowlist_function("packet_getTCPHeader")
         .allowlist_function("packet_copyPayloadShadow")
+        .allowlist_function("packet_ref")
         .allowlist_function("packet_unref")
         //# Needs GQueue
         .blocklist_function("worker_finish")
@@ -225,6 +226,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::work::event::Event;")
         .raw_line("use crate::core::work::event_queue::ThreadSafeEventQueue;")
         .raw_line("use crate::core::work::task::TaskRef;")
+        .raw_line("use crate::network::router::Router;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;")
         .raw_line("use crate::host::descriptor::File;")
@@ -325,10 +327,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "routing/payload.c",
         "routing/packet.c",
         "routing/address.c",
-        "routing/router_queue_single.c",
-        "routing/router_queue_static.c",
-        "routing/router_queue_codel.c",
-        "routing/router.c",
         "routing/dns.c",
         "utility/async_priority_queue.c",
         "utility/count_down_latch.c",
