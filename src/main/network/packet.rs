@@ -3,11 +3,25 @@ use std::io::Write;
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
 
+pub enum PacketStatus {
+    RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,
+    RouterDequeued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DEQUEUED as isize,
+    RouterDropped = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DROPPED as isize,
+}
+
 pub struct Packet {
     c_ptr: *mut c::Packet,
 }
 
 impl Packet {
+    #[cfg(test)]
+    /// Creates an empty packet for unit tests.
+    pub fn mock_new() -> Packet {
+        let c_ptr = unsafe { c::packet_new_inner(1, 1) };
+        unsafe { c::packet_setMock(c_ptr) };
+        Packet::from_raw(c_ptr)
+    }
+
     pub fn size(&self) -> usize {
         assert!(!self.c_ptr.is_null());
         let sz = unsafe { c::packet_getTotalSize(self.c_ptr) };
@@ -24,6 +38,12 @@ impl Packet {
         assert!(!self.c_ptr.is_null());
         let sz = unsafe { c::packet_getPayloadSize(self.c_ptr) };
         sz as usize
+    }
+
+    pub fn add_status(&mut self, status: PacketStatus) {
+        assert!(!self.c_ptr.is_null());
+        let status_flag = status as c::PacketDeliveryStatusFlags;
+        unsafe { c::packet_addDeliveryStatus(self.c_ptr, status_flag) };
     }
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet

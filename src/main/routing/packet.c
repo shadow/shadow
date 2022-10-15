@@ -84,21 +84,30 @@ const gchar* protocol_toString(ProtocolType type) {
         case PLOCAL: return "LOCAL";
         case PUDP: return "UDP";
         case PTCP: return "TCP";
+        case PMOCK: return "MOCK";
         default: return "UNKNOWN";
     }
 }
 
-Packet* packet_new(Host* host) {
+// Exposed for unit testing only. Use `packet_new` outside of tests.
+Packet* packet_new_inner(guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
     packet->referenceCount = 1;
 
-    packet->hostID = host_getID(host);
-    packet->packetID = host_getNewPacketID(host);
+    packet->hostID = hostID;
+    packet->packetID = packetID;
 
     packet->orderedStatus = g_queue_new();
 
+    return packet;
+}
+
+Packet* packet_new(Host* host) {
+    guint hostID = host_getID(host);
+    guint64 packetID = host_getNewPacketID(host);
+    Packet* packet = packet_new_inner(hostID, packetID);
     worker_count_allocation(Packet);
     return packet;
 }
@@ -243,6 +252,12 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
     return sequence1 < sequence2 ? -1 : sequence1 > sequence2 ? 1 : 0;
 }
 
+// Enables non-zero size for mock packets for testing. Do not use outside of testing.
+void packet_setMock(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    packet->protocol = PMOCK;
+}
+
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
     MAGIC_ASSERT(packet);
@@ -331,7 +346,9 @@ gsize packet_getTotalSize(const Packet* packet) {
 
 gsize packet_getPayloadSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    if(packet->payload) {
+    if (packet->protocol == PMOCK) {
+        return CONFIG_MTU;
+    } else if (packet->payload) {
         return payload_getLength(packet->payload);
     } else {
         return 0;

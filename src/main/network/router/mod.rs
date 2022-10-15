@@ -1,20 +1,25 @@
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
+use crate::network::packet::Packet;
 use crate::utility::{Magic, ObjectCounter};
 
 use self::codel_queue::CoDelQueue;
-use super::packet::Packet;
-
 mod codel_queue;
 
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+
+/// A router assists with moving packets between hosts across the simulated
+/// network.
 pub struct Router {
     magic: Magic<Self>,
     _counter: ObjectCounter,
+    /// Packets inbound to the host from the simulated network.
     inbound_packets: CoDelQueue,
 }
 
 impl Router {
-    fn new() -> Router {
+    pub fn new() -> Router {
         Router {
             magic: Magic::new(),
             _counter: ObjectCounter::new("Router"),
@@ -23,30 +28,43 @@ impl Router {
     }
 
     // Return true if the router changed from empty to non-empty.
-    fn push(&mut self, packet: Packet) -> bool {
-        self.magic.debug_check();
-        let was_empty = self.inbound_packets.len() == 0;
-        self.inbound_packets.push(packet);
-        was_empty && self.inbound_packets.len() > 0
+    // TODO: This will eventually not return anything once we have
+    // PacketDevice signaling implemented in rust.
+    // Rob: Coming in future PR.
+    pub fn push(&mut self, packet: Packet) -> bool {
+        self.push_inner(packet, Worker::current_time().unwrap())
     }
 
-    fn peek(&self) -> Option<&Packet> {
+    fn push_inner(&mut self, packet: Packet, now: EmulatedTime) -> bool {
+        self.magic.debug_check();
+        let was_empty = self.inbound_packets.is_empty();
+        self.inbound_packets.push(packet, now);
+        was_empty && !self.inbound_packets.is_empty()
+    }
+
+    pub fn peek(&self) -> Option<&Packet> {
         self.magic.debug_check();
         self.inbound_packets.peek()
     }
 
-    fn pop(&mut self) -> Option<Packet> {
+    pub fn pop(&mut self) -> Option<Packet> {
+        self.pop_inner(Worker::current_time().unwrap())
+    }
+
+    fn pop_inner(&mut self, now: EmulatedTime) -> Option<Packet> {
         self.magic.debug_check();
-        self.inbound_packets.pop()
+        self.inbound_packets.pop(now)
     }
 
     fn _route_outgoing_packet(_src_host: &Host, _packet: Packet) {
-        // TODO: move worker_sendPacket to here
+        // TODO: move worker_sendPacket to here.
+        // Rob: Coming in future PR.
         todo!()
     }
 
     fn _route_incoming_packet(_dst_host: &Host, _packet: Packet) {
-        // TODO: move _worker_runDeliverPacketTask to here
+        // TODO: move _worker_runDeliverPacketTask to here.
+        // Rob: Coming in future PR.
         todo!()
     }
 }
@@ -59,12 +77,14 @@ mod export {
         Box::into_raw(Box::new(Router::new()))
     }
 
+    /// The returned `c::Packet` must not live longer than the next time the router is modified;
+    /// when the router is modified, the returned packet pointer becomes invalid/dangling.
     #[no_mangle]
-    pub extern "C" fn router_peek(router_ptr: *mut Router) -> *mut c::Packet {
-        let router = unsafe { router_ptr.as_mut() }.unwrap();
+    pub extern "C" fn router_peek(router_ptr: *const Router) -> *const c::Packet {
+        let router = unsafe { router_ptr.as_ref() }.unwrap();
         match router.peek() {
             Some(packet) => packet.borrow_inner(),
-            None => std::ptr::null_mut(),
+            None => std::ptr::null(),
         }
     }
 
@@ -77,6 +97,8 @@ mod export {
         }
     }
 
+    /// Ownership of the `c::Packet` passed to this function transfers to the router. The caller
+    /// should not use the packet after calling this function, and should not call `packet_unref`.
     #[no_mangle]
     pub extern "C" fn router_enqueue(router_ptr: *mut Router, packet_ptr: *mut c::Packet) -> bool {
         let router = unsafe { router_ptr.as_mut() }.unwrap();
@@ -97,12 +119,42 @@ mod export {
 
 #[cfg(test)]
 mod tests {
+    use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::SimulationTime};
+
     use super::*;
+
+    pub fn mock_time_millis(millis_since_sim_start: u64) -> EmulatedTime {
+        let simtime = SimulationTime::from_millis(millis_since_sim_start);
+        EmulatedTime::from_abs_simtime(simtime)
+    }
 
     #[test]
     fn empty() {
+        let now = mock_time_millis(1000);
         let mut router = Router::new();
-        assert!(router.pop().is_none());
         assert!(router.peek().is_none());
+        assert!(router.pop_inner(now).is_none());
+    }
+
+    #[test]
+    // Ignore in miri for use of c::packet* functions.
+    #[cfg_attr(miri, ignore)]
+    fn push_pop_simple() {
+        let now = mock_time_millis(1000);
+        let mut router = Router::new();
+
+        const N: usize = 10;
+
+        for i in 1..=N {
+            assert_eq!(router.push_inner(Packet::mock_new(), now.clone()), i == 1);
+            assert!(router.peek().is_some());
+        }
+        for _ in 1..=N {
+            assert!(router.peek().is_some());
+            assert!(router.pop_inner(now.clone()).is_some());
+        }
+
+        assert!(router.peek().is_none());
+        assert!(router.pop_inner(now.clone()).is_none());
     }
 }

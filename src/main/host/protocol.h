@@ -8,9 +8,7 @@
 #define SHD_PROTOCOL_H_
 
 typedef enum _ProtocolType ProtocolType;
-enum _ProtocolType {
-    PNONE, PLOCAL, PTCP, PUDP
-};
+enum _ProtocolType { PNONE, PLOCAL, PTCP, PUDP, PMOCK };
 
 enum ProtocolLocalFlags {
     PLOCAL_NONE = 0,
