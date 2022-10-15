@@ -1,10 +1,12 @@
 use std::borrow::Borrow;
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
+use std::thread;
 
 use anyhow::{self, Context};
 use clap::Parser;
 use nix::sys::{personality, resource, signal};
+use signal_hook::{consts, iterator::Signals};
 
 use crate::core::controller::Controller;
 use crate::core::logger::shadow_logger;
@@ -19,6 +21,14 @@ pub fn run_shadow<'a>(build_info: &ShadowBuildInfo, args: Vec<&'a OsStr>) -> any
     if unsafe { c::main_checkGlibVersion() } != 0 {
         return Err(anyhow::anyhow!("Unsupported GLib version"));
     }
+
+    let mut signals_list = Signals::new(&[consts::signal::SIGINT, consts::signal::SIGTERM])?;
+    thread::spawn(move || {
+        for _signal in signals_list.forever() {
+            log::logger().flush();
+            std::process::exit(1);
+        }
+    });
 
     // unblock all signals in shadow and child processes since cmake's ctest blocks
     // SIGTERM (and maybe others)

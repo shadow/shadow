@@ -1090,6 +1090,7 @@ dependencies = [
  "shadow-shim-helper-rs",
  "shadow_shmem",
  "shadow_tsc",
+ "signal-hook",
  "syscall-logger",
  "system-deps",
  "tempfile",
