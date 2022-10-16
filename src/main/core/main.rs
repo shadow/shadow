@@ -24,7 +24,8 @@ pub fn run_shadow<'a>(build_info: &ShadowBuildInfo, args: Vec<&'a OsStr>) -> any
 
     let mut signals_list = Signals::new(&[consts::signal::SIGINT, consts::signal::SIGTERM])?;
     thread::spawn(move || {
-        for _signal in signals_list.forever() {
+        for signal in signals_list.forever() {
+            log::info!("Received signal {}. Flushing log and exiting", signal);
             log::logger().flush();
             std::process::exit(1);
         }
