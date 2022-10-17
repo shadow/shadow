@@ -1,13 +1,19 @@
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use vasi::VirtualAddressSpaceIndependent;
+
 pub mod emulated_time;
+pub mod rootedcell;
 pub mod scmutex;
+pub mod shim_shmem;
 pub mod signals;
 pub mod simulation_time;
 
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, VirtualAddressSpaceIndependent,
+)]
 pub struct HostId(u32);
 
 impl From<u32> for HostId {

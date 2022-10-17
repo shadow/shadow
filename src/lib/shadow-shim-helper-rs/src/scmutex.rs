@@ -6,6 +6,7 @@ use std::{
     pin::Pin,
     sync::atomic::{AtomicI32, AtomicU32, Ordering},
 };
+use vasi::VirtualAddressSpaceIndependent;
 
 /// Simple mutex that is suitable for use in shared memory:
 ///
@@ -21,6 +22,12 @@ pub struct SelfContainedMutex<T> {
 
 unsafe impl<T> Send for SelfContainedMutex<T> where T: Send {}
 unsafe impl<T> Sync for SelfContainedMutex<T> where T: Send {}
+
+// SAFETY: SelfContainedMutex is VirtualAddressSpaceIndependent as long as T is.
+unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedMutex<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
 
 const UNLOCKED: i32 = 0;
 const LOCKED: i32 = 1;
