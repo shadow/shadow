@@ -367,7 +367,8 @@ static void _shmemblockserialized_populate(const ShMemBlock* blk, const ShMemFil
     strncpy(serial->name, shmf->name, SHD_SHMEM_FILE_NAME_NBYTES);
 }
 
-ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator, ShMemBlock* blk) {
+ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
+                                                   const ShMemBlock* blk) {
     assert(allocator && blk);
 
     ShMemBlockSerialized ret;
@@ -398,7 +399,7 @@ static void _shmemblock_populate(const ShMemBlockSerialized* serial, const ShMem
 }
 
 ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
-                                           ShMemBlockSerialized* serial) {
+                                           const ShMemBlockSerialized* serial) {
     assert(allocator && serial);
 
     ShMemBlock ret;
@@ -451,7 +452,8 @@ void shmemserializer_destroy(ShMemSerializer* serializer) {
     free(serializer);
 }
 
-ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer, ShMemBlock* blk) {
+ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
+                                                    const ShMemBlock* blk) {
     assert(serializer && blk);
 
     ShMemBlockSerialized ret;
