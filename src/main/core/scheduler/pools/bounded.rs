@@ -9,7 +9,7 @@ use crate::core::scheduler::logical_processor::LogicalProcessors;
 use crate::utility::synchronization::count_down_latch::{
     build_count_down_latch, LatchCounter, LatchWaiter,
 };
-use crate::utility::synchronization::semaphore::LibcSemaphoreArc;
+use crate::utility::synchronization::thread_parking::{ThreadUnparker, ThreadUnparkerUnassigned};
 
 // If making substantial changes to this scheduler, you should verify the compilation error message
 // for each test at the end of this file to make sure that they correctly cause the expected
@@ -56,8 +56,8 @@ pub struct SharedState {
 
 /// Scheduling state for a thread.
 pub struct ThreadScheduling {
-    /// Semaphore used to wait for a new task.
-    task_start_semaphore: LibcSemaphoreArc,
+    /// Used to unpark the thread when it has a new task.
+    unparker: ThreadUnparker,
     /// The OS pid for this thread.
     tid: nix::unistd::Pid,
     /// The logical processor index that this thread is assigned to.
@@ -102,8 +102,9 @@ impl ParallelismBoundedThreadPool {
             .iter()
             .cycle()
             .zip(&tids)
-            .map(|(processor_idx, tid)| ThreadScheduling {
-                task_start_semaphore: LibcSemaphoreArc::new(0),
+            .zip(&thread_handles)
+            .map(|((processor_idx, tid), handle)| ThreadScheduling {
+                unparker: ThreadUnparkerUnassigned::new().assign(handle.thread().clone()),
                 tid: *tid,
                 logical_processor_idx: AtomicUsize::new(processor_idx),
             })
@@ -162,7 +163,7 @@ impl ParallelismBoundedThreadPool {
 
         // send the sentinel task to all threads
         for thread in &self.shared_state.threads {
-            thread.task_start_semaphore.post();
+            thread.unparker.unpark();
         }
 
         for handle in self.thread_handles.drain(..) {
@@ -358,11 +359,11 @@ fn work_loop(
     let poison_when_dropped = PoisonWhenDropped(shared_state);
 
     let thread_data = &shared_state.threads[thread_idx];
-    let start_semaphore = &thread_data.task_start_semaphore;
+    let thread_parker = thread_data.unparker.parker();
 
     loop {
         // wait for a new task
-        start_semaphore.wait();
+        thread_parker.park();
 
         // scope used to make sure we drop everything (including the task) before counting down
         {
@@ -431,7 +432,7 @@ fn start_next_thread(
         }
 
         // start the thread
-        next_thread.task_start_semaphore.post();
+        next_thread.unparker.unpark();
     }
 }
 
@@ -461,7 +462,7 @@ mod tests {
 
     use super::*;
 
-    // these tests don't use miri since they use `LibcSemaphoreArc` and `nix::unistd::gettid()`
+    // these tests don't use miri since they use `nix::unistd::gettid()`
 
     #[test]
     #[cfg_attr(miri, ignore)]
