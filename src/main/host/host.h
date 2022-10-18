@@ -41,7 +41,7 @@ void host_unref(Host* host);
 bool host_pushLocalEvent(Host* host, Event* event);
 void host_execute(Host* host, CEmulatedTime until);
 CEmulatedTime host_nextEventTime(Host* host);
-const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
+const ThreadSafeEventQueue* host_getOwnedPacketEventQueue(Host* host);
 
 void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);

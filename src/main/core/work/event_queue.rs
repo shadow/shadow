@@ -104,20 +104,56 @@ mod export {
     use std::sync::Arc;
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_new() -> *const ThreadSafeEventQueue {
+    pub unsafe extern "C" fn eventqueue_new() -> *mut EventQueue {
+        Box::into_raw(Box::new(EventQueue::new()))
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn eventqueue_drop(queue: *mut EventQueue) {
+        assert!(!queue.is_null());
+        unsafe { Box::from_raw(queue) };
+    }
+
+    /// Takes ownership of the event.
+    #[no_mangle]
+    pub unsafe extern "C" fn eventqueue_push(queue: *mut EventQueue, event: *mut Event) {
+        assert!(!event.is_null());
+        let queue = unsafe { queue.as_mut() }.unwrap();
+        let event = unsafe { Box::from_raw(event) };
+        queue.push(*event);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn eventqueue_pop(queue: *mut EventQueue) -> *mut Event {
+        let queue = unsafe { queue.as_mut() }.unwrap();
+        queue
+            .pop()
+            .map(Box::new)
+            .map(Box::into_raw)
+            .unwrap_or(std::ptr::null_mut())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn eventqueue_nextEventTime(queue: *const EventQueue) -> CEmulatedTime {
+        let queue = unsafe { queue.as_ref() }.unwrap();
+        EmulatedTime::to_c_emutime(queue.next_event_time())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn threadsafeeventqueue_new() -> *const ThreadSafeEventQueue {
         Arc::into_raw(Arc::new(ThreadSafeEventQueue(
             Mutex::new(EventQueue::new()),
         )))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_drop(queue: *const ThreadSafeEventQueue) {
+    pub unsafe extern "C" fn threadsafeeventqueue_drop(queue: *const ThreadSafeEventQueue) {
         assert!(!queue.is_null());
         unsafe { Arc::from_raw(queue) };
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_cloneArc(
+    pub unsafe extern "C" fn threadsafeeventqueue_cloneArc(
         queue_ptr: *const ThreadSafeEventQueue,
     ) -> *const ThreadSafeEventQueue {
         assert!(!queue_ptr.is_null());
@@ -131,7 +167,7 @@ mod export {
 
     /// Takes ownership of the event.
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_push(
+    pub unsafe extern "C" fn threadsafeeventqueue_push(
         queue: *const ThreadSafeEventQueue,
         event: *mut Event,
     ) {
@@ -142,7 +178,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_pop(queue: *const ThreadSafeEventQueue) -> *mut Event {
+    pub unsafe extern "C" fn threadsafeeventqueue_pop(
+        queue: *const ThreadSafeEventQueue,
+    ) -> *mut Event {
         let queue = unsafe { queue.as_ref() }.unwrap();
         queue
             .0
@@ -155,7 +193,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn eventqueue_nextEventTime(
+    pub unsafe extern "C" fn threadsafeeventqueue_nextEventTime(
         queue: *const ThreadSafeEventQueue,
     ) -> CEmulatedTime {
         let queue = unsafe { queue.as_ref() }.unwrap();

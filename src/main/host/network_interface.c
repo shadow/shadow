@@ -569,7 +569,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             TaskRef* packetTask =
                 taskref_new_bound(host_getID(src), _networkinterface_local_packet_arrived_CB,
                                   interface, packet, NULL, packet_unrefTaskFreeFunc);
-            host_scheduleTaskWithDelay(src, packetTask, 1);
+            host_scheduleTaskWithDelay(src, packetTask, 0);
             taskref_drop(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.

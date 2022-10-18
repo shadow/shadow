@@ -49,7 +49,8 @@ struct _Host {
     HostParameters params;
 
     /* for event scheduling */
-    const ThreadSafeEventQueue* eventQueue;
+    EventQueue* localEventQueue;
+    const ThreadSafeEventQueue* packetEventQueue;
 
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
@@ -135,7 +136,8 @@ Host* host_new(const HostParameters* params) {
     host->params.hostname = g_strdup(params->hostname);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
-    host->eventQueue = eventqueue_new();
+    host->localEventQueue = eventqueue_new();
+    host->packetEventQueue = threadsafeeventqueue_new();
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
@@ -275,9 +277,14 @@ void host_shutdown(Host* host) {
 
     debug("shutting down host %s", host->params.hostname);
 
-    if (host->eventQueue) {
-        eventqueue_drop(host->eventQueue);
-        host->eventQueue = NULL;
+    if (host->localEventQueue) {
+        eventqueue_drop(host->localEventQueue);
+        host->localEventQueue = NULL;
+    }
+
+    if (host->packetEventQueue) {
+        threadsafeeventqueue_drop(host->packetEventQueue);
+        host->packetEventQueue = NULL;
     }
 
     if(host->processes) {
@@ -380,7 +387,7 @@ bool host_pushLocalEvent(Host* host, Event* event) {
         return false;
     }
 
-    eventqueue_push(host->eventQueue, event);
+    eventqueue_push(host->localEventQueue, event);
     return true;
 }
 
@@ -389,14 +396,45 @@ void host_execute(Host* host, CEmulatedTime until) {
 
     CPU* cpu = host_getCPU(host);
 
+    long counter = 0;
+
     while (true) {
-        CEmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
-        if (nextEventTime == EMUTIME_INVALID || nextEventTime >= until) {
-            break;
+        CEmulatedTime nextEventTime;
+        Event* event = NULL;
+
+        {
+            CEmulatedTime nextLocalEventTime = eventqueue_nextEventTime(host->localEventQueue);
+            CEmulatedTime nextPacketEventTime = threadsafeeventqueue_nextEventTime(host->packetEventQueue);
+
+            if (nextLocalEventTime == EMUTIME_INVALID) {
+                nextLocalEventTime = EMUTIME_MAX;
+            }
+
+            if (nextPacketEventTime == EMUTIME_INVALID) {
+                nextPacketEventTime = EMUTIME_MAX;
+            }
+
+            nextEventTime = MIN(nextLocalEventTime, nextPacketEventTime);
+            if (nextEventTime == EMUTIME_INVALID || nextEventTime >= until) {
+                break;
+            }
+
+            // get the next event
+            if (nextLocalEventTime < nextPacketEventTime) {
+                event = eventqueue_pop(host->localEventQueue);
+            } else if (nextPacketEventTime < nextLocalEventTime) {
+                event = threadsafeeventqueue_pop(host->packetEventQueue);
+            } else {
+                if (counter % 2 == 0) {
+                    event = eventqueue_pop(host->localEventQueue);
+                } else {
+                    event = threadsafeeventqueue_pop(host->packetEventQueue);
+                }
+            }
         }
 
-        // get the next event
-        Event* event = eventqueue_pop(host->eventQueue);
+        counter += 1;
+
         cpu_updateTime(cpu, event_getTime(event));
 
         // if blocked by the CPU, we'll reschedule it
@@ -430,12 +468,16 @@ void host_execute(Host* host, CEmulatedTime until) {
 
 CEmulatedTime host_nextEventTime(Host* host) {
     MAGIC_ASSERT(host);
-    return eventqueue_nextEventTime(host->eventQueue);
+
+    CEmulatedTime localTime = eventqueue_nextEventTime(host->localEventQueue);
+    CEmulatedTime packetTime = threadsafeeventqueue_nextEventTime(host->packetEventQueue);
+
+    return MIN(localTime, packetTime);
 }
 
-const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host) {
+const ThreadSafeEventQueue* host_getOwnedPacketEventQueue(Host* host) {
     MAGIC_ASSERT(host);
-    return eventqueue_cloneArc(host->eventQueue);
+    return threadsafeeventqueue_cloneArc(host->packetEventQueue);
 }
 
 /* this function is called by worker after the workers exist */

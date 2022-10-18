@@ -299,7 +299,10 @@ impl<'a> Manager<'a> {
                     min_runahead_config,
                 ),
                 child_pid_watcher: ChildPidWatcher::new(),
-                event_queues: hosts.iter().map(|x| (x.id(), x.event_queue())).collect(),
+                event_queues: hosts
+                    .iter()
+                    .map(|x| (x.id(), x.packet_event_queue()))
+                    .collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
             });

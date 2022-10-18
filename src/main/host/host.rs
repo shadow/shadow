@@ -147,8 +147,8 @@ impl Host {
         res != 0
     }
 
-    pub fn event_queue(&self) -> Arc<ThreadSafeEventQueue> {
-        let new_arc = unsafe { cshadow::host_getOwnedEventQueue(self.chost()) };
+    pub fn packet_event_queue(&self) -> Arc<ThreadSafeEventQueue> {
+        let new_arc = unsafe { cshadow::host_getOwnedPacketEventQueue(self.chost()) };
         unsafe { Arc::from_raw(new_arc) }
     }
 

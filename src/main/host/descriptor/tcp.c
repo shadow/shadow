@@ -2531,7 +2531,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
 
         TaskRef* updateWindowTask = taskref_new_bound(
             host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
-        host_scheduleTaskWithDelay(thread_getHost(thread), updateWindowTask, 1);
+        host_scheduleTaskWithDelay(thread_getHost(thread), updateWindowTask, 0);
         taskref_drop(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
