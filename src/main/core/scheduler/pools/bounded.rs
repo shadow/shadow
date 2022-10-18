@@ -58,7 +58,8 @@ pub struct SharedState {
 pub struct ThreadScheduling {
     /// Used to unpark the thread when it has a new task.
     unparker: ThreadUnparker,
-    /// The OS pid for this thread.
+    /// The OS pid for this thread. This will have an invalid value when running under miri.
+    #[cfg_attr(miri, allow(dead_code))]
     tid: nix::unistd::Pid,
     /// The logical processor index that this thread is assigned to.
     logical_processor_idx: AtomicUsize,
@@ -349,8 +350,15 @@ fn work_loop(
         }
     }
 
+    let tid = if cfg!(not(miri)) {
+        nix::unistd::gettid()
+    } else {
+        // the sched_setaffinity() should be disabled under miri, so this should be fine
+        nix::unistd::Pid::from_raw(-1)
+    };
+
     // send this thread's tid to the main thread
-    tid_send.send(nix::unistd::gettid()).unwrap();
+    tid_send.send(tid).unwrap();
 
     // get the shared state
     let shared_state = shared_state_recv.recv().unwrap();
@@ -447,6 +455,8 @@ fn assign_to_processor(
         let mut cpus = nix::sched::CpuSet::new();
         cpus.set(cpu_id as usize).unwrap();
 
+        // only set the affinity if not running in miri
+        #[cfg(not(miri))]
         nix::sched::sched_setaffinity(thread.tid, &cpus).unwrap();
     }
 
@@ -462,10 +472,7 @@ mod tests {
 
     use super::*;
 
-    // these tests don't use miri since they use `nix::unistd::gettid()`
-
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_scope() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
@@ -480,7 +487,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_run() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
@@ -497,7 +503,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_pinning() {
         let mut pool = ParallelismBoundedThreadPool::new(&[Some(0), Some(1)], 4, "worker");
 
@@ -514,7 +519,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_large_parallelism() {
         let mut pool = ParallelismBoundedThreadPool::new(&vec![None; 100], 4, "worker");
 
@@ -531,7 +535,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_large_num_threads() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 100, "worker");
 
@@ -548,7 +551,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_scope_runner_order() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None], 1, "worker");
 
@@ -566,7 +568,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_non_aliasing_borrows() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
@@ -600,7 +601,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[cfg_attr(miri, ignore)]
     fn test_panic_all() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
@@ -614,7 +614,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[cfg_attr(miri, ignore)]
     fn test_panic_single() {
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], 4, "worker");
 
@@ -659,7 +658,6 @@ mod tests {
     fn _test_scope_lifetime() {}
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_queues() {
         let num_threads = 4;
         let mut pool = ParallelismBoundedThreadPool::new(&[None, None], num_threads, "worker");
