@@ -143,8 +143,7 @@ Host* host_new(const HostParameters* params) {
     /* applications this node will run */
     host->processes = g_queue_new();
 
-    info("Created host id '%u' name '%s'", (guint)host->params.id,
-         g_quark_to_string(host->params.id));
+    info("Created host id '%u' name '%s'", (guint)host->params.id, host->params.hostname);
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
     shimshmemhost_init(host_getSharedMem(host), host->params.id, _modelUnblockedSyscallLatencyConfig,
