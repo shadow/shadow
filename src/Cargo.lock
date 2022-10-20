@@ -1137,7 +1137,10 @@ dependencies = [
  "bindgen",
  "cc",
  "logger",
+ "once_cell",
  "shadow-build-common",
+ "static_assertions",
+ "vasi",
 ]
 
 [[package]]

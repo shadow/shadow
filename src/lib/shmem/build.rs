@@ -11,6 +11,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("buddy.h")
         .allowlist_function("buddy_.*")
         .header("shmem_allocator.h")
+        .allowlist_function("shmemblock_.*")
+        .allowlist_function("shmemblockserialized_.*")
         .allowlist_function("shmemallocator_.*")
         .allowlist_function("shmemserializer_.*")
         .header("shmem_file.h")

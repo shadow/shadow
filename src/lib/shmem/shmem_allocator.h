@@ -25,6 +25,8 @@ typedef struct _ShMemBlock {
 // A 64-bit unsigned value should not take more than 21 characters (including
 // delimiters) when encoded
 // as a string in base 10.
+//
+// Keep in sync with constant of same name in allocator.rs.
 #define SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN (21 + 21 + 21 + SHD_SHMEM_FILE_NAME_NBYTES + 1)
 
 typedef struct _ShMemBlockSerialized {
@@ -157,7 +159,8 @@ static inline void shmemallocator_globalFree(ShMemBlock* blk) {
  * same process, or, a different process) to retrieve a ShMemBlock that points
  * to the same memory as the input block.
  */
-ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator, ShMemBlock* blk);
+ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
+                                                   const ShMemBlock* blk);
 
 static inline ShMemBlockSerialized shmemallocator_globalBlockSerialize(ShMemBlock* blk) {
     return shmemallocator_blockSerialize(shmemallocator_getGlobal(), blk);
@@ -179,7 +182,8 @@ static inline ShMemBlockSerialized shmemallocator_globalBlockSerialize(ShMemBloc
  *
  *      blockDeserialize(blockSerialize(blk)) == blk
  */
-ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator, ShMemBlockSerialized* serial);
+ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
+                                           const ShMemBlockSerialized* serial);
 
 static inline ShMemBlock shmemallocator_globalBlockDeserialize(ShMemBlockSerialized* serial) {
     return shmemallocator_blockDeserialize(shmemallocator_getGlobal(), serial);
@@ -224,7 +228,8 @@ void shmemserializer_destroy(ShMemSerializer* serializer);
  * POST: returns a valid ShMemBlockSerialized that is identical to the
  * serialized block that was used to generate the input ShMemBlock.
  */
-ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer, ShMemBlock* blk);
+ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
+                                                    const ShMemBlock* blk);
 
 static inline ShMemBlockSerialized shmemserializer_globalBlockSerialize(ShMemBlock* blk) {
     return shmemserializer_blockSerialize(shmemserializer_getGlobal(), blk);
