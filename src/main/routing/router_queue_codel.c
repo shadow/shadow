@@ -197,12 +197,9 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager, 
 }
 
 static CSimulationTime _routerqueuecodel_controlLaw(guint count, CSimulationTime ts) {
-    CSimulationTime newTS = ts + CODEL_PARAM_INTERVAL_SIMTIME;
-
-    double result = ((double)newTS) / sqrt((double)count);
-    double rounded = round(result);
-
-    return (CSimulationTime)rounded;
+    // control_law: t + (INTERVAL / sqrt(count));
+    double result = ((double)CODEL_PARAM_INTERVAL_SIMTIME) / sqrt((double)count);
+    return ts + ((CSimulationTime)result);
 }
 
 static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
