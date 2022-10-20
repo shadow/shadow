@@ -150,14 +150,22 @@ impl Timer {
         host: &mut Host,
     ) {
         let now = Worker::current_time().unwrap();
-        let delay = std::cmp::min(
-            internal_ref.next_expire_time.unwrap() - now,
-            SimulationTime::SECOND,
+
+        // have the timer expire between (1,2] seconds from now, but on a 1-second edge so that all
+        // timer events for all hosts will expire at the same times (and therefore in the same
+        // scheduling rounds, hopefully improving scheduling parallelization)
+        let since_start = now.duration_since(&EmulatedTime::SIMULATION_START);
+        let early_expire_time_since_start =
+            SimulationTime::from_secs(since_start.as_secs()) + SimulationTime::SECOND * 2;
+
+        let time = std::cmp::min(
+            internal_ref.next_expire_time.unwrap(),
+            EmulatedTime::SIMULATION_START + early_expire_time_since_start,
         );
         let expire_id = internal_ref.next_expire_id;
         internal_ref.next_expire_id += 1;
         let task = TaskRef::new(move |host| Self::timer_expire(&internal_ptr, host, expire_id));
-        host.schedule_task_with_delay(task, delay);
+        host.schedule_task_at_emulated_time(task, time);
     }
 
     pub fn arm(
