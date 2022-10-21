@@ -8,7 +8,7 @@ use crate::core::sim_config::Bandwidth;
 use crate::core::work::event::Event;
 use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::{Host, HostInfo};
+use crate::host::host::{HostInfo, HostRef};
 use crate::host::process::{ProcessId, ProcessRef};
 use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
@@ -132,7 +132,7 @@ impl Worker {
     }
 
     /// Set the currently-active Host.
-    pub fn set_active_host(host: &Host) {
+    pub fn set_active_host(host: &HostRef) {
         let info = host.info().clone();
         let old = Worker::with_mut(|w| w.active_host_info.replace(info)).unwrap();
         debug_assert!(old.is_none());
@@ -621,7 +621,7 @@ mod export {
         if host.is_null() {
             Worker::clear_active_host();
         } else {
-            let host = unsafe { Host::borrow_from_c(host) };
+            let host = unsafe { HostRef::borrow_from_c(host) };
             Worker::set_active_host(&host);
         }
     }

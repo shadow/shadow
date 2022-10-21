@@ -9,7 +9,7 @@ use crate::utility::{Magic, ObjectCounter};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
-use super::host::Host;
+use super::host::HostRef;
 
 pub struct Timer {
     magic: Magic<Self>,
@@ -28,7 +28,7 @@ struct TimerInternal {
     expiration_count: u64,
     next_expire_id: u64,
     min_valid_expire_id: u64,
-    on_expire: Box<dyn Fn(&mut Host) + Send + Sync>,
+    on_expire: Box<dyn Fn(&mut HostRef) + Send + Sync>,
 }
 
 impl TimerInternal {
@@ -45,7 +45,7 @@ impl Timer {
     /// expiration. `on_expire` will cause a panic if it calls mutable methods
     /// of the enclosing Timer.  If it may need to call mutable methods of the
     /// Timer, it should push a new task to the scheduler to do so.
-    pub fn new<F: 'static + Fn(&mut Host) + Send + Sync>(on_expire: F) -> Self {
+    pub fn new<F: 'static + Fn(&mut HostRef) + Send + Sync>(on_expire: F) -> Self {
         Self {
             magic: Magic::new(),
             _counter: ObjectCounter::new("Timer"),
@@ -104,7 +104,7 @@ impl Timer {
 
     fn timer_expire(
         internal_weak: &Weak<AtomicRefCell<TimerInternal>>,
-        host: &mut Host,
+        host: &mut HostRef,
         expire_id: u64,
     ) {
         let internal = if let Some(internal) = Weak::upgrade(internal_weak) {
@@ -147,7 +147,7 @@ impl Timer {
     fn schedule_new_expire_event(
         internal_ref: &mut TimerInternal,
         internal_ptr: Weak<AtomicRefCell<TimerInternal>>,
-        host: &mut Host,
+        host: &mut HostRef,
     ) {
         let now = Worker::current_time().unwrap();
 
@@ -170,7 +170,7 @@ impl Timer {
 
     pub fn arm(
         &mut self,
-        host: &mut Host,
+        host: &mut HostRef,
         expire_time: EmulatedTime,
         expire_interval: SimulationTime,
     ) {
@@ -245,7 +245,7 @@ pub mod export {
         expireInterval: CSimulationTime,
     ) {
         let timer = unsafe { timer.as_mut() }.unwrap();
-        let mut host = unsafe { Host::borrow_from_c(host) };
+        let mut host = unsafe { HostRef::borrow_from_c(host) };
         let nextExpireTime = EmulatedTime::from_c_emutime(nextExpireTime).unwrap();
         let expireInterval = SimulationTime::from_c_simtime(expireInterval).unwrap();
         timer.arm(&mut host, nextExpireTime, expireInterval)

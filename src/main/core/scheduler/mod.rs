@@ -11,7 +11,7 @@ mod thread_per_host;
 
 use std::cell::RefCell;
 
-use crate::host::host::Host;
+use crate::host::host::HostRef;
 
 // any scheduler implementation can read/write the thread-local directly, but external modules can
 // only read it using `core_affinity()`
@@ -139,7 +139,7 @@ pub enum HostIter<'a, 'b> {
 
 impl<'a, 'b> HostIter<'a, 'b> {
     /// Get the next host.
-    pub fn next(&mut self) -> Option<&mut Host> {
+    pub fn next(&mut self) -> Option<&mut HostRef> {
         match self {
             Self::ThreadPerHost(x) => x.next(),
             Self::ThreadPerCore(x) => x.next(),

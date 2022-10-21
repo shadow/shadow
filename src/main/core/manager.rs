@@ -19,7 +19,7 @@ use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::host::host::Host;
+use crate::host::host::HostRef;
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
@@ -532,7 +532,7 @@ impl<'a> Manager<'a> {
         host_id: HostId,
         host: &HostInfo,
         dns: *mut c::DNS,
-    ) -> anyhow::Result<Host> {
+    ) -> anyhow::Result<HostRef> {
         let hostname = CString::new(&*host.name).unwrap();
         let pcap_dir = host
             .pcap_dir
@@ -675,7 +675,7 @@ impl<'a> Manager<'a> {
 
         unsafe { c::host_unlockShimShmemLock(c_host) };
 
-        Ok(unsafe { Host::borrow_from_c(c_host) })
+        Ok(unsafe { HostRef::borrow_from_c(c_host) })
     }
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is

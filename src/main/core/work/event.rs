@@ -1,4 +1,4 @@
-use crate::host::host::Host;
+use crate::host::host::HostRef;
 use crate::utility::{Magic, ObjectCounter};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::HostId;
@@ -20,7 +20,7 @@ impl Event {
     pub fn new(
         task: TaskRef,
         time: EmulatedTime,
-        src_host: &mut Host,
+        src_host: &mut HostRef,
         dst_host_id: HostId,
     ) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl Event {
         }
     }
 
-    pub fn execute(self, host: &mut Host) {
+    pub fn execute(self, host: &mut HostRef) {
         self.magic.debug_check();
 
         // make sure we're executing on the correct host
@@ -122,7 +122,7 @@ mod export {
         dst_host_id: HostId,
     ) -> *mut Event {
         let task_ref = unsafe { task_ref.as_mut() }.unwrap();
-        let mut src_host = unsafe { Host::borrow_from_c(src_host) };
+        let mut src_host = unsafe { HostRef::borrow_from_c(src_host) };
         let time = EmulatedTime::from_abs_simtime(SimulationTime::from_c_simtime(time).unwrap());
 
         Box::into_raw(Box::new(Event::new(
@@ -144,7 +144,7 @@ mod export {
     pub unsafe extern "C" fn event_executeAndFree(event: *mut Event, host: *mut c::Host) {
         assert!(!event.is_null());
         let event = unsafe { Box::from_raw(event) };
-        let mut host = unsafe { Host::borrow_from_c(host) };
+        let mut host = unsafe { HostRef::borrow_from_c(host) };
 
         event.execute(&mut host);
     }

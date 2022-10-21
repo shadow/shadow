@@ -28,7 +28,7 @@ pub struct HostInfo {
 /// Eventually cshadow::Host's contents and functionality will be migrated into
 /// there though, and this will become the "real" Host object.
 #[derive(Debug)]
-pub struct Host {
+pub struct HostRef {
     chost: SyncSendPointer<cshadow::Host>,
 
     // Store immutable info in an Arc, that we can safely clone into the Worker
@@ -48,7 +48,7 @@ pub struct Host {
     _make_unsync: std::marker::PhantomData<std::cell::Cell<()>>,
 }
 
-impl Host {
+impl HostRef {
     /// For now, this should only be called via Worker, to borrow the current
     /// Host. This will ensure there is only one reference to a given Host
     /// in Rust.
@@ -57,7 +57,7 @@ impl Host {
     /// have exclusive access over its lifetime. `p` must outlive the returned object.
     pub unsafe fn borrow_from_c(p: *mut cshadow::Host) -> Self {
         assert!(!p.is_null());
-        Host {
+        HostRef {
             chost: unsafe { SyncSendPointer::new(p) },
             info: OnceCell::new(),
             _make_unsync: Default::default(),

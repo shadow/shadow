@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    host::host::Host,
+    host::host::HostRef,
     utility::{IsSend, IsSync, Magic, ObjectCounter},
 };
 
@@ -12,11 +12,11 @@ use crate::{
 pub struct TaskRef {
     magic: Magic<Self>,
     _counter: ObjectCounter,
-    inner: Arc<dyn Fn(&mut Host) + Send + Sync>,
+    inner: Arc<dyn Fn(&mut HostRef) + Send + Sync>,
 }
 
 impl TaskRef {
-    pub fn new<T: 'static + Fn(&mut Host) + Send + Sync>(f: T) -> Self {
+    pub fn new<T: 'static + Fn(&mut HostRef) + Send + Sync>(f: T) -> Self {
         Self {
             inner: Arc::new(f),
             magic: Magic::new(),
@@ -27,7 +27,7 @@ impl TaskRef {
     /// Executes the task.
     ///
     /// If the task was created from C, will panic if the task's host lock isn't held.
-    pub fn execute(&self, host: &mut Host) {
+    pub fn execute(&self, host: &mut HostRef) {
         self.magic.debug_check();
         (self.inner)(host)
     }
@@ -63,7 +63,7 @@ pub mod export {
 
     use crate::{
         cshadow,
-        host::host::Host,
+        host::host::HostRef,
         utility::{notnull::notnull_mut, HostTreePointer, SyncSendPointer},
     };
     use shadow_shim_helper_rs::HostId;
@@ -210,7 +210,7 @@ pub mod export {
                 argument_free,
             )
         };
-        let task = TaskRef::new(move |host: &mut Host| objs.execute(host.chost()));
+        let task = TaskRef::new(move |host: &mut HostRef| objs.execute(host.chost()));
         // It'd be nice if we could use Arc::into_raw here, avoiding a level of
         // pointer indirection. Unfortunately that doesn't work because of the
         // internal dynamic Trait object, making the resulting pointer non-ABI
@@ -248,7 +248,7 @@ pub mod export {
                 argument_free,
             )
         };
-        let task = TaskRef::new(move |host: &mut Host| objs.execute(host.chost()));
+        let task = TaskRef::new(move |host: &mut HostRef| objs.execute(host.chost()));
         // It'd be nice if we could use Arc::into_raw here, avoiding a level of
         // pointer indirection. Unfortunately that doesn't work because of the
         // internal dynamic Trait object, making the resulting pointer non-ABI
