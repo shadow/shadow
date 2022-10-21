@@ -26,12 +26,12 @@ impl From<ProcessId> for u32 {
     }
 }
 
-pub struct Process {
+pub struct ProcessRef {
     // Placeholder. We don't actually use this yet.
     cprocess: *mut cshadow::Process,
 }
 
-impl Process {
+impl ProcessRef {
     /// For now, this should only be called via Worker to borrow the current
     /// Process, or from the exported functions below. This will ensure there is
     /// only one reference to a given Process in Rust.
@@ -40,7 +40,7 @@ impl Process {
     /// have exclusive access over its lifetime. `p` must outlive the returned object.
     pub unsafe fn borrow_from_c(p: *mut cshadow::Process) -> Self {
         assert!(!p.is_null());
-        Process { cprocess: p }
+        ProcessRef { cprocess: p }
     }
 
     pub fn cprocess(&self) -> *mut cshadow::Process {
@@ -163,7 +163,7 @@ mod export {
         proc: *mut cshadow::Process,
         desc: *mut Descriptor,
     ) -> libc::c_int {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
+        let mut proc = unsafe { ProcessRef::borrow_from_c(proc) };
         let desc = Descriptor::from_raw(desc).unwrap();
 
         let fd = proc.register_descriptor(*desc);
@@ -176,7 +176,7 @@ mod export {
         proc: *mut cshadow::Process,
         handle: libc::c_int,
     ) -> *const Descriptor {
-        let proc = unsafe { Process::borrow_from_c(proc) };
+        let proc = unsafe { ProcessRef::borrow_from_c(proc) };
 
         let handle: u32 = match handle.try_into() {
             Ok(i) => i,
@@ -198,7 +198,7 @@ mod export {
         proc: *mut cshadow::Process,
         handle: libc::c_int,
     ) -> *mut Descriptor {
-        let mut proc = unsafe { Process::borrow_from_c(proc) };
+        let mut proc = unsafe { ProcessRef::borrow_from_c(proc) };
 
         let handle: u32 = match handle.try_into() {
             Ok(i) => i,
@@ -220,7 +220,7 @@ mod export {
         proc: *mut cshadow::Process,
         handle: libc::c_int,
     ) -> *mut cshadow::LegacyFile {
-        let proc = unsafe { Process::borrow_from_c(proc) };
+        let proc = unsafe { ProcessRef::borrow_from_c(proc) };
 
         let handle: u32 = match handle.try_into() {
             Ok(i) => i,

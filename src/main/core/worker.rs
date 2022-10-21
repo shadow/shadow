@@ -9,7 +9,7 @@ use crate::core::work::event::Event;
 use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
 use crate::host::host::{Host, HostInfo};
-use crate::host::process::{Process, ProcessId};
+use crate::host::process::{ProcessId, ProcessRef};
 use crate::host::thread::{CThread, Thread, ThreadId};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
@@ -145,7 +145,7 @@ impl Worker {
     }
 
     /// Set the currently-active Process.
-    pub fn set_active_process(process: &Process) {
+    pub fn set_active_process(process: &ProcessRef) {
         debug_assert_eq!(
             process.host_id(),
             Worker::with_active_host_info(|h| h.id).unwrap()
@@ -631,7 +631,7 @@ mod export {
         if process.is_null() {
             Worker::clear_active_process();
         } else {
-            let process = unsafe { Process::borrow_from_c(notnull_mut_debug(process)) };
+            let process = unsafe { ProcessRef::borrow_from_c(notnull_mut_debug(process)) };
             Worker::set_active_process(&process);
         }
     }

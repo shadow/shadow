@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::Descriptor;
-use crate::host::process::Process;
+use crate::host::process::ProcessRef;
 use crate::host::syscall_types::SysCallArgs;
 use crate::host::syscall_types::SyscallResult;
 
@@ -78,7 +78,7 @@ impl SyscallHandler {
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor(
-        process: &Process,
+        process: &ProcessRef,
         fd: impl TryInto<u32>,
     ) -> Result<&Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
@@ -93,7 +93,7 @@ impl SyscallHandler {
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor_mut(
-        process: &mut Process,
+        process: &mut ProcessRef,
         fd: impl TryInto<u32>,
     ) -> Result<&mut Descriptor, nix::errno::Errno> {
         // check that fd is within bounds

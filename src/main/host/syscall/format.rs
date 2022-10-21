@@ -561,7 +561,7 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
-    use crate::host::process::Process;
+    use crate::host::process::ProcessRef;
     use std::ffi::CStr;
 
     #[no_mangle]
@@ -577,7 +577,7 @@ mod export {
         assert!(!name.is_null());
         assert!(!args.is_null());
 
-        let proc = unsafe { Process::borrow_from_c(proc) };
+        let proc = unsafe { ProcessRef::borrow_from_c(proc) };
 
         let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
         let args = unsafe { CStr::from_ptr(args) }.to_str().unwrap();

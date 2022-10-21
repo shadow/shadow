@@ -34,7 +34,7 @@
 
 use super::{
     host::Host,
-    process::Process,
+    process::ProcessRef,
     thread::{CThread, Thread},
 };
 use crate::cshadow;
@@ -52,7 +52,7 @@ impl<'a> HostContext<'a> {
     }
 
     /// Add the given process to the context.
-    pub fn with_process(&'a mut self, process: &'a mut Process) -> ProcessContext<'a> {
+    pub fn with_process(&'a mut self, process: &'a mut ProcessRef) -> ProcessContext<'a> {
         ProcessContext::new(self.host, process)
     }
 }
@@ -60,11 +60,11 @@ impl<'a> HostContext<'a> {
 /// Represent the "current" `Host` and `Process`.
 pub struct ProcessContext<'a> {
     pub host: &'a mut Host,
-    pub process: &'a mut Process,
+    pub process: &'a mut ProcessRef,
 }
 
 impl<'a> ProcessContext<'a> {
-    pub fn new(host: &'a mut Host, process: &'a mut Process) -> Self {
+    pub fn new(host: &'a mut Host, process: &'a mut ProcessRef) -> Self {
         Self { host, process }
     }
 
@@ -76,12 +76,16 @@ impl<'a> ProcessContext<'a> {
 /// Represent the "current" `Host`, `Process`, and `Thread`.
 pub struct ThreadContext<'a> {
     pub host: &'a mut Host,
-    pub process: &'a mut Process,
+    pub process: &'a mut ProcessRef,
     pub thread: &'a mut dyn Thread,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a mut Host, process: &'a mut Process, thread: &'a mut dyn Thread) -> Self {
+    pub fn new(
+        host: &'a mut Host,
+        process: &'a mut ProcessRef,
+        thread: &'a mut dyn Thread,
+    ) -> Self {
         Self {
             host,
             process,
@@ -94,7 +98,7 @@ impl<'a> ThreadContext<'a> {
 /// Rust code, we can build them from C pointers.
 pub struct ThreadContextObjs {
     host: Host,
-    process: Process,
+    process: ProcessRef,
     thread: CThread,
 }
 
@@ -102,7 +106,7 @@ impl ThreadContextObjs {
     pub unsafe fn from_syscallhandler(sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
         let host = unsafe { Host::borrow_from_c(sys.host) };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
+        let process = unsafe { ProcessRef::borrow_from_c(sys.process) };
         let thread = unsafe { CThread::new(sys.thread) };
         Self {
             host,
@@ -115,7 +119,7 @@ impl ThreadContextObjs {
         let sys = unsafe { cshadow::thread_getSysCallHandler(thread) };
         let sys = unsafe { sys.as_mut().unwrap() };
         let host = unsafe { Host::borrow_from_c(sys.host) };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
+        let process = unsafe { ProcessRef::borrow_from_c(sys.process) };
         let thread = unsafe { CThread::new(sys.thread) };
         Self {
             host,
