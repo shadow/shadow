@@ -1,16 +1,21 @@
 use super::{Root, Tag};
-use std::{cell::Cell, ptr::NonNull};
+use std::{
+    cell::{Cell, UnsafeCell},
+    ptr::NonNull,
+};
 
 struct RootedRcInternal<T> {
-    val: T,
+    val: UnsafeCell<Option<T>>,
     strong_count: Cell<u32>,
+    weak_count: Cell<u32>,
 }
 
 impl<T> RootedRcInternal<T> {
     pub fn new(val: T) -> Self {
         Self {
-            val,
+            val: UnsafeCell::new(Some(val)),
             strong_count: Cell::new(1),
+            weak_count: Cell::new(0),
         }
     }
 
@@ -21,29 +26,28 @@ impl<T> RootedRcInternal<T> {
     pub fn dec_strong(&self) {
         self.strong_count.set(self.strong_count.get() - 1)
     }
+
+    pub fn inc_weak(&self) {
+        self.weak_count.set(self.weak_count.get() + 1)
+    }
+
+    pub fn dec_weak(&self) {
+        self.weak_count.set(self.weak_count.get() - 1)
+    }
 }
 
-/// Analagous to [std::rc::Rc]. In particular like [std::rc::Rc] and unlike
-/// [std::sync::Arc], it doesn't perform any atomic operations internally,
-/// making it relatively inexpensive
-///
-/// Unlike [std::rc::Rc], this type [Send] and [Sync] if `T` is. This is safe because
-/// the owner is required to prove ownership of the associated [Root]
-/// to perform any sensitive operations.
-///
-/// Instances must be destroyed using [RootedRc::safely_drop], which validates
-/// that the [Root] is held before manipulating reference counts, etc.
-/// Failing to call [RootedRc::safely_drop] results in a `panic` in debug builds,
-/// or leaking the object in release builds.
-pub struct RootedRc<T> {
+enum RefType {
+    Weak,
+    Strong,
+}
+
+// Shared implementation for strong and weak references
+struct RootedRcCommon<T> {
     tag: Tag,
-    // Option<NonNull<_>> here instead of `* mut` for
-    // [covariance](https://doc.rust-lang.org/reference/subtyping.html#variance).
     internal: Option<NonNull<RootedRcInternal<T>>>,
 }
 
-impl<T> RootedRc<T> {
-    /// Creates a new object associated with `root`.
+impl<T> RootedRcCommon<T> {
     pub fn new(root: &Root, val: T) -> Self {
         Self {
             tag: root.tag(),
@@ -53,70 +57,75 @@ impl<T> RootedRc<T> {
         }
     }
 
-    /// Like [Clone::clone], but requires that the corresponding Root is held.
-    ///
-    /// Intentionally named clone to shadow Self::deref()::clone().
-    ///
-    /// Panics if `root` is not the associated [Root].
-    pub fn clone(&self, root: &Root) -> Self {
+    // Validates that no other thread currently has access to self.internal, and
+    // return a reference to it.
+    pub fn borrow_internal(&self, root: &Root) -> &RootedRcInternal<T> {
         assert_eq!(
             root.tag, self.tag,
             "Tried using root {:?} instead of {:?}",
             root.tag, self.tag
         );
-        // SAFETY: We've verified that the lock is held by inspection of the
-        // lock itself. We hold a reference to the guard, guaranteeing that the
-        // lock is held while `unchecked_clone` runs.
-        unsafe { self.unchecked_clone() }
+        // SAFETY:
+        // * Holding a reference to `root` proves no other threads can currently
+        //   access `self.internal`.
+        // * `self.internal` is accessible since we hold a strong reference.
+        unsafe { self.internal.unwrap().as_ref() }
     }
 
-    /// # Safety
-    ///
-    /// There must be no other threads accessing this object, or clones of this object.
-    unsafe fn unchecked_clone(&self) -> Self {
-        // SAFETY: Pointer should be valid by construction. Caller is
-        // responsible for ensuring no parallel access.
-        let internal = unsafe { self.internal.unwrap().as_ref() };
-        internal.inc_strong();
+    pub fn safely_drop(mut self, root: &Root, t: RefType) {
+        let internal: &RootedRcInternal<T> = self.borrow_internal(root);
+        match t {
+            RefType::Weak => internal.dec_weak(),
+            RefType::Strong => internal.dec_strong(),
+        };
+        let strong_count = internal.strong_count.get();
+        let weak_count = internal.weak_count.get();
+
+        // If there are no more strong references, prepare to drop the value.
+        // If the value was already dropped (e.g. because we're now dropping a
+        // weak reference after all the strong refs were already dropped), this
+        // is a no-op.
+        let val: Option<T> = if strong_count == 0 {
+            // SAFETY: Since no strong references remain, nothing else can be
+            // referencing the internal value.
+            unsafe { internal.val.get().as_mut().unwrap().take() }
+        } else {
+            None
+        };
+
+        // Clear `self.internal`, so that `drop` knows that `safely_drop` ran.
+        let internal: NonNull<RootedRcInternal<T>> = self.internal.take().unwrap();
+
+        // If there are neither strong nor weak references, drop `internal` itself.
+        if strong_count == 0 && weak_count == 0 {
+            // SAFETY: We know the pointer is still valid since we had the last
+            // reference, and since the counts are now zero, there can be no
+            // other references.
+            drop(unsafe { Box::from_raw(internal.as_ptr()) });
+        }
+
+        // (Potentially) drop the internal value only after we've finished with
+        // the Rc bookkeeping, so that it's in a valid state even if the value's
+        // drop implementation panics.
+        drop(val);
+    }
+
+    pub fn clone(&self, root: &Root, t: RefType) -> Self {
+        let internal: &RootedRcInternal<T> = self.borrow_internal(root);
+        match t {
+            RefType::Weak => internal.inc_weak(),
+            RefType::Strong => internal.inc_strong(),
+        };
         Self {
             tag: self.tag,
             internal: self.internal,
         }
     }
-
-    /// Safely drop this object, dropping the internal value if no other
-    /// references to it remain.
-    ///
-    /// Instances that are dropped *without* calling this method cannot be
-    /// safely cleaned up. In debug builds this will result in a `panic`.
-    /// Otherwise the underlying reference count will simply not be decremented,
-    /// ultimately resulting in the enclosed value never being dropped.
-    pub fn safely_drop(mut self, root: &Root) {
-        assert_eq!(
-            root.tag, self.tag,
-            "Tried using a root {:?} instead of {:?}",
-            root.tag, self.tag
-        );
-        let internal = self.internal.take().unwrap();
-        let drop_internal = {
-            // SAFETY: pointer points to valid data by construction.
-            let internal = unsafe { internal.as_ref() };
-            internal.dec_strong();
-            internal.strong_count.get() == 0
-        };
-        if drop_internal {
-            // SAFETY: There are no remaining strong references to
-            // self.internal, and we know that no other threads could be
-            // manipulating the reference count in parallel since we have the
-            // root lock.
-            unsafe { Box::from_raw(internal.as_ptr()) };
-        }
-    }
 }
 
-impl<T> Drop for RootedRc<T> {
+impl<T> Drop for RootedRcCommon<T> {
     fn drop(&mut self) {
-        if !self.internal.is_none() {
+        if self.internal.is_some() {
             log::error!("Dropped without calling `safely_drop`");
 
             // We *can* continue without violating Rust safety properties; the
@@ -137,17 +146,86 @@ impl<T> Drop for RootedRc<T> {
     }
 }
 
-// SAFETY: RootedRc ensures that its internals can only be accessed when the
-// Root is held by the current thread, effectively synchronizing the reference
-// count.
-unsafe impl<T: Sync + Send> Send for RootedRc<T> {}
-unsafe impl<T: Sync + Send> Sync for RootedRc<T> {}
+// SAFETY: RootedRcCommon ensures that its internals can only be accessed when
+// the Root is held by the current thread, effectively synchronizing the
+// reference count.
+unsafe impl<T: Sync + Send> Send for RootedRcCommon<T> {}
+unsafe impl<T: Sync + Send> Sync for RootedRcCommon<T> {}
+
+/// Analagous to [std::rc::Rc]. In particular like [std::rc::Rc] and unlike
+/// [std::sync::Arc], it doesn't perform any atomic operations internally,
+/// making it relatively inexpensive
+///
+/// Unlike [std::rc::Rc], this type [Send] and [Sync] if `T` is. This is safe because
+/// the owner is required to prove ownership of the associated [Root]
+/// to perform any sensitive operations.
+///
+/// Instances must be destroyed using [RootedRc::safely_drop], which validates
+/// that the [Root] is held before manipulating reference counts, etc.
+/// Failing to call [RootedRc::safely_drop] results in a `panic` in debug builds,
+/// or leaking the object in release builds.
+pub struct RootedRc<T> {
+    common: RootedRcCommon<T>,
+}
+
+impl<T> RootedRc<T> {
+    /// Creates a new object associated with `root`.
+    pub fn new(root: &Root, val: T) -> Self {
+        Self {
+            common: RootedRcCommon::new(root, val),
+        }
+    }
+
+    /// Create a weak reference.
+    ///
+    /// We use fully qualified syntax here for consistency with Rc and Arc and
+    /// to avoid name conflicts with `T`'s methods.
+    pub fn downgrade(this: &Self, root: &Root) -> RootedRcWeak<T> {
+        RootedRcWeak {
+            common: this.common.clone(root, RefType::Weak),
+        }
+    }
+
+    /// Like [Clone::clone], but requires that the corresponding Root is held.
+    ///
+    /// Intentionally named clone to shadow Self::deref()::clone().
+    ///
+    /// Panics if `root` is not the associated [Root].
+    pub fn clone(&self, root: &Root) -> Self {
+        Self {
+            common: self.common.clone(root, RefType::Strong),
+        }
+    }
+
+    /// Safely drop this object, dropping the internal value if no other
+    /// references to it remain.
+    ///
+    /// Instances that are dropped *without* calling this method cannot be
+    /// safely cleaned up. In debug builds this will result in a `panic`.
+    /// Otherwise the underlying reference count will simply not be decremented,
+    /// ultimately resulting in the enclosed value never being dropped.
+    pub fn safely_drop(self, root: &Root) {
+        self.common.safely_drop(root, RefType::Strong);
+    }
+}
 
 impl<T> std::ops::Deref for RootedRc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &unsafe { self.internal.unwrap().as_ref() }.val
+        // No need to require a reference to `Root` here since we're not
+        // touching the counts, only the value itself, which we already required
+        // to be Sync and Send for RootedRc<T> to be Sync and Send.
+
+        // SAFETY: Pointer to `internal` is valid, since we hold a strong ref.
+        let internal = unsafe { self.common.internal.unwrap().as_ref() };
+
+        // SAFETY: Since we hold a strong ref, we know that `val` is valid, and
+        // that there are no mutable references to it. (The only time we create
+        // a mutable reference is to drop the T value when the strong ref count
+        // reaches zero)
+        let val = unsafe { &*internal.val.get() };
+        val.as_ref().unwrap()
     }
 }
 
@@ -259,5 +337,103 @@ mod test_rooted_rc {
         }
 
         rc.safely_drop(&root.lock().unwrap());
+    }
+}
+
+pub struct RootedRcWeak<T> {
+    common: RootedRcCommon<T>,
+}
+
+impl<T> RootedRcWeak<T> {
+    pub fn upgrade(&self, root: &Root) -> Option<RootedRc<T>> {
+        let internal = self.common.borrow_internal(root);
+
+        if internal.strong_count.get() == 0 {
+            return None;
+        }
+
+        Some(RootedRc {
+            common: self.common.clone(root, RefType::Strong),
+        })
+    }
+
+    /// Like [Clone::clone], but requires that the corresponding Root is held.
+    ///
+    /// Intentionally named clone to shadow Self::deref()::clone().
+    ///
+    /// Panics if `root` is not the associated [Root].
+    pub fn clone(&self, root: &Root) -> Self {
+        Self {
+            common: self.common.clone(root, RefType::Weak),
+        }
+    }
+
+    pub fn safely_drop(self, root: &Root) {
+        self.common.safely_drop(root, RefType::Weak)
+    }
+}
+
+// SAFETY: RootedRc ensures that its internals can only be accessed when the
+// Root is held by the current thread, effectively synchronizing the reference
+// count.
+unsafe impl<T: Sync + Send> Send for RootedRcWeak<T> {}
+unsafe impl<T: Sync + Send> Sync for RootedRcWeak<T> {}
+
+#[cfg(test)]
+mod test_rooted_rc_weak {
+    use super::*;
+
+    #[test]
+    fn successful_upgrade() {
+        let root = Root::new();
+        let strong = RootedRc::new(&root, 42);
+        let weak = RootedRc::downgrade(&strong, &root);
+
+        let upgraded = weak.upgrade(&root).unwrap();
+
+        assert_eq!(*upgraded, *strong);
+
+        upgraded.safely_drop(&root);
+        weak.safely_drop(&root);
+        strong.safely_drop(&root);
+    }
+
+    #[test]
+    fn failed_upgrade() {
+        let root = Root::new();
+        let strong = RootedRc::new(&root, 42);
+        let weak = RootedRc::downgrade(&strong, &root);
+
+        strong.safely_drop(&root);
+
+        assert!(weak.upgrade(&root).is_none());
+
+        weak.safely_drop(&root);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn drop_without_lock_panics_with_debug_assertions() {
+        let root = Root::new();
+        let strong = RootedRc::new(&root, 42);
+        drop(RootedRc::downgrade(&strong, &root));
+        strong.safely_drop(&root);
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn drop_without_lock_doesnt_leak_value() {
+        let root = Root::new();
+        let rc = std::rc::Rc::new(());
+        let strong = RootedRc::new(&root, rc.clone());
+        drop(RootedRc::downgrade(&strong, &root));
+        strong.safely_drop(&root);
+
+        // Because we safely dropped all of the strong references,
+        // the internal std::rc::Rc value should still have been dropped.
+        // The `internal` field itself will be leaked since the weak count
+        // never reaches 0.
+        assert_eq!(std::rc::Rc::strong_count(&rc), 1);
     }
 }
