@@ -17,7 +17,7 @@
 
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
-use crate::host::thread::{CThread, Thread};
+use crate::host::thread::Thread;
 use crate::utility::notnull::*;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
@@ -552,7 +552,7 @@ impl MemoryManager {
 
     /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
     /// running thread.
-    pub fn init_mapper(&mut self, thread: &mut impl Thread) {
+    pub fn init_mapper(&mut self, thread: &mut Thread) {
         assert!(self.memory_mapper.is_none());
         self.memory_mapper = Some(MemoryMapper::new(self, thread));
     }
@@ -571,7 +571,7 @@ impl MemoryManager {
         }
     }
 
-    fn handle_brk(&mut self, thread: &mut impl Thread, ptr: PluginPtr) -> SyscallResult {
+    fn handle_brk(&mut self, thread: &mut Thread, ptr: PluginPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
@@ -581,7 +581,7 @@ impl MemoryManager {
     #[allow(clippy::too_many_arguments)]
     fn do_mmap(
         &mut self,
-        thread: &mut dyn Thread,
+        thread: &mut Thread,
         addr: PluginPtr,
         length: usize,
         prot: i32,
@@ -604,7 +604,7 @@ impl MemoryManager {
 
     fn handle_munmap(
         &mut self,
-        thread: &mut impl Thread,
+        thread: &mut Thread,
         addr: PluginPtr,
         length: usize,
     ) -> SyscallResult {
@@ -622,7 +622,7 @@ impl MemoryManager {
 
     fn do_munmap(
         &mut self,
-        thread: &mut dyn Thread,
+        thread: &mut Thread,
         addr: PluginPtr,
         length: usize,
     ) -> nix::Result<()> {
@@ -635,7 +635,7 @@ impl MemoryManager {
 
     fn handle_mremap(
         &mut self,
-        thread: &mut impl Thread,
+        thread: &mut Thread,
         old_address: PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -652,7 +652,7 @@ impl MemoryManager {
 
     fn handle_mprotect(
         &mut self,
-        thread: &mut impl Thread,
+        thread: &mut Thread,
         addr: PluginPtr,
         size: usize,
         prot: i32,
@@ -787,7 +787,7 @@ mod export {
     ) {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
         if !memory_manager.has_mapper() {
-            let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+            let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
             memory_manager.init_mapper(&mut thread)
         }
     }
@@ -994,7 +994,7 @@ mod export {
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReturn {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+        let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_brk(&mut thread, PluginPtr::from(plugin_src))
             .into()
@@ -1013,7 +1013,7 @@ mod export {
         offset: i64,
     ) -> c::SysCallReturn {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+        let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
         memory_manager
             .do_mmap(
                 &mut thread,
@@ -1036,7 +1036,7 @@ mod export {
         len: usize,
     ) -> c::SysCallReturn {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+        let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_munmap(&mut thread, PluginPtr::from(addr), len)
             .into()
@@ -1053,7 +1053,7 @@ mod export {
         new_addr: c::PluginPtr,
     ) -> c::SysCallReturn {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+        let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_mremap(
                 &mut thread,
@@ -1075,7 +1075,7 @@ mod export {
         prot: i32,
     ) -> c::SysCallReturn {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+        let mut thread = unsafe { Thread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
             .into()
