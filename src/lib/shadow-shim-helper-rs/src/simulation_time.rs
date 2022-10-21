@@ -51,6 +51,22 @@ impl SimulationTime {
         }
     }
 
+    /// Convert a [`Duration`](std::time::Duration) to a [`SimulationTime`]. This function exists as
+    /// a `const` alternative to `SimulationTime::try_from(duration)`. May panic if the duration is
+    /// too large.
+    pub const fn from_duration(val: std::time::Duration) -> Self {
+        if SIMTIME_ONE_NANOSECOND != 1 {
+            unreachable!();
+        }
+
+        let val = val.as_nanos();
+        if val > SIMTIME_MAX as u128 {
+            panic!("Duration is larger than SIMTIME_MAX");
+        }
+
+        Self(val as u64)
+    }
+
     pub fn is_zero(&self) -> bool {
         self.0 == 0
     }
