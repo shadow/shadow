@@ -80,7 +80,7 @@ jobs:
       - name: Get month
         id: get-month
         run: |
-          echo "::set-output name=month::$(/bin/date -u "+%Y%m")"
+          echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
