@@ -32,7 +32,7 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
-use super::{host::Host, process::Process, thread::Thread};
+use super::{host::Host, process::Process, thread::ThreadRef};
 use crate::cshadow;
 
 /// Represent the "current" Host.
@@ -64,7 +64,7 @@ impl<'a> ProcessContext<'a> {
         Self { host, process }
     }
 
-    pub fn with_thread(&'a mut self, thread: &'a mut Thread) -> ThreadContext<'a> {
+    pub fn with_thread(&'a mut self, thread: &'a mut ThreadRef) -> ThreadContext<'a> {
         ThreadContext::new(self.host, self.process, thread)
     }
 }
@@ -73,11 +73,11 @@ impl<'a> ProcessContext<'a> {
 pub struct ThreadContext<'a> {
     pub host: &'a mut Host,
     pub process: &'a mut Process,
-    pub thread: &'a mut Thread,
+    pub thread: &'a mut ThreadRef,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a mut Host, process: &'a mut Process, thread: &'a mut Thread) -> Self {
+    pub fn new(host: &'a mut Host, process: &'a mut Process, thread: &'a mut ThreadRef) -> Self {
         Self {
             host,
             process,
@@ -91,7 +91,7 @@ impl<'a> ThreadContext<'a> {
 pub struct ThreadContextObjs {
     host: Host,
     process: Process,
-    thread: Thread,
+    thread: ThreadRef,
 }
 
 impl ThreadContextObjs {
@@ -99,7 +99,7 @@ impl ThreadContextObjs {
         let sys = unsafe { sys.as_mut().unwrap() };
         let host = unsafe { Host::borrow_from_c(sys.host) };
         let process = unsafe { Process::borrow_from_c(sys.process) };
-        let thread = unsafe { Thread::new(sys.thread) };
+        let thread = unsafe { ThreadRef::new(sys.thread) };
         Self {
             host,
             process,
@@ -112,7 +112,7 @@ impl ThreadContextObjs {
         let sys = unsafe { sys.as_mut().unwrap() };
         let host = unsafe { Host::borrow_from_c(sys.host) };
         let process = unsafe { Process::borrow_from_c(sys.process) };
-        let thread = unsafe { Thread::new(sys.thread) };
+        let thread = unsafe { ThreadRef::new(sys.thread) };
         Self {
             host,
             process,

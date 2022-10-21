@@ -7,11 +7,11 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::HostId;
 
 /// Wraps the C Thread struct.
-pub struct Thread {
+pub struct ThreadRef {
     cthread: *mut c::Thread,
 }
 
-impl Thread {
+impl ThreadRef {
     /// Have the plugin thread natively execute the given syscall.
     pub fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
         // We considered using an iterator here rather than having to pass an index everywhere
@@ -218,7 +218,7 @@ impl Thread {
     }
 }
 
-impl Drop for Thread {
+impl Drop for ThreadRef {
     fn drop(&mut self) {
         // Safety: self.cthread initialized in CThread::new.
         unsafe {
