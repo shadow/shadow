@@ -499,7 +499,8 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
         "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
 }
 
-static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
+static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName,
+                                                 int accessMode) {
     MAGIC_ASSERT(proc);
     utility_debugAssert(fileName != NULL);
 
@@ -516,7 +517,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
             "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
     }
 
-    int errcode = regularfile_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
+    int errcode = regularfile_open(stdfile, fileName, accessMode | O_CREAT | O_TRUNC,
                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
     free(cwd);
 
@@ -538,17 +539,17 @@ static void _process_start(Process* proc) {
     }
 
     // Set up stdin
-    _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null");
+    _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null", O_RDONLY);
 
     // Set up stdout
     gchar* stdoutFileName = _process_outputFileName(proc, "stdout");
-    proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName);
+    proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName, O_WRONLY);
     legacyfile_ref((LegacyFile*)proc->stdoutFile);
     g_free(stdoutFileName);
 
     // Set up stderr
     gchar* stderrFileName = _process_outputFileName(proc, "stderr");
-    proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName);
+    proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName, O_WRONLY);
     legacyfile_ref((LegacyFile*)proc->stderrFile);
     g_free(stderrFileName);
 
