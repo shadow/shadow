@@ -7,6 +7,7 @@
 - [iPerf 3](#iperf-3)
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
 - [CTorrent and opentracker](#ctorrent-and-opentracker)
+- [http-server](#http-server)
 
 ## libopenblas
 
@@ -391,3 +392,43 @@ cat shadow.data/hosts/downloader1/foo
 
 1. Shadow must be run as a non-root user since opentracker will attempt to drop
 privileges if it detects that the effective user is root.
+
+## http-server
+
+### Example
+
+```yaml
+general:
+  stop_time: 10s
+  model_unblocked_syscall_latency: true
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: node
+      args: /usr/local/bin/http-server -p 80 -d
+      start_time: 3s
+  client:
+    network_node_id: 0
+    processes:
+    - path: curl
+      args: -s server
+      start_time: 5s
+```
+
+```bash
+rm -rf shadow.data; shadow shadow.yaml > shadow.log
+less shadow.data/hosts/client/client.curl.1000.stdout
+```
+
+### Notes
+
+1. Either the Node.js runtime or http-server uses a busy loop that is
+incompatible with Shadow and will cause Shadow to deadlock.
+`model_unblocked_syscall_latency` works around this (see
+[busy-loops](limitations.md#busy-loops)).
