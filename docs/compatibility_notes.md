@@ -6,6 +6,8 @@
 - [iPerf 2](#iperf-2)
 - [iPerf 3](#iperf-3)
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
+- [CTorrent and opentracker](#ctorrent-and-opentracker)
+- [http-server](#http-server)
 
 ## libopenblas
 
@@ -341,3 +343,92 @@ rm -rf shadow.data; shadow shadow.yaml > shadow.log
 linked version by replacing `CGO_ENABLED=0` with `CGO_ENABLED=1` in etcd's
 `build.sh` script. The etcd packages included in the Debian and Ubuntu APT
 repositories are dynamically linked, so they can be used directly.
+
+## CTorrent and opentracker
+
+### Example
+
+```yaml
+general:
+  stop_time: 60s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  tracker:
+    network_node_id: 0
+    processes:
+    - path: opentracker
+  uploader:
+    network_node_id: 0
+    processes:
+    - path: cp
+      args: ../../../foo .
+      start_time: 10s
+    - path: ctorrent
+      args: -t foo -s example.torrent -u http://tracker:6969/announce
+      start_time: 11s
+    - path: ctorrent
+      args: example.torrent
+      start_time: 12s
+  downloader:
+    network_node_id: 0
+    quantity: 10
+    processes:
+    - path: ctorrent
+      args: ../uploader/example.torrent
+      start_time: 30s
+```
+
+```bash
+echo "bar" > foo
+rm -rf shadow.data; shadow shadow.yaml > shadow.log
+cat shadow.data/hosts/downloader1/foo
+```
+
+### Notes
+
+1. Shadow must be run as a non-root user since opentracker will attempt to drop
+privileges if it detects that the effective user is root.
+
+## http-server
+
+### Example
+
+```yaml
+general:
+  stop_time: 10s
+  model_unblocked_syscall_latency: true
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: node
+      args: /usr/local/bin/http-server -p 80 -d
+      start_time: 3s
+  client:
+    network_node_id: 0
+    processes:
+    - path: curl
+      args: -s server
+      start_time: 5s
+```
+
+```bash
+rm -rf shadow.data; shadow shadow.yaml > shadow.log
+less shadow.data/hosts/client/client.curl.1000.stdout
+```
+
+### Notes
+
+1. Either the Node.js runtime or http-server uses a busy loop that is
+incompatible with Shadow and will cause Shadow to deadlock.
+`model_unblocked_syscall_latency` works around this (see
+[busy-loops](limitations.md#busy-loops)).
