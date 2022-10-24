@@ -6,6 +6,7 @@
 - [iPerf 2](#iperf-2)
 - [iPerf 3](#iperf-3)
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
+- [CTorrent and opentracker](#ctorrent-and-opentracker)
 
 ## libopenblas
 
@@ -341,3 +342,52 @@ rm -rf shadow.data; shadow shadow.yaml > shadow.log
 linked version by replacing `CGO_ENABLED=0` with `CGO_ENABLED=1` in etcd's
 `build.sh` script. The etcd packages included in the Debian and Ubuntu APT
 repositories are dynamically linked, so they can be used directly.
+
+## CTorrent and opentracker
+
+### Example
+
+```yaml
+general:
+  stop_time: 60s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  tracker:
+    network_node_id: 0
+    processes:
+    - path: opentracker
+  uploader:
+    network_node_id: 0
+    processes:
+    - path: cp
+      args: ../../../foo .
+      start_time: 10s
+    - path: ctorrent
+      args: -t foo -s example.torrent -u http://tracker:6969/announce
+      start_time: 11s
+    - path: ctorrent
+      args: example.torrent
+      start_time: 12s
+  downloader:
+    network_node_id: 0
+    quantity: 10
+    processes:
+    - path: ctorrent
+      args: ../uploader/example.torrent
+      start_time: 30s
+```
+
+```bash
+echo "bar" > foo
+rm -rf shadow.data; shadow shadow.yaml > shadow.log
+cat shadow.data/hosts/downloader1/foo
+```
+
+### Notes
+
+1. Shadow must be run as a non-root user since opentracker will attempt to drop
+privileges if it detects that the effective user is root.
