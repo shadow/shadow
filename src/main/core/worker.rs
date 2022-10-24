@@ -10,7 +10,7 @@ use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
 use crate::host::host::{Host, HostInfo};
 use crate::host::process::{Process, ProcessId};
-use crate::host::thread::{CThread, Thread, ThreadId};
+use crate::host::thread::{ThreadId, ThreadRef};
 use crate::network::network_graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
@@ -165,7 +165,7 @@ impl Worker {
     }
 
     /// Set the currently-active Thread.
-    pub fn set_active_thread(thread: &CThread) {
+    pub fn set_active_thread(thread: &ThreadRef) {
         debug_assert_eq!(
             thread.host_id(),
             Worker::with_active_host_info(|h| h.id).unwrap()
@@ -641,7 +641,7 @@ mod export {
         if thread.is_null() {
             Worker::clear_active_thread();
         } else {
-            let thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             Worker::set_active_thread(&thread);
         }
     }
