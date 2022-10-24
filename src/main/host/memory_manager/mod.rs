@@ -734,7 +734,7 @@ where
 }
 
 mod export {
-    use crate::host::context::ThreadContextObjs;
+    use crate::{core::worker::Worker, host::context::ThreadContextObjs};
 
     use super::*;
 
@@ -759,8 +759,12 @@ mod export {
         thread: *mut c::Thread,
         len: usize,
     ) -> *mut AllocdMem<u8> {
-        let mut objs = unsafe { ThreadContextObjs::from_thread(notnull_mut_debug(thread)) };
-        Box::into_raw(Box::new(AllocdMem::new(&mut objs.borrow(), len)))
+        Worker::with_active_host(|host| {
+            let mut objs =
+                unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
+            Box::into_raw(Box::new(AllocdMem::new(&mut objs.borrow(), len)))
+        })
+        .unwrap()
     }
 
     #[no_mangle]
@@ -768,9 +772,13 @@ mod export {
         thread: *mut c::Thread,
         allocd_mem: *mut AllocdMem<u8>,
     ) {
-        let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
-        let mut objs = unsafe { ThreadContextObjs::from_thread(notnull_mut_debug(thread)) };
-        allocd_mem.free(&mut objs.borrow());
+        Worker::with_active_host(|host| {
+            let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
+            let mut objs =
+                unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
+            allocd_mem.free(&mut objs.borrow());
+        })
+        .unwrap()
     }
 
     #[no_mangle]

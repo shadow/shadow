@@ -54,9 +54,10 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
 
     const Address* address;
 
-    if (strncasecmp(name, host_getName(sys->host), MIN(name_len, NI_MAXHOST)) == 0) {
+    if (strncasecmp(name, host_getName(_syscallhandler_getHost(sys)), MIN(name_len, NI_MAXHOST)) ==
+        0) {
         trace("Using default address for my own hostname %s", name);
-        address = host_getDefaultAddress(sys->host);
+        address = host_getDefaultAddress(_syscallhandler_getHost(sys));
     } else {
         trace("Looking up name %s", name);
         address = worker_resolveNameToAddress(name);

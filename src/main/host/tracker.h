@@ -16,7 +16,8 @@
 #include "main/host/tracker_types.h"
 #include "main/routing/packet.minimal.h"
 
-Tracker* tracker_new(Host* host, CSimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
+Tracker* tracker_new(const Host* host, CSimulationTime interval, LogLevel loglevel,
+                     LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);
 
 void tracker_addProcessingTime(Tracker* tracker, CSimulationTime processingTime);
@@ -30,8 +31,8 @@ void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t 
 void tracker_updateSocketInputBuffer(Tracker* tracker, LegacySocket* socket, gsize inputBufferLength, gsize inputBufferSize);
 void tracker_updateSocketOutputBuffer(Tracker* tracker, LegacySocket* socket, gsize outputBufferLength, gsize outputBufferSize);
 void tracker_removeSocket(Tracker* tracker, LegacySocket* socket);
-void tracker_heartbeat(Tracker* tracker, Host* host);
-static inline void tracker_heartbeatTask(Host* host, gpointer tracker, gpointer userData) {
+void tracker_heartbeat(Tracker* tracker, const Host* host);
+static inline void tracker_heartbeatTask(const Host* host, gpointer tracker, gpointer userData) {
     tracker_heartbeat(tracker, host);
 }
 

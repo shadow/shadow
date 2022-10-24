@@ -107,13 +107,6 @@ impl ThreadPerCoreSched {
     /// See [`crate::core::scheduler::Scheduler::join`].
     pub fn join(self) {
         self.pool.join();
-
-        // when the host is in rust we won't need to do this
-        for host_queue in self.thread_hosts.iter() {
-            while let Some(host) = host_queue.pop() {
-                unsafe { crate::cshadow::host_unref(host.chost()) };
-            }
-        }
     }
 }
 
@@ -142,13 +135,11 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
                 thread_index_iter_offset: 0,
-                current_host: None,
             };
 
             f(i, &mut host_iter);
 
-            assert!(host_iter.current_host.is_none());
-            assert!(host_iter.next().is_none());
+            assert!(host_iter.next(None).is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -170,13 +161,11 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
                 thread_index_iter_offset: 0,
-                current_host: None,
             };
 
             f(i, &mut host_iter, this_elem);
 
-            assert!(host_iter.current_host.is_none());
-            assert!(host_iter.next().is_none());
+            assert!(host_iter.next(None).is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -195,14 +184,14 @@ pub struct HostIter<'a> {
     this_thread_index: usize,
     /// The thread offset of our iterator; stored so that we can resume where we left off.
     thread_index_iter_offset: usize,
-    /// The host that was last returned from `next()`.
-    current_host: Option<Host>,
 }
 
 impl<'a> HostIter<'a> {
     /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self) -> Option<&mut Host> {
-        self.return_current_host();
+    pub fn next(&mut self, prev: Option<Host>) -> Option<Host> {
+        if let Some(prev) = prev {
+            self.thread_hosts_to.push(prev).unwrap();
+        }
 
         // a generator would be nice here...
         for from_queue in self
@@ -216,10 +205,7 @@ impl<'a> HostIter<'a> {
             .skip(self.thread_index_iter_offset)
         {
             if let Some(host) = from_queue.pop() {
-                // yield the host, but keep ownership so that we can add it back to the proper
-                // queue later
-                self.current_host = Some(host);
-                return self.current_host.as_mut();
+                return Some(host);
             }
 
             // no hosts remaining in this queue, so keep our persistent offset up-to-date
@@ -227,19 +213,5 @@ impl<'a> HostIter<'a> {
         }
 
         None
-    }
-
-    /// Returns the currently stored host back to a queue.
-    fn return_current_host(&mut self) {
-        if let Some(current_host) = self.current_host.take() {
-            self.thread_hosts_to.push(current_host).unwrap();
-        }
-    }
-}
-
-impl<'a> std::ops::Drop for HostIter<'a> {
-    fn drop(&mut self) {
-        // make sure we don't own and drop a host
-        self.return_current_host();
     }
 }

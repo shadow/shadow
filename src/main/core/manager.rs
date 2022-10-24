@@ -325,16 +325,26 @@ impl<'a> Manager<'a> {
             // boot each host
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    while let Some(host) = hosts.next() {
+                    let mut prev_host = None;
+                    loop {
+                        let host = hosts.next(prev_host);
+                        let host = if let Some(h) = host {
+                            h
+                        } else {
+                            break;
+                        };
                         worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
-                        unsafe { host.lock_shmem() };
                         worker::Worker::set_active_host(host);
 
-                        host.boot();
+                        worker::Worker::with_active_host(|host| {
+                            unsafe { host.lock_shmem() };
+                            host.boot();
+                            unsafe { host.unlock_shmem() };
+                        })
+                        .unwrap();
 
-                        worker::Worker::clear_active_host();
-                        unsafe { host.unlock_shmem() };
                         worker::Worker::clear_current_time();
+                        prev_host = Some(worker::Worker::take_active_host());
                     }
                 });
             });
@@ -387,15 +397,27 @@ impl<'a> Manager<'a> {
                             worker::Worker::set_round_end_time(window_end);
 
                             // get the next host for this thread from the scheduler
-                            while let Some(host) = hosts.next() {
-                                unsafe { host.lock_shmem() };
+                            let mut prev_host = None;
+                            loop {
+                                let host = hosts.next(prev_host);
+                                let host = if let Some(h) = host {
+                                    h
+                                } else {
+                                    break;
+                                };
                                 worker::Worker::set_active_host(host);
 
-                                host.execute(window_end);
-                                let host_next_event_time = host.next_event_time();
+                                let host_next_event_time =
+                                    worker::Worker::with_active_host(|host| {
+                                        unsafe { host.lock_shmem() };
+                                        host.execute(window_end);
+                                        let host_next_event_time = host.next_event_time();
+                                        unsafe { host.unlock_shmem() };
+                                        host_next_event_time
+                                    })
+                                    .unwrap();
 
-                                worker::Worker::clear_active_host();
-                                unsafe { host.unlock_shmem() };
+                                prev_host = Some(worker::Worker::take_active_host());
 
                                 *next_event_time = [*next_event_time, host_next_event_time]
                                     .into_iter()
@@ -455,15 +477,24 @@ impl<'a> Manager<'a> {
 
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    while let Some(host) = hosts.next() {
+                    let mut prev_host = None;
+                    loop {
+                        let host = hosts.next(prev_host);
+                        let host = if let Some(h) = host {
+                            h
+                        } else {
+                            break;
+                        };
                         worker::Worker::set_current_time(self.end_time);
-                        //unsafe { host.lock() };
                         worker::Worker::set_active_host(host);
 
-                        host.free_all_applications();
-                        host.shutdown();
+                        worker::Worker::with_active_host(|host| {
+                            host.free_all_applications();
+                            host.shutdown();
+                        })
+                        .unwrap();
 
-                        worker::Worker::clear_active_host();
+                        prev_host = Some(worker::Worker::take_active_host());
                         //unsafe { host.unlock() };
                         worker::Worker::clear_current_time();
                     }
@@ -530,48 +561,48 @@ impl<'a> Manager<'a> {
     fn build_host(
         &self,
         host_id: HostId,
-        host: &HostInfo,
+        host_info: &HostInfo,
         dns: *mut c::DNS,
     ) -> anyhow::Result<Host> {
-        let hostname = CString::new(&*host.name).unwrap();
-        let pcap_dir = host
+        let hostname = CString::new(&*host_info.name).unwrap();
+        let pcap_dir = host_info
             .pcap_dir
             .as_ref()
             .map(|x| CString::new(x.to_str().unwrap()).unwrap());
 
         // scope used to enforce drop order for pointers
-        let c_host = {
+        let host = {
             let params = c::HostParameters {
                 // the manager sets this ID
                 id: host_id,
                 // the manager sets this CPU frequency
                 cpuFrequency: self.raw_frequency_khz,
                 // cast the u64 to a u32, ignoring truncated bits
-                nodeSeed: host.seed as u32,
+                nodeSeed: host_info.seed as u32,
                 hostname: hostname.as_ptr(),
-                nodeId: host.network_node_id,
-                ipAddr: match host.ip_addr.unwrap() {
+                nodeId: host_info.network_node_id,
+                ipAddr: match host_info.ip_addr.unwrap() {
                     std::net::IpAddr::V4(ip) => u32::to_be(ip.into()),
                     // the config only allows ipv4 addresses, so this shouldn't happen
                     std::net::IpAddr::V6(_) => unreachable!("IPv6 not supported"),
                 },
                 simEndTime: EmulatedTime::to_c_emutime(Some(self.end_time)),
-                requestedBwDownBits: host.bandwidth_down_bits.unwrap(),
-                requestedBwUpBits: host.bandwidth_up_bits.unwrap(),
-                cpuThreshold: host.cpu_threshold,
-                cpuPrecision: host.cpu_precision,
-                heartbeatInterval: SimulationTime::to_c_simtime(host.heartbeat_interval),
-                heartbeatLogLevel: host
+                requestedBwDownBits: host_info.bandwidth_down_bits.unwrap(),
+                requestedBwUpBits: host_info.bandwidth_up_bits.unwrap(),
+                cpuThreshold: host_info.cpu_threshold,
+                cpuPrecision: host_info.cpu_precision,
+                heartbeatInterval: SimulationTime::to_c_simtime(host_info.heartbeat_interval),
+                heartbeatLogLevel: host_info
                     .heartbeat_log_level
                     .map(|x| x.to_c_loglevel())
                     .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                heartbeatLogInfo: host
+                heartbeatLogInfo: host_info
                     .heartbeat_log_info
                     .iter()
                     .map(|x| x.to_c_loginfoflag())
                     .reduce(|x, y| x | y)
                     .unwrap_or(c::_LogInfoFlags_LOG_INFO_FLAGS_NONE),
-                logLevel: host
+                logLevel: host_info
                     .log_level
                     .map(|x| x.to_c_loglevel())
                     .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
@@ -581,38 +612,37 @@ impl<'a> Manager<'a> {
                     .as_ref()
                     .map(|x| x.as_ptr())
                     .unwrap_or(std::ptr::null()),
-                pcapCaptureSize: host.pcap_capture_size.try_into().unwrap(),
-                qdisc: host.qdisc,
-                recvBufSize: host.recv_buf_size,
-                autotuneRecvBuf: if host.autotune_recv_buf { 1 } else { 0 },
-                sendBufSize: host.send_buf_size,
-                autotuneSendBuf: if host.autotune_send_buf { 1 } else { 0 },
-                interfaceBufSize: host.interface_buf_size,
+                pcapCaptureSize: host_info.pcap_capture_size.try_into().unwrap(),
+                qdisc: host_info.qdisc,
+                recvBufSize: host_info.recv_buf_size,
+                autotuneRecvBuf: if host_info.autotune_recv_buf { 1 } else { 0 },
+                sendBufSize: host_info.send_buf_size,
+                autotuneSendBuf: if host_info.autotune_send_buf { 1 } else { 0 },
+                interfaceBufSize: host_info.interface_buf_size,
             };
 
             let hosts_path =
                 CString::new(self.hosts_path.clone().into_os_string().as_bytes()).unwrap();
 
-            let c_host = unsafe { c::host_new(&params) };
-            assert!(!c_host.is_null());
+            let host = Host::new(&params);
 
-            unsafe { c::host_setup(c_host, dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
+            unsafe { host.setup(dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
 
             // make sure we never accidentally drop the following objects before running the
             // unsafe code (will be a compile-time error if they were dropped)
             let _ = &hostname;
             let _ = &pcap_dir;
 
-            c_host
+            host
         };
 
-        unsafe { c::host_lockShimShmemLock(c_host) };
+        unsafe { host.lock_shmem() };
 
-        for proc in &host.processes {
+        for proc in &host_info.processes {
             let plugin_path =
                 CString::new(proc.plugin.clone().into_os_string().as_bytes()).unwrap();
             let plugin_name = CString::new(proc.plugin.file_name().unwrap().as_bytes()).unwrap();
-            let pause_for_debugging = host.pause_for_debugging;
+            let pause_for_debugging = host_info.pause_for_debugging;
 
             let argv: Vec<CString> = proc
                 .args
@@ -620,7 +650,7 @@ impl<'a> Manager<'a> {
                 .map(|x| CString::new(x.as_bytes()).unwrap())
                 .collect();
 
-            let shim_log_level = host
+            let shim_log_level = host_info
                 .log_level
                 .unwrap_or(self.config.general.log_level.unwrap());
 
@@ -646,13 +676,12 @@ impl<'a> Manager<'a> {
                     .chain(std::iter::once(std::ptr::null()))
                     .collect();
 
-                unsafe { c::host_continueExecutionTimer(c_host) };
+                host.continue_execution_timer();
 
                 unsafe {
-                    c::host_addApplication(
-                        c_host,
-                        SimulationTime::to_c_simtime(Some(proc.start_time)),
-                        SimulationTime::to_c_simtime(proc.stop_time),
+                    host.add_application(
+                        proc.start_time,
+                        proc.stop_time,
                         plugin_name.as_ptr(),
                         plugin_path.as_ptr(),
                         envv_ptrs.as_ptr(),
@@ -661,7 +690,7 @@ impl<'a> Manager<'a> {
                     )
                 };
 
-                unsafe { c::host_stopExecutionTimer(c_host) };
+                host.stop_execution_timer();
 
                 // make sure we never accidentally drop the following objects before running the
                 // unsafe code (will be a compile-time error if they were dropped)
@@ -673,9 +702,9 @@ impl<'a> Manager<'a> {
             }
         }
 
-        unsafe { c::host_unlockShimShmemLock(c_host) };
+        unsafe { host.unlock_shmem() };
 
-        Ok(unsafe { Host::borrow_from_c(c_host) })
+        Ok(host)
     }
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is

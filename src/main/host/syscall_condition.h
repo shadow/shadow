@@ -49,7 +49,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger);
 /* Add a timeout to the condition. At time `t`, the conditition will be triggered
  * if it hasn't already. `t` is absolute emulated time, as returned by
  * `worker_getCurrentEmulatedTime`. */
-void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, CEmulatedTime t);
+void syscallcondition_setTimeout(SysCallCondition* cond, const Host* host, CEmulatedTime t);
 
 /* Add a file to the condition which can be used in the syscall handler once it becomes unblocked,
  * without needing to lookup the file again in the descriptor table (since it may no longer exist in
@@ -67,7 +67,7 @@ void syscallcondition_unref(SysCallCondition* cond);
  * be notified via process_continue() when the condition occurs. After
  * this call, the condition object will begin listening on the status of
  * the timeout and descriptor given in new(). */
-void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* proc,
+void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, Process* proc,
                                    Thread* thread);
 
 /* Deactivate the condition by deregistering any open listeners and

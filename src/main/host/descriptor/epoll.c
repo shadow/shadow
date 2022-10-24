@@ -174,7 +174,7 @@ static void _epoll_fileStatusChanged(Epoll* epoll, const EpollKey* key);
 
 static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
                                    EpollWatchObject object, const struct epoll_event* event,
-                                   Host* host) {
+                                   const Host* host) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_debugAssert(event);
@@ -312,7 +312,7 @@ void epoll_reset(Epoll* epoll) {
     g_hash_table_remove_all(epoll->watching);
 }
 
-static void _epoll_close(LegacyFile* descriptor, Host* host) {
+static void _epoll_close(LegacyFile* descriptor, const Host* host) {
     Epoll* epoll = _epoll_fromLegacyFile(descriptor);
     MAGIC_ASSERT(epoll);
     epoll_clearWatchListeners(epoll);
@@ -454,7 +454,7 @@ static void _getWatchObject(const Descriptor* descriptor, EpollWatchTypes* watch
 }
 
 gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descriptor,
-                   const struct epoll_event* event, Host* host) {
+                   const struct epoll_event* event, const Host* host) {
     MAGIC_ASSERT(epoll);
 
     trace("epoll descriptor %p, operation %s, descriptor %i", &epoll->super,

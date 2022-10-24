@@ -123,7 +123,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
 
     /* Service the call in the timer module. */
     struct itimerspec oldValue;
-    errcode = timerfd_setTime(timer, sys->host, flags, &newValue, &oldValue);
+    errcode = timerfd_setTime(timer, _syscallhandler_getHost(sys), flags, &newValue, &oldValue);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }

@@ -77,14 +77,6 @@ impl ThreadPerHostSched {
             });
         });
 
-        // need to unref the host from the main thread so that the global allocation counter will be
-        // correctly updated
-        for host in hosts {
-            if let Some(host) = host.lock().unwrap().take() {
-                unsafe { crate::cshadow::host_unref(host.chost()) };
-            }
-        }
-
         self.pool.join();
     }
 }
@@ -119,10 +111,13 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
                 let mut host = host.borrow_mut();
 
                 let mut host_iter = HostIter {
-                    host: Some(host.as_mut().unwrap()),
+                    host: host.take(),
+                    returned_host: None,
                 };
 
                 f(task_context.thread_idx, &mut host_iter);
+
+                host.replace(host_iter.returned_host.take().unwrap());
             });
         });
     }
@@ -147,10 +142,13 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
                 let mut host = host.borrow_mut();
 
                 let mut host_iter = HostIter {
-                    host: Some(host.as_mut().unwrap()),
+                    host: host.take(),
+                    returned_host: None,
                 };
 
                 f(task_context.thread_idx, &mut host_iter, this_elem);
+
+                host.replace(host_iter.returned_host.unwrap());
             });
         });
     }
@@ -158,13 +156,17 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread. For this thread-per-host scheduler,
 /// there will only ever be one host per thread.
-pub struct HostIter<'a> {
-    host: Option<&'a mut Host>,
+pub struct HostIter {
+    host: Option<Host>,
+    returned_host: Option<Host>,
 }
 
-impl<'a> HostIter<'a> {
+impl HostIter {
     /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self) -> Option<&mut Host> {
+    pub fn next(&mut self, prev: Option<Host>) -> Option<Host> {
+        if let Some(prev) = prev {
+            assert!(self.returned_host.replace(prev).is_none())
+        }
         self.host.take()
     }
 }

@@ -41,7 +41,7 @@ static void _transport_free(LegacyFile* descriptor) {
     transport->vtable->free(descriptor);
 }
 
-static void _transport_close(LegacyFile* descriptor, Host* host) {
+static void _transport_close(LegacyFile* descriptor, const Host* host) {
     Transport* transport = _transport_fromLegacyFile(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);

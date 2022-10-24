@@ -71,13 +71,14 @@ int regularfile_getOSBackedFD(RegularFile* file);
 // Operations that require a non-null RegularFile*
 // ****************************************
 
-ssize_t regularfile_read(RegularFile* file, Host* host, void* buf, size_t bufSize);
-ssize_t regularfile_pread(RegularFile* file, Host* host, void* buf, size_t bufSize, off_t offset);
-ssize_t regularfile_preadv(RegularFile* file, Host* host, const struct iovec* iov, int iovcnt,
+ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t bufSize);
+ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t bufSize,
+                          off_t offset);
+ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iovec* iov, int iovcnt,
                            off_t offset);
 #ifdef SYS_preadv2
-ssize_t regularfile_preadv2(RegularFile* file, Host* host, const struct iovec* iov, int iovcnt,
-                            off_t offset, int flags);
+ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct iovec* iov,
+                            int iovcnt, off_t offset, int flags);
 #endif
 ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize);
 ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, off_t offset);

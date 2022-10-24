@@ -30,12 +30,12 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType
 void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket);
 void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket);
 
-void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
+void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
                                 const CompatSocket* socket);
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
                                                  uint64_t bwDownKiBps, uint64_t bwUpKiBps);
 
-void networkinterface_receivePackets(NetworkInterface* interface, Host* host);
+void networkinterface_receivePackets(NetworkInterface* interface, const Host* host);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */

@@ -71,12 +71,12 @@ SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr 
         case DT_FILE:
             if (!doPread) {
                 utility_debugAssert(offset == 0);
-                result = regularfile_read((RegularFile*)desc, sys->host,
+                result = regularfile_read((RegularFile*)desc, _syscallhandler_getHost(sys),
                                           process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                           sizeNeeded);
             } else {
                 result = regularfile_pread(
-                    (RegularFile*)desc, sys->host,
+                    (RegularFile*)desc, _syscallhandler_getHost(sys),
                     process_getWriteablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded, offset);
             }
             break;
@@ -265,7 +265,7 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const gchar* hostname = host_getName(sys->host);
+    const gchar* hostname = host_getName(_syscallhandler_getHost(sys));
 
     snprintf(buf->sysname, _UTSNAME_SYSNAME_LENGTH, "shadowsys");
     snprintf(buf->nodename, _UTSNAME_NODENAME_LENGTH, "%s", hostname);

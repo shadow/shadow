@@ -104,7 +104,7 @@ static void _regularfile_closeHelper(RegularFile* file) {
     }
 }
 
-static void _regularfile_close(LegacyFile* desc, Host* host) {
+static void _regularfile_close(LegacyFile* desc, const Host* host) {
     RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
 
     trace("Closing file %p with os-backed file %i", file, _regularfile_getOSBackedFD(file));
@@ -309,7 +309,7 @@ int regularfile_open(RegularFile* file, const char* pathname, int flags, mode_t 
     return regularfile_openat(file, NULL, pathname, flags, mode, workingDir);
 }
 
-static void _regularfile_readRandomBytes(RegularFile* file, Host* host, void* buf,
+static void _regularfile_readRandomBytes(RegularFile* file, const Host* host, void* buf,
                                          size_t numBytes) {
     utility_debugAssert(file->type == FILE_TYPE_RANDOM);
 
@@ -322,8 +322,8 @@ static void _regularfile_readRandomBytes(RegularFile* file, Host* host, void* bu
     random_nextNBytes(rng, buf, numBytes);
 }
 
-static size_t _regularfile_readvRandomBytes(RegularFile* file, Host* host, const struct iovec* iov,
-                                            int iovcnt) {
+static size_t _regularfile_readvRandomBytes(RegularFile* file, const Host* host,
+                                            const struct iovec* iov, int iovcnt) {
     size_t total = 0;
     for (int i = 0; i < iovcnt; i++) {
         _regularfile_readRandomBytes(file, host, iov[i].iov_base, iov[i].iov_len);
@@ -332,7 +332,7 @@ static size_t _regularfile_readvRandomBytes(RegularFile* file, Host* host, const
     return total;
 }
 
-ssize_t regularfile_read(RegularFile* file, Host* host, void* buf, size_t bufSize) {
+ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {
@@ -353,7 +353,8 @@ ssize_t regularfile_read(RegularFile* file, Host* host, void* buf, size_t bufSiz
     return (result < 0) ? -errno : result;
 }
 
-ssize_t regularfile_pread(RegularFile* file, Host* host, void* buf, size_t bufSize, off_t offset) {
+ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t bufSize,
+                          off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {
@@ -374,7 +375,7 @@ ssize_t regularfile_pread(RegularFile* file, Host* host, void* buf, size_t bufSi
     return (result < 0) ? -errno : result;
 }
 
-ssize_t regularfile_preadv(RegularFile* file, Host* host, const struct iovec* iov, int iovcnt,
+ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iovec* iov, int iovcnt,
                            off_t offset) {
     MAGIC_ASSERT(file);
 
@@ -396,8 +397,8 @@ ssize_t regularfile_preadv(RegularFile* file, Host* host, const struct iovec* io
 }
 
 #ifdef SYS_preadv2
-ssize_t regularfile_preadv2(RegularFile* file, Host* host, const struct iovec* iov, int iovcnt,
-                            off_t offset, int flags) {
+ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct iovec* iov,
+                            int iovcnt, off_t offset, int flags) {
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {

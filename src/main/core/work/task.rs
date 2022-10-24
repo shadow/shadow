@@ -12,11 +12,11 @@ use crate::{
 pub struct TaskRef {
     magic: Magic<Self>,
     _counter: ObjectCounter,
-    inner: Arc<dyn Fn(&mut Host) + Send + Sync>,
+    inner: Arc<dyn Fn(&Host) + Send + Sync>,
 }
 
 impl TaskRef {
-    pub fn new<T: 'static + Fn(&mut Host) + Send + Sync>(f: T) -> Self {
+    pub fn new<T: 'static + Fn(&Host) + Send + Sync>(f: T) -> Self {
         Self {
             inner: Arc::new(f),
             magic: Magic::new(),
@@ -27,7 +27,7 @@ impl TaskRef {
     /// Executes the task.
     ///
     /// If the task was created from C, will panic if the task's host lock isn't held.
-    pub fn execute(&self, host: &mut Host) {
+    pub fn execute(&self, host: &Host) {
         self.magic.debug_check();
         (self.inner)(host)
     }
@@ -62,14 +62,12 @@ pub mod export {
     use super::*;
 
     use crate::{
-        cshadow,
         host::host::Host,
         utility::{notnull::notnull_mut, HostTreePointer, SyncSendPointer},
     };
     use shadow_shim_helper_rs::HostId;
 
-    pub type TaskCallbackFunc =
-        extern "C" fn(*mut cshadow::Host, *mut libc::c_void, *mut libc::c_void);
+    pub type TaskCallbackFunc = extern "C" fn(*const Host, *mut libc::c_void, *mut libc::c_void);
     pub type TaskObjectFreeFunc = Option<extern "C" fn(*mut libc::c_void)>;
     pub type TaskArgumentFreeFunc = Option<extern "C" fn(*mut libc::c_void)>;
 
@@ -105,7 +103,7 @@ pub mod export {
         }
 
         /// Panics if host lock for `object` and `argument` aren't held.
-        fn execute(&self, host: *mut cshadow::Host) {
+        fn execute(&self, host: *const Host) {
             (self.callback)(host, unsafe { self.object.ptr() }, unsafe {
                 self.argument.ptr()
             })
@@ -156,7 +154,7 @@ pub mod export {
         }
 
         /// Panics if host lock for `object` and `argument` aren't held.
-        fn execute(&self, host: *mut cshadow::Host) {
+        fn execute(&self, host: *const Host) {
             (self.callback)(host, self.object.ptr(), self.argument.ptr())
         }
     }
@@ -210,7 +208,7 @@ pub mod export {
                 argument_free,
             )
         };
-        let task = TaskRef::new(move |host: &mut Host| objs.execute(host.chost()));
+        let task = TaskRef::new(move |host: &Host| objs.execute(host));
         // It'd be nice if we could use Arc::into_raw here, avoiding a level of
         // pointer indirection. Unfortunately that doesn't work because of the
         // internal dynamic Trait object, making the resulting pointer non-ABI
@@ -248,7 +246,7 @@ pub mod export {
                 argument_free,
             )
         };
-        let task = TaskRef::new(move |host: &mut Host| objs.execute(host.chost()));
+        let task = TaskRef::new(move |host: &Host| objs.execute(host));
         // It'd be nice if we could use Arc::into_raw here, avoiding a level of
         // pointer indirection. Unfortunately that doesn't work because of the
         // internal dynamic Trait object, making the resulting pointer non-ABI

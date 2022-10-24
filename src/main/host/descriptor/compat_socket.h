@@ -43,7 +43,7 @@ ProtocolType compatsocket_getProtocol(const CompatSocket* socket);
 bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
 bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket);
-void compatsocket_pushInPacket(const CompatSocket* socket, Host* host, Packet* packet);
-Packet* compatsocket_pullOutPacket(const CompatSocket* socket, Host* host);
+void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet);
+Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_COMPAT_SOCKET_H_ */

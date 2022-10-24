@@ -29,7 +29,7 @@ struct _Thread {
 
     int tid;
 
-    Host* host;
+    HostId hostId;
     Process* process;
     // If non-null, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
@@ -49,15 +49,14 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread* thread_new(Host* host, Process* process, int threadID) {
+Thread* thread_new(const Host* host, Process* process, int threadID) {
     Thread* thread = g_new(Thread, 1);
     *thread = (Thread){.referenceCount = 1,
-                       .host = host,
+                       .hostId = host_getID(host),
                        .process = process,
                        .tid = threadID,
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
-    host_ref(host);
     process_ref(process);
 
     thread->sys = syscallhandler_new(host, process, thread);
@@ -92,10 +91,6 @@ void thread_unref(Thread* thread) {
         if (thread->process) {
             process_unref(thread->process);
             thread->process = NULL;
-        }
-        if (thread->host) {
-            host_unref(thread->host);
-            thread->host = NULL;
         }
         if (thread->sys) {
             syscallhandler_unref(thread->sys);
@@ -133,7 +128,8 @@ void thread_resume(Thread* thread) {
     // Wait on new condition.
     thread->cond = cond;
     if (thread->cond) {
-        syscallcondition_waitNonblock(thread->cond, thread->host, thread->process, thread);
+        syscallcondition_waitNonblock(
+            thread->cond, thread_getHost(thread), thread->process, thread);
     } else {
         utility_debugAssert(!managedthread_isRunning(thread->mthread));
         if (thread->sys) {
@@ -185,7 +181,11 @@ SysCallHandler* thread_getSysCallHandler(Thread* thread) {
 
 Process* thread_getProcess(Thread* thread) { return thread->process; }
 
-Host* thread_getHost(Thread* thread) { return thread->host; }
+const Host* thread_getHost(Thread* thread) {
+    const Host* host = worker_getCurrentHost();
+    utility_debugAssert(host_getID(host) == thread->hostId);
+    return host;
+}
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
@@ -205,7 +205,8 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
 
-    *child = thread_new(thread->host, thread->process, host_getNewProcessID(thread->host));
+    const Host* host = thread_getHost(thread);
+    *child = thread_new(host, thread->process, host_getNewProcessID(host));
 
     int rv = managedthread_clone(
         (*child)->mthread, thread->mthread, flags, child_stack, ptid, ctid, newtls);
@@ -223,7 +224,7 @@ uint32_t thread_getProcessId(Thread* thread) {
 
 HostId thread_getHostId(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return host_getID(thread->host);
+    return thread->hostId;
 }
 
 pid_t thread_getNativePid(Thread* thread) {

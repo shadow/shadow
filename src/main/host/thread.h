@@ -19,7 +19,7 @@ typedef struct _Thread Thread;
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 
-Thread* thread_new(Host* host, Process* process, int threadID);
+Thread* thread_new(const Host* host, Process* process, int threadID);
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
@@ -80,7 +80,7 @@ ShMemBlock* thread_getShMBlock(Thread* thread);
 ShimShmemThread* thread_sharedMem(Thread* thread);
 
 Process* thread_getProcess(Thread* thread);
-Host* thread_getHost(Thread* thread);
+const Host* thread_getHost(Thread* thread);
 // Get the syscallhandler for this thread.
 SysCallHandler* thread_getSysCallHandler(Thread* thread);
 SysCallCondition* thread_getSysCallCondition(Thread* thread);

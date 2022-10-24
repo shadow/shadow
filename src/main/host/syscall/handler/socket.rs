@@ -819,11 +819,11 @@ impl SyscallHandler {
                     ctx.process
                         .deregister_descriptor(fd_1)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                     ctx.process
                         .deregister_descriptor(fd_2)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                 });
                 Err(e.into())
             }

@@ -14,9 +14,9 @@
 
 // Maximum time that the current event may run ahead to. Must only be called if we hold the host
 // lock.
-CEmulatedTime worker_maxEventRunaheadTime(Host* host);
+CEmulatedTime worker_maxEventRunaheadTime(const Host* host);
 
-void worker_sendPacket(Host* src, Packet* packet);
+void worker_sendPacket(const Host* src, Packet* packet);
 
 // Increment a counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the

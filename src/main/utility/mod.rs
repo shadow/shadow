@@ -62,25 +62,26 @@ unsafe impl<T> Send for HostTreePointer<T> {}
 unsafe impl<T> Sync for HostTreePointer<T> {}
 
 impl<T> HostTreePointer<T> {
-    /// Create a pointer that may only be accessed when the lock for `host_id`
-    /// is held.
+    /// Create a pointer that may only be accessed when the host with id
+    /// `host_id` is active.
     pub fn new_for_host(host_id: HostId, ptr: *mut T) -> Self {
         Self { host_id, ptr }
     }
 
-    /// Create a pointer that may only be accessed when the lock for the current host
-    /// is held.
+    /// Create a pointer that may only be accessed when the current host is
+    /// active.
     pub fn new(ptr: *mut T) -> Self {
-        let host_id = Worker::with_active_host_info(|i| i.id);
+        let host_id = Worker::with_active_host(|h| h.info().id);
         Self::new_for_host(host_id.unwrap(), ptr)
     }
 
     /// Get the pointer.
     ///
-    /// Panics if the configured host lock is not held.
+    /// Panics if the configured host is not active.
     ///
-    /// SAFETY: Pointer must only be dereferenced with the Host lock held, in
-    /// addition to the normal safety requirements for dereferencing a pointer.
+    /// SAFETY: Pointer must only be dereferenced while the configures Host is
+    /// still active, in addition to the normal safety requirements for
+    /// dereferencing a pointer.
     pub unsafe fn ptr(&self) -> *mut T {
         // While a caller might conceivably get the pointer without the lock
         // held but only dereference after it actually is held, better to be
@@ -89,8 +90,10 @@ impl<T> HostTreePointer<T> {
         // This function is still `unsafe` since it's now the caller's
         // responsibility to not release the lock and *then* dereference the
         // pointer.
-        Worker::with_active_host_info(|i| {
-            assert_eq!(self.host_id, i.id);
+        //
+        // FIXME: unwrap result. See https://github.com/shadow/shadow/issues/2514
+        Worker::with_active_host(|h| {
+            assert_eq!(self.host_id, h.info().id);
         });
         self.ptr
     }

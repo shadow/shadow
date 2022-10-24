@@ -15,7 +15,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
-typedef struct _Host Host;
+typedef struct _HostCInternal HostCInternal;
 
 #include "lib/logger/log_level.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
@@ -33,83 +33,80 @@ typedef struct _Host Host;
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 
-Host* host_new(const HostParameters* params);
-void host_ref(Host* host);
-void host_unref(Host* host);
+HostCInternal* hostc_new(const HostParameters* params);
+void hostc_unref(HostCInternal* host);
 
-bool host_pushLocalEvent(Host* host, Event* event);
-void host_execute(Host* host, CEmulatedTime until);
-CEmulatedTime host_nextEventTime(Host* host);
-const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host);
+bool hostc_pushLocalEvent(HostCInternal* host, Event* event);
+void hostc_execute(const Host* rhost, CEmulatedTime until);
+CEmulatedTime hostc_nextEventTime(HostCInternal* host);
+const ThreadSafeEventQueue* hostc_getOwnedEventQueue(HostCInternal* host);
 
-void host_continueExecutionTimer(Host* host);
-void host_stopExecutionTimer(Host* host);
+void hostc_continueExecutionTimer(HostCInternal* host);
+void hostc_stopExecutionTimer(HostCInternal* host);
 
-void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
-void host_boot(Host* host);
-void host_shutdown(Host* host);
+void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
+void hostc_boot(const Host* rhost);
+void hostc_shutdown(HostCInternal* host);
 
-guint host_getNewProcessID(Host* host);
-guint64 host_getNewEventID(Host* host);
-guint64 host_getNewPacketID(Host* host);
-void host_addApplication(Host* host, CSimulationTime startTime, CSimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
-                         const gchar* const* argv, bool pause_for_debugging);
-void host_freeAllApplications(Host* host);
+guint hostc_getNewProcessID(HostCInternal* host);
+guint64 hostc_getNewEventID(HostCInternal* host);
+guint64 hostc_getNewPacketID(HostCInternal* host);
+void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
+                          const gchar* pluginName, const gchar* pluginPath,
+                          const gchar* const* envv, const gchar* const* argv,
+                          bool pause_for_debugging);
+void hostc_freeAllApplications(HostCInternal* host);
 
-HostId host_getID(Host* host);
-CPU* host_getCPU(Host* host);
-Tsc* host_getTsc(Host* host);
-const gchar* host_getName(Host* host);
-Address* host_getDefaultAddress(Host* host);
-in_addr_t host_getDefaultIP(Host* host);
-Random* host_getRandom(Host* host);
-gdouble host_getNextPacketPriority(Host* host);
+HostId hostc_getID(HostCInternal* host);
+CPU* hostc_getCPU(HostCInternal* host);
+Tsc* hostc_getTsc(HostCInternal* host);
+const gchar* hostc_getName(HostCInternal* host);
+Address* hostc_getDefaultAddress(HostCInternal* host);
+in_addr_t hostc_getDefaultIP(HostCInternal* host);
+Random* hostc_getRandom(HostCInternal* host);
+gdouble hostc_getNextPacketPriority(HostCInternal* host);
 
-gboolean host_autotuneReceiveBuffer(Host* host);
-gboolean host_autotuneSendBuffer(Host* host);
-guint64 host_getConfiguredRecvBufSize(Host* host);
-guint64 host_getConfiguredSendBufSize(Host* host);
+gboolean hostc_autotuneReceiveBuffer(HostCInternal* host);
+gboolean hostc_autotuneSendBuffer(HostCInternal* host);
+guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host);
+guint64 hostc_getConfiguredSendBufSize(HostCInternal* host);
 
-NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
-Router* host_getUpstreamRouter(Host* host);
+NetworkInterface* hostc_lookupInterface(HostCInternal* host, in_addr_t handle);
+Router* hostc_getUpstreamRouter(HostCInternal* host);
 
-uint64_t host_get_bw_down_kiBps(Host* host);
-uint64_t host_get_bw_up_kiBps(Host* host);
+uint64_t hostc_get_bw_down_kiBps(HostCInternal* host);
+uint64_t hostc_get_bw_up_kiBps(HostCInternal* host);
 
-void host_returnHandleHack(gint handle);
+Tracker* hostc_getTracker(HostCInternal* host);
+LogLevel hostc_getLogLevel(HostCInternal* host);
 
-Tracker* host_getTracker(Host* host);
-LogLevel host_getLogLevel(Host* host);
+const gchar* hostc_getDataPath(HostCInternal* host);
 
-const gchar* host_getDataPath(Host* host);
+gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP);
+gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+                                    in_port_t port, in_addr_t peerIP, in_port_t peerPort);
+void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
+                              in_addr_t bindAddress);
+void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket);
+in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+                                  in_addr_t peerIP, in_port_t peerPort);
 
-gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP);
-gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
-                                   in_addr_t interfaceIP, in_port_t port,
-                                   in_addr_t peerIP, in_port_t peerPort);
-void host_associateInterface(Host* host, const CompatSocket* socket, in_addr_t bindAddress);
-void host_disassociateInterface(Host* host, const CompatSocket* socket);
-in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
-                                 in_addr_t interfaceIP, in_addr_t peerIP,
-                                 in_port_t peerPort);
-
-Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(Host* host);
-FutexTable* host_getFutexTable(Host* host);
+Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host);
+FutexTable* hostc_getFutexTable(HostCInternal* host);
 
 // converts a virtual (shadow) tid into the native tid
-pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID);
+pid_t hostc_getNativeTID(HostCInternal* host, pid_t virtualPID, pid_t virtualTID);
 
 // Returns the specified process, or NULL if it doesn't exist.
-Process* host_getProcess(Host* host, pid_t virtualPID);
+Process* hostc_getProcess(HostCInternal* host, pid_t virtualPID);
 
 // Returns the specified thread, or NULL if it doesn't exist.
 // If you already have the thread's Process*, `process_getThread` may be more
 // efficient.
-Thread* host_getThread(Host* host, pid_t virtualTID);
+Thread* hostc_getThread(HostCInternal* host, pid_t virtualTID);
 
 // Returns host-specific state that's kept in memory shared with the shim(s).
-ShimShmemHost* host_getSharedMem(Host* host);
+ShimShmemHost* hostc_getSharedMem(HostCInternal* host);
 
 // Returns the lock, or NULL if the lock isn't held by Shadow.
 //
@@ -119,23 +116,23 @@ ShimShmemHost* host_getSharedMem(Host* host);
 // properly, debug builds detect if we get it wrong (e.g. we try accessing
 // protected data without holding the lock, or the shim tries to take the lock
 // but can't).
-ShimShmemHostLock* host_getShimShmemLock(Host* host);
+ShimShmemHostLock* hostc_getShimShmemLock(HostCInternal* host);
 
-// Take the host's shared memory lock. See `host_getShimShmemLock`.
-void host_lockShimShmemLock(Host* host);
+// Take the host's shared memory lock. See `hostc_getShimShmemLock`.
+void hostc_lockShimShmemLock(HostCInternal* host);
 
-// Release the host's shared memory lock. See `host_getShimShmemLock`.
-void host_unlockShimShmemLock(Host* host);
+// Release the host's shared memory lock. See `hostc_getShimShmemLock`.
+void hostc_unlockShimShmemLock(HostCInternal* host);
 
 // Returns the next value and increments our monotonically increasing
 // determinism sequence counter. The resulting values can be sorted to
 // established a deterministic ordering, which can be useful when iterating
 // items that are otherwise inconsistently ordered (e.g. hash table iterators).
-guint64 host_getNextDeterministicSequenceValue(Host* host);
+guint64 hostc_getNextDeterministicSequenceValue(HostCInternal* host);
 
 // Schedule a task for this host at time 'time'.
-gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, CEmulatedTime time);
+gboolean hostc_scheduleTaskAtEmulatedTime(const Host* host, TaskRef* task, CEmulatedTime time);
 // Schedule a task for this host at a time 'nanoDelay' from now,.
-gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, CSimulationTime nanoDelay);
+gboolean hostc_scheduleTaskWithDelay(const Host* host, TaskRef* task, CSimulationTime nanoDelay);
 
-#endif /* SHD_HOST_H_ */
+#endif /* SHD_hostc_H_ */

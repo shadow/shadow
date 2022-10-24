@@ -44,7 +44,7 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
-struct _Host {
+struct _HostCInternal {
     HostParameters params;
 
     /* for event scheduling */
@@ -114,10 +114,10 @@ static CSimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
-Host* host_new(const HostParameters* params) {
+HostCInternal* hostc_new(const HostParameters* params) {
     utility_debugAssert(params);
 
-    Host* host = g_new0(Host, 1);
+    HostCInternal* host = g_new0(HostCInternal, 1);
     MAGIC_INIT(host);
 
 #ifdef USE_PERF_TIMERS
@@ -145,9 +145,9 @@ Host* host_new(const HostParameters* params) {
     info("Created host id '%u' name '%s'", (guint)host->params.id, host->params.hostname);
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(host_getSharedMem(host), host->params.id, _modelUnblockedSyscallLatencyConfig,
-                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig,
-                       _unblockedVdsoLatencyConfig);
+    shimshmemhost_init(hostc_getSharedMem(host), host->params.id,
+                       _modelUnblockedSyscallLatencyConfig, _maxUnappliedCpuLatencyConfig,
+                       _unblockedSyscallLatencyConfig, _unblockedVdsoLatencyConfig);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;
@@ -157,23 +157,23 @@ Host* host_new(const HostParameters* params) {
     g_timer_stop(host->executionTimer);
 #endif
 
-    worker_count_allocation(Host);
+    worker_count_allocation(HostCInternal);
 
     return host;
 }
 
-uint64_t host_get_bw_down_kiBps(Host* host) {
+uint64_t hostc_get_bw_down_kiBps(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.requestedBwDownBits / (8 * 1024);
 }
 
-uint64_t host_get_bw_up_kiBps(Host* host) {
+uint64_t hostc_get_bw_up_kiBps(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.requestedBwUpBits / (8 * 1024);
 }
 
 /* this function is called by manager before the workers exist */
-void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
+void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 
     /* get unique virtual address identifiers for each network interface */
@@ -217,7 +217,7 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
         if (g_path_is_absolute(host->params.pcapDir)) {
             pcapDir = g_strdup(host->params.pcapDir);
         } else {
-            pcapDir = g_build_path("/", host_getDataPath(host), host->params.pcapDir, NULL);
+            pcapDir = g_build_path("/", hostc_getDataPath(host), host->params.pcapDir, NULL);
         }
     }
 
@@ -250,23 +250,23 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
          "%" G_GUINT64_FORMAT " cpuFrequency, %" G_GUINT64_FORMAT " cpuThreshold, "
          "%" G_GUINT64_FORMAT " cpuPrecision",
          (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
-         address_toHostIPString(host->defaultAddress), host_get_bw_up_kiBps(host),
-         host_get_bw_down_kiBps(host), host->params.sendBufSize, host->params.recvBufSize,
+         address_toHostIPString(host->defaultAddress), hostc_get_bw_up_kiBps(host),
+         hostc_get_bw_down_kiBps(host), host->params.sendBufSize, host->params.recvBufSize,
          host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
-static void _host_free(Host* host) {
+static void _hostc_free(HostCInternal* host) {
     MAGIC_ASSERT(host);
     MAGIC_CLEAR(host);
     g_free(host);
 
-    worker_count_deallocation(Host);
+    worker_count_deallocation(HostCInternal);
 }
 
 /* this is needed outside of the free function, because there are parts of the shutdown
- * process that actually hold references to the host. if you just called host_unref instead
- * of this function, then host_free would never actually get called. */
-void host_shutdown(Host* host) {
+ * process that actually hold references to the host. if you just called hostc_unref instead
+ * of this function, then hostc_free would never actually get called. */
+void hostc_shutdown(HostCInternal* host) {
 #ifdef USE_PERF_TIMERS
     g_timer_continue(host->executionTimer);
 #endif
@@ -327,27 +327,22 @@ void host_shutdown(Host* host) {
     if(host->defaultAddress) address_unref(host->defaultAddress);
     if(host->params.hostname) g_free((gchar*)host->params.hostname);
 
-    utility_debugAssert(host_getSharedMem(host));
-    shimshmemhost_destroy(host_getSharedMem(host));
+    utility_debugAssert(hostc_getSharedMem(host));
+    shimshmemhost_destroy(hostc_getSharedMem(host));
     shmemallocator_globalFree(&host->shimSharedMemBlock);
 }
 
-void host_ref(Host* host) {
-    MAGIC_ASSERT(host);
-    (host->referenceCount)++;
-}
-
-void host_unref(Host* host) {
+void hostc_unref(HostCInternal* host) {
     MAGIC_ASSERT(host);
     (host->referenceCount)--;
     utility_debugAssert(host->referenceCount >= 0);
     if(host->referenceCount == 0) {
-        _host_free(host);
+        _hostc_free(host);
     }
 }
 
 /* resumes the execution timer for this host */
-void host_continueExecutionTimer(Host* host) {
+void hostc_continueExecutionTimer(HostCInternal* host) {
 #ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_continue(host->executionTimer);
@@ -355,19 +350,19 @@ void host_continueExecutionTimer(Host* host) {
 }
 
 /* stops the execution timer for this host */
-void host_stopExecutionTimer(Host* host) {
+void hostc_stopExecutionTimer(HostCInternal* host) {
 #ifdef USE_PERF_TIMERS
     MAGIC_ASSERT(host);
     g_timer_stop(host->executionTimer);
 #endif
 }
 
-HostId host_getID(Host* host) {
+HostId hostc_getID(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.id;
 }
 
-bool host_pushLocalEvent(Host* host, Event* event) {
+bool hostc_pushLocalEvent(HostCInternal* host, Event* event) {
     MAGIC_ASSERT(host);
 
     CEmulatedTime eventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event));
@@ -382,10 +377,12 @@ bool host_pushLocalEvent(Host* host, Event* event) {
     return true;
 }
 
-void host_execute(Host* host, CEmulatedTime until) {
+void hostc_execute(const Host* rhost, CEmulatedTime until) {
+    HostCInternal* host = host_internal(rhost);
+
     MAGIC_ASSERT(host);
 
-    CPU* cpu = host_getCPU(host);
+    CPU* cpu = hostc_getCPU(host);
 
     while (true) {
         CEmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
@@ -406,14 +403,14 @@ void host_execute(Host* host, CEmulatedTime until) {
                   cpuDelay);
 
             // track the event delay time
-            Tracker* tracker = host_getTracker(host);
+            Tracker* tracker = hostc_getTracker(host);
             if (tracker != NULL) {
                 tracker_addVirtualProcessingDelay(tracker, cpuDelay);
             }
 
             // reschedule the event after the CPU delay time
             event_setTime(event, event_getTime(event) + cpuDelay);
-            host_pushLocalEvent(host, event);
+            hostc_pushLocalEvent(host, event);
 
             // want to continue pushing back events until we reach the delay time
             continue;
@@ -421,34 +418,35 @@ void host_execute(Host* host, CEmulatedTime until) {
 
         // run the event
         worker_setCurrentEmulatedTime(nextEventTime);
-        event_executeAndFree(event, host);
+        event_executeAndFree(event, rhost);
         worker_clearCurrentTime();
     }
 }
 
-CEmulatedTime host_nextEventTime(Host* host) {
+CEmulatedTime hostc_nextEventTime(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return eventqueue_nextEventTime(host->eventQueue);
 }
 
-const ThreadSafeEventQueue* host_getOwnedEventQueue(Host* host) {
+const ThreadSafeEventQueue* hostc_getOwnedEventQueue(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return eventqueue_cloneArc(host->eventQueue);
 }
 
 /* this function is called by worker after the workers exist */
-void host_boot(Host* host) {
+void hostc_boot(const Host* rhost) {
+    HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
     if (host->params.heartbeatInterval != SIMTIME_INVALID) {
-        host->tracker = tracker_new(host, host->params.heartbeatInterval,
+        host->tracker = tracker_new(rhost, host->params.heartbeatInterval,
                                     host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
     }
 
     /* start refilling the token buckets for all interfaces */
-    guint64 bwDownKiBps = host_get_bw_down_kiBps(host);
-    guint64 bwUpKiBps = host_get_bw_up_kiBps(host);
+    guint64 bwDownKiBps = hostc_get_bw_down_kiBps(host);
+    guint64 bwUpKiBps = hostc_get_bw_up_kiBps(host);
 
     GHashTableIter iter;
     gpointer key, value;
@@ -456,28 +454,30 @@ void host_boot(Host* host) {
 
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         NetworkInterface* interface = value;
-        networkinterface_startRefillingTokenBuckets(interface, host, bwDownKiBps, bwUpKiBps);
+        networkinterface_startRefillingTokenBuckets(interface, rhost, bwDownKiBps, bwUpKiBps);
     }
 }
 
-guint host_getNewProcessID(Host* host) {
+guint hostc_getNewProcessID(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->processIDCounter++;
 }
 
-guint64 host_getNewEventID(Host* host) {
+guint64 hostc_getNewEventID(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->eventIDCounter++;
 }
 
-guint64 host_getNewPacketID(Host* host) {
+guint64 hostc_getNewPacketID(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->packetIDCounter++;
 }
 
-void host_addApplication(Host* host, CSimulationTime startTime, CSimulationTime stopTime,
-                         const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
-                         const gchar* const* argv, bool pause_for_debugging) {
+void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
+                          const gchar* pluginName, const gchar* pluginPath,
+                          const gchar* const* envv, const gchar* const* argv,
+                          bool pause_for_debugging) {
+    HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
     /* get a mutable version of the env list */
@@ -493,26 +493,18 @@ void host_addApplication(Host* host, CSimulationTime startTime, CSimulationTime 
         /* append to the env */
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
-    guint processID = host_getNewProcessID(host);
-    Process* proc = process_new(host,
-                                processID,
-                                startTime,
-                                stopTime,
-                                host_getName(host),
-                                pluginName,
-                                pluginPath,
-                                envv_dup,
-                                argv,
-                                pause_for_debugging);
+    guint processID = hostc_getNewProcessID(host);
+    Process* proc = process_new(rhost, processID, startTime, stopTime, hostc_getName(host),
+                                pluginName, pluginPath, envv_dup, argv, pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
 
     /* schedule the start and stop events */
-    process_schedule(proc);
+    process_schedule(proc, rhost);
 
     g_strfreev(envv_dup);
 }
 
-void host_freeAllApplications(Host* host) {
+void hostc_freeAllApplications(HostCInternal* host) {
     MAGIC_ASSERT(host);
     trace("start freeing applications for host '%s'", host->params.hostname);
     while(!g_queue_is_empty(host->processes)) {
@@ -523,57 +515,58 @@ void host_freeAllApplications(Host* host) {
     trace("done freeing application for host '%s'", host->params.hostname);
 }
 
-CPU* host_getCPU(Host* host) {
+CPU* hostc_getCPU(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->cpu;
 }
 
-Tsc* host_getTsc(Host* host) {
+Tsc* hostc_getTsc(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return &host->tsc;
 }
 
-const gchar* host_getName(Host* host) {
+const gchar* hostc_getName(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.hostname;
 }
 
-Address* host_getDefaultAddress(Host* host) {
+Address* hostc_getDefaultAddress(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->defaultAddress;
 }
 
-in_addr_t host_getDefaultIP(Host* host) {
+in_addr_t hostc_getDefaultIP(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return address_toNetworkIP(host->defaultAddress);
 }
 
-Random* host_getRandom(Host* host) {
+Random* hostc_getRandom(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->random;
 }
 
-gboolean host_autotuneReceiveBuffer(Host* host) {
+gboolean hostc_autotuneReceiveBuffer(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.autotuneRecvBuf;
 }
 
-gboolean host_autotuneSendBuffer(Host* host) {
+gboolean hostc_autotuneSendBuffer(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.autotuneSendBuf;
 }
 
-NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
+NetworkInterface* hostc_lookupInterface(HostCInternal* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
 }
 
-Router* host_getUpstreamRouter(Host* host) {
+Router* hostc_getUpstreamRouter(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->router;
 }
 
-void host_associateInterface(Host* host, const CompatSocket* socket, in_addr_t bindAddress) {
+void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
+                              in_addr_t bindAddress) {
     MAGIC_ASSERT(host);
 
     /* associate the interfaces corresponding to bindAddress with socket */
@@ -588,12 +581,12 @@ void host_associateInterface(Host* host, const CompatSocket* socket, in_addr_t b
             networkinterface_associate(interface, socket);
         }
     } else {
-        NetworkInterface* interface = host_lookupInterface(host, bindAddress);
+        NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
         networkinterface_associate(interface, socket);
     }
 }
 
-void host_disassociateInterface(Host* host, const CompatSocket* socket) {
+void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket) {
     if (socket == NULL) {
         return;
     }
@@ -615,22 +608,22 @@ void host_disassociateInterface(Host* host, const CompatSocket* socket) {
         }
 
     } else {
-        NetworkInterface* interface = host_lookupInterface(host, bindAddress);
+        NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
         networkinterface_disassociate(interface, socket);
     }
 }
 
-guint64 host_getConfiguredRecvBufSize(Host* host) {
+guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.recvBufSize;
 }
 
-guint64 host_getConfiguredSendBufSize(Host* host) {
+guint64 hostc_getConfiguredSendBufSize(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.sendBufSize;
 }
 
-gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
+gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 
     if(interfaceIP == htonl(INADDR_ANY)) {
@@ -641,7 +634,7 @@ gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
         }
     }
 
-    NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
+    NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
     if(interface) {
         return TRUE;
     }
@@ -649,9 +642,8 @@ gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     return FALSE;
 }
 
-gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
-                                   in_addr_t interfaceIP, in_port_t port,
-                                   in_addr_t peerIP, in_port_t peerPort) {
+gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+                                    in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     gboolean isAvailable = FALSE;
@@ -672,20 +664,20 @@ gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
             }
         }
     } else {
-        NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
+        NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
         isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
     }
 
     return isAvailable;
 }
 
-in_port_t _host_incrementPort(in_port_t port, in_port_t port_on_overflow) {
+in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {
     uint16_t val = ntohs(port);
     val = (val == UINT16_MAX) ? ntohs(port_on_overflow) : val + 1;
     return htons(val);
 }
 
-static in_port_t _host_getRandomPort(Host* host) {
+static in_port_t _hostc_getRandomPort(HostCInternal* host) {
     gdouble randomFraction = random_nextDouble(host->random);
     gdouble numPotentialPorts = (gdouble)(UINT16_MAX - MIN_RANDOM_PORT);
 
@@ -699,9 +691,8 @@ static in_port_t _host_getRandomPort(Host* host) {
     return htons(randomHostPort);
 }
 
-in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
-                                 in_addr_t interfaceIP, in_addr_t peerIP,
-                                 in_port_t peerPort) {
+in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+                                  in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
@@ -712,11 +703,10 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     /* if choosing randomly doesn't succeed within 10 tries, then we have already
      * allocated a lot of ports (>90% on average). then we fall back to linear search. */
     for(guint i = 0; i < 10; i++) {
-        in_port_t randomPort = _host_getRandomPort(host);
+        in_port_t randomPort = _hostc_getRandomPort(host);
 
         /* this will check all interfaces in the case of INADDR_ANY */
-        if (host_isInterfaceAvailable(
-                host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+        if (hostc_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
             return randomPort;
         }
     }
@@ -724,15 +714,14 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     /* now if we tried too many times and still don't have a port, fall back
      * to a linear search to make sure we get a free port if we have one.
      * but start from a random port instead of the min. */
-    in_port_t start = _host_getRandomPort(host);
-    in_port_t next = _host_incrementPort(start, htons(MIN_RANDOM_PORT));
+    in_port_t start = _hostc_getRandomPort(host);
+    in_port_t next = _hostc_incrementPort(start, htons(MIN_RANDOM_PORT));
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */
-        if (host_isInterfaceAvailable(
-                host, type, interfaceIP, next, peerIP, peerPort)) {
+        if (hostc_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
             return next;
         }
-        next = _host_incrementPort(next, htons(MIN_RANDOM_PORT));
+        next = _hostc_incrementPort(next, htons(MIN_RANDOM_PORT));
     }
 
     gchar* peerIPStr = address_ipToNewString(peerIP);
@@ -741,33 +730,33 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     return 0;
 }
 
-Tracker* host_getTracker(Host* host) {
+Tracker* hostc_getTracker(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->tracker;
 }
 
-LogLevel host_getLogLevel(Host* host) {
+LogLevel hostc_getLogLevel(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.logLevel;
 }
 
-gdouble host_getNextPacketPriority(Host* host) {
+gdouble hostc_getNextPacketPriority(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return ++(host->packetPriorityCounter);
 }
 
-const gchar* host_getDataPath(Host* host) {
+const gchar* hostc_getDataPath(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->dataDirPath;
 }
 
-Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(Host* host) {
+Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host) {
     return host->abstractUnixNamespace;
 }
 
-FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }
+FutexTable* hostc_getFutexTable(HostCInternal* host) { return host->futexTable; }
 
-Process* host_getProcess(Host* host, pid_t virtualPID) {
+Process* hostc_getProcess(HostCInternal* host, pid_t virtualPID) {
     MAGIC_ASSERT(host);
 
     // TODO: once we have a process table, we can do a constant time lookup instead
@@ -784,7 +773,7 @@ Process* host_getProcess(Host* host, pid_t virtualPID) {
     return NULL;
 }
 
-Thread* host_getThread(Host* host, pid_t virtualTID) {
+Thread* hostc_getThread(HostCInternal* host, pid_t virtualTID) {
     MAGIC_ASSERT(host);
 
     // TODO: once we have a process table, we can do a constant time lookup instead
@@ -802,7 +791,7 @@ Thread* host_getThread(Host* host, pid_t virtualTID) {
     return NULL;
 }
 
-pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
+pid_t hostc_getNativeTID(HostCInternal* host, pid_t virtualPID, pid_t virtualTID) {
     MAGIC_ASSERT(host);
 
     // TODO: once we have a process table, we can do a constant time lookup instead
@@ -823,40 +812,42 @@ pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
     return nativeTID; // 0 if no process/thread has the given virtual PID/TID
 }
 
-ShimShmemHost* host_getSharedMem(Host* host) {
+ShimShmemHost* hostc_getSharedMem(HostCInternal* host) {
     MAGIC_ASSERT(host);
     utility_debugAssert(host->shimSharedMemBlock.p);
     return host->shimSharedMemBlock.p;
 }
 
-ShimShmemHostLock* host_getShimShmemLock(Host* host) {
+ShimShmemHostLock* hostc_getShimShmemLock(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->shimShmemHostLock;
 }
 
-void host_lockShimShmemLock(Host* host) {
+void hostc_lockShimShmemLock(HostCInternal* host) {
     MAGIC_ASSERT(host);
-    host->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(host));
+    host->shimShmemHostLock = shimshmemhost_lock(hostc_getSharedMem(host));
 }
 
-void host_unlockShimShmemLock(Host* host) {
+void hostc_unlockShimShmemLock(HostCInternal* host) {
     MAGIC_ASSERT(host);
-    shimshmemhost_unlock(host_getSharedMem(host), &host->shimShmemHostLock);
+    shimshmemhost_unlock(hostc_getSharedMem(host), &host->shimShmemHostLock);
 }
 
-guint64 host_getNextDeterministicSequenceValue(Host* host) {
+guint64 hostc_getNextDeterministicSequenceValue(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->determinismSequenceCounter++;
 }
 
-gboolean host_scheduleTaskAtEmulatedTime(Host* host, TaskRef* task, CEmulatedTime time) {
-    HostId hostID = host_getID(host);
+gboolean hostc_scheduleTaskAtEmulatedTime(const Host* rhost, TaskRef* task, CEmulatedTime time) {
+    HostCInternal* host = host_internal(rhost);
+    HostId hostID = hostc_getID(host);
     Event* event =
-        event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), host, hostID);
-    return host_pushLocalEvent(host, event) ? TRUE : FALSE;
+        event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), rhost, hostID);
+    return hostc_pushLocalEvent(host, event) ? TRUE : FALSE;
 }
 
-gboolean host_scheduleTaskWithDelay(Host* host, TaskRef* task, CSimulationTime nanoDelay) {
+gboolean hostc_scheduleTaskWithDelay(const Host* rhost, TaskRef* task, CSimulationTime nanoDelay) {
+    HostCInternal* host = host_internal(rhost);
     CEmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
-    return host_scheduleTaskAtEmulatedTime(host, task, time);
+    return hostc_scheduleTaskAtEmulatedTime(rhost, task, time);
 }

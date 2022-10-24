@@ -65,7 +65,7 @@ static gboolean _udp_isFamilySupported(LegacySocket* socket, sa_family_t family)
 }
 
 /* Address and port must be in network byte order. */
-static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
+static gint _udp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
@@ -85,7 +85,7 @@ static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, i
     return 0;
 }
 
-static void _udp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
+static void _udp_processPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
@@ -95,7 +95,7 @@ static void _udp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
     }
 }
 
-static void _udp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
+static void _udp_dropPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
@@ -134,7 +134,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     in_port_t sourcePort = 0;
     legacysocket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
 
-    Host* host = thread_getHost(thread);
+    const Host* host = thread_getHost(thread);
     if (sourceIP == htonl(INADDR_ANY)) {
         /* source interface depends on destination */
         if (destinationIP == htonl(INADDR_LOOPBACK)) {
@@ -233,7 +233,7 @@ static void _udp_free(LegacyFile* descriptor) {
     worker_count_deallocation(UDP);
 }
 
-static void _udp_close(LegacyFile* descriptor, Host* host) {
+static void _udp_close(LegacyFile* descriptor, const Host* host) {
     UDP* udp = _udp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(udp);
     _udp_setState(udp, UDPS_CLOSED);
@@ -264,7 +264,7 @@ SocketFunctionTable udp_functions = {_udp_close,
                                      _udp_dropPacket,
                                      MAGIC_VALUE};
 
-UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
+UDP* udp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
