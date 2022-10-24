@@ -157,6 +157,10 @@ path = "regression/test_busy_wait.rs"
 name = "test_itimer"
 path = "itimer/test_itimer.rs"
 
+[[bin]]
+name = "test_stdio"
+path = "stdio/test_stdio.rs"
+
 [dependencies]
 anyhow = { version = "1.0.65", features = ["backtrace"] }
 libc = "0.2"
