@@ -1,0 +1,21 @@
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: /usr/sbin/nginx
+      args: -c ../../../nginx.conf -p .
+      start_time: 0s
+  client:
+    network_node_id: 0
+    quantity: 3
+    processes:
+    - path: /usr/bin/curl
+      args: -s server
+      start_time: 2s

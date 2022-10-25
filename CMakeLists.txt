@@ -241,6 +241,7 @@ endif()
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
+add_subdirectory(${CMAKE_SOURCE_DIR}/examples/)
 
 ## Add more build info that will appear in 'shadow -v' and in the log file
 ## This should come after the project tree recursion so we can pick up the
