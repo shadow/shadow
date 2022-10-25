@@ -31,7 +31,8 @@ FLAGS+=("--")
 FLAGS+=("--exclude-regex" "$EXCLUDE")
 
 # Exclude tor tests as we test them in a different workflow
-FLAGS+=("--label-exclude" "tor")
+# Exclude examples as we don't have all the required dependencies
+FLAGS+=("--label-exclude" "tor|example")
 
 FLAGS+=("--output-on-failure")
 
