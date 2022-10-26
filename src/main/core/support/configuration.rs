@@ -498,7 +498,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_interval: None,
             strace_logging_mode: Some(StraceLoggingMode::Off),
             use_extended_yaml: Some(false),
-            scheduler: Some(Scheduler::ThreadPerHost),
+            scheduler: Some(Scheduler::ThreadPerCore),
         }
     }
 }
