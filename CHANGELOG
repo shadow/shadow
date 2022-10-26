@@ -22,4 +22,6 @@ by using an absolute path or prefixing with `./`.
   network simulations, the bug didn't appear to affect Tor network performance
   enough to lead us to believe that previous Tor simulations are invalid.
   https://github.com/shadow/shadow/pull/2479
+* Changed the default scheduler from `thread-per-host` to `thread-per-core`, which has better
+  performance on most machines.
 * (add entry here)
