@@ -15,4 +15,11 @@ opened with `O_NOFOLLOW`. https://github.com/shadow/shadow/pull/2353
 interpreted as relative to the current directory. For backwards compatibility, Shadow will currently
 prefer a binary in that location if one is found but log a warning. Such cases should be disambiguated
 by using an absolute path or prefixing with `./`.
+* Fixed order-of-operations bug in CoDel control law that could lead to an
+  unexpected packet drop schedule. We think the bug could have caused Shadow to
+  slightly more aggressively drop packets that have already been sitting in the
+  CoDel queue for longer than 110 milliseconds. Based on the results of some Tor
+  network simulations, the bug didn't appear to affect Tor network performance
+  enough to lead us to believe that previous Tor simulations are invalid.
+  https://github.com/shadow/shadow/pull/2479
 * (add entry here)
