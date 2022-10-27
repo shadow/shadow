@@ -12,16 +12,10 @@ firefox build/guide/index.html
 
 Many tools benefit from a [compiler command
 database](https://clangd.llvm.org/design/compile-commands), conventionally in a
-file called `compile_commands.json`. To generate such a database, use the
-`setup` script's `--compile-commands` option when building. This must be done
-with a clean build, so as not to miss any files.
-
-```bash
-./setup build --clean --compile-commands
-```
-
-This uses the [bear](https://github.com/rizsotto/Bear) tool, which must already
-be installed.
+file called `compile_commands.json`. If shadow's `setup` script finds the
+[bear](https://github.com/rizsotto/Bear) tool on your `PATH`, it will
+automatically use it to create and update `build/compile_commands.json` when
+running `setup build`.
 
 ## Files and descriptors
 

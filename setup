@@ -116,11 +116,6 @@ def main():
         action="store_true", dest="do_werror",
         default=False)
 
-    parser_build.add_argument('--compile-commands',
-        help="Generate compile_commands.json, which is useful to IDEs and analyzers",
-        action="store_true", dest="do_compile_commands",
-        default=False)
-
     # configure test subcommand
     parser_test = subparsers_main.add_parser('test', add_help=False, help='Run Shadow tests.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -184,6 +179,15 @@ def main():
     logging.debug("Setup is returning code '{0}'".format(r))
     sys.exit(r)
 
+def has_bear():
+    # Use the shell to see if bear exists. Capture output to prevent it being
+    # printed to the console.
+    return subprocess.run(
+        "bear --version",
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE).returncode == 0
+
 def build(args, remaining):
     # get absolute paths
     if args.prefix is not None: args.prefix = getfullpath(args.prefix)
@@ -198,10 +202,6 @@ def build(args, remaining):
 
     # clear cmake cache
     if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
-
-    if args.do_compile_commands and os.path.exists(builddir):
-        logging.error("Generating compile_commands.json on a non-clean build may miss some files")
-        return -1
 
     # create directories
     if not os.path.exists(builddir): os.makedirs(builddir)
@@ -267,8 +267,8 @@ def build(args, remaining):
 
     # call make, wait for it to finish
     make = ""
-    if args.do_compile_commands:
-        make += "bear --"
+    if has_bear():
+        make += "bear --append --"
     make += f" make -j{args.njobs}"
 
     logging.info("calling " + make)
