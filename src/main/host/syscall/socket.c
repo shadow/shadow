@@ -376,6 +376,9 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket*
             int sock_type = -1;
 
             switch (legacysocket_getProtocol(sock)) {
+                case PMOCK: {
+                    panic("Mock packet should not appear outside of tests");
+                }
                 case PNONE: {
                     panic("Socket has no protocol");
                 }

@@ -24,15 +24,14 @@
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
-#include "main/routing/router.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
 
 struct _NetworkInterface {
-    /* The upstream ISP router connected to this interface.
-     * May be NULL for loopback interfaces. */
-    Router* router;
+    /* If we use the upstream ISP router on this interface.
+     * Will be false for loopback interfaces. */
+    bool uses_router;
 
     /* The queuing discipline used by this interface to schedule the
      * sending of packets from sockets. */
@@ -331,7 +330,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
     /* we can only receive packets from the upstream router if we actually have one.
      * sending on loopback means we don't have a router, sending to a remote host
      * means we do have a router. */
-    if(!interface->router) {
+    if(!interface->uses_router) {
         return;
     }
 
@@ -339,7 +338,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
     gboolean is_bootstrapping = worker_isBootstrapActive();
     const Packet* peeked_packet = NULL;
 
-    while ((peeked_packet = router_peek(interface->router))) {
+    while ((peeked_packet = router_peek(host_getUpstreamRouter(host)))) {
         // Check if our rate limits allow us to receive the packet.
         if (!is_bootstrapping) {
             uint64_t required = _networkinterface_packet_tokens(peeked_packet);
@@ -362,7 +361,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
         }
 
         /* we are now the owner of the packet reference from the router */
-        Packet* packet = router_dequeue(interface->router);
+        Packet* packet = router_dequeue(host_getUpstreamRouter(host));
         // We already peeked it, so it better be here when we pop it.
         utility_debugAssert(packet);
 
@@ -572,10 +571,11 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             host_scheduleTaskWithDelay(src, packetTask, 1);
             taskref_drop(packetTask);
         } else {
-            /* let the upstream router send to remote with appropriate delays.
+            /* send to destination over the virtual internet with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */
-            utility_debugAssert(interface->router);
-            router_forward(interface->router, src, packet);
+            utility_debugAssert(interface->uses_router);
+            // TODO: move worker_sendPacket into the rust Router
+            worker_sendPacket(src, packet);
         }
 
         Tracker* tracker = host_getTracker(src);
@@ -620,25 +620,9 @@ void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
     _networkinterface_sendPackets(interface, host);
 }
 
-void networkinterface_setRouter(NetworkInterface* interface, Router* router) {
-    MAGIC_ASSERT(interface);
-    if(interface->router) {
-        router_unref(interface->router);
-    }
-    interface->router = router;
-    if(interface->router) {
-        router_ref(interface->router);
-    }
-}
-
-Router* networkinterface_getRouter(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-    return interface->router;
-}
-
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength) {
+                                       guint64 interfaceReceiveLength, bool uses_router) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -672,6 +656,8 @@ NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
         g_string_free(filename, TRUE);
     }
 
+    interface->uses_router = uses_router;
+
     debug("bringing up network interface '%s' at '%s' using queuing discipline %s",
           address_toHostName(interface->address), address_toHostIPString(interface->address),
           interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
@@ -688,10 +674,6 @@ void networkinterface_free(NetworkInterface* interface) {
     fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_unref);
 
     g_hash_table_destroy(interface->boundSockets);
-
-    if(interface->router) {
-        router_unref(interface->router);
-    }
 
     dns_deregister(worker_getDNS(), interface->address);
     address_unref(interface->address);

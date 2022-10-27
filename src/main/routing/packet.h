@@ -39,6 +39,11 @@ void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength);
 Packet* packet_copy(Packet* packet);
 
+// Exposed for unit testing only. Use `packet_new` outside of tests.
+Packet* packet_new_inner(guint hostID, guint64 packetID);
+// For testing only; do not use outside of tests.
+void packet_setMock(Packet* packet);
+
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
 static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(packet); }

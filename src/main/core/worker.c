@@ -19,7 +19,6 @@
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
-#include "main/routing/router.h"
 #include "main/utility/utility.h"
 
 CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
@@ -34,14 +33,23 @@ CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
     return max;
 }
 
+// TODO: move to Router::_route_incoming_packet
 static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
     Packet* packet = voidPacket;
-    in_addr_t ip = packet_getDestinationIP(packet);
-    Router* router = host_getUpstreamRouter(host, ip);
+    Router* router = host_getUpstreamRouter(host);
     utility_debugAssert(router != NULL);
-    router_enqueue(router, host, packet);
+
+    // Keep ownership of the packet after the task unrefs it.
+    packet_ref(packet);
+    // Ownership transfers to the router here.
+    bool became_nonempty = router_enqueue(router, packet);
+
+    if (became_nonempty) {
+        networkinterface_receivePackets(host_lookupInterface(host, host_getDefaultIP(host)), host);
+    }
 }
 
+// TODO: move to Router::_route_outgoing_packet
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 

@@ -11,6 +11,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "PluginPtr".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
+            "Packet".into(),
             "Process".into(),
             "Host".into(),
             "Thread".into(),
@@ -83,6 +84,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("core/logger/log_wrapper.h")
         .header("core/main.h")
         .header("core/support/config_handlers.h")
+        .header("core/support/definitions.h")
         .header("core/worker.h")
         .header("host/affinity.h")
         .header("host/descriptor/descriptor.h")
@@ -152,16 +154,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("syscallhandler_.*")
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
-        .allowlist_function("packet_getSourceIP")
-        .allowlist_function("packet_getDestinationIP")
-        .allowlist_function("packet_getSourcePort")
-        .allowlist_function("packet_getDestinationPort")
-        .allowlist_function("packet_getHeaderSize")
-        .allowlist_function("packet_getPayloadSize")
-        .allowlist_function("packet_getTotalSize")
-        .allowlist_function("packet_getProtocol")
-        .allowlist_function("packet_getTCPHeader")
-        .allowlist_function("packet_copyPayloadShadow")
+        .allowlist_function("packet_.*")
         //# Needs GQueue
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
@@ -186,7 +179,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("LogInfoFlags")
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
+        .allowlist_type("PacketDeliveryStatusFlags")
         .allowlist_var("CONFIG_PIPE_BUFFER_SIZE")
+        .allowlist_var("CONFIG_MTU")
         .allowlist_var("SYSCALL_IO_BUFSIZE")
         .allowlist_var("SHADOW_SOMAXCONN")
         .opaque_type("LegacyFile")
@@ -223,6 +218,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::work::event::Event;")
         .raw_line("use crate::core::work::event_queue::ThreadSafeEventQueue;")
         .raw_line("use crate::core::work::task::TaskRef;")
+        .raw_line("use crate::network::router::Router;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;")
         .raw_line("use crate::host::descriptor::File;")
@@ -323,10 +319,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "routing/payload.c",
         "routing/packet.c",
         "routing/address.c",
-        "routing/router_queue_single.c",
-        "routing/router_queue_static.c",
-        "routing/router_queue_codel.c",
-        "routing/router.c",
         "routing/dns.c",
         "utility/async_priority_queue.c",
         "utility/count_down_latch.c",

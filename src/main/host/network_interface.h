@@ -17,11 +17,10 @@ typedef struct _NetworkInterface NetworkInterface;
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
 #include "main/routing/address.h"
-#include "main/routing/router.h"
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength);
+                                       guint64 interfaceReceiveLength, bool uses_router);
 void networkinterface_free(NetworkInterface* interface);
 
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
@@ -35,9 +34,6 @@ void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
                                                  uint64_t bwDownKiBps, uint64_t bwUpKiBps);
-
-void networkinterface_setRouter(NetworkInterface* interface, Router* router);
-Router* networkinterface_getRouter(NetworkInterface* interface);
 
 void networkinterface_receivePackets(NetworkInterface* interface, Host* host);
 

@@ -32,7 +32,6 @@ typedef struct _Host Host;
 #include "main/host/tracker_types.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/routing/router.h"
 
 Host* host_new(const HostParameters* params);
 void host_ref(Host* host);
@@ -73,7 +72,7 @@ guint64 host_getConfiguredRecvBufSize(Host* host);
 guint64 host_getConfiguredSendBufSize(Host* host);
 
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
-Router* host_getUpstreamRouter(Host* host, in_addr_t handle);
+Router* host_getUpstreamRouter(Host* host);
 
 uint64_t host_get_bw_down_kiBps(Host* host);
 uint64_t host_get_bw_up_kiBps(Host* host);

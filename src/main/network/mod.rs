@@ -1,4 +1,5 @@
 pub mod network_graph;
 mod packet;
 mod petgraph_wrapper;
-mod router;
+mod relay;
+pub mod router;

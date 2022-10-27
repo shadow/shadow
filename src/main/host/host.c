@@ -42,7 +42,6 @@
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
-#include "main/routing/router.h"
 #include "main/utility/utility.h"
 
 struct _Host {
@@ -225,10 +224,10 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
     /* virtual addresses and interfaces for managing network I/O */
     NetworkInterface* loopback =
         networkinterface_new(loopbackAddress, pcapDir, host->params.pcapCaptureSize,
-                             host->params.qdisc, host->params.interfaceBufSize);
+                             host->params.qdisc, host->params.interfaceBufSize, false);
     NetworkInterface* ethernet =
         networkinterface_new(ethernetAddress, pcapDir, host->params.pcapCaptureSize,
-                             host->params.qdisc, host->params.interfaceBufSize);
+                             host->params.qdisc, host->params.interfaceBufSize, true);
 
     g_free(pcapDir);
 
@@ -240,8 +239,7 @@ void host_setup(Host* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPa
     /* the upstream router that will queue packets until we can receive them.
      * this only applies the the ethernet interface, the loopback interface
      * does not receive packets from a router. */
-    host->router = router_new(QUEUE_MANAGER_CODEL, ethernet);
-    networkinterface_setRouter(ethernet, host->router);
+    host->router = router_new();
 
     address_unref(loopbackAddress);
     address_unref(ethernetAddress);
@@ -289,7 +287,7 @@ void host_shutdown(Host* host) {
     }
 
     if(host->router) {
-        router_unref(host->router);
+        router_free(host->router);
     }
 
     if (host->abstractUnixNamespace) {
@@ -570,11 +568,9 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
 }
 
-Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
+Router* host_getUpstreamRouter(Host* host) {
     MAGIC_ASSERT(host);
-    NetworkInterface* interface = g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
-    utility_debugAssert(interface != NULL);
-    return networkinterface_getRouter(interface);
+    return host->router;
 }
 
 void host_associateInterface(Host* host, const CompatSocket* socket, in_addr_t bindAddress) {

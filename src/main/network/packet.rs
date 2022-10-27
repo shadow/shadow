@@ -3,6 +3,80 @@ use std::io::Write;
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
 
+pub enum PacketStatus {
+    RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,
+    RouterDequeued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DEQUEUED as isize,
+    RouterDropped = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DROPPED as isize,
+}
+
+pub struct Packet {
+    c_ptr: *mut c::Packet,
+}
+
+impl Packet {
+    #[cfg(test)]
+    /// Creates an empty packet for unit tests.
+    pub fn mock_new() -> Packet {
+        let c_ptr = unsafe { c::packet_new_inner(1, 1) };
+        unsafe { c::packet_setMock(c_ptr) };
+        Packet::from_raw(c_ptr)
+    }
+
+    pub fn size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getTotalSize(self.c_ptr) };
+        sz as usize
+    }
+
+    fn _header_size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getHeaderSize(self.c_ptr) };
+        sz as usize
+    }
+
+    fn _payload_size(&self) -> usize {
+        assert!(!self.c_ptr.is_null());
+        let sz = unsafe { c::packet_getPayloadSize(self.c_ptr) };
+        sz as usize
+    }
+
+    pub fn add_status(&mut self, status: PacketStatus) {
+        assert!(!self.c_ptr.is_null());
+        let status_flag = status as c::PacketDeliveryStatusFlags;
+        unsafe { c::packet_addDeliveryStatus(self.c_ptr, status_flag) };
+    }
+
+    /// Transfers ownership of the given c_ptr reference into a new rust packet
+    /// object.
+    pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
+        assert!(!c_ptr.is_null());
+        Self { c_ptr }
+    }
+
+    /// Transfers ownership of the inner c_ptr reference to the caller while
+    /// dropping the rust packet object.
+    pub fn into_inner(mut self) -> *mut c::Packet {
+        // We want to keep the c ref when the rust packet is dropped.
+        let c_ptr = self.c_ptr;
+        self.c_ptr = std::ptr::null_mut();
+        c_ptr
+    }
+
+    pub fn borrow_inner(&self) -> *mut c::Packet {
+        self.c_ptr
+    }
+}
+
+impl Drop for Packet {
+    fn drop(&mut self) {
+        if !self.c_ptr.is_null() {
+            // If the rust packet is dropped before into_inner() is called,
+            // we also drop the c packet ref to free it.
+            unsafe { c::packet_unref(self.c_ptr) }
+        }
+    }
+}
+
 impl PacketDisplay for *const c::Packet {
     fn display_bytes(&self, mut writer: impl Write) -> std::io::Result<()> {
         assert!(!self.is_null());
