@@ -10,6 +10,6 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: ../target/debug/test_signal_resched
+    - path: ../../target/debug/test_signal_resched
       args: --shadow-passing
       start_time: 1

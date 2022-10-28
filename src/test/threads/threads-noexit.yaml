@@ -8,5 +8,5 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: ../target/debug/test_threads_noexit
+    - path: ../../target/debug/test_threads_noexit
       start_time: 1

@@ -7,5 +7,5 @@ add_linux_tests(BASENAME signal COMMAND shadow-test-launcher test-signal : test-
 add_shadow_tests(BASENAME signal)
 
 ## More complete signal functionality.
-add_linux_tests(BASENAME signals-extra COMMAND sh -c "../target/debug/test_signals --libc-passing")
+add_linux_tests(BASENAME signals-extra COMMAND sh -c "../../target/debug/test_signals --libc-passing")
 add_shadow_tests(BASENAME signals-extra)

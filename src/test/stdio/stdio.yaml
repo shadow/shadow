@@ -7,4 +7,4 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: ../target/debug/test_stdio
+    - path: ../../target/debug/test_stdio

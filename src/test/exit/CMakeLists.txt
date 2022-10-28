@@ -1,4 +1,4 @@
-add_linux_tests(BASENAME exit COMMAND sh -c "../target/debug/test_exit")
+add_linux_tests(BASENAME exit COMMAND sh -c "../../target/debug/test_exit")
 add_shadow_tests(BASENAME exit)
 
 add_executable(test_exit_sigsegv test_exit_sigsegv.c)

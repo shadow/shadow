@@ -7,6 +7,6 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: ../target/debug/test_random
+    - path: ../../target/debug/test_random
       args: --shadow-passing
       start_time: 1

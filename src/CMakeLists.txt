@@ -18,7 +18,7 @@ foreach(DEFINITION IN LISTS COMPILE_DEFINITIONS)
   set(RUST_CXXFLAGS "${RUST_CXXFLAGS} -D${DEFINITION}")
 endforeach()
 
-set(RUST_TARGETS "--lib")
+set(RUST_TARGETS "--lib --bins")
 if(SHADOW_TEST STREQUAL ON)
   set(RUST_TARGETS "${RUST_TARGETS} --tests")
 endif()
@@ -61,7 +61,24 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_TARGET_FLAG} ${RUST_BUILD_FLAG} ${RUST_TARGETS} --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\""
+    BUILD_COMMAND bash -c " \
+        ${CARGO_ENV_VARS} \
+        cargo build \
+        --workspace --exclude shadow-tests \
+        ${RUST_TARGET_FLAG} \
+        ${RUST_BUILD_FLAG} \
+        ${RUST_TARGETS} \
+        --target-dir \"${TARGETDIR}\" \
+        --features \"${RUST_FEATURES}\" \
+        "
+    # always build shadow-tests with the debug profile, even when shadow is built in release mode
+    COMMAND bash -c " \
+        ${CARGO_ENV_VARS} \
+        cargo build \
+        --package shadow-tests \
+        --target-dir \"${TARGETDIR}\" \
+        --features \"${RUST_FEATURES}\" \
+        "
     BUILD_BYPRODUCTS
       ${TARGETDIR}/debug/${RUST_TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${RUST_TARGET}/libshadow_shim_helper_rs.a
     INSTALL_COMMAND ""
@@ -87,7 +104,16 @@ endforeach()
 # better than trying to fight the "rust way" here. It also includes doc tests,
 # which normally don't have persistent executables at all.
 add_test(NAME rust-unit-tests
-         COMMAND bash -c "${CARGO_ENV_VARS} cargo test ${RUST_TARGET_FLAG} ${RUST_BUILD_FLAG} --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml --target-dir \"${TARGETDIR}\" --features \"${RUST_FEATURES}\"")
+         COMMAND bash -c " \
+            ${CARGO_ENV_VARS} \
+            cargo test \
+            ${RUST_TARGET_FLAG} \
+            ${RUST_BUILD_FLAG} \
+            --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml \
+            --target-dir \"${TARGETDIR}\" \
+            --features \"${RUST_FEATURES}\" \
+            "
+         )
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
 set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE)
