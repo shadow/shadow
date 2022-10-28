@@ -1,3 +1,5 @@
+mod petgraph_wrapper;
+
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error::Error;
@@ -7,7 +9,7 @@ use crate::core::support::configuration::{
     self, Compression, FileSource, GraphOptions, GraphSource,
 };
 use crate::core::support::{units, units::Unit};
-use crate::network::petgraph_wrapper::GraphWrapper;
+use crate::network::graph::petgraph_wrapper::GraphWrapper;
 use crate::utility::tilde_expansion;
 
 use anyhow::Context;
