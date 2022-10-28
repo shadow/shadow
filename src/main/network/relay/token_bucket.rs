@@ -20,13 +20,25 @@ impl TokenBucket {
         refill_size: u64,
         refill_interval: SimulationTime,
     ) -> Option<TokenBucket> {
+        let now = Worker::current_time().unwrap();
+        TokenBucket::new_inner(capacity, refill_size, refill_interval, now)
+    }
+
+    /// Implements the functionality of `new()` without calling into the
+    /// `Worker` module. Useful for testing.
+    fn new_inner(
+        capacity: u64,
+        refill_size: u64,
+        refill_interval: SimulationTime,
+        now: EmulatedTime,
+    ) -> Option<TokenBucket> {
         if capacity > 0 && refill_size > 0 && !refill_interval.is_zero() {
             Some(TokenBucket {
                 capacity,
                 balance: capacity,
                 refill_size,
                 refill_interval,
-                last_refill: Worker::current_time().unwrap(),
+                last_refill: now,
             })
         } else {
             None
@@ -38,7 +50,18 @@ impl TokenBucket {
     /// duration until the next token refill on error. Passing a 0 size always
     /// succeeds.
     pub fn comforming_remove(&mut self, size: u64) -> Result<u64, SimulationTime> {
-        let next_refill_span = self.lazy_refill();
+        let now = Worker::current_time().unwrap();
+        self.conforming_remove_inner(size, &now)
+    }
+
+    /// Implements the functionality of `comforming_remove()` without calling into the
+    /// `Worker` module. Useful for testing.
+    fn conforming_remove_inner(
+        &mut self,
+        size: u64,
+        now: &EmulatedTime,
+    ) -> Result<u64, SimulationTime> {
+        let next_refill_span = self.lazy_refill(now);
         self.balance = self.balance.checked_sub(size).ok_or(next_refill_span)?;
         Ok(self.balance)
     }
@@ -48,8 +71,7 @@ impl TokenBucket {
     /// occurred in the past but were not applied yet because the token bucket
     /// was not in use. No refills will occur if called multiple times within
     /// the same refill interval. Returns the duration to the next refill event.
-    fn lazy_refill(&mut self) -> SimulationTime {
-        let now = Worker::current_time().unwrap();
+    fn lazy_refill(&mut self, now: &EmulatedTime) -> SimulationTime {
         let mut span = now.duration_since(&self.last_refill);
 
         if span >= self.refill_interval {
@@ -58,7 +80,9 @@ impl TokenBucket {
                 .as_nanos()
                 .checked_div(self.refill_interval.as_nanos())
                 .unwrap();
-            let num_tokens = self.refill_size.saturating_mul(num_refills as u64);
+            let num_tokens = self
+                .refill_size
+                .saturating_mul(num_refills.try_into().unwrap());
             debug_assert!(num_tokens > 0);
 
             self.balance = self
@@ -67,7 +91,9 @@ impl TokenBucket {
                 .clamp(0, self.capacity);
 
             // Update to the most recent refill event time.
-            let inc = self.refill_interval.saturating_mul(num_refills as u64);
+            let inc = self
+                .refill_interval
+                .saturating_mul(num_refills.try_into().unwrap());
             self.last_refill = self.last_refill.saturating_add(inc);
 
             span = now.duration_since(&self.last_refill);
@@ -124,7 +150,7 @@ mod export {
             }
             Err(next_refill_duration) => {
                 *remaining_tokens = 0;
-                *nanos_until_refill = next_refill_duration.as_nanos() as u64;
+                *nanos_until_refill = next_refill_duration.as_nanos().try_into().unwrap();
                 false
             }
         }
@@ -134,11 +160,13 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::network::tests::mock_time_millis;
 
     #[test]
     fn test_new_invalid_args() {
-        assert!(TokenBucket::new(0, 1, SimulationTime::from_nanos(1)).is_none());
-        assert!(TokenBucket::new(1, 0, SimulationTime::from_nanos(1)).is_none());
-        assert!(TokenBucket::new(1, 1, SimulationTime::ZERO).is_none());
+        let now = mock_time_millis(1000);
+        assert!(TokenBucket::new_inner(0, 1, SimulationTime::from_nanos(1), now.clone()).is_none());
+        assert!(TokenBucket::new_inner(1, 0, SimulationTime::from_nanos(1), now.clone()).is_none());
+        assert!(TokenBucket::new_inner(1, 1, SimulationTime::ZERO, now).is_none());
     }
 }
