@@ -7,6 +7,6 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: ../../target/debug/test_socketpair
+    - path: ../../../target/debug/test_socketpair
       args: --shadow-passing
       start_time: 1
