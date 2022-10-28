@@ -325,7 +325,7 @@ impl CoDelQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::network::router::tests::mock_time_millis;
+    use crate::network::tests::mock_time_millis;
 
     // Some of the tests here don't run in miri because they cause c::packet*
     // functions to be called during the test.
