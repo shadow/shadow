@@ -16,7 +16,7 @@ use crate::core::support::configuration::{
     ProcessOptions, QDiscMode,
 };
 use crate::core::support::units::{self, Unit};
-use crate::network::network_graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
+use crate::network::graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::tilde_expansion;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 

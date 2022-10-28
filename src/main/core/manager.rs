@@ -20,7 +20,7 @@ use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
-use crate::network::network_graph::{IpAssignment, RoutingInfo};
+use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
 use crate::utility::{self, SyncSendPointer};

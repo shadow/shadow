@@ -11,7 +11,7 @@ use crate::cshadow;
 use crate::host::host::{Host, HostInfo};
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{ThreadId, ThreadRef};
-use crate::network::network_graph::{IpAssignment, RoutingInfo};
+use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
