@@ -173,4 +173,96 @@ mod tests {
         assert!(TokenBucket::new_inner(1, 0, SimulationTime::from_nanos(1), now.clone()).is_none());
         assert!(TokenBucket::new_inner(1, 1, SimulationTime::ZERO, now).is_none());
     }
+
+    #[test]
+    fn test_new_valid_args() {
+        let now = mock_time_millis(1000);
+        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_nanos(1), now.clone()).is_some());
+        assert!(
+            TokenBucket::new_inner(1, 1, SimulationTime::from_millis(1), now.clone()).is_some()
+        );
+        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_secs(1), now.clone()).is_some());
+
+        let tb = TokenBucket::new_inner(54321, 12345, SimulationTime::from_secs(1), now.clone())
+            .unwrap();
+        assert_eq!(tb.capacity, 54321);
+        assert_eq!(tb.refill_increment, 12345);
+        assert_eq!(tb.refill_interval, SimulationTime::from_secs(1));
+    }
+
+    #[test]
+    fn test_refill_after_one_interval() {
+        let interval = SimulationTime::from_millis(10);
+        let capacity = 100;
+        let increment = 10;
+        let now = mock_time_millis(1000);
+
+        let mut tb = TokenBucket::new_inner(capacity, increment, interval, now.clone()).unwrap();
+        assert_eq!(tb.balance, capacity);
+
+        // Remove all tokens
+        assert!(tb.conforming_remove_inner(capacity, &now).is_ok());
+        assert_eq!(tb.balance, 0);
+
+        for i in 1..=(capacity / increment) {
+            // One more interval of time passes
+            let later = now + interval.saturating_mul(i.try_into().unwrap());
+            // Should cause an increment to the balance
+            let result = tb.conforming_remove_inner(0, &later);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), tb.balance);
+            assert_eq!(tb.balance, increment.saturating_mul(i));
+        }
+    }
+
+    #[test]
+    fn test_refill_after_multiple_intervals() {
+        let now = mock_time_millis(1000);
+        let mut tb =
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now.clone()).unwrap();
+
+        // Remove all tokens
+        assert!(tb.conforming_remove_inner(100, &now).is_ok());
+        assert_eq!(tb.balance, 0);
+
+        // 5 Refill intervals have passed
+        let later = now + SimulationTime::from_millis(50);
+
+        let result = tb.conforming_remove_inner(0, &later);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), tb.balance);
+        assert_eq!(tb.balance, 50);
+    }
+
+    #[test]
+    fn test_capacity_limit() {
+        let now = mock_time_millis(1000);
+        let mut tb =
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now.clone()).unwrap();
+
+        // Remove all tokens
+        assert!(tb.conforming_remove_inner(100, &now).is_ok());
+        assert_eq!(tb.balance, 0);
+
+        // Far into the future
+        let later = now + SimulationTime::from_secs(60);
+
+        // Should not exceed capacity
+        let result = tb.conforming_remove_inner(0, &later);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), tb.balance);
+        assert_eq!(tb.balance, 100);
+    }
+
+    #[test]
+    fn test_remove_error() {
+        let now = mock_time_millis(1000);
+        let mut tb =
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(123), now.clone()).unwrap();
+
+        // This many tokens are not available
+        let result = tb.conforming_remove_inner(1000, &now);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), SimulationTime::from_millis(123));
+    }
 }
