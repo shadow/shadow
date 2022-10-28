@@ -5,38 +5,39 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 pub struct TokenBucket {
     capacity: u64,
     balance: u64,
-    refill_size: u64,
+    refill_increment: u64,
     refill_interval: SimulationTime,
     last_refill: EmulatedTime,
 }
 
 impl TokenBucket {
-    /// Creates a new token bucket rate limiter. The capacity enables
-    /// burstiness, while the long term rate is defined by refill_size tokens
-    /// being periodically added to the bucket every refill_interval duration.
-    /// Returns None if any of the args are non-positive.
+    /// Creates a new token bucket rate limiter with an initial balance set to
+    /// `capacity`. The capacity enables burstiness, while the long term rate is
+    /// defined by `refill_increment` tokens being periodically added to the
+    /// bucket every `refill_interval` duration. Returns None if any of the args
+    /// are non-positive.
     pub fn new(
         capacity: u64,
-        refill_size: u64,
+        refill_increment: u64,
         refill_interval: SimulationTime,
     ) -> Option<TokenBucket> {
         let now = Worker::current_time().unwrap();
-        TokenBucket::new_inner(capacity, refill_size, refill_interval, now)
+        TokenBucket::new_inner(capacity, refill_increment, refill_interval, now)
     }
 
     /// Implements the functionality of `new()` without calling into the
     /// `Worker` module. Useful for testing.
     fn new_inner(
         capacity: u64,
-        refill_size: u64,
+        refill_increment: u64,
         refill_interval: SimulationTime,
         now: EmulatedTime,
     ) -> Option<TokenBucket> {
-        if capacity > 0 && refill_size > 0 && !refill_interval.is_zero() {
+        if capacity > 0 && refill_increment > 0 && !refill_interval.is_zero() {
             Some(TokenBucket {
                 capacity,
                 balance: capacity,
-                refill_size,
+                refill_increment,
                 refill_interval,
                 last_refill: now,
             })
@@ -45,24 +46,27 @@ impl TokenBucket {
         }
     }
 
-    /// Remove size tokens from the bucket if and only if the bucket contains at
-    /// least size tokens. Returns the updated token balance on success, and the
-    /// duration until the next token refill on error. Passing a 0 size always
+    /// Remove `decrement` tokens from the bucket if and only if the bucket contains at
+    /// least `decrement` tokens. Returns the updated token balance on success, and the
+    /// duration until the next token refill on error. Passing a 0 `decrement` always
     /// succeeds.
-    pub fn comforming_remove(&mut self, size: u64) -> Result<u64, SimulationTime> {
+    pub fn comforming_remove(&mut self, decrement: u64) -> Result<u64, SimulationTime> {
         let now = Worker::current_time().unwrap();
-        self.conforming_remove_inner(size, &now)
+        self.conforming_remove_inner(decrement, &now)
     }
 
     /// Implements the functionality of `comforming_remove()` without calling into the
     /// `Worker` module. Useful for testing.
     fn conforming_remove_inner(
         &mut self,
-        size: u64,
+        decrement: u64,
         now: &EmulatedTime,
     ) -> Result<u64, SimulationTime> {
         let next_refill_span = self.lazy_refill(now);
-        self.balance = self.balance.checked_sub(size).ok_or(next_refill_span)?;
+        self.balance = self
+            .balance
+            .checked_sub(decrement)
+            .ok_or(next_refill_span)?;
         Ok(self.balance)
     }
 
@@ -81,7 +85,7 @@ impl TokenBucket {
                 .checked_div(self.refill_interval.as_nanos())
                 .unwrap();
             let num_tokens = self
-                .refill_size
+                .refill_increment
                 .saturating_mul(num_refills.try_into().unwrap());
             debug_assert!(num_tokens > 0);
 
@@ -110,13 +114,13 @@ mod export {
     #[no_mangle]
     pub extern "C" fn tokenbucket_new(
         capacity: u64,
-        refill_size: u64,
+        refill_increment: u64,
         refill_interval_nanos: u64,
     ) -> *mut TokenBucket {
         Box::into_raw(Box::new(
             TokenBucket::new(
                 capacity,
-                refill_size,
+                refill_increment,
                 SimulationTime::from_nanos(refill_interval_nanos),
             )
             .unwrap(),
