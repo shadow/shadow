@@ -36,11 +36,6 @@ typedef struct _HostCInternal HostCInternal;
 HostCInternal* hostc_new(const HostParameters* params);
 void hostc_unref(HostCInternal* host);
 
-bool hostc_pushLocalEvent(HostCInternal* host, Event* event);
-void hostc_execute(const Host* rhost, CEmulatedTime until);
-CEmulatedTime hostc_nextEventTime(HostCInternal* host);
-const ThreadSafeEventQueue* hostc_getOwnedEventQueue(HostCInternal* host);
-
 void hostc_continueExecutionTimer(HostCInternal* host);
 void hostc_stopExecutionTimer(HostCInternal* host);
 

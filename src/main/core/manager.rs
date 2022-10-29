@@ -299,7 +299,10 @@ impl<'a> Manager<'a> {
                     min_runahead_config,
                 ),
                 child_pid_watcher: ChildPidWatcher::new(),
-                event_queues: hosts.iter().map(|x| (x.id(), x.event_queue())).collect(),
+                event_queues: hosts
+                    .iter()
+                    .map(|x| (x.id(), x.event_queue().clone()))
+                    .collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
             });
@@ -624,7 +627,7 @@ impl<'a> Manager<'a> {
             let hosts_path =
                 CString::new(self.hosts_path.clone().into_os_string().as_bytes()).unwrap();
 
-            let host = Host::new(&params);
+            let host = Host::new(params);
 
             unsafe { host.setup(dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
 

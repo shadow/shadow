@@ -9,6 +9,7 @@ use vasi::VirtualAddressSpaceIndependent;
 /// Unlike [std::cell::RefCell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to borrow.
+#[derive(Debug)]
 #[repr(C)]
 pub struct RootedRefCell<T> {
     tag: Tag,

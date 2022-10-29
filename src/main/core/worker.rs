@@ -6,7 +6,6 @@ use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::work::event::Event;
-use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
 use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
@@ -25,6 +24,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex};
+
+use super::work::event_queue::EventQueue;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -345,7 +346,7 @@ pub struct WorkerShared {
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
     pub child_pid_watcher: ChildPidWatcher,
-    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
+    pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
 }
@@ -435,7 +436,7 @@ impl WorkerShared {
 
     pub fn push_to_host(&self, host: HostId, event: Event) {
         let event_queue = self.event_queues.get(&host).unwrap();
-        event_queue.0.lock().unwrap().push(event);
+        event_queue.lock().unwrap().push(event);
     }
 }
 

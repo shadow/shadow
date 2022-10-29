@@ -1,12 +1,14 @@
-
+use log::trace;
 use once_cell::unsync::OnceCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use std::net::IpAddr;
 use std::os::raw::c_char;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use crate::core::work::event_queue::ThreadSafeEventQueue;
+use crate::core::work::event::Event;
+use crate::core::work::event_queue::EventQueue;
 use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::utility::SyncSendPointer;
@@ -26,7 +28,6 @@ pub struct HostInfo {
 }
 
 /// A simulated Host.
-#[derive(Debug)]
 pub struct Host {
     // Legacy C implementation of the host. Fields and functionality should be
     // migrated from here to this Host.
@@ -48,18 +49,41 @@ pub struct Host {
     // Not used yet.
     #[allow(unused)]
     root: Root,
+
+    event_queue: Arc<Mutex<EventQueue>>,
+
+    params: cshadow::HostParameters,
 }
+
+/// HostParameters is !Send by default due to string pointers, but those are
+/// statically allocated and immutable.
+unsafe impl Send for cshadow::HostParameters {}
 
 /// Host must be `Send`.
 impl crate::utility::IsSend for Host {}
 
+// TODO: use derive(Debug) if/when all fields implement Debug.
+impl std::fmt::Debug for Host {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Host")
+            .field("chost", &self.chost)
+            .field("info", &self.info)
+            .finish()
+    }
+}
+
 impl Host {
-    pub fn new(params: &cshadow::HostParameters) -> Self {
-        let chost = unsafe { cshadow::hostc_new(params) };
+    pub fn new(params: cshadow::HostParameters) -> Self {
+        // Ok because hostc_new copies params rather than saving this pointer.
+        // TODO: remove params from HostCInternal.
+        let chost = unsafe { cshadow::hostc_new(&params) };
+        let root = Root::new();
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             info: OnceCell::new(),
-            root: Root::new(),
+            root,
+            event_queue: Arc::new(Mutex::new(EventQueue::new())),
+            params,
         }
     }
 
@@ -155,33 +179,25 @@ impl Host {
         unsafe { cshadow::hostc_stopExecutionTimer(self.chost()) };
     }
 
-    pub fn schedule_task_at_emulated_time(&self, mut task: TaskRef, t: EmulatedTime) -> bool {
-        let res = unsafe {
-            cshadow::hostc_scheduleTaskAtEmulatedTime(
-                self,
-                &mut task,
-                EmulatedTime::to_c_emutime(Some(t)),
-            )
-        };
-        // Intentionally drop `task`. An eventual event_new clones.
-        res != 0
+    pub fn schedule_task_at_emulated_time(&self, task: TaskRef, t: EmulatedTime) -> bool {
+        let event = Event::new(task, t, self, self.id());
+        self.push_local_event(event)
     }
 
-    pub fn schedule_task_with_delay(&self, mut task: TaskRef, t: SimulationTime) -> bool {
-        let res = unsafe {
-            cshadow::hostc_scheduleTaskWithDelay(
-                self,
-                &mut task,
-                SimulationTime::to_c_simtime(Some(t)),
-            )
-        };
-        // Intentionally drop `task`. An eventual event_new clones.
-        res != 0
+    pub fn schedule_task_with_delay(&self, task: TaskRef, t: SimulationTime) -> bool {
+        self.schedule_task_at_emulated_time(task, Worker::current_time().unwrap() + t)
     }
 
-    pub fn event_queue(&self) -> Arc<ThreadSafeEventQueue> {
-        let new_arc = unsafe { cshadow::hostc_getOwnedEventQueue(self.chost()) };
-        unsafe { Arc::from_raw(new_arc) }
+    pub fn event_queue(&self) -> &Arc<Mutex<EventQueue>> {
+        &self.event_queue
+    }
+
+    pub fn push_local_event(&self, event: Event) -> bool {
+        if event.time() >= EmulatedTime::from_c_emutime(self.params.simEndTime).unwrap() {
+            return false;
+        }
+        self.event_queue.lock().unwrap().push(event);
+        true
     }
 
     pub fn boot(&self) {
@@ -197,11 +213,60 @@ impl Host {
     }
 
     pub fn execute(&self, until: EmulatedTime) {
-        unsafe { cshadow::hostc_execute(self, EmulatedTime::to_c_emutime(Some(until))) };
+        let cpu = unsafe { cshadow::hostc_getCPU(self.chost()) };
+        loop {
+            let mut event = {
+                let mut event_queue = self.event_queue.lock().unwrap();
+                match event_queue.next_event_time() {
+                    Some(t) if t < until => {}
+                    _ => break,
+                };
+                event_queue.pop().unwrap()
+            };
+
+            unsafe {
+                cshadow::cpu_updateTime(
+                    cpu,
+                    SimulationTime::to_c_simtime(Some(event.time().to_abs_simtime())),
+                )
+            };
+
+            if unsafe { cshadow::cpu_isBlocked(cpu) != 0 } {
+                let cpu_delay =
+                    SimulationTime::from_c_simtime(unsafe { cshadow::cpu_getDelay(cpu) }).unwrap();
+                trace!(
+                    "event blocked on CPU, rescheduled for {:?} from now",
+                    cpu_delay
+                );
+
+                // track the event delay time
+                let tracker = unsafe { cshadow::hostc_getTracker(self.chost()) };
+                if !tracker.is_null() {
+                    unsafe {
+                        cshadow::tracker_addVirtualProcessingDelay(
+                            tracker,
+                            SimulationTime::to_c_simtime(Some(cpu_delay)),
+                        )
+                    };
+                }
+
+                // reschedule the event after the CPU delay time
+                event.set_time(event.time() + cpu_delay);
+                self.push_local_event(event);
+
+                // want to continue pushing back events until we reach the delay time
+                continue;
+            }
+
+            // run the event
+            Worker::set_current_time(event.time());
+            event.execute(self);
+            Worker::clear_current_time();
+        }
     }
 
     pub fn next_event_time(&self) -> Option<EmulatedTime> {
-        EmulatedTime::from_c_emutime(unsafe { cshadow::hostc_nextEventTime(self.chost()) })
+        self.event_queue.lock().unwrap().next_event_time()
     }
 
     pub unsafe fn lock_shmem(&self) {
@@ -237,27 +302,16 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_pushLocalEvent(hostrc: *const Host, event: *mut Event) -> bool {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_pushLocalEvent(hostrc.chost(), event) }
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_execute(hostrc, until) }
+        let until = EmulatedTime::from_c_emutime(until).unwrap();
+        hostrc.execute(until)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_nextEventTime(hostrc: *const Host) -> CEmulatedTime {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_nextEventTime(hostrc.chost()) }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getOwnedEventQueue(hostrc: *const Host) -> *const ThreadSafeEventQueue {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getOwnedEventQueue(hostrc.chost()) }
+        EmulatedTime::to_c_emutime(hostrc.next_event_time())
     }
 
     #[no_mangle]
@@ -570,7 +624,9 @@ mod export {
         time: CEmulatedTime,
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_scheduleTaskAtEmulatedTime(hostrc, task, time) != 0}
+        let task = unsafe { task.as_ref().unwrap().clone() };
+        let time = EmulatedTime::from_c_emutime(time).unwrap();
+        hostrc.schedule_task_at_emulated_time(task, time)
     }
 
     /// Schedule a task for this host at a time 'nanoDelay' from now,.
@@ -581,7 +637,9 @@ mod export {
         delay: CSimulationTime,
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_scheduleTaskWithDelay(hostrc, task, delay) != 0}
+        let task = unsafe { task.as_ref().unwrap().clone() };
+        let delay = SimulationTime::from_c_simtime(delay).unwrap();
+        hostrc.schedule_task_with_delay(task, delay)
     }
 
     /// Should only be used from host.c

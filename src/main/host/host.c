@@ -47,9 +47,6 @@
 struct _HostCInternal {
     HostParameters params;
 
-    /* for event scheduling */
-    const ThreadSafeEventQueue* eventQueue;
-
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
@@ -133,8 +130,6 @@ HostCInternal* hostc_new(const HostParameters* params) {
     utility_debugAssert(params->hostname);
     host->params.hostname = g_strdup(params->hostname);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
-
-    host->eventQueue = eventqueue_new();
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
@@ -273,11 +268,6 @@ void hostc_shutdown(HostCInternal* host) {
 
     debug("shutting down host %s", host->params.hostname);
 
-    if (host->eventQueue) {
-        eventqueue_drop(host->eventQueue);
-        host->eventQueue = NULL;
-    }
-
     if(host->processes) {
         g_queue_free(host->processes);
     }
@@ -360,77 +350,6 @@ void hostc_stopExecutionTimer(HostCInternal* host) {
 HostId hostc_getID(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.id;
-}
-
-bool hostc_pushLocalEvent(HostCInternal* host, Event* event) {
-    MAGIC_ASSERT(host);
-
-    CEmulatedTime eventTime = emutime_add_simtime(EMUTIME_SIMULATION_START, event_getTime(event));
-
-    // if event time is greater than the simulation end time, then skip
-    if (eventTime >= host->params.simEndTime) {
-        event_free(event);
-        return false;
-    }
-
-    eventqueue_push(host->eventQueue, event);
-    return true;
-}
-
-void hostc_execute(const Host* rhost, CEmulatedTime until) {
-    HostCInternal* host = host_internal(rhost);
-
-    MAGIC_ASSERT(host);
-
-    CPU* cpu = hostc_getCPU(host);
-
-    while (true) {
-        CEmulatedTime nextEventTime = eventqueue_nextEventTime(host->eventQueue);
-        if (nextEventTime == EMUTIME_INVALID || nextEventTime >= until) {
-            break;
-        }
-
-        // get the next event
-        Event* event = eventqueue_pop(host->eventQueue);
-        cpu_updateTime(cpu, event_getTime(event));
-
-        // if blocked by the CPU, we'll reschedule it
-        if (cpu_isBlocked(cpu)) {
-            CSimulationTime cpuDelay = cpu_getDelay(cpu);
-
-            trace("event blocked on CPU, rescheduled for %" G_GUINT64_FORMAT
-                  " nanoseconds from now",
-                  cpuDelay);
-
-            // track the event delay time
-            Tracker* tracker = hostc_getTracker(host);
-            if (tracker != NULL) {
-                tracker_addVirtualProcessingDelay(tracker, cpuDelay);
-            }
-
-            // reschedule the event after the CPU delay time
-            event_setTime(event, event_getTime(event) + cpuDelay);
-            hostc_pushLocalEvent(host, event);
-
-            // want to continue pushing back events until we reach the delay time
-            continue;
-        }
-
-        // run the event
-        worker_setCurrentEmulatedTime(nextEventTime);
-        event_executeAndFree(event, rhost);
-        worker_clearCurrentTime();
-    }
-}
-
-CEmulatedTime hostc_nextEventTime(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return eventqueue_nextEventTime(host->eventQueue);
-}
-
-const ThreadSafeEventQueue* hostc_getOwnedEventQueue(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return eventqueue_cloneArc(host->eventQueue);
 }
 
 /* this function is called by worker after the workers exist */
@@ -836,18 +755,4 @@ void hostc_unlockShimShmemLock(HostCInternal* host) {
 guint64 hostc_getNextDeterministicSequenceValue(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->determinismSequenceCounter++;
-}
-
-gboolean hostc_scheduleTaskAtEmulatedTime(const Host* rhost, TaskRef* task, CEmulatedTime time) {
-    HostCInternal* host = host_internal(rhost);
-    HostId hostID = hostc_getID(host);
-    Event* event =
-        event_new(task, emutime_sub_emutime(time, EMUTIME_SIMULATION_START), rhost, hostID);
-    return hostc_pushLocalEvent(host, event) ? TRUE : FALSE;
-}
-
-gboolean hostc_scheduleTaskWithDelay(const Host* rhost, TaskRef* task, CSimulationTime nanoDelay) {
-    HostCInternal* host = host_internal(rhost);
-    CEmulatedTime time = emutime_add_simtime(worker_getCurrentEmulatedTime(), nanoDelay);
-    return hostc_scheduleTaskAtEmulatedTime(rhost, task, time);
 }
