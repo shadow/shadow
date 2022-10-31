@@ -77,7 +77,7 @@ pub struct Worker {
     // when applicable. These are used to make this information available to
     // code that might not have access to the objects themselves, such as the
     // ShadowLogger.
-    active_host: RefCell<Option<Host>>,
+    active_host: RefCell<Option<Box<Host>>>,
     active_process_info: RefCell<Option<ProcessInfo>>,
     active_thread_info: RefCell<Option<ThreadInfo>>,
 
@@ -127,17 +127,24 @@ impl Worker {
     where
         F: FnOnce(&Host) -> R,
     {
-        Worker::with(|w| w.active_host.borrow().as_ref().map(f)).flatten()
+        Worker::with(|w| {
+            let h = &*w.active_host.borrow();
+            match h {
+                Some(h) => Some(f(&*h)),
+                None => None,
+            }
+        })
+        .flatten()
     }
 
     /// Set the currently-active Host.
-    pub fn set_active_host(host: Host) {
+    pub fn set_active_host(host: Box<Host>) {
         let old = Worker::with(|w| w.active_host.borrow_mut().replace(host)).unwrap();
         debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Host.
-    pub fn take_active_host() -> Host {
+    pub fn take_active_host() -> Box<Host> {
         Worker::with(|w| w.active_host.borrow_mut().take())
             .unwrap()
             .unwrap()

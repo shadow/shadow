@@ -566,7 +566,7 @@ impl<'a> Manager<'a> {
         host_id: HostId,
         host_info: &HostInfo,
         dns: *mut c::DNS,
-    ) -> anyhow::Result<Host> {
+    ) -> anyhow::Result<Box<Host>> {
         let hostname = CString::new(&*host_info.name).unwrap();
         let pcap_dir = host_info
             .pcap_dir
@@ -627,7 +627,7 @@ impl<'a> Manager<'a> {
             let hosts_path =
                 CString::new(self.hosts_path.clone().into_os_string().as_bytes()).unwrap();
 
-            let host = Host::new(params);
+            let host = Box::new(Host::new(params));
 
             unsafe { host.setup(dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
 

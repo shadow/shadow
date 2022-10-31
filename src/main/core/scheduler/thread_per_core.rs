@@ -9,8 +9,8 @@ use super::CORE_AFFINITY;
 pub struct ThreadPerCoreSched {
     pool: UnboundedThreadPool,
     num_threads: usize,
-    thread_hosts: Vec<ArrayQueue<Host>>,
-    thread_hosts_processed: Vec<ArrayQueue<Host>>,
+    thread_hosts: Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts_processed: Vec<ArrayQueue<Box<Host>>>,
     hosts_need_swap: bool,
 }
 
@@ -19,7 +19,7 @@ impl ThreadPerCoreSched {
     /// is assigned many hosts, and threads may steal hosts from other threads.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
     where
-        T: IntoIterator<Item = Host>,
+        T: IntoIterator<Item = Box<Host>>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let hosts = hosts.into_iter();
@@ -115,8 +115,8 @@ pub struct SchedulerScope<'sched, 'pool, 'scope>
 where
     'sched: 'scope,
 {
-    thread_hosts: &'sched Vec<ArrayQueue<Host>>,
-    thread_hosts_processed: &'sched Vec<ArrayQueue<Host>>,
+    thread_hosts: &'sched Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts_processed: &'sched Vec<ArrayQueue<Box<Host>>>,
     hosts_need_swap: &'sched mut bool,
     runner: TaskRunner<'pool, 'scope>,
 }
@@ -176,9 +176,9 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 /// the iterator may steal hosts from other threads.
 pub struct HostIter<'a> {
     /// Queues to take hosts from.
-    thread_hosts_from: &'a [ArrayQueue<Host>],
+    thread_hosts_from: &'a [ArrayQueue<Box<Host>>],
     /// The queue to add hosts to when done with them.
-    thread_hosts_to: &'a ArrayQueue<Host>,
+    thread_hosts_to: &'a ArrayQueue<Box<Host>>,
     /// The index of this thread. This is the first queue of `thread_hosts_from` that we take hosts
     /// from.
     this_thread_index: usize,
@@ -188,7 +188,7 @@ pub struct HostIter<'a> {
 
 impl<'a> HostIter<'a> {
     /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self, prev: Option<Host>) -> Option<Host> {
+    pub fn next(&mut self, prev: Option<Box<Host>>) -> Option<Box<Host>> {
         if let Some(prev) = prev {
             self.thread_hosts_to.push(prev).unwrap();
         }

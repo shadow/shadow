@@ -146,7 +146,7 @@ impl<'a, 'b> HostIter<'a, 'b> {
     /// Get the next [`Host`], and return the one obtained from the previous
     /// call, if any. All [`Host`]s obtained from `next` must be returned in
     /// this way.
-    pub fn next(&mut self, prev: Option<Host>) -> Option<Host> {
+    pub fn next(&mut self, prev: Option<Box<Host>>) -> Option<Box<Host>> {
         match self {
             Self::ThreadPerHost(x) => x.next(prev),
             Self::ThreadPerCore(x) => x.next(prev),
