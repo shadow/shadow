@@ -135,8 +135,9 @@ const gchar* address_toString(const Address* address) {
 }
 
 gchar* address_ipToNewString(in_addr_t ip) {
-    gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN+1);
-    const gchar* ipString = inet_ntop(AF_INET, &ip, ipStringBuffer, INET6_ADDRSTRLEN);
+    gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
+    struct in_addr addr = {.s_addr = ip};
+    const gchar* ipString = inet_ntop(AF_INET, &addr, ipStringBuffer, INET6_ADDRSTRLEN);
     GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
     g_free(ipStringBuffer);
     return g_string_free(result, FALSE);
