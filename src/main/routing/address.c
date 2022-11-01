@@ -134,6 +134,7 @@ const gchar* address_toString(const Address* address) {
     return address->idString;
 }
 
+// Address must be in network byte order.
 gchar* address_ipToNewString(in_addr_t ip) {
     gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
     struct in_addr addr = {.s_addr = ip};
@@ -143,6 +144,7 @@ gchar* address_ipToNewString(in_addr_t ip) {
     return g_string_free(result, FALSE);
 }
 
+// Returned address will be in network byte order.
 in_addr_t address_stringToIP(const gchar* ipString) {
     struct in_addr inaddr;
     if(1 == inet_pton(AF_INET, ipString, &inaddr)) {

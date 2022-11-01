@@ -22,6 +22,7 @@
 struct _DNS {
     GMutex lock;
 
+    /* address in network byte order */
     in_addr_t ipAddressCounter;
     guint macAddressCounter;
 
@@ -38,6 +39,7 @@ struct _DNS {
     MAGIC_DECLARE;
 };
 
+/* Address must be in network byte order. */
 static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
     utility_debugAssert(cidrStr);
 
@@ -81,6 +83,7 @@ static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
     }
 }
 
+/* Address must be in network byte order. */
 static gboolean _dns_isRestricted(DNS* dns, in_addr_t netIP) {
     /* http://en.wikipedia.org/wiki/Reserved_IP_addresses#Reserved_IPv4_addresses */
     if(_dns_isIPInRange(netIP, "0.0.0.0/8") ||
@@ -105,11 +108,13 @@ static gboolean _dns_isRestricted(DNS* dns, in_addr_t netIP) {
     }
 }
 
+/* Address must be in network byte order. */
 static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     gboolean exists = g_hash_table_lookup_extended(dns->addressByIP, GUINT_TO_POINTER(ip), NULL, NULL);
     return exists ? FALSE : TRUE;
 }
 
+/* Address must be in network byte order. */
 Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP) {
     MAGIC_ASSERT(dns);
     utility_debugAssert(name);
@@ -168,6 +173,7 @@ void dns_deregister(DNS* dns, Address* address) {
     }
 }
 
+/* Address must be in network byte order. */
 Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     MAGIC_ASSERT(dns);
     Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));

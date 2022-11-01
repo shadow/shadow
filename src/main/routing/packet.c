@@ -41,15 +41,23 @@ struct _PacketLocalHeader {
     enum ProtocolLocalFlags flags;
     gint sourceDescriptorHandle;
     gint destinationDescriptorHandle;
+
+    // port is in network byte order
     in_port_t port;
 };
 
 typedef struct _PacketUDPHeader PacketUDPHeader;
 struct _PacketUDPHeader {
     enum ProtocolUDPFlags flags;
+
+    // address is in network byte order
     in_addr_t sourceIP;
+    // port is in network byte order
     in_port_t sourcePort;
+
+    // address is in network byte order
     in_addr_t destinationIP;
+    // port is in network byte order
     in_port_t destinationPort;
 };
 
@@ -258,6 +266,7 @@ void packet_setMock(Packet* packet) {
     packet->protocol = PMOCK;
 }
 
+// The port must be in network byte order.
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
     MAGIC_ASSERT(packet);
@@ -275,6 +284,7 @@ void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
     packet->protocol = PLOCAL;
 }
 
+// The addresses and ports must be in network byte order.
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort) {
@@ -294,6 +304,7 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
     packet->protocol = PUDP;
 }
 
+// The addresses and ports must be in network byte order.
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
@@ -368,6 +379,7 @@ gdouble packet_getPriority(const Packet* packet) {
     return packet->priority;
 }
 
+// The returned address will be in network byte order.
 in_addr_t packet_getDestinationIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
     in_addr_t ip = 0;
@@ -399,6 +411,7 @@ in_addr_t packet_getDestinationIP(const Packet* packet) {
     return ip;
 }
 
+// The returned port will be in network byte order.
 in_port_t packet_getDestinationPort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
@@ -432,6 +445,7 @@ in_port_t packet_getDestinationPort(const Packet* packet) {
     return port;
 }
 
+// The returned address will be in network byte order.
 in_addr_t packet_getSourceIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
@@ -464,6 +478,7 @@ in_addr_t packet_getSourceIP(const Packet* packet) {
     return ip;
 }
 
+// The returned port will be in network byte order.
 in_port_t packet_getSourcePort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 

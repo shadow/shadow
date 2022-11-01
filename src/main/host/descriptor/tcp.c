@@ -108,10 +108,10 @@ struct _TCPServer {
     /* maximum number of pending connections (capped at SHADOW_SOMAXCONN) */
     guint pendingMax;
     guint pendingCount;
-    /* IP and port of the last peer trying to connect to us */
+    /* IP and port of the last peer trying to connect to us; both in network byte order */
     in_addr_t lastPeerIP;
     in_port_t lastPeerPort;
-    /* last interface IP we received on */
+    /* last interface IP we received on in network byte order */
     in_addr_t lastIP;
     MAGIC_DECLARE;
 };
@@ -266,6 +266,7 @@ static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
     return (TCP*)descriptor;
 }
 
+/* Address and port must be in network byte order. */
 static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peerIP,
                                in_port_t peerPort) {
     MAGIC_ASSERT(tcp);
@@ -385,6 +386,7 @@ void tcp_clearAllChildrenIfServer(TCP* tcp) {
     }
 }
 
+/* Returned address is in network byte order. */
 static in_addr_t tcp_getIP(TCP* tcp) {
     in_addr_t ip = 0;
     if(tcp->server) {
@@ -405,6 +407,7 @@ static in_addr_t tcp_getIP(TCP* tcp) {
     return ip;
 }
 
+/* Returned address is in network byte order. */
 static in_addr_t tcp_getPeerIP(TCP* tcp) {
     in_addr_t ip = tcp->super.peerIP;
     if(tcp->server && ip == 0) {
@@ -416,6 +419,7 @@ static in_addr_t tcp_getPeerIP(TCP* tcp) {
 static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
+    /* addresses are in network byte order */
     in_addr_t sourceIP = tcp_getIP(tcp);
     in_addr_t destinationIP = tcp_getPeerIP(tcp);
 
@@ -494,6 +498,7 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
      */
     tcp->autotune.didInitializeBufferSizes = TRUE;
 
+    /* addresses are in network byte order */
     in_addr_t sourceIP = tcp_getIP(tcp);
     in_addr_t destinationIP = tcp_getPeerIP(tcp);
 
@@ -842,13 +847,14 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, Host* host, enum Protoc
                                                bool isEmpty) {
     MAGIC_ASSERT(tcp);
 
-    /*
-     * packets from children of a server must appear to be coming from the server
-     */
+    /* packets from children of a server must appear to be coming from the server */
+
+    /* address and port are in network byte order */
     in_addr_t sourceIP = tcp_getIP(tcp);
     in_port_t sourcePort = (tcp->child) ? tcp->child->parent->super.boundPort :
             tcp->super.boundPort;
 
+    /* address and port are in network byte order */
     in_addr_t destinationIP = tcp_getPeerIP(tcp);
     in_port_t destinationPort = (tcp->server) ? tcp->server->lastPeerPort : tcp->super.peerPort;
 
@@ -1580,6 +1586,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
 
+/* Address and port must be in network byte order. */
 static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
@@ -1620,6 +1627,7 @@ void tcp_updateServerBacklog(TCP* tcp, gint backlog) {
     _tcpserver_updateBacklog(tcp->server, backlog);
 }
 
+/* Address and port must be in network byte order. */
 gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
                           gint* acceptedHandle) {
     MAGIC_ASSERT(tcp);
@@ -1689,6 +1697,7 @@ gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
     return 0;
 }
 
+/* Address and port must be in network byte order. */
 static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(tcp);
 
@@ -2305,6 +2314,7 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     }
 }
 
+/* Address and port must be in network byte order. */
 static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
@@ -2374,6 +2384,7 @@ static void _tcp_sendWindowUpdate(Host* host, gpointer voidTcp, gpointer data) {
     tcp->receive.windowUpdatePending = FALSE;
 }
 
+/* Address and port must be in network byte order. */
 static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);

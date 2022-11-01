@@ -480,6 +480,7 @@ mod export {
         Worker::with_mut(|w| w.shared.dns()).unwrap()
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getLatency(
         src: libc::in_addr_t,
@@ -492,6 +493,7 @@ mod export {
         SimulationTime::to_c_simtime(latency)
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getReliability(
         src: libc::in_addr_t,
@@ -503,18 +505,21 @@ mod export {
         Worker::with_mut(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_isRoutable(src: libc::in_addr_t, dst: libc::in_addr_t) -> bool {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
@@ -523,6 +528,7 @@ mod export {
         Worker::with_mut(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
+    /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_incrementPacketCount(src: libc::in_addr_t, dst: libc::in_addr_t) {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());

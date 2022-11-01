@@ -20,10 +20,17 @@
 typedef struct _PacketTCPHeader PacketTCPHeader;
 struct _PacketTCPHeader {
     enum ProtocolTCPFlags flags;
+
+    // address is in network byte order
     in_addr_t sourceIP;
+    // port is in network byte order
     in_port_t sourcePort;
+
+    // address is in network byte order
     in_addr_t destinationIP;
+    // port is in network byte order
     in_port_t destinationPort;
+
     guint sequence;
     guint acknowledgment;
     GList* selectiveACKs;
@@ -51,11 +58,16 @@ static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(pack
 void packet_setPriority(Packet *packet, double value);
 gdouble packet_getPriority(const Packet* packet);
 
+// The port must be in network byte order.
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
+
+// The addresses and ports must be in network byte order.
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort);
+
+// The addresses and ports must be in network byte order.
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
@@ -67,10 +79,16 @@ gsize packet_getTotalSize(const Packet* packet);
 gsize packet_getPayloadSize(const Packet* packet);
 gsize packet_getHeaderSize(const Packet* packet);
 
+// The returned address will be in network byte order.
 in_addr_t packet_getDestinationIP(const Packet* packet);
+// The returned port will be in network byte order.
 in_port_t packet_getDestinationPort(const Packet* packet);
+
+// The returned address will be in network byte order.
 in_addr_t packet_getSourceIP(const Packet* packet);
+// The returned port will be in network byte order.
 in_port_t packet_getSourcePort(const Packet* packet);
+
 ProtocolType packet_getProtocol(const Packet* packet);
 
 gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
