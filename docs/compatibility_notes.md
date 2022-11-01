@@ -97,7 +97,7 @@ version provided in Ubuntu 20.04, don't have this issue. See issue
 
 #### `nginx.conf`
 
-```
+```nginx
 {{#include ../examples/nginx/nginx.conf}}
 ```
 

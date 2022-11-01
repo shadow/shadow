@@ -12,7 +12,7 @@
   + cargo, rustc (version \~ latest)
   + libclang (version >= 9)
 
-Notice: Clang 13.0 is unsupported as it has a miscompilation bug that affects
+Notice: Clang 13.0.0 is unsupported as it has a miscompilation bug that affects
         Shadow (see [issue #1741](https://github.com/shadow/shadow/issues/1741)).
 
 ### Recommended Python Modules (for helper/analysis scripts):
