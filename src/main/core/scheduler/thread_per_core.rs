@@ -1,6 +1,7 @@
 use crossbeam::queue::ArrayQueue;
 
 use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
+use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -134,12 +135,9 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_from: &self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
-                thread_index_iter_offset: 0,
             };
 
             f(i, &mut host_iter);
-
-            assert!(host_iter.next(None).is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -160,12 +158,9 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_from: &self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
-                thread_index_iter_offset: 0,
             };
 
             f(i, &mut host_iter, this_elem);
-
-            assert!(host_iter.next(None).is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -182,18 +177,14 @@ pub struct HostIter<'a> {
     /// The index of this thread. This is the first queue of `thread_hosts_from` that we take hosts
     /// from.
     this_thread_index: usize,
-    /// The thread offset of our iterator; stored so that we can resume where we left off.
-    thread_index_iter_offset: usize,
 }
 
 impl<'a> HostIter<'a> {
-    /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self, prev: Option<Box<Host>>) -> Option<Box<Host>> {
-        if let Some(prev) = prev {
-            self.thread_hosts_to.push(prev).unwrap();
-        }
-
-        // a generator would be nice here...
+    /// See [`crate::core::scheduler::HostIter::for_each`].
+    pub fn for_each<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Host),
+    {
         for from_queue in self
             .thread_hosts_from
             .iter()
@@ -201,17 +192,17 @@ impl<'a> HostIter<'a> {
             // start from the current thread index
             .skip(self.this_thread_index)
             .take(self.thread_hosts_from.len())
-            // skip to where we last left off
-            .skip(self.thread_index_iter_offset)
         {
-            if let Some(host) = from_queue.pop() {
-                return Some(host);
+            while let Some(host) = from_queue.pop() {
+                Worker::set_active_host(host);
+                Worker::with_active_host(|host| {
+                    f(host);
+                })
+                .unwrap();
+                self.thread_hosts_to
+                    .push(Worker::take_active_host())
+                    .unwrap();
             }
-
-            // no hosts remaining in this queue, so keep our persistent offset up-to-date
-            self.thread_index_iter_offset += 1;
         }
-
-        None
     }
 }

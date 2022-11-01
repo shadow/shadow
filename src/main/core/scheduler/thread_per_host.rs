@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
+use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -110,14 +111,11 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
             THREAD_HOST.with(|host| {
                 let mut host = host.borrow_mut();
 
-                let mut host_iter = HostIter {
-                    host: host.take(),
-                    returned_host: None,
-                };
+                let mut host_iter = HostIter { host: host.take() };
 
                 f(task_context.thread_idx, &mut host_iter);
 
-                host.replace(host_iter.returned_host.take().unwrap());
+                host.replace(host_iter.host.take().unwrap());
             });
         });
     }
@@ -141,14 +139,11 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
             THREAD_HOST.with(|host| {
                 let mut host = host.borrow_mut();
 
-                let mut host_iter = HostIter {
-                    host: host.take(),
-                    returned_host: None,
-                };
+                let mut host_iter = HostIter { host: host.take() };
 
                 f(task_context.thread_idx, &mut host_iter, this_elem);
 
-                host.replace(host_iter.returned_host.unwrap());
+                host.replace(host_iter.host.unwrap());
             });
         });
     }
@@ -158,15 +153,19 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
 /// there will only ever be one host per thread.
 pub struct HostIter {
     host: Option<Box<Host>>,
-    returned_host: Option<Box<Host>>,
 }
 
 impl HostIter {
-    /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self, prev: Option<Box<Host>>) -> Option<Box<Host>> {
-        if let Some(prev) = prev {
-            assert!(self.returned_host.replace(prev).is_none())
-        }
-        self.host.take()
+    /// See [`crate::core::scheduler::HostIter::for_each`].
+    pub fn for_each<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Host),
+    {
+        Worker::set_active_host(self.host.take().unwrap());
+        Worker::with_active_host(|host| {
+            f(host);
+        })
+        .unwrap();
+        self.host.replace(Worker::take_active_host());
     }
 }

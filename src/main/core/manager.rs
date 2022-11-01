@@ -328,27 +328,13 @@ impl<'a> Manager<'a> {
             // boot each host
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    let mut prev_host = None;
-                    loop {
-                        let host = hosts.next(prev_host);
-                        let host = if let Some(h) = host {
-                            h
-                        } else {
-                            break;
-                        };
+                    hosts.for_each(|host| {
                         worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
-                        worker::Worker::set_active_host(host);
-
-                        worker::Worker::with_active_host(|host| {
-                            unsafe { host.lock_shmem() };
-                            host.boot();
-                            unsafe { host.unlock_shmem() };
-                        })
-                        .unwrap();
-
+                        unsafe { host.lock_shmem() };
+                        host.boot();
+                        unsafe { host.unlock_shmem() };
                         worker::Worker::clear_current_time();
-                        prev_host = Some(worker::Worker::take_active_host());
-                    }
+                    });
                 });
             });
 
@@ -399,34 +385,19 @@ impl<'a> Manager<'a> {
                             worker::Worker::reset_next_event_time();
                             worker::Worker::set_round_end_time(window_end);
 
-                            // get the next host for this thread from the scheduler
-                            let mut prev_host = None;
-                            loop {
-                                let host = hosts.next(prev_host);
-                                let host = if let Some(h) = host {
-                                    h
-                                } else {
-                                    break;
+                            hosts.for_each(|host| {
+                                let host_next_event_time = {
+                                    unsafe { host.lock_shmem() };
+                                    host.execute(window_end);
+                                    let host_next_event_time = host.next_event_time();
+                                    unsafe { host.unlock_shmem() };
+                                    host_next_event_time
                                 };
-                                worker::Worker::set_active_host(host);
-
-                                let host_next_event_time =
-                                    worker::Worker::with_active_host(|host| {
-                                        unsafe { host.lock_shmem() };
-                                        host.execute(window_end);
-                                        let host_next_event_time = host.next_event_time();
-                                        unsafe { host.unlock_shmem() };
-                                        host_next_event_time
-                                    })
-                                    .unwrap();
-
-                                prev_host = Some(worker::Worker::take_active_host());
-
                                 *next_event_time = [*next_event_time, host_next_event_time]
                                     .into_iter()
                                     .filter_map(std::convert::identity)
                                     .reduce(std::cmp::min);
-                            }
+                            });
 
                             let packet_next_event_time = worker::Worker::get_next_event_time();
 
@@ -480,27 +451,12 @@ impl<'a> Manager<'a> {
 
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    let mut prev_host = None;
-                    loop {
-                        let host = hosts.next(prev_host);
-                        let host = if let Some(h) = host {
-                            h
-                        } else {
-                            break;
-                        };
+                    hosts.for_each(|host| {
                         worker::Worker::set_current_time(self.end_time);
-                        worker::Worker::set_active_host(host);
-
-                        worker::Worker::with_active_host(|host| {
-                            host.free_all_applications();
-                            host.shutdown();
-                        })
-                        .unwrap();
-
-                        prev_host = Some(worker::Worker::take_active_host());
-                        //unsafe { host.unlock() };
+                        host.free_all_applications();
+                        host.shutdown();
                         worker::Worker::clear_current_time();
-                    }
+                    });
                 });
             });
 

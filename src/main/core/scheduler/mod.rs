@@ -132,24 +132,20 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 }
 
 /// Supports iterating over all hosts assigned to this thread.
-///
-/// It *moves* the [`Host`] instead of returning a reference, so that it can be
-/// safely moved into a `static` thread local in
-/// [`crate::core::worker::Worker`]. Users must return each [`Host`] they obtain
-/// via [`HostIter::next`].
 pub enum HostIter<'a, 'b> {
     ThreadPerHost(&'a mut thread_per_host::HostIter),
     ThreadPerCore(&'a mut thread_per_core::HostIter<'b>),
 }
 
 impl<'a, 'b> HostIter<'a, 'b> {
-    /// Get the next [`Host`], and return the one obtained from the previous
-    /// call, if any. All [`Host`]s obtained from `next` must be returned in
-    /// this way.
-    pub fn next(&mut self, prev: Option<Box<Host>>) -> Option<Box<Host>> {
+    /// For each [`Host`], calls `f` with each `Host`, and with that `Host` set as active in the [`crate::core::worker::Worker`].
+    pub fn for_each<F>(&mut self, f: F)
+    where
+        F: FnMut(&Host),
+    {
         match self {
-            Self::ThreadPerHost(x) => x.next(prev),
-            Self::ThreadPerCore(x) => x.next(prev),
+            Self::ThreadPerHost(x) => x.for_each(f),
+            Self::ThreadPerCore(x) => x.for_each(f),
         }
     }
 }
