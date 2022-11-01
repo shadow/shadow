@@ -64,6 +64,7 @@ static gboolean _udp_isFamilySupported(LegacySocket* socket, sa_family_t family)
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
+/* Address and port must be in network byte order. */
 static gint _udp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
@@ -123,9 +124,12 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     }
 
     /* use default destination if none was specified */
+
+    /* address and port are in network byte order */
     in_addr_t destinationIP = (ip != 0) ? ip : udp->super.peerIP;
     in_port_t destinationPort = (port != 0) ? port : udp->super.peerPort;
 
+    /* address and port are in network byte order */
     in_addr_t sourceIP = 0;
     in_port_t sourcePort = 0;
     legacysocket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
@@ -169,6 +173,7 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     return bytes_sent;
 }
 
+/* Address and port must be in network byte order. */
 static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)transport);

@@ -132,6 +132,7 @@ void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Ho
     interface->tb_receive = _networkinterface_create_tb(bwDownKiBps);
 }
 
+/* The address and ports must be in network byte order. */
 static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
         ProtocolType type, in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
@@ -151,10 +152,12 @@ static gchar* _networkinterface_socketToAssociationKey(NetworkInterface* interfa
 
     ProtocolType type = compatsocket_getProtocol(socket);
 
+    /* address and port are in network byte order */
     in_addr_t peerIP = 0;
     in_port_t peerPort = 0;
     compatsocket_getPeerName(socket, &peerIP, &peerPort);
 
+    /* address and port are in network byte order */
     in_addr_t boundIP = 0;
     in_port_t boundPort = 0;
     compatsocket_getSocketName(socket, &boundIP, &boundPort);
@@ -163,6 +166,7 @@ static gchar* _networkinterface_socketToAssociationKey(NetworkInterface* interfa
     return key;
 }
 
+/* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
     MAGIC_ASSERT(interface);

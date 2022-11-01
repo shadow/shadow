@@ -23,6 +23,7 @@ NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint64 interfaceReceiveLength, bool uses_router);
 void networkinterface_free(NetworkInterface* interface);
 
+/* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
 
