@@ -91,7 +91,6 @@ struct _HostCInternal {
 
     gchar* dataDirPath;
 
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -142,7 +141,6 @@ HostCInternal* hostc_new(const HostParameters* params) {
                        _unblockedSyscallLatencyConfig, _unblockedVdsoLatencyConfig);
 
     host->processIDCounter = 1000;
-    host->referenceCount = 1;
 
 #ifdef USE_PERF_TIMERS
     /* we go back to the manager setup process here, so stop counting this host execution */
@@ -316,11 +314,7 @@ void hostc_shutdown(HostCInternal* host) {
 
 void hostc_unref(HostCInternal* host) {
     MAGIC_ASSERT(host);
-    (host->referenceCount)--;
-    utility_debugAssert(host->referenceCount >= 0);
-    if(host->referenceCount == 0) {
-        _hostc_free(host);
-    }
+    _hostc_free(host);
 }
 
 /* resumes the execution timer for this host */
