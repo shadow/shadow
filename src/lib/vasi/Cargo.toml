@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = "0.2.134"
+libc = "0.2.137"
 static_assertions = "1.1.0"
 vasi-macro = { path = "../vasi-macro" }
