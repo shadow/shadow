@@ -9,6 +9,9 @@ mod codel_queue;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
+// temporary re-export of the C wrapper function
+pub use export::router_enqueue;
+
 /// A router assists with moving packets between hosts across the simulated
 /// network.
 pub struct Router {
@@ -100,7 +103,10 @@ mod export {
     /// Ownership of the `c::Packet` passed to this function transfers to the router. The caller
     /// should not use the packet after calling this function, and should not call `packet_unref`.
     #[no_mangle]
-    pub extern "C" fn router_enqueue(router_ptr: *mut Router, packet_ptr: *mut c::Packet) -> bool {
+    pub unsafe extern "C" fn router_enqueue(
+        router_ptr: *mut Router,
+        packet_ptr: *mut c::Packet,
+    ) -> bool {
         let router = unsafe { router_ptr.as_mut() }.unwrap();
         let packet = Packet::from_raw(packet_ptr);
         router.push(packet)

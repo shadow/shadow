@@ -4,7 +4,8 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
-use std::net::IpAddr;
+
+use std::net::Ipv4Addr;
 use std::os::raw::c_char;
 use std::sync::{Arc, Mutex};
 
@@ -14,6 +15,7 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::network::router::Router;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -26,7 +28,7 @@ use atomic_refcell::AtomicRefCell;
 pub struct HostInfo {
     pub id: HostId,
     pub name: String,
-    pub default_ip: IpAddr,
+    pub default_ip: Ipv4Addr,
     pub log_level: Option<log::LevelFilter>,
 }
 
@@ -154,10 +156,9 @@ impl Host {
         slice.to_str().unwrap()
     }
 
-    pub fn default_ip(&self) -> std::net::IpAddr {
-        use std::net;
+    pub fn default_ip(&self) -> Ipv4Addr {
         let addr = unsafe { cshadow::hostc_getDefaultIP(self.chost()) };
-        net::IpAddr::V4(net::Ipv4Addr::from(addr.to_le_bytes()))
+        u32::from_be(addr).into()
     }
 
     pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
@@ -169,6 +170,15 @@ impl Host {
     pub fn log_level(&self) -> Option<log::LevelFilter> {
         let level = unsafe { cshadow::hostc_getLogLevel(self.chost()) };
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
+    }
+
+    pub fn upstream_router(&self) -> *mut Router {
+        unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
+    }
+
+    pub fn interface(&self, handle: Ipv4Addr) -> *mut cshadow::NetworkInterface {
+        let handle = u32::from(handle).to_be();
+        unsafe { cshadow::hostc_lookupInterface(self.chost(), handle) }
     }
 
     pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
@@ -374,7 +384,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDefaultIP(hostrc: *const Host) -> in_addr_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getDefaultIP(hostrc.chost()) }
+        let ip = hostrc.default_ip();
+        u32::from(ip).to_be()
     }
 
     #[no_mangle]
@@ -413,13 +424,14 @@ mod export {
         handle: in_addr_t,
     ) -> *mut cshadow::NetworkInterface {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_lookupInterface(hostrc.chost(), handle) }
+        let handle = u32::from_be(handle).into();
+        hostrc.interface(handle)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getUpstreamRouter(hostrc.chost()) }
+        hostrc.upstream_router()
     }
 
     #[no_mangle]

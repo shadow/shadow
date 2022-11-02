@@ -1,16 +1,20 @@
 use atomic_refcell::{AtomicRef, AtomicRefCell};
+use crossbeam::atomic::AtomicCell;
 use nix::unistd::Pid;
 use once_cell::sync::Lazy;
+use rand::Rng;
 
 use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::work::event::Event;
+use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{ThreadId, ThreadRef};
 use crate::network::graph::{IpAssignment, RoutingInfo};
+use crate::network::packet::Packet;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
@@ -270,6 +274,109 @@ impl Worker {
         .unwrap();
     }
 
+    /// SAFETY: `packet` must be valid and not accessed by another thread while this function is
+    /// running.
+    pub unsafe fn send_packet(src_host: &Host, packet: *mut cshadow::Packet) {
+        assert!(!packet.is_null());
+
+        let current_time = Worker::current_time().unwrap();
+        let round_end_time = Worker::round_end_time().unwrap();
+
+        let is_completed = current_time >= Worker::with(|w| w.shared.sim_end_time).unwrap();
+        let is_bootstrapping =
+            current_time < Worker::with(|w| w.shared.bootstrap_end_time).unwrap();
+
+        if is_completed {
+            // the simulation is over, don't bother
+            return;
+        }
+
+        let src_ip = unsafe { cshadow::packet_getSourceIP(packet) };
+        let dst_ip = unsafe { cshadow::packet_getDestinationIP(packet) };
+        let payload_size = unsafe { cshadow::packet_getPayloadSize(packet) };
+
+        let src_ip: std::net::Ipv4Addr = u32::from_be(src_ip).into();
+        let dst_ip: std::net::Ipv4Addr = u32::from_be(dst_ip).into();
+
+        let dst_host_id = Worker::with(|w| {
+            w.shared
+                .resolve_ip_to_host_id(dst_ip)
+                .expect("No host ID for dest address {dst_ip}")
+        })
+        .unwrap();
+
+        let src_ip = std::net::IpAddr::V4(src_ip);
+        let dst_ip = std::net::IpAddr::V4(dst_ip);
+
+        // check if network reliability forces us to 'drop' the packet
+        let reliability: f64 = Worker::with(|w| w.shared.reliability(src_ip, dst_ip).unwrap())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let chance: f64 = src_host.with_random_mut(|r| r.gen());
+
+        // don't drop control packets with length 0, otherwise congestion control has problems
+        // responding to packet loss
+        // https://github.com/shadow/shadow/issues/2517
+        if !is_bootstrapping && chance > reliability && payload_size > 0 {
+            unsafe {
+                cshadow::packet_addDeliveryStatus(
+                    packet,
+                    cshadow::_PacketDeliveryStatusFlags_PDS_INET_DROPPED,
+                )
+            };
+            return;
+        }
+
+        let delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
+        let deliver_time = current_time + delay;
+
+        Worker::update_lowest_used_latency(delay);
+        Worker::with(|w| w.shared.increment_packet_count(src_ip, dst_ip)).unwrap();
+
+        // TODO: this should change for sending to remote manager (on a different machine); this is
+        // the only place where tasks are sent between separate host
+
+        unsafe {
+            cshadow::packet_addDeliveryStatus(
+                packet,
+                cshadow::_PacketDeliveryStatusFlags_PDS_INET_SENT,
+            )
+        };
+
+        // copy the packet
+        let packet = Packet::from_raw(unsafe { cshadow::packet_copy(packet) });
+        let packet = Arc::new(AtomicCell::new(Some(packet)));
+
+        let packet_task = TaskRef::new(move |host| {
+            let packet = packet.take().expect("Packet task ran twice");
+
+            let router = host.upstream_router();
+            let became_nonempty =
+                unsafe { crate::network::router::router_enqueue(router, packet.into_inner()) };
+
+            if became_nonempty {
+                let default_ip = host.default_ip();
+                let interface = host.interface(default_ip);
+                unsafe { cshadow::networkinterface_receivePackets(interface, host) };
+            }
+        });
+
+        let mut packet_event = Event::new(packet_task, deliver_time, src_host, dst_host_id);
+
+        // delay the packet until the next round
+        if deliver_time < round_end_time {
+            packet_event.set_time(round_end_time);
+        }
+
+        // we may have sent this packet after the destination host finished running the current
+        // round and calculated its min event time, so we put this in our min event time instead
+        Worker::update_next_event_time(packet_event.time());
+
+        debug_assert!(packet_event.time() >= round_end_time);
+        Worker::with(|w| w.shared.push_to_host(dst_host_id, packet_event)).unwrap();
+    }
+
     // Runs `f` with a shared reference to the current thread's Worker. Returns
     // None if this thread has no Worker object.
     #[must_use]
@@ -403,6 +510,16 @@ impl WorkerShared {
         true
     }
 
+    pub fn resolve_ip_to_host_id(&self, ip: std::net::Ipv4Addr) -> Option<HostId> {
+        let dns = self.dns.ptr();
+        let ip = u32::from(ip).to_be();
+        let addr = unsafe { cshadow::dns_resolveIPToAddress(dns, ip) };
+        if addr.is_null() {
+            return None;
+        }
+        Some(unsafe { cshadow::address_getID(addr) })
+    }
+
     pub fn increment_plugin_error_count(&self) {
         let old_count = self
             .num_plugin_errors
@@ -495,18 +612,6 @@ mod export {
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
-    pub extern "C" fn worker_getReliability(
-        src: libc::in_addr_t,
-        dst: libc::in_addr_t,
-    ) -> libc::c_float {
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        Worker::with(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
-    }
-
-    /// Addresses must be provided in network byte order.
-    #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         Worker::with(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
@@ -528,15 +633,6 @@ mod export {
         Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
-    /// Addresses must be provided in network byte order.
-    #[no_mangle]
-    pub extern "C" fn worker_incrementPacketCount(src: libc::in_addr_t, dst: libc::in_addr_t) {
-        let src = std::net::IpAddr::V4(u32::from_be(src).into());
-        let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
-
-        Worker::with(|w| w.shared.increment_packet_count(src, dst)).unwrap()
-    }
-
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
         Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
@@ -548,21 +644,19 @@ mod export {
         Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
-    /// Takes ownership of the event.
-    #[no_mangle]
-    pub extern "C" fn worker_pushToHost(host_id: HostId, event: *mut Event) {
-        assert!(!event.is_null());
-        let event = unsafe { Box::from_raw(event) };
-        assert!(event.time() >= Worker::round_end_time().unwrap());
-        Worker::with(|w| w.shared.push_to_host(host_id, *event)).unwrap();
-    }
-
     #[no_mangle]
     pub extern "C" fn worker_setMinEventTimeNextRound(time: cshadow::CSimulationTime) {
         let time = SimulationTime::from_c_simtime(time).unwrap();
         let time = EmulatedTime::from_abs_simtime(time);
 
         Worker::update_next_event_time(time);
+    }
+
+    // TODO: move to Router::_route_outgoing_packet
+    #[no_mangle]
+    pub extern "C" fn worker_sendPacket(src_host: *const Host, packet: *mut cshadow::Packet) {
+        let src_host = unsafe { src_host.as_ref() }.unwrap();
+        unsafe { Worker::send_packet(src_host, packet) };
     }
 
     /// Returns NULL if there is no live Worker.

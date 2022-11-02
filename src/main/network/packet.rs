@@ -2,6 +2,7 @@ use std::io::Write;
 
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
+use crate::utility::SyncSendPointer;
 
 pub enum PacketStatus {
     RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,
@@ -10,7 +11,13 @@ pub enum PacketStatus {
 }
 
 pub struct Packet {
-    c_ptr: *mut c::Packet,
+    c_ptr: SyncSendPointer<c::Packet>,
+
+    // There isn't currently a reason why we would need a packet to by Sync, and we probably won't
+    // ever need it to be Sync. By ensuring calling code doesn't assume Packet is Sync, we have more
+    // flexibility in how we implement Packet internally. Since Cell is !Sync, this will make Packet
+    // !Sync.
+    _make_unsync: std::marker::PhantomData<std::cell::Cell<()>>,
 }
 
 impl Packet {
@@ -23,56 +30,59 @@ impl Packet {
     }
 
     pub fn size(&self) -> usize {
-        assert!(!self.c_ptr.is_null());
-        let sz = unsafe { c::packet_getTotalSize(self.c_ptr) };
+        assert!(!self.c_ptr.ptr().is_null());
+        let sz = unsafe { c::packet_getTotalSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     fn _header_size(&self) -> usize {
-        assert!(!self.c_ptr.is_null());
-        let sz = unsafe { c::packet_getHeaderSize(self.c_ptr) };
+        assert!(!self.c_ptr.ptr().is_null());
+        let sz = unsafe { c::packet_getHeaderSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     fn _payload_size(&self) -> usize {
-        assert!(!self.c_ptr.is_null());
-        let sz = unsafe { c::packet_getPayloadSize(self.c_ptr) };
+        assert!(!self.c_ptr.ptr().is_null());
+        let sz = unsafe { c::packet_getPayloadSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     pub fn add_status(&mut self, status: PacketStatus) {
-        assert!(!self.c_ptr.is_null());
+        assert!(!self.c_ptr.ptr().is_null());
         let status_flag = status as c::PacketDeliveryStatusFlags;
-        unsafe { c::packet_addDeliveryStatus(self.c_ptr, status_flag) };
+        unsafe { c::packet_addDeliveryStatus(self.c_ptr.ptr(), status_flag) };
     }
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet
     /// object.
     pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
         assert!(!c_ptr.is_null());
-        Self { c_ptr }
+        Self {
+            c_ptr: unsafe { SyncSendPointer::new(c_ptr) },
+            _make_unsync: Default::default(),
+        }
     }
 
     /// Transfers ownership of the inner c_ptr reference to the caller while
     /// dropping the rust packet object.
     pub fn into_inner(mut self) -> *mut c::Packet {
         // We want to keep the c ref when the rust packet is dropped.
-        let c_ptr = self.c_ptr;
-        self.c_ptr = std::ptr::null_mut();
+        let c_ptr = self.c_ptr.ptr();
+        self.c_ptr = unsafe { SyncSendPointer::new(std::ptr::null_mut()) };
         c_ptr
     }
 
     pub fn borrow_inner(&self) -> *mut c::Packet {
-        self.c_ptr
+        self.c_ptr.ptr()
     }
 }
 
 impl Drop for Packet {
     fn drop(&mut self) {
-        if !self.c_ptr.is_null() {
+        if !self.c_ptr.ptr().is_null() {
             // If the rust packet is dropped before into_inner() is called,
             // we also drop the c packet ref to free it.
-            unsafe { c::packet_unref(self.c_ptr) }
+            unsafe { c::packet_unref(self.c_ptr.ptr()) }
         }
     }
 }
