@@ -26,10 +26,10 @@ typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
  * We work around it by forward declaring Host here, and including host.h below
  * to ensure we get an error if host.h's forward declaration somehow changes.
  */
-typedef struct _Host Host;
+typedef struct Host Host;
 
 /* required functions */
-typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, Host* host);
+typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, const Host* host);
 typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
 typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
 

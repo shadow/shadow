@@ -32,7 +32,7 @@ static TimerFd* _timerfd_fromLegacyFile(LegacyFile* descriptor) {
     return (TimerFd*)descriptor;
 }
 
-static void _timerfd_close(LegacyFile* descriptor, Host* host) {
+static void _timerfd_close(LegacyFile* descriptor, const Host* host) {
     TimerFd* timerfd = _timerfd_fromLegacyFile(descriptor);
     MAGIC_ASSERT(timerfd);
     trace("timer desc %p closing now", &timerfd->super);
@@ -68,7 +68,7 @@ static void _timerfd_cleanup(LegacyFile* descriptor) {
 static LegacyFileFunctionTable _timerfdFunctions = {
     _timerfd_close, _timerfd_cleanup, _timerfd_free, MAGIC_VALUE};
 
-static void _timerfd_expire(Host* host, gpointer voidTimer, gpointer data);
+static void _timerfd_expire(const Host* host, gpointer voidTimer, gpointer data);
 
 TimerFd* timerfd_new(HostId hostId) {
     TimerFd* timerfd = g_new0(TimerFd, 1);
@@ -104,7 +104,7 @@ void timerfd_getTime(const TimerFd* timerfd, struct itimerspec* curr_value) {
     }
 }
 
-static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
+static void _timerfd_expire(const Host* host, gpointer voidTimerFd, gpointer data) {
     TimerFd* timerfd = voidTimerFd;
     MAGIC_ASSERT(timerfd);
 
@@ -113,7 +113,7 @@ static void _timerfd_expire(Host* host, gpointer voidTimerFd, gpointer data) {
     }
 }
 
-static void _timerfd_arm(TimerFd* timerfd, Host* host, const struct itimerspec* config,
+static void _timerfd_arm(TimerFd* timerfd, const Host* host, const struct itimerspec* config,
                          gint flags) {
     MAGIC_ASSERT(timerfd);
     utility_debugAssert(config);
@@ -144,8 +144,8 @@ static gboolean _timerfd_timeIsValid(const struct timespec* config) {
     return (config->tv_nsec < 0 || config->tv_nsec >= SIMTIME_ONE_SECOND) ? FALSE : TRUE;
 }
 
-gint timerfd_setTime(TimerFd* timerfd, Host* host, gint flags, const struct itimerspec* new_value,
-                     struct itimerspec* old_value) {
+gint timerfd_setTime(TimerFd* timerfd, const Host* host, gint flags,
+                     const struct itimerspec* new_value, struct itimerspec* old_value) {
     MAGIC_ASSERT(timerfd);
 
     utility_debugAssert(new_value);

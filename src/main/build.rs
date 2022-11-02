@@ -14,6 +14,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "Packet".into(),
             "Process".into(),
             "Host".into(),
+            "HostParameters".into(),
             "Thread".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
@@ -32,6 +33,11 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "main/bindings/c/bindings-opaque.h".into(),
                 "main/core/worker.h".into(),
                 "main/host/descriptor/descriptor_types.h".into(),
+                "main/host/futex_table.h".into(),
+                "main/host/host.h".into(),
+                "main/host/host_parameters.h".into(),
+                "main/host/network_interface.h".into(),
+                "main/host/protocol.h".into(),
                 "main/host/status_listener.h".into(),
                 "main/host/syscall_handler.h".into(),
                 "main/host/syscall_types.h".into(),
@@ -39,6 +45,11 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "main/host/tracker_types.h".into(),
                 "main/routing/dns.h".into(),
                 "main/routing/packet.minimal.h".into(),
+            ],
+            sys_includes: vec![
+                "sys/socket.h".into(),
+                "netinet/in.h".into(),
+                "arpa/inet.h".into(),
             ],
             export: cbindgen::ExportConfig {
                 // Generate all item types, excluding enum types.
@@ -88,6 +99,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("core/worker.h")
         .header("host/affinity.h")
         .header("host/descriptor/descriptor.h")
+        .header("host/cpu.h")
         .header("host/host.h")
         .header("host/process.h")
         .header("host/status.h")
@@ -101,6 +113,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall_condition.h")
         .header("host/syscall_types.h")
         .header("host/thread.h")
+        .header("host/tracker.h")
         .header("routing/packet.h")
         .header("utility/rpath.h")
         .header("utility/utility.h")
@@ -108,10 +121,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // until we do.
         .blocklist_type("_?GQueue")
         // Needs GQueue
-        .blocklist_type("_?LegacySocket.*")
+        .opaque_type("_?LegacySocket.*")
         .blocklist_type("_?Socket.*")
-        // Needs LegacySocket
-        .blocklist_type("_?CompatSocket.*")
+        .allowlist_type("_?CompatSocket.*")
         // Uses atomics, which bindgen doesn't translate correctly.
         // https://github.com/rust-lang/rust-bindgen/issues/2151
         .blocklist_type("atomic_bool")
@@ -126,12 +138,11 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("legacyfile_getHandle")
         .allowlist_function("legacyfile_setHandle")
         .allowlist_function("legacyfile_shutdownHelper")
-        .allowlist_function("host_.*")
-        // Needs CompatSocket
-        .blocklist_function("host_.*Interface")
-
+        .allowlist_function("hostc_.*")
         // used by shadow's main function
         .allowlist_function("main_.*")
+        .allowlist_function("cpu_.*")
+        .allowlist_function("tracker_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
         .allowlist_function("runConfigHandlers")
@@ -152,6 +163,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("syscallcondition_getActiveFile")
         .allowlist_function("syscallcondition_setActiveFile")
         .allowlist_function("syscallhandler_.*")
+        .allowlist_function("tracker_*")
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
         .allowlist_function("packet_.*")
@@ -167,7 +179,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 
         .allowlist_function("return_code_for_signal")
 
-        .allowlist_type("Host")
+        .allowlist_type("HostCInternal")
+        .allowlist_type("HostParameters")
         .allowlist_type("PluginPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")
@@ -193,9 +206,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .opaque_type("Logger")
         .opaque_type("DescriptorTable")
         .opaque_type("MemoryManager")
-        .opaque_type("Random")
         .opaque_type("TaskRef")
         .opaque_type("GList")
+        .blocklist_type("Host")
         .blocklist_type("Logger")
         .blocklist_type("Timer")
         .blocklist_type("Controller")
@@ -215,20 +228,18 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::main::ShadowBuildInfo;")
         .raw_line("use crate::core::support::configuration::ConfigOptions;")
         .raw_line("use crate::core::support::configuration::QDiscMode;")
-        .raw_line("use crate::core::work::event::Event;")
-        .raw_line("use crate::core::work::event_queue::ThreadSafeEventQueue;")
         .raw_line("use crate::core::work::task::TaskRef;")
         .raw_line("use crate::network::router::Router;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")
+        .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::memory_manager::MemoryManager;")
         .raw_line("use crate::host::syscall::format::StraceFmtMode;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::timer::Timer;")
         .raw_line("use crate::utility::counter::Counter;")
-        .raw_line("use crate::utility::random::Random;")
 
         .raw_line("use atomic_refcell::AtomicRefCell;")
         .raw_line("use logger::Logger;")

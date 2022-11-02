@@ -39,7 +39,7 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host.chost(), cb_queue))
+        CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
             .unwrap_or(Ok(()))
             .map(|()| 0.into())
     }
@@ -83,9 +83,7 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| {
-                replaced_desc.close(ctx.host.chost(), cb_queue)
-            });
+            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.host, cb_queue));
         }
 
         // return the new fd
@@ -124,9 +122,7 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| {
-                replaced_desc.close(ctx.host.chost(), cb_queue)
-            });
+            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.host, cb_queue));
         }
 
         // return the new fd
@@ -490,11 +486,11 @@ impl SyscallHandler {
                     ctx.process
                         .deregister_descriptor(read_fd)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                     ctx.process
                         .deregister_descriptor(write_fd)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                 });
                 Err(e.into())
             }

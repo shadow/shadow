@@ -113,7 +113,8 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         if (epev.events) {
-            epoll_control(sys->epoll, EPOLL_CTL_ADD, pfd->fd, desc, &epev, sys->host);
+            epoll_control(
+                sys->epoll, EPOLL_CTL_ADD, pfd->fd, desc, &epev, _syscallhandler_getHost(sys));
         }
     }
 }
@@ -132,7 +133,8 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
         if (dont_block || _syscallhandler_didListenTimeoutExpire(sys)) {
             trace("No events are ready and poll needs to return now");
             goto done;
-        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+        } else if (thread_unblockedSignalPending(
+                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             trace("Interrupted by a signal.");
             num_ready = -EINTR;
             goto done;
@@ -148,7 +150,7 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
                                         .status = STATUS_FILE_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
-                syscallcondition_setTimeout(cond, sys->host,
+                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys),
                                             worker_getCurrentEmulatedTime() +
                                                 timeout->tv_sec * SIMTIME_ONE_SECOND +
                                                 timeout->tv_nsec * SIMTIME_ONE_NANOSECOND);

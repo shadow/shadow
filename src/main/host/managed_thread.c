@@ -67,7 +67,7 @@ static void _managedthread_syncAffinityWithWorker(ManagedThread* mthread) {
 
 static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent* event) {
     // We're about to let managed thread execute, so need to release the shared memory lock.
-    Host* host = thread_getHost(thread->base);
+    const Host* host = thread_getHost(thread->base);
     shimshmem_setMaxRunaheadTime(
         host_getShimShmemLock(host), worker_maxEventRunaheadTime(host));
     shimshmem_setEmulatedTime(

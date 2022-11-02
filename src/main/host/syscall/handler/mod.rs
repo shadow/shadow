@@ -107,7 +107,7 @@ impl SyscallHandler {
 }
 
 mod export {
-    use crate::utility::notnull::notnull_mut_debug;
+    use crate::{core::worker::Worker, utility::notnull::notnull_mut_debug};
 
     use super::*;
 
@@ -132,8 +132,12 @@ mod export {
     ) -> c::SysCallReturn {
         assert!(!sys.is_null());
         let sys = unsafe { &mut *sys };
-        let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(csys)) };
-        sys.syscall(&mut objs.borrow(), unsafe { args.as_ref().unwrap() })
-            .into()
+        Worker::with_active_host(|host| {
+            let mut objs =
+                unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
+            sys.syscall(&mut objs.borrow(), unsafe { args.as_ref().unwrap() })
+                .into()
+        })
+        .unwrap()
     }
 }

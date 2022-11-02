@@ -31,7 +31,7 @@ impl SyscallHandler {
         };
 
         // Get random bytes using host rng to maintain determinism.
-        ctx.host.random().fill_bytes(&mut mem_ref);
+        ctx.host.with_random_mut(|rng| rng.fill_bytes(&mut mem_ref));
 
         // We must flush the memory reference to write it back.
         match mem_ref.flush() {

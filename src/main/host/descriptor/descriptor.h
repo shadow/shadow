@@ -25,7 +25,7 @@ void legacyfile_ref(gpointer data);
 void legacyfile_unref(gpointer data);
 void legacyfile_refWeak(gpointer data);
 void legacyfile_unrefWeak(gpointer data);
-void legacyfile_close(LegacyFile* descriptor, Host* host);
+void legacyfile_close(LegacyFile* descriptor, const Host* host);
 
 LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 

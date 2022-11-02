@@ -28,7 +28,7 @@ struct TimerInternal {
     expiration_count: u64,
     next_expire_id: u64,
     min_valid_expire_id: u64,
-    on_expire: Box<dyn Fn(&mut Host) + Send + Sync>,
+    on_expire: Box<dyn Fn(&Host) + Send + Sync>,
 }
 
 impl TimerInternal {
@@ -45,7 +45,7 @@ impl Timer {
     /// expiration. `on_expire` will cause a panic if it calls mutable methods
     /// of the enclosing Timer.  If it may need to call mutable methods of the
     /// Timer, it should push a new task to the scheduler to do so.
-    pub fn new<F: 'static + Fn(&mut Host) + Send + Sync>(on_expire: F) -> Self {
+    pub fn new<F: 'static + Fn(&Host) + Send + Sync>(on_expire: F) -> Self {
         Self {
             magic: Magic::new(),
             _counter: ObjectCounter::new("Timer"),
@@ -104,7 +104,7 @@ impl Timer {
 
     fn timer_expire(
         internal_weak: &Weak<AtomicRefCell<TimerInternal>>,
-        host: &mut Host,
+        host: &Host,
         expire_id: u64,
     ) {
         let internal = if let Some(internal) = Weak::upgrade(internal_weak) {
@@ -147,7 +147,7 @@ impl Timer {
     fn schedule_new_expire_event(
         internal_ref: &mut TimerInternal,
         internal_ptr: Weak<AtomicRefCell<TimerInternal>>,
-        host: &mut Host,
+        host: &Host,
     ) {
         let now = Worker::current_time().unwrap();
 
@@ -168,12 +168,7 @@ impl Timer {
         host.schedule_task_at_emulated_time(task, time);
     }
 
-    pub fn arm(
-        &mut self,
-        host: &mut Host,
-        expire_time: EmulatedTime,
-        expire_interval: SimulationTime,
-    ) {
+    pub fn arm(&mut self, host: &Host, expire_time: EmulatedTime, expire_interval: SimulationTime) {
         self.magic.debug_check();
         debug_assert!(expire_time >= Worker::current_time().unwrap());
 
@@ -184,7 +179,6 @@ impl Timer {
 }
 
 pub mod export {
-    use crate::cshadow;
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
@@ -240,15 +234,15 @@ pub mod export {
     #[allow(non_snake_case)]
     pub unsafe extern "C" fn timer_arm(
         timer: *mut Timer,
-        host: *mut cshadow::Host,
+        host: *const Host,
         nextExpireTime: CEmulatedTime,
         expireInterval: CSimulationTime,
     ) {
         let timer = unsafe { timer.as_mut() }.unwrap();
-        let mut host = unsafe { Host::borrow_from_c(host) };
+        let host = unsafe { host.as_ref().unwrap() };
         let nextExpireTime = EmulatedTime::from_c_emutime(nextExpireTime).unwrap();
         let expireInterval = SimulationTime::from_c_simtime(expireInterval).unwrap();
-        timer.arm(&mut host, nextExpireTime, expireInterval)
+        timer.arm(host, nextExpireTime, expireInterval)
     }
 
     #[no_mangle]

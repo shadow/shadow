@@ -30,10 +30,11 @@ typedef enum {
 } TimeoutType;
 
 struct _SysCallHandler {
+    HostId hostId;
+
     /* We store pointers to the host, process, and thread that the syscall
      * handler is associated with. We typically need to makes calls into
      * these modules in order to handle syscalls. */
-    Host* host;
     Process* process;
     Thread* thread;
 
@@ -98,5 +99,6 @@ bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
+const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

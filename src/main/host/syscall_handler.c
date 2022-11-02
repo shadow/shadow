@@ -55,8 +55,13 @@
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
-SysCallHandler* syscallhandler_new(Host* host, Process* process,
-                                   Thread* thread) {
+const Host* _syscallhandler_getHost(const SysCallHandler* sys) {
+    const Host* host = worker_getCurrentHost();
+    utility_debugAssert(host_getID(host) == sys->hostId);
+    return host;
+}
+
+SysCallHandler* syscallhandler_new(const Host* host, Process* process, Thread* thread) {
     utility_debugAssert(host);
     utility_debugAssert(process);
     utility_debugAssert(thread);
@@ -64,7 +69,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
     *sys = (SysCallHandler){
-        .host = host,
+        .hostId = host_getID(host),
         .process = process,
         .thread = thread,
         .syscall_handler_rs = rustsyscallhandler_new(),
@@ -85,7 +90,6 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 
     MAGIC_INIT(sys);
 
-    host_ref(host);
     process_ref(process);
     thread_ref(thread);
 
@@ -116,9 +120,6 @@ static void _syscallhandler_free(SysCallHandler* sys) {
         counter_free(sys->syscall_counter);
     }
 
-    if (sys->host) {
-        host_unref(sys->host);
-    }
     if (sys->process) {
         process_unref(sys->process);
     }
@@ -265,6 +266,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     MAGIC_ASSERT(sys);
 
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(sys->process);
+    const Host* host = _syscallhandler_getHost(sys);
 
     SysCallReturn scr;
 
@@ -544,10 +546,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             UNSUPPORTED(sched_setaffinity);
 
             default: {
-                warning(
-                    "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
-                    args->number, thread_getID(sys->thread), process_getName(sys->process),
-                    host_getName(sys->host));
+                warning("Detected unsupported syscall %ld called from thread %i in process %s on "
+                        "host %s",
+                        args->number, thread_getID(sys->thread), process_getName(sys->process),
+                        host_getName(host));
                 error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
                       "unusual behavior",
                       ENOSYS, args->number);
@@ -586,7 +588,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // call will return a success  status  (normally,  the  number of bytes
     // transferred)."
     if (scr.state == SYSCALL_BLOCK &&
-        thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+        thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(host))) {
         SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
         syscallcondition_unref(blocked->cond);
         scr = syscallreturn_makeInterrupted(blocked->restartable);
@@ -599,28 +601,28 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         process_freePtrsWithoutFlushing(sys->process);
     }
 
-    if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(sys->host)) &&
+    if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(host)) &&
         process_isRunning(sys->process) &&
         (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
         CSimulationTime maxUnappliedCpuLatency =
-            shimshmem_maxUnappliedCpuLatency(host_getSharedMem(sys->host));
+            shimshmem_maxUnappliedCpuLatency(host_getSharedMem(host));
         // Increment unblocked syscall latency, but only for
         // non-shadow-syscalls, since the latter are part of Shadow's
         // internal plumbing; they shouldn't necessarily "consume" time.
         if (!syscall_num_is_shadow(args->number)) {
             shimshmem_incrementUnappliedCpuLatency(
-                host_getShimShmemLock(sys->host),
-                shimshmem_unblockedSyscallLatency(host_getSharedMem(sys->host)));
+                host_getShimShmemLock(host),
+                shimshmem_unblockedSyscallLatency(host_getSharedMem(host)));
         }
         const CSimulationTime unappliedCpuLatency =
-            shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(sys->host));
+            shimshmem_getUnappliedCpuLatency(host_getShimShmemLock(host));
         trace("Unapplied CPU latency amt=%ld max=%ld", unappliedCpuLatency, maxUnappliedCpuLatency);
         if (unappliedCpuLatency > maxUnappliedCpuLatency) {
             CEmulatedTime newTime = worker_getCurrentEmulatedTime() + unappliedCpuLatency;
-            CEmulatedTime maxTime = worker_maxEventRunaheadTime(sys->host);
+            CEmulatedTime maxTime = worker_maxEventRunaheadTime(host);
             if (newTime <= maxTime) {
                 trace("Reached unblocked syscall limit. Incrementing time");
-                shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(sys->host));
+                shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(host));
                 worker_setCurrentEmulatedTime(newTime);
             } else {
                 trace("Reached unblocked syscall limit. Yielding.");
@@ -630,7 +632,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 sys->havePendingResult = true;
                 sys->pendingResult = scr;
                 SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-                syscallcondition_setTimeout(cond, sys->host, newTime);
+                syscallcondition_setTimeout(cond, host, newTime);
                 scr = syscallreturn_makeBlocked(cond, false);
             }
         }

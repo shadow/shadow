@@ -43,7 +43,7 @@ struct _SysCallCondition {
 };
 
 static void _syscallcondition_unrefcb(void* cond_ptr);
-static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* arg);
+static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, void* arg);
 
 SysCallCondition* syscallcondition_new(Trigger trigger) {
     SysCallCondition* cond = malloc(sizeof(*cond));
@@ -85,7 +85,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     return cond;
 }
 
-void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, CEmulatedTime t) {
+void syscallcondition_setTimeout(SysCallCondition* cond, const Host* host, CEmulatedTime t) {
     MAGIC_ASSERT(cond);
 
     cond->timeoutExpiration = t;
@@ -306,7 +306,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
+static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host) {
     if (cond->timeoutExpiration != EMUTIME_INVALID &&
         cond->timeoutExpiration >= worker_getCurrentEmulatedTime()) {
         // Timed out.
@@ -323,7 +323,7 @@ static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
     return false;
 }
 
-static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
+static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
     MAGIC_ASSERT(cond);
 
@@ -401,7 +401,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* arg) {
+static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
     MAGIC_ASSERT(cond);
 
@@ -412,7 +412,7 @@ static void _syscallcondition_notifyTimeoutExpired(Host* host, void* obj, void* 
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-void syscallcondition_waitNonblock(SysCallCondition* cond, Host* host, Process* proc,
+void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, Process* proc,
                                    Thread* thread) {
     MAGIC_ASSERT(cond);
     utility_debugAssert(proc);

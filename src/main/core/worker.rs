@@ -6,9 +6,8 @@ use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::work::event::Event;
-use crate::core::work::event_queue::ThreadSafeEventQueue;
 use crate::cshadow;
-use crate::host::host::{Host, HostInfo};
+use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{ThreadId, ThreadRef};
 use crate::network::graph::{IpAssignment, RoutingInfo};
@@ -25,6 +24,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex};
+
+use super::work::event_queue::EventQueue;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -76,27 +77,24 @@ pub struct Worker {
     // when applicable. These are used to make this information available to
     // code that might not have access to the objects themselves, such as the
     // ShadowLogger.
-    //
-    // Because the HostInfo is relatively heavy-weight, we store it in an Arc.
-    // Experimentally cloning the Arc is cheaper tha copying by value.
-    active_host_info: Option<Arc<HostInfo>>,
-    active_process_info: Option<ProcessInfo>,
-    active_thread_info: Option<ThreadInfo>,
+    active_host: RefCell<Option<Box<Host>>>,
+    active_process_info: RefCell<Option<ProcessInfo>>,
+    active_thread_info: RefCell<Option<ThreadInfo>>,
 
-    clock: Clock,
+    clock: RefCell<Clock>,
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
     min_latency_cache: Cell<Option<SimulationTime>>,
 
     // A counter for all syscalls made by processes freed by this worker.
-    syscall_counter: Counter,
+    syscall_counter: RefCell<Counter>,
     // A counter for objects allocated by this worker.
-    object_alloc_counter: Counter,
+    object_alloc_counter: RefCell<Counter>,
     // A counter for objects deallocated by this worker.
-    object_dealloc_counter: Counter,
+    object_dealloc_counter: RefCell<Counter>,
 
-    next_event_time: Option<EmulatedTime>,
+    next_event_time: Cell<Option<EmulatedTime>>,
 }
 
 impl Worker {
@@ -106,61 +104,69 @@ impl Worker {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
                 shared: AtomicRef::map(WORKER_SHARED.borrow(), |x| x.as_ref().unwrap()),
-                active_host_info: None,
-                active_process_info: None,
-                active_thread_info: None,
-                clock: Clock {
+                active_host: RefCell::new(None),
+                active_process_info: RefCell::new(None),
+                active_thread_info: RefCell::new(None),
+                clock: RefCell::new(Clock {
                     now: None,
                     barrier: None,
-                },
+                }),
                 min_latency_cache: Cell::new(None),
-                object_alloc_counter: Counter::new(),
-                object_dealloc_counter: Counter::new(),
-                syscall_counter: Counter::new(),
-                next_event_time: None,
+                object_alloc_counter: RefCell::new(Counter::new()),
+                object_dealloc_counter: RefCell::new(Counter::new()),
+                syscall_counter: RefCell::new(Counter::new()),
+                next_event_time: Cell::new(None),
             }));
             assert!(res.is_ok(), "Worker already initialized");
         });
     }
 
     /// Run `f` with a reference to the current Host, or return None if there is no current Host.
-    pub fn with_active_host_info<F, R>(f: F) -> Option<R>
+    #[must_use]
+    pub fn with_active_host<F, R>(f: F) -> Option<R>
     where
-        F: FnOnce(&Arc<HostInfo>) -> R,
+        F: FnOnce(&Host) -> R,
     {
-        Worker::with(|w| w.active_host_info.as_ref().map(f)).flatten()
+        Worker::with(|w| {
+            let h = &*w.active_host.borrow();
+            match h {
+                Some(h) => Some(f(&*h)),
+                None => None,
+            }
+        })
+        .flatten()
     }
 
     /// Set the currently-active Host.
-    pub fn set_active_host(host: &Host) {
-        let info = host.info().clone();
-        let old = Worker::with_mut(|w| w.active_host_info.replace(info)).unwrap();
+    pub fn set_active_host(host: Box<Host>) {
+        let old = Worker::with(|w| w.active_host.borrow_mut().replace(host)).unwrap();
         debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Host.
-    pub fn clear_active_host() {
-        let old = Worker::with_mut(|w| w.active_host_info.take()).unwrap();
-        debug_assert!(old.is_some());
+    pub fn take_active_host() -> Box<Host> {
+        Worker::with(|w| w.active_host.borrow_mut().take())
+            .unwrap()
+            .unwrap()
     }
 
     /// Set the currently-active Process.
     pub fn set_active_process(process: &Process) {
         debug_assert_eq!(
             process.host_id(),
-            Worker::with_active_host_info(|h| h.id).unwrap()
+            Worker::with_active_host(|h| h.info().id).unwrap()
         );
         let info = ProcessInfo {
             id: process.id(),
             native_pid: process.native_pid(),
         };
-        let old = Worker::with_mut(|w| w.active_process_info.replace(info)).unwrap();
+        let old = Worker::with(|w| w.active_process_info.borrow_mut().replace(info)).unwrap();
         debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Process.
     pub fn clear_active_process() {
-        let old = Worker::with_mut(|w| w.active_process_info.take()).unwrap();
+        let old = Worker::with(|w| w.active_process_info.borrow_mut().take()).unwrap();
         debug_assert!(old.is_some());
     }
 
@@ -168,20 +174,20 @@ impl Worker {
     pub fn set_active_thread(thread: &ThreadRef) {
         debug_assert_eq!(
             thread.host_id(),
-            Worker::with_active_host_info(|h| h.id).unwrap()
+            Worker::with_active_host(|h| h.info().id).unwrap()
         );
         debug_assert_eq!(thread.process_id(), Worker::active_process_id().unwrap());
         let info = ThreadInfo {
             id: thread.id(),
             native_tid: thread.system_tid(),
         };
-        let old = Worker::with_mut(|w| w.active_thread_info.replace(info)).unwrap();
+        let old = Worker::with(|w| w.active_thread_info.borrow_mut().replace(info)).unwrap();
         debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
-        let old = Worker::with_mut(|w| w.active_thread_info.take());
+        let old = Worker::with(|w| w.active_thread_info.borrow_mut().take());
         debug_assert!(!old.is_none());
     }
 
@@ -196,35 +202,41 @@ impl Worker {
     }
 
     pub fn active_process_native_pid() -> Option<nix::unistd::Pid> {
-        Worker::with(|w| w.active_process_info.as_ref().map(|p| p.native_pid)).flatten()
+        Worker::with(|w| {
+            w.active_process_info
+                .borrow()
+                .as_ref()
+                .map(|p| p.native_pid)
+        })
+        .flatten()
     }
 
     pub fn active_process_id() -> Option<ProcessId> {
-        Worker::with(|w| w.active_process_info.as_ref().map(|p| p.id)).flatten()
+        Worker::with(|w| w.active_process_info.borrow().as_ref().map(|p| p.id)).flatten()
     }
 
     pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
-        Worker::with(|w| w.active_thread_info.as_ref().map(|t| t.native_tid)).flatten()
+        Worker::with(|w| w.active_thread_info.borrow().as_ref().map(|t| t.native_tid)).flatten()
     }
 
     pub fn set_round_end_time(t: EmulatedTime) {
-        Worker::with_mut(|w| w.clock.barrier.replace(t)).unwrap();
+        Worker::with(|w| w.clock.borrow_mut().barrier.replace(t)).unwrap();
     }
 
     fn round_end_time() -> Option<EmulatedTime> {
-        Worker::with(|w| w.clock.barrier).flatten()
+        Worker::with(|w| w.clock.borrow().barrier).flatten()
     }
 
     pub fn set_current_time(t: EmulatedTime) {
-        Worker::with_mut(|w| w.clock.now.replace(t)).unwrap();
+        Worker::with(|w| w.clock.borrow_mut().now.replace(t)).unwrap();
     }
 
     pub fn clear_current_time() {
-        Worker::with_mut(|w| w.clock.now.take()).unwrap();
+        Worker::with(|w| w.clock.borrow_mut().now.take()).unwrap();
     }
 
     pub fn current_time() -> Option<EmulatedTime> {
-        Worker::with(|w| w.clock.now).flatten()
+        Worker::with(|w| w.clock.borrow().now).flatten()
     }
 
     pub fn update_lowest_used_latency(t: SimulationTime) {
@@ -241,17 +253,18 @@ impl Worker {
     }
 
     pub fn reset_next_event_time() {
-        Worker::with_mut(|w| w.next_event_time = None).unwrap();
+        Worker::with(|w| w.next_event_time.set(None)).unwrap();
     }
 
     pub fn get_next_event_time() -> Option<EmulatedTime> {
-        Worker::with(|w| w.next_event_time).unwrap()
+        Worker::with(|w| w.next_event_time.get()).unwrap()
     }
 
     pub fn update_next_event_time(t: EmulatedTime) {
-        Worker::with_mut(|w| {
-            if w.next_event_time.is_none() || t < w.next_event_time.unwrap() {
-                w.next_event_time = Some(t);
+        Worker::with(|w| {
+            let next_event_time = w.next_event_time.get();
+            if next_event_time.is_none() || t < next_event_time.unwrap() {
+                w.next_event_time.set(Some(t));
             }
         })
         .unwrap();
@@ -270,26 +283,13 @@ impl Worker {
             .flatten()
     }
 
-    // Runs `f` with a mutable reference to the current thread's Worker. Returns
-    // None if this thread has no Worker object.
-    #[must_use]
-    fn with_mut<F, O>(f: F) -> Option<O>
-    where
-        F: FnOnce(&mut Worker) -> O,
-    {
-        WORKER
-            .try_with(|w| w.get().map(|w| f(&mut w.borrow_mut())))
-            .ok()
-            .flatten()
-    }
-
     pub fn increment_object_alloc_counter(s: &str) {
         if !USE_OBJECT_COUNTERS.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
 
-        Worker::with_mut(|w| {
-            w.object_alloc_counter.add_one(s);
+        Worker::with(|w| {
+            w.object_alloc_counter.borrow_mut().add_one(s);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
@@ -302,8 +302,8 @@ impl Worker {
             return;
         }
 
-        Worker::with_mut(|w| {
-            w.object_dealloc_counter.add_one(s);
+        Worker::with(|w| {
+            w.object_dealloc_counter.borrow_mut().add_one(s);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
@@ -312,22 +312,22 @@ impl Worker {
     }
 
     pub fn add_to_global_alloc_counters() {
-        Worker::with_mut(|w| {
+        Worker::with(|w| {
             let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
             let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
 
-            global_alloc_counter.add_counter(&w.object_alloc_counter);
-            global_dealloc_counter.add_counter(&w.object_dealloc_counter);
+            global_alloc_counter.add_counter(&w.object_alloc_counter.borrow());
+            global_dealloc_counter.add_counter(&w.object_dealloc_counter.borrow());
 
-            w.object_alloc_counter = Counter::new();
-            w.object_dealloc_counter = Counter::new();
+            *w.object_alloc_counter.borrow_mut() = Counter::new();
+            *w.object_dealloc_counter.borrow_mut() = Counter::new();
         })
         .unwrap()
     }
 
     pub fn worker_add_syscall_counts(syscall_counts: &Counter) {
-        Worker::with_mut(|w| {
-            w.syscall_counter.add_counter(syscall_counts);
+        Worker::with(|w| {
+            w.syscall_counter.borrow_mut().add_counter(syscall_counts);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
@@ -353,7 +353,7 @@ pub struct WorkerShared {
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
     pub child_pid_watcher: ChildPidWatcher,
-    pub event_queues: HashMap<HostId, Arc<ThreadSafeEventQueue>>,
+    pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
 }
@@ -443,7 +443,7 @@ impl WorkerShared {
 
     pub fn push_to_host(&self, host: HostId, event: Event) {
         let event_queue = self.event_queues.get(&host).unwrap();
-        event_queue.0.lock().unwrap().push(event);
+        event_queue.lock().unwrap().push(event);
     }
 }
 
@@ -477,7 +477,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        Worker::with_mut(|w| w.shared.dns()).unwrap()
+        Worker::with(|w| w.shared.dns()).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
@@ -489,7 +489,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        let latency = Worker::with_mut(|w| w.shared.latency(src, dst)).unwrap();
+        let latency = Worker::with(|w| w.shared.latency(src, dst)).unwrap();
         SimulationTime::to_c_simtime(latency)
     }
 
@@ -502,21 +502,21 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        Worker::with_mut(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
+        Worker::with(|w| w.shared.reliability(src, dst).unwrap()).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
+        Worker::with(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
     pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
-        Worker::with_mut(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
+        Worker::with(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
@@ -525,7 +525,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        Worker::with_mut(|w| w.shared.is_routable(src, dst)).unwrap()
+        Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
@@ -534,18 +534,18 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        Worker::with_mut(|w| w.shared.increment_packet_count(src, dst)).unwrap()
+        Worker::with(|w| w.shared.increment_packet_count(src, dst)).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_incrementPluginErrors() {
-        Worker::with_mut(|w| w.shared.increment_plugin_error_count()).unwrap()
+        Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
     }
 
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
     #[no_mangle]
     pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
-        Worker::with_mut(|w| w.shared.child_pid_watcher() as *const _).unwrap()
+        Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
     /// Takes ownership of the event.
@@ -554,7 +554,7 @@ mod export {
         assert!(!event.is_null());
         let event = unsafe { Box::from_raw(event) };
         assert!(event.time() >= Worker::round_end_time().unwrap());
-        Worker::with_mut(|w| w.shared.push_to_host(host_id, *event)).unwrap();
+        Worker::with(|w| w.shared.push_to_host(host_id, *event)).unwrap();
     }
 
     #[no_mangle]
@@ -568,7 +568,7 @@ mod export {
     /// Returns NULL if there is no live Worker.
     #[no_mangle]
     pub extern "C" fn _worker_objectAllocCounter() -> *mut Counter {
-        Worker::with_mut(|w| &mut w.object_alloc_counter as *mut Counter)
+        Worker::with(|w| &mut *w.object_alloc_counter.borrow_mut() as *mut Counter)
             .unwrap_or(std::ptr::null_mut())
     }
 
@@ -586,7 +586,7 @@ mod export {
     /// Returns NULL if there is no live Worker.
     #[no_mangle]
     pub extern "C" fn _worker_objectDeallocCounter() -> *mut Counter {
-        Worker::with_mut(|w| &mut w.object_dealloc_counter as *mut Counter)
+        Worker::with(|w| &mut *w.object_dealloc_counter.borrow_mut() as *mut Counter)
             .unwrap_or(std::ptr::null_mut())
     }
 
@@ -604,7 +604,8 @@ mod export {
     /// Returns NULL if there is no live Worker.
     #[no_mangle]
     pub extern "C" fn _worker_syscallCounter() -> *mut Counter {
-        Worker::with_mut(|w| &mut w.syscall_counter as *mut Counter).unwrap_or(std::ptr::null_mut())
+        Worker::with(|w| &mut *w.syscall_counter.borrow_mut() as *mut Counter)
+            .unwrap_or(std::ptr::null_mut())
     }
 
     /// Aggregate the given syscall counts in a worker syscall counter.
@@ -620,16 +621,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_threadID() -> i32 {
         Worker::thread_id().unwrap().0.try_into().unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_setActiveHost(host: *mut cshadow::Host) {
-        if host.is_null() {
-            Worker::clear_active_host();
-        } else {
-            let host = unsafe { Host::borrow_from_c(host) };
-            Worker::set_active_host(&host);
-        }
     }
 
     #[no_mangle]
@@ -692,12 +683,12 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::with(|w| w.clock.now.unwrap() < w.shared.bootstrap_end_time).unwrap()
+        Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn worker_isSimCompleted() -> bool {
-        Worker::with(|w| w.clock.now.unwrap() >= w.shared.sim_end_time).unwrap()
+        Worker::with(|w| w.clock.borrow().now.unwrap() >= w.shared.sim_end_time).unwrap()
     }
 
     #[no_mangle]
@@ -752,5 +743,12 @@ mod export {
         let mut global_syscall_counter = SYSCALL_COUNTER.lock().unwrap();
         global_syscall_counter.add_counter(&syscall_counter);
         *syscall_counter = Counter::new();
+    }
+
+    /// Returns a pointer to the current running host. The returned pointer is
+    /// invalidated the next time the worker switches hosts.
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentHost() -> *const Host {
+        Worker::with_active_host(|h| h as *const _).unwrap()
     }
 }

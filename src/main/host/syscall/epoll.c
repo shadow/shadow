@@ -126,7 +126,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, fd, descriptor, event, sys->host);
+    errorCode = epoll_control(epoll, op, fd, descriptor, event, _syscallhandler_getHost(sys));
 
     return syscallreturn_makeDoneI64(errorCode);
 }
@@ -174,7 +174,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
             /* Return 0; no events are ready. */
             return syscallreturn_makeDoneI64(0);
-        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+        } else if (thread_unblockedSignalPending(
+                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             return syscallreturn_makeInterrupted(false);
         } else {
             trace("No events are ready on epoll %i and we need to block", epfd);
@@ -189,7 +190,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* Set timeout, if provided. */
             if (timeout_ms > 0) {
                 syscallcondition_setTimeout(
-                    cond, sys->host,
+                    cond, _syscallhandler_getHost(sys),
                     worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
             }
 

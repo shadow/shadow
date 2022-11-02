@@ -130,7 +130,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
 
     if (errcode < 0) {
         /* This will unref/free the RegularFile. */
-        legacyfile_close((LegacyFile*)file_desc, sys->host);
+        legacyfile_close((LegacyFile*)file_desc, _syscallhandler_getHost(sys));
         legacyfile_unref(file_desc);
         return syscallreturn_makeDoneErrno(-errcode);
     }

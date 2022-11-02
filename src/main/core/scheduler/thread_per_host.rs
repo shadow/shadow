@@ -2,13 +2,14 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
+use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
 
 std::thread_local! {
     /// The host that belongs to this thread.
-    static THREAD_HOST: RefCell<Option<Host>> = RefCell::new(None);
+    static THREAD_HOST: RefCell<Option<Box<Host>>> = RefCell::new(None);
 }
 
 /// A host scheduler.
@@ -21,7 +22,7 @@ impl ThreadPerHostSched {
     /// Each logical processor is assigned many threads, and each thread is given a single host.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
     where
-        T: IntoIterator<Item = Host>,
+        T: IntoIterator<Item = Box<Host>>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let hosts = hosts.into_iter();
@@ -29,7 +30,7 @@ impl ThreadPerHostSched {
         let mut pool = ParallelismBoundedThreadPool::new(cpu_ids, hosts.len(), "shadow-worker");
 
         // for determinism, threads will take hosts from a vec rather than a queue
-        let hosts: Vec<Mutex<Option<Host>>> = hosts.map(|x| Mutex::new(Some(x))).collect();
+        let hosts: Vec<Mutex<Option<Box<Host>>>> = hosts.map(|x| Mutex::new(Some(x))).collect();
 
         // have each thread take a host and store it as a thread-local
         pool.scope(|s| {
@@ -63,7 +64,7 @@ impl ThreadPerHostSched {
 
     /// See [`crate::core::scheduler::Scheduler::join`].
     pub fn join(mut self) {
-        let hosts: Vec<Mutex<Option<Host>>> = (0..self.pool.num_threads())
+        let hosts: Vec<Mutex<Option<Box<Host>>>> = (0..self.pool.num_threads())
             .map(|_| Mutex::new(None))
             .collect();
 
@@ -76,14 +77,6 @@ impl ThreadPerHostSched {
                 });
             });
         });
-
-        // need to unref the host from the main thread so that the global allocation counter will be
-        // correctly updated
-        for host in hosts {
-            if let Some(host) = host.lock().unwrap().take() {
-                unsafe { crate::cshadow::host_unref(host.chost()) };
-            }
-        }
 
         self.pool.join();
     }
@@ -118,11 +111,11 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
             THREAD_HOST.with(|host| {
                 let mut host = host.borrow_mut();
 
-                let mut host_iter = HostIter {
-                    host: Some(host.as_mut().unwrap()),
-                };
+                let mut host_iter = HostIter { host: host.take() };
 
                 f(task_context.thread_idx, &mut host_iter);
+
+                host.replace(host_iter.host.take().unwrap());
             });
         });
     }
@@ -146,11 +139,11 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
             THREAD_HOST.with(|host| {
                 let mut host = host.borrow_mut();
 
-                let mut host_iter = HostIter {
-                    host: Some(host.as_mut().unwrap()),
-                };
+                let mut host_iter = HostIter { host: host.take() };
 
                 f(task_context.thread_idx, &mut host_iter, this_elem);
+
+                host.replace(host_iter.host.unwrap());
             });
         });
     }
@@ -158,13 +151,21 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread. For this thread-per-host scheduler,
 /// there will only ever be one host per thread.
-pub struct HostIter<'a> {
-    host: Option<&'a mut Host>,
+pub struct HostIter {
+    host: Option<Box<Host>>,
 }
 
-impl<'a> HostIter<'a> {
-    /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self) -> Option<&mut Host> {
-        self.host.take()
+impl HostIter {
+    /// See [`crate::core::scheduler::HostIter::for_each`].
+    pub fn for_each<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Host),
+    {
+        Worker::set_active_host(self.host.take().unwrap());
+        Worker::with_active_host(|host| {
+            f(host);
+        })
+        .unwrap();
+        self.host.replace(Worker::take_active_host());
     }
 }

@@ -35,7 +35,7 @@ typedef void (*StatusArgumentFreeFunc)(void* data);
  * used to specify which status bits this listener should monitor. */
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host);
+                                   StatusArgumentFreeFunc argumentFreeFunc, const Host* host);
 
 /* Increment the reference count for this listener. */
 void statuslistener_ref(StatusListener* listener);

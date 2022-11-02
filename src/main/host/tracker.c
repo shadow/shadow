@@ -127,7 +127,7 @@ static void _socketstats_free(SocketStats* ss) {
 
 static guintptr _tracker_socketHandle(LegacySocket* sock) { return (guintptr)sock; }
 
-Tracker* tracker_new(Host* host, CSimulationTime interval, LogLevel loglevel,
+Tracker* tracker_new(const Host* host, CSimulationTime interval, LogLevel loglevel,
                      LogInfoFlags loginfo) {
     Tracker* tracker = g_new0(Tracker, 1);
     MAGIC_INIT(tracker);
@@ -576,7 +576,7 @@ static void _tracker_logRAM(Tracker* tracker, LogLevel level, CSimulationTime in
         tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);
 }
 
-void tracker_heartbeat(Tracker* tracker, Host* host) {
+void tracker_heartbeat(Tracker* tracker, const Host* host) {
     MAGIC_ASSERT(tracker);
 
     /* check to see if node info is being logged */

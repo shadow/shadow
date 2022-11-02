@@ -139,7 +139,7 @@ void legacyfile_unrefWeak(gpointer data) {
     _legacyfile_free(descriptor);
 }
 
-void legacyfile_close(LegacyFile* descriptor, Host* host) {
+void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 

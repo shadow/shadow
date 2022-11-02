@@ -41,7 +41,7 @@ struct _PacketTCPHeader {
 
 const gchar* protocol_toString(ProtocolType type);
 
-Packet* packet_new(Host* host);
+Packet* packet_new(const Host* host);
 void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength);
 Packet* packet_copy(Packet* packet);

@@ -62,7 +62,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, futexVPtr);
 
     // Check if we already have a futex
-    FutexTable* ftable = host_getFutexTable(sys->host);
+    FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));
     Futex* futex = futextable_get(ftable, futexPPtr);
 
     if (_syscallhandler_wasBlocked(sys)) {
@@ -74,7 +74,8 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
             // Timeout while waiting for a wakeup
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
-        } else if (thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host))) {
+        } else if (thread_unblockedSignalPending(
+                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             trace("Futex %p has been interrupted by a signal", (void*)futexPPtr.val);
             result = -EINTR;
         } else {
@@ -111,7 +112,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         CEmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
                                                 ? timeoutSimTime + worker_getCurrentEmulatedTime()
                                                 : timeoutSimTime;
-        syscallcondition_setTimeout(cond, sys->host, timeoutEmulatedTime);
+        syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys), timeoutEmulatedTime);
     }
     return syscallreturn_makeBlocked(cond, true);
 }
@@ -122,7 +123,7 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
     PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, futexVPtr);
 
     // Lookup the futex in the futex table
-    FutexTable* ftable = host_getFutexTable(sys->host);
+    FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));
     Futex* futex = futextable_get(ftable, futexPPtr);
 
     trace("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);

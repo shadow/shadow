@@ -133,16 +133,19 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread.
 pub enum HostIter<'a, 'b> {
-    ThreadPerHost(&'a mut thread_per_host::HostIter<'b>),
+    ThreadPerHost(&'a mut thread_per_host::HostIter),
     ThreadPerCore(&'a mut thread_per_core::HostIter<'b>),
 }
 
 impl<'a, 'b> HostIter<'a, 'b> {
-    /// Get the next host.
-    pub fn next(&mut self) -> Option<&mut Host> {
+    /// For each [`Host`], calls `f` with each `Host`, and with that `Host` set as active in the [`crate::core::worker::Worker`].
+    pub fn for_each<F>(&mut self, f: F)
+    where
+        F: FnMut(&Host),
+    {
         match self {
-            Self::ThreadPerHost(x) => x.next(),
-            Self::ThreadPerCore(x) => x.next(),
+            Self::ThreadPerHost(x) => x.for_each(f),
+            Self::ThreadPerCore(x) => x.for_each(f),
         }
     }
 }

@@ -184,8 +184,8 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     /* OK, now we can check if we have anything to accept. */
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
     int accepted_fd = 0;
-    errcode = tcp_acceptServerPeer(
-        tcp_desc, sys->host, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
+    errcode = tcp_acceptServerPeer(tcp_desc, _syscallhandler_getHost(sys),
+                                   &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
     LegacyFile* legacyDesc = (LegacyFile*)tcp_desc;
     if (errcode == -EWOULDBLOCK && !(legacyfile_getFlags(legacyDesc) & O_NONBLOCK)) {
@@ -248,7 +248,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
 #endif
 
     /* make sure we have an interface at that address */
-    if (!host_doesInterfaceExist(sys->host, addr)) {
+    if (!host_doesInterfaceExist(_syscallhandler_getHost(sys), addr)) {
         debug("no network interface exists for the provided bind address");
         return -EINVAL;
     }
@@ -259,7 +259,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
     /* Get a free ephemeral port if they didn't specify one. */
     if (port == 0) {
         port =
-            host_getRandomFreePort(sys->host, ptype, addr, peerAddr, peerPort);
+            host_getRandomFreePort(_syscallhandler_getHost(sys), ptype, addr, peerAddr, peerPort);
         trace("binding to generated ephemeral port %u", ntohs(port));
     }
 
@@ -271,7 +271,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
 
     /* Make sure the port is available at this address for this protocol. */
     if (!host_isInterfaceAvailable(
-            sys->host, ptype, addr, port, peerAddr, peerPort)) {
+            _syscallhandler_getHost(sys), ptype, addr, port, peerAddr, peerPort)) {
         debug("the provided address and port %u are not available", ntohs(port));
         return -EADDRINUSE;
     }
@@ -282,7 +282,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
 
     /* set associations */
     CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-    host_associateInterface(sys->host, &compat_socket, addr);
+    host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, addr);
     return 0;
 }
 
@@ -732,9 +732,9 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             in_addr_t bindAddr =
                 (dest_ip == htonl(INADDR_LOOPBACK))
                     ? htonl(INADDR_LOOPBACK)
-                    : address_toNetworkIP(host_getDefaultAddress(sys->host));
+                    : address_toNetworkIP(host_getDefaultAddress(_syscallhandler_getHost(sys)));
             in_port_t bindPort =
-                host_getRandomFreePort(sys->host, ptype, bindAddr, 0, 0);
+                host_getRandomFreePort(_syscallhandler_getHost(sys), ptype, bindAddr, 0, 0);
 
             if (!bindPort) {
                 return syscallreturn_makeDoneErrno(EADDRNOTAVAIL);
@@ -746,7 +746,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
             /* set netiface->socket associations */
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-            host_associateInterface(sys->host, &compat_socket, bindAddr);
+            host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, bindAddr);
         }
     } else if (legacyfile_getType(desc) == DT_TCPSOCKET) {
         errcode = tcp_getConnectionError((TCP*)socket_desc);
@@ -935,7 +935,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
 
     /* make sure we will be able to route this later */
     if (peerAddr != loopbackAddr) {
-        const Address* myAddress = host_getDefaultAddress(sys->host);
+        const Address* myAddress = host_getDefaultAddress(_syscallhandler_getHost(sys));
         const Address* peerAddress = worker_resolveIPToAddress(peerAddr);
         in_addr_t myAddr = htonl(address_toHostIP(myAddress));
         if (!peerAddress || !worker_isRoutable(myAddr, peerAddr)) {
@@ -954,7 +954,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
          * use default interface unless the remote peer is on loopback */
         in_addr_t bindAddr = (loopbackAddr == peerAddr)
                                  ? loopbackAddr
-                                 : host_getDefaultIP(sys->host);
+                                 : host_getDefaultIP(_syscallhandler_getHost(sys));
         errcode = _syscallhandler_bindHelper(
             sys, socket_desc, bindAddr, 0, peerAddr, peerPort);
         if (errcode < 0) {
@@ -965,7 +965,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     /* Now we are ready to connect. */
-    errcode = legacysocket_connectToPeer(socket_desc, sys->host, peerAddr, peerPort, family);
+    errcode = legacysocket_connectToPeer(
+        socket_desc, _syscallhandler_getHost(sys), peerAddr, peerPort, family);
 
     LegacyFile* desc = (LegacyFile*)socket_desc;
     if (legacyfile_getType(desc) == DT_TCPSOCKET && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
@@ -1080,7 +1081,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
         in_addr_t peerIP = 0;
         if (legacysocket_getPeerName(socket_desc, &peerIP, NULL) &&
             peerIP != htonl(INADDR_LOOPBACK)) {
-            inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
+            inet_addr->sin_addr.s_addr = host_getDefaultIP(_syscallhandler_getHost(sys));
         }
     }
 
@@ -1214,7 +1215,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
         }
     }
 
-    tcp_enterServerMode(tcp_desc, sys->host, sys->process, backlog);
+    tcp_enterServerMode(tcp_desc, _syscallhandler_getHost(sys), sys->process, backlog);
     return syscallreturn_makeDoneU64(0);
 }
 
@@ -1303,7 +1304,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     TCP* tcp_desc = NULL;
     errcode = _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
     if (errcode >= 0) {
-        return syscallreturn_makeDoneI64(tcp_shutdown(tcp_desc, sys->host, how));
+        return syscallreturn_makeDoneI64(tcp_shutdown(tcp_desc, _syscallhandler_getHost(sys), how));
     }
 
     UDP* udp_desc = NULL;
@@ -1350,14 +1351,14 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     }
 
     /* We are all set to create the socket. */
-    guint64 recvBufSize = host_getConfiguredRecvBufSize(sys->host);
-    guint64 sendBufSize = host_getConfiguredSendBufSize(sys->host);
+    guint64 recvBufSize = host_getConfiguredRecvBufSize(_syscallhandler_getHost(sys));
+    guint64 sendBufSize = host_getConfiguredSendBufSize(_syscallhandler_getHost(sys));
 
     LegacySocket* sock_desc = NULL;
     if (type_no_flags == SOCK_STREAM) {
-        sock_desc = (LegacySocket*)tcp_new(sys->host, recvBufSize, sendBufSize);
+        sock_desc = (LegacySocket*)tcp_new(_syscallhandler_getHost(sys), recvBufSize, sendBufSize);
     } else {
-        sock_desc = (LegacySocket*)udp_new(sys->host, recvBufSize, sendBufSize);
+        sock_desc = (LegacySocket*)udp_new(_syscallhandler_getHost(sys), recvBufSize, sendBufSize);
     }
 
     int descFlags = 0;

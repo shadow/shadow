@@ -57,7 +57,8 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(cond, sys->host, worker_getCurrentEmulatedTime() + reqSimTime);
+        syscallcondition_setTimeout(
+            cond, _syscallhandler_getHost(sys), worker_getCurrentEmulatedTime() + reqSimTime);
 
         /* Block the thread, unblock when the timer expires. */
         return syscallreturn_makeBlocked(cond, false);
@@ -65,8 +66,8 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
-        utility_debugAssert(
-            thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(sys->host)));
+        utility_debugAssert(thread_unblockedSignalPending(
+            sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys))));
 
         if (remainder.val) {
             CEmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);

@@ -11,6 +11,8 @@ use crate::utility::{HostTreePointer, IsSend, IsSync};
 
 use socket::{Socket, SocketRef, SocketRefMut};
 
+use super::host::Host;
+
 pub mod descriptor_table;
 pub mod eventfd;
 pub mod pipe;
@@ -628,7 +630,7 @@ impl Descriptor {
     /// Close the descriptor. The `host` option is a legacy option for legacy file.
     pub fn close(
         self,
-        host: *mut c::Host,
+        host: &Host,
         cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
         self.file.close(host, cb_queue)
@@ -716,7 +718,7 @@ impl LegacyFileCounter {
 
     /// Close the descriptor, and if this is the last descriptor pointing to its legacy file, close
     /// the legacy file as well.
-    pub fn close(self, host: *mut c::Host) {
+    pub fn close(self, host: &Host) {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
@@ -735,7 +737,7 @@ impl CompatFile {
     /// Close the file. The `host` option is a legacy option for legacy files.
     pub fn close(
         self,
-        host: *mut c::Host,
+        host: &Host,
         cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
         match self {

@@ -132,7 +132,7 @@ const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
     utility_panic("Invalid CompatSocket type");
 }
 
-void compatsocket_pushInPacket(const CompatSocket* socket, Host* host, Packet* packet) {
+void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
             return legacysocket_pushInPacket(socket->object.as_legacy_socket, host, packet);
@@ -142,7 +142,7 @@ void compatsocket_pushInPacket(const CompatSocket* socket, Host* host, Packet* p
     utility_panic("Invalid CompatSocket type");
 }
 
-Packet* compatsocket_pullOutPacket(const CompatSocket* socket, Host* host) {
+Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
             return legacysocket_pullOutPacket(socket->object.as_legacy_socket, host);

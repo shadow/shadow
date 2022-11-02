@@ -259,7 +259,7 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 #endif // RSWLOG
 }
 
-static void _tcp_flush(TCP* tcp, Host* host);
+static void _tcp_flush(TCP* tcp, const Host* host);
 
 static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
     utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
@@ -416,7 +416,7 @@ static in_addr_t tcp_getPeerIP(TCP* tcp) {
     return ip;
 }
 
-static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
+static guint _tcp_calculateRTT(TCP* tcp, const Host* host) {
     MAGIC_ASSERT(tcp);
 
     /* addresses are in network byte order */
@@ -456,7 +456,7 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
     return rtt;
 }
 
-static gsize _tcp_computeRTTMEM(TCP* tcp, Host* host, gboolean isRMEM) {
+static gsize _tcp_computeRTTMEM(TCP* tcp, const Host* host, gboolean isRMEM) {
     gsize bw_KiBps = 0;
     if(isRMEM) {
         bw_KiBps = (gsize)host_get_bw_down_kiBps(host);
@@ -471,19 +471,19 @@ static gsize _tcp_computeRTTMEM(TCP* tcp, Host* host, gboolean isRMEM) {
     return mem;
 }
 
-static gsize _tcp_computeMaxRMEM(TCP* tcp, Host* host) {
+static gsize _tcp_computeMaxRMEM(TCP* tcp, const Host* host) {
     gsize mem = _tcp_computeRTTMEM(tcp, host, TRUE);
     mem = CLAMP(mem, CONFIG_TCP_RMEM_MAX, CONFIG_TCP_RMEM_MAX*10);
     return mem;
 }
 
-static gsize _tcp_computeMaxWMEM(TCP* tcp, Host* host) {
+static gsize _tcp_computeMaxWMEM(TCP* tcp, const Host* host) {
     gsize mem = _tcp_computeRTTMEM(tcp, host, FALSE);
     mem = CLAMP(mem, CONFIG_TCP_WMEM_MAX, CONFIG_TCP_WMEM_MAX*10);
     return mem;
 }
 
-static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
+static void _tcp_tuneInitialBufferSizes(TCP* tcp, const Host* host) {
     MAGIC_ASSERT(tcp);
 
     if(!CONFIG_TCPAUTOTUNE) {
@@ -572,7 +572,7 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
           legacysocket_getInputBufferSize(&(tcp->super)));
 }
 
-static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) {
+static void _tcp_autotuneReceiveBuffer(TCP* tcp, const Host* host, guint bytesCopied) {
     MAGIC_ASSERT(tcp);
 
     tcp->autotune.bytesCopied += (gsize)bytesCopied;
@@ -604,7 +604,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) 
     }
 }
 
-static void _tcp_autotuneSendBuffer(TCP* tcp, Host* host) {
+static void _tcp_autotuneSendBuffer(TCP* tcp, const Host* host) {
     MAGIC_ASSERT(tcp);
 
     /* Linux Kernel 3.11.6:
@@ -642,10 +642,10 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
 }
 
 // XXX declaration
-static void _tcp_runCloseTimerExpiredTask(Host* host, gpointer tcp, gpointer userData);
+static void _tcp_runCloseTimerExpiredTask(const Host* host, gpointer tcp, gpointer userData);
 static void _tcp_clearRetransmit(TCP* tcp, guint sequence);
 
-static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
+static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
     MAGIC_ASSERT(tcp);
 
     tcp->stateLast = tcp->state;
@@ -737,7 +737,7 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
     }
 }
 
-static void _tcp_runCloseTimerExpiredTask(Host* host, gpointer voidTcp, gpointer userData) {
+static void _tcp_runCloseTimerExpiredTask(const Host* host, gpointer voidTcp, gpointer userData) {
     TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
     _tcp_setState(tcp, host, TCPS_CLOSED);
@@ -843,8 +843,8 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
-static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, Host* host, enum ProtocolTCPFlags flags,
-                                               bool isEmpty) {
+static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
+                                               enum ProtocolTCPFlags flags, bool isEmpty) {
     MAGIC_ASSERT(tcp);
 
     /* packets from children of a server must appear to be coming from the server */
@@ -895,7 +895,7 @@ static Packet* _tcp_createDataPacket(TCP* tcp, Thread* thread, enum ProtocolTCPF
                                      PluginVirtualPtr payload, gsize payloadLength) {
     MAGIC_ASSERT(tcp);
 
-    Host* host = thread_getHost(thread);
+    const Host* host = thread_getHost(thread);
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
@@ -904,13 +904,13 @@ static Packet* _tcp_createDataPacket(TCP* tcp, Thread* thread, enum ProtocolTCPF
     return packet;
 }
 
-static Packet* _tcp_createControlPacket(TCP* tcp, Host* host, enum ProtocolTCPFlags flags) {
+static Packet* _tcp_createControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     return _tcp_createPacketWithoutPayload(tcp, host, flags, /*isEmpty=*/true);
 }
 
-static void _tcp_sendControlPacket(TCP* tcp, Host* host, enum ProtocolTCPFlags flags) {
+static void _tcp_sendControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     trace("%s <-> %s: sending response control packet now",
@@ -1019,10 +1019,10 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
 }
 
 // XXX forward declaration
-static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer /*TCP*/ tcp,
+static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer /*TCP*/ tcp,
                                                gpointer /*Thread*/ thread);
 
-static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, CSimulationTime now,
+static void _tcp_scheduleRetransmitTimer(TCP* tcp, const Host* host, CSimulationTime now,
                                          CSimulationTime delay) {
     MAGIC_ASSERT(tcp);
 
@@ -1047,7 +1047,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, CSimulationTime n
     }
 }
 
-static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, Host* host, CSimulationTime now) {
+static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, const Host* host, CSimulationTime now) {
     /* logic for scheduling retransmission events. we only need to schedule one if
      * we have no events that will allow us to schedule one later. */
     CSimulationTime* nextTimePtr = priorityqueue_peek(tcp->retransmit.scheduledTimerExpirations);
@@ -1061,7 +1061,7 @@ static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, Host* host, CSimulati
     _tcp_scheduleRetransmitTimer(tcp, host, now, delay);
 }
 
-static void _tcp_setRetransmitTimer(TCP* tcp, Host* host, CSimulationTime now) {
+static void _tcp_setRetransmitTimer(TCP* tcp, const Host* host, CSimulationTime now) {
     MAGIC_ASSERT(tcp);
 
     /* our retransmission timer needs to change
@@ -1090,7 +1090,7 @@ static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
     tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, CONFIG_TCP_RTO_MIN);
 }
 
-static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, CSimulationTime timestamp) {
+static void _tcp_updateRTTEstimate(TCP* tcp, const Host* host, CSimulationTime timestamp) {
     MAGIC_ASSERT(tcp);
 
     CSimulationTime now = worker_getCurrentSimulationTime();
@@ -1126,7 +1126,7 @@ static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, CSimulationTime timesta
             tcp->timing.rttVariance, tcp->retransmit.timeout);
 }
 
-static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
+static void _tcp_retransmitPacket(TCP* tcp, const Host* host, gint sequence) {
     MAGIC_ASSERT(tcp);
 
     Packet* packet = g_hash_table_lookup(tcp->retransmit.queue, GINT_TO_POINTER(sequence));
@@ -1166,7 +1166,7 @@ static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
     packet_unref(packet);
 }
 
-static void _tcp_sendShutdownFin(TCP* tcp, Host* host) {
+static void _tcp_sendShutdownFin(TCP* tcp, const Host* host) {
     MAGIC_ASSERT(tcp);
 
     gboolean sendFin = FALSE;
@@ -1189,7 +1189,7 @@ static void _tcp_sendShutdownFin(TCP* tcp, Host* host) {
     }
 }
 
-void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packet) {
+void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     CSimulationTime now = worker_getCurrentSimulationTime();
@@ -1220,7 +1220,7 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packe
     }
 }
 
-static void _tcp_flush(TCP* tcp, Host* host) {
+static void _tcp_flush(TCP* tcp, const Host* host) {
     MAGIC_ASSERT(tcp);
 
     /* make sure our information is up to date */
@@ -1383,7 +1383,8 @@ static void _tcp_flush(TCP* tcp, Host* host) {
     }
 }
 
-static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpointer unused) {
+static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidTcp,
+                                               gpointer unused) {
     TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
 
@@ -1587,7 +1588,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 }
 
 /* Address and port must be in network byte order. */
-static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
+static gint _tcp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
@@ -1611,7 +1612,7 @@ static gint _tcp_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, i
     return -EINPROGRESS;
 }
 
-void tcp_enterServerMode(TCP* tcp, Host* host, Process* process, gint backlog) {
+void tcp_enterServerMode(TCP* tcp, const Host* host, Process* process, gint backlog) {
     MAGIC_ASSERT(tcp);
 
     /* we are a server ready to listen, build our server state */
@@ -1628,7 +1629,7 @@ void tcp_updateServerBacklog(TCP* tcp, gint backlog) {
 }
 
 /* Address and port must be in network byte order. */
-gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
+gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* port,
                           gint* acceptedHandle) {
     MAGIC_ASSERT(tcp);
     utility_debugAssert(acceptedHandle);
@@ -1804,7 +1805,8 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
     return flags;
 }
 
-TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Host* host, Packet* packet, PacketTCPHeader* header) {
+TCPProcessFlags _tcp_ackProcessing(TCP* tcp, const Host* host, Packet* packet,
+                                   PacketTCPHeader* header) {
     MAGIC_ASSERT(tcp);
 
     trace("processing acks");
@@ -1914,7 +1916,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
           &tcp->super.super.super);
 }
 
-static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer userData) {
+static void _tcp_sendACKTaskCallback(const Host* host, gpointer voidTcp, gpointer userData) {
     TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
     tcp->send.delayedACKIsScheduled = FALSE;
@@ -1928,7 +1930,7 @@ static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer user
 }
 
 /* return TRUE if the packet should be retransmitted */
-static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet) {
+static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -2288,7 +2290,7 @@ static void _tcp_processPacket(LegacySocket* socket, Host* host, Packet* packet)
     trace("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
-static void _tcp_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
+static void _tcp_dropPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -2371,7 +2373,7 @@ static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirt
     return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
-static void _tcp_sendWindowUpdate(Host* host, gpointer voidTcp, gpointer data) {
+static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer data) {
     TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
     trace("%s <-> %s: receive window opened, advertising the new "
@@ -2390,7 +2392,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
     MAGIC_ASSERT(tcp);
 
-    Host* host = thread_getHost(thread);
+    const Host* host = thread_getHost(thread);
 
     /*
      * TODO
@@ -2605,7 +2607,7 @@ static void _tcp_free(LegacyFile* descriptor) {
     worker_count_deallocation(TCP);
 }
 
-static void _tcp_close(LegacyFile* descriptor, Host* host) {
+static void _tcp_close(LegacyFile* descriptor, const Host* host) {
     TCP* tcp = _tcp_fromLegacyFile(descriptor);
     MAGIC_ASSERT(tcp);
 
@@ -2656,7 +2658,7 @@ static void _tcp_close(LegacyFile* descriptor, Host* host) {
     }
 }
 
-gint tcp_shutdown(TCP* tcp, Host* host, gint how) {
+gint tcp_shutdown(TCP* tcp, const Host* host, gint how) {
     MAGIC_ASSERT(tcp);
 
     if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED ||
@@ -2697,7 +2699,7 @@ SocketFunctionTable tcp_functions = {_tcp_close,
                                      _tcp_dropPacket,
                                      MAGIC_VALUE};
 
-TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
+TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 

@@ -1,6 +1,7 @@
 use crossbeam::queue::ArrayQueue;
 
 use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
+use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -9,8 +10,8 @@ use super::CORE_AFFINITY;
 pub struct ThreadPerCoreSched {
     pool: UnboundedThreadPool,
     num_threads: usize,
-    thread_hosts: Vec<ArrayQueue<Host>>,
-    thread_hosts_processed: Vec<ArrayQueue<Host>>,
+    thread_hosts: Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts_processed: Vec<ArrayQueue<Box<Host>>>,
     hosts_need_swap: bool,
 }
 
@@ -19,7 +20,7 @@ impl ThreadPerCoreSched {
     /// is assigned many hosts, and threads may steal hosts from other threads.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
     where
-        T: IntoIterator<Item = Host>,
+        T: IntoIterator<Item = Box<Host>>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let hosts = hosts.into_iter();
@@ -107,13 +108,6 @@ impl ThreadPerCoreSched {
     /// See [`crate::core::scheduler::Scheduler::join`].
     pub fn join(self) {
         self.pool.join();
-
-        // when the host is in rust we won't need to do this
-        for host_queue in self.thread_hosts.iter() {
-            while let Some(host) = host_queue.pop() {
-                unsafe { crate::cshadow::host_unref(host.chost()) };
-            }
-        }
     }
 }
 
@@ -122,8 +116,8 @@ pub struct SchedulerScope<'sched, 'pool, 'scope>
 where
     'sched: 'scope,
 {
-    thread_hosts: &'sched Vec<ArrayQueue<Host>>,
-    thread_hosts_processed: &'sched Vec<ArrayQueue<Host>>,
+    thread_hosts: &'sched Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts_processed: &'sched Vec<ArrayQueue<Box<Host>>>,
     hosts_need_swap: &'sched mut bool,
     runner: TaskRunner<'pool, 'scope>,
 }
@@ -141,14 +135,9 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_from: &self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
-                thread_index_iter_offset: 0,
-                current_host: None,
             };
 
             f(i, &mut host_iter);
-
-            assert!(host_iter.current_host.is_none());
-            assert!(host_iter.next().is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -169,14 +158,9 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
                 thread_hosts_from: &self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
-                thread_index_iter_offset: 0,
-                current_host: None,
             };
 
             f(i, &mut host_iter, this_elem);
-
-            assert!(host_iter.current_host.is_none());
-            assert!(host_iter.next().is_none());
         });
 
         *self.hosts_need_swap = true;
@@ -187,24 +171,20 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 /// the iterator may steal hosts from other threads.
 pub struct HostIter<'a> {
     /// Queues to take hosts from.
-    thread_hosts_from: &'a [ArrayQueue<Host>],
+    thread_hosts_from: &'a [ArrayQueue<Box<Host>>],
     /// The queue to add hosts to when done with them.
-    thread_hosts_to: &'a ArrayQueue<Host>,
+    thread_hosts_to: &'a ArrayQueue<Box<Host>>,
     /// The index of this thread. This is the first queue of `thread_hosts_from` that we take hosts
     /// from.
     this_thread_index: usize,
-    /// The thread offset of our iterator; stored so that we can resume where we left off.
-    thread_index_iter_offset: usize,
-    /// The host that was last returned from `next()`.
-    current_host: Option<Host>,
 }
 
 impl<'a> HostIter<'a> {
-    /// See [`crate::core::scheduler::HostIter::next`].
-    pub fn next(&mut self) -> Option<&mut Host> {
-        self.return_current_host();
-
-        // a generator would be nice here...
+    /// See [`crate::core::scheduler::HostIter::for_each`].
+    pub fn for_each<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Host),
+    {
         for from_queue in self
             .thread_hosts_from
             .iter()
@@ -212,34 +192,17 @@ impl<'a> HostIter<'a> {
             // start from the current thread index
             .skip(self.this_thread_index)
             .take(self.thread_hosts_from.len())
-            // skip to where we last left off
-            .skip(self.thread_index_iter_offset)
         {
-            if let Some(host) = from_queue.pop() {
-                // yield the host, but keep ownership so that we can add it back to the proper
-                // queue later
-                self.current_host = Some(host);
-                return self.current_host.as_mut();
+            while let Some(host) = from_queue.pop() {
+                Worker::set_active_host(host);
+                Worker::with_active_host(|host| {
+                    f(host);
+                })
+                .unwrap();
+                self.thread_hosts_to
+                    .push(Worker::take_active_host())
+                    .unwrap();
             }
-
-            // no hosts remaining in this queue, so keep our persistent offset up-to-date
-            self.thread_index_iter_offset += 1;
         }
-
-        None
-    }
-
-    /// Returns the currently stored host back to a queue.
-    fn return_current_host(&mut self) {
-        if let Some(current_host) = self.current_host.take() {
-            self.thread_hosts_to.push(current_host).unwrap();
-        }
-    }
-}
-
-impl<'a> std::ops::Drop for HostIter<'a> {
-    fn drop(&mut self) {
-        // make sure we don't own and drop a host
-        self.return_current_host();
     }
 }

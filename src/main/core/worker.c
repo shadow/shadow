@@ -21,7 +21,7 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
-CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
+CEmulatedTime worker_maxEventRunaheadTime(const Host* host) {
     utility_debugAssert(host);
     CEmulatedTime max = emutime_add_simtime(EMUTIME_SIMULATION_START, _worker_getRoundEndTime());
 
@@ -34,7 +34,7 @@ CEmulatedTime worker_maxEventRunaheadTime(Host* host) {
 }
 
 // TODO: move to Router::_route_incoming_packet
-static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
+static void _worker_runDeliverPacketTask(const Host* host, gpointer voidPacket, gpointer userData) {
     Packet* packet = voidPacket;
     Router* router = host_getUpstreamRouter(host);
     utility_debugAssert(router != NULL);
@@ -50,7 +50,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 }
 
 // TODO: move to Router::_route_outgoing_packet
-void worker_sendPacket(Host* srcHost, Packet* packet) {
+void worker_sendPacket(const Host* srcHost, Packet* packet) {
     utility_debugAssert(packet != NULL);
 
     if (worker_isSimCompleted()) {
@@ -73,8 +73,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     /* check if network reliability forces us to 'drop' the packet */
     gdouble reliability = worker_getReliability(srcIP, dstIP);
 
-    Random* random = host_getRandom(srcHost);
-    gdouble chance = random_nextDouble(random);
+    gdouble chance = host_rngDouble(srcHost);
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */

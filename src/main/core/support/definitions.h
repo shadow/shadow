@@ -8,7 +8,7 @@
 
 // TODO put into a shd-types.h file
 typedef struct _Process Process;
-typedef struct _Host Host;
+typedef struct Host Host;
 
 /**
  * The start of our random port range in host order, used if application doesn't

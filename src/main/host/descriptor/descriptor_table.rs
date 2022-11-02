@@ -143,7 +143,7 @@ impl DescriptorTable {
 
 mod export {
     use super::*;
-    use crate::host::descriptor::CallbackQueue;
+    use crate::host::{descriptor::CallbackQueue, host::Host};
     use libc::c_int;
 
     /// Create an object that can be used to store all descriptors created by a
@@ -193,9 +193,10 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn descriptortable_removeAndCloseAll(
         table: *mut DescriptorTable,
-        host: *mut c::Host,
+        host: *const Host,
     ) {
         let table = unsafe { table.as_mut().unwrap() };
+        let host = unsafe { host.as_ref().unwrap() };
 
         CallbackQueue::queue_and_run(|cb_queue| {
             for desc in table.remove_all() {

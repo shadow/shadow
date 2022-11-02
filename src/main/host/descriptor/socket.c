@@ -77,7 +77,7 @@ static void _legacysocket_free(LegacyFile* descriptor) {
     socket->vtable->free((LegacyFile*)socket);
 }
 
-static void _legacysocket_close(LegacyFile* descriptor, Host* host) {
+static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
     LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
@@ -112,7 +112,7 @@ TransportFunctionTable socket_functions = {
     _legacysocket_close,        _legacysocket_cleanup,         _legacysocket_free,
     _legacysocket_sendUserData, _legacysocket_receiveUserData, MAGIC_VALUE};
 
-void legacysocket_init(LegacySocket* socket, Host* host, SocketFunctionTable* vtable,
+void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTable* vtable,
                        LegacyFileType type, guint receiveBufferSize, guint sendBufferSize) {
     utility_debugAssert(socket && vtable);
 
@@ -150,8 +150,8 @@ gboolean legacysocket_isFamilySupported(LegacySocket* socket, sa_family_t family
     return socket->vtable->isFamilySupported(socket, family);
 }
 
-gint legacysocket_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, in_port_t port,
-                                sa_family_t family) {
+gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t ip,
+                                in_port_t port, sa_family_t family) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -163,14 +163,14 @@ gint legacysocket_connectToPeer(LegacySocket* socket, Host* host, in_addr_t ip, 
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
 }
 
-void legacysocket_pushInPacket(LegacySocket* socket, Host* host, Packet* packet) {
+void legacysocket_pushInPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
     socket->vtable->process(socket, host, packet);
 }
 
-void legacysocket_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
+void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     socket->vtable->dropPacket(socket, host, packet);
@@ -178,7 +178,7 @@ void legacysocket_dropPacket(LegacySocket* socket, Host* host, Packet* packet) {
 
 /* functions implemented by socket */
 
-Packet* legacysocket_pullOutPacket(LegacySocket* socket, Host* host) {
+Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
     return legacysocket_removeFromOutputBuffer(socket, host);
 }
 
@@ -345,7 +345,7 @@ void legacysocket_setOutputBufferSize(LegacySocket* socket, gsize newSize) {
     }
 }
 
-gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet* packet) {
+gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
@@ -375,7 +375,7 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, Host* host, Packet*
     return TRUE;
 }
 
-Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, Host* host) {
+Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* host) {
     MAGIC_ASSERT(socket);
 
     /* see if we have any packets */
@@ -419,7 +419,7 @@ gsize _legacysocket_getOutputBufferSpaceIncludingTCP(LegacySocket* socket) {
     return space;
 }
 
-gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet* packet) {
+gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
@@ -460,7 +460,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, Host* host, Packet
     return TRUE;
 }
 
-Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, Host* host) {
+Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* host) {
     MAGIC_ASSERT(socket);
 
     /* see if we have any packets */

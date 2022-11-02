@@ -112,7 +112,7 @@ Packet* packet_new_inner(guint hostID, guint64 packetID) {
     return packet;
 }
 
-Packet* packet_new(Host* host) {
+Packet* packet_new(const Host* host) {
     guint hostID = host_getID(host);
     guint64 packetID = host_getNewPacketID(host);
     Packet* packet = packet_new_inner(hostID, packetID);

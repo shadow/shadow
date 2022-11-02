@@ -66,7 +66,7 @@ struct _NetworkInterface {
 };
 
 /* forward declarations */
-static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src);
+static void _networkinterface_sendPackets(NetworkInterface* interface, const Host* src);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     utility_debugAssert(taggedSocketPtr != NULL);
@@ -123,7 +123,7 @@ static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
     return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
 }
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host,
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
                                                  uint64_t bwDownKiBps, uint64_t bwUpKiBps) {
     MAGIC_ASSERT(interface);
     // Set size and refill rates for token buckets.
@@ -249,7 +249,7 @@ static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
-static void _networkinterface_process_packet_in(Host* host, NetworkInterface* interface,
+static void _networkinterface_process_packet_in(const Host* host, NetworkInterface* interface,
                                                 Packet* packet) {
     MAGIC_ASSERT(interface);
 
@@ -311,7 +311,7 @@ static void _networkinterface_process_packet_in(Host* host, NetworkInterface* in
     }
 }
 
-static void _networkinterface_local_packet_arrived_CB(Host* host, gpointer voidInterface,
+static void _networkinterface_local_packet_arrived_CB(const Host* host, gpointer voidInterface,
                                                       gpointer voidPacket) {
     _networkinterface_process_packet_in(host, voidInterface, voidPacket);
 }
@@ -320,7 +320,7 @@ static uint64_t _networkinterface_packet_tokens(const Packet* packet) {
     return (uint64_t)packet_getTotalSize(packet);
 }
 
-static void _networkinterface_continue_receiving_CB(Host* host, gpointer voidInterface,
+static void _networkinterface_continue_receiving_CB(const Host* host, gpointer voidInterface,
                                                     gpointer userData) {
     NetworkInterface* interface = voidInterface;
     MAGIC_ASSERT(interface);
@@ -328,7 +328,7 @@ static void _networkinterface_continue_receiving_CB(Host* host, gpointer voidInt
     networkinterface_receivePackets(interface, host);
 }
 
-void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
+void networkinterface_receivePackets(NetworkInterface* interface, const Host* host) {
     MAGIC_ASSERT(interface);
 
     /* we can only receive packets from the upstream router if we actually have one.
@@ -376,7 +376,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
     }
 }
 
-static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket* socket,
+static void _networkinterface_updatePacketHeader(const Host* host, const CompatSocket* socket,
                                                  Packet* packet) {
     if (socket->type == CST_LEGACY_SOCKET) {
         LegacyFile* descriptor = (LegacyFile*)socket->object.as_legacy_socket;
@@ -390,7 +390,7 @@ static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket*
 }
 
 /* round robin queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, Host* host,
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, const Host* host,
                                                   LegacySocket** socketOut) {
     Packet* packet = NULL;
 
@@ -431,8 +431,8 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, H
 }
 
 /* first-in-first-out queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface, Host* host,
-                                                       LegacySocket** socketOut) {
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface,
+                                                       const Host* host, LegacySocket** socketOut) {
     /* use packet priority field to select based on application ordering.
      * this is really a simplification of prioritizing on timestamps. */
     Packet* packet = NULL;
@@ -473,7 +473,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
     return packet;
 }
 
-static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, Host* host,
+static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, const Host* host,
                                                      LegacySocket** socketOut) {
     MAGIC_ASSERT(interface);
     switch (interface->qdisc) {
@@ -512,7 +512,7 @@ static const Packet* _networkinterface_peek_next_packet_out(NetworkInterface* in
     }
 }
 
-static void _networkinterface_continue_sending_CB(Host* host, gpointer voidInterface,
+static void _networkinterface_continue_sending_CB(const Host* host, gpointer voidInterface,
                                                   gpointer userData) {
     NetworkInterface* interface = voidInterface;
     MAGIC_ASSERT(interface);
@@ -520,7 +520,7 @@ static void _networkinterface_continue_sending_CB(Host* host, gpointer voidInter
     _networkinterface_sendPackets(interface, host);
 }
 
-static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src) {
+static void _networkinterface_sendPackets(NetworkInterface* interface, const Host* src) {
     MAGIC_ASSERT(interface);
 
     gboolean is_bootstrapping = worker_isBootstrapActive();
@@ -592,7 +592,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
     }
 }
 
-void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
+void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
                                 const CompatSocket* socket) {
     MAGIC_ASSERT(interface);
 

@@ -74,12 +74,11 @@ ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
 ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
 
-static gchar* _process_outputFileName(Process* proc, const char* type);
+static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type);
 static void _process_check(Process* proc);
 
 struct _Process {
-    /* Host owning this process */
-    Host* host;
+    HostId hostId;
 
     /* unique id of the program that this process should run */
     guint processID;
@@ -167,6 +166,12 @@ struct _Process {
 static void _unref_process_cb(gpointer data);
 static void _unref_thread_cb(gpointer data);
 
+static const Host* _host(Process* proc) {
+    const Host* host = worker_getCurrentHost();
+    utility_debugAssert(host_getID(host) == proc->hostId);
+    return host;
+}
+
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
@@ -181,9 +186,9 @@ ShimShmemProcess* process_getSharedMem(Process* proc) {
 // FIXME: still needed? Time is now updated more granularly in the Thread code
 // when xferring control to/from shim.
 static void _process_setSharedTime(Process* proc) {
-    shimshmem_setMaxRunaheadTime(
-        host_getShimShmemLock(proc->host), worker_maxEventRunaheadTime(proc->host));
-    shimshmem_setEmulatedTime(host_getSharedMem(proc->host), worker_getCurrentEmulatedTime());
+    const Host* host = _host(proc);
+    shimshmem_setMaxRunaheadTime(host_getShimShmemLock(host), worker_maxEventRunaheadTime(host));
+    shimshmem_setEmulatedTime(host_getSharedMem(host), worker_getCurrentEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
@@ -294,7 +299,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
         // is dead. Leave it pending for the next thread in the process to
         // flush.
 
-        FutexTable* ftable = host_getFutexTable(process->host);
+        FutexTable* ftable = host_getFutexTable(_host(process));
         utility_debugAssert(ftable);
         Futex* futex =
             futextable_get(ftable, process_getPhysicalAddress(process, clear_child_tid_pvp));
@@ -403,7 +408,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
         }
     }
 
-    gchar* fileName = _process_outputFileName(proc, "exitcode");
+    gchar* fileName = _process_outputFileName(proc, _host(proc), "exitcode");
     FILE* exitcodeFile = fopen(fileName, "we");
     g_free(fileName);
 
@@ -477,7 +482,7 @@ static void _process_check(Process* proc) {
 #endif
 
     descriptortable_shutdownHelper(proc->descTable);
-    descriptortable_removeAndCloseAll(proc->descTable, proc->host);
+    descriptortable_removeAndCloseAll(proc->descTable, _host(proc));
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -494,9 +499,8 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc);
 }
 
-static gchar* _process_outputFileName(Process* proc, const char* type) {
-    return g_strdup_printf(
-        "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
+static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type) {
+    return g_strdup_printf("%s/%s.%s", host_getDataPath(host), proc->processName->str, type);
 }
 
 static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName,
@@ -542,19 +546,19 @@ static void _process_start(Process* proc) {
     _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null", O_RDONLY);
 
     // Set up stdout
-    gchar* stdoutFileName = _process_outputFileName(proc, "stdout");
+    gchar* stdoutFileName = _process_outputFileName(proc, _host(proc), "stdout");
     proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName, O_WRONLY);
     legacyfile_ref((LegacyFile*)proc->stdoutFile);
     g_free(stdoutFileName);
 
     // Set up stderr
-    gchar* stderrFileName = _process_outputFileName(proc, "stderr");
+    gchar* stderrFileName = _process_outputFileName(proc, _host(proc), "stderr");
     proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName, O_WRONLY);
     legacyfile_ref((LegacyFile*)proc->stderrFile);
     g_free(stderrFileName);
 
     if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
-        gchar* straceFileName = _process_outputFileName(proc, "strace");
+        gchar* straceFileName = _process_outputFileName(proc, _host(proc), "strace");
         proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         g_free(straceFileName);
@@ -562,7 +566,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread* mainThread = thread_new(proc->host, proc, tid);
+    Thread* mainThread = thread_new(_host(proc), proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
@@ -631,7 +635,8 @@ static void _process_start(Process* proc) {
     process_continue(proc, mainThread);
 }
 
-static void _start_thread_task(Host* host, gpointer callbackObject, gpointer callbackArgument) {
+static void _start_thread_task(const Host* host, gpointer callbackObject,
+                               gpointer callbackArgument) {
     Process* process = callbackObject;
     Thread* thread = callbackArgument;
     process_continue(process, thread);
@@ -654,9 +659,10 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    TaskRef* task = taskref_new_bound(host_getID(proc->host), _start_thread_task, proc, thread,
-                                      _unref_process_cb, _unref_thread_cb);
-    host_scheduleTaskWithDelay(proc->host, task, 0);
+    const Host* host = _host(proc);
+    TaskRef* task = taskref_new_bound(
+        host_getID(host), _start_thread_task, proc, thread, _unref_process_cb, _unref_thread_cb);
+    host_scheduleTaskWithDelay(host, task, 0);
     taskref_drop(task);
 }
 
@@ -692,7 +698,7 @@ void process_continue(Process* proc, Thread* thread) {
 
     _process_setSharedTime(proc);
 
-    shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(proc->host));
+    shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
     proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
     proc->plugin.isExecuting = FALSE;
@@ -749,32 +755,31 @@ void process_stop(Process* proc) {
     _process_check(proc);
 }
 
-static void _process_runStartTask(Host* host, gpointer proc, gpointer nothing) {
+static void _process_runStartTask(const Host* host, gpointer proc, gpointer nothing) {
     _process_start(proc);
 }
 
-static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
+static void _process_runStopTask(const Host* host, gpointer proc, gpointer nothing) {
     process_stop(proc);
 }
 
-void process_schedule(Process* proc) {
+void process_schedule(Process* proc, const Host* host) {
     MAGIC_ASSERT(proc);
 
     if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
         process_ref(proc);
         TaskRef* startProcessTask =
-            taskref_new_bound(host_getID(proc->host), _process_runStartTask, proc, NULL,
+            taskref_new_bound(proc->hostId, _process_runStartTask, proc, NULL,
                               (TaskObjectFreeFunc)process_unref, NULL);
-        host_scheduleTaskAtEmulatedTime(proc->host, startProcessTask, proc->startTime);
+        host_scheduleTaskAtEmulatedTime(host, startProcessTask, proc->startTime);
         taskref_drop(startProcessTask);
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
         process_ref(proc);
-        TaskRef* stopProcessTask =
-            taskref_new_bound(host_getID(proc->host), _process_runStopTask, proc, NULL,
-                              (TaskObjectFreeFunc)process_unref, NULL);
-        host_scheduleTaskAtEmulatedTime(proc->host, stopProcessTask, proc->stopTime);
+        TaskRef* stopProcessTask = taskref_new_bound(proc->hostId, _process_runStopTask, proc, NULL,
+                                                     (TaskObjectFreeFunc)process_unref, NULL);
+        host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
         taskref_drop(stopProcessTask);
     }
 }
@@ -795,7 +800,7 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-static void _process_itimer_real_expiration(Host* host, void* voidProcess, void* _unused) {
+static void _process_itimer_real_expiration(const Host* host, void* voidProcess, void* _unused) {
     Process* process = voidProcess;
     MAGIC_ASSERT(process);
 
@@ -808,15 +813,14 @@ static void _process_itimer_real_expiration(Host* host, void* voidProcess, void*
     process_signal(process, NULL, &siginfo);
 }
 
-Process* process_new(Host* host, guint processID, CSimulationTime startTime,
+Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
                      const gchar* pluginPath, gchar** envv, const gchar* const* argv,
                      bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
-    proc->host = host;
-    host_ref(proc->host);
+    proc->hostId = host_getID(host);
 
     proc->processID = processID;
 
@@ -872,7 +876,7 @@ Process* process_new(Host* host, guint processID, CSimulationTime startTime,
 
     /* add log file to env */
     {
-        gchar* logFileName = _process_outputFileName(proc, "shimlog");
+        gchar* logFileName = _process_outputFileName(proc, host, "shimlog");
         envv = g_environ_setenv(envv, "SHADOW_LOG_FILE", logFileName, TRUE);
         g_free(logFileName);
     }
@@ -969,11 +973,6 @@ static void _process_free(Process* proc) {
         descriptortable_free(proc->descTable);
     }
 
-    /* And we no longer need to access the host. */
-    if (proc->host) {
-        host_unref(proc->host);
-    }
-
     if (proc->itimerReal) {
         timer_drop(proc->itimerReal);
         proc->itimerReal = NULL;
@@ -1016,8 +1015,7 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
 
 HostId process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->host);
-    return host_getID(proc->host);
+    return proc->hostId;
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {
@@ -1276,8 +1274,10 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
         return;
     }
 
+    const Host* host = _host(process);
+
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
-        host_getShimShmemLock(process->host), process_getSharedMem(process), siginfo->si_signo);
+        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo);
     if (action.u.ksa_handler == SIG_IGN ||
         (action.u.ksa_handler == SIG_DFL &&
          shd_defaultAction(siginfo->si_signo) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
@@ -1286,7 +1286,7 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
     }
 
     shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
-        host_getShimShmemLock(process->host), process_getSharedMem(process));
+        host_getShimShmemLock(host), process_getSharedMem(process));
 
     if (shd_sigismember(&pending_signals, siginfo->si_signo)) {
         // Signal is already pending. From signal(7):In the case where a standard signal is already
@@ -1297,13 +1297,13 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 
     shd_sigaddset(&pending_signals, siginfo->si_signo);
     shimshmem_setProcessPendingSignals(
-        host_getShimShmemLock(process->host), process_getSharedMem(process), pending_signals);
-    shimshmem_setProcessSiginfo(host_getShimShmemLock(process->host), process_getSharedMem(process),
-                                siginfo->si_signo, siginfo);
+        host_getShimShmemLock(host), process_getSharedMem(process), pending_signals);
+    shimshmem_setProcessSiginfo(
+        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo, siginfo);
 
     if (currentRunningThread != NULL && thread_getProcess(currentRunningThread) == process) {
         shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
-            host_getShimShmemLock(process->host), thread_sharedMem(currentRunningThread));
+            host_getShimShmemLock(host), thread_sharedMem(currentRunningThread));
         if (!shd_sigismember(&blocked_signals, siginfo->si_signo)) {
             // Target process is this process, and current thread hasn't blocked
             // the signal.  It will be delivered to this thread when it resumes.
@@ -1311,7 +1311,7 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
         }
     }
 
-    _process_interruptWithSignal(process, host_getShimShmemLock(process->host), siginfo->si_signo);
+    _process_interruptWithSignal(process, host_getShimShmemLock(host), siginfo->si_signo);
 }
 
 Timer* process_getRealtimeTimer(Process* process) {

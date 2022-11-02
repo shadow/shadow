@@ -13,7 +13,7 @@
 
 typedef struct _UDP UDP;
 
-UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize);
+UDP* udp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize);
 gint udp_shutdown(UDP* udp, gint how);
 
 #endif /* SHD_UDP_H_ */

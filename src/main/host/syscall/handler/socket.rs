@@ -126,7 +126,8 @@ impl SyscallHandler {
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
-        Socket::bind(socket, addr.as_ref(), ctx.host.random())
+        ctx.host
+            .with_random_mut(|rng| Socket::bind(socket, addr.as_ref(), rng))
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
@@ -819,11 +820,11 @@ impl SyscallHandler {
                     ctx.process
                         .deregister_descriptor(fd_1)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                     ctx.process
                         .deregister_descriptor(fd_2)
                         .unwrap()
-                        .close(ctx.host.chost(), cb_queue);
+                        .close(ctx.host, cb_queue);
                 });
                 Err(e.into())
             }

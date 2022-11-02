@@ -17,12 +17,7 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn new(
-        task: TaskRef,
-        time: EmulatedTime,
-        src_host: &mut Host,
-        dst_host_id: HostId,
-    ) -> Self {
+    pub fn new(task: TaskRef, time: EmulatedTime, src_host: &Host, dst_host_id: HostId) -> Self {
         Self {
             magic: Magic::new(),
             task,
@@ -34,7 +29,7 @@ impl Event {
         }
     }
 
-    pub fn execute(self, host: &mut Host) {
+    pub fn execute(self, host: &Host) {
         self.magic.debug_check();
 
         // make sure we're executing on the correct host
@@ -111,24 +106,23 @@ impl PartialOrd for Event {
 mod export {
     use super::*;
 
-    use crate::cshadow as c;
     use shadow_shim_helper_rs::simulation_time::{CSimulationTime, SimulationTime};
 
     #[no_mangle]
     pub unsafe extern "C" fn event_new(
         task_ref: *mut TaskRef,
         time: CSimulationTime,
-        src_host: *mut c::Host,
+        src_host: *const Host,
         dst_host_id: HostId,
     ) -> *mut Event {
         let task_ref = unsafe { task_ref.as_mut() }.unwrap();
-        let mut src_host = unsafe { Host::borrow_from_c(src_host) };
+        let src_host = unsafe { src_host.as_ref().unwrap() };
         let time = EmulatedTime::from_abs_simtime(SimulationTime::from_c_simtime(time).unwrap());
 
         Box::into_raw(Box::new(Event::new(
             task_ref.clone(),
             time,
-            &mut src_host,
+            src_host,
             dst_host_id,
         )))
     }
@@ -141,12 +135,12 @@ mod export {
 
     /// Execute the event. **This frees the event.**
     #[no_mangle]
-    pub unsafe extern "C" fn event_executeAndFree(event: *mut Event, host: *mut c::Host) {
+    pub unsafe extern "C" fn event_executeAndFree(event: *mut Event, host: *const Host) {
         assert!(!event.is_null());
         let event = unsafe { Box::from_raw(event) };
-        let mut host = unsafe { Host::borrow_from_c(host) };
+        let host = unsafe { host.as_ref().unwrap() };
 
-        event.execute(&mut host);
+        event.execute(host);
     }
 
     #[no_mangle]

@@ -53,7 +53,7 @@ int status_listener_compare(const void* ptr_1, const void* ptr_2) {
 
 StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
                                    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-                                   StatusArgumentFreeFunc argumentFreeFunc, Host* host) {
+                                   StatusArgumentFreeFunc argumentFreeFunc, const Host* host) {
     StatusListener* listener = malloc(sizeof(StatusListener));
 
     *listener =

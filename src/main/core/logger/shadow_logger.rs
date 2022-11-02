@@ -299,7 +299,7 @@ impl ShadowLogger {
 
 impl Log for ShadowLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        let filter = match Worker::with_active_host_info(|host| host.log_level) {
+        let filter = match Worker::with_active_host(|host| host.info().log_level) {
             Some(Some(level)) => level,
             _ => log::max_level(),
         };
@@ -313,7 +313,7 @@ impl Log for ShadowLogger {
 
         let message = std::fmt::format(*record.args());
 
-        let host_info = Worker::with_active_host_info(|host| host.clone());
+        let host_info = Worker::with_active_host(|host| host.info().clone());
 
         let mut shadowrecord = ShadowLogRecord {
             level: record.level(),
