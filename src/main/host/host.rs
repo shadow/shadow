@@ -15,6 +15,7 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::network::router::Router;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -169,6 +170,15 @@ impl Host {
     pub fn log_level(&self) -> Option<log::LevelFilter> {
         let level = unsafe { cshadow::hostc_getLogLevel(self.chost()) };
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
+    }
+
+    pub fn upstream_router(&self) -> *mut Router {
+        unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
+    }
+
+    pub fn interface(&self, handle: Ipv4Addr) -> *mut cshadow::NetworkInterface {
+        let handle = u32::from(handle).to_be();
+        unsafe { cshadow::hostc_lookupInterface(self.chost(), handle) }
     }
 
     pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
@@ -414,13 +424,14 @@ mod export {
         handle: in_addr_t,
     ) -> *mut cshadow::NetworkInterface {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_lookupInterface(hostrc.chost(), handle) }
+        let handle = u32::from_be(handle).into();
+        hostrc.interface(handle)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getUpstreamRouter(hostrc.chost()) }
+        hostrc.upstream_router()
     }
 
     #[no_mangle]
