@@ -204,3 +204,113 @@ impl<'a, HostType: Host> HostIter<'a, HostType> {
         }
     }
 }
+
+#[cfg(any(test, doctest))]
+mod tests {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestHost {}
+
+    #[test]
+    fn test_parallelism() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+
+        assert_eq!(sched.parallelism(), 2);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_no_join() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let _sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panic() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+
+        sched.scope(|s| {
+            s.run(|x| {
+                if x == 1 {
+                    panic!();
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn test_run() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+
+        let counter = AtomicU32::new(0);
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run(|_| {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                });
+            });
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), 2 * 3);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_run_with_hosts() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+
+        let counter = AtomicU32::new(0);
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run_with_hosts(|_, hosts| {
+                    hosts.for_each(|host| {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        host
+                    });
+                });
+            });
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), 5 * 3);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_run_with_data() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+
+        let data = vec![0u32; sched.parallelism()];
+        let data: Vec<_> = data.into_iter().map(|x| std::sync::Mutex::new(x)).collect();
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run_with_data(&data, |_, hosts, elem| {
+                    let mut elem = elem.lock().unwrap();
+                    hosts.for_each(|host| {
+                        *elem += 1;
+                        host
+                    });
+                });
+            });
+        }
+
+        let sum: u32 = data.into_iter().map(|x| x.into_inner().unwrap()).sum();
+        assert_eq!(sum, 5 * 3);
+
+        sched.join();
+    }
+}
