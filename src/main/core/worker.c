@@ -73,8 +73,7 @@ void worker_sendPacket(const Host* srcHost, Packet* packet) {
     /* check if network reliability forces us to 'drop' the packet */
     gdouble reliability = worker_getReliability(srcIP, dstIP);
 
-    Random* random = host_getRandom(srcHost);
-    gdouble chance = random_nextDouble(random);
+    gdouble chance = host_rngDouble(srcHost);
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */

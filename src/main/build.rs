@@ -206,7 +206,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .opaque_type("Logger")
         .opaque_type("DescriptorTable")
         .opaque_type("MemoryManager")
-        .opaque_type("Random")
         .opaque_type("TaskRef")
         .opaque_type("GList")
         .blocklist_type("Host")
@@ -241,7 +240,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::timer::Timer;")
         .raw_line("use crate::utility::counter::Counter;")
-        .raw_line("use crate::utility::random::Random;")
 
         .raw_line("use atomic_refcell::AtomicRefCell;")
         .raw_line("use logger::Logger;")

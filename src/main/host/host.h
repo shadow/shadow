@@ -58,7 +58,6 @@ Tsc* hostc_getTsc(HostCInternal* host);
 const gchar* hostc_getName(HostCInternal* host);
 Address* hostc_getDefaultAddress(HostCInternal* host);
 in_addr_t hostc_getDefaultIP(HostCInternal* host);
-Random* hostc_getRandom(HostCInternal* host);
 gdouble hostc_getNextPacketPriority(HostCInternal* host);
 
 gboolean hostc_autotuneReceiveBuffer(HostCInternal* host);
@@ -83,7 +82,7 @@ gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_a
 void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
                               in_addr_t bindAddress);
 void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket);
-in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+in_port_t hostc_getRandomFreePort(const Host* host, ProtocolType type, in_addr_t interfaceIP,
                                   in_addr_t peerIP, in_port_t peerPort);
 
 Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host);

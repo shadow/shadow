@@ -1,5 +1,8 @@
 use log::trace;
 use once_cell::unsync::OnceCell;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use std::net::IpAddr;
 use std::os::raw::c_char;
@@ -52,6 +55,8 @@ pub struct Host {
 
     event_queue: Arc<Mutex<EventQueue>>,
 
+    random: RootedRefCell<Xoshiro256PlusPlus>,
+
     params: cshadow::HostParameters,
 }
 
@@ -78,12 +83,17 @@ impl Host {
         // TODO: remove params from HostCInternal.
         let chost = unsafe { cshadow::hostc_new(&params) };
         let root = Root::new();
+        let random = RootedRefCell::new(
+            &root,
+            Xoshiro256PlusPlus::seed_from_u64(params.nodeSeed as u64),
+        );
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
+            random,
         }
     }
 
@@ -161,10 +171,9 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
-    pub fn random(&self) -> &mut impl rand::Rng {
-        let ptr = unsafe { cshadow::hostc_getRandom(self.chost()) };
-        let random = unsafe { ptr.as_mut() }.unwrap();
-        &mut random.0
+    pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
+        let mut rng = self.random.borrow_mut(&self.root);
+        f(&mut *rng)
     }
 
     pub fn get_new_event_id(&self) -> u64 {
@@ -292,11 +301,11 @@ mod export {
     use std::os::raw::c_char;
 
     use libc::{in_addr_t, in_port_t};
+    use rand::{Rng, RngCore};
 
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime, HostCInternal},
         network::router::Router,
-        utility::random::Random,
     };
 
     use super::*;
@@ -366,12 +375,6 @@ mod export {
     pub unsafe extern "C" fn host_getDefaultIP(hostrc: *const Host) -> in_addr_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         unsafe { cshadow::hostc_getDefaultIP(hostrc.chost()) }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getRandom(hostrc: *const Host) -> *mut Random {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getRandom(hostrc.chost()) }
     }
 
     #[no_mangle]
@@ -510,7 +513,7 @@ mod export {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         unsafe {
             cshadow::hostc_getRandomFreePort(
-                hostrc.chost(),
+                hostrc,
                 protocol_type,
                 interface_ip,
                 peer_ip,
@@ -640,6 +643,22 @@ mod export {
         let task = unsafe { task.as_ref().unwrap().clone() };
         let delay = SimulationTime::from_c_simtime(delay).unwrap();
         hostrc.schedule_task_with_delay(task, delay)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_rngDouble(host: *const Host) -> f64 {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.with_random_mut(|rng| rng.gen())
+    }
+
+    /// Fills the buffer with pseudo-random bytes.
+    #[no_mangle]
+    pub extern "C" fn host_rngNextNBytes(host: *const Host, buf: *mut u8, len: usize) {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.with_random_mut(|rng| {
+            let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
+            rng.fill_bytes(buf);
+        })
     }
 
     /// Should only be used from host.c

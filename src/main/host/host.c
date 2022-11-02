@@ -84,9 +84,6 @@ struct _HostCInternal {
     /* Lock protecting parts of shimSharedMemBlock. */
     ShimShmemHostLock* shimShmemHostLock;
 
-    /* random stream */
-    Random* random;
-
 #ifdef USE_PERF_TIMERS
     /* track the time spent executing this host */
     GTimer* executionTimer;
@@ -190,7 +187,6 @@ void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* 
         g_mkdir_with_parents(host->dataDirPath, 0775);
     }
 
-    host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, rawCPUFreq, host->params.cpuThreshold,
                         host->params.cpuPrecision);
 
@@ -293,10 +289,6 @@ void hostc_shutdown(HostCInternal* host) {
     }
     if(host->tracker) {
         tracker_free(host->tracker);
-    }
-
-    if(host->random) {
-        random_free(host->random);
     }
 
     if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
@@ -459,11 +451,6 @@ in_addr_t hostc_getDefaultIP(HostCInternal* host) {
     return address_toNetworkIP(host->defaultAddress);
 }
 
-Random* hostc_getRandom(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->random;
-}
-
 gboolean hostc_autotuneReceiveBuffer(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.autotuneRecvBuf;
@@ -596,8 +583,9 @@ in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {
     return htons(val);
 }
 
-static in_port_t _hostc_getRandomPort(HostCInternal* host) {
-    gdouble randomFraction = random_nextDouble(host->random);
+static in_port_t _hostc_getRandomPort(const Host* rhost) {
+    HostCInternal* host = host_internal(rhost);
+    gdouble randomFraction = host_rngDouble(rhost);
     gdouble numPotentialPorts = (gdouble)(UINT16_MAX - MIN_RANDOM_PORT);
 
     gdouble randomPick = round(randomFraction * numPotentialPorts);
@@ -610,8 +598,9 @@ static in_port_t _hostc_getRandomPort(HostCInternal* host) {
     return htons(randomHostPort);
 }
 
-in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
+in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_t interfaceIP,
                                   in_addr_t peerIP, in_port_t peerPort) {
+    HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
@@ -622,7 +611,7 @@ in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_add
     /* if choosing randomly doesn't succeed within 10 tries, then we have already
      * allocated a lot of ports (>90% on average). then we fall back to linear search. */
     for(guint i = 0; i < 10; i++) {
-        in_port_t randomPort = _hostc_getRandomPort(host);
+        in_port_t randomPort = _hostc_getRandomPort(rhost);
 
         /* this will check all interfaces in the case of INADDR_ANY */
         if (hostc_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
@@ -633,7 +622,7 @@ in_port_t hostc_getRandomFreePort(HostCInternal* host, ProtocolType type, in_add
     /* now if we tried too many times and still don't have a port, fall back
      * to a linear search to make sure we get a free port if we have one.
      * but start from a random port instead of the min. */
-    in_port_t start = _hostc_getRandomPort(host);
+    in_port_t start = _hostc_getRandomPort(rhost);
     in_port_t next = _hostc_incrementPort(start, htons(MIN_RANDOM_PORT));
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */

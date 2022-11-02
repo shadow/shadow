@@ -15,7 +15,6 @@ pub mod pcap_writer;
 pub mod perf_timer;
 pub mod pod;
 pub mod proc_maps;
-pub mod random;
 pub mod shm_cleanup;
 pub mod status_bar;
 pub mod stream_len;

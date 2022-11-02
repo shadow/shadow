@@ -318,8 +318,7 @@ static void _regularfile_readRandomBytes(RegularFile* file, const Host* host, vo
     trace("RegularFile %p will read %zu bytes from random source for host %s", file, numBytes,
           host_getName(host));
 
-    Random* rng = host_getRandom(host);
-    random_nextNBytes(rng, buf, numBytes);
+    host_rngNextNBytes(host, buf, numBytes);
 }
 
 static size_t _regularfile_readvRandomBytes(RegularFile* file, const Host* host,
