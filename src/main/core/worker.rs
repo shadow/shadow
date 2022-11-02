@@ -318,7 +318,7 @@ impl Worker {
         // don't drop control packets with length 0, otherwise congestion control has problems
         // responding to packet loss
         // https://github.com/shadow/shadow/issues/2517
-        if !is_bootstrapping && chance > reliability && payload_size > 0 {
+        if !is_bootstrapping && chance >= reliability && payload_size > 0 {
             unsafe {
                 cshadow::packet_addDeliveryStatus(
                     packet,
@@ -844,5 +844,20 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getCurrentHost() -> *const Host {
         Worker::with_active_host(|h| h as *const _).unwrap()
+    }
+
+    /// Maximum time that the current event may run ahead to. Must only be called if we hold the
+    /// host lock.
+    #[no_mangle]
+    pub extern "C" fn worker_maxEventRunaheadTime(host: *const Host) -> CEmulatedTime {
+        let host = unsafe { host.as_ref() }.unwrap();
+
+        let mut max = Worker::round_end_time().unwrap();
+
+        if let Some(next_event_time) = host.next_event_time() {
+            max = std::cmp::min(max, next_event_time);
+        }
+
+        EmulatedTime::to_c_emutime(Some(max))
     }
 }

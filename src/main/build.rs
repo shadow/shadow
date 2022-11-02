@@ -283,7 +283,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "core/logger/log_wrapper.c",
         "core/support/config_handlers.c",
         "core/main.c",
-        "core/worker.c",
         "host/descriptor/descriptor.c",
         "host/status_listener.c",
         "host/descriptor/compat_socket.c",
