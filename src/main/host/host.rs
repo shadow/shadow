@@ -4,7 +4,8 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
-use std::net::IpAddr;
+
+use std::net::Ipv4Addr;
 use std::os::raw::c_char;
 use std::sync::{Arc, Mutex};
 
@@ -26,7 +27,7 @@ use atomic_refcell::AtomicRefCell;
 pub struct HostInfo {
     pub id: HostId,
     pub name: String,
-    pub default_ip: IpAddr,
+    pub default_ip: Ipv4Addr,
     pub log_level: Option<log::LevelFilter>,
 }
 
@@ -154,10 +155,9 @@ impl Host {
         slice.to_str().unwrap()
     }
 
-    pub fn default_ip(&self) -> std::net::IpAddr {
-        use std::net;
+    pub fn default_ip(&self) -> Ipv4Addr {
         let addr = unsafe { cshadow::hostc_getDefaultIP(self.chost()) };
-        net::IpAddr::V4(net::Ipv4Addr::from(addr.to_le_bytes()))
+        u32::from_be(addr).into()
     }
 
     pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
@@ -374,7 +374,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDefaultIP(hostrc: *const Host) -> in_addr_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getDefaultIP(hostrc.chost()) }
+        let ip = hostrc.default_ip();
+        u32::from(ip).to_be()
     }
 
     #[no_mangle]
