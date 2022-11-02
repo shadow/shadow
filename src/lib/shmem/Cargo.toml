@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 logger = { path = "../logger" }
 vasi = { path = "../vasi" }
-static_assertions = "1.1.0"
 once_cell = "1.15.0"
 
 [build-dependencies]

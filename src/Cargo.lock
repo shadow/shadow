@@ -1137,7 +1137,6 @@ dependencies = [
  "logger",
  "once_cell",
  "shadow-build-common",
- "static_assertions",
  "vasi",
 ]
 
@@ -1290,7 +1289,6 @@ checksum = "c1e5fa573d8ac5f1a856f8d7be41d390ee973daf97c806b2c1a465e4e1406e68"
 name = "vasi"
 version = "0.1.0"
 dependencies = [
- "libc",
  "static_assertions",
  "vasi-macro",
 ]
