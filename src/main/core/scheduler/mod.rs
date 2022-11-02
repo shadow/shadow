@@ -30,7 +30,7 @@ pub fn core_affinity() -> Option<u32> {
 /// require support for GATs.
 pub enum Scheduler {
     ThreadPerHost(thread_per_host::ThreadPerHostSched),
-    ThreadPerCore(thread_per_core::ThreadPerCoreSched),
+    ThreadPerCore(thread_per_core::ThreadPerCoreSched<Box<Host>>),
 }
 
 impl Scheduler {
@@ -65,7 +65,7 @@ impl Scheduler {
 
 pub enum SchedulerScope<'sched, 'pool, 'scope> {
     ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope>),
-    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope>),
+    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, Box<Host>>),
 }
 
 impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {

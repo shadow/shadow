@@ -1,25 +1,28 @@
+use std::fmt::Debug;
+
 use crossbeam::queue::ArrayQueue;
 
-use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
-use crate::host::host::Host;
-
 use super::CORE_AFFINITY;
+use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
+
+pub trait Host: Debug + Send {}
+impl<T> Host for T where T: Debug + Send {}
 
 /// A host scheduler.
-pub struct ThreadPerCoreSched {
+pub struct ThreadPerCoreSched<HostType: Host> {
     pool: UnboundedThreadPool,
     num_threads: usize,
-    thread_hosts: Vec<ArrayQueue<Box<Host>>>,
-    thread_hosts_processed: Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts: Vec<ArrayQueue<HostType>>,
+    thread_hosts_processed: Vec<ArrayQueue<HostType>>,
     hosts_need_swap: bool,
 }
 
-impl ThreadPerCoreSched {
+impl<HostType: Host> ThreadPerCoreSched<HostType> {
     /// A new host scheduler with threads that are pinned to the provided OS processors. Each thread
     /// is assigned many hosts, and threads may steal hosts from other threads.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
     where
-        T: IntoIterator<Item = Box<Host>>,
+        T: IntoIterator<Item = HostType>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let hosts = hosts.into_iter();
@@ -73,7 +76,7 @@ impl ThreadPerCoreSched {
     /// See [`crate::core::scheduler::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
-        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope>) + 'scope,
+        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope, HostType>) + 'scope,
     ) {
         // we can't swap after the below `pool.scope()` due to lifetime restrictions, so we need to
         // do it before instead
@@ -111,24 +114,27 @@ impl ThreadPerCoreSched {
 }
 
 /// A wrapper around the work pool's scoped runner.
-pub struct SchedulerScope<'sched, 'pool, 'scope>
+pub struct SchedulerScope<'sched, 'pool, 'scope, HostType: Host>
 where
     'sched: 'scope,
 {
-    thread_hosts: &'sched Vec<ArrayQueue<Box<Host>>>,
-    thread_hosts_processed: &'sched Vec<ArrayQueue<Box<Host>>>,
+    thread_hosts: &'sched Vec<ArrayQueue<HostType>>,
+    thread_hosts_processed: &'sched Vec<ArrayQueue<HostType>>,
     hosts_need_swap: &'sched mut bool,
     runner: TaskRunner<'pool, 'scope>,
 }
 
-impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
+impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
     /// See [`crate::core::scheduler::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(f);
     }
 
     /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
-    pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter) + Send + Sync + 'scope) {
+    pub fn run_with_hosts(
+        self,
+        f: impl Fn(usize, &mut HostIter<'_, HostType>) + Send + Sync + 'scope,
+    ) {
         self.runner.run(move |i| {
             let mut host_iter = HostIter {
                 thread_hosts_from: &self.thread_hosts,
@@ -146,7 +152,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
-        f: impl Fn(usize, &mut HostIter, &T) + Send + Sync + 'scope,
+        f: impl Fn(usize, &mut HostIter<'_, HostType>, &T) + Send + Sync + 'scope,
     ) where
         T: Sync,
     {
@@ -168,21 +174,21 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread. For this thread-per-core scheduler,
 /// the iterator may steal hosts from other threads.
-pub struct HostIter<'a> {
+pub struct HostIter<'a, HostType: Host> {
     /// Queues to take hosts from.
-    thread_hosts_from: &'a [ArrayQueue<Box<Host>>],
+    thread_hosts_from: &'a [ArrayQueue<HostType>],
     /// The queue to add hosts to when done with them.
-    thread_hosts_to: &'a ArrayQueue<Box<Host>>,
+    thread_hosts_to: &'a ArrayQueue<HostType>,
     /// The index of this thread. This is the first queue of `thread_hosts_from` that we take hosts
     /// from.
     this_thread_index: usize,
 }
 
-impl<'a> HostIter<'a> {
+impl<'a, HostType: Host> HostIter<'a, HostType> {
     /// See [`crate::core::scheduler::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
-        F: FnMut(Box<Host>) -> Box<Host>,
+        F: FnMut(HostType) -> HostType,
     {
         for from_queue in self
             .thread_hosts_from
