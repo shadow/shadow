@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 logger = { path = "../logger" }
 vasi = { path = "../vasi" }
-once_cell = "1.15.0"
+once_cell = "1.16.0"
 
 [build-dependencies]
 bindgen = { version = "0.60.1" }
