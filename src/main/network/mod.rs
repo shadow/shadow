@@ -1,5 +1,5 @@
 pub mod graph;
-mod packet;
+pub mod packet;
 mod relay;
 pub mod router;
 
