@@ -7,14 +7,7 @@
 #ifndef SHD_WORKER_H_
 #define SHD_WORKER_H_
 
-#include "main/host/host.h"
-#include "main/routing/packet.minimal.h"
-
 #include "main/bindings/c/bindings.h"
-
-// Maximum time that the current event may run ahead to. Must only be called if we hold the host
-// lock.
-CEmulatedTime worker_maxEventRunaheadTime(const Host* host);
 
 // Increment a counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the
