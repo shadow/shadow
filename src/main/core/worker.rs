@@ -318,7 +318,7 @@ impl Worker {
         // don't drop control packets with length 0, otherwise congestion control has problems
         // responding to packet loss
         // https://github.com/shadow/shadow/issues/2517
-        if !is_bootstrapping && chance > reliability && payload_size > 0 {
+        if !is_bootstrapping && chance >= reliability && payload_size > 0 {
             unsafe {
                 cshadow::packet_addDeliveryStatus(
                     packet,
