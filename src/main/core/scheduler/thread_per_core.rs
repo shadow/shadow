@@ -1,7 +1,6 @@
 use crossbeam::queue::ArrayQueue;
 
 use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
-use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -183,7 +182,7 @@ impl<'a> HostIter<'a> {
     /// See [`crate::core::scheduler::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
-        F: FnMut(&Host),
+        F: FnMut(Box<Host>) -> Box<Host>,
     {
         for from_queue in self
             .thread_hosts_from
@@ -194,14 +193,7 @@ impl<'a> HostIter<'a> {
             .take(self.thread_hosts_from.len())
         {
             while let Some(host) = from_queue.pop() {
-                Worker::set_active_host(host);
-                Worker::with_active_host(|host| {
-                    f(host);
-                })
-                .unwrap();
-                self.thread_hosts_to
-                    .push(Worker::take_active_host())
-                    .unwrap();
+                self.thread_hosts_to.push(f(host)).unwrap();
             }
         }
     }
