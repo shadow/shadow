@@ -577,7 +577,6 @@ impl<'a> Manager<'a> {
                 autotuneRecvBuf: if host_info.autotune_recv_buf { 1 } else { 0 },
                 sendBufSize: host_info.send_buf_size,
                 autotuneSendBuf: if host_info.autotune_send_buf { 1 } else { 0 },
-                interfaceBufSize: host_info.interface_buf_size,
             };
 
             let host = Box::new(Host::new(params));

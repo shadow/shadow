@@ -367,12 +367,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("socket_recv_autotune").unwrap().as_str())]
     pub socket_recv_autotune: Option<bool>,
 
-    /// Size of the interface receive buffer that accepts incoming packets
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bytes")]
-    #[clap(help = EXP_HELP.get("interface_buffer").unwrap().as_str())]
-    pub interface_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
-
     /// The queueing discipline to use at the network interface
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "mode")]
@@ -490,7 +484,6 @@ impl Default for ExperimentalOptions {
             socket_send_autotune: Some(true),
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
             socket_recv_autotune: Some(true),
-            interface_buffer: Some(units::Bytes::new(1_024_000, units::SiPrefixUpper::Base)),
             interface_qdisc: Some(QDiscMode::Fifo),
             use_legacy_working_dir: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),

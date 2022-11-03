@@ -266,6 +266,14 @@ def shadow_dict_post_processing(shadow: Dict):
                 if 'socket_recv_buffer' in host['options']:
                     host['options']['socket_recv_autotune'] = False
 
+                if 'interface_buffer' in host['options']:
+                    # we no longer use this attribute
+                    removed = host['options'].pop('interface_buffer')
+                    print_deprecation_msg('interface_buffer', removed)
+
+                if len(host['options']) == 0:
+                    del host['options']
+
             for process in host['processes']:
                 # replace the plugin name with its path
                 plugin = process.pop('plugin')

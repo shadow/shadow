@@ -192,10 +192,10 @@ void hostc_setup(const Host* rhost, DNS* dns, gulong rawCPUFreq) {
     }
 
     /* virtual addresses and interfaces for managing network I/O */
-    host->loopback = networkinterface_new(loopbackAddress, pcapDir, host->params.pcapCaptureSize,
-                                          host->params.qdisc, host->params.interfaceBufSize, false);
-    host->internet = networkinterface_new(ethernetAddress, pcapDir, host->params.pcapCaptureSize,
-                                          host->params.qdisc, host->params.interfaceBufSize, true);
+    host->loopback = networkinterface_new(
+        loopbackAddress, pcapDir, host->params.pcapCaptureSize, host->params.qdisc, false);
+    host->internet = networkinterface_new(
+        ethernetAddress, pcapDir, host->params.pcapCaptureSize, host->params.qdisc, true);
 
     g_free(pcapDir);
 

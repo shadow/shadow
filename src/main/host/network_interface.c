@@ -625,8 +625,7 @@ void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
 }
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
-                                       guint32 pcapCaptureSize, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength, bool uses_router) {
+                                       guint32 pcapCaptureSize, QDiscMode qdisc, bool uses_router) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 

@@ -181,7 +181,6 @@ pub struct HostInfo {
     pub recv_buf_size: u64,
     pub autotune_send_buf: bool,
     pub autotune_recv_buf: bool,
-    pub interface_buf_size: u64,
     pub qdisc: QDiscMode,
 }
 
@@ -305,13 +304,6 @@ fn build_host(
                 .value(),
             autotune_send_buf: config.experimental.socket_send_autotune.unwrap(),
             autotune_recv_buf: config.experimental.socket_recv_autotune.unwrap(),
-            interface_buf_size: config
-                .experimental
-                .interface_buffer
-                .unwrap()
-                .convert(units::SiPrefixUpper::Base)
-                .unwrap()
-                .value(),
             qdisc: config.experimental.interface_qdisc.unwrap(),
         });
     }
