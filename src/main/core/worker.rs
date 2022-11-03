@@ -1,5 +1,4 @@
 use atomic_refcell::{AtomicRef, AtomicRefCell};
-use crossbeam::atomic::AtomicCell;
 use once_cell::sync::Lazy;
 use rand::Rng;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
@@ -10,7 +9,6 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::sim_stats::{LocalSimStats, SharedSimStats};
 use crate::core::work::event::Event;
-use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
@@ -395,7 +393,6 @@ impl Worker {
         }
 
         let delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
-        let deliver_time = current_time + delay;
 
         Worker::update_lowest_used_latency(delay);
         Worker::with(|w| w.shared.increment_packet_count(src_ip, dst_ip)).unwrap();
@@ -412,28 +409,22 @@ impl Worker {
 
         // copy the packet
         let packet = Packet::from_raw(unsafe { cshadow::packet_copy(packet) });
-        let packet = Arc::new(AtomicCell::new(Some(packet)));
-
-        let packet_task = TaskRef::new(move |host| {
-            let packet = packet.take().expect("Packet task ran twice");
-            host.upstream_router_borrow_mut()
-                .route_incoming_packet(packet);
-            host.notify_router_has_packets();
-        });
-
-        let mut packet_event = Event::new(packet_task, deliver_time, src_host, dst_host_id);
 
         // delay the packet until the next round
+        let mut deliver_time = current_time + delay;
         if deliver_time < round_end_time {
-            packet_event.set_time(round_end_time);
+            deliver_time = round_end_time;
         }
 
         // we may have sent this packet after the destination host finished running the current
         // round and calculated its min event time, so we put this in our min event time instead
-        Worker::update_next_event_time(packet_event.time());
+        Worker::update_next_event_time(deliver_time);
 
-        debug_assert!(packet_event.time() >= round_end_time);
-        Worker::with(|w| w.shared.push_to_host(dst_host_id, packet_event)).unwrap();
+        Worker::with(|w| {
+            w.shared
+                .push_packet_to_host(packet, dst_host_id, deliver_time, src_host)
+        })
+        .unwrap();
     }
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
@@ -527,6 +518,7 @@ pub struct WorkerShared {
     // calculates the runahead for the next simulation round
     pub runahead: Runahead,
     pub child_pid_watcher: ChildPidWatcher,
+    /// Event queues for each host. This should only be used to push packet events.
     pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
@@ -633,8 +625,17 @@ impl WorkerShared {
         &self.child_pid_watcher
     }
 
-    pub fn push_to_host(&self, host: HostId, event: Event) {
-        let event_queue = self.event_queues.get(&host).unwrap();
+    /// Push a packet to the destination host's event queue. Does not check that the time is valid
+    /// (is outside of the current scheduling round, etc).
+    pub fn push_packet_to_host(
+        &self,
+        packet: Packet,
+        dst_host_id: HostId,
+        time: EmulatedTime,
+        src_host: &Host,
+    ) {
+        let event = Event::new_packet(packet, time, src_host);
+        let event_queue = self.event_queues.get(&dst_host_id).unwrap();
         event_queue.lock().unwrap().push(event);
     }
 }

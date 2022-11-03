@@ -1,5 +1,5 @@
 use crate::core::support::configuration::QDiscMode;
-use crate::core::work::event::Event;
+use crate::core::work::event::{Event, EventData};
 use crate::core::work::event_queue::EventQueue;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
@@ -581,7 +581,7 @@ impl Host {
     }
 
     pub fn schedule_task_at_emulated_time(&self, task: TaskRef, t: EmulatedTime) -> bool {
-        let event = Event::new(task, t, self, self.id());
+        let event = Event::new_local(task, t, self);
         self.push_local_event(event)
     }
 
@@ -693,7 +693,16 @@ impl Host {
 
             // run the event
             Worker::set_current_time(event.time());
-            event.execute(self);
+            self.continue_execution_timer();
+            match event.data() {
+                EventData::Packet(data) => {
+                    self.upstream_router_borrow_mut()
+                        .route_incoming_packet(data.packet());
+                    self.notify_router_has_packets();
+                }
+                EventData::Local(data) => data.task().execute(self),
+            }
+            self.stop_execution_timer();
             Worker::clear_current_time();
         }
     }
