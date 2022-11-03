@@ -89,8 +89,6 @@ struct _HostCInternal {
     GTimer* executionTimer;
 #endif
 
-    gchar* dataDirPath;
-
     MAGIC_DECLARE;
 };
 
@@ -163,7 +161,8 @@ uint64_t hostc_get_bw_up_kiBps(HostCInternal* host) {
 }
 
 /* this function is called by manager before the workers exist */
-void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath) {
+void hostc_setup(const Host* rhost, DNS* dns, gulong rawCPUFreq) {
+    HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
     /* get unique virtual address identifiers for each network interface */
@@ -179,11 +178,6 @@ void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* 
 
     host->defaultAddress = ethernetAddress;
     address_ref(host->defaultAddress);
-
-    if (!host->dataDirPath) {
-        host->dataDirPath = g_build_filename(hostRootPath, host->params.hostname, NULL);
-        g_mkdir_with_parents(host->dataDirPath, 0775);
-    }
 
     host->cpu = cpu_new(host->params.cpuFrequency, rawCPUFreq, host->params.cpuThreshold,
                         host->params.cpuPrecision);
@@ -206,7 +200,7 @@ void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* 
         if (g_path_is_absolute(host->params.pcapDir)) {
             pcapDir = g_strdup(host->params.pcapDir);
         } else {
-            pcapDir = g_build_path("/", hostc_getDataPath(host), host->params.pcapDir, NULL);
+            pcapDir = g_build_path("/", host_getDataPath(rhost), host->params.pcapDir, NULL);
         }
     }
 
@@ -290,10 +284,6 @@ void hostc_shutdown(HostCInternal* host) {
     }
 
     if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
-
-    if(host->dataDirPath) {
-        g_free(host->dataDirPath);
-    }
 
 #ifdef USE_PERF_TIMERS
     gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
@@ -645,11 +635,6 @@ LogLevel hostc_getLogLevel(HostCInternal* host) {
 gdouble hostc_getNextPacketPriority(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return ++(host->packetPriorityCounter);
-}
-
-const gchar* hostc_getDataPath(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->dataDirPath;
 }
 
 Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host) {

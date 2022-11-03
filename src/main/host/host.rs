@@ -4,9 +4,11 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
-
+use std::ffi::{CStr, CString, OsString};
 use std::net::Ipv4Addr;
 use std::os::raw::c_char;
+use std::os::unix::prelude::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::core::work::event::Event;
@@ -59,6 +61,13 @@ pub struct Host {
 
     random: RootedRefCell<Xoshiro256PlusPlus>,
 
+    // Store as a CString so that we can return a borrowed pointer to C code
+    // instead of having to allocate a new string.
+    //
+    // TODO: Store as PathBuf once we can remove `host_getDataPath`. (Or maybe
+    // don't store it at all)
+    data_dir_path: RootedRefCell<Option<CString>>,
+
     params: cshadow::HostParameters,
 }
 
@@ -89,6 +98,7 @@ impl Host {
             &root,
             Xoshiro256PlusPlus::seed_from_u64(params.nodeSeed as u64),
         );
+        let data_dir_path = RootedRefCell::new(&root, None);
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             info: OnceCell::new(),
@@ -96,16 +106,29 @@ impl Host {
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
             random,
+            data_dir_path,
         }
     }
 
-    pub unsafe fn setup(
-        &self,
-        dns: *mut cshadow::DNS,
-        raw_cpu_freq: u64,
-        host_root_path: *const c_char,
-    ) {
-        unsafe { cshadow::hostc_setup(self.chost(), dns, raw_cpu_freq, host_root_path) }
+    pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq: u64, host_root_path: &Path) {
+        let hostname: OsString = {
+            let hostname = unsafe { CStr::from_ptr(self.params.hostname) };
+            OsString::from_vec(hostname.to_bytes().to_vec())
+        };
+
+        let mut data_dir_path = PathBuf::new();
+        data_dir_path.push(host_root_path);
+        data_dir_path.push(&hostname);
+        std::fs::create_dir_all(&data_dir_path).unwrap();
+
+        let mut data_dir_path = data_dir_path.as_os_str().to_os_string().as_bytes().to_vec();
+        data_dir_path.push(0);
+        let data_dir_path = CString::from_vec_with_nul(data_dir_path).unwrap();
+        self.data_dir_path
+            .borrow_mut(&self.root)
+            .replace(data_dir_path);
+
+        unsafe { cshadow::hostc_setup(self, dns, raw_cpu_freq) }
     }
 
     pub unsafe fn add_application(
@@ -458,10 +481,17 @@ mod export {
         unsafe { cshadow::hostc_getLogLevel(hostrc.chost()) }
     }
 
+    /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when
+    /// the Host is destroyed, and possibly when it is otherwise moved or mutated.
     #[no_mangle]
     pub unsafe extern "C" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getDataPath(hostrc.chost()) }
+        hostrc
+            .data_dir_path
+            .borrow(&hostrc.root)
+            .as_ref()
+            .unwrap()
+            .as_ptr()
     }
 
     #[no_mangle]
