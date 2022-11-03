@@ -4,6 +4,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
+use std::cell::Cell;
 use std::ffi::{CStr, CString, OsString};
 use std::net::Ipv4Addr;
 use std::os::raw::c_char;
@@ -68,6 +69,17 @@ pub struct Host {
     // don't store it at all)
     data_dir_path: RootedRefCell<Option<CString>>,
 
+    // virtual process and event id counter
+    process_id_counter: Cell<u32>,
+    event_id_counter: Cell<u64>,
+    packet_id_counter: Cell<u64>,
+
+    // Enables us to sort objects deterministically based on their creation order.
+    determinism_sequence_counter: Cell<u64>,
+
+    // track the order in which the application sent us application data
+    packet_priority_counter: Cell<f64>,
+
     params: cshadow::HostParameters,
 }
 
@@ -99,6 +111,14 @@ impl Host {
             Xoshiro256PlusPlus::seed_from_u64(params.nodeSeed as u64),
         );
         let data_dir_path = RootedRefCell::new(&root, None);
+
+        // Process IDs start at 1000
+        let process_id_counter = Cell::new(1000);
+        let event_id_counter = Cell::new(0);
+        let packet_id_counter = Cell::new(0);
+        let determinism_sequence_counter = Cell::new(0);
+        // Packet priorities start at 1.0. "0.0" is used for control packets.
+        let packet_priority_counter = Cell::new(1.0);
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             info: OnceCell::new(),
@@ -107,6 +127,11 @@ impl Host {
             params,
             random,
             data_dir_path,
+            process_id_counter,
+            event_id_counter,
+            packet_id_counter,
+            packet_priority_counter,
+            determinism_sequence_counter,
         }
     }
 
@@ -210,7 +235,33 @@ impl Host {
     }
 
     pub fn get_new_event_id(&self) -> u64 {
-        unsafe { cshadow::hostc_getNewEventID(self.chost()) }
+        let res = self.event_id_counter.get();
+        self.event_id_counter.set(res + 1);
+        res
+    }
+
+    pub fn get_new_process_id(&self) -> u32 {
+        let res = self.process_id_counter.get();
+        self.process_id_counter.set(res + 1);
+        res
+    }
+
+    pub fn get_new_packet_id(&self) -> u64 {
+        let res = self.packet_id_counter.get();
+        self.packet_id_counter.set(res + 1);
+        res
+    }
+
+    pub fn get_next_deterministic_sequence_value(&self) -> u64 {
+        let res = self.determinism_sequence_counter.get();
+        self.determinism_sequence_counter.set(res + 1);
+        res
+    }
+
+    pub fn get_next_packet_priority(&self) -> f64 {
+        let res = self.packet_priority_counter.get();
+        self.packet_priority_counter.set(res + 1.0);
+        res
     }
 
     pub fn continue_execution_timer(&self) {
@@ -359,13 +410,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getNewProcessID(hostrc: *const Host) -> u32 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getNewProcessID(hostrc.chost()) }
+        hostrc.get_new_process_id()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getNewPacketID(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getNewPacketID(hostrc.chost()) }
+        hostrc.get_new_packet_id()
     }
 
     #[no_mangle]
@@ -414,7 +465,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> f64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getNextPacketPriority(hostrc.chost()) }
+        hostrc.get_next_packet_priority()
     }
 
     #[no_mangle]
@@ -658,7 +709,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getNextDeterministicSequenceValue(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getNextDeterministicSequenceValue(hostrc.chost()) }
+        hostrc.get_next_deterministic_sequence_value()
     }
 
     /// Schedule a task for this host at time 'time'.

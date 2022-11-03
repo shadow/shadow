@@ -43,9 +43,6 @@ void hostc_setup(const Host* host, DNS* dns, gulong rawCPUFreq);
 void hostc_boot(const Host* rhost);
 void hostc_shutdown(HostCInternal* host);
 
-guint hostc_getNewProcessID(HostCInternal* host);
-guint64 hostc_getNewEventID(HostCInternal* host);
-guint64 hostc_getNewPacketID(HostCInternal* host);
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
                           const gchar* pluginName, const gchar* pluginPath,
                           const gchar* const* envv, const gchar* const* argv,
@@ -58,7 +55,6 @@ Tsc* hostc_getTsc(HostCInternal* host);
 const gchar* hostc_getName(HostCInternal* host);
 Address* hostc_getDefaultAddress(HostCInternal* host);
 in_addr_t hostc_getDefaultIP(HostCInternal* host);
-gdouble hostc_getNextPacketPriority(HostCInternal* host);
 
 gboolean hostc_autotuneReceiveBuffer(HostCInternal* host);
 gboolean hostc_autotuneSendBuffer(HostCInternal* host);

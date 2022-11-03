@@ -61,22 +61,11 @@ struct _HostCInternal {
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
 
-    /* virtual process and event id counter */
-    guint processIDCounter;
-    guint64 eventIDCounter;
-    guint64 packetIDCounter;
-
-    /* Enables us to sort objects deterministically based on their creation order. */
-    guint64 determinismSequenceCounter;
-
     /* map abstract socket addresses to unix sockets */
     Arc_AtomicRefCell_AbstractUnixNamespace* abstractUnixNamespace;
 
     /* map address to futex objects */
     FutexTable* futexTable;
-
-    /* track the order in which the application sent us application data */
-    gdouble packetPriorityCounter;
 
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
@@ -137,8 +126,6 @@ HostCInternal* hostc_new(const HostParameters* params) {
     shimshmemhost_init(hostc_getSharedMem(host), host->params.id,
                        _modelUnblockedSyscallLatencyConfig, _maxUnappliedCpuLatencyConfig,
                        _unblockedSyscallLatencyConfig, _unblockedVdsoLatencyConfig);
-
-    host->processIDCounter = 1000;
 
 #ifdef USE_PERF_TIMERS
     /* we go back to the manager setup process here, so stop counting this host execution */
@@ -353,21 +340,6 @@ void hostc_boot(const Host* rhost) {
     }
 }
 
-guint hostc_getNewProcessID(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->processIDCounter++;
-}
-
-guint64 hostc_getNewEventID(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->eventIDCounter++;
-}
-
-guint64 hostc_getNewPacketID(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->packetIDCounter++;
-}
-
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
                           const gchar* pluginName, const gchar* pluginPath,
                           const gchar* const* envv, const gchar* const* argv,
@@ -388,7 +360,7 @@ void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulat
         /* append to the env */
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
-    guint processID = hostc_getNewProcessID(host);
+    guint processID = host_getNewProcessID(rhost);
     Process* proc = process_new(rhost, processID, startTime, stopTime, hostc_getName(host),
                                 pluginName, pluginPath, envv_dup, argv, pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
@@ -632,11 +604,6 @@ LogLevel hostc_getLogLevel(HostCInternal* host) {
     return host->params.logLevel;
 }
 
-gdouble hostc_getNextPacketPriority(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return ++(host->packetPriorityCounter);
-}
-
 Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host) {
     return host->abstractUnixNamespace;
 }
@@ -718,9 +685,4 @@ void hostc_lockShimShmemLock(HostCInternal* host) {
 void hostc_unlockShimShmemLock(HostCInternal* host) {
     MAGIC_ASSERT(host);
     shimshmemhost_unlock(hostc_getSharedMem(host), &host->shimShmemHostLock);
-}
-
-guint64 hostc_getNextDeterministicSequenceValue(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->determinismSequenceCounter++;
 }
