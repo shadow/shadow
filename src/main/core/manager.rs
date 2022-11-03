@@ -14,7 +14,7 @@ use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
-use crate::core::scheduler::{Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
+use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
@@ -328,7 +328,7 @@ impl<'a> Manager<'a> {
             // boot each host
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    hosts.for_each(|host| {
+                    for_each_host(hosts, |host| {
                         worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
                         unsafe { host.lock_shmem() };
                         host.boot();
@@ -385,7 +385,7 @@ impl<'a> Manager<'a> {
                             worker::Worker::reset_next_event_time();
                             worker::Worker::set_round_end_time(window_end);
 
-                            hosts.for_each(|host| {
+                            for_each_host(hosts, |host| {
                                 let host_next_event_time = {
                                     unsafe { host.lock_shmem() };
                                     host.execute(window_end);
@@ -451,7 +451,7 @@ impl<'a> Manager<'a> {
 
             scheduler.scope(|s| {
                 s.run_with_hosts(move |_, hosts| {
-                    hosts.for_each(|host| {
+                    for_each_host(hosts, |host| {
                         worker::Worker::set_current_time(self.end_time);
                         host.free_all_applications();
                         host.shutdown();
@@ -886,6 +886,18 @@ pub struct ManagerConfig {
 
     // a list of hosts and their processes
     pub hosts: Vec<HostInfo>,
+}
+
+/// Helper function to initialize the global [`Host`] before running the closure.
+fn for_each_host(host_iter: &mut HostIter, mut f: impl FnMut(&Host)) {
+    host_iter.for_each(|host| {
+        worker::Worker::set_active_host(host);
+        worker::Worker::with_active_host(|host| {
+            f(host);
+        })
+        .unwrap();
+        worker::Worker::take_active_host()
+    });
 }
 
 /// Get the raw speed of the experiment machine.

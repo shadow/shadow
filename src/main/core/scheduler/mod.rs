@@ -30,7 +30,7 @@ pub fn core_affinity() -> Option<u32> {
 /// require support for GATs.
 pub enum Scheduler {
     ThreadPerHost(thread_per_host::ThreadPerHostSched),
-    ThreadPerCore(thread_per_core::ThreadPerCoreSched),
+    ThreadPerCore(thread_per_core::ThreadPerCoreSched<Box<Host>>),
 }
 
 impl Scheduler {
@@ -65,7 +65,7 @@ impl Scheduler {
 
 pub enum SchedulerScope<'sched, 'pool, 'scope> {
     ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope>),
-    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope>),
+    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, Box<Host>>),
 }
 
 impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
@@ -134,14 +134,14 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 /// Supports iterating over all hosts assigned to this thread.
 pub enum HostIter<'a, 'b> {
     ThreadPerHost(&'a mut thread_per_host::HostIter),
-    ThreadPerCore(&'a mut thread_per_core::HostIter<'b>),
+    ThreadPerCore(&'a mut thread_per_core::HostIter<'b, Box<Host>>),
 }
 
 impl<'a, 'b> HostIter<'a, 'b> {
-    /// For each [`Host`], calls `f` with each `Host`, and with that `Host` set as active in the [`crate::core::worker::Worker`].
+    /// For each [`Host`], calls `f` with each `Host`. The `Host` must be returned by the closure.
     pub fn for_each<F>(&mut self, f: F)
     where
-        F: FnMut(&Host),
+        F: FnMut(Box<Host>) -> Box<Host>,
     {
         match self {
             Self::ThreadPerHost(x) => x.for_each(f),

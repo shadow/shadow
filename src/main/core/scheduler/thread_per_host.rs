@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
-use crate::core::worker::Worker;
 use crate::host::host::Host;
 
 use super::CORE_AFFINITY;
@@ -159,13 +158,9 @@ impl HostIter {
     /// See [`crate::core::scheduler::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
-        F: FnMut(&Host),
+        F: FnMut(Box<Host>) -> Box<Host>,
     {
-        Worker::set_active_host(self.host.take().unwrap());
-        Worker::with_active_host(|host| {
-            f(host);
-        })
-        .unwrap();
-        self.host.replace(Worker::take_active_host());
+        let host = self.host.take().unwrap();
+        self.host.replace(f(host));
     }
 }
