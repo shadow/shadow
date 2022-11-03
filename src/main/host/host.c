@@ -50,7 +50,10 @@ struct _HostCInternal {
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
-    GHashTable* interfaces;
+    /* Interfaces for transferring packets. */
+    NetworkInterface* loopback;
+    NetworkInterface* internet;
+
     Address* defaultAddress;
     CPU* cpu;
     Tsc tsc;
@@ -113,9 +116,6 @@ HostCInternal* hostc_new(const HostParameters* params) {
     utility_debugAssert(params->hostname);
     host->params.hostname = g_strdup(params->hostname);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
-
-    host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-            NULL, (GDestroyNotify) networkinterface_free);
 
     /* applications this node will run */
     host->processes = g_queue_new();
@@ -192,19 +192,12 @@ void hostc_setup(const Host* rhost, DNS* dns, gulong rawCPUFreq) {
     }
 
     /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback =
-        networkinterface_new(loopbackAddress, pcapDir, host->params.pcapCaptureSize,
-                             host->params.qdisc, host->params.interfaceBufSize, false);
-    NetworkInterface* ethernet =
-        networkinterface_new(ethernetAddress, pcapDir, host->params.pcapCaptureSize,
-                             host->params.qdisc, host->params.interfaceBufSize, true);
+    host->loopback = networkinterface_new(loopbackAddress, pcapDir, host->params.pcapCaptureSize,
+                                          host->params.qdisc, host->params.interfaceBufSize, false);
+    host->internet = networkinterface_new(ethernetAddress, pcapDir, host->params.pcapCaptureSize,
+                                          host->params.qdisc, host->params.interfaceBufSize, true);
 
     g_free(pcapDir);
-
-    g_hash_table_replace(
-        host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
-    g_hash_table_replace(
-        host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 
     /* the upstream router that will queue packets until we can receive them.
      * this only applies the the ethernet interface, the loopback interface
@@ -247,8 +240,11 @@ void hostc_shutdown(HostCInternal* host) {
         g_queue_free(host->processes);
     }
 
-    if(host->interfaces) {
-        g_hash_table_destroy(host->interfaces);
+    if (host->internet) {
+        networkinterface_free(host->internet);
+    }
+    if (host->loopback) {
+        networkinterface_free(host->loopback);
     }
 
     if(host->router) {
@@ -330,14 +326,8 @@ void hostc_boot(const Host* rhost) {
     guint64 bwDownKiBps = hostc_get_bw_down_kiBps(host);
     guint64 bwUpKiBps = hostc_get_bw_up_kiBps(host);
 
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->interfaces);
-
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        NetworkInterface* interface = value;
-        networkinterface_startRefillingTokenBuckets(interface, rhost, bwDownKiBps, bwUpKiBps);
-    }
+    networkinterface_startRefillingTokenBuckets(host->loopback, rhost, bwDownKiBps, bwUpKiBps);
+    networkinterface_startRefillingTokenBuckets(host->internet, rhost, bwDownKiBps, bwUpKiBps);
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
@@ -419,7 +409,13 @@ gboolean hostc_autotuneSendBuffer(HostCInternal* host) {
 
 NetworkInterface* hostc_lookupInterface(HostCInternal* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
-    return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
+    if (handle == htonl(INADDR_LOOPBACK)) {
+        return host->loopback;
+    } else if (handle == address_toNetworkIP(host->defaultAddress)) {
+        return host->internet;
+    } else {
+        return NULL;
+    }
 }
 
 Router* hostc_getUpstreamRouter(HostCInternal* host) {
@@ -434,14 +430,8 @@ void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
     /* associate the interfaces corresponding to bindAddress with socket */
     if(bindAddress == htonl(INADDR_ANY)) {
         /* need to associate all interfaces */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->interfaces);
-
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            NetworkInterface* interface = value;
-            networkinterface_associate(interface, socket);
-        }
+        networkinterface_associate(host->loopback, socket);
+        networkinterface_associate(host->internet, socket);
     } else {
         NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
         networkinterface_associate(interface, socket);
@@ -460,15 +450,8 @@ void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket
 
     if (bindAddress == htonl(INADDR_ANY)) {
         /* need to dissociate all interfaces */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->interfaces);
-
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            NetworkInterface* interface = value;
-            networkinterface_disassociate(interface, socket);
-        }
-
+        networkinterface_disassociate(host->loopback, socket);
+        networkinterface_disassociate(host->internet, socket);
     } else {
         NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
         networkinterface_disassociate(interface, socket);
@@ -489,11 +472,7 @@ gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 
     if(interfaceIP == htonl(INADDR_ANY)) {
-        if(g_hash_table_size(host->interfaces) > 0) {
-            return TRUE;
-        } else {
-            return FALSE;
-        }
+        return TRUE;
     }
 
     NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
@@ -512,19 +491,9 @@ gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_a
 
     if(interfaceIP == htonl(INADDR_ANY)) {
         /* need to check that all interfaces are free */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->interfaces);
-
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            NetworkInterface* interface = value;
-            isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
-
-            /* as soon as one is taken, break out to return FALSE */
-            if(!isAvailable) {
-                break;
-            }
-        }
+        isAvailable =
+            !networkinterface_isAssociated(host->loopback, type, port, peerIP, peerPort) &&
+            !networkinterface_isAssociated(host->internet, type, port, peerIP, peerPort);
     } else {
         NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
         isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
