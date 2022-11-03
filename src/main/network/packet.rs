@@ -17,6 +17,20 @@ pub struct Packet {
     c_ptr: SyncSendPointer<c::Packet>,
 }
 
+impl std::fmt::Debug for Packet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Packet").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for Packet {
+    fn eq(&self, other: &Self) -> bool {
+        self.c_ptr.ptr() == other.c_ptr.ptr()
+    }
+}
+
+impl Eq for Packet {}
+
 impl Packet {
     #[cfg(test)]
     /// Creates an empty packet for unit tests.
