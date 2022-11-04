@@ -39,13 +39,10 @@ void hostc_unref(HostCInternal* host);
 void hostc_continueExecutionTimer(HostCInternal* host);
 void hostc_stopExecutionTimer(HostCInternal* host);
 
-void hostc_setup(HostCInternal* host, DNS* dns, gulong rawCPUFreq, const gchar* hostRootPath);
+void hostc_setup(const Host* host, DNS* dns, gulong rawCPUFreq);
 void hostc_boot(const Host* rhost);
 void hostc_shutdown(HostCInternal* host);
 
-guint hostc_getNewProcessID(HostCInternal* host);
-guint64 hostc_getNewEventID(HostCInternal* host);
-guint64 hostc_getNewPacketID(HostCInternal* host);
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
                           const gchar* pluginName, const gchar* pluginPath,
                           const gchar* const* envv, const gchar* const* argv,
@@ -58,7 +55,6 @@ Tsc* hostc_getTsc(HostCInternal* host);
 const gchar* hostc_getName(HostCInternal* host);
 Address* hostc_getDefaultAddress(HostCInternal* host);
 in_addr_t hostc_getDefaultIP(HostCInternal* host);
-gdouble hostc_getNextPacketPriority(HostCInternal* host);
 
 gboolean hostc_autotuneReceiveBuffer(HostCInternal* host);
 gboolean hostc_autotuneSendBuffer(HostCInternal* host);
@@ -73,8 +69,6 @@ uint64_t hostc_get_bw_up_kiBps(HostCInternal* host);
 
 Tracker* hostc_getTracker(HostCInternal* host);
 LogLevel hostc_getLogLevel(HostCInternal* host);
-
-const gchar* hostc_getDataPath(HostCInternal* host);
 
 gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP);
 gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,

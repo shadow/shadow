@@ -580,12 +580,8 @@ impl<'a> Manager<'a> {
                 interfaceBufSize: host_info.interface_buf_size,
             };
 
-            let hosts_path =
-                CString::new(self.hosts_path.clone().into_os_string().as_bytes()).unwrap();
-
             let host = Box::new(Host::new(params));
-
-            unsafe { host.setup(dns, self.raw_frequency_khz, hosts_path.as_ptr()) };
+            unsafe { host.setup(dns, self.raw_frequency_khz, &self.hosts_path) };
 
             // make sure we never accidentally drop the following objects before running the
             // unsafe code (will be a compile-time error if they were dropped)
