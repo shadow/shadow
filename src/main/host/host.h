@@ -61,7 +61,8 @@ gboolean hostc_autotuneSendBuffer(HostCInternal* host);
 guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host);
 guint64 hostc_getConfiguredSendBufSize(HostCInternal* host);
 
-NetworkInterface* hostc_lookupInterface(HostCInternal* host, in_addr_t handle);
+void hostc_packetsAreAvailableToReceive(const Host* rhost);
+void hostc_socketWantsToSend(const Host* rhost, const CompatSocket* socket, in_addr_t interfaceIP);
 Router* hostc_getUpstreamRouter(HostCInternal* host);
 
 uint64_t hostc_get_bw_down_kiBps(HostCInternal* host);

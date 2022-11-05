@@ -236,11 +236,6 @@ impl Host {
         unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
     }
 
-    pub fn interface(&self, handle: Ipv4Addr) -> *mut cshadow::NetworkInterface {
-        let handle = u32::from(handle).to_be();
-        unsafe { cshadow::hostc_lookupInterface(self.chost(), handle) }
-    }
-
     pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
         let mut rng = self.random.borrow_mut(&self.root);
         f(&mut *rng)
@@ -374,6 +369,10 @@ impl Host {
         self.event_queue.lock().unwrap().next_event_time()
     }
 
+    pub fn packets_are_available_to_receive(&self) {
+        unsafe { cshadow::hostc_packetsAreAvailableToReceive(self) };
+    }
+
     pub unsafe fn lock_shmem(&self) {
         unsafe { cshadow::hostc_lockShimShmemLock(self.chost()) };
     }
@@ -502,16 +501,6 @@ mod export {
     pub unsafe extern "C" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         unsafe { cshadow::hostc_getConfiguredSendBufSize(hostrc.chost()) }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_lookupInterface(
-        hostrc: *const Host,
-        handle: in_addr_t,
-    ) -> *mut cshadow::NetworkInterface {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let handle = u32::from_be(handle).into();
-        hostrc.interface(handle)
     }
 
     #[no_mangle]
@@ -771,5 +760,14 @@ mod export {
     pub unsafe extern "C" fn host_internal(hostrc: *const Host) -> *mut HostCInternal {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.chost()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_socketWantsToSend(
+        hostrc: *const Host,
+        socket: *const cshadow::CompatSocket,
+        handle: in_addr_t,
+    ) {
+        unsafe { cshadow::hostc_socketWantsToSend(hostrc, socket, handle) };
     }
 }

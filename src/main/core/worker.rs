@@ -356,9 +356,7 @@ impl Worker {
                 unsafe { crate::network::router::router_enqueue(router, packet.into_inner()) };
 
             if became_nonempty {
-                let default_ip = host.default_ip();
-                let interface = host.interface(default_ip);
-                unsafe { cshadow::networkinterface_receivePackets(interface, host) };
+                host.packets_are_available_to_receive();
             }
         });
 

@@ -407,7 +407,7 @@ gboolean hostc_autotuneSendBuffer(HostCInternal* host) {
     return host->params.autotuneSendBuf;
 }
 
-NetworkInterface* hostc_lookupInterface(HostCInternal* host, in_addr_t handle) {
+static NetworkInterface* _hostc_lookupInterface(HostCInternal* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     if (handle == htonl(INADDR_LOOPBACK)) {
         return host->loopback;
@@ -433,7 +433,7 @@ void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
         networkinterface_associate(host->loopback, socket);
         networkinterface_associate(host->internet, socket);
     } else {
-        NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
+        NetworkInterface* interface = _hostc_lookupInterface(host, bindAddress);
         networkinterface_associate(interface, socket);
     }
 }
@@ -453,7 +453,7 @@ void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket
         networkinterface_disassociate(host->loopback, socket);
         networkinterface_disassociate(host->internet, socket);
     } else {
-        NetworkInterface* interface = hostc_lookupInterface(host, bindAddress);
+        NetworkInterface* interface = _hostc_lookupInterface(host, bindAddress);
         networkinterface_disassociate(interface, socket);
     }
 }
@@ -475,7 +475,7 @@ gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP) {
         return TRUE;
     }
 
-    NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
+    NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
     if(interface) {
         return TRUE;
     }
@@ -495,11 +495,24 @@ gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_a
             !networkinterface_isAssociated(host->loopback, type, port, peerIP, peerPort) &&
             !networkinterface_isAssociated(host->internet, type, port, peerIP, peerPort);
     } else {
-        NetworkInterface* interface = hostc_lookupInterface(host, interfaceIP);
+        NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
         isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
     }
 
     return isAvailable;
+}
+
+void hostc_packetsAreAvailableToReceive(const Host* rhost) {
+    HostCInternal* host = host_internal(rhost);
+    MAGIC_ASSERT(host);
+    networkinterface_receivePackets(host->internet, rhost);
+}
+
+void hostc_socketWantsToSend(const Host* rhost, const CompatSocket* socket, in_addr_t interfaceIP) {
+    HostCInternal* host = host_internal(rhost);
+    MAGIC_ASSERT(host);
+    NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
+    networkinterface_wantsSend(interface, rhost, socket);
 }
 
 in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {

@@ -16,7 +16,6 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
-#include "main/host/network_interface.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
@@ -453,9 +452,8 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, 
 
     /* tell the interface to include us when sending out to the network */
     in_addr_t ip = packet_getSourceIP(packet);
-    NetworkInterface* interface = host_lookupInterface(host, ip);
     CompatSocket compat_socket = compatsocket_fromLegacySocket(socket);
-    networkinterface_wantsSend(interface, host, &compat_socket);
+    host_socketWantsToSend(host, &compat_socket, ip);
 
     return TRUE;
 }

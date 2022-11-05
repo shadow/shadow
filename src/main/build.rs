@@ -138,7 +138,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("legacyfile_getHandle")
         .allowlist_function("legacyfile_setHandle")
         .allowlist_function("legacyfile_shutdownHelper")
-        .allowlist_function("networkinterface_receivePackets")
+        .allowlist_function("networkinterface_.*")
         .allowlist_function("hostc_.*")
 
         // used by shadow's main function
