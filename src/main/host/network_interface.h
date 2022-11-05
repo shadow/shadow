@@ -32,8 +32,8 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
                                 const CompatSocket* socket);
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
-                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps);
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
+                                                 uint64_t bwUpKiBps);
 
 void networkinterface_receivePackets(NetworkInterface* interface, const Host* host);
 

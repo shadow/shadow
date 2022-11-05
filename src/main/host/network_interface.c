@@ -123,8 +123,8 @@ static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
     return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
 }
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
-                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps) {
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
+                                                 uint64_t bwUpKiBps) {
     MAGIC_ASSERT(interface);
     // Set size and refill rates for token buckets.
     // This needs to be called when host is booting, i.e. when the worker exists.

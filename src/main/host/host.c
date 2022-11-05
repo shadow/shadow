@@ -326,8 +326,8 @@ void hostc_boot(const Host* rhost) {
     guint64 bwDownKiBps = hostc_get_bw_down_kiBps(host);
     guint64 bwUpKiBps = hostc_get_bw_up_kiBps(host);
 
-    networkinterface_startRefillingTokenBuckets(host->loopback, rhost, bwDownKiBps, bwUpKiBps);
-    networkinterface_startRefillingTokenBuckets(host->internet, rhost, bwDownKiBps, bwUpKiBps);
+    networkinterface_startRefillingTokenBuckets(host->loopback, bwDownKiBps, bwUpKiBps);
+    networkinterface_startRefillingTokenBuckets(host->internet, bwDownKiBps, bwUpKiBps);
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
