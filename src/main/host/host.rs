@@ -100,6 +100,13 @@ impl std::fmt::Debug for Host {
     }
 }
 
+/// Helper for converting a PathBuf to a CString
+fn pathbuf_to_nul_term_cstring(buf: PathBuf) -> CString {
+    let mut bytes = buf.as_os_str().to_os_string().as_bytes().to_vec();
+    bytes.push(0);
+    CString::from_vec_with_nul(bytes).unwrap()
+}
+
 impl Host {
     pub fn new(params: cshadow::HostParameters) -> Self {
         // Ok because hostc_new copies params rather than saving this pointer.
@@ -136,6 +143,20 @@ impl Host {
     }
 
     pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq: u64, host_root_path: &Path) {
+        {
+            let data_dir_path = self.data_dir_path(host_root_path);
+            std::fs::create_dir_all(&data_dir_path).unwrap();
+
+            let data_dir_path = pathbuf_to_nul_term_cstring(data_dir_path);
+            self.data_dir_path
+                .borrow_mut(&self.root)
+                .replace(data_dir_path);
+        }
+
+        unsafe { cshadow::hostc_setup(self, dns, raw_cpu_freq) }
+    }
+
+    fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = {
             let hostname = unsafe { CStr::from_ptr(self.params.hostname) };
             OsString::from_vec(hostname.to_bytes().to_vec())
@@ -144,16 +165,7 @@ impl Host {
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
         data_dir_path.push(&hostname);
-        std::fs::create_dir_all(&data_dir_path).unwrap();
-
-        let mut data_dir_path = data_dir_path.as_os_str().to_os_string().as_bytes().to_vec();
-        data_dir_path.push(0);
-        let data_dir_path = CString::from_vec_with_nul(data_dir_path).unwrap();
-        self.data_dir_path
-            .borrow_mut(&self.root)
-            .replace(data_dir_path);
-
-        unsafe { cshadow::hostc_setup(self, dns, raw_cpu_freq) }
+        data_dir_path
     }
 
     pub unsafe fn add_application(
