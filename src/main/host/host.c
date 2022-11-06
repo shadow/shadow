@@ -35,7 +35,6 @@
 #include "main/host/descriptor/udp.h"
 #include "main/host/futex_table.h"
 #include "main/host/host.h"
-#include "main/host/network_interface.h"
 #include "main/host/process.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -49,10 +48,6 @@ struct _HostCInternal {
 
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
-
-    /* Interfaces for transferring packets. */
-    NetworkInterface* loopback;
-    NetworkInterface* internet;
 
     Address* defaultAddress;
     CPU* cpu;
@@ -148,20 +143,9 @@ uint64_t hostc_get_bw_up_kiBps(HostCInternal* host) {
 }
 
 /* this function is called by manager before the workers exist */
-void hostc_setup(const Host* rhost, DNS* dns, gulong rawCPUFreq) {
+void hostc_setup(const Host* rhost, Address* ethernetAddress, gulong rawCPUFreq) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
-
-    /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress =
-        dns_register(dns, host->params.id, host->params.hostname, htonl(INADDR_LOOPBACK));
-    Address* ethernetAddress =
-        dns_register(dns, host->params.id, host->params.hostname, host->params.ipAddr);
-
-    if (loopbackAddress == NULL || ethernetAddress == NULL) {
-        /* we should have caught this earlier when we were assigning IP addresses */
-        panic("Could not register address");
-    }
 
     host->defaultAddress = ethernetAddress;
     address_ref(host->defaultAddress);
@@ -182,30 +166,10 @@ void hostc_setup(const Host* rhost, DNS* dns, gulong rawCPUFreq) {
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
 
-    char* pcapDir = NULL;
-    if (host->params.pcapDir != NULL) {
-        if (g_path_is_absolute(host->params.pcapDir)) {
-            pcapDir = g_strdup(host->params.pcapDir);
-        } else {
-            pcapDir = g_build_path("/", host_getDataPath(rhost), host->params.pcapDir, NULL);
-        }
-    }
-
-    /* virtual addresses and interfaces for managing network I/O */
-    host->loopback = networkinterface_new(
-        loopbackAddress, pcapDir, host->params.pcapCaptureSize, host->params.qdisc, false);
-    host->internet = networkinterface_new(
-        ethernetAddress, pcapDir, host->params.pcapCaptureSize, host->params.qdisc, true);
-
-    g_free(pcapDir);
-
     /* the upstream router that will queue packets until we can receive them.
      * this only applies the the ethernet interface, the loopback interface
      * does not receive packets from a router. */
     host->router = router_new();
-
-    address_unref(loopbackAddress);
-    address_unref(ethernetAddress);
 
     info("Setup host id '%u' name '%s' with seed %u, ip %s, "
          "%" G_GUINT64_FORMAT " bwUpKiBps, %" G_GUINT64_FORMAT " bwDownKiBps, "
@@ -238,13 +202,6 @@ void hostc_shutdown(HostCInternal* host) {
 
     if(host->processes) {
         g_queue_free(host->processes);
-    }
-
-    if (host->internet) {
-        networkinterface_free(host->internet);
-    }
-    if (host->loopback) {
-        networkinterface_free(host->loopback);
     }
 
     if(host->router) {
@@ -321,13 +278,6 @@ void hostc_boot(const Host* rhost) {
         host->tracker = tracker_new(rhost, host->params.heartbeatInterval,
                                     host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
     }
-
-    /* start refilling the token buckets for all interfaces */
-    guint64 bwDownKiBps = hostc_get_bw_down_kiBps(host);
-    guint64 bwUpKiBps = hostc_get_bw_up_kiBps(host);
-
-    networkinterface_startRefillingTokenBuckets(host->loopback, bwDownKiBps, bwUpKiBps);
-    networkinterface_startRefillingTokenBuckets(host->internet, bwDownKiBps, bwUpKiBps);
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
@@ -407,55 +357,9 @@ gboolean hostc_autotuneSendBuffer(HostCInternal* host) {
     return host->params.autotuneSendBuf;
 }
 
-static NetworkInterface* _hostc_lookupInterface(HostCInternal* host, in_addr_t handle) {
-    MAGIC_ASSERT(host);
-    if (handle == htonl(INADDR_LOOPBACK)) {
-        return host->loopback;
-    } else if (handle == address_toNetworkIP(host->defaultAddress)) {
-        return host->internet;
-    } else {
-        return NULL;
-    }
-}
-
 Router* hostc_getUpstreamRouter(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->router;
-}
-
-void hostc_associateInterface(HostCInternal* host, const CompatSocket* socket,
-                              in_addr_t bindAddress) {
-    MAGIC_ASSERT(host);
-
-    /* associate the interfaces corresponding to bindAddress with socket */
-    if(bindAddress == htonl(INADDR_ANY)) {
-        /* need to associate all interfaces */
-        networkinterface_associate(host->loopback, socket);
-        networkinterface_associate(host->internet, socket);
-    } else {
-        NetworkInterface* interface = _hostc_lookupInterface(host, bindAddress);
-        networkinterface_associate(interface, socket);
-    }
-}
-
-void hostc_disassociateInterface(HostCInternal* host, const CompatSocket* socket) {
-    if (socket == NULL) {
-        return;
-    }
-
-    in_addr_t bindAddress;
-    if (!compatsocket_getSocketName(socket, &bindAddress, NULL)) {
-        return;
-    }
-
-    if (bindAddress == htonl(INADDR_ANY)) {
-        /* need to dissociate all interfaces */
-        networkinterface_disassociate(host->loopback, socket);
-        networkinterface_disassociate(host->internet, socket);
-    } else {
-        NetworkInterface* interface = _hostc_lookupInterface(host, bindAddress);
-        networkinterface_disassociate(interface, socket);
-    }
 }
 
 guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host) {
@@ -466,53 +370,6 @@ guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host) {
 guint64 hostc_getConfiguredSendBufSize(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->params.sendBufSize;
-}
-
-gboolean hostc_doesInterfaceExist(HostCInternal* host, in_addr_t interfaceIP) {
-    MAGIC_ASSERT(host);
-
-    if(interfaceIP == htonl(INADDR_ANY)) {
-        return TRUE;
-    }
-
-    NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
-    if(interface) {
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-gboolean hostc_isInterfaceAvailable(HostCInternal* host, ProtocolType type, in_addr_t interfaceIP,
-                                    in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
-    MAGIC_ASSERT(host);
-
-    gboolean isAvailable = FALSE;
-
-    if(interfaceIP == htonl(INADDR_ANY)) {
-        /* need to check that all interfaces are free */
-        isAvailable =
-            !networkinterface_isAssociated(host->loopback, type, port, peerIP, peerPort) &&
-            !networkinterface_isAssociated(host->internet, type, port, peerIP, peerPort);
-    } else {
-        NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
-        isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
-    }
-
-    return isAvailable;
-}
-
-void hostc_packetsAreAvailableToReceive(const Host* rhost) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-    networkinterface_receivePackets(host->internet, rhost);
-}
-
-void hostc_socketWantsToSend(const Host* rhost, const CompatSocket* socket, in_addr_t interfaceIP) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-    NetworkInterface* interface = _hostc_lookupInterface(host, interfaceIP);
-    networkinterface_wantsSend(interface, rhost, socket);
 }
 
 in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {
@@ -552,7 +409,7 @@ in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_
         in_port_t randomPort = _hostc_getRandomPort(rhost);
 
         /* this will check all interfaces in the case of INADDR_ANY */
-        if (hostc_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(rhost, type, interfaceIP, randomPort, peerIP, peerPort)) {
             return randomPort;
         }
     }
@@ -564,7 +421,7 @@ in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_
     in_port_t next = _hostc_incrementPort(start, htons(MIN_RANDOM_PORT));
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */
-        if (hostc_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(rhost, type, interfaceIP, next, peerIP, peerPort)) {
             return next;
         }
         next = _hostc_incrementPort(next, htons(MIN_RANDOM_PORT));

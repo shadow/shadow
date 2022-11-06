@@ -2,6 +2,7 @@ pub mod context;
 pub mod descriptor;
 pub mod host;
 pub mod memory_manager;
+pub mod network_interface;
 pub mod process;
 pub mod syscall;
 pub mod syscall_condition;

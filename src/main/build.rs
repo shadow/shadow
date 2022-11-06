@@ -18,6 +18,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "Thread".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
+            "NetworkInterface".into(),
         ]);
         c
     };
@@ -151,6 +152,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("rustlogger_new")
         .allowlist_function("dns_.*")
         .allowlist_function("address_getID")
+        .allowlist_function("address_unref")
+        .allowlist_function("compatsocket_getSocketName")
 
         .allowlist_function("workerpool_updateMinHostRunahead")
 

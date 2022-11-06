@@ -22,7 +22,6 @@
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
-#include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
@@ -678,7 +677,6 @@ void networkinterface_free(NetworkInterface* interface) {
 
     g_hash_table_destroy(interface->boundSockets);
 
-    dns_deregister(worker_getDNS(), interface->address);
     address_unref(interface->address);
 
     if(interface->pcap) {
