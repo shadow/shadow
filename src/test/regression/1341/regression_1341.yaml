@@ -1,0 +1,32 @@
+general:
+  stop_time: 5
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+# we test twice, each with a different host ID order, since in the past this
+# would affect shadow's networking behaviour
+hosts:
+  receiver-1:
+    network_node_id: 0
+    processes:
+    - path: ../../../target/debug/test_regression_1341
+      args: receiver 1234
+  receiver-2:
+    network_node_id: 0
+    processes:
+    - path: ../../../target/debug/test_regression_1341
+      args: receiver 1234
+  # the sender has a lower hostID than the receiver ('a' > 'r')
+  a-sender:
+    network_node_id: 0
+    processes:
+    - path: ../../../target/debug/test_regression_1341
+      args: sender receiver-1:1234
+  # the sender has a higher hostID than the receiver ('z' > 'r')
+  z-sender:
+    network_node_id: 0
+    processes:
+    - path: ../../../target/debug/test_regression_1341
+      args: sender receiver-2:1234
