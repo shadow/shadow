@@ -1,0 +1,114 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Examples Tests
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  examples:
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-20.04
+
+    container:
+      image: 'ubuntu:22.04'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--shm-size="1g" --security-opt seccomp=unconfined'
+
+    env:
+      CC: 'clang'
+      CONTAINER: 'ubuntu:22.04'
+      BUILDTYPE: 'release'
+      RUSTPROFILE: minimal
+
+    steps:
+      - name: Checkout shadow
+        uses: actions/checkout@v3
+        with:
+          path: shadow
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Get month
+        id: get-month
+        run: |
+          echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: |
+          cd shadow
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # dependencies for examples
+          export DEBIAN_FRONTEND=noninteractive
+          ./examples/nginx/install_deps.sh
+
+      - name: Restore cargo registry cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          # invalidate the cache once per month
+          key: cargo-registry-${{ steps.get-month.outputs.month }}
+          restore-keys: |
+            cargo-registry-
+
+      - name: Build shadow
+        run: |
+          cd shadow
+          . ci/container_scripts/build_and_install.sh
+
+      - name: Test
+        run: |
+          cd shadow
+          ./setup test -- --build-config extra --label-regex example
+
+      - name: Last 200 log lines
+        if: failure()
+        run: |
+          tail -n 200 shadow/build/Testing/Temporary/LastTest.log
+
+      - name: Compress logs
+        if: failure()
+        run: |
+          shopt -s globstar
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/examples/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+
+      - name: Upload shadow data directory
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: shadow-data-dir
+          path: shadow/build/examples/**/*.data.tar.xz
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: shadow-log-file
+          path: shadow/build/Testing/Temporary.tar.xz
