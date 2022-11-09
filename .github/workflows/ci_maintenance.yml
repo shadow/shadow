@@ -30,6 +30,12 @@ jobs:
           - python version for the python lint (\`.github/workflows/lint.yml\`)
           - tor and tgen versions for the tor tests (\`.github/workflows/run_tor.yml\`)
 
+          Shadow's dependencies may also need to be updated.
+
+          \`\`\`bash
+          cargo upgrade --incompatible
+          \`\`\`
+
           *This issue is automatically generated every 4 months by the workflow "${{ github.workflow }}".*
           `
           })
