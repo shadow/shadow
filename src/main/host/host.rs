@@ -422,7 +422,11 @@ impl Host {
 
         // Deregistering localhost is a no-op, so we skip it.
         let _ = Worker::with_dns(|dns| unsafe {
-            cshadow::dns_deregister(dns, cshadow::hostc_getDefaultAddress(self.chost()))
+            let dns = dns as *const cshadow::DNS;
+            cshadow::dns_deregister(
+                dns.cast_mut(),
+                cshadow::hostc_getDefaultAddress(self.chost()),
+            )
         });
     }
 
