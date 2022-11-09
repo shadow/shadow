@@ -204,6 +204,24 @@ impl TryFromSyscallReg for nix::sys::stat::Mode {
     }
 }
 
+impl TryFromSyscallReg for nix::sys::mman::ProtFlags {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::from_bits(reg.into())
+    }
+}
+
+impl TryFromSyscallReg for nix::sys::mman::MapFlags {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::from_bits(reg.into())
+    }
+}
+
+impl TryFromSyscallReg for nix::sys::mman::MRemapFlags {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::from_bits(reg.into())
+    }
+}
+
 // implement display formatting
 
 simple_display_impl!(i8, i16, i32, i64, isize);
@@ -225,6 +243,9 @@ simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 simple_debug_impl!(nix::sys::stat::Mode);
+simple_debug_impl!(nix::sys::mman::ProtFlags);
+simple_debug_impl!(nix::sys::mman::MapFlags);
+simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
 impl SyscallPtrDisplay for SyscallPtr<*const i8> {
     fn fmt(

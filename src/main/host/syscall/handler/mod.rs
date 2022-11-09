@@ -11,6 +11,7 @@ mod eventfd;
 mod fcntl;
 mod file;
 mod ioctl;
+mod mman;
 mod random;
 mod sched;
 mod socket;
@@ -32,6 +33,7 @@ impl SyscallHandler {
             libc::SYS_accept => self.accept(ctx, args),
             libc::SYS_accept4 => self.accept4(ctx, args),
             libc::SYS_bind => self.bind(ctx, args),
+            libc::SYS_brk => self.brk(ctx, args),
             libc::SYS_close => self.close(ctx, args),
             libc::SYS_connect => self.connect(ctx, args),
             libc::SYS_dup => self.dup(ctx, args),
@@ -47,6 +49,10 @@ impl SyscallHandler {
             libc::SYS_getsockopt => self.getsockopt(ctx, args),
             libc::SYS_ioctl => self.ioctl(ctx, args),
             libc::SYS_listen => self.listen(ctx, args),
+            libc::SYS_mmap => self.mmap(ctx, args),
+            libc::SYS_mprotect => self.mprotect(ctx, args),
+            libc::SYS_mremap => self.mremap(ctx, args),
+            libc::SYS_munmap => self.munmap(ctx, args),
             libc::SYS_open => self.open(ctx, args),
             libc::SYS_openat => self.openat(ctx, args),
             libc::SYS_pipe => self.pipe(ctx, args),
