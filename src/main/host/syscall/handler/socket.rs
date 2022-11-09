@@ -117,9 +117,8 @@ impl SyscallHandler {
 
         let file = file.inner_file().clone();
 
-        let socket = match file {
-            File::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(ref socket) = file else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?;
@@ -182,9 +181,8 @@ impl SyscallHandler {
         addr_ptr: PluginPtr,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
-        let socket = match open_file.inner_file() {
-            File::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(ref socket) = open_file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // get the send flags
@@ -296,9 +294,8 @@ impl SyscallHandler {
         addr_ptr: PluginPtr,
         addr_len_ptr: PluginPtr,
     ) -> SyscallResult {
-        let socket = match open_file.inner_file() {
-            File::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(ref socket) = open_file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // get the recv flags
@@ -386,9 +383,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // linux will return an EFAULT before other errors
@@ -434,9 +430,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // linux will return an EFAULT before other errors like ENOTCONN
@@ -479,9 +474,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().listen(backlog, cb_queue))?;
@@ -574,9 +568,8 @@ impl SyscallHandler {
         addr_len_ptr: PluginPtr,
         flags: libc::c_int,
     ) -> SyscallResult {
-        let socket = match open_file.inner_file() {
-            File::Socket(ref x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(ref socket) = open_file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // get the accept flags
@@ -677,9 +670,8 @@ impl SyscallHandler {
             },
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
@@ -719,9 +711,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // TODO: support rust sockets
@@ -854,9 +845,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // TODO: support rust sockets
@@ -891,9 +881,8 @@ impl SyscallHandler {
             }
         };
 
-        let socket = match file.inner_file() {
-            File::Socket(x) => x,
-            _ => return Err(Errno::ENOTSOCK.into()),
+        let File::Socket(socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
         };
 
         // TODO: support rust sockets

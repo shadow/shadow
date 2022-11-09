@@ -32,7 +32,7 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ i32, /* rseq  */*const libc::c_void, /* rseq_len */u32, /* flags */i32, /* sig */u32)]
+    #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */u32, /* flags */i32, /* sig */u32)]
     pub fn rseq(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let rseq_ptr = TypedPluginPtr::new::<rseq>(unsafe { args.get(0).as_ptr }.into(), 1);
         let rseq_len = usize::try_from(unsafe { args.get(1).as_u64 }).unwrap();

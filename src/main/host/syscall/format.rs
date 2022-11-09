@@ -584,10 +584,9 @@ mod export {
         let result = SyscallResult::from(result);
 
         let logging_mode = StraceFmtMode::try_from(logging_mode).unwrap().into();
-        let logging_mode = match logging_mode {
-            Some(x) => x,
+        let Some(logging_mode) = logging_mode else {
             // logging was disabled
-            None => return result.into(),
+            return result.into()
         };
 
         // we don't know the type, so just show it as an int
