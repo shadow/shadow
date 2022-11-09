@@ -19,8 +19,7 @@ typedef struct _NetworkInterface NetworkInterface;
 #include "main/routing/address.h"
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
-                                       guint32 pcapCaptureSize, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength, bool uses_router);
+                                       guint32 pcapCaptureSize, QDiscMode qdisc, bool uses_router);
 void networkinterface_free(NetworkInterface* interface);
 
 /* The address and ports must be in network byte order. */
@@ -33,8 +32,8 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
 void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
                                 const CompatSocket* socket);
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
-                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps);
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
+                                                 uint64_t bwUpKiBps);
 
 void networkinterface_receivePackets(NetworkInterface* interface, const Host* host);
 

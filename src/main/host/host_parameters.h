@@ -39,7 +39,6 @@ struct _HostParameters {
     gboolean autotuneRecvBuf;
     guint64 sendBufSize;
     gboolean autotuneSendBuf;
-    guint64 interfaceBufSize;
 };
 
 #endif

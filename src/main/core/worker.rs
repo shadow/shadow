@@ -141,6 +141,16 @@ impl Worker {
         .flatten()
     }
 
+    /// Run `f` with a reference to the global DNS.
+    ///
+    /// Panics if the Worker or its DNS hasn't yet been initialized.
+    pub fn with_dns<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut cshadow::DNS) -> R,
+    {
+        Worker::with(|w| f(unsafe { w.shared.dns().as_mut().unwrap() })).unwrap()
+    }
+
     /// Set the currently-active Host.
     pub fn set_active_host(host: Box<Host>) {
         let old = Worker::with(|w| w.active_host.borrow_mut().replace(host)).unwrap();
@@ -356,9 +366,7 @@ impl Worker {
                 unsafe { crate::network::router::router_enqueue(router, packet.into_inner()) };
 
             if became_nonempty {
-                let default_ip = host.default_ip();
-                let interface = host.interface(default_ip);
-                unsafe { cshadow::networkinterface_receivePackets(interface, host) };
+                host.packets_are_available_to_receive();
             }
         });
 
@@ -594,7 +602,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        Worker::with(|w| w.shared.dns()).unwrap()
+        Worker::with_dns(|dns| dns as *mut cshadow::DNS)
     }
 
     /// Addresses must be provided in network byte order.

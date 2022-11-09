@@ -22,8 +22,10 @@ pub mod synchronization;
 pub mod syscall;
 pub mod time;
 
+use std::ffi::CString;
 use std::marker::PhantomData;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::core::worker::Worker;
@@ -264,6 +266,13 @@ fn create_dir_with_mode(path: impl AsRef<Path>, mode: u32) -> std::io::Result<()
     let mut dir_builder = std::fs::DirBuilder::new();
     dir_builder.mode(mode);
     dir_builder.create(&path)
+}
+
+/// Helper for converting a PathBuf to a CString
+pub fn pathbuf_to_nul_term_cstring(buf: PathBuf) -> CString {
+    let mut bytes = buf.as_os_str().to_os_string().as_bytes().to_vec();
+    bytes.push(0);
+    CString::from_vec_with_nul(bytes).unwrap()
 }
 
 #[cfg(test)]

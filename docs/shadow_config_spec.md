@@ -68,7 +68,6 @@ hosts:
 - [`experimental.host_heartbeat_interval`](#experimentalhost_heartbeat_interval)
 - [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
-- [`experimental.interface_buffer`](#experimentalinterface_buffer)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
@@ -323,13 +322,6 @@ Default: "info"
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
 
 Log level at which to print host statistics.
-
-#### `experimental.interface_buffer`
-
-Default: "1024000 B"  
-Type: String OR Integer
-
-Size of the interface receive buffer that accepts incoming packets.
 
 #### `experimental.interface_qdisc`
 

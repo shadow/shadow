@@ -22,7 +22,6 @@
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
-#include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
@@ -123,8 +122,8 @@ static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
     return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
 }
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, const Host* host,
-                                                 uint64_t bwDownKiBps, uint64_t bwUpKiBps) {
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
+                                                 uint64_t bwUpKiBps) {
     MAGIC_ASSERT(interface);
     // Set size and refill rates for token buckets.
     // This needs to be called when host is booting, i.e. when the worker exists.
@@ -625,8 +624,7 @@ void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
 }
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
-                                       guint32 pcapCaptureSize, QDiscMode qdisc,
-                                       guint64 interfaceReceiveLength, bool uses_router) {
+                                       guint32 pcapCaptureSize, QDiscMode qdisc, bool uses_router) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -679,7 +677,6 @@ void networkinterface_free(NetworkInterface* interface) {
 
     g_hash_table_destroy(interface->boundSockets);
 
-    dns_deregister(worker_getDNS(), interface->address);
     address_unref(interface->address);
 
     if(interface->pcap) {

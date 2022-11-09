@@ -4,11 +4,11 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString, OsString};
 use std::net::Ipv4Addr;
 use std::os::raw::c_char;
-use std::os::unix::prelude::{OsStrExt, OsStringExt};
+use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -18,8 +18,9 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::host::network_interface::NetworkInterface;
 use crate::network::router::Router;
-use crate::utility::SyncSendPointer;
+use crate::utility::{self, SyncSendPointer};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
@@ -61,6 +62,10 @@ pub struct Host {
     event_queue: Arc<Mutex<EventQueue>>,
 
     random: RootedRefCell<Xoshiro256PlusPlus>,
+
+    // TODO: rearrange our setup process so we don't need Option types here.
+    localhost: RefCell<Option<NetworkInterface>>,
+    internet: RefCell<Option<NetworkInterface>>,
 
     // Store as a CString so that we can return a borrowed pointer to C code
     // instead of having to allocate a new string.
@@ -126,6 +131,8 @@ impl Host {
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
             random,
+            localhost: RefCell::new(None),
+            internet: RefCell::new(None),
             data_dir_path,
             process_id_counter,
             event_id_counter,
@@ -136,6 +143,66 @@ impl Host {
     }
 
     pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq: u64, host_root_path: &Path) {
+        {
+            let data_dir_path = self.data_dir_path(host_root_path);
+            std::fs::create_dir_all(&data_dir_path).unwrap();
+
+            let data_dir_path = utility::pathbuf_to_nul_term_cstring(data_dir_path);
+            self.data_dir_path
+                .borrow_mut(&self.root)
+                .replace(data_dir_path);
+        }
+
+        // Register using the param hints.
+        // We already checked that the addresses are available, so fail if they are not.
+        let local_ipv4 = u32::from(Ipv4Addr::LOCALHOST).to_be();
+        let local_addr =
+            unsafe { cshadow::dns_register(dns, self.params.id, self.params.hostname, local_ipv4) };
+        assert!(!local_addr.is_null());
+
+        let inet_addr = unsafe {
+            cshadow::dns_register(
+                dns,
+                self.params.id,
+                self.params.hostname,
+                self.params.ipAddr,
+            )
+        };
+        assert!(!inet_addr.is_null());
+
+        unsafe { cshadow::hostc_setup(self, inet_addr, raw_cpu_freq) }
+
+        // Virtual addresses and interfaces for managing network I/O
+        let localhost = unsafe {
+            NetworkInterface::new(
+                self.id(),
+                local_addr,
+                self.pcap_dir_path(host_root_path),
+                self.params.pcapCaptureSize,
+                self.params.qdisc,
+                false,
+            )
+        };
+        self.localhost.borrow_mut().replace(localhost);
+
+        let internet = unsafe {
+            NetworkInterface::new(
+                self.id(),
+                inet_addr,
+                self.pcap_dir_path(host_root_path),
+                self.params.pcapCaptureSize,
+                self.params.qdisc,
+                true,
+            )
+        };
+        self.internet.borrow_mut().replace(internet);
+
+        // Cleanup
+        unsafe { cshadow::address_unref(local_addr) };
+        unsafe { cshadow::address_unref(inet_addr) };
+    }
+
+    fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = {
             let hostname = unsafe { CStr::from_ptr(self.params.hostname) };
             OsString::from_vec(hostname.to_bytes().to_vec())
@@ -144,16 +211,23 @@ impl Host {
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
         data_dir_path.push(&hostname);
-        std::fs::create_dir_all(&data_dir_path).unwrap();
+        data_dir_path
+    }
 
-        let mut data_dir_path = data_dir_path.as_os_str().to_os_string().as_bytes().to_vec();
-        data_dir_path.push(0);
-        let data_dir_path = CString::from_vec_with_nul(data_dir_path).unwrap();
-        self.data_dir_path
-            .borrow_mut(&self.root)
-            .replace(data_dir_path);
+    fn pcap_dir_path(&self, host_root_path: &Path) -> Option<PathBuf> {
+        if self.params.pcapDir.is_null() {
+            None
+        } else {
+            let path_string: OsString = {
+                let path_str = unsafe { CStr::from_ptr(self.params.pcapDir) };
+                OsString::from_vec(path_str.to_bytes().to_vec())
+            };
 
-        unsafe { cshadow::hostc_setup(self, dns, raw_cpu_freq) }
+            let mut path = self.data_dir_path(host_root_path);
+            // If relative it will append, if absolute it will replace.
+            path.push(PathBuf::from(path_string));
+            path.canonicalize().ok()
+        }
     }
 
     pub unsafe fn add_application(
@@ -224,9 +298,32 @@ impl Host {
         unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
     }
 
-    pub fn interface(&self, handle: Ipv4Addr) -> *mut cshadow::NetworkInterface {
-        let handle = u32::from(handle).to_be();
-        unsafe { cshadow::hostc_lookupInterface(self.chost(), handle) }
+    fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
+        if addr.is_loopback() {
+            Some(&self.localhost)
+        } else if addr == self.info().default_ip {
+            Some(&self.internet)
+        } else {
+            None
+        }
+    }
+
+    /// Run `f` with a reference to the network interface associated with
+    /// `addr`, or returns `None` if there is no such interface.
+    ///
+    /// Panics if we have not yet initialized our network interfaces yet.
+    #[must_use]
+    fn with_interface_mut<Func, Res>(&self, addr: Ipv4Addr, f: Func) -> Option<Res>
+    where
+        Func: FnOnce(&mut NetworkInterface) -> Res,
+    {
+        match self.interface(addr) {
+            Some(rc) => {
+                let mut iface = rc.borrow_mut();
+                Some(f(iface.as_mut().unwrap()))
+            }
+            None => None,
+        }
     }
 
     pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
@@ -295,10 +392,38 @@ impl Host {
 
     pub fn boot(&self) {
         unsafe { cshadow::hostc_boot(self) };
+
+        // Start refilling the token buckets for all interfaces.
+        let bw_down = unsafe { cshadow::hostc_get_bw_down_kiBps(self.chost()) };
+        let bw_up = unsafe { cshadow::hostc_get_bw_up_kiBps(self.chost()) };
+        self.localhost
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .start_refilling_token_buckets(bw_down, bw_up);
+        self.internet
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .start_refilling_token_buckets(bw_down, bw_up);
     }
 
     pub fn shutdown(&self) {
+        // Need to drop the interfaces early because they trigger worker accesses
+        // that will not be valid at the normal drop time. The interfaces will
+        // become None after this and should not be unwrapped anymore.
+        // TODO: clean this up when removing the interface's C internals.
+        {
+            self.localhost.replace(None);
+            self.internet.replace(None);
+        }
+
         unsafe { cshadow::hostc_shutdown(self.chost()) };
+
+        // Deregistering localhost is a no-op, so we skip it.
+        let _ = Worker::with_dns(|dns| unsafe {
+            cshadow::dns_deregister(dns, cshadow::hostc_getDefaultAddress(self.chost()))
+        });
     }
 
     pub fn free_all_applications(&self) {
@@ -360,6 +485,16 @@ impl Host {
 
     pub fn next_event_time(&self) -> Option<EmulatedTime> {
         self.event_queue.lock().unwrap().next_event_time()
+    }
+
+    pub fn packets_are_available_to_receive(&self) {
+        // TODO: ideally we call
+        //   `self.internet.borrow().as_ref().unwrap().receive_packets(self);`
+        // but that causes a double-borrow loop. See `host_socketWantsToSend()`.
+        unsafe {
+            let netif_ptr = self.internet.borrow().as_ref().unwrap().borrow_inner();
+            cshadow::networkinterface_receivePackets(netif_ptr, self)
+        };
     }
 
     pub unsafe fn lock_shmem(&self) {
@@ -493,16 +628,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_lookupInterface(
-        hostrc: *const Host,
-        handle: in_addr_t,
-    ) -> *mut cshadow::NetworkInterface {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let handle = u32::from_be(handle).into();
-        hostrc.interface(handle)
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.upstream_router()
@@ -551,28 +676,43 @@ mod export {
         interface_ip: in_addr_t,
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_doesInterfaceExist(hostrc.chost(), interface_ip) != 0 }
+        let ipv4 = Ipv4Addr::from(u32::from_be(interface_ip));
+        ipv4.is_unspecified() || hostrc.interface(ipv4).is_some()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_isInterfaceAvailable(
         hostrc: *const Host,
         protocol_type: cshadow::ProtocolType,
-        interface_ip: in_addr_t,
+        interface_addr: in_addr_t,
         port: in_port_t,
-        peer_ip: in_addr_t,
+        peer_addr: in_addr_t,
         peer_port: in_port_t,
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe {
-            cshadow::hostc_isInterfaceAvailable(
-                hostrc.chost(),
+        let ipv4 = Ipv4Addr::from(u32::from_be(interface_addr));
+
+        if ipv4.is_unspecified() {
+            // Check that all interfaces are available.
+            !hostrc.localhost.borrow().as_ref().unwrap().is_associated(
                 protocol_type,
-                interface_ip,
                 port,
-                peer_ip,
+                peer_addr,
                 peer_port,
-            ) != 0
+            ) && !hostrc.internet.borrow().as_ref().unwrap().is_associated(
+                protocol_type,
+                port,
+                peer_addr,
+                peer_port,
+            )
+        } else {
+            // The interface is not available if it does not exist.
+            match hostrc.with_interface_mut(ipv4, |iface| {
+                iface.is_associated(protocol_type, port, peer_addr, peer_port)
+            }) {
+                Some(is_associated) => !is_associated,
+                None => false,
+            }
         }
     }
 
@@ -580,10 +720,25 @@ mod export {
     pub unsafe extern "C" fn host_associateInterface(
         hostrc: *const Host,
         socket: *const cshadow::CompatSocket,
-        bind_address: in_addr_t,
+        bind_addr: in_addr_t,
     ) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_associateInterface(hostrc.chost(), socket, bind_address) }
+        let ipv4 = Ipv4Addr::from(u32::from_be(bind_addr));
+
+        // Associate the interfaces corresponding to bind_addr with socket
+        if ipv4.is_unspecified() {
+            // Need to associate all interfaces.
+            hostrc
+                .localhost
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .associate(socket);
+            hostrc.internet.borrow().as_ref().unwrap().associate(socket);
+        } else {
+            // TODO: return error if interface does not exist.
+            let _ = hostrc.with_interface_mut(ipv4, |iface| iface.associate(socket));
+        }
     }
 
     #[no_mangle]
@@ -592,7 +747,34 @@ mod export {
         socket: *const cshadow::CompatSocket,
     ) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_disassociateInterface(hostrc.chost(), socket) }
+
+        let mut bind_addr = 0;
+        let found = unsafe {
+            cshadow::compatsocket_getSocketName(socket, &mut bind_addr, std::ptr::null_mut())
+        };
+        if found {
+            let ipv4 = Ipv4Addr::from(u32::from_be(bind_addr));
+
+            // Associate the interfaces corresponding to bind_addr with socket
+            if ipv4.is_unspecified() {
+                // Need to disassociate all interfaces.
+                hostrc
+                    .localhost
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .disassociate(socket);
+                hostrc
+                    .internet
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .disassociate(socket);
+            } else {
+                // TODO: return error if interface does not exist.
+                let _ = hostrc.with_interface_mut(ipv4, |iface| iface.disassociate(socket));
+            }
+        }
     }
 
     #[no_mangle]
@@ -759,5 +941,25 @@ mod export {
     pub unsafe extern "C" fn host_internal(hostrc: *const Host) -> *mut HostCInternal {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.chost()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_socketWantsToSend(
+        hostrc: *const Host,
+        socket: *const cshadow::CompatSocket,
+        addr: in_addr_t,
+    ) {
+        let host = unsafe { hostrc.as_ref().unwrap() };
+        let ipv4 = u32::from_be(addr).into();
+
+        // TODO: ideally we call `iface.wants_send(socket, hostrc)` in the closure,
+        // but that causes a double borrow loop. This will be fixed in Rob's next
+        // PR, but will cause us to process packets slightly differently than we do now.
+        // For now, we mimic the call flow of the old C code.
+        unsafe {
+            if let Some(netif_ptr) = host.with_interface_mut(ipv4, |iface| iface.borrow_inner()) {
+                cshadow::networkinterface_wantsSend(netif_ptr, host, socket);
+            }
+        };
     }
 }
