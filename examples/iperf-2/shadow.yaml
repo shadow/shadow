@@ -1,0 +1,20 @@
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: iperf
+      args: -s
+      start_time: 0s
+  client:
+    network_node_id: 0
+    processes:
+    - path: iperf
+      args: -c server -t 5
+      start_time: 2s

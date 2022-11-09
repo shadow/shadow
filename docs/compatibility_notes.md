@@ -49,32 +49,11 @@ See also:
 ### Example
 
 ```yaml
-general:
-  stop_time: 10s
-  model_unblocked_syscall_latency: true
-
-network:
-  graph:
-    type: 1_gbit_switch
-
-hosts:
-  server:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/python3
-      args: -m http.server 80
-      start_time: 0s
-  client:
-    network_node_id: 0
-    quantity: 3
-    processes:
-    - path: /usr/bin/curl
-      args: -s server
-      start_time: 2s
+{{#include ../examples/curl/shadow.yaml}}
 ```
 
 ```bash
-rm -rf shadow.data; shadow shadow.yaml > shadow.log
+{{#include ../examples/curl/run.sh:body}}
 ```
 
 ### Notes
@@ -118,30 +97,11 @@ off`.
 ### Example
 
 ```yaml
-general:
-  stop_time: 10s
-
-network:
-  graph:
-    type: 1_gbit_switch
-
-hosts:
-  server:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/iperf
-      args: -s
-      start_time: 0s
-  client:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/iperf
-      args: -c server -t 5
-      start_time: 2s
+{{#include ../examples/iperf-2/shadow.yaml}}
 ```
 
 ```bash
-rm -rf shadow.data; shadow shadow.yaml > shadow.log
+{{#include ../examples/iperf-2/run.sh:body}}
 ```
 
 ### Notes
@@ -168,13 +128,13 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: /bin/iperf3
+    - path: iperf3
       args: -s --bind 0.0.0.0
       start_time: 0s
   client:
     network_node_id: 0
     processes:
-    - path: /bin/iperf3
+    - path: iperf3
       args: -c server -t 5
       start_time: 2s
 ```
@@ -343,32 +303,11 @@ privileges if it detects that the effective user is root.
 ### Example
 
 ```yaml
-general:
-  stop_time: 10s
-  model_unblocked_syscall_latency: true
-
-network:
-  graph:
-    type: 1_gbit_switch
-
-hosts:
-  server:
-    network_node_id: 0
-    processes:
-    - path: node
-      args: /usr/local/bin/http-server -p 80 -d
-      start_time: 3s
-  client:
-    network_node_id: 0
-    processes:
-    - path: curl
-      args: -s server
-      start_time: 5s
+{{#include ../examples/http-server/shadow.yaml}}
 ```
 
 ```bash
-rm -rf shadow.data; shadow shadow.yaml > shadow.log
-less shadow.data/hosts/client/client.curl.1000.stdout
+{{#include ../examples/http-server/run.sh:body}}
 ```
 
 ### Notes
