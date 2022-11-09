@@ -66,6 +66,8 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Upgrade cargo/rust
+        run: rustup update
       - name: Cargo doc check
         run: |
           cmake -S . -B build
