@@ -722,9 +722,8 @@ impl<'a> Manager<'a> {
             }
 
             // it's LD_PRELOAD, so skip if there's no value
-            let value = match value {
-                Some(x) => x,
-                None => continue,
+            let Some(value) = value else {
+                continue;
             };
 
             // both ':' and ' ' are valid LD_PRELOAD separators

@@ -88,10 +88,9 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             ctx: &mut crate::host::context::ThreadContext,
             args: &crate::host::syscall_types::SysCallArgs,
         ) -> crate::host::syscall_types::SyscallResult {{
-            let strace_fmt_options = match ctx.process.strace_logging_options() {{
-                Some(x) => x,
+            let Some(strace_fmt_options) = ctx.process.strace_logging_options() else {{
                 // exit early if strace logging is not enabled
-                None => return self.{syscall_name}_original(ctx, args),
+                return self.{syscall_name}_original(ctx, args);
             }};
 
             // make sure to include the full path to all used types
