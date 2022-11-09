@@ -365,9 +365,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(mkdirat);
             HANDLE_C(mknodat);
             HANDLE_C(mmap);
-#ifdef SYS_mmap2
-            HANDLE_C(mmap2);
-#endif
             HANDLE_C(mprotect);
             HANDLE_C(mremap);
             HANDLE_C(munmap);
