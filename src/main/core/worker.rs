@@ -146,9 +146,9 @@ impl Worker {
     /// Panics if the Worker or its DNS hasn't yet been initialized.
     pub fn with_dns<F, R>(f: F) -> R
     where
-        F: FnOnce(&mut cshadow::DNS) -> R,
+        F: FnOnce(&cshadow::DNS) -> R,
     {
-        Worker::with(|w| f(unsafe { w.shared.dns().as_mut().unwrap() })).unwrap()
+        Worker::with(|w| f(w.shared.dns())).unwrap()
     }
 
     /// Set the currently-active Host.
@@ -474,8 +474,16 @@ pub struct WorkerShared {
 }
 
 impl WorkerShared {
-    pub fn dns(&self) -> *mut cshadow::DNS {
-        self.dns.ptr()
+    pub fn dns(&self) -> &cshadow::DNS {
+        // SAFETY: The DNS object effectively uses interior mutability outside of an UnsafeCell (the
+        // data within DNS can change but is thread-safe due to a GMutex), so normally we couldn't
+        // cast it to a shared reference. But bindgen generates a definition for DNS that is
+        // zero-sized, so rust should be fine with casting this as a shared reference, since rust
+        // doesn't know that DNS has any data associated with it.
+        assert_eq!(0, std::mem::size_of::<cshadow::DNS>());
+
+        // assume that the dns pointer was initialized correctly
+        unsafe { self.dns.ptr().as_ref() }.unwrap()
     }
 
     pub fn latency(&self, src: std::net::IpAddr, dst: std::net::IpAddr) -> Option<SimulationTime> {
@@ -602,7 +610,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
-        Worker::with_dns(|dns| dns as *mut cshadow::DNS)
+        Worker::with_dns(|dns| dns as *const cshadow::DNS).cast_mut()
     }
 
     /// Addresses must be provided in network byte order.
