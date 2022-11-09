@@ -264,19 +264,6 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) 
     return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, offset);
 }
 
-SysCallReturn syscallhandler_mmap2(SysCallHandler* sys, const SysCallArgs* args) {
-    PluginPtr addrPtr = args->args[0].as_ptr; // void*
-    size_t len = args->args[1].as_u64;
-    int prot = args->args[2].as_i64;
-    int flags = args->args[3].as_i64;
-    int fd = args->args[4].as_i64;
-    int64_t pgoffset = args->args[5].as_i64;
-
-    // As long as we're on a system where off_t is 64-bit, we can just remap to mmap.
-    utility_debugAssert(sizeof(off_t) == sizeof(int64_t));
-    return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, 4096 * pgoffset);
-}
-
 SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr old_addr = args->args[0].as_ptr;
     uint64_t old_size = args->args[1].as_u64;

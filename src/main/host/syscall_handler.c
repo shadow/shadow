@@ -292,7 +292,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(accept);
             HANDLE_RUST(accept4);
             HANDLE_RUST(bind);
-            HANDLE_C(brk);
+            HANDLE_RUST(brk);
             HANDLE_C(clock_gettime);
             HANDLE_C(clock_nanosleep);
             HANDLE_C(clone);
@@ -364,13 +364,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(lseek);
             HANDLE_C(mkdirat);
             HANDLE_C(mknodat);
-            HANDLE_C(mmap);
-#ifdef SYS_mmap2
-            HANDLE_C(mmap2);
-#endif
-            HANDLE_C(mprotect);
-            HANDLE_C(mremap);
-            HANDLE_C(munmap);
+            HANDLE_RUST(mmap);
+            HANDLE_RUST(mprotect);
+            HANDLE_RUST(mremap);
+            HANDLE_RUST(munmap);
             HANDLE_C(nanosleep);
             HANDLE_C(newfstatat);
             HANDLE_RUST(open);
