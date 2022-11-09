@@ -63,6 +63,9 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           # dependencies for examples
           export DEBIAN_FRONTEND=noninteractive
+          ./examples/curl/install_deps.sh
+          ./examples/http-server/install_deps.sh
+          ./examples/iperf-2/install_deps.sh
           ./examples/nginx/install_deps.sh
 
       - name: Restore cargo registry cache
