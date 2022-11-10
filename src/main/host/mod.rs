@@ -1,4 +1,5 @@
 pub mod context;
+pub mod cpu;
 pub mod descriptor;
 pub mod host;
 pub mod memory_manager;
