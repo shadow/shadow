@@ -39,7 +39,6 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
-#include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -352,11 +351,11 @@ static void _process_terminate(Process* proc) {
 
 #ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
-    CSimulationTime delay = (CSimulationTime)(elapsedTimeSec * SIMTIME_ONE_SECOND);
-    cpu_addDelay(host_getCPU(proc->host), delay);
+    uint64_t delayNanos = elapsedTimeSec * 1000000000ull;
+    host_addDelayNanos(proc->host, delayNanos);
     Tracker* tracker = host_getTracker(proc->host);
     if (tracker != NULL) {
-        tracker_addProcessingTime(tracker, delay);
+        tracker_addProcessingTimeNanos(tracker, delayNanos);
     }
     proc->totalRunTime += elapsedTimeSec;
 }

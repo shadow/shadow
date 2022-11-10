@@ -20,7 +20,7 @@ Tracker* tracker_new(const Host* host, CSimulationTime interval, LogLevel loglev
                      LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);
 
-void tracker_addProcessingTime(Tracker* tracker, CSimulationTime processingTime);
+void tracker_addProcessingTimeNanos(Tracker* tracker, CSimulationTime processingTime);
 void tracker_addVirtualProcessingDelay(Tracker* tracker, CSimulationTime delay);
 void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);
 void tracker_addOutputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);

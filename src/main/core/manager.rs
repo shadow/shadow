@@ -537,7 +537,7 @@ impl<'a> Manager<'a> {
                 // the manager sets this ID
                 id: host_id,
                 // the manager sets this CPU frequency
-                cpu_frequency: self.raw_frequency_khz,
+                cpu_frequency_khz: self.raw_frequency_khz,
                 node_seed: host_info.seed,
                 hostname,
                 node_id: host_info.network_node_id,

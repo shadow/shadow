@@ -23,7 +23,6 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
-#include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"
@@ -47,7 +46,6 @@ struct _HostCInternal {
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
-    CPU* cpu;
     Tsc tsc;
 
     /* the virtual processes this host is running */
@@ -117,16 +115,13 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
 }
 
 /* this function is called by manager before the workers exist */
-void hostc_setup(const Host* rhost, gulong rawCPUFreq) {
+void hostc_setup(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
-    host->cpu = cpu_new(host_paramsCpuFrequency(rhost), rawCPUFreq, host_paramsCpuThreshold(rhost),
-                        host_paramsCpuPrecision(rhost));
-
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
     if (!tsc_frequency) {
-        tsc_frequency = host_paramsCpuFrequency(rhost);
+        tsc_frequency = host_paramsCpuFrequencyKHz(rhost) * 1000;
         warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
                 "simulation time. For most applications this shouldn't matter.");
     }
@@ -172,9 +167,6 @@ void hostc_shutdown(const Host* rhost) {
         futextable_unref(host->futexTable);
     }
 
-    if(host->cpu) {
-        cpu_free(host->cpu);
-    }
     if(host->tracker) {
         tracker_free(host->tracker);
     }
@@ -268,11 +260,6 @@ void hostc_freeAllApplications(const Host* rhost) {
         process_unref(proc);
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
-}
-
-CPU* hostc_getCPU(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->cpu;
 }
 
 Tsc* hostc_getTsc(HostCInternal* host) {
