@@ -92,6 +92,9 @@ pub struct Host {
     random: RootedRefCell<Xoshiro256PlusPlus>,
     params: HostParameters,
 
+    // TODO: Use a Rust address type.
+    default_address: RefCell<SyncSendPointer<cshadow::Address>>,
+
     // TODO: rearrange our setup process so we don't need Option types here.
     localhost: RefCell<Option<NetworkInterface>>,
     internet: RefCell<Option<NetworkInterface>>,
@@ -136,6 +139,7 @@ impl Host {
         let root = Root::new();
         let random = RootedRefCell::new(&root, Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let data_dir_path = RootedRefCell::new(&root, None);
+        let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
         // Process IDs start at 1000
         let process_id_counter = Cell::new(1000);
@@ -146,6 +150,7 @@ impl Host {
         let packet_priority_counter = Cell::new(1.0);
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
+            default_address,
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
@@ -195,8 +200,9 @@ impl Host {
             )
         };
         assert!(!inet_addr.is_null());
+        *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
 
-        unsafe { cshadow::hostc_setup(self, inet_addr, raw_cpu_freq) }
+        unsafe { cshadow::hostc_setup(self, raw_cpu_freq) }
 
         // Virtual addresses and interfaces for managing network I/O
         let localhost = unsafe {
@@ -250,7 +256,6 @@ impl Host {
 
         // Cleanup
         unsafe { cshadow::address_unref(local_addr) };
-        unsafe { cshadow::address_unref(inet_addr) };
     }
 
     fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
@@ -322,7 +327,8 @@ impl Host {
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
-        let addr = unsafe { cshadow::hostc_getDefaultIP(self.chost()) };
+        let addr = self.default_address.borrow().ptr();
+        let addr = unsafe { cshadow::address_toNetworkIP(addr) };
         u32::from_be(addr).into()
     }
 
@@ -476,10 +482,7 @@ impl Host {
         // Deregistering localhost is a no-op, so we skip it.
         let _ = Worker::with_dns(|dns| unsafe {
             let dns = dns as *const cshadow::DNS;
-            cshadow::dns_deregister(
-                dns.cast_mut(),
-                cshadow::hostc_getDefaultAddress(self.chost()),
-            )
+            cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
         });
     }
 
@@ -569,6 +572,10 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        let default_addr = self.default_address.borrow().ptr();
+        if !default_addr.is_null() {
+            unsafe { cshadow::address_unref(default_addr) };
+        }
         unsafe { cshadow::hostc_unref(self.chost()) };
     }
 }
@@ -641,10 +648,12 @@ mod export {
         hostrc.params.hostname.as_ptr()
     }
 
+    /// SAFETY: Returned pointer belongs to Host, and is only safe to access
+    /// while no other threads are accessing Host.
     #[no_mangle]
     pub unsafe extern "C" fn host_getDefaultAddress(hostrc: *const Host) -> *mut cshadow::Address {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getDefaultAddress(hostrc.chost()) }
+        hostrc.default_address.borrow().ptr()
     }
 
     #[no_mangle]

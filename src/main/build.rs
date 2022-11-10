@@ -150,8 +150,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("runConfigHandlers")
         .allowlist_function("rustlogger_new")
         .allowlist_function("dns_.*")
-        .allowlist_function("address_getID")
-        .allowlist_function("address_unref")
+        .allowlist_function("address_.*")
         .allowlist_function("compatsocket_getSocketName")
 
         .allowlist_function("workerpool_updateMinHostRunahead")

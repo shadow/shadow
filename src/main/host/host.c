@@ -47,7 +47,6 @@ struct _HostCInternal {
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
-    Address* defaultAddress;
     CPU* cpu;
     Tsc tsc;
 
@@ -121,12 +120,9 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
 }
 
 /* this function is called by manager before the workers exist */
-void hostc_setup(const Host* rhost, Address* ethernetAddress, gulong rawCPUFreq) {
+void hostc_setup(const Host* rhost, gulong rawCPUFreq) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
-
-    host->defaultAddress = ethernetAddress;
-    address_ref(host->defaultAddress);
 
     host->cpu = cpu_new(host_paramsCpuFrequency(rhost), rawCPUFreq, host_paramsCpuThreshold(rhost),
                         host_paramsCpuPrecision(rhost));
@@ -200,9 +196,6 @@ void hostc_shutdown(const Host* rhost) {
 #else
     info("host '%s' has been shut down", host_getName(rhost));
 #endif
-
-    if (host->defaultAddress)
-        address_unref(host->defaultAddress);
 
     utility_debugAssert(hostc_getSharedMem(host));
     shimshmemhost_destroy(hostc_getSharedMem(host));
@@ -294,16 +287,6 @@ CPU* hostc_getCPU(HostCInternal* host) {
 Tsc* hostc_getTsc(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return &host->tsc;
-}
-
-Address* hostc_getDefaultAddress(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->defaultAddress;
-}
-
-in_addr_t hostc_getDefaultIP(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return address_toNetworkIP(host->defaultAddress);
 }
 
 Router* hostc_getUpstreamRouter(HostCInternal* host) {
