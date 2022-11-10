@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub};
 
+use serde::ser::SerializeMap;
+
 /// The main counter object that maps individual keys to count values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Counter {
@@ -156,6 +158,20 @@ impl Display for Counter {
             }
         }
         write!(f, "}}")
+    }
+}
+
+impl serde::Serialize for Counter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let items = self.sorted_for_display().into_iter();
+        let mut map = serializer.serialize_map(Some(items.len()))?;
+        for (k, v) in items {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
     }
 }
 
