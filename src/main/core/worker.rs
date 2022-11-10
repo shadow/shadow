@@ -440,7 +440,7 @@ impl Worker {
         .unwrap()
     }
 
-    pub fn worker_add_syscall_counts(syscall_counts: &Counter) {
+    pub fn add_syscall_counts(syscall_counts: &Counter) {
         Worker::with(|w| {
             w.syscall_counter.borrow_mut().add_counter(syscall_counts);
         })
@@ -452,6 +452,18 @@ impl Worker {
             // code so panic only in debug builds
             debug_panic!("Trying to add syscall counts when there is no worker");
         });
+    }
+
+    pub fn add_to_global_syscall_counters() {
+        Worker::with(|w| {
+            let mut thread_counter = w.syscall_counter.borrow_mut();
+            let mut global_counter = SYSCALL_COUNTER.lock().unwrap();
+
+            global_counter.add_counter(&thread_counter);
+
+            *thread_counter = Counter::new();
+        })
+        .unwrap()
     }
 }
 
@@ -675,13 +687,6 @@ mod export {
         unsafe { Worker::send_packet(src_host, packet) };
     }
 
-    /// Returns NULL if there is no live Worker.
-    #[no_mangle]
-    pub extern "C" fn _worker_objectAllocCounter() -> *mut Counter {
-        Worker::with(|w| &mut *w.object_alloc_counter.borrow_mut() as *mut Counter)
-            .unwrap_or(std::ptr::null_mut())
-    }
-
     /// Implementation for counting allocated objects. Do not use this function directly.
     /// Use worker_count_allocation instead from the call site.
     #[no_mangle]
@@ -691,13 +696,6 @@ mod export {
         let s = unsafe { std::ffi::CStr::from_ptr(object_name) };
         let s = s.to_str().unwrap();
         Worker::increment_object_alloc_counter(s);
-    }
-
-    /// Returns NULL if there is no live Worker.
-    #[no_mangle]
-    pub extern "C" fn _worker_objectDeallocCounter() -> *mut Counter {
-        Worker::with(|w| &mut *w.object_dealloc_counter.borrow_mut() as *mut Counter)
-            .unwrap_or(std::ptr::null_mut())
     }
 
     /// Implementation for counting deallocated objects. Do not use this function directly.
@@ -711,20 +709,13 @@ mod export {
         Worker::increment_object_dealloc_counter(s);
     }
 
-    /// Returns NULL if there is no live Worker.
-    #[no_mangle]
-    pub extern "C" fn _worker_syscallCounter() -> *mut Counter {
-        Worker::with(|w| &mut *w.syscall_counter.borrow_mut() as *mut Counter)
-            .unwrap_or(std::ptr::null_mut())
-    }
-
     /// Aggregate the given syscall counts in a worker syscall counter.
     #[no_mangle]
     pub extern "C" fn worker_add_syscall_counts(syscall_counts: *const Counter) {
         assert!(!syscall_counts.is_null());
         let syscall_counts = unsafe { syscall_counts.as_ref() }.unwrap();
 
-        Worker::worker_add_syscall_counts(syscall_counts);
+        Worker::add_syscall_counts(syscall_counts);
     }
 
     /// ID of the current thread's Worker. Panics if the thread has no Worker.
@@ -824,35 +815,6 @@ mod export {
             unsafe { cshadow::dns_resolveNameToAddress(dns, name) }
         })
         .unwrap()
-    }
-
-    /// Add the counters to their global counterparts, and clear the provided counters.
-    #[no_mangle]
-    pub extern "C" fn worker_addToGlobalAllocCounters(
-        alloc_counter: *mut Counter,
-        dealloc_counter: *mut Counter,
-    ) {
-        let alloc_counter = unsafe { alloc_counter.as_mut() }.unwrap();
-        let dealloc_counter = unsafe { dealloc_counter.as_mut() }.unwrap();
-
-        let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
-        let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
-
-        global_alloc_counter.add_counter(alloc_counter);
-        global_dealloc_counter.add_counter(dealloc_counter);
-
-        *alloc_counter = Counter::new();
-        *dealloc_counter = Counter::new();
-    }
-
-    /// Add the counters to their global counterparts, and clear the provided counters.
-    #[no_mangle]
-    pub extern "C" fn worker_addToGlobalSyscallCounter(syscall_counter: *mut Counter) {
-        let syscall_counter = unsafe { syscall_counter.as_mut() }.unwrap();
-
-        let mut global_syscall_counter = SYSCALL_COUNTER.lock().unwrap();
-        global_syscall_counter.add_counter(&syscall_counter);
-        *syscall_counter = Counter::new();
     }
 
     /// Returns a pointer to the current running host. The returned pointer is
