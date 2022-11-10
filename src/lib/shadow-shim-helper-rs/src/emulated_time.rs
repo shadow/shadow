@@ -124,6 +124,12 @@ impl std::ops::Add<SimulationTime> for EmulatedTime {
     }
 }
 
+impl std::ops::AddAssign<SimulationTime> for EmulatedTime {
+    fn add_assign(&mut self, rhs: SimulationTime) {
+        *self = *self + rhs;
+    }
+}
+
 impl std::ops::Sub<SimulationTime> for EmulatedTime {
     type Output = EmulatedTime;
 
