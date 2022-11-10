@@ -460,9 +460,11 @@ impl<'a> Manager<'a> {
                 });
             });
 
-            // add each thread's local allocation counters to the global allocation counter
+            // add each thread's local allocation counters to the global allocation counter, and
+            // local syscall counters to the global syscall counter
             scheduler.scope(|s| {
                 s.run(|_| {
+                    worker::Worker::add_to_global_syscall_counters();
                     worker::Worker::add_to_global_alloc_counters();
                 });
             });
