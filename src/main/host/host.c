@@ -44,8 +44,6 @@
 #include "main/utility/utility.h"
 
 struct _HostCInternal {
-    HostParameters params;
-
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
 
@@ -92,9 +90,7 @@ static CSimulationTime _maxUnappliedCpuLatencyConfig;
 ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
 
 /* this function is called by manager before the workers exist */
-HostCInternal* hostc_new(const HostParameters* params) {
-    utility_debugAssert(params);
-
+HostCInternal* hostc_new(HostId id, const char* hostName) {
     HostCInternal* host = g_new0(HostCInternal, 1);
     MAGIC_INIT(host);
 
@@ -104,23 +100,15 @@ HostCInternal* hostc_new(const HostParameters* params) {
     host->executionTimer = g_timer_new();
 #endif
 
-    /* first copy the entire struct of params */
-    host->params = *params;
-
-    /* now dup the strings so we own them */
-    utility_debugAssert(params->hostname);
-    host->params.hostname = g_strdup(params->hostname);
-    if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
-
     /* applications this node will run */
     host->processes = g_queue_new();
 
-    info("Created host id '%u' name '%s'", (guint)host->params.id, host->params.hostname);
+    info("Created host id '%u' name '%s'", (guint)id, hostName);
 
     host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(hostc_getSharedMem(host), host->params.id,
-                       _modelUnblockedSyscallLatencyConfig, _maxUnappliedCpuLatencyConfig,
-                       _unblockedSyscallLatencyConfig, _unblockedVdsoLatencyConfig);
+    shimshmemhost_init(hostc_getSharedMem(host), id, _modelUnblockedSyscallLatencyConfig,
+                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig,
+                       _unblockedVdsoLatencyConfig);
 
 #ifdef USE_PERF_TIMERS
     /* we go back to the manager setup process here, so stop counting this host execution */
@@ -132,16 +120,6 @@ HostCInternal* hostc_new(const HostParameters* params) {
     return host;
 }
 
-uint64_t hostc_get_bw_down_kiBps(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.requestedBwDownBits / (8 * 1024);
-}
-
-uint64_t hostc_get_bw_up_kiBps(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.requestedBwUpBits / (8 * 1024);
-}
-
 /* this function is called by manager before the workers exist */
 void hostc_setup(const Host* rhost, Address* ethernetAddress, gulong rawCPUFreq) {
     HostCInternal* host = host_internal(rhost);
@@ -150,12 +128,12 @@ void hostc_setup(const Host* rhost, Address* ethernetAddress, gulong rawCPUFreq)
     host->defaultAddress = ethernetAddress;
     address_ref(host->defaultAddress);
 
-    host->cpu = cpu_new(host->params.cpuFrequency, rawCPUFreq, host->params.cpuThreshold,
-                        host->params.cpuPrecision);
+    host->cpu = cpu_new(host_paramsCpuFrequency(rhost), rawCPUFreq, host_paramsCpuThreshold(rhost),
+                        host_paramsCpuPrecision(rhost));
 
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
     if (!tsc_frequency) {
-        tsc_frequency = host->params.cpuFrequency;
+        tsc_frequency = host_paramsCpuFrequency(rhost);
         warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
                 "simulation time. For most applications this shouldn't matter.");
     }
@@ -170,16 +148,6 @@ void hostc_setup(const Host* rhost, Address* ethernetAddress, gulong rawCPUFreq)
      * this only applies the the ethernet interface, the loopback interface
      * does not receive packets from a router. */
     host->router = router_new();
-
-    info("Setup host id '%u' name '%s' with seed %u, ip %s, "
-         "%" G_GUINT64_FORMAT " bwUpKiBps, %" G_GUINT64_FORMAT " bwDownKiBps, "
-         "%" G_GUINT64_FORMAT " initSockSendBufSize, %" G_GUINT64_FORMAT " initSockRecvBufSize, "
-         "%" G_GUINT64_FORMAT " cpuFrequency, %" G_GUINT64_FORMAT " cpuThreshold, "
-         "%" G_GUINT64_FORMAT " cpuPrecision",
-         (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
-         address_toHostIPString(host->defaultAddress), hostc_get_bw_up_kiBps(host),
-         hostc_get_bw_down_kiBps(host), host->params.sendBufSize, host->params.recvBufSize,
-         host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 static void _hostc_free(HostCInternal* host) {
@@ -193,12 +161,13 @@ static void _hostc_free(HostCInternal* host) {
 /* this is needed outside of the free function, because there are parts of the shutdown
  * process that actually hold references to the host. if you just called hostc_unref instead
  * of this function, then hostc_free would never actually get called. */
-void hostc_shutdown(HostCInternal* host) {
+void hostc_shutdown(const Host* rhost) {
+    HostCInternal* host = host_internal(rhost);
 #ifdef USE_PERF_TIMERS
     g_timer_continue(host->executionTimer);
 #endif
 
-    debug("shutting down host %s", host->params.hostname);
+    debug("shutting down host %s", host_getName(rhost));
 
     if(host->processes) {
         g_queue_free(host->processes);
@@ -223,19 +192,17 @@ void hostc_shutdown(HostCInternal* host) {
         tracker_free(host->tracker);
     }
 
-    if(host->params.pcapDir) g_free((gchar*)host->params.pcapDir);
-
 #ifdef USE_PERF_TIMERS
     gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
     g_timer_destroy(host->executionTimer);
     info("host '%s' has been shut down, total execution time was %f seconds", host->params.hostname,
          totalExecutionTime);
 #else
-    info("host '%s' has been shut down", host->params.hostname);
+    info("host '%s' has been shut down", host_getName(rhost));
 #endif
 
-    if(host->defaultAddress) address_unref(host->defaultAddress);
-    if(host->params.hostname) g_free((gchar*)host->params.hostname);
+    if (host->defaultAddress)
+        address_unref(host->defaultAddress);
 
     utility_debugAssert(hostc_getSharedMem(host));
     shimshmemhost_destroy(hostc_getSharedMem(host));
@@ -263,20 +230,16 @@ void hostc_stopExecutionTimer(HostCInternal* host) {
 #endif
 }
 
-HostId hostc_getID(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.id;
-}
-
 /* this function is called by worker after the workers exist */
 void hostc_boot(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
-    if (host->params.heartbeatInterval != SIMTIME_INVALID) {
-        host->tracker = tracker_new(rhost, host->params.heartbeatInterval,
-                                    host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
+    CSimulationTime heartbeatInterval = host_paramsHeartbeatInterval(rhost);
+    if (heartbeatInterval != SIMTIME_INVALID) {
+        host->tracker = tracker_new(rhost, heartbeatInterval, host_paramsHeartbeatLogLevel(rhost),
+                                    host_paramsHeartbeatLogInfo(rhost));
     }
 }
 
@@ -301,7 +264,7 @@ void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulat
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
     guint processID = host_getNewProcessID(rhost);
-    Process* proc = process_new(rhost, processID, startTime, stopTime, hostc_getName(host),
+    Process* proc = process_new(rhost, processID, startTime, stopTime, host_getName(rhost),
                                 pluginName, pluginPath, envv_dup, argv, pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
 
@@ -311,15 +274,16 @@ void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulat
     g_strfreev(envv_dup);
 }
 
-void hostc_freeAllApplications(HostCInternal* host) {
+void hostc_freeAllApplications(const Host* rhost) {
+    HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
-    trace("start freeing applications for host '%s'", host->params.hostname);
+    trace("start freeing applications for host '%s'", host_getName(rhost));
     while(!g_queue_is_empty(host->processes)) {
         Process* proc = g_queue_pop_head(host->processes);
         process_stop(proc);
         process_unref(proc);
     }
-    trace("done freeing application for host '%s'", host->params.hostname);
+    trace("done freeing application for host '%s'", host_getName(rhost));
 }
 
 CPU* hostc_getCPU(HostCInternal* host) {
@@ -332,11 +296,6 @@ Tsc* hostc_getTsc(HostCInternal* host) {
     return &host->tsc;
 }
 
-const gchar* hostc_getName(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.hostname;
-}
-
 Address* hostc_getDefaultAddress(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->defaultAddress;
@@ -347,29 +306,9 @@ in_addr_t hostc_getDefaultIP(HostCInternal* host) {
     return address_toNetworkIP(host->defaultAddress);
 }
 
-gboolean hostc_autotuneReceiveBuffer(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.autotuneRecvBuf;
-}
-
-gboolean hostc_autotuneSendBuffer(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.autotuneSendBuf;
-}
-
 Router* hostc_getUpstreamRouter(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->router;
-}
-
-guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.recvBufSize;
-}
-
-guint64 hostc_getConfiguredSendBufSize(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.sendBufSize;
 }
 
 in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {
@@ -436,11 +375,6 @@ in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_
 Tracker* hostc_getTracker(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->tracker;
-}
-
-LogLevel hostc_getLogLevel(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->params.logLevel;
 }
 
 Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host) {

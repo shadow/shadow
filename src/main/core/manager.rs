@@ -19,7 +19,7 @@ use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
-use crate::host::host::Host;
+use crate::host::host::{Host, HostParameters};
 use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
@@ -533,61 +533,50 @@ impl<'a> Manager<'a> {
 
         // scope used to enforce drop order for pointers
         let host = {
-            let params = c::HostParameters {
+            let params = HostParameters {
                 // the manager sets this ID
                 id: host_id,
                 // the manager sets this CPU frequency
-                cpuFrequency: self.raw_frequency_khz,
-                // cast the u64 to a u32, ignoring truncated bits
-                nodeSeed: host_info.seed as u32,
-                hostname: hostname.as_ptr(),
-                nodeId: host_info.network_node_id,
-                ipAddr: match host_info.ip_addr.unwrap() {
+                cpu_frequency: self.raw_frequency_khz,
+                node_seed: host_info.seed,
+                hostname,
+                node_id: host_info.network_node_id,
+                ip_addr: match host_info.ip_addr.unwrap() {
                     std::net::IpAddr::V4(ip) => u32::to_be(ip.into()),
                     // the config only allows ipv4 addresses, so this shouldn't happen
                     std::net::IpAddr::V6(_) => unreachable!("IPv6 not supported"),
                 },
-                simEndTime: EmulatedTime::to_c_emutime(Some(self.end_time)),
-                requestedBwDownBits: host_info.bandwidth_down_bits.unwrap(),
-                requestedBwUpBits: host_info.bandwidth_up_bits.unwrap(),
-                cpuThreshold: host_info.cpu_threshold,
-                cpuPrecision: host_info.cpu_precision,
-                heartbeatInterval: SimulationTime::to_c_simtime(host_info.heartbeat_interval),
-                heartbeatLogLevel: host_info
+                sim_end_time: self.end_time,
+                requested_bw_down_bits: host_info.bandwidth_down_bits.unwrap(),
+                requested_bw_up_bits: host_info.bandwidth_up_bits.unwrap(),
+                cpu_threshold: host_info.cpu_threshold,
+                cpu_precision: host_info.cpu_precision,
+                heartbeat_interval: host_info.heartbeat_interval,
+                heartbeat_log_level: host_info
                     .heartbeat_log_level
                     .map(|x| x.to_c_loglevel())
                     .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                heartbeatLogInfo: host_info
+                heartbeat_log_info: host_info
                     .heartbeat_log_info
                     .iter()
                     .map(|x| x.to_c_loginfoflag())
                     .reduce(|x, y| x | y)
                     .unwrap_or(c::_LogInfoFlags_LOG_INFO_FLAGS_NONE),
-                logLevel: host_info
+                log_level: host_info
                     .log_level
                     .map(|x| x.to_c_loglevel())
                     .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                // the `as_ref()` is important to prevent `map()` from consuming the `Option`
-                // and using a pointer to a temporary value
-                pcapDir: pcap_dir
-                    .as_ref()
-                    .map(|x| x.as_ptr())
-                    .unwrap_or(std::ptr::null()),
-                pcapCaptureSize: host_info.pcap_capture_size.try_into().unwrap(),
+                pcap_dir,
+                pcap_capture_size: host_info.pcap_capture_size.try_into().unwrap(),
                 qdisc: host_info.qdisc,
-                recvBufSize: host_info.recv_buf_size,
-                autotuneRecvBuf: if host_info.autotune_recv_buf { 1 } else { 0 },
-                sendBufSize: host_info.send_buf_size,
-                autotuneSendBuf: if host_info.autotune_send_buf { 1 } else { 0 },
+                init_sock_recv_buf_size: host_info.recv_buf_size,
+                autotune_recv_buf: host_info.autotune_recv_buf,
+                init_sock_send_buf_size: host_info.send_buf_size,
+                autotune_send_buf: host_info.autotune_send_buf,
             };
 
             let host = Box::new(Host::new(params));
             unsafe { host.setup(dns, self.raw_frequency_khz, &self.hosts_path) };
-
-            // make sure we never accidentally drop the following objects before running the
-            // unsafe code (will be a compile-time error if they were dropped)
-            let _ = &hostname;
-            let _ = &pcap_dir;
 
             host
         };

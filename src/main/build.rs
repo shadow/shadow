@@ -14,7 +14,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "Packet".into(),
             "Process".into(),
             "Host".into(),
-            "HostParameters".into(),
             "Thread".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
@@ -36,7 +35,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "main/host/descriptor/descriptor_types.h".into(),
                 "main/host/futex_table.h".into(),
                 "main/host/host.h".into(),
-                "main/host/host_parameters.h".into(),
                 "main/host/network_interface.h".into(),
                 "main/host/protocol.h".into(),
                 "main/host/status_listener.h".into(),
@@ -187,7 +185,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("return_code_for_signal")
 
         .allowlist_type("HostCInternal")
-        .allowlist_type("HostParameters")
         .allowlist_type("PluginPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")
