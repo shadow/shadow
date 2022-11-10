@@ -25,14 +25,13 @@ typedef struct _HostCInternal HostCInternal;
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/futex_table.h"
-#include "main/host/host_parameters.h"
 #include "main/host/protocol.h"
 #include "main/host/thread.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 
-HostCInternal* hostc_new(const HostParameters* params);
+HostCInternal* hostc_new(HostId id, const char* hostName);
 void hostc_unref(HostCInternal* host);
 
 void hostc_continueExecutionTimer(HostCInternal* host);
@@ -40,33 +39,22 @@ void hostc_stopExecutionTimer(HostCInternal* host);
 
 void hostc_setup(const Host* host, Address* ethernetAddress, gulong rawCPUFreq);
 void hostc_boot(const Host* rhost);
-void hostc_shutdown(HostCInternal* host);
+void hostc_shutdown(const Host* rhost);
 
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
                           const gchar* pluginName, const gchar* pluginPath,
                           const gchar* const* envv, const gchar* const* argv,
                           bool pause_for_debugging);
-void hostc_freeAllApplications(HostCInternal* host);
+void hostc_freeAllApplications(const Host* rhost);
 
-HostId hostc_getID(HostCInternal* host);
 CPU* hostc_getCPU(HostCInternal* host);
 Tsc* hostc_getTsc(HostCInternal* host);
-const gchar* hostc_getName(HostCInternal* host);
 Address* hostc_getDefaultAddress(HostCInternal* host);
 in_addr_t hostc_getDefaultIP(HostCInternal* host);
 
-gboolean hostc_autotuneReceiveBuffer(HostCInternal* host);
-gboolean hostc_autotuneSendBuffer(HostCInternal* host);
-guint64 hostc_getConfiguredRecvBufSize(HostCInternal* host);
-guint64 hostc_getConfiguredSendBufSize(HostCInternal* host);
-
 Router* hostc_getUpstreamRouter(HostCInternal* host);
 
-uint64_t hostc_get_bw_down_kiBps(HostCInternal* host);
-uint64_t hostc_get_bw_up_kiBps(HostCInternal* host);
-
 Tracker* hostc_getTracker(HostCInternal* host);
-LogLevel hostc_getLogLevel(HostCInternal* host);
 
 in_port_t hostc_getRandomFreePort(const Host* host, ProtocolType type, in_addr_t interfaceIP,
                                   in_addr_t peerIP, in_port_t peerPort);

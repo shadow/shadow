@@ -1,17 +1,4 @@
-use log::trace;
-use once_cell::unsync::OnceCell;
-use rand::SeedableRng;
-use rand_xoshiro::Xoshiro256PlusPlus;
-use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::rootedcell::Root;
-use std::cell::{Cell, RefCell};
-use std::ffi::{CStr, CString, OsString};
-use std::net::Ipv4Addr;
-use std::os::raw::c_char;
-use std::os::unix::prelude::OsStringExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-
+use crate::core::support::configuration::QDiscMode;
 use crate::core::work::event::Event;
 use crate::core::work::event_queue::EventQueue;
 use crate::core::work::task::TaskRef;
@@ -21,11 +8,52 @@ use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::NetworkInterface;
 use crate::network::router::Router;
 use crate::utility::{self, SyncSendPointer};
+use atomic_refcell::AtomicRefCell;
+use log::{info, trace};
+use logger::LogLevel;
+use once_cell::unsync::OnceCell;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
+use std::cell::{Cell, RefCell};
+use std::ffi::{CString, OsString};
+use std::net::Ipv4Addr;
+use std::os::raw::c_char;
+use std::os::unix::prelude::OsStringExt;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
-use atomic_refcell::AtomicRefCell;
+pub struct HostParameters {
+    pub id: HostId,
+    pub node_seed: u64,
+    // TODO: Remove when we don't need C compatibility.
+    // Already storing as a String in HostInfo.
+    pub hostname: CString,
+    pub node_id: u32,
+    pub ip_addr: libc::in_addr_t,
+    pub sim_end_time: EmulatedTime,
+    pub requested_bw_down_bits: u64,
+    pub requested_bw_up_bits: u64,
+    pub cpu_frequency: u64,
+    pub cpu_threshold: u64,
+    pub cpu_precision: u64,
+    pub heartbeat_interval: Option<SimulationTime>,
+    pub heartbeat_log_level: LogLevel,
+    pub heartbeat_log_info: cshadow::LogInfoFlags,
+    pub log_level: LogLevel,
+    // TODO: change to PathBuf when we don't need C compatibility
+    pub pcap_dir: Option<CString>,
+    pub pcap_capture_size: u32,
+    pub qdisc: QDiscMode,
+    pub init_sock_recv_buf_size: u64,
+    pub autotune_recv_buf: bool,
+    pub init_sock_send_buf_size: u64,
+    pub autotune_send_buf: bool,
+}
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -62,6 +90,7 @@ pub struct Host {
     event_queue: Arc<Mutex<EventQueue>>,
 
     random: RootedRefCell<Xoshiro256PlusPlus>,
+    params: HostParameters,
 
     // TODO: rearrange our setup process so we don't need Option types here.
     localhost: RefCell<Option<NetworkInterface>>,
@@ -84,13 +113,7 @@ pub struct Host {
 
     // track the order in which the application sent us application data
     packet_priority_counter: Cell<f64>,
-
-    params: cshadow::HostParameters,
 }
-
-/// HostParameters is !Send by default due to string pointers, but those are
-/// statically allocated and immutable.
-unsafe impl Send for cshadow::HostParameters {}
 
 /// Host must be `Send`.
 impl crate::utility::IsSend for Host {}
@@ -106,15 +129,12 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    pub fn new(params: cshadow::HostParameters) -> Self {
+    pub fn new(params: HostParameters) -> Self {
         // Ok because hostc_new copies params rather than saving this pointer.
         // TODO: remove params from HostCInternal.
-        let chost = unsafe { cshadow::hostc_new(&params) };
+        let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
-        let random = RootedRefCell::new(
-            &root,
-            Xoshiro256PlusPlus::seed_from_u64(params.nodeSeed as u64),
-        );
+        let random = RootedRefCell::new(&root, Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let data_dir_path = RootedRefCell::new(&root, None);
 
         // Process IDs start at 1000
@@ -156,16 +176,22 @@ impl Host {
         // Register using the param hints.
         // We already checked that the addresses are available, so fail if they are not.
         let local_ipv4 = u32::from(Ipv4Addr::LOCALHOST).to_be();
-        let local_addr =
-            unsafe { cshadow::dns_register(dns, self.params.id, self.params.hostname, local_ipv4) };
+        let local_addr = unsafe {
+            cshadow::dns_register(
+                dns,
+                self.params.id,
+                self.params.hostname.as_ptr(),
+                local_ipv4,
+            )
+        };
         assert!(!local_addr.is_null());
 
         let inet_addr = unsafe {
             cshadow::dns_register(
                 dns,
                 self.params.id,
-                self.params.hostname,
-                self.params.ipAddr,
+                self.params.hostname.as_ptr(),
+                self.params.ip_addr,
             )
         };
         assert!(!inet_addr.is_null());
@@ -178,7 +204,7 @@ impl Host {
                 self.id(),
                 local_addr,
                 self.pcap_dir_path(host_root_path),
-                self.params.pcapCaptureSize,
+                self.params.pcap_capture_size,
                 self.params.qdisc,
                 false,
             )
@@ -190,12 +216,37 @@ impl Host {
                 self.id(),
                 inet_addr,
                 self.pcap_dir_path(host_root_path),
-                self.params.pcapCaptureSize,
+                self.params.pcap_capture_size,
                 self.params.qdisc,
                 true,
             )
         };
         self.internet.borrow_mut().replace(internet);
+
+        info!(
+            concat!(
+                "Setup host id '{:?}'",
+                " name '{name}'",
+                " with seed {seed},",
+                " {bw_up_kiBps} bwUpKiBps,",
+                " {bw_down_kiBps} bwDownKiBps,",
+                " {init_sock_send_buf_size} initSockSendBufSize,",
+                " {init_sock_recv_buf_size} initSockRecvBufSize, ",
+                " {cpu_frequency} cpuFrequency, ",
+                " {cpu_threshold} cpuThreshold, ",
+                " {cpu_precision} cpuPresision"
+            ),
+            self.id(),
+            name = self.info().name,
+            seed = self.params.node_seed,
+            bw_up_kiBps = self.bw_up_kiBps(),
+            bw_down_kiBps = self.bw_down_kiBps(),
+            init_sock_send_buf_size = self.params.init_sock_send_buf_size,
+            init_sock_recv_buf_size = self.params.init_sock_recv_buf_size,
+            cpu_frequency = self.params.cpu_frequency,
+            cpu_threshold = self.params.cpu_threshold,
+            cpu_precision = self.params.cpu_precision
+        );
 
         // Cleanup
         unsafe { cshadow::address_unref(local_addr) };
@@ -203,10 +254,7 @@ impl Host {
     }
 
     fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
-        let hostname: OsString = {
-            let hostname = unsafe { CStr::from_ptr(self.params.hostname) };
-            OsString::from_vec(hostname.to_bytes().to_vec())
-        };
+        let hostname: OsString = { OsString::from_vec(self.params.hostname.to_bytes().to_vec()) };
 
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
@@ -215,19 +263,15 @@ impl Host {
     }
 
     fn pcap_dir_path(&self, host_root_path: &Path) -> Option<PathBuf> {
-        if self.params.pcapDir.is_null() {
-            None
-        } else {
-            let path_string: OsString = {
-                let path_str = unsafe { CStr::from_ptr(self.params.pcapDir) };
-                OsString::from_vec(path_str.to_bytes().to_vec())
-            };
+        let Some(pcap_dir) = &self.params.pcap_dir else {
+            return None;
+        };
+        let path_string: OsString = { OsString::from_vec(pcap_dir.to_bytes().to_vec()) };
 
-            let mut path = self.data_dir_path(host_root_path);
-            // If relative it will append, if absolute it will replace.
-            path.push(PathBuf::from(path_string));
-            path.canonicalize().ok()
-        }
+        let mut path = self.data_dir_path(host_root_path);
+        // If relative it will append, if absolute it will replace.
+        path.push(PathBuf::from(path_string));
+        path.canonicalize().ok()
     }
 
     pub unsafe fn add_application(
@@ -262,7 +306,7 @@ impl Host {
         self.info.get_or_init(|| {
             Arc::new(HostInfo {
                 id: self.id(),
-                name: self.name().into(),
+                name: self.params.hostname.to_str().unwrap().to_owned(),
                 default_ip: self.default_ip(),
                 log_level: self.log_level(),
             })
@@ -270,12 +314,11 @@ impl Host {
     }
 
     pub fn id(&self) -> HostId {
-        unsafe { cshadow::hostc_getID(self.chost()) }
+        self.params.id
     }
 
     pub fn name(&self) -> &str {
-        let slice = unsafe { std::ffi::CStr::from_ptr(cshadow::hostc_getName(self.chost())) };
-        slice.to_str().unwrap()
+        &self.info().name
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
@@ -290,7 +333,7 @@ impl Host {
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
-        let level = unsafe { cshadow::hostc_getLogLevel(self.chost()) };
+        let level = self.params.log_level;
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
@@ -306,6 +349,16 @@ impl Host {
         } else {
             None
         }
+    }
+
+    #[allow(non_snake_case)]
+    pub fn bw_up_kiBps(&self) -> u64 {
+        self.params.requested_bw_up_bits / (8 * 1024)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn bw_down_kiBps(&self) -> u64 {
+        self.params.requested_bw_down_bits / (8 * 1024)
     }
 
     /// Run `f` with a reference to the network interface associated with
@@ -383,7 +436,7 @@ impl Host {
     }
 
     pub fn push_local_event(&self, event: Event) -> bool {
-        if event.time() >= EmulatedTime::from_c_emutime(self.params.simEndTime).unwrap() {
+        if event.time() >= self.params.sim_end_time {
             return false;
         }
         self.event_queue.lock().unwrap().push(event);
@@ -394,8 +447,8 @@ impl Host {
         unsafe { cshadow::hostc_boot(self) };
 
         // Start refilling the token buckets for all interfaces.
-        let bw_down = unsafe { cshadow::hostc_get_bw_down_kiBps(self.chost()) };
-        let bw_up = unsafe { cshadow::hostc_get_bw_up_kiBps(self.chost()) };
+        let bw_down = self.bw_down_kiBps();
+        let bw_up = self.bw_up_kiBps();
         self.localhost
             .borrow()
             .as_ref()
@@ -418,7 +471,7 @@ impl Host {
             self.internet.replace(None);
         }
 
-        unsafe { cshadow::hostc_shutdown(self.chost()) };
+        unsafe { cshadow::hostc_shutdown(self) };
 
         // Deregistering localhost is a no-op, so we skip it.
         let _ = Worker::with_dns(|dns| unsafe {
@@ -431,7 +484,7 @@ impl Host {
     }
 
     pub fn free_all_applications(&self) {
-        unsafe { cshadow::hostc_freeAllApplications(self.chost()) };
+        unsafe { cshadow::hostc_freeAllApplications(self) };
     }
 
     pub fn execute(&self, until: EmulatedTime) {
@@ -561,13 +614,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_freeAllApplications(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_freeAllApplications(hostrc.chost()) }
+        hostrc.free_all_applications()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getID(hostrc: *const Host) -> HostId {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getID(hostrc.chost()) }
+        hostrc.id()
     }
 
     #[no_mangle]
@@ -585,7 +638,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getName(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getName(hostrc.chost()) }
+        hostrc.params.hostname.as_ptr()
     }
 
     #[no_mangle]
@@ -610,25 +663,25 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_autotuneReceiveBuffer(hostrc: *const Host) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_autotuneReceiveBuffer(hostrc.chost()) != 0 }
+        hostrc.params.autotune_recv_buf
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_autotuneSendBuffer(hostrc: *const Host) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_autotuneSendBuffer(hostrc.chost()) != 0 }
+        hostrc.params.autotune_send_buf
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getConfiguredRecvBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getConfiguredRecvBufSize(hostrc.chost()) }
+        hostrc.params.init_sock_recv_buf_size
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getConfiguredSendBufSize(hostrc.chost()) }
+        hostrc.params.init_sock_send_buf_size
     }
 
     #[no_mangle]
@@ -640,25 +693,19 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_get_bw_down_kiBps(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_get_bw_down_kiBps(hostrc.chost()) }
+        hostrc.bw_down_kiBps()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_get_bw_up_kiBps(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_get_bw_up_kiBps(hostrc.chost()) }
+        hostrc.bw_up_kiBps()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         unsafe { cshadow::hostc_getTracker(hostrc.chost()) }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getLogLevel(hostrc: *const Host) -> logger::LogLevel {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getLogLevel(hostrc.chost()) }
     }
 
     /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when
@@ -938,6 +985,42 @@ mod export {
             let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
             rng.fill_bytes(buf);
         })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsCpuFrequency(host: *const Host) -> u64 {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.params.cpu_frequency
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsCpuThreshold(host: *const Host) -> u64 {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.params.cpu_threshold
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsCpuPrecision(host: *const Host) -> u64 {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.params.cpu_precision
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsHeartbeatInterval(host: *const Host) -> CSimulationTime {
+        let host = unsafe { host.as_ref().unwrap() };
+        SimulationTime::to_c_simtime(host.params.heartbeat_interval)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsHeartbeatLogLevel(host: *const Host) -> LogLevel {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.params.heartbeat_log_level
+    }
+
+    #[no_mangle]
+    pub extern "C" fn host_paramsHeartbeatLogInfo(host: *const Host) -> cshadow::LogInfoFlags {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.params.heartbeat_log_info
     }
 
     /// Should only be used from host.c
