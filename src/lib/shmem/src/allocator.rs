@@ -32,8 +32,14 @@ where
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
 // immutable references to the underlying data.
-unsafe impl <'origin, T> Sync for ShMemBlock<'origin, T> where T: Sync + VirtualAddressSpaceIndependent {}
-unsafe impl <'origin, T> Send for ShMemBlock<'origin, T> where T: Send + Sync + VirtualAddressSpaceIndependent {}
+unsafe impl<'origin, T> Sync for ShMemBlock<'origin, T> where
+    T: Sync + VirtualAddressSpaceIndependent
+{
+}
+unsafe impl<'origin, T> Send for ShMemBlock<'origin, T> where
+    T: Send + Sync + VirtualAddressSpaceIndependent
+{
+}
 
 impl<'origin, T> ShMemBlock<'origin, T>
 where
@@ -55,24 +61,6 @@ where
         }
     }
 
-    /// Deallocates the backing storage from shared memory. Panics
-    /// if `block` was not created via an [`Allocator`].
-    ///
-    /// SAFETY: There must be no live references to this memory, including
-    /// via other [`ShMemBlock`] objects that alias this one.
-    pub unsafe fn deallocate(mut self) {
-        match self.origin {
-            ShMemBlockOrigin::Allocator(a) => {
-                unsafe {
-                    c_bindings::shmemallocator_free(a.internal, &mut self.internal as *mut _)
-                };
-            }
-            ShMemBlockOrigin::Serializer(_) => {
-                panic!("Cannot deallocate a block that was instantiated via a Serializer");
-            }
-        }
-    }
-
     pub fn serialize(&self) -> ShMemBlockSerialized {
         let serialized = match self.origin {
             ShMemBlockOrigin::Allocator(a) => unsafe {
@@ -90,6 +78,26 @@ where
     // This function will fail to compile for a T that isn't FFI-safe.
     #[deny(improper_ctypes_definitions)]
     extern "C" fn _validate_stable_layout(_: T) {}
+}
+
+impl<'origin, T> Drop for ShMemBlock<'origin, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    fn drop(&mut self) {
+        match self.origin {
+            ShMemBlockOrigin::Allocator(a) => {
+                unsafe {
+                    std::ptr::drop_in_place(self.internal.p as *mut T);
+                    c_bindings::shmemallocator_free(a.internal, &mut self.internal as *mut _)
+                };
+            }
+            ShMemBlockOrigin::Serializer(_) => {
+                // No cleanup of individual blocks implemented.
+                // TODO: Probably ought to munmap.
+            }
+        }
+    }
 }
 
 impl<'origin, T> Deref for ShMemBlock<'origin, T>
@@ -163,9 +171,7 @@ impl Allocator {
         })
     }
 
-    /// Safety: The returned [`ShMemBlock`] must not be deallocated as long as
-    /// any [`ShMemBlock`] aliasing it is still alive.
-    pub unsafe fn alloc<T>(&self, val: T) -> ShMemBlock<T>
+    pub fn alloc<T>(&self, val: T) -> ShMemBlock<T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
     {
@@ -180,27 +186,6 @@ impl Allocator {
         // Safety: We've validated and initialized; caller is responsible for
         // lifetime.
         unsafe { ShMemBlock::new(raw_block, ShMemBlockOrigin::Allocator(self)) }
-    }
-
-    /// Deserialize a `block` that was allocated by `self`. You probably want
-    /// Serializer::deserialize instead.
-    ///
-    /// TODO: do we need this? Can only be called from the process
-    /// that originally allocated the block, which shouldn't need to.
-    ///
-    /// SAFETY:
-    /// * `block` must have been originally created by this allocator.
-    /// * `block` must have been created from  a value of type `T`.
-    /// * The backing memory must be live for the lifetime of the returned
-    ///   ShMemBlock. e.g. `ShMemBlock::deallocate` must not have been called
-    ///   on any block referencing that memory.
-    pub unsafe fn deserialize<'a, T>(&'a self, block: &ShMemBlockSerialized) -> ShMemBlock<'a, T>
-    where
-        T: Sync + VirtualAddressSpaceIndependent,
-    {
-        let raw_blk =
-            unsafe { c_bindings::shmemallocator_blockDeserialize(self.internal, &block.internal) };
-        unsafe { ShMemBlock::new(raw_blk, ShMemBlockOrigin::Allocator(self)) }
     }
 }
 
@@ -227,8 +212,9 @@ impl Serializer {
     /// SAFETY:
     /// * `block` must have been created from a `ShMemBlock<T>`
     /// * The backing memory must be live for the lifetime of the returned
-    ///   ShMemBlock. e.g. `ShMemBlock::deallocate` must not have been called
-    ///   on any block referencing that memory.
+    ///   ShMemBlock. i.e. the original allocated ShMemBlock must outlive the
+    ///   returned one. We can't guarantee this with normal lifetime analysis, since
+    ///   the original block may be in another process.
     pub unsafe fn deserialize<'a, T>(&'a self, block: &ShMemBlockSerialized) -> ShMemBlock<'a, T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
@@ -241,6 +227,8 @@ impl Serializer {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicI32, Ordering};
+
     use super::*;
 
     #[test]
@@ -250,7 +238,7 @@ mod tests {
         type T = i32;
         let x: T = 42;
 
-        let original_block: ShMemBlock<T> = unsafe { Allocator::global().alloc(x) };
+        let original_block: ShMemBlock<T> = Allocator::global().alloc(x);
         {
             let serialized_block = original_block.serialize();
             let serialized_str = serialized_block.to_string();
@@ -258,26 +246,30 @@ mod tests {
             let block = unsafe { Serializer::global().deserialize::<T>(&serialized_block) };
             assert_eq!(*block, 42);
         }
-        unsafe { original_block.deallocate() };
     }
 
-    // As above but uses Allocator::deserialize instead of Serializer::deserialize.
-    // TODO: do we need this functionality?
     #[test]
     // Uses FFI
     #[cfg_attr(miri, ignore)]
-    fn round_trip_through_allocator() {
-        type T = i32;
-        let x: T = 42;
+    fn mutations() {
+        type T = AtomicI32;
+        let original_block: ShMemBlock<T> = Allocator::global().alloc(AtomicI32::new(0));
 
-        let original_block: ShMemBlock<T> = unsafe { Allocator::global().alloc(x) };
-        {
-            let serialized_block = original_block.serialize();
-            let serialized_str = serialized_block.to_string();
-            let serialized_block = ShMemBlockSerialized::from_string(&serialized_str).unwrap();
-            let block = unsafe { Allocator::global().deserialize::<T>(&serialized_block) };
-            assert_eq!(*block, 42);
-        }
-        unsafe { original_block.deallocate() };
+        let serialized_block = original_block.serialize();
+        let deserialized_block =
+            unsafe { Serializer::global().deserialize::<T>(&serialized_block) };
+
+        assert_eq!(original_block.load(Ordering::SeqCst), 0);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 0);
+
+        // Mutate through original
+        original_block.store(10, Ordering::SeqCst);
+        assert_eq!(original_block.load(Ordering::SeqCst), 10);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 10);
+
+        // Mutate through deserialized
+        deserialized_block.store(20, Ordering::SeqCst);
+        assert_eq!(original_block.load(Ordering::SeqCst), 20);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
     }
 }
