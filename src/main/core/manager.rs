@@ -463,12 +463,10 @@ impl<'a> Manager<'a> {
                 });
             });
 
-            // add each thread's local allocation counters to the global allocation counter, and
-            // local syscall counters to the global syscall counter
+            // add each thread's local sim statistics to the global sim statistics.
             scheduler.scope(|s| {
                 s.run(|_| {
-                    worker::Worker::add_to_global_syscall_counters();
-                    worker::Worker::add_to_global_alloc_counters();
+                    worker::Worker::add_to_global_sim_stats();
                 });
             });
 
@@ -497,35 +495,30 @@ impl<'a> Manager<'a> {
         // since the scheduler was dropped, all workers should have completed and the global object
         // and syscall counters should have been updated
 
-        let mut stats = sim_stats::SimStats::new();
+        worker::with_global_sim_stats(|stats| {
+            if self.config.experimental.use_syscall_counters.unwrap() {
+                log::info!(
+                    "Global syscall counts: {}",
+                    stats.syscall_counts.lock().unwrap()
+                );
+            }
+            if self.config.experimental.use_object_counters.unwrap() {
+                let alloc_counts = stats.alloc_counts.lock().unwrap();
+                let dealloc_counts = stats.dealloc_counts.lock().unwrap();
+                log::info!("Global allocated object counts: {}", alloc_counts);
+                log::info!("Global deallocated object counts: {}", dealloc_counts);
 
-        // log syscall counters
-        if self.config.experimental.use_syscall_counters.unwrap() {
-            worker::with_global_syscall_counter(|counter| {
-                log::info!("Global syscall counts: {}", counter);
-                stats.syscalls = counter.clone();
-            });
-        }
-
-        // log and check object allocation/deallocation counters
-        if self.config.experimental.use_object_counters.unwrap() {
-            worker::with_global_object_counters(|alloc_counter, dealloc_counter| {
-                log::info!("Global allocated object counts: {}", alloc_counter);
-                log::info!("Global deallocated object counts: {}", dealloc_counter);
-                stats.alloc_counts = alloc_counter.clone();
-                stats.dealloc_counts = dealloc_counter.clone();
-
-                if alloc_counter == dealloc_counter {
+                if *alloc_counts == *dealloc_counts {
                     log::info!("We allocated and deallocated the same number of objects :)");
                 } else {
                     // don't change the formatting of this line as we search for it in test cases
                     log::warn!("Memory leak detected");
                 }
-            });
-        }
+            }
 
-        let stats_filename = self.data_path.clone().join("sim-stats.json");
-        sim_stats::write_stats_to_file(&stats_filename, stats)?;
+            let stats_filename = self.data_path.clone().join("sim-stats.json");
+            sim_stats::write_stats_to_file(&stats_filename, stats)
+        })?;
 
         Ok(num_plugin_errors)
     }

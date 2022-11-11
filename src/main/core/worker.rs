@@ -7,6 +7,7 @@ use rand::Rng;
 use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
+use crate::core::sim_stats::{LocalSimStats, SharedSimStats};
 use crate::core::work::event::Event;
 use crate::core::work::task::TaskRef;
 use crate::cshadow;
@@ -34,9 +35,7 @@ use super::work::event_queue::EventQueue;
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
 // global counters to be used when there is no worker active
-static ALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
-static DEALLOC_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
-static SYSCALL_COUNTER: Lazy<Mutex<Counter>> = Lazy::new(|| Mutex::new(Counter::new()));
+static SIM_STATS: Lazy<SharedSimStats> = Lazy::new(|| SharedSimStats::new());
 
 // thread-local global state
 std::thread_local! {
@@ -91,12 +90,8 @@ pub struct Worker {
     // worker's minimum latency.
     min_latency_cache: Cell<Option<SimulationTime>>,
 
-    // A counter for all syscalls made by processes freed by this worker.
-    syscall_counter: RefCell<Counter>,
-    // A counter for objects allocated by this worker.
-    object_alloc_counter: RefCell<Counter>,
-    // A counter for objects deallocated by this worker.
-    object_dealloc_counter: RefCell<Counter>,
+    // Statistics about the simulation, such as syscall counts.
+    sim_stats: LocalSimStats,
 
     next_event_time: Cell<Option<EmulatedTime>>,
 }
@@ -116,9 +111,7 @@ impl Worker {
                     barrier: None,
                 }),
                 min_latency_cache: Cell::new(None),
-                object_alloc_counter: RefCell::new(Counter::new()),
-                object_dealloc_counter: RefCell::new(Counter::new()),
-                syscall_counter: RefCell::new(Counter::new()),
+                sim_stats: LocalSimStats::new(),
                 next_event_time: Cell::new(None),
             }));
             assert!(res.is_ok(), "Worker already initialized");
@@ -404,11 +397,11 @@ impl Worker {
         }
 
         Worker::with(|w| {
-            w.object_alloc_counter.borrow_mut().add_one(s);
+            w.sim_stats.alloc_counts.borrow_mut().add_one(s);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
-            ALLOC_COUNTER.lock().unwrap().add_one(s);
+            SIM_STATS.alloc_counts.lock().unwrap().add_one(s);
         });
     }
 
@@ -418,35 +411,28 @@ impl Worker {
         }
 
         Worker::with(|w| {
-            w.object_dealloc_counter.borrow_mut().add_one(s);
+            w.sim_stats.dealloc_counts.borrow_mut().add_one(s);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
-            DEALLOC_COUNTER.lock().unwrap().add_one(s);
+            SIM_STATS.dealloc_counts.lock().unwrap().add_one(s);
         });
-    }
-
-    pub fn add_to_global_alloc_counters() {
-        Worker::with(|w| {
-            let mut global_alloc_counter = ALLOC_COUNTER.lock().unwrap();
-            let mut global_dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
-
-            global_alloc_counter.add_counter(&w.object_alloc_counter.borrow());
-            global_dealloc_counter.add_counter(&w.object_dealloc_counter.borrow());
-
-            *w.object_alloc_counter.borrow_mut() = Counter::new();
-            *w.object_dealloc_counter.borrow_mut() = Counter::new();
-        })
-        .unwrap()
     }
 
     pub fn add_syscall_counts(syscall_counts: &Counter) {
         Worker::with(|w| {
-            w.syscall_counter.borrow_mut().add_counter(syscall_counts);
+            w.sim_stats
+                .syscall_counts
+                .borrow_mut()
+                .add_counter(syscall_counts);
         })
         .unwrap_or_else(|| {
             // no live worker; fall back to the shared counter
-            SYSCALL_COUNTER.lock().unwrap().add_counter(syscall_counts);
+            SIM_STATS
+                .syscall_counts
+                .lock()
+                .unwrap()
+                .add_counter(syscall_counts);
 
             // while we handle this okay, this probably indicates an issue somewhere else in the
             // code so panic only in debug builds
@@ -454,16 +440,8 @@ impl Worker {
         });
     }
 
-    pub fn add_to_global_syscall_counters() {
-        Worker::with(|w| {
-            let mut thread_counter = w.syscall_counter.borrow_mut();
-            let mut global_counter = SYSCALL_COUNTER.lock().unwrap();
-
-            global_counter.add_counter(&thread_counter);
-
-            *thread_counter = Counter::new();
-        })
-        .unwrap()
+    pub fn add_to_global_sim_stats() {
+        Worker::with(|w| SIM_STATS.add_from_local_stats(&w.sim_stats)).unwrap()
     }
 }
 
@@ -603,15 +581,8 @@ pub fn enable_object_counters() {
     USE_OBJECT_COUNTERS.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn with_global_syscall_counter<T>(f: impl FnOnce(&Counter) -> T) -> T {
-    let counter = SYSCALL_COUNTER.lock().unwrap();
-    f(&counter)
-}
-
-pub fn with_global_object_counters<T>(f: impl FnOnce(&Counter, &Counter) -> T) -> T {
-    let alloc_counter = ALLOC_COUNTER.lock().unwrap();
-    let dealloc_counter = DEALLOC_COUNTER.lock().unwrap();
-    f(&alloc_counter, &dealloc_counter)
+pub fn with_global_sim_stats<T>(f: impl FnOnce(&SharedSimStats) -> T) -> T {
+    f(&SIM_STATS)
 }
 
 mod export {
