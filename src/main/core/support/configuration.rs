@@ -14,7 +14,7 @@ use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::format::StraceFmtMode;
 use shadow_shim_helper_rs::simulation_time::{
-    CSimulationTime, SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND,
+    CSimulationTime, SimulationTime, SIMTIME_INVALID, SIMTIME_ONE_SECOND,
 };
 
 use logger as c_log;
@@ -129,6 +129,28 @@ impl ConfigOptions {
             experimental: config_file.experimental,
             hosts: config_file.hosts,
         }
+    }
+
+    pub fn model_unblocked_syscall_latency(&self) -> bool {
+        self.general.model_unblocked_syscall_latency.unwrap()
+    }
+
+    pub fn max_unapplied_cpu_latency(&self) -> SimulationTime {
+        let nanos = self.experimental.max_unapplied_cpu_latency.unwrap();
+        let nanos = nanos.convert(units::TimePrefix::Nano).unwrap().value();
+        SimulationTime::from_nanos(nanos)
+    }
+
+    pub fn unblocked_syscall_latency(&self) -> SimulationTime {
+        let nanos = self.experimental.unblocked_syscall_latency.unwrap();
+        let nanos = nanos.convert(units::TimePrefix::Nano).unwrap().value();
+        SimulationTime::from_nanos(nanos)
+    }
+
+    pub fn unblocked_vdso_latency(&self) -> SimulationTime {
+        let nanos = self.experimental.unblocked_vdso_latency.unwrap();
+        let nanos = nanos.convert(units::TimePrefix::Nano).unwrap().value();
+        SimulationTime::from_nanos(nanos)
     }
 }
 
@@ -1388,11 +1410,7 @@ mod export {
     pub extern "C" fn config_getMaxUnappliedCpuLatency(config: *const ConfigOptions) -> u64 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.max_unapplied_cpu_latency {
-            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
-            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            None => 0,
-        }
+        SimulationTime::to_c_simtime(Some(config.max_unapplied_cpu_latency()))
     }
 
     #[no_mangle]
@@ -1401,11 +1419,7 @@ mod export {
     ) -> CSimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.unblocked_syscall_latency {
-            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
-            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            None => 0,
-        }
+        SimulationTime::to_c_simtime(Some(config.unblocked_syscall_latency()))
     }
 
     #[no_mangle]
@@ -1414,11 +1428,7 @@ mod export {
     ) -> CSimulationTime {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.unblocked_vdso_latency {
-            Some(x) => x.convert(units::TimePrefix::Nano).unwrap().value() * SIMTIME_ONE_NANOSECOND,
-            // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
-            None => 0,
-        }
+        SimulationTime::to_c_simtime(Some(config.unblocked_vdso_latency()))
     }
 
     #[no_mangle]
@@ -1446,7 +1456,7 @@ mod export {
     pub extern "C" fn config_getModelUnblockedSyscallLatency(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.general.model_unblocked_syscall_latency.unwrap()
+        config.model_unblocked_syscall_latency()
     }
 
     #[no_mangle]
