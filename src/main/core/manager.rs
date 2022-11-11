@@ -16,7 +16,7 @@ use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
-use crate::core::sim_stats::SimStats;
+use crate::core::sim_stats;
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
@@ -497,13 +497,13 @@ impl<'a> Manager<'a> {
         // since the scheduler was dropped, all workers should have completed and the global object
         // and syscall counters should have been updated
 
-        let mut sim_stats = SimStats::new();
+        let mut stats = sim_stats::SimStats::new();
 
         // log syscall counters
         if self.config.experimental.use_syscall_counters.unwrap() {
             worker::with_global_syscall_counter(|counter| {
                 log::info!("Global syscall counts: {}", counter);
-                sim_stats.syscalls = counter.clone();
+                stats.syscalls = counter.clone();
             });
         }
 
@@ -512,8 +512,8 @@ impl<'a> Manager<'a> {
             worker::with_global_object_counters(|alloc_counter, dealloc_counter| {
                 log::info!("Global allocated object counts: {}", alloc_counter);
                 log::info!("Global deallocated object counts: {}", dealloc_counter);
-                sim_stats.objects.alloc_counts = alloc_counter.clone();
-                sim_stats.objects.dealloc_counts = dealloc_counter.clone();
+                stats.objects.alloc_counts = alloc_counter.clone();
+                stats.objects.dealloc_counts = dealloc_counter.clone();
 
                 if alloc_counter == dealloc_counter {
                     log::info!("We allocated and deallocated the same number of objects :)");
@@ -525,15 +525,7 @@ impl<'a> Manager<'a> {
         }
 
         let stats_filename = self.data_path.clone().join("sim-stats.json");
-        let stats_file = std::fs::File::create(&stats_filename)
-            .with_context(|| format!("Failed to create file '{}'", stats_filename.display()))?;
-
-        serde_json::to_writer_pretty(stats_file, &sim_stats).with_context(|| {
-            format!(
-                "Failed to write stats json to file '{}'",
-                stats_filename.display()
-            )
-        })?;
+        sim_stats::write_stats_to_file(&stats_filename, stats)?;
 
         Ok(num_plugin_errors)
     }
