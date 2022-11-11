@@ -119,6 +119,13 @@ impl SimulationTime {
         }
     }
 
+    pub fn checked_rem(self, other: Self) -> Option<Self> {
+        match self.0.checked_rem(other.0) {
+            Some(rem) => SimulationTime::from_c_simtime(rem),
+            None => None,
+        }
+    }
+
     pub fn saturating_add(self, other: Self) -> Self {
         let sum = self.0.checked_add(other.0).unwrap_or(SIMTIME_MAX);
         SimulationTime::from_c_simtime(sum).unwrap()
@@ -201,6 +208,12 @@ impl std::ops::Sub<SimulationTime> for SimulationTime {
     }
 }
 
+impl std::ops::SubAssign<SimulationTime> for SimulationTime {
+    fn sub_assign(&mut self, rhs: SimulationTime) {
+        *self = *self - rhs;
+    }
+}
+
 impl std::ops::Mul<u64> for SimulationTime {
     type Output = SimulationTime;
 
@@ -214,6 +227,14 @@ impl std::ops::Div<u64> for SimulationTime {
 
     fn div(self, other: u64) -> Self::Output {
         self.checked_div(other).unwrap()
+    }
+}
+
+impl std::ops::Rem<SimulationTime> for SimulationTime {
+    type Output = SimulationTime;
+
+    fn rem(self, other: SimulationTime) -> Self::Output {
+        self.checked_rem(other).unwrap()
     }
 }
 

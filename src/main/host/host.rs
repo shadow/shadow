@@ -39,8 +39,8 @@ pub struct HostParameters {
     pub requested_bw_down_bits: u64,
     pub requested_bw_up_bits: u64,
     pub cpu_frequency: u64,
-    pub cpu_threshold: u64,
-    pub cpu_precision: u64,
+    pub cpu_threshold: Option<SimulationTime>,
+    pub cpu_precision: Option<SimulationTime>,
     pub heartbeat_interval: Option<SimulationTime>,
     pub heartbeat_log_level: LogLevel,
     pub heartbeat_log_info: cshadow::LogInfoFlags,
@@ -54,6 +54,8 @@ pub struct HostParameters {
     pub init_sock_send_buf_size: u64,
     pub autotune_send_buf: bool,
 }
+
+use super::cpu::Cpu;
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -91,6 +93,8 @@ pub struct Host {
 
     random: RootedRefCell<Xoshiro256PlusPlus>,
     params: HostParameters,
+
+    cpu: RefCell<Option<Cpu>>,
 
     // TODO: Use a Rust address type.
     default_address: RefCell<SyncSendPointer<cshadow::Address>>,
@@ -141,6 +145,7 @@ impl Host {
         let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
         let random = RootedRefCell::new(&root, Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
+        let cpu = RefCell::new(None);
         let data_dir_path = RootedRefCell::new(&root, None);
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
@@ -160,6 +165,7 @@ impl Host {
             params,
             random,
             abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
+            cpu,
             localhost: RefCell::new(None),
             internet: RefCell::new(None),
             data_dir_path,
@@ -171,7 +177,19 @@ impl Host {
         }
     }
 
-    pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq: u64, host_root_path: &Path) {
+    pub unsafe fn setup(
+        &self,
+        dns: *mut cshadow::DNS,
+        raw_cpu_freq_khz: u64,
+        host_root_path: &Path,
+    ) {
+        self.cpu.borrow_mut().replace(Cpu::new(
+            self.params.cpu_frequency,
+            raw_cpu_freq_khz,
+            self.params.cpu_threshold,
+            self.params.cpu_precision,
+        ));
+
         {
             let data_dir_path = self.data_dir_path(host_root_path);
             std::fs::create_dir_all(&data_dir_path).unwrap();
@@ -206,7 +224,7 @@ impl Host {
         assert!(!inet_addr.is_null());
         *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
 
-        unsafe { cshadow::hostc_setup(self, raw_cpu_freq) }
+        unsafe { cshadow::hostc_setup(self) }
 
         // Virtual addresses and interfaces for managing network I/O
         let localhost = unsafe {
@@ -244,7 +262,7 @@ impl Host {
                 " {init_sock_recv_buf_size} initSockRecvBufSize, ",
                 " {cpu_frequency} cpuFrequency, ",
                 " {cpu_threshold} cpuThreshold, ",
-                " {cpu_precision} cpuPresision"
+                " {cpu_precision} cpuPrecision"
             ),
             self.id(),
             name = self.info().name,
@@ -253,9 +271,9 @@ impl Host {
             bw_down_kiBps = self.bw_down_kiBps(),
             init_sock_send_buf_size = self.params.init_sock_send_buf_size,
             init_sock_recv_buf_size = self.params.init_sock_recv_buf_size,
-            cpu_frequency = self.params.cpu_frequency,
-            cpu_threshold = self.params.cpu_threshold,
-            cpu_precision = self.params.cpu_precision
+            cpu_frequency = format!("{:?}", self.params.cpu_frequency),
+            cpu_threshold = format!("{:?}", self.params.cpu_threshold),
+            cpu_precision = format!("{:?}", self.params.cpu_precision),
         );
 
         // Cleanup
@@ -493,7 +511,6 @@ impl Host {
     }
 
     pub fn execute(&self, until: EmulatedTime) {
-        let cpu = unsafe { cshadow::hostc_getCPU(self.chost()) };
         loop {
             let mut event = {
                 let mut event_queue = self.event_queue.lock().unwrap();
@@ -504,38 +521,35 @@ impl Host {
                 event_queue.pop().unwrap()
             };
 
-            unsafe {
-                cshadow::cpu_updateTime(
-                    cpu,
-                    SimulationTime::to_c_simtime(Some(event.time().to_abs_simtime())),
-                )
-            };
+            {
+                let mut opt_cpu = self.cpu.borrow_mut();
+                let cpu = opt_cpu.as_mut().unwrap();
+                cpu.update_time(event.time());
+                let cpu_delay = cpu.delay();
+                if cpu_delay > SimulationTime::ZERO {
+                    trace!(
+                        "event blocked on CPU, rescheduled for {:?} from now",
+                        cpu_delay
+                    );
 
-            if unsafe { cshadow::cpu_isBlocked(cpu) != 0 } {
-                let cpu_delay =
-                    SimulationTime::from_c_simtime(unsafe { cshadow::cpu_getDelay(cpu) }).unwrap();
-                trace!(
-                    "event blocked on CPU, rescheduled for {:?} from now",
-                    cpu_delay
-                );
+                    // track the event delay time
+                    let tracker = unsafe { cshadow::hostc_getTracker(self.chost()) };
+                    if !tracker.is_null() {
+                        unsafe {
+                            cshadow::tracker_addVirtualProcessingDelay(
+                                tracker,
+                                SimulationTime::to_c_simtime(Some(cpu_delay)),
+                            )
+                        };
+                    }
 
-                // track the event delay time
-                let tracker = unsafe { cshadow::hostc_getTracker(self.chost()) };
-                if !tracker.is_null() {
-                    unsafe {
-                        cshadow::tracker_addVirtualProcessingDelay(
-                            tracker,
-                            SimulationTime::to_c_simtime(Some(cpu_delay)),
-                        )
-                    };
+                    // reschedule the event after the CPU delay time
+                    event.set_time(event.time() + cpu_delay);
+                    self.push_local_event(event);
+
+                    // want to continue pushing back events until we reach the delay time
+                    continue;
                 }
-
-                // reschedule the event after the CPU delay time
-                event.set_time(event.time() + cpu_delay);
-                self.push_local_event(event);
-
-                // want to continue pushing back events until we reach the delay time
-                continue;
             }
 
             // run the event
@@ -583,7 +597,7 @@ impl Drop for Host {
 }
 
 mod export {
-    use std::os::raw::c_char;
+    use std::{os::raw::c_char, time::Duration};
 
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
@@ -630,12 +644,6 @@ mod export {
     pub unsafe extern "C" fn host_getID(hostrc: *const Host) -> HostId {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.id()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getCPU(hostrc: *const Host) -> *mut cshadow::CPU {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getCPU(hostrc.chost()) }
     }
 
     #[no_mangle]
@@ -990,21 +998,16 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsCpuFrequency(host: *const Host) -> u64 {
+    pub extern "C" fn host_paramsCpuFrequencyHz(host: *const Host) -> u64 {
         let host = unsafe { host.as_ref().unwrap() };
         host.params.cpu_frequency
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsCpuThreshold(host: *const Host) -> u64 {
+    pub extern "C" fn host_addDelayNanos(host: *const Host, delay_nanos: u64) {
         let host = unsafe { host.as_ref().unwrap() };
-        host.params.cpu_threshold
-    }
-
-    #[no_mangle]
-    pub extern "C" fn host_paramsCpuPrecision(host: *const Host) -> u64 {
-        let host = unsafe { host.as_ref().unwrap() };
-        host.params.cpu_precision
+        let delay = Duration::from_nanos(delay_nanos);
+        host.cpu.borrow_mut().as_mut().unwrap().add_delay(delay);
     }
 
     #[no_mangle]

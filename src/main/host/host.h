@@ -21,7 +21,6 @@ typedef struct _HostCInternal HostCInternal;
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
-#include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/futex_table.h"
@@ -37,7 +36,7 @@ void hostc_unref(HostCInternal* host);
 void hostc_continueExecutionTimer(HostCInternal* host);
 void hostc_stopExecutionTimer(HostCInternal* host);
 
-void hostc_setup(const Host* host, gulong rawCPUFreq);
+void hostc_setup(const Host* host);
 void hostc_boot(const Host* rhost);
 void hostc_shutdown(const Host* rhost);
 
@@ -47,7 +46,6 @@ void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulati
                           bool pause_for_debugging);
 void hostc_freeAllApplications(const Host* rhost);
 
-CPU* hostc_getCPU(HostCInternal* host);
 Tsc* hostc_getTsc(HostCInternal* host);
 
 Router* hostc_getUpstreamRouter(HostCInternal* host);

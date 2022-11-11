@@ -166,8 +166,8 @@ pub struct HostInfo {
     pub seed: u64,
     pub network_node_id: u32,
     pub pause_for_debugging: bool,
-    pub cpu_threshold: u64,
-    pub cpu_precision: u64,
+    pub cpu_threshold: Option<SimulationTime>,
+    pub cpu_precision: Option<SimulationTime>,
     pub bandwidth_down_bits: Option<u64>,
     pub bandwidth_up_bits: Option<u64>,
     pub ip_addr: Option<std::net::IpAddr>,
@@ -251,8 +251,8 @@ fn build_host(
             network_node_id: host.network_node_id,
             pause_for_debugging,
 
-            cpu_threshold: 0,
-            cpu_precision: 200,
+            cpu_threshold: None,
+            cpu_precision: Some(SimulationTime::from_nanos(200)),
 
             bandwidth_down_bits: host
                 .bandwidth_down

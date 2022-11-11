@@ -56,8 +56,8 @@ struct _Tracker {
     gboolean didLogRAMHeader;
     gboolean didLogSocketHeader;
 
-    CSimulationTime processingTimeTotal;
-    CSimulationTime processingTimeLastInterval;
+    uint64_t processingTimeTotalNanos;
+    uint64_t processingTimeLastIntervalNanos;
 
     gsize numDelayedTotal;
     CSimulationTime delayTimeTotal;
@@ -162,12 +162,12 @@ void tracker_free(Tracker* tracker) {
     g_free(tracker);
 }
 
-void tracker_addProcessingTime(Tracker* tracker, CSimulationTime processingTime) {
+void tracker_addProcessingTimeNanos(Tracker* tracker, uint64_t processingTimeNanos) {
     MAGIC_ASSERT(tracker);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
-        tracker->processingTimeTotal += processingTime;
-        tracker->processingTimeLastInterval += processingTime;
+        tracker->processingTimeTotalNanos += processingTimeNanos;
+        tracker->processingTimeLastIntervalNanos += processingTimeNanos;
     }
 }
 
@@ -431,7 +431,8 @@ static gchar* _tracker_getCounterString(Counters* c) {
 
 static void _tracker_logNode(Tracker* tracker, LogLevel level, CSimulationTime interval) {
     guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
-    gdouble cpuutil = (gdouble)(((gdouble)tracker->processingTimeLastInterval) / ((gdouble)interval));
+    gdouble cpuutil =
+        (gdouble)(((gdouble)tracker->processingTimeLastIntervalNanos) / ((gdouble)interval));
     gdouble avgdelayms = 0.0;
 
     if(tracker->numDelayedLastInterval > 0) {
@@ -595,7 +596,7 @@ void tracker_heartbeat(Tracker* tracker, const Host* host) {
     }
 
     /* clear interval stats */
-    tracker->processingTimeLastInterval = 0;
+    tracker->processingTimeLastIntervalNanos = 0;
     tracker->delayTimeLastInterval = 0;
     tracker->numDelayedLastInterval = 0;
     tracker->allocatedBytesLastInterval = 0;

@@ -99,7 +99,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("core/worker.h")
         .header("host/affinity.h")
         .header("host/descriptor/descriptor.h")
-        .header("host/cpu.h")
         .header("host/host.h")
         .header("host/process.h")
         .header("host/status.h")
@@ -142,7 +141,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("hostc_.*")
         // used by shadow's main function
         .allowlist_function("main_.*")
-        .allowlist_function("cpu_.*")
         .allowlist_function("tracker_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
@@ -283,7 +281,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/descriptor/udp.c",
         "host/affinity.c",
         "host/process.c",
-        "host/cpu.c",
         "host/futex.c",
         "host/futex_table.c",
         "host/shimipc.c",
