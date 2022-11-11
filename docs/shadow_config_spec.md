@@ -143,7 +143,7 @@ Path to store simulation output.
 Default: "1 sec"  
 Type: String OR Integer OR null
 
-Interval at which to print heartbeat messages.
+Interval at which to print simulation heartbeat messages.
 
 #### `general.log_level`
 
@@ -304,10 +304,10 @@ time, regardless of Shadow version.
 
 #### `experimental.host_heartbeat_interval`
 
-Default: null  
+Default: "1 sec"  
 Type: String OR Integer OR null
 
-Amount of time between heartbeat messages for this host.
+Amount of time between host heartbeat messages.
 
 #### `experimental.host_heartbeat_log_info`
 
@@ -321,7 +321,7 @@ List of information to show in the host's heartbeat message.
 Default: "info"  
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
 
-Log level at which to print host statistics.
+Log level at which to print host heartbeat messages.
 
 #### `experimental.interface_qdisc`
 
