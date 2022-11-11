@@ -38,7 +38,7 @@ pub struct HostParameters {
     pub sim_end_time: EmulatedTime,
     pub requested_bw_down_bits: u64,
     pub requested_bw_up_bits: u64,
-    pub cpu_frequency_khz: u64,
+    pub cpu_frequency: u64,
     pub cpu_threshold: Option<SimulationTime>,
     pub cpu_precision: Option<SimulationTime>,
     pub heartbeat_interval: Option<SimulationTime>,
@@ -184,7 +184,7 @@ impl Host {
         host_root_path: &Path,
     ) {
         self.cpu.borrow_mut().replace(Cpu::new(
-            self.params.cpu_frequency_khz,
+            self.params.cpu_frequency,
             raw_cpu_freq_khz,
             self.params.cpu_threshold,
             self.params.cpu_precision,
@@ -262,7 +262,7 @@ impl Host {
                 " {init_sock_recv_buf_size} initSockRecvBufSize, ",
                 " {cpu_frequency} cpuFrequency, ",
                 " {cpu_threshold} cpuThreshold, ",
-                " {cpu_precision} cpuPresision"
+                " {cpu_precision} cpuPrecision"
             ),
             self.id(),
             name = self.info().name,
@@ -271,7 +271,7 @@ impl Host {
             bw_down_kiBps = self.bw_down_kiBps(),
             init_sock_send_buf_size = self.params.init_sock_send_buf_size,
             init_sock_recv_buf_size = self.params.init_sock_recv_buf_size,
-            cpu_frequency = format!("{:?}", self.params.cpu_frequency_khz),
+            cpu_frequency = format!("{:?}", self.params.cpu_frequency),
             cpu_threshold = format!("{:?}", self.params.cpu_threshold),
             cpu_precision = format!("{:?}", self.params.cpu_precision),
         );
@@ -998,9 +998,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsCpuFrequencyKHz(host: *const Host) -> u64 {
+    pub extern "C" fn host_paramsCpuFrequencyHz(host: *const Host) -> u64 {
         let host = unsafe { host.as_ref().unwrap() };
-        host.params.cpu_frequency_khz
+        host.params.cpu_frequency
     }
 
     #[no_mangle]

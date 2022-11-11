@@ -6,8 +6,8 @@ use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::Simula
 /// corresponding delay for when the simulated CPU should be allowed to run
 /// next.
 pub struct Cpu {
-    simulated_frequency_khz: u64,
-    native_frequency_khz: u64,
+    simulated_frequency: u64,
+    native_frequency: u64,
     threshold: Option<SimulationTime>,
     precision: Option<SimulationTime>,
     now: EmulatedTime,
@@ -21,8 +21,8 @@ impl Cpu {
     /// `precision`: if provided, round individual native delays to this
     /// granularity (rounding up at midpoint). Panics if this is `Some(0)`.
     pub fn new(
-        simulated_frequency_khz: u64,
-        native_frequency_khz: u64,
+        simulated_frequency: u64,
+        native_frequency: u64,
         threshold: Option<SimulationTime>,
         precision: Option<SimulationTime>,
     ) -> Self {
@@ -31,8 +31,8 @@ impl Cpu {
         }
 
         Self {
-            simulated_frequency_khz,
-            native_frequency_khz,
+            simulated_frequency,
+            native_frequency,
             threshold,
             precision,
             now: EmulatedTime::MIN,
@@ -47,12 +47,16 @@ impl Cpu {
 
     /// Account for `native_delay` spent natively executing code.
     pub fn add_delay(&mut self, native_delay: Duration) {
-        // first normalize the physical CPU to the virtual CPU
-        let mega_cycles = (native_delay.as_nanos() as u64)
-            .checked_mul(self.native_frequency_khz)
+        // first normalize the physical CPU to the virtual CPU. We use u128 here
+        // to guarantee no overflow when multiplying two u64's.
+        let cycles = (native_delay.as_nanos() as u128)
+            .checked_mul(self.native_frequency as u128)
             .unwrap();
-        let simulated_delay_nanos = mega_cycles / self.simulated_frequency_khz;
-        let mut adjusted_delay = SimulationTime::from_nanos(simulated_delay_nanos);
+        let simulated_delay_nanos = cycles / (self.simulated_frequency as u128);
+        // Theoretically possible to overflow (and then panic) here, but only
+        // for a delay of > ~500 years.
+        let mut adjusted_delay =
+            SimulationTime::from_nanos(simulated_delay_nanos.try_into().unwrap());
 
         // round the adjusted delay to the nearest precision if needed
         if let Some(precision) = self.precision {
@@ -92,9 +96,11 @@ impl Cpu {
 mod tests {
     use super::*;
 
+    const MHZ: u64 = 1_000_000;
+
     #[test]
     fn no_threshold_never_delays() {
-        let mut cpu = Cpu::new(1000, 1000, None, None);
+        let mut cpu = Cpu::new(1000 * MHZ, 1000 * MHZ, None, None);
         assert_eq!(cpu.delay(), SimulationTime::ZERO);
 
         cpu.add_delay(Duration::from_secs(1));
@@ -103,7 +109,12 @@ mod tests {
 
     #[test]
     fn basic_delay() {
-        let mut cpu = Cpu::new(1_000_000, 1_000_000, Some(SimulationTime::NANOSECOND), None);
+        let mut cpu = Cpu::new(
+            1000 * MHZ,
+            1000 * MHZ,
+            Some(SimulationTime::NANOSECOND),
+            None,
+        );
         assert_eq!(cpu.delay(), SimulationTime::ZERO);
 
         // Set our start time.
@@ -129,17 +140,29 @@ mod tests {
     }
 
     #[test]
-    fn large_delay() {
-        let mut cpu = Cpu::new(1_000_000, 1_000_000, Some(SimulationTime::NANOSECOND), None);
+    fn no_overflow() {
+        // Use 1 THz processor
+        let mut cpu = Cpu::new(
+            1_000_000 * MHZ,
+            1_000_000 * MHZ,
+            Some(SimulationTime::NANOSECOND),
+            None,
+        );
 
-        // Simulate having spent a native hour; ensure no overflow etc.
+        // Simulate having spent a native hour
         cpu.add_delay(Duration::from_secs(3600));
+
         assert_eq!(cpu.delay(), SimulationTime::from_secs(3600));
     }
 
     #[test]
     fn faster_native() {
-        let mut cpu = Cpu::new(1_000_000, 1_100_000, Some(SimulationTime::NANOSECOND), None);
+        let mut cpu = Cpu::new(
+            1000 * MHZ,
+            1100 * MHZ,
+            Some(SimulationTime::NANOSECOND),
+            None,
+        );
         assert_eq!(cpu.delay(), SimulationTime::ZERO);
 
         // Since the simulated CPU is slower, it takes longer to execute.
@@ -149,7 +172,12 @@ mod tests {
 
     #[test]
     fn faster_simulated() {
-        let mut cpu = Cpu::new(1_100_000, 1_000_000, Some(SimulationTime::NANOSECOND), None);
+        let mut cpu = Cpu::new(
+            1100 * MHZ,
+            1000 * MHZ,
+            Some(SimulationTime::NANOSECOND),
+            None,
+        );
         assert_eq!(cpu.delay(), SimulationTime::ZERO);
 
         // Since the simulated CPU is faster, it takes less time to execute.
@@ -160,7 +188,7 @@ mod tests {
     #[test]
     fn thresholded() {
         let threshold = SimulationTime::from_millis(100);
-        let mut cpu = Cpu::new(1_000_000, 1_000_000, Some(threshold), None);
+        let mut cpu = Cpu::new(1000 * MHZ, 1000 * MHZ, Some(threshold), None);
         assert_eq!(cpu.delay(), SimulationTime::ZERO);
 
         // Simulate having spent 1 ms.
@@ -180,8 +208,8 @@ mod tests {
     fn round_lt_half_precision() {
         let precision = SimulationTime::from_millis(100);
         let mut cpu = Cpu::new(
-            1_000_000,
-            1_000_000,
+            1000 * MHZ,
+            1000 * MHZ,
             Some(SimulationTime::NANOSECOND),
             Some(precision),
         );
@@ -193,8 +221,8 @@ mod tests {
     fn round_half_precision() {
         let precision = SimulationTime::from_millis(100);
         let mut cpu = Cpu::new(
-            1_000_000,
-            1_000_000,
+            1000 * MHZ,
+            1000 * MHZ,
             Some(SimulationTime::NANOSECOND),
             Some(precision),
         );
@@ -206,8 +234,8 @@ mod tests {
     fn round_gt_half_precision() {
         let precision = SimulationTime::from_millis(100);
         let mut cpu = Cpu::new(
-            1_000_000,
-            1_000_000,
+            1000 * MHZ,
+            1000 * MHZ,
             Some(SimulationTime::NANOSECOND),
             Some(precision),
         );

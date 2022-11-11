@@ -121,7 +121,7 @@ void hostc_setup(const Host* rhost) {
 
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
     if (!tsc_frequency) {
-        tsc_frequency = host_paramsCpuFrequencyKHz(rhost) * 1000;
+        tsc_frequency = host_paramsCpuFrequencyHz(rhost);
         warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
                 "simulation time. For most applications this shouldn't matter.");
     }

@@ -32,7 +32,7 @@ pub struct Manager<'a> {
     controller: &'a Controller<'a>,
     config: &'a ConfigOptions,
 
-    raw_frequency_khz: u64,
+    raw_frequency: u64,
     end_time: EmulatedTime,
 
     hosts_path: PathBuf,
@@ -58,8 +58,8 @@ impl<'a> Manager<'a> {
         end_time: EmulatedTime,
     ) -> anyhow::Result<Self> {
         // get the system's CPU frequency
-        let raw_frequency_khz = get_raw_cpu_frequency().unwrap_or_else(|e| {
-            let default_freq = 2_500_000; // 2.5 GHz
+        let raw_frequency = get_raw_cpu_frequency_hz().unwrap_or_else(|e| {
+            let default_freq = 2_500_000_000; // 2.5 GHz
             log::debug!(
                 "Failed to get raw CPU frequency, using {} Hz instead: {}",
                 default_freq,
@@ -182,7 +182,7 @@ impl<'a> Manager<'a> {
             manager_config: Some(manager_config),
             controller,
             config,
-            raw_frequency_khz,
+            raw_frequency,
             end_time,
             hosts_path,
             preload_injector_path,
@@ -537,7 +537,7 @@ impl<'a> Manager<'a> {
                 // the manager sets this ID
                 id: host_id,
                 // the manager sets this CPU frequency
-                cpu_frequency_khz: self.raw_frequency_khz,
+                cpu_frequency: self.raw_frequency,
                 node_seed: host_info.seed,
                 hostname,
                 node_id: host_info.network_node_id,
@@ -576,7 +576,7 @@ impl<'a> Manager<'a> {
             };
 
             let host = Box::new(Host::new(params));
-            unsafe { host.setup(dns, self.raw_frequency_khz, &self.hosts_path) };
+            unsafe { host.setup(dns, self.raw_frequency, &self.hosts_path) };
 
             host
         };
@@ -886,9 +886,10 @@ fn for_each_host(host_iter: &mut HostIter, mut f: impl FnMut(&Host)) {
 }
 
 /// Get the raw speed of the experiment machine.
-fn get_raw_cpu_frequency() -> anyhow::Result<u64> {
+fn get_raw_cpu_frequency_hz() -> anyhow::Result<u64> {
     const CONFIG_CPU_MAX_FREQ_FILE: &str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
-    Ok(std::fs::read_to_string(CONFIG_CPU_MAX_FREQ_FILE)?.parse()?)
+    let khz: u64 = std::fs::read_to_string(CONFIG_CPU_MAX_FREQ_FILE)?.parse()?;
+    Ok(khz * 1000)
 }
 
 fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
