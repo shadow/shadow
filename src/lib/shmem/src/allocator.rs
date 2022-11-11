@@ -104,6 +104,7 @@ where
     }
 }
 
+#[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
 }
