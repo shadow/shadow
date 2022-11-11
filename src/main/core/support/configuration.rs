@@ -1407,31 +1407,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getMaxUnappliedCpuLatency(config: *const ConfigOptions) -> u64 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        SimulationTime::to_c_simtime(Some(config.max_unapplied_cpu_latency()))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUnblockedSyscallLatency(
-        config: *const ConfigOptions,
-    ) -> CSimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        SimulationTime::to_c_simtime(Some(config.unblocked_syscall_latency()))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUnblockedVdsoLatency(
-        config: *const ConfigOptions,
-    ) -> CSimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        SimulationTime::to_c_simtime(Some(config.unblocked_vdso_latency()))
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> NonZeroU32 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1450,13 +1425,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.general.progress.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getModelUnblockedSyscallLatency(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.model_unblocked_syscall_latency()
     }
 
     #[no_mangle]

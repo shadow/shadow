@@ -65,18 +65,6 @@ struct _HostCInternal {
     MAGIC_DECLARE;
 };
 
-static bool _modelUnblockedSyscallLatencyConfig = false;
-ADD_CONFIG_HANDLER(config_getModelUnblockedSyscallLatency, _modelUnblockedSyscallLatencyConfig)
-
-static CSimulationTime _unblockedSyscallLatencyConfig;
-ADD_CONFIG_HANDLER(config_getUnblockedSyscallLatency, _unblockedSyscallLatencyConfig)
-
-static CSimulationTime _unblockedVdsoLatencyConfig;
-ADD_CONFIG_HANDLER(config_getUnblockedVdsoLatency, _unblockedVdsoLatencyConfig)
-
-static CSimulationTime _maxUnappliedCpuLatencyConfig;
-ADD_CONFIG_HANDLER(config_getMaxUnappliedCpuLatency, _maxUnappliedCpuLatencyConfig)
-
 /* this function is called by manager before the workers exist */
 HostCInternal* hostc_new(HostId id, const char* hostName) {
     HostCInternal* host = g_new0(HostCInternal, 1);
