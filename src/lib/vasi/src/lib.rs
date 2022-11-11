@@ -24,16 +24,27 @@ pub use vasi_macro::VirtualAddressSpaceIndependent;
 pub unsafe trait VirtualAddressSpaceIndependent {}
 
 // Types not containing any pointers are trivially VirtualAddressSpaceIndependent.
-unsafe impl VirtualAddressSpaceIndependent for i32 {}
-unsafe impl VirtualAddressSpaceIndependent for u32 {}
 unsafe impl VirtualAddressSpaceIndependent for i64 {}
 unsafe impl VirtualAddressSpaceIndependent for u64 {}
+unsafe impl VirtualAddressSpaceIndependent for i32 {}
+unsafe impl VirtualAddressSpaceIndependent for u32 {}
+unsafe impl VirtualAddressSpaceIndependent for i16 {}
+unsafe impl VirtualAddressSpaceIndependent for u16 {}
+unsafe impl VirtualAddressSpaceIndependent for i8 {}
+unsafe impl VirtualAddressSpaceIndependent for u8 {}
 unsafe impl VirtualAddressSpaceIndependent for usize {}
 unsafe impl VirtualAddressSpaceIndependent for isize {}
 unsafe impl VirtualAddressSpaceIndependent for bool {}
 
-// "This type has the same in-memory representation as the underlying integer type, u64"
+// e.g. "This type has the same in-memory representation as the underlying integer type, u64"
 unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU64 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI64 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU32 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI32 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU16 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI16 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU8 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI8 {}
 
 // An array of T is [VirtualAddressSpaceIndependent] if its elements are.
 unsafe impl<T, const N: usize> VirtualAddressSpaceIndependent for [T; N] where
