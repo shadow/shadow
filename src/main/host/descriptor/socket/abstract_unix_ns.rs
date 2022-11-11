@@ -311,23 +311,3 @@ mod tests {
         incremental_name::<5>(CHARSET.len().pow(5));
     }
 }
-
-mod export {
-    use super::*;
-
-    #[no_mangle]
-    pub unsafe extern "C" fn abstractunixnamespace_new(
-    ) -> *mut Arc<AtomicRefCell<AbstractUnixNamespace>> {
-        Box::into_raw(Box::new(Arc::new(AtomicRefCell::new(
-            AbstractUnixNamespace::new(),
-        ))))
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn abstractunixnamespace_free(
-        ns: *mut Arc<AtomicRefCell<AbstractUnixNamespace>>,
-    ) {
-        assert!(!ns.is_null());
-        unsafe { Box::from_raw(ns) };
-    }
-}

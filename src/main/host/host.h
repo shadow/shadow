@@ -57,7 +57,6 @@ Tracker* hostc_getTracker(HostCInternal* host);
 in_port_t hostc_getRandomFreePort(const Host* host, ProtocolType type, in_addr_t interfaceIP,
                                   in_addr_t peerIP, in_port_t peerPort);
 
-Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host);
 FutexTable* hostc_getFutexTable(HostCInternal* host);
 
 // converts a virtual (shadow) tid into the native tid

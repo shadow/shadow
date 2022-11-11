@@ -56,9 +56,6 @@ struct _HostCInternal {
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
 
-    /* map abstract socket addresses to unix sockets */
-    Arc_AtomicRefCell_AbstractUnixNamespace* abstractUnixNamespace;
-
     /* map address to futex objects */
     FutexTable* futexTable;
 
@@ -135,8 +132,6 @@ void hostc_setup(const Host* rhost, gulong rawCPUFreq) {
     }
     host->tsc = Tsc_create(tsc_frequency);
 
-    host->abstractUnixNamespace = abstractunixnamespace_new();
-
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
 
@@ -171,10 +166,6 @@ void hostc_shutdown(const Host* rhost) {
 
     if(host->router) {
         router_free(host->router);
-    }
-
-    if (host->abstractUnixNamespace) {
-        abstractunixnamespace_free(host->abstractUnixNamespace);
     }
 
     if (host->futexTable) {
@@ -358,10 +349,6 @@ in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_
 Tracker* hostc_getTracker(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->tracker;
-}
-
-Arc_AtomicRefCell_AbstractUnixNamespace* hostc_getAbstractUnixNamespace(HostCInternal* host) {
-    return host->abstractUnixNamespace;
 }
 
 FutexTable* hostc_getFutexTable(HostCInternal* host) { return host->futexTable; }

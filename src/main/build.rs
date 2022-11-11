@@ -90,7 +90,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 }
 
 fn run_bindgen(build_common: &ShadowBuildCommon) {
-    let bindings = build_common.bindgen_builder()
+    let bindings = build_common
+        .bindgen_builder()
         .header("core/logger/log_wrapper.h")
         .header("core/main.h")
         .header("core/support/config_handlers.h")
@@ -130,7 +131,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("_?ShimThreadSharedMem")
         .blocklist_type("_?ShimProcessSharedMem")
         .blocklist_function("thread_sharedMem")
-
         .allowlist_function("affinity_.*")
         .allowlist_function("thread_.*")
         .allowlist_function("legacyfile_close")
@@ -140,7 +140,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("legacyfile_shutdownHelper")
         .allowlist_function("networkinterface_.*")
         .allowlist_function("hostc_.*")
-
         // used by shadow's main function
         .allowlist_function("main_.*")
         .allowlist_function("cpu_.*")
@@ -152,9 +151,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("dns_.*")
         .allowlist_function("address_.*")
         .allowlist_function("compatsocket_getSocketName")
-
         .allowlist_function("workerpool_updateMinHostRunahead")
-
         .allowlist_function("process_.*")
         .allowlist_function("shadow_logger_getDefault")
         .allowlist_function("shadow_logger_shouldFilter")
@@ -175,14 +172,11 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
         .blocklist_function("worker_freeHosts")
-
         .blocklist_function("syscallhandler_new")
         .blocklist_function("syscallhandler_ref")
         .blocklist_function("syscallhandler_unref")
         .blocklist_function("syscallhandler_make_syscall")
-
         .allowlist_function("return_code_for_signal")
-
         .allowlist_type("HostCInternal")
         .allowlist_type("PluginPtr")
         .allowlist_type("Status")
@@ -223,7 +217,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .opaque_type("WorkerC")
         .allowlist_type("WorkerPool")
         .opaque_type("WorkerPool")
-        .blocklist_type("Arc_AtomicRefCell_AbstractUnixNamespace")
         .blocklist_type("HashSet_String")
         .blocklist_type("QDiscMode")
         .disable_header_comment()
@@ -234,7 +227,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::work::task::TaskRef;")
         .raw_line("use crate::network::router::Router;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
-        .raw_line("use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")
         .raw_line("use crate::host::host::Host;")
@@ -243,16 +235,10 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::timer::Timer;")
         .raw_line("use crate::utility::counter::Counter;")
-
-        .raw_line("use atomic_refcell::AtomicRefCell;")
         .raw_line("use logger::Logger;")
         .raw_line("use shadow_shim_helper_rs::HostId;")
-        .raw_line("use std::sync::Arc;")
-        .raw_line("type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;")
-
         //# used to generate #[must_use] annotations)
         .enable_function_attribute_detection()
-
         //# don't generate rust bindings for c bindings of rust code)
         .blocklist_file(".*/bindings-opaque.h")
         .blocklist_file(".*/bindings.h")

@@ -95,6 +95,9 @@ pub struct Host {
     // TODO: Use a Rust address type.
     default_address: RefCell<SyncSendPointer<cshadow::Address>>,
 
+    // map abstract socket addresses to unix sockets
+    abstract_unix_namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
+
     // TODO: rearrange our setup process so we don't need Option types here.
     localhost: RefCell<Option<NetworkInterface>>,
     internet: RefCell<Option<NetworkInterface>>,
@@ -156,6 +159,7 @@ impl Host {
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
             random,
+            abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             localhost: RefCell::new(None),
             internet: RefCell::new(None),
             data_dir_path,
@@ -333,9 +337,7 @@ impl Host {
     }
 
     pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
-        let ptr = unsafe { cshadow::hostc_getAbstractUnixNamespace(self.chost()) };
-        assert!(!ptr.is_null());
-        unsafe { &*ptr }
+        &self.abstract_unix_namespace
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
@@ -855,15 +857,6 @@ mod export {
                 peer_port,
             )
         }
-    }
-
-    // Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(HostRcCInternal* host);
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getAbstractUnixNamespace(
-        hostrc: *const Host,
-    ) -> *mut Arc<AtomicRefCell<AbstractUnixNamespace>> {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getAbstractUnixNamespace(hostrc.chost()) }
     }
 
     #[no_mangle]
