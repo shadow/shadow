@@ -30,6 +30,11 @@ where
     _phantom: PhantomData<T>,
 }
 
+// SAFETY: T is already required to be Sync, and ShMemBlock only exposes
+// immutable references to the underlying data.
+unsafe impl <'origin, T> Sync for ShMemBlock<'origin, T> where T: Sync + VirtualAddressSpaceIndependent {}
+unsafe impl <'origin, T> Send for ShMemBlock<'origin, T> where T: Send + Sync + VirtualAddressSpaceIndependent {}
+
 impl<'origin, T> ShMemBlock<'origin, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
