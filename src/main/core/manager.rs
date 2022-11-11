@@ -512,8 +512,8 @@ impl<'a> Manager<'a> {
             worker::with_global_object_counters(|alloc_counter, dealloc_counter| {
                 log::info!("Global allocated object counts: {}", alloc_counter);
                 log::info!("Global deallocated object counts: {}", dealloc_counter);
-                stats.objects.alloc_counts = alloc_counter.clone();
-                stats.objects.dealloc_counts = dealloc_counter.clone();
+                stats.alloc_counts = alloc_counter.clone();
+                stats.dealloc_counts = dealloc_counter.clone();
 
                 if alloc_counter == dealloc_counter {
                     log::info!("We allocated and deallocated the same number of objects :)");
