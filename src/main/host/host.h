@@ -37,7 +37,7 @@ void hostc_unref(HostCInternal* host);
 void hostc_continueExecutionTimer(HostCInternal* host);
 void hostc_stopExecutionTimer(HostCInternal* host);
 
-void hostc_setup(const Host* host, Address* ethernetAddress, gulong rawCPUFreq);
+void hostc_setup(const Host* host, gulong rawCPUFreq);
 void hostc_boot(const Host* rhost);
 void hostc_shutdown(const Host* rhost);
 
@@ -49,8 +49,6 @@ void hostc_freeAllApplications(const Host* rhost);
 
 CPU* hostc_getCPU(HostCInternal* host);
 Tsc* hostc_getTsc(HostCInternal* host);
-Address* hostc_getDefaultAddress(HostCInternal* host);
-in_addr_t hostc_getDefaultIP(HostCInternal* host);
 
 Router* hostc_getUpstreamRouter(HostCInternal* host);
 
