@@ -52,9 +52,6 @@ Router* hostc_getUpstreamRouter(HostCInternal* host);
 
 Tracker* hostc_getTracker(HostCInternal* host);
 
-in_port_t hostc_getRandomFreePort(const Host* host, ProtocolType type, in_addr_t interfaceIP,
-                                  in_addr_t peerIP, in_port_t peerPort);
-
 FutexTable* hostc_getFutexTable(HostCInternal* host);
 
 // converts a virtual (shadow) tid into the native tid
@@ -86,12 +83,6 @@ void hostc_lockShimShmemLock(HostCInternal* host);
 
 // Release the host's shared memory lock. See `hostc_getShimShmemLock`.
 void hostc_unlockShimShmemLock(HostCInternal* host);
-
-// Returns the next value and increments our monotonically increasing
-// determinism sequence counter. The resulting values can be sorted to
-// established a deterministic ordering, which can be useful when iterating
-// items that are otherwise inconsistently ordered (e.g. hash table iterators).
-guint64 hostc_getNextDeterministicSequenceValue(HostCInternal* host);
 
 // Schedule a task for this host at time 'time'.
 gboolean hostc_scheduleTaskAtEmulatedTime(const Host* host, TaskRef* task, CEmulatedTime time);

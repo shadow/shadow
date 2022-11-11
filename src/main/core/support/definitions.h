@@ -11,12 +11,6 @@ typedef struct _Process Process;
 typedef struct Host Host;
 
 /**
- * The start of our random port range in host order, used if application doesn't
- * specify the port it wants to bind to, and for client connections.
- */
-#define MIN_RANDOM_PORT 10000
-
-/**
  * An upper limit to the maximum number of pending incoming connections.
  * On a laptop: net.core.somaxconn = 4096
  */

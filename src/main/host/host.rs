@@ -9,10 +9,10 @@ use crate::host::network_interface::NetworkInterface;
 use crate::network::router::Router;
 use crate::utility::{self, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
-use log::{info, trace};
+use log::{info, trace, warn};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -21,11 +21,15 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use std::cell::{Cell, RefCell};
 use std::ffi::{CString, OsString};
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+// The start of our random port range in host order, used if application doesn't
+// specify the port it wants to bind to, and for client connections.
+const MIN_RANDOM_PORT: u16 = 10000;
 
 pub struct HostParameters {
     pub id: HostId,
@@ -581,6 +585,89 @@ impl Host {
         unsafe { cshadow::hostc_unlockShimShmemLock(self.chost()) };
     }
 
+    pub fn is_interface_available(
+        &self,
+        protocol_type: cshadow::ProtocolType,
+        src: SocketAddrV4,
+        dst: SocketAddrV4,
+    ) -> bool {
+        let port = src.port().to_be();
+        let peer_addr = u32::from(*dst.ip()).to_be();
+        let peer_port = dst.port().to_be();
+
+        if src.ip().is_unspecified() {
+            // Check that all interfaces are available.
+            !self.localhost.borrow().as_ref().unwrap().is_associated(
+                protocol_type,
+                port,
+                peer_addr,
+                peer_port,
+            ) && !self.internet.borrow().as_ref().unwrap().is_associated(
+                protocol_type,
+                port,
+                peer_addr,
+                peer_port,
+            )
+        } else {
+            // The interface is not available if it does not exist.
+            match self.with_interface_mut(*src.ip(), |iface| {
+                iface.is_associated(protocol_type, port, peer_addr, peer_port)
+            }) {
+                Some(is_associated) => !is_associated,
+                None => false,
+            }
+        }
+    }
+
+    // Returns a random port in host byte order
+    pub fn get_random_free_port(
+        &self,
+        protocol_type: cshadow::ProtocolType,
+        interface_ip: Ipv4Addr,
+        peer: SocketAddrV4,
+    ) -> Option<u16> {
+        // we need a random port that is free everywhere we need it to be.
+        // we have two modes here: first we just try grabbing a random port until we
+        // get a free one. if we cannot find one fast enough, then as a fallback we
+        // do an inefficient linear search that is guaranteed to succeed or fail.
+
+        // if choosing randomly doesn't succeed within 10 tries, then we have already
+        // allocated a lot of ports (>90% on average). then we fall back to linear search.
+        for _ in 0..10 {
+            let random_port = self
+                .random
+                .borrow_mut(&self.root)
+                .gen_range(MIN_RANDOM_PORT..=u16::MAX);
+
+            // this will check all interfaces in the case of INADDR_ANY
+            if self.is_interface_available(
+                protocol_type,
+                SocketAddrV4::new(interface_ip, random_port),
+                peer,
+            ) {
+                return Some(random_port);
+            }
+        }
+
+        // now if we tried too many times and still don't have a port, fall back
+        // to a linear search to make sure we get a free port if we have one.
+        // but start from a random port instead of the min.
+        let ports = MIN_RANDOM_PORT..=u16::MAX;
+        let start_offset = self.random.borrow_mut(&self.root).gen_range(0..ports.len());
+        for port in ports.clone().cycle().skip(start_offset).take(ports.len()) {
+            if self.is_interface_available(
+                protocol_type,
+                SocketAddrV4::new(interface_ip, port),
+                peer,
+            ) {
+                return Some(port);
+            }
+        }
+
+        warn!("unable to find free ephemeral port for {protocol_type} peer {peer}");
+        None
+    }
+
     pub fn chost(&self) -> *mut cshadow::HostCInternal {
         self.chost.ptr()
     }
@@ -760,30 +847,15 @@ mod export {
         peer_port: in_port_t,
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let ipv4 = Ipv4Addr::from(u32::from_be(interface_addr));
-
-        if ipv4.is_unspecified() {
-            // Check that all interfaces are available.
-            !hostrc.localhost.borrow().as_ref().unwrap().is_associated(
-                protocol_type,
-                port,
-                peer_addr,
-                peer_port,
-            ) && !hostrc.internet.borrow().as_ref().unwrap().is_associated(
-                protocol_type,
-                port,
-                peer_addr,
-                peer_port,
-            )
-        } else {
-            // The interface is not available if it does not exist.
-            match hostrc.with_interface_mut(ipv4, |iface| {
-                iface.is_associated(protocol_type, port, peer_addr, peer_port)
-            }) {
-                Some(is_associated) => !is_associated,
-                None => false,
-            }
-        }
+        let src = SocketAddrV4::new(
+            Ipv4Addr::from(u32::from_be(interface_addr)),
+            u16::from_be(port),
+        );
+        let dst = SocketAddrV4::new(
+            Ipv4Addr::from(u32::from_be(peer_addr)),
+            u16::from_be(peer_port),
+        );
+        hostrc.is_interface_available(protocol_type, src, dst)
     }
 
     #[no_mangle]
@@ -856,15 +928,14 @@ mod export {
         peer_port: in_port_t,
     ) -> in_port_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe {
-            cshadow::hostc_getRandomFreePort(
-                hostrc,
-                protocol_type,
-                interface_ip,
-                peer_ip,
-                peer_port,
-            )
-        }
+        let Some(port) = hostrc.get_random_free_port(
+            protocol_type,
+            Ipv4Addr::from(u32::from_be(interface_ip)),
+            SocketAddrV4::new(Ipv4Addr::from(u32::from_be(peer_ip)),
+            u16::from_be(peer_port))) else {
+                return 0;
+            };
+        port.to_be()
     }
 
     #[no_mangle]
