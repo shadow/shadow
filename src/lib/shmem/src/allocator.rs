@@ -10,13 +10,11 @@ enum ShMemBlockOrigin<'a> {
     Serializer(&'a Serializer),
 }
 
-/// A typed pointer to shared memory. Does *not* track the lifetime of the
-/// underlying shared memory, which may have been allocated, and may be
-/// deallocated, by another process. See also the `Safety` comments for methods
-/// creating a ShMemBlock.
+/// A typed pointer to shared memory.
 ///
-/// TODO: Wrap objects allocated via the shared memory allocator with some
-/// validity flag/cookie and reference count in shared memory?
+/// The pointer to the underlying data (e.g. as accessed via `deref`) is guaranteed
+/// not to change even if the `ShMemBlock` itself is moved. (Host uses this to safely
+/// cache a lock obtained from a ShMemBlock).
 pub struct ShMemBlock<'origin, T>
 // T must be Sync, since it will be simultaneously available to multiple threads
 // (and processes).
@@ -215,6 +213,9 @@ impl Serializer {
     ///   ShMemBlock. i.e. the original allocated ShMemBlock must outlive the
     ///   returned one. We can't guarantee this with normal lifetime analysis, since
     ///   the original block may be in another process.
+    //
+    // TODO: Wrap objects allocated via the shared memory allocator with some
+    // validity flag/cookie and reference count in shared memory?
     pub unsafe fn deserialize<'a, T>(&'a self, block: &ShMemBlockSerialized) -> ShMemBlock<'a, T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
@@ -271,5 +272,28 @@ mod tests {
         deserialized_block.store(20, Ordering::SeqCst);
         assert_eq!(original_block.load(Ordering::SeqCst), 20);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
+    }
+
+    // Validate our guarantee that the data pointer doesn't move, even if the block does.
+    // Host relies on this for soundness.
+    #[test]
+    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn stable_pointer() {
+        type T = u32;
+        let block: ShMemBlock<T> = Allocator::global().alloc(0);
+
+        let block_addr = &block as *const ShMemBlock<T>;
+        let data_addr = block.deref() as *const T;
+
+        let block = Some(block);
+
+        // Validate that the block itself actually moved.
+        let new_block_addr = block.as_ref().unwrap() as *const ShMemBlock<T>;
+        assert_ne!(block_addr, new_block_addr);
+
+        // Validate that the data referenced by the block *hasn't* moved.
+        let new_data_addr = block.as_ref().unwrap().deref() as *const T;
+        assert_eq!(data_addr, new_data_addr);
     }
 }
