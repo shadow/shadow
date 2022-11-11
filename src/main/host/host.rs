@@ -17,8 +17,11 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
+use shadow_shim_helper_rs::scmutex::SelfContainedMutexGuard;
+use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
+use shadow_shmem::allocator::ShMemBlock;
 use std::cell::{Cell, RefCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -57,6 +60,10 @@ pub struct HostParameters {
     pub autotune_recv_buf: bool,
     pub init_sock_send_buf_size: u64,
     pub autotune_send_buf: bool,
+    pub model_unblocked_syscall_latency: bool,
+    pub max_unapplied_cpu_latency: SimulationTime,
+    pub unblocked_syscall_latency: SimulationTime,
+    pub unblocked_vdso_latency: SimulationTime,
 }
 
 use super::cpu::Cpu;
@@ -127,6 +134,16 @@ pub struct Host {
 
     // track the order in which the application sent us application data
     packet_priority_counter: Cell<f64>,
+
+    // Cached lock for shim_shmem. `[Host::shmem_lock]` uses unsafe code to give it
+    // a 'static lifetime.
+    // SAFETY:
+    // * This field must be delared before `shim_shmem` so that it's dropped
+    //   before it
+    // * Non `unsafe` APIs shouldn't expose this with a lifetime longer than `self`.
+    shim_shmem_lock: RefCell<Option<SelfContainedMutexGuard<'static, HostShmemProtected>>>,
+    // Shared memory with the shim.
+    shim_shmem: ShMemBlock<'static, HostShmem>,
 }
 
 /// Host must be `Send`.
@@ -153,6 +170,15 @@ impl Host {
         let data_dir_path = RootedRefCell::new(&root, None);
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
+        let host_shmem = HostShmem::new(
+            params.id,
+            params.model_unblocked_syscall_latency,
+            params.max_unapplied_cpu_latency,
+            params.unblocked_syscall_latency,
+            params.unblocked_vdso_latency,
+        );
+        let shim_shmem = shadow_shmem::allocator::Allocator::global().alloc(host_shmem);
+
         // Process IDs start at 1000
         let process_id_counter = Cell::new(1000);
         let event_id_counter = Cell::new(0);
@@ -168,6 +194,8 @@ impl Host {
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
             random,
+            shim_shmem,
+            shim_shmem_lock: RefCell::new(None),
             abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             cpu,
             localhost: RefCell::new(None),
@@ -577,12 +605,36 @@ impl Host {
         };
     }
 
-    pub unsafe fn lock_shmem(&self) {
-        unsafe { cshadow::hostc_lockShimShmemLock(self.chost()) };
+    /// Locks the Host's shared memory, caching the lock internally.
+    ///
+    /// Dropping the Host before calling [`Host::unlock_shmem`] will panic.
+    ///
+    /// TODO: Remove this API once we don't need to cache the lock for the C API.
+    pub fn lock_shmem(&self) {
+        let shim_shmem = &self.shim_shmem;
+        let shim_shmem: *const ShMemBlock<HostShmem> = shim_shmem;
+        // We're extending this lifetime to extend the lifetime of `lock`, below, without
+        // having to `transmute` the type itself.
+        //
+        // SAFETY:
+        // * We ensure that `self.shim_shmem_lock` doesn't outlive `self.shim_shmem`.
+        //   We never drop `self.shim_shmem` before `self` itself is dropped, and in `Self`'s
+        //   `Drop` implementation we validate that the lock isn't held.
+        // * `ShMemBlock` guarantees that its data doesn't move even if the block does.
+        //    So moving `shim_shmem` (e.g. by moving `self`) doesn't invalidate the lock.
+        // * We never mutate `self.shim_shmem` nor borrow the internals of
+        //   `self.shim_shmem.protected` while the lock is held, since that would
+        //   conflict with the cached guard's mutable reference.
+        let shim_shmem: &'static ShMemBlock<HostShmem> = unsafe { &*shim_shmem };
+
+        let lock = shim_shmem.protected().lock();
+        let prev = self.shim_shmem_lock.borrow_mut().replace(lock);
+        assert!(prev.is_none());
     }
 
-    pub unsafe fn unlock_shmem(&self) {
-        unsafe { cshadow::hostc_unlockShimShmemLock(self.chost()) };
+    pub fn unlock_shmem(&self) {
+        let prev = self.shim_shmem_lock.borrow_mut().take();
+        assert!(prev.is_some());
     }
 
     pub fn is_interface_available(
@@ -691,14 +743,23 @@ impl Drop for Host {
             unsafe { cshadow::address_unref(default_addr) };
         }
         unsafe { cshadow::hostc_unref(self.chost()) };
+        // Validate that the shmem lock isn't held, which would potentially
+        // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
+        // guarantee about the order in which fields are dropped)
+        assert!(self.shim_shmem_lock.borrow().is_none());
     }
 }
 
 mod export {
-    use std::{os::raw::c_char, time::Duration};
-
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
+    use shadow_shim_helper_rs::shim_shmem;
+    use shadow_shmem::allocator::ShMemBlockSerialized;
+    use std::{
+        ops::{Deref, DerefMut},
+        os::raw::c_char,
+        time::Duration,
+    };
 
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime, HostCInternal},
@@ -992,12 +1053,12 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getSharedMem(
         hostrc: *const Host,
-    ) -> *const cshadow::ShimShmemHost {
+    ) -> *const shim_shmem::export::ShimShmemHost {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getSharedMem(hostrc.chost()) }
+        hostrc.shim_shmem.deref()
     }
 
-    /// Returns the lock, or NULL if the lock isn't held by Shadow.
+    /// Returns the lock, or panics if the lock isn't held by Shadow.
     ///
     /// Generally the lock can and should be held when Shadow is running, and *not*
     /// held when any of the host's managed threads are running (leaving it available
@@ -1005,26 +1066,37 @@ mod export {
     /// properly, debug builds detect if we get it wrong (e.g. we try accessing
     /// protected data without holding the lock, or the shim tries to take the lock
     /// but can't).
+    ///
+    /// SAFETY: The returned pointer is invalidated when the memory is unlocked, e.g.
+    /// via `host_unlockShimShmemLock`.
     #[no_mangle]
     pub unsafe extern "C" fn host_getShimShmemLock(
         hostrc: *const Host,
-    ) -> *mut cshadow::ShimShmemHostLock {
+    ) -> *mut shim_shmem::export::ShimShmemHostLock {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getShimShmemLock(hostrc.chost()) }
+        let mut opt_lock = hostrc.shim_shmem_lock.borrow_mut();
+        let lock = opt_lock.as_mut().unwrap();
+        lock.deref_mut()
     }
 
     /// Take the host's shared memory lock. See `host_getShimShmemLock`.
     #[no_mangle]
     pub unsafe extern "C" fn host_lockShimShmemLock(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_lockShimShmemLock(hostrc.chost()) }
+        hostrc.lock_shmem()
     }
 
     /// Release the host's shared memory lock. See `host_getShimShmemLock`.
     #[no_mangle]
     pub unsafe extern "C" fn host_unlockShimShmemLock(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_unlockShimShmemLock(hostrc.chost()) }
+        hostrc.unlock_shmem()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_serializeShmem(hostrc: *const Host) -> ShMemBlockSerialized {
+        let hostrc = unsafe { hostrc.as_ref().unwrap() };
+        hostrc.shim_shmem.serialize()
     }
 
     /// Returns the next value and increments our monotonically increasing

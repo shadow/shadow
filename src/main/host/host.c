@@ -57,12 +57,6 @@ struct _HostCInternal {
     /* map address to futex objects */
     FutexTable* futexTable;
 
-    /* Shared memory allocation for shared state with shim. */
-    ShMemBlock shimSharedMemBlock;
-
-    /* Lock protecting parts of shimSharedMemBlock. */
-    ShimShmemHostLock* shimShmemHostLock;
-
 #ifdef USE_PERF_TIMERS
     /* track the time spent executing this host */
     GTimer* executionTimer;
@@ -98,11 +92,6 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
     host->processes = g_queue_new();
 
     info("Created host id '%u' name '%s'", (guint)id, hostName);
-
-    host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
-    shimshmemhost_init(hostc_getSharedMem(host), id, _modelUnblockedSyscallLatencyConfig,
-                       _maxUnappliedCpuLatencyConfig, _unblockedSyscallLatencyConfig,
-                       _unblockedVdsoLatencyConfig);
 
 #ifdef USE_PERF_TIMERS
     /* we go back to the manager setup process here, so stop counting this host execution */
@@ -179,10 +168,6 @@ void hostc_shutdown(const Host* rhost) {
 #else
     info("host '%s' has been shut down", host_getName(rhost));
 #endif
-
-    utility_debugAssert(hostc_getSharedMem(host));
-    shimshmemhost_destroy(hostc_getSharedMem(host));
-    shmemallocator_globalFree(&host->shimSharedMemBlock);
 }
 
 void hostc_unref(HostCInternal* host) {
@@ -230,8 +215,7 @@ void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulat
     gchar** envv_dup = g_strdupv((gchar**)envv);
 
     {
-        ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(&host->shimSharedMemBlock);
+        ShMemBlockSerialized sharedMemBlockSerial = host_serializeShmem(rhost);
 
         char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
@@ -333,25 +317,4 @@ pid_t hostc_getNativeTID(HostCInternal* host, pid_t virtualPID, pid_t virtualTID
     }
 
     return nativeTID; // 0 if no process/thread has the given virtual PID/TID
-}
-
-ShimShmemHost* hostc_getSharedMem(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    utility_debugAssert(host->shimSharedMemBlock.p);
-    return host->shimSharedMemBlock.p;
-}
-
-ShimShmemHostLock* hostc_getShimShmemLock(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->shimShmemHostLock;
-}
-
-void hostc_lockShimShmemLock(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    host->shimShmemHostLock = shimshmemhost_lock(hostc_getSharedMem(host));
-}
-
-void hostc_unlockShimShmemLock(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    shimshmemhost_unlock(hostc_getSharedMem(host), &host->shimShmemHostLock);
 }

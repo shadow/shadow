@@ -393,7 +393,7 @@ fn signal_from_i32(s: i32) -> Signal {
     unsafe { std::mem::transmute(s) }
 }
 
-mod export {
+pub mod export {
     use std::sync::atomic::Ordering;
 
     use crate::{

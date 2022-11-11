@@ -333,9 +333,9 @@ impl<'a> Manager<'a> {
                 s.run_with_hosts(move |_, hosts| {
                     for_each_host(hosts, |host| {
                         worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
-                        unsafe { host.lock_shmem() };
+                        host.lock_shmem();
                         host.boot();
-                        unsafe { host.unlock_shmem() };
+                        host.unlock_shmem();
                         worker::Worker::clear_current_time();
                     });
                 });
@@ -390,10 +390,10 @@ impl<'a> Manager<'a> {
 
                             for_each_host(hosts, |host| {
                                 let host_next_event_time = {
-                                    unsafe { host.lock_shmem() };
+                                    host.lock_shmem();
                                     host.execute(window_end);
                                     let host_next_event_time = host.next_event_time();
-                                    unsafe { host.unlock_shmem() };
+                                    host.unlock_shmem();
                                     host_next_event_time
                                 };
                                 *next_event_time = [*next_event_time, host_next_event_time]
@@ -577,6 +577,10 @@ impl<'a> Manager<'a> {
                 autotune_recv_buf: host_info.autotune_recv_buf,
                 init_sock_send_buf_size: host_info.send_buf_size,
                 autotune_send_buf: host_info.autotune_send_buf,
+                model_unblocked_syscall_latency: self.config.model_unblocked_syscall_latency(),
+                max_unapplied_cpu_latency: self.config.max_unapplied_cpu_latency(),
+                unblocked_syscall_latency: self.config.unblocked_syscall_latency(),
+                unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
             };
 
             let host = Box::new(Host::new(params));
@@ -585,7 +589,7 @@ impl<'a> Manager<'a> {
             host
         };
 
-        unsafe { host.lock_shmem() };
+        host.lock_shmem();
 
         for proc in &host_info.processes {
             let plugin_path =
@@ -651,7 +655,7 @@ impl<'a> Manager<'a> {
             }
         }
 
-        unsafe { host.unlock_shmem() };
+        host.unlock_shmem();
 
         Ok(host)
     }
