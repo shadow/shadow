@@ -16,6 +16,7 @@ use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
+use crate::core::sim_stats;
 use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
@@ -35,6 +36,7 @@ pub struct Manager<'a> {
     raw_frequency: u64,
     end_time: EmulatedTime,
 
+    data_path: PathBuf,
     hosts_path: PathBuf,
 
     // path to the injector lib that we preload for managed processes (if no other lib is preloaded)
@@ -184,6 +186,7 @@ impl<'a> Manager<'a> {
             config,
             raw_frequency,
             end_time,
+            data_path,
             hosts_path,
             preload_injector_path,
             preload_libc_path,
@@ -460,12 +463,10 @@ impl<'a> Manager<'a> {
                 });
             });
 
-            // add each thread's local allocation counters to the global allocation counter, and
-            // local syscall counters to the global syscall counter
+            // add each thread's local sim statistics to the global sim statistics.
             scheduler.scope(|s| {
                 s.run(|_| {
-                    worker::Worker::add_to_global_syscall_counters();
-                    worker::Worker::add_to_global_alloc_counters();
+                    worker::Worker::add_to_global_sim_stats();
                 });
             });
 
@@ -494,27 +495,30 @@ impl<'a> Manager<'a> {
         // since the scheduler was dropped, all workers should have completed and the global object
         // and syscall counters should have been updated
 
-        // log syscall counters
-        if self.config.experimental.use_syscall_counters.unwrap() {
-            worker::with_global_syscall_counter(|counter| {
-                log::info!("Global syscall counts: {}", counter);
-            });
-        }
+        worker::with_global_sim_stats(|stats| {
+            if self.config.experimental.use_syscall_counters.unwrap() {
+                log::info!(
+                    "Global syscall counts: {}",
+                    stats.syscall_counts.lock().unwrap()
+                );
+            }
+            if self.config.experimental.use_object_counters.unwrap() {
+                let alloc_counts = stats.alloc_counts.lock().unwrap();
+                let dealloc_counts = stats.dealloc_counts.lock().unwrap();
+                log::info!("Global allocated object counts: {}", alloc_counts);
+                log::info!("Global deallocated object counts: {}", dealloc_counts);
 
-        // log and check object allocation/deallocation counters
-        if self.config.experimental.use_object_counters.unwrap() {
-            worker::with_global_object_counters(|alloc_counter, dealloc_counter| {
-                log::info!("Global allocated object counts: {}", alloc_counter);
-                log::info!("Global deallocated object counts: {}", dealloc_counter);
-
-                if alloc_counter == dealloc_counter {
+                if *alloc_counts == *dealloc_counts {
                     log::info!("We allocated and deallocated the same number of objects :)");
                 } else {
                     // don't change the formatting of this line as we search for it in test cases
                     log::warn!("Memory leak detected");
                 }
-            });
-        }
+            }
+
+            let stats_filename = self.data_path.clone().join("sim-stats.json");
+            sim_stats::write_stats_to_file(&stats_filename, stats)
+        })?;
 
         Ok(num_plugin_errors)
     }
@@ -935,38 +939,4 @@ where
     }
 
     duplicates
-}
-
-mod export {
-    use std::ffi::CStr;
-
-    use crate::core::support::configuration::ConfigOptions;
-
-    #[no_mangle]
-    pub extern "C" fn manager_saveProcessedConfigYaml(
-        config: *const ConfigOptions,
-        filename: *const libc::c_char,
-    ) -> libc::c_int {
-        let config = unsafe { config.as_ref() }.unwrap();
-        let filename = unsafe { CStr::from_ptr(filename) }.to_str().unwrap();
-
-        let file = match std::fs::File::create(&filename) {
-            Ok(f) => f,
-            Err(e) => {
-                log::warn!("Could not create file {:?}: {}", filename, e);
-                return 1;
-            }
-        };
-
-        if let Err(e) = serde_yaml::to_writer(file, &config) {
-            log::warn!(
-                "Could not write processed config yaml to file {:?}: {}",
-                filename,
-                e
-            );
-            return 1;
-        }
-
-        return 0;
-    }
 }

@@ -1063,6 +1063,7 @@ dependencies = [
  "regex",
  "schemars",
  "serde",
+ "serde_json",
  "serde_yaml",
  "shadow-build-common",
  "shadow-shim-helper-rs",

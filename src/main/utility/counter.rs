@@ -14,8 +14,10 @@ generic types.
 */
 
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub};
+
+use serde::ser::SerializeMap;
 
 /// The main counter object that maps individual keys to count values.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,14 +121,13 @@ impl Counter {
             }
         }
     }
-}
 
-impl Display for Counter {
-    /// Returns a string representation of the counter in the form
-    ///   `{key1:value1, key2:value2, ..., keyN:valueN}`
-    /// for known keys and values, where the list is sorted by value with the
-    /// largest value first.
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    /// Get an iterator that returns elements in the order best suited for human-readable output
+    /// (currently sorted by value with the largest value first).
+    fn sorted_for_display<'a>(
+        &'a self,
+    ) -> impl IntoIterator<IntoIter = impl Iterator<Item = (&'a String, &'a i64)> + ExactSizeIterator + 'a>
+    {
         // Get the items in a vector so we can sort them.
         let mut item_vec = Vec::from_iter(&self.items);
 
@@ -136,15 +137,41 @@ impl Display for Counter {
             val_a.cmp(val_b).reverse().then(key_a.cmp(key_b))
         });
 
+        item_vec
+    }
+}
+
+impl Display for Counter {
+    /// Returns a string representation of the counter in the form
+    ///   `{key1:value1, key2:value2, ..., keyN:valueN}`
+    /// for known keys and values.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let items = self.sorted_for_display().into_iter();
+        let items_len = items.len();
+
         // Create a string representation of the counts by iterating over the items.
         write!(f, "{{")?;
-        for i in 0..item_vec.len() {
-            write!(f, "{}:{}", item_vec[i].0, item_vec[i].1)?;
-            if i < (item_vec.len() - 1) {
+        for (i, item) in items.enumerate() {
+            write!(f, "{}:{}", item.0, item.1)?;
+            if i < items_len - 1 {
                 write!(f, ", ")?;
             }
         }
         write!(f, "}}")
+    }
+}
+
+impl serde::Serialize for Counter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let items = self.sorted_for_display().into_iter();
+        let mut map = serializer.serialize_map(Some(items.len()))?;
+        for (k, v) in items {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
     }
 }
 
