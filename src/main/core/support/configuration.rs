@@ -488,7 +488,10 @@ impl Default for ExperimentalOptions {
             use_legacy_working_dir: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
-            host_heartbeat_interval: None,
+            host_heartbeat_interval: Some(NullableOption::Value(units::Time::new(
+                1,
+                units::TimePrefixUpper::Sec,
+            ))),
             strace_logging_mode: Some(StraceLoggingMode::Off),
             use_extended_yaml: Some(false),
             scheduler: Some(Scheduler::ThreadPerCore),
