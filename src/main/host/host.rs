@@ -652,9 +652,20 @@ impl Host {
         // now if we tried too many times and still don't have a port, fall back
         // to a linear search to make sure we get a free port if we have one.
         // but start from a random port instead of the min.
-        let ports = MIN_RANDOM_PORT..=u16::MAX;
-        let start_offset = self.random.borrow_mut(&self.root).gen_range(0..ports.len());
-        for port in ports.clone().cycle().skip(start_offset).take(ports.len()) {
+        let start = self
+            .random
+            .borrow_mut(&self.root)
+            .gen_range(MIN_RANDOM_PORT..=u16::MAX);
+        let mut port = start;
+        loop {
+            port = if port == u16::MAX {
+                MIN_RANDOM_PORT
+            } else {
+                port + 1
+            };
+            if port == start {
+                break;
+            }
             if self.is_interface_available(
                 protocol_type,
                 SocketAddrV4::new(interface_ip, port),
