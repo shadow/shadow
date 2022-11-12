@@ -272,67 +272,6 @@ Router* hostc_getUpstreamRouter(HostCInternal* host) {
     return host->router;
 }
 
-in_port_t _hostc_incrementPort(in_port_t port, in_port_t port_on_overflow) {
-    uint16_t val = ntohs(port);
-    val = (val == UINT16_MAX) ? ntohs(port_on_overflow) : val + 1;
-    return htons(val);
-}
-
-static in_port_t _hostc_getRandomPort(const Host* rhost) {
-    HostCInternal* host = host_internal(rhost);
-    gdouble randomFraction = host_rngDouble(rhost);
-    gdouble numPotentialPorts = (gdouble)(UINT16_MAX - MIN_RANDOM_PORT);
-
-    gdouble randomPick = round(randomFraction * numPotentialPorts);
-    in_port_t randomHostPort = (in_port_t) randomPick;
-
-    /* make sure we don't assign any low privileged ports */
-    randomHostPort += (in_port_t)MIN_RANDOM_PORT;
-
-    utility_debugAssert(randomHostPort >= MIN_RANDOM_PORT);
-    return htons(randomHostPort);
-}
-
-in_port_t hostc_getRandomFreePort(const Host* rhost, ProtocolType type, in_addr_t interfaceIP,
-                                  in_addr_t peerIP, in_port_t peerPort) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-
-    /* we need a random port that is free everywhere we need it to be.
-     * we have two modes here: first we just try grabbing a random port until we
-     * get a free one. if we cannot find one fast enough, then as a fallback we
-     * do an inefficient linear search that is guaranteed to succeed or fail. */
-
-    /* if choosing randomly doesn't succeed within 10 tries, then we have already
-     * allocated a lot of ports (>90% on average). then we fall back to linear search. */
-    for(guint i = 0; i < 10; i++) {
-        in_port_t randomPort = _hostc_getRandomPort(rhost);
-
-        /* this will check all interfaces in the case of INADDR_ANY */
-        if (host_isInterfaceAvailable(rhost, type, interfaceIP, randomPort, peerIP, peerPort)) {
-            return randomPort;
-        }
-    }
-
-    /* now if we tried too many times and still don't have a port, fall back
-     * to a linear search to make sure we get a free port if we have one.
-     * but start from a random port instead of the min. */
-    in_port_t start = _hostc_getRandomPort(rhost);
-    in_port_t next = _hostc_incrementPort(start, htons(MIN_RANDOM_PORT));
-    while(next != start) {
-        /* this will check all interfaces in the case of INADDR_ANY */
-        if (host_isInterfaceAvailable(rhost, type, interfaceIP, next, peerIP, peerPort)) {
-            return next;
-        }
-        next = _hostc_incrementPort(next, htons(MIN_RANDOM_PORT));
-    }
-
-    gchar* peerIPStr = address_ipToNewString(peerIP);
-    warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
-            protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
-    return 0;
-}
-
 Tracker* hostc_getTracker(HostCInternal* host) {
     MAGIC_ASSERT(host);
     return host->tracker;
