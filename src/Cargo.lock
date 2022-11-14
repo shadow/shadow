@@ -1125,6 +1125,7 @@ dependencies = [
 name = "shadow_tsc"
 version = "0.1.0"
 dependencies = [
+ "cbindgen",
  "cc",
  "logger",
  "shadow-build-common",
