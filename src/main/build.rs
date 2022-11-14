@@ -18,6 +18,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "EmulatedTime".into(),
             "SimulationTime".into(),
             "NetworkInterface".into(),
+            "Tsc".into(),
         ]);
         c
     };

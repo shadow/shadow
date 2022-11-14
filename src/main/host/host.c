@@ -19,7 +19,6 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
-#include "lib/tsc/tsc.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
@@ -45,8 +44,6 @@
 struct _HostCInternal {
     /* The router upstream from the host, from which we receive packets. */
     Router* router;
-
-    Tsc tsc;
 
     /* the virtual processes this host is running */
     GQueue* processes;
@@ -95,14 +92,6 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
 void hostc_setup(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
-
-    uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
-    if (!tsc_frequency) {
-        tsc_frequency = host_paramsCpuFrequencyHz(rhost);
-        warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
-                "simulation time. For most applications this shouldn't matter.");
-    }
-    host->tsc = Tsc_create(tsc_frequency);
 
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
@@ -232,11 +221,6 @@ void hostc_freeAllApplications(const Host* rhost) {
         process_unref(proc);
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
-}
-
-Tsc* hostc_getTsc(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return &host->tsc;
 }
 
 Router* hostc_getUpstreamRouter(HostCInternal* host) {
