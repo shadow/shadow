@@ -3,6 +3,16 @@
 // https://github.com/rust-lang/cargo/issues/9391
 extern crate logger;
 
+/// cbindgen:ignore
+pub mod c_internal {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    // https://github.com/rust-lang/rust/issues/66220
+    #![allow(improper_ctypes)]
+    include!(concat!(env!("OUT_DIR"), "/c_internal.rs"));
+}
+
 /// Emulates an x86-64 processor's timestamp counter, as read by rdtsc and
 /// rdtscp.
 #[repr(C)]
@@ -20,7 +30,12 @@ impl Tsc {
     /// needs more work if we need to dependably get the host's TSC rate.
     /// e.g. see <https://github.com/shadow/shadow/issues/1519>.
     pub fn native_cycles_per_second() -> Option<u64> {
-        todo!();
+        let res = unsafe { c_internal::TscC_nativeCyclesPerSecond() };
+        if res == 0 {
+            None
+        } else {
+            Some(res)
+        }
     }
 
     pub fn new(cycles_per_second: u64) -> Self {
@@ -179,6 +194,17 @@ mod test {
 
 mod export {
     use super::*;
+
+    /// Returns the host system's native TSC rate, or 0 if it couldn't be found.
+    ///
+    /// WARNING: this is known to fail completely on some supported CPUs
+    /// (particularly AMD), and can return the wrong value for others. i.e. this
+    /// needs more work if we need to dependably get the host's TSC rate.
+    /// e.g. see https://github.com/shadow/shadow/issues/1519.
+    #[no_mangle]
+    pub extern "C" fn Tsc_nativeCyclesPerSecond() -> u64 {
+        Tsc::native_cycles_per_second().unwrap_or(0)
+    }
 
     /// Instantiate a TSC with the given clock rate.
     #[no_mangle]
