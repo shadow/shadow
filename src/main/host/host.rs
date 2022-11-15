@@ -22,7 +22,7 @@ use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
@@ -138,12 +138,27 @@ pub struct Host {
     // Cached lock for shim_shmem. `[Host::shmem_lock]` uses unsafe code to give it
     // a 'static lifetime.
     // SAFETY:
-    // * This field must be delared before `shim_shmem` so that it's dropped
-    //   before it
-    // * Non `unsafe` APIs shouldn't expose this with a lifetime longer than `self`.
-    shim_shmem_lock: RefCell<Option<SelfContainedMutexGuard<'static, HostShmemProtected>>>,
+    // * This field must not outlive `shim_shmem`. We achieve this by:
+    //   * Declaring this field before `shim_shmem` so that it's dropped before
+    //   it.
+    //   * We never expose the guard itself via non-unsafe interfaces. e.g.  our
+    //   safe interfaces don't allow access to the guard itself, nor to the
+    //   internal data with a lifetime that could outlive `self` (and thereby
+    //   `shim_shmem`).
+    shim_shmem_lock:
+        RefCell<Option<UnsafeCell<SelfContainedMutexGuard<'static, HostShmemProtected>>>>,
     // Shared memory with the shim.
-    shim_shmem: ShMemBlock<'static, HostShmem>,
+    //
+    // SAFETY: The data inside HostShmem::protected aliases shim_shmem_lock when
+    // the latter is held.  Even when holding `&mut self` or `self`, if
+    // `shim_shmem_lock` is held we must avoid invalidating it, e.g. by
+    // `std::mem::replace`.
+    //
+    // Note though that we're already prevented from creating another reference
+    // to the data inside `HostShmem::protected` through this field, since
+    // `self.shim_shmem...protected.lock()` will fail if the lock is already
+    // held.
+    shim_shmem: UnsafeCell<ShMemBlock<'static, HostShmem>>,
 }
 
 /// Host must be `Send`.
@@ -161,8 +176,6 @@ impl std::fmt::Debug for Host {
 
 impl Host {
     pub fn new(params: HostParameters) -> Self {
-        // Ok because hostc_new copies params rather than saving this pointer.
-        // TODO: remove params from HostCInternal.
         let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
         let random = RootedRefCell::new(&root, Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
@@ -177,7 +190,8 @@ impl Host {
             params.unblocked_syscall_latency,
             params.unblocked_vdso_latency,
         );
-        let shim_shmem = shadow_shmem::allocator::Allocator::global().alloc(host_shmem);
+        let shim_shmem =
+            UnsafeCell::new(shadow_shmem::allocator::Allocator::global().alloc(host_shmem));
 
         // Process IDs start at 1000
         let process_id_counter = Cell::new(1000);
@@ -609,26 +623,26 @@ impl Host {
     ///
     /// Dropping the Host before calling [`Host::unlock_shmem`] will panic.
     ///
-    /// TODO: Remove this API once we don't need to cache the lock for the C API.
+    /// TODO: Consider removing this API once we don't need to cache the lock for the C API.
     pub fn lock_shmem(&self) {
-        let shim_shmem = &self.shim_shmem;
-        let shim_shmem: *const ShMemBlock<HostShmem> = shim_shmem;
         // We're extending this lifetime to extend the lifetime of `lock`, below, without
         // having to `transmute` the type itself.
         //
         // SAFETY:
         // * We ensure that `self.shim_shmem_lock` doesn't outlive `self.shim_shmem`.
-        //   We never drop `self.shim_shmem` before `self` itself is dropped, and in `Self`'s
-        //   `Drop` implementation we validate that the lock isn't held.
-        // * `ShMemBlock` guarantees that its data doesn't move even if the block does.
-        //    So moving `shim_shmem` (e.g. by moving `self`) doesn't invalidate the lock.
+        //   See SAFETY requirements on Self::shim_shmem_lock itself.
         // * We never mutate `self.shim_shmem` nor borrow the internals of
         //   `self.shim_shmem.protected` while the lock is held, since that would
         //   conflict with the cached guard's mutable reference.
-        let shim_shmem: &'static ShMemBlock<HostShmem> = unsafe { &*shim_shmem };
-
+        // * `ShMemBlock` guarantees that its data doesn't move even if the block does.
+        //    So moving `shim_shmem` (e.g. by moving `self`) doesn't invalidate the lock.
+        let shim_shmem: &'static ShMemBlock<HostShmem> =
+            unsafe { self.shim_shmem.get().as_ref().unwrap() };
         let lock = shim_shmem.protected().lock();
-        let prev = self.shim_shmem_lock.borrow_mut().replace(lock);
+        let prev = self
+            .shim_shmem_lock
+            .borrow_mut()
+            .replace(UnsafeCell::new(lock));
         assert!(prev.is_none());
     }
 
@@ -1055,7 +1069,10 @@ mod export {
         hostrc: *const Host,
     ) -> *const shim_shmem::export::ShimShmemHost {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.shim_shmem.deref()
+        // SAFETY: The requirements documented on `shim_shmem`, that we don't move
+        // `shim_shmem` or otherwise invalidate the lock, are upheld since we aren't
+        // exposing a mutable pointer.
+        unsafe { hostrc.shim_shmem.get().as_ref().unwrap().deref() }
     }
 
     /// Returns the lock, or panics if the lock isn't held by Shadow.
@@ -1076,7 +1093,9 @@ mod export {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         let mut opt_lock = hostrc.shim_shmem_lock.borrow_mut();
         let lock = opt_lock.as_mut().unwrap();
-        lock.deref_mut()
+        // SAFETY: The caller is responsible for not accessing the returned pointer
+        // after the lock has been released.
+        unsafe { lock.get().as_mut().unwrap().deref_mut() }
     }
 
     /// Take the host's shared memory lock. See `host_getShimShmemLock`.
@@ -1096,7 +1115,10 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_serializeShmem(hostrc: *const Host) -> ShMemBlockSerialized {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.shim_shmem.serialize()
+        // SAFETY: wrt the `shim_shmem` field requirements: We're calling an
+        // immutable method of `ShMemBlock`; this doesn't touch the HostShmem
+        // data (including HostShmem::protected).
+        unsafe { hostrc.shim_shmem.get().as_ref().unwrap().serialize() }
     }
 
     /// Returns the next value and increments our monotonically increasing
