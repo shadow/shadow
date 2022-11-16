@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{self, Context};
 use atomic_refcell::AtomicRefCell;
+use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::HostId;
@@ -34,6 +35,7 @@ pub struct Manager<'a> {
     config: &'a ConfigOptions,
 
     raw_frequency: u64,
+    native_tsc_frequency: u64,
     end_time: EmulatedTime,
 
     data_path: PathBuf,
@@ -69,6 +71,15 @@ impl<'a> Manager<'a> {
             );
             default_freq
         });
+
+        let native_tsc_frequency = if let Some(f) = shadow_tsc::Tsc::native_cycles_per_second() {
+            f
+        } else {
+            warn!(
+                "Couldn't find native TSC frequency. Emulated rdtsc may use a rate different than managed code expects"
+            );
+            raw_frequency
+        };
 
         // we always preload the injector lib to ensure that the shim is loaded into the managed
         // processes
@@ -185,6 +196,7 @@ impl<'a> Manager<'a> {
             controller,
             config,
             raw_frequency,
+            native_tsc_frequency,
             end_time,
             data_path,
             hosts_path,
@@ -577,6 +589,7 @@ impl<'a> Manager<'a> {
                 autotune_recv_buf: host_info.autotune_recv_buf,
                 init_sock_send_buf_size: host_info.send_buf_size,
                 autotune_send_buf: host_info.autotune_send_buf,
+                native_tsc_frequency: self.native_tsc_frequency,
                 model_unblocked_syscall_latency: self.config.model_unblocked_syscall_latency(),
                 max_unapplied_cpu_latency: self.config.max_unapplied_cpu_latency(),
                 unblocked_syscall_latency: self.config.unblocked_syscall_latency(),

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <inttypes.h>
 #include <sched.h>
 #include <search.h>
 #include <string.h>

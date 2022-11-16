@@ -1,4 +1,4 @@
-#include "lib/tsc/tsc.h"
+#include "lib/tsc/tsc_internal.h"
 
 #include <assert.h>
 #include <cpuid.h>
@@ -176,7 +176,7 @@ __attribute__((unused)) static uint64_t _frequency_via_brand_string() {
     return frequency;
 }
 
-uint64_t Tsc_nativeCyclesPerSecond() {
+uint64_t TscC_nativeCyclesPerSecond() {
     // Since we don't have an efficient way of trapping and emulating cpuid
     // to just dictate the perceived clock frequency to the managed program,
     // we need to use cpuid ourselves to figure out the clock frequency, so that
@@ -191,50 +191,4 @@ uint64_t Tsc_nativeCyclesPerSecond() {
     // 0x15.
     warning("Couldn't get CPU TSC frequency");
     return 0;
-}
-
-Tsc Tsc_create(uint64_t cyclesPerSecond) {
-    assert(cyclesPerSecond);
-    return (Tsc) { .cyclesPerSecond = cyclesPerSecond};
-}
-
-static void _Tsc_setRdtscCycles(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t nanos) {
-    assert(tsc);
-    assert(rax);
-    assert(rdx);
-    // Guaranteed not to overflow since the operands are both 64 bit.
-    __uint128_t gigaCycles = (__uint128_t)tsc->cyclesPerSecond * nanos;
-    uint64_t cycles = gigaCycles / 1000000000;
-    *rdx = (cycles >> 32) & 0xffffffff;
-    *rax = cycles & 0xffffffff;
-}
-
-void Tsc_emulateRdtsc(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) {
-    assert(tsc);
-    assert(rax);
-    assert(rdx);
-    _Tsc_setRdtscCycles(tsc, rax, rdx, nanos);
-    *rip += 2;
-}
-
-void Tsc_emulateRdtscp(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rcx, uint64_t* rip,
-                       uint64_t nanos) {
-    assert(tsc);
-    assert(rax);
-    assert(rdx);
-    assert(rcx);
-    _Tsc_setRdtscCycles(tsc, rax, rdx, nanos);
-    // rcx is set to IA32_TSC_AUX. According to the Intel developer manual
-    // 17.17.2 "IA32_TSC_AUX Register and RDTSCP Support", "IA32_TSC_AUX
-    // provides a 32-bit field that is initialized by privileged software with a
-    // signature value (for example, a logical processor ID)." ... "User mode
-    // software can use RDTSCP to detect if CPU migration has occurred between
-    // successive reads of the TSC. It can also be used to adjust for per-CPU
-    // differences in TSC values in a NUMA system."
-    //
-    // For now we just hard-code an arbitrary constant, which should be fine for
-    // the stated purpose.
-    // `hex(int(random.random()*2**32))`
-    *rcx = 0x806eb479;
-    *rip += 3;
 }

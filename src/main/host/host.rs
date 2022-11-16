@@ -22,6 +22,7 @@ use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
+use shadow_tsc::Tsc;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -60,6 +61,7 @@ pub struct HostParameters {
     pub autotune_recv_buf: bool,
     pub init_sock_send_buf_size: u64,
     pub autotune_send_buf: bool,
+    pub native_tsc_frequency: u64,
     pub model_unblocked_syscall_latency: bool,
     pub max_unapplied_cpu_latency: SimulationTime,
     pub unblocked_syscall_latency: SimulationTime,
@@ -135,6 +137,7 @@ pub struct Host {
     // track the order in which the application sent us application data
     packet_priority_counter: Cell<f64>,
 
+    tsc: Tsc,
     // Cached lock for shim_shmem. `[Host::shmem_lock]` uses unsafe code to give it
     // a 'static lifetime.
     // SAFETY:
@@ -200,6 +203,8 @@ impl Host {
         let determinism_sequence_counter = Cell::new(0);
         // Packet priorities start at 1.0. "0.0" is used for control packets.
         let packet_priority_counter = Cell::new(1.0);
+        let tsc = Tsc::new(params.native_tsc_frequency);
+
         Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             default_address,
@@ -220,6 +225,7 @@ impl Host {
             packet_id_counter,
             packet_priority_counter,
             determinism_sequence_counter,
+            tsc,
         }
     }
 
@@ -745,6 +751,12 @@ impl Host {
         None
     }
 
+    /// Timestamp Counter emulation for this Host. It ticks at the same rate as
+    /// the native Timestamp Counter, if we were able to find it.
+    pub fn tsc(&self) -> &Tsc {
+        &self.tsc
+    }
+
     pub fn chost(&self) -> *mut cshadow::HostCInternal {
         self.chost.ptr()
     }
@@ -819,10 +831,12 @@ mod export {
         hostrc.id()
     }
 
+    /// SAFETY: The returned pointer belongs to Host, and is invalidated when
+    /// `host` is moved or freed.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getTsc(hostrc: *const Host) -> *mut cshadow::Tsc {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getTsc(hostrc.chost()) }
+    pub unsafe extern "C" fn host_getTsc(host: *const Host) -> *const Tsc {
+        let hostrc = unsafe { host.as_ref().unwrap() };
+        hostrc.tsc()
     }
 
     #[no_mangle]

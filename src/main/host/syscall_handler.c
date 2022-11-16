@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_event.h"
