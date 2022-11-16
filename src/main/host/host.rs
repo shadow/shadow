@@ -412,8 +412,9 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
-    pub fn upstream_router(&self) -> *mut Router {
-        unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
+    pub fn with_upstream_router_mut<Res>(&self, f: impl FnOnce(&mut Router) -> Res) -> Res {
+        let router = unsafe { &mut *cshadow::hostc_getUpstreamRouter(self.chost()) };
+        f(router)
     }
 
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
@@ -890,7 +891,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.upstream_router()
+        hostrc.with_upstream_router_mut(|r| r as *mut _)
     }
 
     #[no_mangle]
