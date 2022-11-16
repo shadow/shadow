@@ -18,8 +18,8 @@ not complete before the timeout.
 ```bash
 ./setup build --test --extra
 ./setup test --extra
-# To exclude the Tor tests (for example if you built Shadow in debug mode)
-./setup test --extra -- --label-exclude tor
+# To exclude the TGen and Tor tests (for example if you built Shadow in debug mode)
+./setup test --extra -- --label-exclude tgen|tor
 ```
 
 If you change the version of tor located at `~/.local/bin/tor`, make sure to

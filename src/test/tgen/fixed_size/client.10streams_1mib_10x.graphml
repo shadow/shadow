@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d5" for="node" attr.name="count" attr.type="string"/>
+<key id="d4" for="node" attr.name="recvsize" attr.type="string"/>
+<key id="d3" for="node" attr.name="sendsize" attr.type="string"/>
+<key id="d2" for="node" attr.name="stallout" attr.type="string"/>
+<key id="d1" for="node" attr.name="peers" attr.type="string"/>
+<key id="d0" for="node" attr.name="time" attr.type="string"/>
+<graph edgedefault="directed"><node id="start">
+  <data key="d0">1 second</data>
+  <data key="d1">server:80</data>
+  <data key="d2">60 seconds</data>
+  <data key="d3">1 mib</data>
+  <data key="d4">1 mib</data>
+</node>
+<node id="pause"/>
+<node id="end">
+  <data key="d5">10</data>
+</node>
+<node id="stream0"/>
+<node id="stream1"/>
+<node id="stream2"/>
+<node id="stream3"/>
+<node id="stream4"/>
+<node id="stream5"/>
+<node id="stream6"/>
+<node id="stream7"/>
+<node id="stream8"/>
+<node id="stream9"/>
+<edge source="start" target="stream0"/>
+<edge source="start" target="stream1"/>
+<edge source="start" target="stream2"/>
+<edge source="start" target="stream3"/>
+<edge source="start" target="stream4"/>
+<edge source="start" target="stream5"/>
+<edge source="start" target="stream6"/>
+<edge source="start" target="stream7"/>
+<edge source="start" target="stream8"/>
+<edge source="start" target="stream9"/>
+<edge source="pause" target="end"/>
+<edge source="end" target="start"/>
+<edge source="stream0" target="pause"/>
+<edge source="stream1" target="pause"/>
+<edge source="stream2" target="pause"/>
+<edge source="stream3" target="pause"/>
+<edge source="stream4" target="pause"/>
+<edge source="stream5" target="pause"/>
+<edge source="stream6" target="pause"/>
+<edge source="stream7" target="pause"/>
+<edge source="stream8" target="pause"/>
+<edge source="stream9" target="pause"/>
+</graph></graphml>
