@@ -44,11 +44,6 @@ struct _HostCInternal {
     /* the virtual processes this host is running */
     GQueue* processes;
 
-#ifdef USE_PERF_TIMERS
-    /* track the time spent executing this host */
-    GTimer* executionTimer;
-#endif
-
     MAGIC_DECLARE;
 };
 
@@ -57,21 +52,10 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
     HostCInternal* host = g_new0(HostCInternal, 1);
     MAGIC_INIT(host);
 
-#ifdef USE_PERF_TIMERS
-    /* start tracking execution time for this host.
-     * creating the timer automatically starts it. */
-    host->executionTimer = g_timer_new();
-#endif
-
     /* applications this node will run */
     host->processes = g_queue_new();
 
     info("Created host id '%u' name '%s'", (guint)id, hostName);
-
-#ifdef USE_PERF_TIMERS
-    /* we go back to the manager setup process here, so stop counting this host execution */
-    g_timer_stop(host->executionTimer);
-#endif
 
     worker_count_allocation(HostCInternal);
 
@@ -98,45 +82,16 @@ static void _hostc_free(HostCInternal* host) {
  * of this function, then hostc_free would never actually get called. */
 void hostc_shutdown(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
-#ifdef USE_PERF_TIMERS
-    g_timer_continue(host->executionTimer);
-#endif
-
     debug("shutting down host %s", host_getName(rhost));
 
     if(host->processes) {
         g_queue_free(host->processes);
     }
-
-#ifdef USE_PERF_TIMERS
-    gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
-    g_timer_destroy(host->executionTimer);
-    info("host '%s' has been shut down, total execution time was %f seconds", host->params.hostname,
-         totalExecutionTime);
-#else
-    info("host '%s' has been shut down", host_getName(rhost));
-#endif
 }
 
 void hostc_unref(HostCInternal* host) {
     MAGIC_ASSERT(host);
     _hostc_free(host);
-}
-
-/* resumes the execution timer for this host */
-void hostc_continueExecutionTimer(HostCInternal* host) {
-#ifdef USE_PERF_TIMERS
-    MAGIC_ASSERT(host);
-    g_timer_continue(host->executionTimer);
-#endif
-}
-
-/* stops the execution timer for this host */
-void hostc_stopExecutionTimer(HostCInternal* host) {
-#ifdef USE_PERF_TIMERS
-    MAGIC_ASSERT(host);
-    g_timer_stop(host->executionTimer);
-#endif
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,

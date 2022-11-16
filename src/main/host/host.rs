@@ -31,6 +31,9 @@ use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "perf_timers")]
+use crate::utility::perf_timer::PerfTimer;
+
 // The start of our random port range in host order, used if application doesn't
 // specify the port it wants to bind to, and for client connections.
 const MIN_RANDOM_PORT: u16 = 10000;
@@ -117,6 +120,9 @@ pub struct Host {
     // map address to futex objects
     futex_table: RefCell<SyncSendPointer<cshadow::FutexTable>>,
 
+    #[cfg(feature = "perf_timers")]
+    execution_timer: RefCell<PerfTimer>,
+
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -191,6 +197,9 @@ impl std::fmt::Debug for Host {
 
 impl Host {
     pub fn new(params: HostParameters) -> Self {
+        #[cfg(feature = "perf_timers")]
+        let execution_timer = RefCell::new(PerfTimer::new());
+
         let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
@@ -217,7 +226,7 @@ impl Host {
         let packet_priority_counter = Cell::new(1.0);
         let tsc = Tsc::new(params.native_tsc_frequency);
 
-        Self {
+        let res = Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             default_address,
             info: OnceCell::new(),
@@ -241,7 +250,13 @@ impl Host {
             packet_priority_counter,
             determinism_sequence_counter,
             tsc,
-        }
+            #[cfg(feature = "perf_timers")]
+            execution_timer,
+        };
+
+        res.stop_execution_timer();
+
+        res
     }
 
     pub unsafe fn setup(
@@ -529,11 +544,13 @@ impl Host {
     }
 
     pub fn continue_execution_timer(&self) {
-        unsafe { cshadow::hostc_continueExecutionTimer(self.chost()) };
+        #[cfg(feature = "perf_timers")]
+        self.execution_timer.borrow_mut().start();
     }
 
     pub fn stop_execution_timer(&self) {
-        unsafe { cshadow::hostc_stopExecutionTimer(self.chost()) };
+        #[cfg(feature = "perf_timers")]
+        self.execution_timer.borrow_mut().stop();
     }
 
     pub fn schedule_task_at_emulated_time(&self, task: TaskRef, t: EmulatedTime) -> bool {
@@ -591,6 +608,8 @@ impl Host {
     }
 
     pub fn shutdown(&self) {
+        self.continue_execution_timer();
+
         // Need to drop the interfaces early because they trigger worker accesses
         // that will not be valid at the normal drop time. The interfaces will
         // become None after this and should not be unwrapped anymore.
@@ -607,6 +626,14 @@ impl Host {
             let dns = dns as *const cshadow::DNS;
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
         });
+
+        self.stop_execution_timer();
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "host '{}' has been shut down, total execution time was {:?}",
+            self.name(),
+            self.execution_timer.borrow().elapsed()
+        );
     }
 
     pub fn free_all_applications(&self) {
