@@ -15,7 +15,6 @@ use once_cell::unsync::OnceCell;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::scmutex::SelfContainedMutexGuard;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
@@ -124,7 +123,7 @@ pub struct Host {
     //
     // TODO: Store as PathBuf once we can remove `host_getDataPath`. (Or maybe
     // don't store it at all)
-    data_dir_path: RootedRefCell<Option<CString>>,
+    data_dir_path: RefCell<Option<CString>>,
 
     // virtual process and event id counter
     process_id_counter: Cell<u32>,
@@ -183,7 +182,7 @@ impl Host {
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let cpu = RefCell::new(None);
-        let data_dir_path = RootedRefCell::new(&root, None);
+        let data_dir_path = RefCell::new(None);
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
         let host_shmem = HostShmem::new(
@@ -247,9 +246,7 @@ impl Host {
             std::fs::create_dir_all(&data_dir_path).unwrap();
 
             let data_dir_path = utility::pathbuf_to_nul_term_cstring(data_dir_path);
-            self.data_dir_path
-                .borrow_mut(&self.root)
-                .replace(data_dir_path);
+            self.data_dir_path.borrow_mut().replace(data_dir_path);
         }
 
         // Register using the param hints.
@@ -919,12 +916,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc
-            .data_dir_path
-            .borrow(&hostrc.root)
-            .as_ref()
-            .unwrap()
-            .as_ptr()
+        hostrc.data_dir_path.borrow().as_ref().unwrap().as_ptr()
     }
 
     #[no_mangle]
