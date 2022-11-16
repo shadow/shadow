@@ -111,6 +111,9 @@ pub struct Host {
     // does not receive packets from a router.
     router: RefCell<Router>,
 
+    // a statistics tracker for in/out bytes, CPU, memory, etc.
+    tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
+
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -219,6 +222,7 @@ impl Host {
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
             router: RefCell::new(Router::new()),
+            tracker: RefCell::new(None),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -425,6 +429,22 @@ impl Host {
         f(router.deref_mut())
     }
 
+    /// Calls `f` with the Host's tracker, if it has one.
+    #[must_use]
+    pub fn with_tracker_mut<Res>(
+        &self,
+        f: impl FnOnce(&mut cshadow::Tracker) -> Res,
+    ) -> Option<Res> {
+        let tracker = self.tracker.borrow_mut();
+        if let Some(tracker) = &*tracker {
+            debug_assert!(!tracker.ptr().is_null());
+            let tracker = unsafe { &mut *tracker.ptr() };
+            Some(f(tracker))
+        } else {
+            None
+        }
+    }
+
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
         if addr.is_loopback() {
             Some(&self.localhost)
@@ -528,8 +548,6 @@ impl Host {
     }
 
     pub fn boot(&self) {
-        unsafe { cshadow::hostc_boot(self) };
-
         // Start refilling the token buckets for all interfaces.
         let bw_down = self.bw_down_kiBps();
         let bw_up = self.bw_up_kiBps();
@@ -543,6 +561,23 @@ impl Host {
             .as_ref()
             .unwrap()
             .start_refilling_token_buckets(bw_down, bw_up);
+
+        // must be done after the default IP exists so tracker_heartbeat works
+        if let Some(heartbeat_interval) = self.params.heartbeat_interval {
+            let heartbeat_interval = SimulationTime::to_c_simtime(Some(heartbeat_interval));
+            let tracker = unsafe {
+                cshadow::tracker_new(
+                    self,
+                    heartbeat_interval,
+                    self.params.heartbeat_log_level,
+                    self.params.heartbeat_log_info,
+                )
+            };
+            // SAFETY: we synchronize access to the Host's tracker using a RefCell.
+            self.tracker
+                .borrow_mut()
+                .replace(unsafe { SyncSendPointer::new(tracker) });
+        }
     }
 
     pub fn shutdown(&self) {
@@ -591,11 +626,11 @@ impl Host {
                     );
 
                     // track the event delay time
-                    let tracker = unsafe { cshadow::hostc_getTracker(self.chost()) };
-                    if !tracker.is_null() {
+                    let tracker = self.tracker.borrow_mut();
+                    if let Some(tracker) = &*tracker {
                         unsafe {
                             cshadow::tracker_addVirtualProcessingDelay(
-                                tracker,
+                                tracker.ptr(),
                                 SimulationTime::to_c_simtime(Some(cpu_delay)),
                             )
                         };
@@ -774,6 +809,12 @@ impl Drop for Host {
         if !default_addr.is_null() {
             unsafe { cshadow::address_unref(default_addr) };
         }
+
+        if let Some(tracker) = self.tracker.borrow_mut().take() {
+            debug_assert!(!tracker.ptr().is_null());
+            unsafe { cshadow::tracker_free(tracker.ptr()) };
+        };
+
         unsafe { cshadow::hostc_unref(self.chost()) };
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
@@ -914,10 +955,20 @@ mod export {
         hostrc.bw_up_kiBps()
     }
 
+    /// Returns a pointer to the Host's Tracker, if there is one, otherwise
+    /// NULL.
+    ///
+    /// SAFETY: The returned pointer belongs to and is synchronized by the Host,
+    /// and is invalidated when the Host is no longer accessible to the current
+    /// thread, or something else accesses its Tracker.
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getTracker(hostrc.chost()) }
+        if let Some(tracker_ptr) = hostrc.with_tracker_mut(|tracker| tracker as *mut _) {
+            tracker_ptr
+        } else {
+            std::ptr::null_mut()
+        }
     }
 
     /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when

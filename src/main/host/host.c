@@ -45,9 +45,6 @@ struct _HostCInternal {
     /* the virtual processes this host is running */
     GQueue* processes;
 
-    /* a statistics tracker for in/out bytes, CPU, memory, etc. */
-    Tracker* tracker;
-
     /* map address to futex objects */
     FutexTable* futexTable;
 
@@ -121,10 +118,6 @@ void hostc_shutdown(const Host* rhost) {
         futextable_unref(host->futexTable);
     }
 
-    if(host->tracker) {
-        tracker_free(host->tracker);
-    }
-
 #ifdef USE_PERF_TIMERS
     gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
     g_timer_destroy(host->executionTimer);
@@ -154,19 +147,6 @@ void hostc_stopExecutionTimer(HostCInternal* host) {
     MAGIC_ASSERT(host);
     g_timer_stop(host->executionTimer);
 #endif
-}
-
-/* this function is called by worker after the workers exist */
-void hostc_boot(const Host* rhost) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-
-    /* must be done after the default IP exists so tracker_heartbeat works */
-    CSimulationTime heartbeatInterval = host_paramsHeartbeatInterval(rhost);
-    if (heartbeatInterval != SIMTIME_INVALID) {
-        host->tracker = tracker_new(rhost, heartbeatInterval, host_paramsHeartbeatLogLevel(rhost),
-                                    host_paramsHeartbeatLogInfo(rhost));
-    }
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
@@ -209,11 +189,6 @@ void hostc_freeAllApplications(const Host* rhost) {
         process_unref(proc);
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
-}
-
-Tracker* hostc_getTracker(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->tracker;
 }
 
 FutexTable* hostc_getFutexTable(HostCInternal* host) { return host->futexTable; }

@@ -37,7 +37,6 @@ void hostc_continueExecutionTimer(HostCInternal* host);
 void hostc_stopExecutionTimer(HostCInternal* host);
 
 void hostc_setup(const Host* host);
-void hostc_boot(const Host* rhost);
 void hostc_shutdown(const Host* rhost);
 
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
@@ -47,8 +46,6 @@ void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulati
 void hostc_freeAllApplications(const Host* rhost);
 
 Tsc* hostc_getTsc(HostCInternal* host);
-
-Tracker* hostc_getTracker(HostCInternal* host);
 
 FutexTable* hostc_getFutexTable(HostCInternal* host);
 
