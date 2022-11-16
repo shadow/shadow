@@ -104,7 +104,7 @@ pub struct Host {
 
     event_queue: Arc<Mutex<EventQueue>>,
 
-    random: RootedRefCell<Xoshiro256PlusPlus>,
+    random: RefCell<Xoshiro256PlusPlus>,
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -181,7 +181,7 @@ impl Host {
     pub fn new(params: HostParameters) -> Self {
         let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
-        let random = RootedRefCell::new(&root, Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
+        let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let cpu = RefCell::new(None);
         let data_dir_path = RootedRefCell::new(&root, None);
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
@@ -458,7 +458,7 @@ impl Host {
     }
 
     pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
-        let mut rng = self.random.borrow_mut(&self.root);
+        let mut rng = self.random.borrow_mut();
         f(&mut *rng)
     }
 
@@ -708,7 +708,7 @@ impl Host {
         for _ in 0..10 {
             let random_port = self
                 .random
-                .borrow_mut(&self.root)
+                .borrow_mut()
                 .gen_range(MIN_RANDOM_PORT..=u16::MAX);
 
             // this will check all interfaces in the case of INADDR_ANY
@@ -726,7 +726,7 @@ impl Host {
         // but start from a random port instead of the min.
         let start = self
             .random
-            .borrow_mut(&self.root)
+            .borrow_mut()
             .gen_range(MIN_RANDOM_PORT..=u16::MAX);
         let mut port = start;
         loop {
