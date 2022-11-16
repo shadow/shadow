@@ -48,8 +48,6 @@ void hostc_freeAllApplications(const Host* rhost);
 
 Tsc* hostc_getTsc(HostCInternal* host);
 
-Router* hostc_getUpstreamRouter(HostCInternal* host);
-
 Tracker* hostc_getTracker(HostCInternal* host);
 
 FutexTable* hostc_getFutexTable(HostCInternal* host);

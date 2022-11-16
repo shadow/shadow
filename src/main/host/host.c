@@ -42,9 +42,6 @@
 #include "main/utility/utility.h"
 
 struct _HostCInternal {
-    /* The router upstream from the host, from which we receive packets. */
-    Router* router;
-
     /* the virtual processes this host is running */
     GQueue* processes;
 
@@ -95,11 +92,6 @@ void hostc_setup(const Host* rhost) {
 
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
-
-    /* the upstream router that will queue packets until we can receive them.
-     * this only applies the the ethernet interface, the loopback interface
-     * does not receive packets from a router. */
-    host->router = router_new();
 }
 
 static void _hostc_free(HostCInternal* host) {
@@ -123,10 +115,6 @@ void hostc_shutdown(const Host* rhost) {
 
     if(host->processes) {
         g_queue_free(host->processes);
-    }
-
-    if(host->router) {
-        router_free(host->router);
     }
 
     if (host->futexTable) {
@@ -221,11 +209,6 @@ void hostc_freeAllApplications(const Host* rhost) {
         process_unref(proc);
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
-}
-
-Router* hostc_getUpstreamRouter(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->router;
 }
 
 Tracker* hostc_getTracker(HostCInternal* host) {

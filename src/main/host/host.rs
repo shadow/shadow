@@ -25,6 +25,7 @@ use shadow_tsc::Tsc;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::ops::DerefMut;
 use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -104,6 +105,12 @@ pub struct Host {
     event_queue: Arc<Mutex<EventQueue>>,
 
     random: RefCell<Xoshiro256PlusPlus>,
+
+    // the upstream router that will queue packets until we can receive them.
+    // this only applies the the ethernet interface, the loopback interface
+    // does not receive packets from a router.
+    router: RefCell<Router>,
+
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -211,6 +218,7 @@ impl Host {
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
+            router: RefCell::new(Router::new()),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -413,8 +421,8 @@ impl Host {
     }
 
     pub fn with_upstream_router_mut<Res>(&self, f: impl FnOnce(&mut Router) -> Res) -> Res {
-        let router = unsafe { &mut *cshadow::hostc_getUpstreamRouter(self.chost()) };
-        f(router)
+        let mut router = self.router.borrow_mut();
+        f(router.deref_mut())
     }
 
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
