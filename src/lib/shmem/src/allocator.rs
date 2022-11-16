@@ -5,17 +5,12 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::c_bindings;
 
-enum ShMemBlockOrigin<'a> {
-    Allocator(&'a Allocator),
-    Serializer(&'a Serializer),
-}
-
 /// A typed pointer to shared memory.
 ///
 /// The pointer to the underlying data (e.g. as accessed via `deref`) is guaranteed
 /// not to change even if the `ShMemBlock` itself is moved. (Host uses this to safely
 /// cache a lock obtained from a ShMemBlock).
-pub struct ShMemBlock<'origin, T>
+pub struct ShMemBlock<'allocator, T>
 // T must be Sync, since it will be simultaneously available to multiple threads
 // (and processes).
 // T mut be VirtualAddressSpaceIndependent, since it may be simultaneously
@@ -24,22 +19,22 @@ where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     internal: c_bindings::ShMemBlock,
-    origin: ShMemBlockOrigin<'origin>,
+    allocator: &'allocator Allocator,
     _phantom: PhantomData<T>,
 }
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
 // immutable references to the underlying data.
-unsafe impl<'origin, T> Sync for ShMemBlock<'origin, T> where
+unsafe impl<'allocator, T> Sync for ShMemBlock<'allocator, T> where
     T: Sync + VirtualAddressSpaceIndependent
 {
 }
-unsafe impl<'origin, T> Send for ShMemBlock<'origin, T> where
+unsafe impl<'allocator, T> Send for ShMemBlock<'allocator, T> where
     T: Send + Sync + VirtualAddressSpaceIndependent
 {
 }
 
-impl<'origin, T> ShMemBlock<'origin, T>
+impl<'allocator, T> ShMemBlock<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -48,57 +43,45 @@ where
     /// SAFETY: The memory pointed to by `internal` should already be initialized
     /// to an instance of `T`, and must not be deallocated while the returned
     /// object is still alive.
-    unsafe fn new(internal: c_bindings::ShMemBlock, origin: ShMemBlockOrigin<'origin>) -> Self {
+    unsafe fn new(internal: c_bindings::ShMemBlock, allocator: &'allocator Allocator) -> Self {
         assert_eq!(internal.nbytes as usize, std::mem::size_of::<T>());
         assert!(!internal.p.is_null());
         assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
         Self {
             internal,
-            origin,
+            allocator,
             _phantom: PhantomData,
         }
     }
 
     pub fn serialize(&self) -> ShMemBlockSerialized {
-        let serialized = match self.origin {
-            ShMemBlockOrigin::Allocator(a) => unsafe {
-                c_bindings::shmemallocator_blockSerialize(a.internal, &self.internal)
-            },
-            ShMemBlockOrigin::Serializer(s) => unsafe {
-                c_bindings::shmemserializer_blockSerialize(s.internal, &self.internal)
-            },
+        let serialized = unsafe {
+            c_bindings::shmemallocator_blockSerialize(self.allocator.internal, &self.internal)
         };
         ShMemBlockSerialized {
             internal: serialized,
         }
     }
 
-    // This function will fail to compile for a T that isn't FFI-safe.
+    // We require that T is FFI safe (and hence has a stable layout).
+    // This function will fail to compile if it isn't.
     #[deny(improper_ctypes_definitions)]
     extern "C" fn _validate_stable_layout(_: T) {}
 }
 
-impl<'origin, T> Drop for ShMemBlock<'origin, T>
+impl<'allocator, T> Drop for ShMemBlock<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     fn drop(&mut self) {
-        match self.origin {
-            ShMemBlockOrigin::Allocator(a) => {
-                unsafe {
-                    std::ptr::drop_in_place(self.internal.p as *mut T);
-                    c_bindings::shmemallocator_free(a.internal, &mut self.internal as *mut _)
-                };
-            }
-            ShMemBlockOrigin::Serializer(_) => {
-                // No cleanup of individual blocks implemented.
-                // TODO: Probably ought to munmap.
-            }
+        unsafe {
+            std::ptr::drop_in_place(self.internal.p as *mut T);
+            c_bindings::shmemallocator_free(self.allocator.internal, &mut self.internal as *mut _)
         }
     }
 }
 
-impl<'origin, T> Deref for ShMemBlock<'origin, T>
+impl<'allocator, T> Deref for ShMemBlock<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -110,6 +93,86 @@ where
     }
 }
 
+/// An *alias* for a [`ShMemBlock`], which may live in a different process and
+/// address space.
+pub struct ShMemBlockAlias<'serializer, T>
+// T must be Sync, since it will be simultaneously available to multiple threads
+// (and processes).
+// T mut be VirtualAddressSpaceIndependent, since it may be simultaneously
+// mapped into different virtual address spaces.
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    internal: c_bindings::ShMemBlock,
+    // TODO: Extend Serializer to allow cleaning up individual deserialized
+    // blocks, and do so from this objects `drop` method.
+    #[allow(unused)]
+    serializer: &'serializer Serializer,
+    _phantom: PhantomData<T>,
+}
+
+// SAFETY: T is already required to be Sync, and ShMemBlock only exposes
+// immutable references to the underlying data.
+unsafe impl<'serializer, T> Sync for ShMemBlockAlias<'serializer, T> where
+    T: Sync + VirtualAddressSpaceIndependent
+{
+}
+unsafe impl<'serializer, T> Send for ShMemBlockAlias<'serializer, T> where
+    T: Send + Sync + VirtualAddressSpaceIndependent
+{
+}
+
+impl<'serializer, T> ShMemBlockAlias<'serializer, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    /// Panics if the ShMemBlock is NULL, the incorrect size, or unaligned.
+    ///
+    /// SAFETY: The memory pointed to by `internal` should already be initialized
+    /// to an instance of `T`, and must not be deallocated while the returned
+    /// object is still alive.
+    unsafe fn new(internal: c_bindings::ShMemBlock, serializer: &'serializer Serializer) -> Self {
+        assert_eq!(internal.nbytes as usize, std::mem::size_of::<T>());
+        assert!(!internal.p.is_null());
+        assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
+        Self {
+            internal,
+            serializer,
+            _phantom: PhantomData,
+        }
+    }
+
+    // We require that T is FFI safe (and hence has a stable layout).
+    // This function will fail to compile if it isn't.
+    #[deny(improper_ctypes_definitions)]
+    extern "C" fn _validate_stable_layout(_: T) {}
+}
+
+impl<'origin, T> Drop for ShMemBlockAlias<'origin, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    fn drop(&mut self) {
+        // No cleanup of individual blocks implemented.
+        // TODO: Probably ought to munmap.
+    }
+}
+
+impl<'origin, T> Deref for ShMemBlockAlias<'origin, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: Validity ensured by [`ShMemBlockAlias::new`].
+        unsafe { (self.internal.p as *const T).as_ref().unwrap() }
+    }
+}
+
+/// A serialized descriptor for a `ShMemBlock`, suitable to be transferred
+/// across processes, which can be used to create a `ShMemBlockAlias` referencing
+/// the original `ShMemBlock`.
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
@@ -149,6 +212,7 @@ impl ShMemBlockSerialized {
     }
 }
 
+/// An allocator for `ShMemBlock`s.
 pub struct Allocator {
     internal: *mut c_bindings::ShMemAllocator,
 }
@@ -181,12 +245,13 @@ impl Allocator {
         assert_eq!(raw_block.p.align_offset(std::mem::align_of::<T>()), 0);
         // Safety: We've validated non-null, size, and alignment.
         unsafe { (raw_block.p as *mut T).write(val) };
-        // Safety: We've validated and initialized; caller is responsible for
-        // lifetime.
-        unsafe { ShMemBlock::new(raw_block, ShMemBlockOrigin::Allocator(self)) }
+        // Safety: We've correctly initialized the raw_block, and are
+        // transferring sole ownership to the ShMemBlock.
+        unsafe { ShMemBlock::new(raw_block, self) }
     }
 }
 
+/// Transforms `ShMemBlockSerialized` to `ShMemBlockAlias`.
 pub struct Serializer {
     internal: *mut crate::c_bindings::ShMemSerializer,
 }
@@ -209,20 +274,19 @@ impl Serializer {
 
     /// SAFETY:
     /// * `block` must have been created from a `ShMemBlock<T>`
-    /// * The backing memory must be live for the lifetime of the returned
-    ///   ShMemBlock. i.e. the original allocated ShMemBlock must outlive the
-    ///   returned one. We can't guarantee this with normal lifetime analysis, since
-    ///   the original block may be in another process.
-    //
-    // TODO: Wrap objects allocated via the shared memory allocator with some
-    // validity flag/cookie and reference count in shared memory?
-    pub unsafe fn deserialize<'a, T>(&'a self, block: &ShMemBlockSerialized) -> ShMemBlock<'a, T>
+    /// * The returned `ShMemBlockAlias` must not outlive the original `ShMemBlock`
+    ///   that `block` was serialized from. We can't guarantee this with normal
+    ///   lifetime analysis, since the original block may be in another process.
+    pub unsafe fn deserialize<'a, T>(
+        &'a self,
+        block: &ShMemBlockSerialized,
+    ) -> ShMemBlockAlias<'a, T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
     {
         let raw_blk =
             unsafe { c_bindings::shmemserializer_blockDeserialize(self.internal, &block.internal) };
-        unsafe { ShMemBlock::new(raw_blk, ShMemBlockOrigin::Serializer(self)) }
+        unsafe { ShMemBlockAlias::new(raw_blk, self) }
     }
 }
 
@@ -254,7 +318,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn mutations() {
         type T = AtomicI32;
-        let original_block: ShMemBlock<T> = Allocator::global().alloc(AtomicI32::new(0));
+        let original_block = Allocator::global().alloc(AtomicI32::new(0));
 
         let serialized_block = original_block.serialize();
         let deserialized_block =
@@ -279,7 +343,7 @@ mod tests {
     #[test]
     // Uses FFI
     #[cfg_attr(miri, ignore)]
-    fn stable_pointer() {
+    fn shmemblock_stable_pointer() {
         type T = u32;
         let block: ShMemBlock<T> = Allocator::global().alloc(0);
 
@@ -290,6 +354,29 @@ mod tests {
 
         // Validate that the block itself actually moved.
         let new_block_addr = block.as_ref().unwrap() as *const ShMemBlock<T>;
+        assert_ne!(block_addr, new_block_addr);
+
+        // Validate that the data referenced by the block *hasn't* moved.
+        let new_data_addr = block.as_ref().unwrap().deref() as *const T;
+        assert_eq!(data_addr, new_data_addr);
+    }
+
+    // Validate our guarantee that the data pointer doesn't move, even if the block does.
+    #[test]
+    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn shmemblockremote_stable_pointer() {
+        type T = u32;
+        let allocd_block: ShMemBlock<T> = Allocator::global().alloc(0);
+        let block = unsafe { Serializer::global().deserialize::<T>(&allocd_block.serialize()) };
+
+        let block_addr = &block as *const _;
+        let data_addr = block.deref() as *const T;
+
+        let block = Some(block);
+
+        // Validate that the block itself actually moved.
+        let new_block_addr = block.as_ref().unwrap() as *const _;
         assert_ne!(block_addr, new_block_addr);
 
         // Validate that the data referenced by the block *hasn't* moved.
