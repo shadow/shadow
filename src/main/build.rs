@@ -143,6 +143,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // used by shadow's main function
         .allowlist_function("main_.*")
         .allowlist_function("tracker_.*")
+        .allowlist_function("futextable_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
         .allowlist_function("runConfigHandlers")

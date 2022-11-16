@@ -114,6 +114,9 @@ pub struct Host {
     // a statistics tracker for in/out bytes, CPU, memory, etc.
     tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
 
+    // map address to futex objects
+    futex_table: RefCell<SyncSendPointer<cshadow::FutexTable>>,
+
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -223,6 +226,7 @@ impl Host {
             params,
             router: RefCell::new(Router::new()),
             tracker: RefCell::new(None),
+            futex_table: RefCell::new(unsafe { SyncSendPointer::new(cshadow::futextable_new()) }),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -443,6 +447,12 @@ impl Host {
         } else {
             None
         }
+    }
+
+    pub fn with_futextable_mut<Res>(&self, f: impl FnOnce(&mut cshadow::FutexTable) -> Res) -> Res {
+        let futex_table_ref = self.futex_table.borrow_mut();
+        let futex_table = unsafe { &mut *futex_table_ref.ptr() };
+        f(futex_table)
     }
 
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
@@ -815,6 +825,10 @@ impl Drop for Host {
             unsafe { cshadow::tracker_free(tracker.ptr()) };
         };
 
+        let futex_table = self.futex_table.borrow_mut().ptr();
+        debug_assert!(!futex_table.is_null());
+        unsafe { cshadow::futextable_unref(futex_table) };
+
         unsafe { cshadow::hostc_unref(self.chost()) };
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
@@ -1090,10 +1104,15 @@ mod export {
         port.to_be()
     }
 
+    /// Returns a pointer to the Host's FutexTable.
+    ///
+    /// SAFETY: The returned pointer belongs to and is synchronized by the Host,
+    /// and is invalidated when the Host is no longer accessible to the current
+    /// thread, or something else accesses its FutexTable.
     #[no_mangle]
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getFutexTable(hostrc.chost()) }
+        hostrc.with_futextable_mut(|futex_table| futex_table as *mut _)
     }
 
     /// converts a virtual (shadow) tid into the native tid

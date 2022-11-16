@@ -47,8 +47,6 @@ void hostc_freeAllApplications(const Host* rhost);
 
 Tsc* hostc_getTsc(HostCInternal* host);
 
-FutexTable* hostc_getFutexTable(HostCInternal* host);
-
 // converts a virtual (shadow) tid into the native tid
 pid_t hostc_getNativeTID(HostCInternal* host, pid_t virtualPID, pid_t virtualTID);
 

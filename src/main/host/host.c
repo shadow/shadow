@@ -31,7 +31,6 @@
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/descriptor/udp.h"
-#include "main/host/futex_table.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/protocol.h"
@@ -44,9 +43,6 @@
 struct _HostCInternal {
     /* the virtual processes this host is running */
     GQueue* processes;
-
-    /* map address to futex objects */
-    FutexTable* futexTable;
 
 #ifdef USE_PERF_TIMERS
     /* track the time spent executing this host */
@@ -87,8 +83,6 @@ void hostc_setup(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
-    /* table to track futexes used by processes/threads */
-    host->futexTable = futextable_new();
 }
 
 static void _hostc_free(HostCInternal* host) {
@@ -112,10 +106,6 @@ void hostc_shutdown(const Host* rhost) {
 
     if(host->processes) {
         g_queue_free(host->processes);
-    }
-
-    if (host->futexTable) {
-        futextable_unref(host->futexTable);
     }
 
 #ifdef USE_PERF_TIMERS
@@ -190,8 +180,6 @@ void hostc_freeAllApplications(const Host* rhost) {
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
 }
-
-FutexTable* hostc_getFutexTable(HostCInternal* host) { return host->futexTable; }
 
 Process* hostc_getProcess(HostCInternal* host, pid_t virtualPID) {
     MAGIC_ASSERT(host);
