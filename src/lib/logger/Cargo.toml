@@ -9,7 +9,7 @@ edition = "2021"
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
-bindgen = { version = "0.61.0" }
+bindgen = { version = "0.62.0" }
 shadow-build-common = { path = "../shadow-build-common" }
 
 [lib]
