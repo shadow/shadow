@@ -13,9 +13,8 @@ mod sync {
     pub use loom::cell::UnsafeCell;
     pub use loom::sync::atomic::{AtomicI32, AtomicU32, Ordering};
     pub use loom::thread;
-    pub use loom::sync::Arc;
+    pub use loom::sync::{Arc, Condvar};
 
-    use loom::sync::Notify;
     use loom::sync::Mutex;
     use std::collections::HashMap;
 
@@ -31,7 +30,7 @@ mod sync {
         _val3: i32,
     ) -> nix::Result<i64> {
         loom::lazy_static! {
-            static ref HASHMAP: Mutex<HashMap<usize, Vec<Arc<Notify>>>> = Mutex::new(HashMap::new());
+            static ref HASHMAP: Mutex<HashMap<usize, Vec<Arc<Condvar>>>> = Mutex::new(HashMap::new());
         }
         match futex_op {
             libc::FUTEX_WAIT => {
@@ -41,10 +40,9 @@ mod sync {
                     return Err(nix::errno::Errno::EAGAIN);
                 }
                 let waiters = hashmap.entry(futex_word as *const _ as usize).or_insert(Vec::new());
-                let notify = Arc::new(Notify::new());
-                waiters.push(notify.clone());
-                drop(hashmap);
-                notify.wait();
+                let condvar = Arc::new(Condvar::new());
+                waiters.push(condvar.clone());
+                condvar.wait(hashmap).unwrap();
                 Ok(0)
             },
             libc::FUTEX_WAKE => {
@@ -55,7 +53,7 @@ mod sync {
                 let to_wake = std::cmp::min(waiters.len(), val as usize);
                 // XXX: Some way to randomize which threads get woken in what order?
                 for _ in 0..to_wake {
-                    waiters.pop().unwrap().notify();
+                    waiters.pop().unwrap().notify_all();
                 }
                 Ok(to_wake as i64)
             },
