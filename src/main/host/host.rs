@@ -25,10 +25,14 @@ use shadow_tsc::Tsc;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::ops::DerefMut;
 use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "perf_timers")]
+use crate::utility::perf_timer::PerfTimer;
 
 // The start of our random port range in host order, used if application doesn't
 // specify the port it wants to bind to, and for client connections.
@@ -104,6 +108,21 @@ pub struct Host {
     event_queue: Arc<Mutex<EventQueue>>,
 
     random: RefCell<Xoshiro256PlusPlus>,
+
+    // the upstream router that will queue packets until we can receive them.
+    // this only applies the the ethernet interface, the loopback interface
+    // does not receive packets from a router.
+    router: RefCell<Router>,
+
+    // a statistics tracker for in/out bytes, CPU, memory, etc.
+    tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
+
+    // map address to futex objects
+    futex_table: RefCell<SyncSendPointer<cshadow::FutexTable>>,
+
+    #[cfg(feature = "perf_timers")]
+    execution_timer: RefCell<PerfTimer>,
+
     params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
@@ -178,6 +197,9 @@ impl std::fmt::Debug for Host {
 
 impl Host {
     pub fn new(params: HostParameters) -> Self {
+        #[cfg(feature = "perf_timers")]
+        let execution_timer = RefCell::new(PerfTimer::new());
+
         let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
@@ -204,13 +226,16 @@ impl Host {
         let packet_priority_counter = Cell::new(1.0);
         let tsc = Tsc::new(params.native_tsc_frequency);
 
-        Self {
+        let res = Self {
             chost: unsafe { SyncSendPointer::new(chost) },
             default_address,
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
+            router: RefCell::new(Router::new()),
+            tracker: RefCell::new(None),
+            futex_table: RefCell::new(unsafe { SyncSendPointer::new(cshadow::futextable_new()) }),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -225,7 +250,13 @@ impl Host {
             packet_priority_counter,
             determinism_sequence_counter,
             tsc,
-        }
+            #[cfg(feature = "perf_timers")]
+            execution_timer,
+        };
+
+        res.stop_execution_timer();
+
+        res
     }
 
     pub unsafe fn setup(
@@ -412,8 +443,31 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
-    pub fn upstream_router(&self) -> *mut Router {
-        unsafe { cshadow::hostc_getUpstreamRouter(self.chost()) }
+    pub fn with_upstream_router_mut<Res>(&self, f: impl FnOnce(&mut Router) -> Res) -> Res {
+        let mut router = self.router.borrow_mut();
+        f(router.deref_mut())
+    }
+
+    /// Calls `f` with the Host's tracker, if it has one.
+    #[must_use]
+    pub fn with_tracker_mut<Res>(
+        &self,
+        f: impl FnOnce(&mut cshadow::Tracker) -> Res,
+    ) -> Option<Res> {
+        let tracker = self.tracker.borrow_mut();
+        if let Some(tracker) = &*tracker {
+            debug_assert!(!tracker.ptr().is_null());
+            let tracker = unsafe { &mut *tracker.ptr() };
+            Some(f(tracker))
+        } else {
+            None
+        }
+    }
+
+    pub fn with_futextable_mut<Res>(&self, f: impl FnOnce(&mut cshadow::FutexTable) -> Res) -> Res {
+        let futex_table_ref = self.futex_table.borrow_mut();
+        let futex_table = unsafe { &mut *futex_table_ref.ptr() };
+        f(futex_table)
     }
 
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
@@ -490,11 +544,13 @@ impl Host {
     }
 
     pub fn continue_execution_timer(&self) {
-        unsafe { cshadow::hostc_continueExecutionTimer(self.chost()) };
+        #[cfg(feature = "perf_timers")]
+        self.execution_timer.borrow_mut().start();
     }
 
     pub fn stop_execution_timer(&self) {
-        unsafe { cshadow::hostc_stopExecutionTimer(self.chost()) };
+        #[cfg(feature = "perf_timers")]
+        self.execution_timer.borrow_mut().stop();
     }
 
     pub fn schedule_task_at_emulated_time(&self, task: TaskRef, t: EmulatedTime) -> bool {
@@ -519,8 +575,6 @@ impl Host {
     }
 
     pub fn boot(&self) {
-        unsafe { cshadow::hostc_boot(self) };
-
         // Start refilling the token buckets for all interfaces.
         let bw_down = self.bw_down_kiBps();
         let bw_up = self.bw_up_kiBps();
@@ -534,9 +588,28 @@ impl Host {
             .as_ref()
             .unwrap()
             .start_refilling_token_buckets(bw_down, bw_up);
+
+        // must be done after the default IP exists so tracker_heartbeat works
+        if let Some(heartbeat_interval) = self.params.heartbeat_interval {
+            let heartbeat_interval = SimulationTime::to_c_simtime(Some(heartbeat_interval));
+            let tracker = unsafe {
+                cshadow::tracker_new(
+                    self,
+                    heartbeat_interval,
+                    self.params.heartbeat_log_level,
+                    self.params.heartbeat_log_info,
+                )
+            };
+            // SAFETY: we synchronize access to the Host's tracker using a RefCell.
+            self.tracker
+                .borrow_mut()
+                .replace(unsafe { SyncSendPointer::new(tracker) });
+        }
     }
 
     pub fn shutdown(&self) {
+        self.continue_execution_timer();
+
         // Need to drop the interfaces early because they trigger worker accesses
         // that will not be valid at the normal drop time. The interfaces will
         // become None after this and should not be unwrapped anymore.
@@ -553,6 +626,14 @@ impl Host {
             let dns = dns as *const cshadow::DNS;
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
         });
+
+        self.stop_execution_timer();
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "host '{}' has been shut down, total execution time was {:?}",
+            self.name(),
+            self.execution_timer.borrow().elapsed()
+        );
     }
 
     pub fn free_all_applications(&self) {
@@ -582,11 +663,11 @@ impl Host {
                     );
 
                     // track the event delay time
-                    let tracker = unsafe { cshadow::hostc_getTracker(self.chost()) };
-                    if !tracker.is_null() {
+                    let tracker = self.tracker.borrow_mut();
+                    if let Some(tracker) = &*tracker {
                         unsafe {
                             cshadow::tracker_addVirtualProcessingDelay(
-                                tracker,
+                                tracker.ptr(),
                                 SimulationTime::to_c_simtime(Some(cpu_delay)),
                             )
                         };
@@ -765,6 +846,16 @@ impl Drop for Host {
         if !default_addr.is_null() {
             unsafe { cshadow::address_unref(default_addr) };
         }
+
+        if let Some(tracker) = self.tracker.borrow_mut().take() {
+            debug_assert!(!tracker.ptr().is_null());
+            unsafe { cshadow::tracker_free(tracker.ptr()) };
+        };
+
+        let futex_table = self.futex_table.borrow_mut().ptr();
+        debug_assert!(!futex_table.is_null());
+        unsafe { cshadow::futextable_unref(futex_table) };
+
         unsafe { cshadow::hostc_unref(self.chost()) };
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
@@ -890,7 +981,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.upstream_router()
+        hostrc.with_upstream_router_mut(|r| r as *mut _)
     }
 
     #[no_mangle]
@@ -905,10 +996,20 @@ mod export {
         hostrc.bw_up_kiBps()
     }
 
+    /// Returns a pointer to the Host's Tracker, if there is one, otherwise
+    /// NULL.
+    ///
+    /// SAFETY: The returned pointer belongs to and is synchronized by the Host,
+    /// and is invalidated when the Host is no longer accessible to the current
+    /// thread, or something else accesses its Tracker.
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getTracker(hostrc.chost()) }
+        if let Some(tracker_ptr) = hostrc.with_tracker_mut(|tracker| tracker as *mut _) {
+            tracker_ptr
+        } else {
+            std::ptr::null_mut()
+        }
     }
 
     /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when
@@ -1030,10 +1131,15 @@ mod export {
         port.to_be()
     }
 
+    /// Returns a pointer to the Host's FutexTable.
+    ///
+    /// SAFETY: The returned pointer belongs to and is synchronized by the Host,
+    /// and is invalidated when the Host is no longer accessible to the current
+    /// thread, or something else accesses its FutexTable.
     #[no_mangle]
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getFutexTable(hostrc.chost()) }
+        hostrc.with_futextable_mut(|futex_table| futex_table as *mut _)
     }
 
     /// converts a virtual (shadow) tid into the native tid

@@ -71,13 +71,14 @@ ExternalProject_Add(
         --target-dir \"${TARGETDIR}\" \
         --features \"${RUST_FEATURES}\" \
         "
-    # always build shadow-tests with the debug profile, even when shadow is built in release mode
+    # always build shadow-tests with the debug profile, even when shadow is built in release mode.
+    # Omit RUST_FEATURES, since the shadow-tests package doesn't define any of the optional features
+    # that we trigger via this wrapper.
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
         --package shadow-tests \
         --target-dir \"${TARGETDIR}\" \
-        --features \"${RUST_FEATURES}\" \
         "
     BUILD_BYPRODUCTS
       ${TARGETDIR}/debug/${RUST_TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${RUST_TARGET}/libshadow_shim_helper_rs.a

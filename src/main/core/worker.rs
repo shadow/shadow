@@ -354,9 +354,9 @@ impl Worker {
         let packet_task = TaskRef::new(move |host| {
             let packet = packet.take().expect("Packet task ran twice");
 
-            let router = host.upstream_router();
-            let became_nonempty =
-                unsafe { crate::network::router::router_enqueue(router, packet.into_inner()) };
+            let became_nonempty = host.with_upstream_router_mut(|router| unsafe {
+                crate::network::router::router_enqueue(router, packet.into_inner())
+            });
 
             if became_nonempty {
                 host.packets_are_available_to_receive();

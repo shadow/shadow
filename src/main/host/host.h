@@ -33,11 +33,7 @@ typedef struct _HostCInternal HostCInternal;
 HostCInternal* hostc_new(HostId id, const char* hostName);
 void hostc_unref(HostCInternal* host);
 
-void hostc_continueExecutionTimer(HostCInternal* host);
-void hostc_stopExecutionTimer(HostCInternal* host);
-
 void hostc_setup(const Host* host);
-void hostc_boot(const Host* rhost);
 void hostc_shutdown(const Host* rhost);
 
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,
@@ -47,12 +43,6 @@ void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulati
 void hostc_freeAllApplications(const Host* rhost);
 
 Tsc* hostc_getTsc(HostCInternal* host);
-
-Router* hostc_getUpstreamRouter(HostCInternal* host);
-
-Tracker* hostc_getTracker(HostCInternal* host);
-
-FutexTable* hostc_getFutexTable(HostCInternal* host);
 
 // converts a virtual (shadow) tid into the native tid
 pid_t hostc_getNativeTID(HostCInternal* host, pid_t virtualPID, pid_t virtualTID);

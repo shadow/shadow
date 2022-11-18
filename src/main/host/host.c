@@ -31,7 +31,6 @@
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/descriptor/udp.h"
-#include "main/host/futex_table.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/protocol.h"
@@ -42,22 +41,8 @@
 #include "main/utility/utility.h"
 
 struct _HostCInternal {
-    /* The router upstream from the host, from which we receive packets. */
-    Router* router;
-
     /* the virtual processes this host is running */
     GQueue* processes;
-
-    /* a statistics tracker for in/out bytes, CPU, memory, etc. */
-    Tracker* tracker;
-
-    /* map address to futex objects */
-    FutexTable* futexTable;
-
-#ifdef USE_PERF_TIMERS
-    /* track the time spent executing this host */
-    GTimer* executionTimer;
-#endif
 
     MAGIC_DECLARE;
 };
@@ -67,21 +52,10 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
     HostCInternal* host = g_new0(HostCInternal, 1);
     MAGIC_INIT(host);
 
-#ifdef USE_PERF_TIMERS
-    /* start tracking execution time for this host.
-     * creating the timer automatically starts it. */
-    host->executionTimer = g_timer_new();
-#endif
-
     /* applications this node will run */
     host->processes = g_queue_new();
 
     info("Created host id '%u' name '%s'", (guint)id, hostName);
-
-#ifdef USE_PERF_TIMERS
-    /* we go back to the manager setup process here, so stop counting this host execution */
-    g_timer_stop(host->executionTimer);
-#endif
 
     worker_count_allocation(HostCInternal);
 
@@ -93,13 +67,6 @@ void hostc_setup(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
     MAGIC_ASSERT(host);
 
-    /* table to track futexes used by processes/threads */
-    host->futexTable = futextable_new();
-
-    /* the upstream router that will queue packets until we can receive them.
-     * this only applies the the ethernet interface, the loopback interface
-     * does not receive packets from a router. */
-    host->router = router_new();
 }
 
 static void _hostc_free(HostCInternal* host) {
@@ -115,70 +82,16 @@ static void _hostc_free(HostCInternal* host) {
  * of this function, then hostc_free would never actually get called. */
 void hostc_shutdown(const Host* rhost) {
     HostCInternal* host = host_internal(rhost);
-#ifdef USE_PERF_TIMERS
-    g_timer_continue(host->executionTimer);
-#endif
-
     debug("shutting down host %s", host_getName(rhost));
 
     if(host->processes) {
         g_queue_free(host->processes);
     }
-
-    if(host->router) {
-        router_free(host->router);
-    }
-
-    if (host->futexTable) {
-        futextable_unref(host->futexTable);
-    }
-
-    if(host->tracker) {
-        tracker_free(host->tracker);
-    }
-
-#ifdef USE_PERF_TIMERS
-    gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
-    g_timer_destroy(host->executionTimer);
-    info("host '%s' has been shut down, total execution time was %f seconds", host->params.hostname,
-         totalExecutionTime);
-#else
-    info("host '%s' has been shut down", host_getName(rhost));
-#endif
 }
 
 void hostc_unref(HostCInternal* host) {
     MAGIC_ASSERT(host);
     _hostc_free(host);
-}
-
-/* resumes the execution timer for this host */
-void hostc_continueExecutionTimer(HostCInternal* host) {
-#ifdef USE_PERF_TIMERS
-    MAGIC_ASSERT(host);
-    g_timer_continue(host->executionTimer);
-#endif
-}
-
-/* stops the execution timer for this host */
-void hostc_stopExecutionTimer(HostCInternal* host) {
-#ifdef USE_PERF_TIMERS
-    MAGIC_ASSERT(host);
-    g_timer_stop(host->executionTimer);
-#endif
-}
-
-/* this function is called by worker after the workers exist */
-void hostc_boot(const Host* rhost) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-
-    /* must be done after the default IP exists so tracker_heartbeat works */
-    CSimulationTime heartbeatInterval = host_paramsHeartbeatInterval(rhost);
-    if (heartbeatInterval != SIMTIME_INVALID) {
-        host->tracker = tracker_new(rhost, heartbeatInterval, host_paramsHeartbeatLogLevel(rhost),
-                                    host_paramsHeartbeatLogInfo(rhost));
-    }
 }
 
 void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulationTime stopTime,
@@ -222,18 +135,6 @@ void hostc_freeAllApplications(const Host* rhost) {
     }
     trace("done freeing application for host '%s'", host_getName(rhost));
 }
-
-Router* hostc_getUpstreamRouter(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->router;
-}
-
-Tracker* hostc_getTracker(HostCInternal* host) {
-    MAGIC_ASSERT(host);
-    return host->tracker;
-}
-
-FutexTable* hostc_getFutexTable(HostCInternal* host) { return host->futexTable; }
 
 Process* hostc_getProcess(HostCInternal* host, pid_t virtualPID) {
     MAGIC_ASSERT(host);

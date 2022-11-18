@@ -143,6 +143,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // used by shadow's main function
         .allowlist_function("main_.*")
         .allowlist_function("tracker_.*")
+        .allowlist_function("futextable_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
         .allowlist_function("runConfigHandlers")
@@ -224,7 +225,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::support::configuration::ConfigOptions;")
         .raw_line("use crate::core::support::configuration::QDiscMode;")
         .raw_line("use crate::core::work::task::TaskRef;")
-        .raw_line("use crate::network::router::Router;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")

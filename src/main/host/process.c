@@ -352,8 +352,9 @@ static void _process_terminate(Process* proc) {
 #ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     uint64_t delayNanos = elapsedTimeSec * 1000000000ull;
-    host_addDelayNanos(proc->host, delayNanos);
-    Tracker* tracker = host_getTracker(proc->host);
+    const Host* host = _host(proc);
+    host_addDelayNanos(host, delayNanos);
+    Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
         tracker_addProcessingTimeNanos(tracker, delayNanos);
     }
