@@ -26,6 +26,15 @@ foreach(client 1stream 10streams 100streams 1000streams)
                       -i 's/XXXCLIENTCONFXXX/client.${client}.graphml/g'
                       ${CMAKE_CURRENT_BINARY_DIR}/${network}-${client}.yaml)
 
+    # The speedtest on faster networks takes longer to complete
+    if("${network}" MATCHES ".*1gbit.*")
+        set(TIMEOUTVAL 360)
+    elseif("${network}" MATCHES ".*100mbit.*")
+        set(TIMEOUTVAL 180)
+    else()
+        set(TIMEOUTVAL 60)
+    endif()
+
     # Add the test, after which we run a script to check performance
     add_shadow_tests(BASENAME tgen-duration-${network}-${client}
                     SHADOW_CONFIG ${CMAKE_CURRENT_BINARY_DIR}/${network}-${client}.yaml
@@ -34,7 +43,7 @@ foreach(client 1stream 10streams 100streams 1000streams)
                     CHECK_RETVAL false
                     POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh ${network} ${client}"
                     PROPERTIES
-                      TIMEOUT 300
+                      TIMEOUT ${TIMEOUTVAL}
                       LABELS tgen
                       CONFIGURATIONS extra)
   endforeach(network)
