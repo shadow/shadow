@@ -130,6 +130,7 @@ unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedMutex<T> where
 const UNLOCKED: i32 = 0;
 const LOCKED: i32 = 1;
 const LOCKED_DISCONNECTED: i32 = 2;
+const UNLOCKED_PENDING_WAKE: i32 = 3;
 
 impl<T> SelfContainedMutex<T> {
     pub fn new(val: T) -> Self {
@@ -148,7 +149,7 @@ impl<T> SelfContainedMutex<T> {
             // `sleepers.fetch_add` is observed strictly after this operation.
             let prev =
                 self.futex_word
-                    .compare_exchange(UNLOCKED, LOCKED, sync::Ordering::Acquire, sync::Ordering::Acquire);
+                    .compare_exchange(UNLOCKED, LOCKED, sync::Ordering::SeqCst, sync::Ordering::SeqCst);
             let prev = match prev {
                 Ok(_) => {
                     // We successfully took the lock.
@@ -157,10 +158,20 @@ impl<T> SelfContainedMutex<T> {
                 // We weren't able to take the lock.
                 Err(i) => i,
             };
+
+            if prev == UNLOCKED_PENDING_WAKE {
+                // Try again. Do *not* use `UNBLOCKED_PENDING_WAKE` as current when
+                // trying to take the lock again above;
+                // We need to let the thread that's in the middle of releasing the lock
+                // make that state change to avoid a possible deadlock.
+                sync::thread::yield_now();
+                continue;
+            }
+
             // Mark ourselves as waiting on the futex. No need for stronger
             // ordering here; the Acquire on the failure path above ensures
             // this happens after.
-            self.sleepers.fetch_add(1, sync::Ordering::Relaxed);
+            self.sleepers.fetch_add(1, sync::Ordering::SeqCst);
             // Sleep until unlocked.
             let res = unsafe {
                 sync::futex(
@@ -172,7 +183,7 @@ impl<T> SelfContainedMutex<T> {
                     0,
                 )
             };
-            self.sleepers.fetch_sub(1, sync::Ordering::Relaxed);
+            self.sleepers.fetch_sub(1, sync::Ordering::SeqCst);
             if res.is_err()
                 && res != Err(nix::errno::Errno::EAGAIN)
                 && res != Err(nix::errno::Errno::EINTR)
@@ -193,13 +204,13 @@ impl<T> SelfContainedMutex<T> {
     }
 
     fn unlock(&self) {
-        self.futex_word.store(UNLOCKED, sync::Ordering::Release);
+        self.futex_word.store(UNLOCKED_PENDING_WAKE, sync::Ordering::SeqCst);
 
         // Acquire: Ensure that the `sleepers.load` below can't be moved to before
         // this fence (and therefore before the `futex.store` above)
         // Release: Ensure that the `futex.store` above can't be moved to after
         // this fence (and therefore not after the `sleepers.load`)
-        std::sync::atomic::compiler_fence(sync::Ordering::AcqRel);
+        std::sync::atomic::fence(sync::Ordering::SeqCst);
 
         // Only perform a FUTEX_WAKE operation if other threads are actually
         // sleeping on the lock.
@@ -208,7 +219,7 @@ impl<T> SelfContainedMutex<T> {
         // incremented `sleepers` will not result in deadlock: since we've already released
         // the futex, their `FUTEX_WAIT` operation will fail, and the other thread will correctly
         // retry to take the lock instead of waiting.
-        if self.sleepers.load(sync::Ordering::Acquire) > 0 {
+        if self.sleepers.load(sync::Ordering::SeqCst) > 0 {
             unsafe {
                 sync::futex(
                     &self.futex_word,
@@ -221,6 +232,13 @@ impl<T> SelfContainedMutex<T> {
                 .unwrap()
             };
         }
+
+        // XXX needed?
+        std::sync::atomic::fence(sync::Ordering::SeqCst);
+
+        // Try marking fully unlocked. Ignore failure, which happens if another
+        // thread took the lock in the meantime.
+        let _ = self.futex_word.compare_exchange(UNLOCKED_PENDING_WAKE, UNLOCKED, sync::Ordering::SeqCst, sync::Ordering::SeqCst);
     }
 }
 
