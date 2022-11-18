@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d5" for="node" attr.name="count" attr.type="string"/>
+<key id="d4" for="node" attr.name="recvsize" attr.type="string"/>
+<key id="d3" for="node" attr.name="sendsize" attr.type="string"/>
+<key id="d2" for="node" attr.name="timeout" attr.type="string"/>
+<key id="d1" for="node" attr.name="peers" attr.type="string"/>
+<key id="d0" for="node" attr.name="time" attr.type="string"/>
+<graph edgedefault="directed"><node id="start">
+  <data key="d0">1 second</data>
+  <data key="d1">server:80</data>
+  <data key="d2">5 seconds</data>
+  <data key="d3">10 gib</data>
+  <data key="d4">10 gib</data>
+</node>
+<node id="end">
+  <data key="d5">1</data>
+</node>
+<node id="stream0"/>
+<node id="stream1"/>
+<node id="stream2"/>
+<node id="stream3"/>
+<node id="stream4"/>
+<node id="stream5"/>
+<node id="stream6"/>
+<node id="stream7"/>
+<node id="stream8"/>
+<node id="stream9"/>
+<edge source="start" target="stream0"/>
+<edge source="start" target="stream1"/>
+<edge source="start" target="stream2"/>
+<edge source="start" target="stream3"/>
+<edge source="start" target="stream4"/>
+<edge source="start" target="stream5"/>
+<edge source="start" target="stream6"/>
+<edge source="start" target="stream7"/>
+<edge source="start" target="stream8"/>
+<edge source="start" target="stream9"/>
+<edge source="end" target="start"/>
+<edge source="stream0" target="end"/>
+<edge source="stream1" target="end"/>
+<edge source="stream2" target="end"/>
+<edge source="stream3" target="end"/>
+<edge source="stream4" target="end"/>
+<edge source="stream5" target="end"/>
+<edge source="stream6" target="end"/>
+<edge source="stream7" target="end"/>
+<edge source="stream8" target="end"/>
+<edge source="stream9" target="end"/>
+</graph></graphml>

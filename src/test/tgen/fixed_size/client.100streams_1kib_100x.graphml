@@ -1,0 +1,321 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d5" for="node" attr.name="count" attr.type="string"/>
+<key id="d4" for="node" attr.name="recvsize" attr.type="string"/>
+<key id="d3" for="node" attr.name="sendsize" attr.type="string"/>
+<key id="d2" for="node" attr.name="stallout" attr.type="string"/>
+<key id="d1" for="node" attr.name="peers" attr.type="string"/>
+<key id="d0" for="node" attr.name="time" attr.type="string"/>
+<graph edgedefault="directed"><node id="start">
+  <data key="d0">1 second</data>
+  <data key="d1">server:80</data>
+  <data key="d2">60 seconds</data>
+  <data key="d3">1 kib</data>
+  <data key="d4">1 kib</data>
+</node>
+<node id="pause"/>
+<node id="end">
+  <data key="d5">100</data>
+</node>
+<node id="stream0"/>
+<node id="stream1"/>
+<node id="stream2"/>
+<node id="stream3"/>
+<node id="stream4"/>
+<node id="stream5"/>
+<node id="stream6"/>
+<node id="stream7"/>
+<node id="stream8"/>
+<node id="stream9"/>
+<node id="stream10"/>
+<node id="stream11"/>
+<node id="stream12"/>
+<node id="stream13"/>
+<node id="stream14"/>
+<node id="stream15"/>
+<node id="stream16"/>
+<node id="stream17"/>
+<node id="stream18"/>
+<node id="stream19"/>
+<node id="stream20"/>
+<node id="stream21"/>
+<node id="stream22"/>
+<node id="stream23"/>
+<node id="stream24"/>
+<node id="stream25"/>
+<node id="stream26"/>
+<node id="stream27"/>
+<node id="stream28"/>
+<node id="stream29"/>
+<node id="stream30"/>
+<node id="stream31"/>
+<node id="stream32"/>
+<node id="stream33"/>
+<node id="stream34"/>
+<node id="stream35"/>
+<node id="stream36"/>
+<node id="stream37"/>
+<node id="stream38"/>
+<node id="stream39"/>
+<node id="stream40"/>
+<node id="stream41"/>
+<node id="stream42"/>
+<node id="stream43"/>
+<node id="stream44"/>
+<node id="stream45"/>
+<node id="stream46"/>
+<node id="stream47"/>
+<node id="stream48"/>
+<node id="stream49"/>
+<node id="stream50"/>
+<node id="stream51"/>
+<node id="stream52"/>
+<node id="stream53"/>
+<node id="stream54"/>
+<node id="stream55"/>
+<node id="stream56"/>
+<node id="stream57"/>
+<node id="stream58"/>
+<node id="stream59"/>
+<node id="stream60"/>
+<node id="stream61"/>
+<node id="stream62"/>
+<node id="stream63"/>
+<node id="stream64"/>
+<node id="stream65"/>
+<node id="stream66"/>
+<node id="stream67"/>
+<node id="stream68"/>
+<node id="stream69"/>
+<node id="stream70"/>
+<node id="stream71"/>
+<node id="stream72"/>
+<node id="stream73"/>
+<node id="stream74"/>
+<node id="stream75"/>
+<node id="stream76"/>
+<node id="stream77"/>
+<node id="stream78"/>
+<node id="stream79"/>
+<node id="stream80"/>
+<node id="stream81"/>
+<node id="stream82"/>
+<node id="stream83"/>
+<node id="stream84"/>
+<node id="stream85"/>
+<node id="stream86"/>
+<node id="stream87"/>
+<node id="stream88"/>
+<node id="stream89"/>
+<node id="stream90"/>
+<node id="stream91"/>
+<node id="stream92"/>
+<node id="stream93"/>
+<node id="stream94"/>
+<node id="stream95"/>
+<node id="stream96"/>
+<node id="stream97"/>
+<node id="stream98"/>
+<node id="stream99"/>
+<edge source="start" target="stream0"/>
+<edge source="start" target="stream1"/>
+<edge source="start" target="stream2"/>
+<edge source="start" target="stream3"/>
+<edge source="start" target="stream4"/>
+<edge source="start" target="stream5"/>
+<edge source="start" target="stream6"/>
+<edge source="start" target="stream7"/>
+<edge source="start" target="stream8"/>
+<edge source="start" target="stream9"/>
+<edge source="start" target="stream10"/>
+<edge source="start" target="stream11"/>
+<edge source="start" target="stream12"/>
+<edge source="start" target="stream13"/>
+<edge source="start" target="stream14"/>
+<edge source="start" target="stream15"/>
+<edge source="start" target="stream16"/>
+<edge source="start" target="stream17"/>
+<edge source="start" target="stream18"/>
+<edge source="start" target="stream19"/>
+<edge source="start" target="stream20"/>
+<edge source="start" target="stream21"/>
+<edge source="start" target="stream22"/>
+<edge source="start" target="stream23"/>
+<edge source="start" target="stream24"/>
+<edge source="start" target="stream25"/>
+<edge source="start" target="stream26"/>
+<edge source="start" target="stream27"/>
+<edge source="start" target="stream28"/>
+<edge source="start" target="stream29"/>
+<edge source="start" target="stream30"/>
+<edge source="start" target="stream31"/>
+<edge source="start" target="stream32"/>
+<edge source="start" target="stream33"/>
+<edge source="start" target="stream34"/>
+<edge source="start" target="stream35"/>
+<edge source="start" target="stream36"/>
+<edge source="start" target="stream37"/>
+<edge source="start" target="stream38"/>
+<edge source="start" target="stream39"/>
+<edge source="start" target="stream40"/>
+<edge source="start" target="stream41"/>
+<edge source="start" target="stream42"/>
+<edge source="start" target="stream43"/>
+<edge source="start" target="stream44"/>
+<edge source="start" target="stream45"/>
+<edge source="start" target="stream46"/>
+<edge source="start" target="stream47"/>
+<edge source="start" target="stream48"/>
+<edge source="start" target="stream49"/>
+<edge source="start" target="stream50"/>
+<edge source="start" target="stream51"/>
+<edge source="start" target="stream52"/>
+<edge source="start" target="stream53"/>
+<edge source="start" target="stream54"/>
+<edge source="start" target="stream55"/>
+<edge source="start" target="stream56"/>
+<edge source="start" target="stream57"/>
+<edge source="start" target="stream58"/>
+<edge source="start" target="stream59"/>
+<edge source="start" target="stream60"/>
+<edge source="start" target="stream61"/>
+<edge source="start" target="stream62"/>
+<edge source="start" target="stream63"/>
+<edge source="start" target="stream64"/>
+<edge source="start" target="stream65"/>
+<edge source="start" target="stream66"/>
+<edge source="start" target="stream67"/>
+<edge source="start" target="stream68"/>
+<edge source="start" target="stream69"/>
+<edge source="start" target="stream70"/>
+<edge source="start" target="stream71"/>
+<edge source="start" target="stream72"/>
+<edge source="start" target="stream73"/>
+<edge source="start" target="stream74"/>
+<edge source="start" target="stream75"/>
+<edge source="start" target="stream76"/>
+<edge source="start" target="stream77"/>
+<edge source="start" target="stream78"/>
+<edge source="start" target="stream79"/>
+<edge source="start" target="stream80"/>
+<edge source="start" target="stream81"/>
+<edge source="start" target="stream82"/>
+<edge source="start" target="stream83"/>
+<edge source="start" target="stream84"/>
+<edge source="start" target="stream85"/>
+<edge source="start" target="stream86"/>
+<edge source="start" target="stream87"/>
+<edge source="start" target="stream88"/>
+<edge source="start" target="stream89"/>
+<edge source="start" target="stream90"/>
+<edge source="start" target="stream91"/>
+<edge source="start" target="stream92"/>
+<edge source="start" target="stream93"/>
+<edge source="start" target="stream94"/>
+<edge source="start" target="stream95"/>
+<edge source="start" target="stream96"/>
+<edge source="start" target="stream97"/>
+<edge source="start" target="stream98"/>
+<edge source="start" target="stream99"/>
+<edge source="pause" target="end"/>
+<edge source="end" target="start"/>
+<edge source="stream0" target="pause"/>
+<edge source="stream1" target="pause"/>
+<edge source="stream2" target="pause"/>
+<edge source="stream3" target="pause"/>
+<edge source="stream4" target="pause"/>
+<edge source="stream5" target="pause"/>
+<edge source="stream6" target="pause"/>
+<edge source="stream7" target="pause"/>
+<edge source="stream8" target="pause"/>
+<edge source="stream9" target="pause"/>
+<edge source="stream10" target="pause"/>
+<edge source="stream11" target="pause"/>
+<edge source="stream12" target="pause"/>
+<edge source="stream13" target="pause"/>
+<edge source="stream14" target="pause"/>
+<edge source="stream15" target="pause"/>
+<edge source="stream16" target="pause"/>
+<edge source="stream17" target="pause"/>
+<edge source="stream18" target="pause"/>
+<edge source="stream19" target="pause"/>
+<edge source="stream20" target="pause"/>
+<edge source="stream21" target="pause"/>
+<edge source="stream22" target="pause"/>
+<edge source="stream23" target="pause"/>
+<edge source="stream24" target="pause"/>
+<edge source="stream25" target="pause"/>
+<edge source="stream26" target="pause"/>
+<edge source="stream27" target="pause"/>
+<edge source="stream28" target="pause"/>
+<edge source="stream29" target="pause"/>
+<edge source="stream30" target="pause"/>
+<edge source="stream31" target="pause"/>
+<edge source="stream32" target="pause"/>
+<edge source="stream33" target="pause"/>
+<edge source="stream34" target="pause"/>
+<edge source="stream35" target="pause"/>
+<edge source="stream36" target="pause"/>
+<edge source="stream37" target="pause"/>
+<edge source="stream38" target="pause"/>
+<edge source="stream39" target="pause"/>
+<edge source="stream40" target="pause"/>
+<edge source="stream41" target="pause"/>
+<edge source="stream42" target="pause"/>
+<edge source="stream43" target="pause"/>
+<edge source="stream44" target="pause"/>
+<edge source="stream45" target="pause"/>
+<edge source="stream46" target="pause"/>
+<edge source="stream47" target="pause"/>
+<edge source="stream48" target="pause"/>
+<edge source="stream49" target="pause"/>
+<edge source="stream50" target="pause"/>
+<edge source="stream51" target="pause"/>
+<edge source="stream52" target="pause"/>
+<edge source="stream53" target="pause"/>
+<edge source="stream54" target="pause"/>
+<edge source="stream55" target="pause"/>
+<edge source="stream56" target="pause"/>
+<edge source="stream57" target="pause"/>
+<edge source="stream58" target="pause"/>
+<edge source="stream59" target="pause"/>
+<edge source="stream60" target="pause"/>
+<edge source="stream61" target="pause"/>
+<edge source="stream62" target="pause"/>
+<edge source="stream63" target="pause"/>
+<edge source="stream64" target="pause"/>
+<edge source="stream65" target="pause"/>
+<edge source="stream66" target="pause"/>
+<edge source="stream67" target="pause"/>
+<edge source="stream68" target="pause"/>
+<edge source="stream69" target="pause"/>
+<edge source="stream70" target="pause"/>
+<edge source="stream71" target="pause"/>
+<edge source="stream72" target="pause"/>
+<edge source="stream73" target="pause"/>
+<edge source="stream74" target="pause"/>
+<edge source="stream75" target="pause"/>
+<edge source="stream76" target="pause"/>
+<edge source="stream77" target="pause"/>
+<edge source="stream78" target="pause"/>
+<edge source="stream79" target="pause"/>
+<edge source="stream80" target="pause"/>
+<edge source="stream81" target="pause"/>
+<edge source="stream82" target="pause"/>
+<edge source="stream83" target="pause"/>
+<edge source="stream84" target="pause"/>
+<edge source="stream85" target="pause"/>
+<edge source="stream86" target="pause"/>
+<edge source="stream87" target="pause"/>
+<edge source="stream88" target="pause"/>
+<edge source="stream89" target="pause"/>
+<edge source="stream90" target="pause"/>
+<edge source="stream91" target="pause"/>
+<edge source="stream92" target="pause"/>
+<edge source="stream93" target="pause"/>
+<edge source="stream94" target="pause"/>
+<edge source="stream95" target="pause"/>
+<edge source="stream96" target="pause"/>
+<edge source="stream97" target="pause"/>
+<edge source="stream98" target="pause"/>
+<edge source="stream99" target="pause"/>
+</graph></graphml>
