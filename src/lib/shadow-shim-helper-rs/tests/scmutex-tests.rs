@@ -1,47 +1,99 @@
+//! This module contains tests that are designed to work with [loom].  See
+//! [loom] documentation for full details, but a basic way to run these under
+//! loom, from the shadow source directory is:
+//!
+//! [loom]: https://docs.rs/loom/latest/loom/
+//!
+//! ```
+//! RUSTFLAGS="--cfg loom" cargo test --manifest-path=src/Cargo.toml -p shadow-shim-helper-rs --test scmutex-tests --target-dir=loomtarget -- --nocapture
+//! ```
 use shadow_shim_helper_rs::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
 
-mod tests {
-    use std::sync::Arc;
+mod sync {
+    #[cfg(loom)]
+    pub fn model<F>(f: F)
+    where
+        F: Fn() + Sync + Send + 'static,
+    {
+        loom::model(move || {
+            f();
+            shadow_shim_helper_rs::scmutex::loom_reset();
+        });
+    }
+    #[cfg(not(loom))]
+    pub fn model<F>(f: F)
+    where
+        F: Fn() + Sync + Send + 'static,
+    {
+        f()
+    }
 
+    #[cfg(loom)]
+    pub use loom::sync::Arc;
+    #[cfg(not(loom))]
+    pub use std::sync::Arc;
+
+    #[cfg(loom)]
+    pub use loom::thread;
+    #[cfg(not(loom))]
+    pub use std::thread;
+
+    #[cfg(loom)]
+    pub fn rand_sleep() {}
+    #[cfg(not(loom))]
+    pub fn rand_sleep() {
+        std::thread::sleep(
+        std::time::Duration::from_nanos(
+                                    rand::random::<u64>() % 10_000_000));
+    }
+}
+
+mod tests {
     use super::*;
 
     #[test]
     fn test_basic() {
-        let mutex = SelfContainedMutex::new(0);
-        let mut guard = mutex.lock();
-        *guard += 1;
+        sync::model(|| {
+            let mutex = SelfContainedMutex::new(0);
+            let mut guard = mutex.lock();
+            *guard += 1;
+        })
     }
 
     #[test]
     fn test_threads() {
-        let mutex = Arc::new(SelfContainedMutex::new(0));
+        sync::model(|| {
+            let mutex = sync::Arc::new(SelfContainedMutex::new(0));
 
-        let threads: Vec<_> = (0..100)
-            .map(|_| {
-                let mutex = mutex.clone();
-                std::thread::spawn(move || {
-                    let mut guard = mutex.lock();
-                    // Hold the lock for up to 10 ms; checking for races
-                    std::thread::sleep(std::time::Duration::from_nanos(
-                        rand::random::<u64>() % 10_000_000,
-                    ));
-                    *guard += 1;
+            #[cfg(loom)]
+            let nthreads = 3;
+            #[cfg(not(loom))]
+            let nthreads = 100;
+
+            let threads: Vec<_> = (0..nthreads)
+                .map(|_|{
+                    let mutex = mutex.clone();
+                    sync::thread::spawn(move || {
+                        let mut guard = mutex.lock();
+                        // Hold the lock for up to 10 ms; checking for races
+                        sync::rand_sleep();
+                        *guard += 1;
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
-        for thread in threads {
-            thread.join().unwrap();
-        }
+            for thread in threads {
+                thread.join().unwrap();
+            }
 
-        let guard = mutex.lock();
-        assert_eq!(*guard, 100);
+            let guard = mutex.lock();
+            assert_eq!(*guard, nthreads);
+        })
     }
 }
 
 mod rkyv_tests {
     use std::pin::Pin;
-    use std::sync::Arc;
 
     use rkyv::string::ArchivedString;
 
@@ -69,96 +121,105 @@ mod rkyv_tests {
 
     #[test]
     fn test_basic() {
-        type T = SelfContainedMutex<i32>;
-        let original_mutex: T = SelfContainedMutex::new(10);
-        let bytes = rkyv::to_bytes::<_, 256>(&original_mutex).unwrap();
+        sync::model(|| {
+            type T = SelfContainedMutex<i32>;
+            let original_mutex: T = SelfContainedMutex::new(10);
+            let bytes = rkyv::to_bytes::<_, 256>(&original_mutex).unwrap();
 
-        // The archived mutex can be used to mutate the data in place.
-        {
+            // The archived mutex can be used to mutate the data in place.
+            {
+                let archived = unsafe { archived_root::<T>(&bytes) };
+                let mut lock = archived.lock();
+                assert_eq!(*lock, 10);
+                *lock += 1;
+            }
+
+            // Re-constituting the archive should still give the new value.
             let archived = unsafe { archived_root::<T>(&bytes) };
-            let mut lock = archived.lock();
-            assert_eq!(*lock, 10);
-            *lock += 1;
-        }
-
-        // Re-constituting the archive should still give the new value.
-        let archived = unsafe { archived_root::<T>(&bytes) };
-        let lock = archived.lock();
-        assert_eq!(*lock, 11);
+            let lock = archived.lock();
+            assert_eq!(*lock, 11);
+        });
     }
 
     #[test]
     fn test_basic_compound() {
-        type T = [SelfContainedMutex<(i32, i32)>; 2];
-        let original_mutexes: T = [
-            SelfContainedMutex::new((1, 2)),
-            SelfContainedMutex::new((3, 4)),
-        ];
-        let bytes = rkyv::to_bytes::<_, 256>(&original_mutexes).unwrap();
+        sync::model(|| {
+            type T = [SelfContainedMutex<(i32, i32)>; 2];
+            let original_mutexes: T = [
+                SelfContainedMutex::new((1, 2)),
+                SelfContainedMutex::new((3, 4)),
+            ];
+            let bytes = rkyv::to_bytes::<_, 256>(&original_mutexes).unwrap();
 
-        let archived = unsafe { archived_root::<T>(&bytes) };
-        assert_eq!(archived[0].lock().0, 1);
-        assert_eq!(archived[0].lock().1, 2);
-        assert_eq!(archived[1].lock().0, 3);
-        assert_eq!(archived[1].lock().1, 4);
+            let archived = unsafe { archived_root::<T>(&bytes) };
+            assert_eq!(archived[0].lock().0, 1);
+            assert_eq!(archived[0].lock().1, 2);
+            assert_eq!(archived[1].lock().0, 3);
+            assert_eq!(archived[1].lock().1, 4);
+        });
     }
 
     #[test]
     fn test_inner_not_unpin() {
-        type T = SelfContainedMutex<String>;
-        let original_mutex: T = SelfContainedMutex::new(String::from("test"));
-        let mut bytes = rkyv::to_bytes::<_, 256>(&original_mutex).unwrap();
+        sync::model(|| {
+            type T = SelfContainedMutex<String>;
+            let original_mutex: T = SelfContainedMutex::new(String::from("test"));
+            let mut bytes = rkyv::to_bytes::<_, 256>(&original_mutex).unwrap();
 
-        {
-            let archived: &SelfContainedMutex<ArchivedString> =
-                unsafe { archived_root::<T>(&bytes) };
-            // Because `ArchivedString` is `!Unpin`, we need to pin the mutex for it to allow
-            // mutable access.
-            //
-            // SAFETY: We never move the underlying data (e.g. by mutating `bytes`)
-            let archived = unsafe { Pin::new_unchecked(archived) };
-            let lock = archived.lock_pinned();
-            assert_eq!(*lock, "test");
+            {
+                let archived: &SelfContainedMutex<ArchivedString> =
+                    unsafe { archived_root::<T>(&bytes) };
+                // Because `ArchivedString` is `!Unpin`, we need to pin the mutex for it to allow
+                // mutable access.
+                //
+                // SAFETY: We never move the underlying data (e.g. by mutating `bytes`)
+                let archived = unsafe { Pin::new_unchecked(archived) };
+                let lock = archived.lock_pinned();
+                assert_eq!(*lock, "test");
 
-            // Because `ArchivedString` is `!Unpin`, we can't directly access the mutable
-            // reference to it. We need to use `map_pinned` instead.
-            SelfContainedMutexGuard::map_pinned(lock, |strref| {
-                let mut strref = strref.pin_mut_str();
-                strref.make_ascii_uppercase();
-                assert_eq!(&*strref, "TEST");
-            });
-        }
+                // Because `ArchivedString` is `!Unpin`, we can't directly access the mutable
+                // reference to it. We need to use `map_pinned` instead.
+                SelfContainedMutexGuard::map_pinned(lock, |strref| {
+                    let mut strref = strref.pin_mut_str();
+                    strref.make_ascii_uppercase();
+                    assert_eq!(&*strref, "TEST");
+                });
+            }
 
-        // Re-constituting the archive should still give the new value.
-        let archived = unsafe { rkyv::archived_root_mut::<T>(std::pin::Pin::new(&mut bytes[..])) };
-        let lock = archived.lock();
-        assert_eq!(*lock, "TEST");
+            // Re-constituting the archive should still give the new value.
+            let archived =
+                unsafe { rkyv::archived_root_mut::<T>(std::pin::Pin::new(&mut bytes[..])) };
+            let lock = archived.lock();
+            assert_eq!(*lock, "TEST");
+        })
     }
 
     #[test]
     fn test_threads() {
-        type T = SelfContainedMutex<i32>;
-        let original_mutex: T = SelfContainedMutex::new(0);
-        let bytes = Arc::new(rkyv::to_bytes::<_, 256>(&original_mutex).unwrap());
+        sync::model(|| {
+            type T = SelfContainedMutex<i32>;
+            let original_mutex: T = SelfContainedMutex::new(0);
+            let bytes = sync::Arc::new(rkyv::to_bytes::<_, 256>(&original_mutex).unwrap());
 
-        let threads: Vec<_> = (0..100)
-            .map(|_| {
-                let bytes = bytes.clone();
-                std::thread::spawn(move || {
-                    // No need to pin here, since i32 implements Unpin.
-                    let archived = unsafe { archived_root::<T>(&bytes) };
-                    let mut guard = archived.lock();
-                    *guard += 1;
+            let threads: Vec<_> = (0..100)
+                .map(|_| {
+                    let bytes = bytes.clone();
+                    sync::thread::spawn(move || {
+                        // No need to pin here, since i32 implements Unpin.
+                        let archived = unsafe { archived_root::<T>(&bytes) };
+                        let mut guard = archived.lock();
+                        *guard += 1;
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
-        for thread in threads {
-            thread.join().unwrap();
-        }
+            for thread in threads {
+                thread.join().unwrap();
+            }
 
-        let archived = unsafe { archived_root::<T>(&bytes) };
-        let guard = archived.lock();
-        assert_eq!(*guard, 100);
+            let archived = unsafe { archived_root::<T>(&bytes) };
+            let guard = archived.lock();
+            assert_eq!(*guard, 100);
+        })
     }
 }

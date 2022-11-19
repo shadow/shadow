@@ -1,12 +1,128 @@
 use rkyv::{Archive, Serialize};
-use std::{
-    cell::UnsafeCell,
-    marker::PhantomData,
-    ops::Deref,
-    pin::Pin,
-    sync::atomic::{AtomicI32, AtomicU32, Ordering},
-};
+use std::{marker::PhantomData, ops::Deref, pin::Pin};
 use vasi::VirtualAddressSpaceIndependent;
+
+// When running under the loom model checker, use its sync primitives.
+// See https://docs.rs/loom/latest/loom/
+mod sync {
+    // Use std sync primitives, or loom equivalents
+    #[cfg(loom)]
+    pub use loom::{
+        sync::atomic,
+        sync::atomic::{AtomicI32, AtomicU32, Ordering},
+        sync::Arc,
+    };
+    #[cfg(not(loom))]
+    pub use std::{
+        sync::atomic,
+        sync::atomic::{AtomicI32, AtomicU32, Ordering},
+        sync::Arc,
+    };
+
+    // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
+    // processes, or into different virtual addresses in the same process, etc.
+    #[cfg(loom)]
+    use loom::sync::{Condvar, Mutex};
+    #[cfg(loom)]
+    use std::collections::HashMap;
+    #[cfg(loom)]
+    loom::lazy_static! {
+        pub static ref FUTEXES: Mutex<HashMap<usize, Vec<Arc<Condvar>>>> = Mutex::new(HashMap::new());
+    }
+
+    #[cfg(not(loom))]
+    pub unsafe fn futex(
+        futex_word: &AtomicI32,
+        futex_op: i32,
+        val: i32,
+        timeout: *const libc::timespec,
+        uaddr2: *mut i32,
+        val3: i32,
+    ) -> nix::Result<i64> {
+        nix::errno::Errno::result(unsafe {
+            libc::syscall(
+                libc::SYS_futex,
+                futex_word,
+                futex_op,
+                val,
+                timeout,
+                uaddr2,
+                val3,
+            )
+        })
+    }
+    #[cfg(loom)]
+    // Models the OS's futex primitive, using loom primitives.
+    // Probably not as "nondeterministic" as the real futex syscall, but have to
+    // start somewhere...
+    pub unsafe fn futex(
+        futex_word: &AtomicI32,
+        futex_op: i32,
+        val: i32,
+        _timeout: *const libc::timespec,
+        _uaddr2: *mut i32,
+        _val3: i32,
+    ) -> nix::Result<i64> {
+        match futex_op {
+            libc::FUTEX_WAIT => {
+                let mut hashmap = FUTEXES.lock().unwrap();
+                let futex_word_val = futex_word.load(Ordering::AcqRel);
+                if futex_word_val != val {
+                    return Err(nix::errno::Errno::EAGAIN);
+                }
+                let waiters = hashmap
+                    .entry(futex_word as *const _ as usize)
+                    .or_insert(Vec::new());
+                let condvar = Arc::new(Condvar::new());
+                waiters.push(condvar.clone());
+                condvar.wait(hashmap).unwrap();
+                Ok(0)
+            }
+            libc::FUTEX_WAKE => {
+                let mut hashmap = FUTEXES.lock().unwrap();
+                let Some(waiters) = hashmap.get_mut(&(futex_word as *const _ as usize)) else {
+                    return Ok(0);
+                };
+                let to_wake = std::cmp::min(waiters.len(), val as usize);
+                // XXX: Some way to randomize which threads get woken in what order?
+                for _ in 0..to_wake {
+                    waiters.pop().unwrap().notify_all();
+                }
+                Ok(to_wake as i64)
+            }
+            _ => Err(nix::errno::Errno::EINVAL),
+        }
+    }
+
+    // From https://docs.rs/loom/latest/loom/#handling-loom-api-differences
+    #[cfg(not(loom))]
+    #[derive(Debug)]
+    #[repr(transparent)]
+    pub struct UnsafeCell<T>(std::cell::UnsafeCell<T>);
+    #[cfg(not(loom))]
+    impl<T> UnsafeCell<T> {
+        pub fn new(data: T) -> UnsafeCell<T> {
+            UnsafeCell(std::cell::UnsafeCell::new(data))
+        }
+
+        pub fn with<R>(&self, f: impl FnOnce(*const T) -> R) -> R {
+            f(self.0.get())
+        }
+
+        pub fn with_mut<R>(&self, f: impl FnOnce(*mut T) -> R) -> R {
+            f(self.0.get())
+        }
+    }
+    #[cfg(loom)]
+    pub use loom::cell::UnsafeCell;
+}
+
+#[cfg(loom)]
+// Lets us clear global state in between loom iterations
+pub fn loom_reset() {
+    #[cfg(loom)]
+    sync::FUTEXES.lock().unwrap().clear();
+}
 
 /// Simple mutex that is suitable for use in shared memory:
 ///
@@ -15,9 +131,9 @@ use vasi::VirtualAddressSpaceIndependent;
 /// * Works across processes (e.g. doesn't use FUTEX_PRIVATE_FLAG)
 #[repr(C)]
 pub struct SelfContainedMutex<T> {
-    futex: AtomicI32,
-    sleepers: AtomicU32,
-    val: UnsafeCell<T>,
+    futex: sync::AtomicI32,
+    sleepers: sync::AtomicU32,
+    val: sync::UnsafeCell<T>,
 }
 
 unsafe impl<T> Send for SelfContainedMutex<T> where T: Send {}
@@ -36,31 +152,10 @@ const LOCKED_DISCONNECTED: i32 = 2;
 impl<T> SelfContainedMutex<T> {
     pub fn new(val: T) -> Self {
         Self {
-            futex: AtomicI32::new(UNLOCKED),
-            sleepers: AtomicU32::new(0),
-            val: UnsafeCell::new(val),
+            futex: sync::AtomicI32::new(UNLOCKED),
+            sleepers: sync::AtomicU32::new(0),
+            val: sync::UnsafeCell::new(val),
         }
-    }
-
-    unsafe fn futex(
-        &self,
-        futex_op: i32,
-        val: i32,
-        timeout: *const libc::timespec,
-        uaddr2: *mut i32,
-        val3: i32,
-    ) -> nix::Result<i64> {
-        nix::errno::Errno::result(unsafe {
-            libc::syscall(
-                libc::SYS_futex,
-                &self.futex,
-                futex_op,
-                val,
-                timeout,
-                uaddr2,
-                val3,
-            )
-        })
     }
 
     pub fn lock(&self) -> SelfContainedMutexGuard<T> {
@@ -69,9 +164,12 @@ impl<T> SelfContainedMutex<T> {
             //
             // We use `Acquire` on the failure path as well to ensure that the
             // `sleepers.fetch_add` is observed strictly after this operation.
-            let prev =
-                self.futex
-                    .compare_exchange(UNLOCKED, LOCKED, Ordering::Acquire, Ordering::Acquire);
+            let prev = self.futex.compare_exchange(
+                UNLOCKED,
+                LOCKED,
+                sync::Ordering::Acquire,
+                sync::Ordering::Acquire,
+            );
             let prev = match prev {
                 Ok(_) => {
                     // We successfully took the lock.
@@ -83,10 +181,11 @@ impl<T> SelfContainedMutex<T> {
             // Mark ourselves as waiting on the futex. No need for stronger
             // ordering here; the Acquire on the failure path above ensures
             // this happens after.
-            self.sleepers.fetch_add(1, Ordering::Relaxed);
+            self.sleepers.fetch_add(1, sync::Ordering::Relaxed);
             // Sleep until unlocked.
             let res = unsafe {
-                self.futex(
+                sync::futex(
+                    &self.futex,
                     libc::FUTEX_WAIT,
                     prev,
                     std::ptr::null(),
@@ -94,7 +193,7 @@ impl<T> SelfContainedMutex<T> {
                     0,
                 )
             };
-            self.sleepers.fetch_sub(1, Ordering::Relaxed);
+            self.sleepers.fetch_sub(1, sync::Ordering::Relaxed);
             if res.is_err()
                 && res != Err(nix::errno::Errno::EAGAIN)
                 && res != Err(nix::errno::Errno::EINTR)
@@ -115,11 +214,11 @@ impl<T> SelfContainedMutex<T> {
     }
 
     fn unlock(&self) {
-        self.futex.store(UNLOCKED, Ordering::Release);
+        self.futex.store(UNLOCKED, sync::Ordering::Release);
 
         // Ensure that the `futex.store` above can't be moved after the
         // `sleepers.load` below.
-        std::sync::atomic::compiler_fence(Ordering::Acquire);
+        std::sync::atomic::compiler_fence(sync::Ordering::Acquire);
 
         // Only perform a FUTEX_WAKE operation if other threads are actually
         // sleeping on the lock.
@@ -128,9 +227,10 @@ impl<T> SelfContainedMutex<T> {
         // incremented `sleepers` will not result in deadlock: since we've already released
         // the futex, their `FUTEX_WAIT` operation will fail, and the other thread will correctly
         // retry to take the lock instead of waiting.
-        if self.sleepers.load(Ordering::Acquire) > 0 {
+        if self.sleepers.load(sync::Ordering::Acquire) > 0 {
             unsafe {
-                self.futex(
+                sync::futex(
+                    &self.futex,
                     libc::FUTEX_WAKE,
                     1,
                     std::ptr::null(),
@@ -163,8 +263,8 @@ impl<'a, T> SelfContainedMutexGuard<'a, T> {
             .compare_exchange(
                 LOCKED,
                 LOCKED_DISCONNECTED,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
+                sync::Ordering::Relaxed,
+                sync::Ordering::Relaxed,
             )
             .unwrap();
         self.mutex.take();
@@ -180,8 +280,8 @@ impl<'a, T> SelfContainedMutexGuard<'a, T> {
             .compare_exchange(
                 LOCKED_DISCONNECTED,
                 LOCKED,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
+                sync::Ordering::Relaxed,
+                sync::Ordering::Relaxed,
             )
             .unwrap();
         Self {
@@ -203,13 +303,14 @@ impl<'a, T> SelfContainedMutexGuard<'a, T> {
         // SAFETY: We ensure that the &mut T made available from the unpinned guard isn't
         // moved-from, by only giving `f` access to a Pin<&mut T>.
         let guard: SelfContainedMutexGuard<T> = unsafe { Pin::into_inner_unchecked(guard) };
-        let ptr_t: *mut T = guard.mutex.unwrap().val.get();
-        // SAFETY: The pointer is valid because it came from the mutex, which we know is live.
-        // The mutex ensures there can be no other live references to the internal data.
-        let ref_t: &mut T = unsafe { &mut *ptr_t };
-        // SAFETY: We know the original data is pinned, since the guard was Pin<Self>.
-        let pinned_t: Pin<&mut T> = unsafe { Pin::new_unchecked(ref_t) };
-        f(pinned_t)
+        guard.mutex.unwrap().val.with_mut(|ptr_t| {
+            // SAFETY: The pointer is valid because it came from the mutex, which we know is live.
+            // The mutex ensures there can be no other live references to the internal data.
+            let ref_t: &mut T = unsafe { &mut *ptr_t };
+            // SAFETY: We know the original data is pinned, since the guard was Pin<Self>.
+            let pinned_t: Pin<&mut T> = unsafe { Pin::new_unchecked(ref_t) };
+            f(pinned_t)
+        })
     }
 }
 
@@ -225,7 +326,7 @@ impl<'a, T> std::ops::Deref for SelfContainedMutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.mutex.unwrap().val.get() }
+        self.mutex.unwrap().val.with(|ptr| unsafe { &*ptr })
     }
 }
 
@@ -236,7 +337,7 @@ where
     T: Unpin,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.mutex.unwrap().val.get() }
+        self.mutex.unwrap().val.with_mut(|ptr| unsafe { &mut *ptr })
     }
 }
 
@@ -282,7 +383,7 @@ where
 
         // We're effectively cloning the original data, so always initialize the futex
         // into the unlocked state.
-        unsafe { std::ptr::addr_of_mut!((*out).futex).write(AtomicI32::new(UNLOCKED)) };
+        unsafe { std::ptr::addr_of_mut!((*out).futex).write(sync::AtomicI32::new(UNLOCKED)) };
 
         // Resolve the inner value
         let (val_offset, out_val_ptr_unsafe_cell) = rkyv::out_field!(out.val);
