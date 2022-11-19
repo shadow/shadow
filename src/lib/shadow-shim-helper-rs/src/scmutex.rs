@@ -216,9 +216,11 @@ impl<T> SelfContainedMutex<T> {
     fn unlock(&self) {
         self.futex.store(UNLOCKED, sync::Ordering::Release);
 
-        // Ensure that the `futex.store` above can't be moved after the
-        // `sleepers.load` below.
-        std::sync::atomic::compiler_fence(sync::Ordering::Acquire);
+        // Acquire: Ensure that the `sleepers.load` below can't be moved to before
+        // this fence (and therefore before the `futex.store` above)
+        // Release: Ensure that the `futex.store` above can't be moved to after
+        // this fence (and therefore not after the `sleepers.load`)
+        sync::atomic::fence(sync::Ordering::AcqRel);
 
         // Only perform a FUTEX_WAKE operation if other threads are actually
         // sleeping on the lock.
