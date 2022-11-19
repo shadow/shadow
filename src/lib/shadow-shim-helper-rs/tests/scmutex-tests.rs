@@ -2,11 +2,24 @@
 //! [loom] documentation for full details, but a basic way to run these under
 //! loom, from the shadow source directory is:
 //!
-//! [loom]: https://docs.rs/loom/latest/loom/
+//! ```
+//! LOOM_MAX_PREEMPTIONS=3 \
+//! RUSTFLAGS="--cfg loom" \
+//! cargo test \
+//! --manifest-path=src/Cargo.toml \
+//! -p shadow-shim-helper-rs \
+//! --test scmutex-tests \
+//! --target-dir=loomtarget \
+//! -- --nocapture
+//! ```
 //!
-//! ```
-//! RUSTFLAGS="--cfg loom" cargo test --manifest-path=src/Cargo.toml -p shadow-shim-helper-rs --test scmutex-tests --target-dir=loomtarget -- --nocapture
-//! ```
+//! Setting `--target-dir` avoids thrashing the build cache back and forth
+//! between a loom build or not.
+//!
+//! In case of failure, see the loom documentation for guidance on debugging.
+//! In particular LOOM_LOG=trace and/or LOOM_LOCATIONS=1 are a good place to start.
+//!
+//! [loom]: <https://docs.rs/loom/latest/loom/>
 use shadow_shim_helper_rs::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
 
 mod sync {
@@ -42,9 +55,9 @@ mod sync {
     pub fn rand_sleep() {}
     #[cfg(not(loom))]
     pub fn rand_sleep() {
-        std::thread::sleep(
-        std::time::Duration::from_nanos(
-                                    rand::random::<u64>() % 10_000_000));
+        std::thread::sleep(std::time::Duration::from_nanos(
+            rand::random::<u64>() % 10_000_000,
+        ));
     }
 }
 
@@ -57,6 +70,41 @@ mod tests {
             let mutex = SelfContainedMutex::new(0);
             let mut guard = mutex.lock();
             *guard += 1;
+            assert_eq!(*guard, 1);
+        })
+    }
+
+    #[test]
+    fn test_reconnect() {
+        sync::model(|| {
+            let mutex = SelfContainedMutex::new(0);
+            let mut guard = mutex.lock();
+            *guard += 1;
+            guard.disconnect();
+            let mut guard = SelfContainedMutexGuard::reconnect(&mutex);
+            assert_eq!(*guard, 1);
+            *guard += 1;
+        })
+    }
+
+    #[test]
+    fn test_reconnect_from_other_thread() {
+        sync::model(|| {
+            let mutex = sync::Arc::new(SelfContainedMutex::new(0));
+
+            {
+                let mutex = mutex.clone();
+                sync::thread::spawn(move || {
+                    let mut guard = mutex.lock();
+                    *guard += 1;
+                    guard.disconnect();
+                })
+                .join()
+                .unwrap();
+            }
+
+            let guard = SelfContainedMutexGuard::reconnect(&mutex);
+            assert_eq!(*guard, 1);
         })
     }
 
@@ -65,19 +113,32 @@ mod tests {
         sync::model(|| {
             let mutex = sync::Arc::new(SelfContainedMutex::new(0));
 
+            // We can only create up to one fewer than loom's MAX_THREADS, which is currently 4.
+            // https://docs.rs/loom/latest/loom/#combinatorial-explosion-with-many-threads
+            //
+            // This should be enough under loom, anyway.
             #[cfg(loom)]
-            let nthreads = 3;
+            let nthreads = loom::MAX_THREADS - 1;
             #[cfg(not(loom))]
             let nthreads = 100;
 
             let threads: Vec<_> = (0..nthreads)
-                .map(|_|{
+                .map(|i| {
                     let mutex = mutex.clone();
                     sync::thread::spawn(move || {
-                        let mut guard = mutex.lock();
-                        // Hold the lock for up to 10 ms; checking for races
-                        sync::rand_sleep();
-                        *guard += 1;
+                        if i % 2 == 0 {
+                            let mut guard = mutex.lock();
+                            // Try to get more execution orders outside of loom.
+                            sync::rand_sleep();
+                            *guard += 1;
+                        } else {
+                            // As above, but also exercise the disconnect path.
+                            let guard = mutex.lock();
+                            guard.disconnect();
+                            sync::rand_sleep();
+                            let mut guard = SelfContainedMutexGuard::reconnect(&mutex);
+                            *guard += 1;
+                        }
                     })
                 })
                 .collect();
@@ -92,6 +153,11 @@ mod tests {
     }
 }
 
+// Crashes under Loom. I suspect it may have to do with writing the internal
+// atomic through a pointer. e.g. an AtomicU32 isn't represented internally as
+// just a u32, and aren't repr(transparent) or even repr(C).
+// TODO: Is there a way to test this code under loom?
+#[cfg(not(loom))]
 mod rkyv_tests {
     use std::pin::Pin;
 
