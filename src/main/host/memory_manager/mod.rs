@@ -497,10 +497,6 @@ impl MemoryManager {
     /// mapped into Shadow, just returns a buffer with unspecified contents,
     /// which will be written back into the process if and when the reference
     /// is flushed.
-    ///
-    /// WARNING: If the reference is flushed without initializing its contents,
-    /// the unspecified contents will be written back into process memory.
-    /// This can be avoided by calling `noflush` on the reference.
     //
     // In some cases we initialize data to avoid actually returning
     // uninitialized memory.  We use inline(always) so that the compiler can
