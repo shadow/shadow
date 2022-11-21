@@ -448,17 +448,13 @@ impl Host {
         self.router.borrow_mut()
     }
 
-    /// Calls `f` with the Host's tracker, if it has one.
-    #[must_use]
-    pub fn with_tracker_mut<Res>(
-        &self,
-        f: impl FnOnce(&mut cshadow::Tracker) -> Res,
-    ) -> Option<Res> {
+    #[track_caller]
+    pub fn tracker_mut(&self) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
         let tracker = self.tracker.borrow_mut();
         if let Some(tracker) = &*tracker {
             debug_assert!(!tracker.ptr().is_null());
             let tracker = unsafe { &mut *tracker.ptr() };
-            Some(f(tracker))
+            Some(tracker)
         } else {
             None
         }
@@ -1005,8 +1001,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        if let Some(tracker_ptr) = hostrc.with_tracker_mut(|tracker| tracker as *mut _) {
-            tracker_ptr
+        if let Some(mut tracker) = hostrc.tracker_mut() {
+            &mut *tracker
         } else {
             std::ptr::null_mut()
         }
