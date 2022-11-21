@@ -64,6 +64,8 @@ unsafe impl Pod for usize {}
 // No! `char` must be a valid unicode value.
 // impl !Pod for char {}
 
+unsafe impl<T> Pod for std::mem::MaybeUninit<T> where T: Pod {}
+
 // libc types
 unsafe impl Pod for libc::Dl_info {}
 unsafe impl Pod for libc::Elf32_Chdr {}
