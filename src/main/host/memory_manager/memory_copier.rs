@@ -54,7 +54,15 @@ impl MemoryCopier {
         T: Pod + Debug,
     {
         // Convert to u8
-        let mut buf = pod::to_u8_slice_mut(dst);
+        // SAFETY: We do not write uninitialized data into `buf`.
+        let buf: &mut [std::mem::MaybeUninit<u8>] = unsafe { pod::to_u8_slice_mut(dst) };
+        // SAFETY: this buffer is write-only.
+        // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
+        // don't need to construct this slice, and can instead only ever operate
+        // on the pointer itself.
+        let mut buf: &mut [u8] =
+            unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, buf.len()) };
+
         let ptr = src.cast_u8();
 
         // Split at page boundaries to allow partial reads.
@@ -92,7 +100,14 @@ impl MemoryCopier {
         src: TypedPluginPtr<T>,
     ) -> Result<(), Errno> {
         assert_eq!(dst.len(), src.len());
-        let buf = pod::to_u8_slice_mut(dst);
+        // SAFETY: We do not write uninitialized data into `buf`.
+        let buf = unsafe { pod::to_u8_slice_mut(dst) };
+        // SAFETY: this buffer is write-only.
+        // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
+        // don't need to construct this slice, and can instead only ever operate
+        // on the pointer itself.
+        let buf: &mut [u8] =
+            unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, buf.len()) };
         let ptr = src.cast_u8();
         let bytes_read = unsafe { self.readv_ptrs(&mut [buf], &[ptr])? };
         if bytes_read != buf.len() {
@@ -171,7 +186,15 @@ impl MemoryCopier {
         src: &[T],
     ) -> Result<(), Errno> {
         let dst = dst.cast_u8();
-        let src = pod::to_u8_slice(src);
+        let src: &[std::mem::MaybeUninit<u8>] = pod::to_u8_slice(src);
+        // SAFETY: We *should* never actually read from this buffer in this process;
+        // ultimately its pointer will be passed to the process_vm_writev syscall,
+        // for which unitialized data is ok.
+        // TODO: Fix or move away from nix's process_vm_writev wrapper so that we
+        // don't need to construct this slice, and can instead only ever operate
+        // on the pointer itself.
+        let src: &[u8] =
+            unsafe { std::slice::from_raw_parts(src.as_ptr() as *const u8, src.len()) };
         assert_eq!(src.len(), dst.len());
 
         let towrite = src.len();

@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 /// Marker trait that the given type is Plain Old Data; i.e. that it is safe to
 /// interpret any pattern of bits as a value of this type.
 ///
@@ -10,29 +12,36 @@
 pub unsafe trait Pod: Copy + 'static {}
 
 /// Convert to a slice of raw bytes.
-pub fn to_u8_slice<T>(slice: &[T]) -> &[u8]
+///
+/// Some bytes may be uninialized if T has padding.
+pub fn to_u8_slice<T>(slice: &[T]) -> &[MaybeUninit<u8>]
 where
     T: Pod,
 {
     // SAFETY: Any value and alignment is safe for u8.
     unsafe {
         std::slice::from_raw_parts(
-            slice.as_ptr() as *const u8,
-            slice.len() * std::mem::size_of::<T>(),
+            slice.as_ptr() as *const MaybeUninit<u8>,
+            slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
         )
     }
 }
 
 /// Convert to a mut slice of raw bytes.
-pub fn to_u8_slice_mut<T>(slice: &mut [T]) -> &mut [u8]
+///
+/// Some bytes may be uninialized if T has padding.
+///
+/// SAFETY: Uninitialized bytes ([`MaybeUninit::uninit`] must not be written
+/// into the returned slice, which would invalidate the source `slice`.
+pub unsafe fn to_u8_slice_mut<T>(slice: &mut [T]) -> &mut [MaybeUninit<u8>]
 where
     T: Pod,
 {
     // SAFETY: Any value and alignment is safe for u8.
     unsafe {
         std::slice::from_raw_parts_mut(
-            slice.as_mut_ptr() as *mut u8,
-            slice.len() * std::mem::size_of::<T>(),
+            slice.as_mut_ptr() as *mut MaybeUninit<u8>,
+            slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
         )
     }
 }
@@ -43,7 +52,7 @@ where
     T: Pod,
 {
     // SAFETY: Any value is legal for Pod.
-    unsafe { std::mem::MaybeUninit::<T>::zeroed().assume_init() }
+    unsafe { std::mem::zeroed() }
 }
 
 // Integer primitives
@@ -63,6 +72,8 @@ unsafe impl Pod for usize {}
 
 // No! `char` must be a valid unicode value.
 // impl !Pod for char {}
+
+unsafe impl<T> Pod for std::mem::MaybeUninit<T> where T: Pod {}
 
 // libc types
 unsafe impl Pod for libc::Dl_info {}

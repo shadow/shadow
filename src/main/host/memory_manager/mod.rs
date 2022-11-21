@@ -497,10 +497,13 @@ impl MemoryManager {
     /// mapped into Shadow, just returns a buffer with unspecified contents,
     /// which will be written back into the process if and when the reference
     /// is flushed.
-    ///
-    /// WARNING: If the reference is flushed without initializing its contents,
-    /// the unspecified contents will be written back into process memory.
-    /// This can be avoided by calling `noflush` on the reference.
+    //
+    // In some cases we initialize data to avoid actually returning
+    // uninitialized memory.  We use inline(always) so that the compiler can
+    // hopefully optimize away this initialization, in cases where the caller
+    // overwrites the data.
+    // TODO: return ProcessMemoryRefMut<MaybeUninit<T>> instead.
+    #[inline(always)]
     pub fn memory_ref_mut_uninit<'a, T: Pod + Debug>(
         &'a mut self,
         ptr: TypedPluginPtr<T>,
@@ -511,10 +514,14 @@ impl MemoryManager {
         let pid = self.pid;
 
         let mut mref = if let Some(mref) = self.mapped_mut(ptr) {
+            // Even if we haven't initialized the data from this process, the
+            // data is initialized from the Rust compiler's perspective; it has
+            // *some* set contents via mmap, even if the other process hasn't
+            // initialized it either.
             ProcessMemoryRefMut::new_mapped(mref)
         } else {
             let mut v = Vec::with_capacity(ptr.len());
-            unsafe { v.set_len(v.capacity()) };
+            v.resize(ptr.len(), pod::zeroed());
             ProcessMemoryRefMut::new_copied(MemoryCopier::new(pid), ptr, v)
         };
 
@@ -522,7 +529,11 @@ impl MemoryManager {
         // caller treats as initd; e.g. by reading the data or flushing it
         // back to the process without initializing it.
         if cfg!(debug_assertions) {
-            pod::to_u8_slice_mut(&mut mref[..]).fill(0x42);
+            // SAFETY: We do not write uninitialized data into `bytes`.
+            let bytes = unsafe { pod::to_u8_slice_mut(&mut mref[..]) };
+            for byte in bytes {
+                unsafe { byte.as_mut_ptr().write(0x42) }
+            }
         }
 
         Ok(mref)
