@@ -460,10 +460,10 @@ impl Host {
         }
     }
 
-    pub fn with_futextable_mut<Res>(&self, f: impl FnOnce(&mut cshadow::FutexTable) -> Res) -> Res {
+    #[track_caller]
+    pub fn futextable_mut(&self) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
-        let futex_table = unsafe { &mut *futex_table_ref.ptr() };
-        f(futex_table)
+        std::cell::RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
 
     fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
@@ -1135,7 +1135,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.with_futextable_mut(|futex_table| futex_table as *mut _)
+        &mut *hostrc.futextable_mut()
     }
 
     /// converts a virtual (shadow) tid into the native tid
