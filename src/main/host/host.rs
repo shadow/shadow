@@ -443,9 +443,9 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
-    pub fn with_upstream_router_mut<Res>(&self, f: impl FnOnce(&mut Router) -> Res) -> Res {
-        let mut router = self.router.borrow_mut();
-        f(router.deref_mut())
+    #[track_caller]
+    pub fn upstream_router_mut(&self) -> impl Deref<Target = Router> + DerefMut + '_ {
+        self.router.borrow_mut()
     }
 
     /// Calls `f` with the Host's tracker, if it has one.
@@ -981,7 +981,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.with_upstream_router_mut(|r| r as *mut _)
+        &mut *hostrc.upstream_router_mut()
     }
 
     #[no_mangle]
