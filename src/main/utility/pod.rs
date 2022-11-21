@@ -43,7 +43,7 @@ where
     T: Pod,
 {
     // SAFETY: Any value is legal for Pod.
-    unsafe { std::mem::MaybeUninit::<T>::zeroed().assume_init() }
+    unsafe { std::mem::zeroed() }
 }
 
 // Integer primitives
