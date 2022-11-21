@@ -316,7 +316,7 @@ impl Worker {
             .unwrap()
             .try_into()
             .unwrap();
-        let chance: f64 = src_host.with_random_mut(|r| r.gen());
+        let chance: f64 = src_host.random_mut().gen();
 
         // don't drop control packets with length 0, otherwise congestion control has problems
         // responding to packet loss

@@ -25,7 +25,7 @@ use shadow_tsc::Tsc;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -508,9 +508,9 @@ impl Host {
         }
     }
 
-    pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
-        let mut rng = self.random.borrow_mut();
-        f(&mut *rng)
+    #[track_caller]
+    pub fn random_mut(&self) -> impl Deref<Target = Xoshiro256PlusPlus> + DerefMut + '_ {
+        self.random.borrow_mut()
     }
 
     pub fn get_new_event_id(&self) -> u64 {
@@ -1272,17 +1272,15 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_rngDouble(host: *const Host) -> f64 {
         let host = unsafe { host.as_ref().unwrap() };
-        host.with_random_mut(|rng| rng.gen())
+        host.random_mut().gen()
     }
 
     /// Fills the buffer with pseudo-random bytes.
     #[no_mangle]
     pub extern "C" fn host_rngNextNBytes(host: *const Host, buf: *mut u8, len: usize) {
         let host = unsafe { host.as_ref().unwrap() };
-        host.with_random_mut(|rng| {
-            let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
-            rng.fill_bytes(buf);
-        })
+        let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
+        host.random_mut().fill_bytes(buf);
     }
 
     #[no_mangle]
