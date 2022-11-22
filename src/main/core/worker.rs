@@ -316,7 +316,7 @@ impl Worker {
             .unwrap()
             .try_into()
             .unwrap();
-        let chance: f64 = src_host.with_random_mut(|r| r.gen());
+        let chance: f64 = src_host.random_mut().gen();
 
         // don't drop control packets with length 0, otherwise congestion control has problems
         // responding to packet loss
@@ -354,9 +354,10 @@ impl Worker {
         let packet_task = TaskRef::new(move |host| {
             let packet = packet.take().expect("Packet task ran twice");
 
-            let became_nonempty = host.with_upstream_router_mut(|router| unsafe {
-                crate::network::router::router_enqueue(router, packet.into_inner())
-            });
+            let became_nonempty = {
+                let mut router = host.upstream_router_mut();
+                unsafe { crate::network::router::router_enqueue(&mut *router, packet.into_inner()) }
+            };
 
             if became_nonempty {
                 host.packets_are_available_to_receive();

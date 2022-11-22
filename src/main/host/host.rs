@@ -22,10 +22,10 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
-use std::cell::{Cell, RefCell, UnsafeCell};
+use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::ffi::{CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -443,34 +443,30 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
-    pub fn with_upstream_router_mut<Res>(&self, f: impl FnOnce(&mut Router) -> Res) -> Res {
-        let mut router = self.router.borrow_mut();
-        f(router.deref_mut())
+    #[track_caller]
+    pub fn upstream_router_mut(&self) -> impl Deref<Target = Router> + DerefMut + '_ {
+        self.router.borrow_mut()
     }
 
-    /// Calls `f` with the Host's tracker, if it has one.
-    #[must_use]
-    pub fn with_tracker_mut<Res>(
-        &self,
-        f: impl FnOnce(&mut cshadow::Tracker) -> Res,
-    ) -> Option<Res> {
+    #[track_caller]
+    pub fn tracker_mut(&self) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
         let tracker = self.tracker.borrow_mut();
         if let Some(tracker) = &*tracker {
             debug_assert!(!tracker.ptr().is_null());
             let tracker = unsafe { &mut *tracker.ptr() };
-            Some(f(tracker))
+            Some(tracker)
         } else {
             None
         }
     }
 
-    pub fn with_futextable_mut<Res>(&self, f: impl FnOnce(&mut cshadow::FutexTable) -> Res) -> Res {
+    #[track_caller]
+    pub fn futextable_mut(&self) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
-        let futex_table = unsafe { &mut *futex_table_ref.ptr() };
-        f(futex_table)
+        RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
 
-    fn interface(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
+    fn interface_cell(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
         if addr.is_loopback() {
             Some(&self.localhost)
         } else if addr == self.info().default_ip {
@@ -490,27 +486,40 @@ impl Host {
         self.params.requested_bw_down_bits / (8 * 1024)
     }
 
-    /// Run `f` with a reference to the network interface associated with
-    /// `addr`, or returns `None` if there is no such interface.
+    /// Returns `None` if there is no such interface.
     ///
     /// Panics if we have not yet initialized our network interfaces yet.
-    #[must_use]
-    fn with_interface_mut<Func, Res>(&self, addr: Ipv4Addr, f: Func) -> Option<Res>
-    where
-        Func: FnOnce(&mut NetworkInterface) -> Res,
-    {
-        match self.interface(addr) {
+    #[track_caller]
+    pub fn interface_mut(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
+        match self.interface_cell(addr) {
             Some(rc) => {
-                let mut iface = rc.borrow_mut();
-                Some(f(iface.as_mut().unwrap()))
+                let interface = rc.borrow_mut();
+                Some(RefMut::map(interface, |i| i.as_mut().unwrap()))
             }
             None => None,
         }
     }
 
-    pub fn with_random_mut<Res>(&self, f: impl FnOnce(&mut Xoshiro256PlusPlus) -> Res) -> Res {
-        let mut rng = self.random.borrow_mut();
-        f(&mut *rng)
+    /// Returns `None` if there is no such interface.
+    ///
+    /// Panics if we have not yet initialized our network interfaces yet.
+    #[track_caller]
+    pub fn interface(&self, addr: Ipv4Addr) -> Option<impl Deref<Target = NetworkInterface> + '_> {
+        match self.interface_cell(addr) {
+            Some(rc) => {
+                let interface = rc.borrow();
+                Some(Ref::map(interface, |i| i.as_ref().unwrap()))
+            }
+            None => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn random_mut(&self) -> impl Deref<Target = Xoshiro256PlusPlus> + DerefMut + '_ {
+        self.random.borrow_mut()
     }
 
     pub fn get_new_event_id(&self) -> u64 {
@@ -760,10 +769,8 @@ impl Host {
             )
         } else {
             // The interface is not available if it does not exist.
-            match self.with_interface_mut(*src.ip(), |iface| {
-                iface.is_associated(protocol_type, port, peer_addr, peer_port)
-            }) {
-                Some(is_associated) => !is_associated,
+            match self.interface(*src.ip()) {
+                Some(i) => !i.is_associated(protocol_type, port, peer_addr, peer_port),
                 None => false,
             }
         }
@@ -981,7 +988,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.with_upstream_router_mut(|r| r as *mut _)
+        &mut *hostrc.upstream_router_mut()
     }
 
     #[no_mangle]
@@ -1005,8 +1012,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        if let Some(tracker_ptr) = hostrc.with_tracker_mut(|tracker| tracker as *mut _) {
-            tracker_ptr
+        if let Some(mut tracker) = hostrc.tracker_mut() {
+            &mut *tracker
         } else {
             std::ptr::null_mut()
         }
@@ -1072,7 +1079,9 @@ mod export {
             hostrc.internet.borrow().as_ref().unwrap().associate(socket);
         } else {
             // TODO: return error if interface does not exist.
-            let _ = hostrc.with_interface_mut(ipv4, |iface| iface.associate(socket));
+            if let Some(iface) = hostrc.interface_mut(ipv4) {
+                iface.associate(socket);
+            }
         }
     }
 
@@ -1107,7 +1116,9 @@ mod export {
                     .disassociate(socket);
             } else {
                 // TODO: return error if interface does not exist.
-                let _ = hostrc.with_interface_mut(ipv4, |iface| iface.disassociate(socket));
+                if let Some(iface) = hostrc.interface_mut(ipv4) {
+                    iface.disassociate(socket);
+                }
             }
         }
     }
@@ -1139,7 +1150,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.with_futextable_mut(|futex_table| futex_table as *mut _)
+        &mut *hostrc.futextable_mut()
     }
 
     /// converts a virtual (shadow) tid into the native tid
@@ -1272,17 +1283,15 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_rngDouble(host: *const Host) -> f64 {
         let host = unsafe { host.as_ref().unwrap() };
-        host.with_random_mut(|rng| rng.gen())
+        host.random_mut().gen()
     }
 
     /// Fills the buffer with pseudo-random bytes.
     #[no_mangle]
     pub extern "C" fn host_rngNextNBytes(host: *const Host, buf: *mut u8, len: usize) {
         let host = unsafe { host.as_ref().unwrap() };
-        host.with_random_mut(|rng| {
-            let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
-            rng.fill_bytes(buf);
-        })
+        let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
+        host.random_mut().fill_bytes(buf);
     }
 
     #[no_mangle]
@@ -1336,10 +1345,10 @@ mod export {
         // but that causes a double borrow loop. This will be fixed in Rob's next
         // PR, but will cause us to process packets slightly differently than we do now.
         // For now, we mimic the call flow of the old C code.
-        unsafe {
-            if let Some(netif_ptr) = host.with_interface_mut(ipv4, |iface| iface.borrow_inner()) {
-                cshadow::networkinterface_wantsSend(netif_ptr, host, socket);
-            }
-        };
+        if let Some(iface) = host.interface_mut(ipv4) {
+            unsafe {
+                cshadow::networkinterface_wantsSend(iface.borrow_inner(), host, socket);
+            };
+        }
     }
 }

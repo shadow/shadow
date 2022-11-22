@@ -125,8 +125,8 @@ impl SyscallHandler {
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
-        ctx.host
-            .with_random_mut(|rng| Socket::bind(socket, addr.as_ref(), rng))
+        let mut rng = ctx.host.random_mut();
+        Socket::bind(socket, addr.as_ref(), &mut *rng)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
