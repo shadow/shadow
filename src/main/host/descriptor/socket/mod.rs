@@ -7,13 +7,10 @@ use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
 
 use unix::UnixSocket;
-
-// https://github.com/shadow/shadow/issues/2093
-#[allow(deprecated)]
-use nix::sys::socket::SockAddr;
 
 pub mod abstract_unix_ns;
 pub mod unix;
@@ -54,23 +51,15 @@ impl Socket {
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    pub fn bind(
-        &self,
-        addr: Option<&nix::sys::socket::SockAddr>,
-        rng: impl rand::Rng,
-    ) -> SyscallResult {
+    pub fn bind(&self, addr: Option<&SockaddrStorage>, rng: impl rand::Rng) -> SyscallResult {
         match self {
             Self::Unix(socket) => UnixSocket::bind(socket, addr, rng),
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn connect(
         &self,
-        addr: &nix::sys::socket::SockAddr,
+        addr: &SockaddrStorage,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         match self {
@@ -127,19 +116,19 @@ impl SocketRef<'_> {
 
 // socket-specific functions
 impl SocketRef<'_> {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    pub fn getpeername(&self) -> Result<Option<SockAddr>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.getpeername().map(|x| x.map(SockAddr::Unix)),
+            Self::Unix(socket) => socket
+                .getpeername()
+                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    pub fn getsockname(&self) -> Result<Option<SockAddr>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.getsockname().map(|x| x.map(SockAddr::Unix)),
+            Self::Unix(socket) => socket
+                .getsockname()
+                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
         }
     }
 
@@ -197,19 +186,19 @@ impl SocketRefMut<'_> {
 
 // socket-specific functions
 impl SocketRefMut<'_> {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    pub fn getpeername(&self) -> Result<Option<SockAddr>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.getpeername().map(|x| x.map(SockAddr::Unix)),
+            Self::Unix(socket) => socket
+                .getpeername()
+                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    pub fn getsockname(&self) -> Result<Option<SockAddr>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.getsockname().map(|x| x.map(SockAddr::Unix)),
+            Self::Unix(socket) => socket
+                .getsockname()
+                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
         }
     }
 
@@ -218,18 +207,14 @@ impl SocketRefMut<'_> {
     );
 
     enum_passthrough_generic!(self, (source, addr, cb_queue), Unix;
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        pub fn sendto<R>(&mut self, source: R, addr: Option<nix::sys::socket::SockAddr>, cb_queue: &mut CallbackQueue)
+        pub fn sendto<R>(&mut self, source: R, addr: Option<SockaddrStorage>, cb_queue: &mut CallbackQueue)
             -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 
     enum_passthrough_generic!(self, (bytes, cb_queue), Unix;
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
         pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
-            -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+            -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
         where W: std::io::Write + std::io::Seek
     );
 
@@ -272,15 +257,4 @@ impl std::fmt::Debug for SocketRefMut<'_> {
             self.get_status()
         )
     }
-}
-
-/// Returns a nix socket address object where only the family is set.
-// https://github.com/shadow/shadow/issues/2093
-#[allow(deprecated)]
-pub fn empty_sockaddr(family: nix::sys::socket::AddressFamily) -> nix::sys::socket::SockAddr {
-    let family = family as libc::sa_family_t;
-    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-    addr.ss_family = family;
-    // the size of ss_family will be 2 bytes on linux
-    nix::sys::socket::sockaddr_storage_to_addr(&addr, 2).unwrap()
 }
