@@ -118,17 +118,13 @@ impl SocketRef<'_> {
 impl SocketRef<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket
-                .getpeername()
-                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
+            Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket
-                .getsockname()
-                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
+            Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
@@ -188,17 +184,13 @@ impl SocketRefMut<'_> {
 impl SocketRefMut<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket
-                .getpeername()
-                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
+            Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Unix(socket) => socket
-                .getsockname()
-                .map(|x| x.map(|y| SockaddrStorage::from_unix(&y.as_ref()))),
+            Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 

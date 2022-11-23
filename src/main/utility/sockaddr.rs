@@ -179,6 +179,27 @@ impl std::fmt::Debug for SockaddrStorage {
     }
 }
 
+impl<T> From<SockaddrUnix<T>> for SockaddrStorage
+where
+    T: Borrow<libc::sockaddr_un>,
+{
+    fn from(addr: SockaddrUnix<T>) -> Self {
+        SockaddrStorage::from_unix(&addr.as_ref())
+    }
+}
+
+impl From<nix::sys::socket::SockaddrIn> for SockaddrStorage {
+    fn from(addr: nix::sys::socket::SockaddrIn) -> Self {
+        SockaddrStorage::from_inet(&addr)
+    }
+}
+
+impl From<nix::sys::socket::SockaddrIn6> for SockaddrStorage {
+    fn from(addr: nix::sys::socket::SockaddrIn6) -> Self {
+        SockaddrStorage::from_inet6(&addr)
+    }
+}
+
 /// A Unix socket address. Typically will be used as an owned address
 /// `SockaddrUnix<libc::sockaddr_un>` or a borrowed address `SockaddrUnix<&libc::sockaddr_un>`, and
 /// you can convert between them using methods such as [`as_ref`](Self::as_ref) or

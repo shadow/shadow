@@ -1437,11 +1437,7 @@ impl Protocol for ConnOrientedConnected {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((
-            num_copied.into(),
-            self.peer_addr
-                .map(|x| SockaddrStorage::from_unix(&x.as_ref())),
-        ))
+        Ok((num_copied.into(), self.peer_addr.map(|x| x.into())))
     }
 
     fn inform_bytes_read(
@@ -1636,12 +1632,7 @@ impl Protocol for ConnLessInitial {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((
-            num_copied.into(),
-            byte_data
-                .from_addr
-                .map(|x| SockaddrStorage::from_unix(&x.as_ref())),
-        ))
+        Ok((num_copied.into(), byte_data.from_addr.map(|x| x.into())))
     }
 
     fn inform_bytes_read(
