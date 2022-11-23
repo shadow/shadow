@@ -126,8 +126,10 @@ impl Counter {
     /// (currently sorted by value with the largest value first).
     fn sorted_for_display<'a>(
         &'a self,
-    ) -> impl IntoIterator<IntoIter = impl Iterator<Item = (&'a String, &'a i64)> + ExactSizeIterator + 'a>
-    {
+    ) -> impl IntoIterator<
+        IntoIter = impl Iterator<Item = (&'a String, &'a i64)> + ExactSizeIterator + 'a,
+        Item = (&'a String, &'a i64),
+    > {
         // Get the items in a vector so we can sort them.
         let mut item_vec = Vec::from_iter(&self.items);
 
