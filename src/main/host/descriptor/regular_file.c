@@ -251,6 +251,11 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         }
     } else if (!strcmp("/etc/localtime", abspath)) {
         file->type = FILE_TYPE_LOCALTIME;
+        if (abspath) {
+            free(abspath);
+        }
+        // Shadow time is in UTC.
+        abspath = strdup("/usr/share/zoneinfo/Etc/UTC");
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
@@ -264,20 +269,11 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     // we should always use O_CLOEXEC for files opened in shadow
     flags |= O_CLOEXEC;
 
-    int osfd = 0, errcode = 0;
-    if (file->type == FILE_TYPE_LOCALTIME) {
-        // Fail the localtime lookup so the plugin falls back to UTC.
-        // TODO: we could instead return a special file that contains
-        // timezone info in the correct format for UTC.
-        osfd = -1;
-        errcode = ENOENT;
-    } else {
-        // TODO: we should open the os-backed file in non-blocking mode even if a
-        // non-block is not requested, and then properly handle the io by, e.g.,
-        // epolling on all such files with a shadow support thread.
-        osfd = open(abspath, flags, mode);
-        errcode = errno;
-    }
+    // TODO: we should open the os-backed file in non-blocking mode even if a
+    // non-block is not requested, and then properly handle the io by, e.g.,
+    // epolling on all such files with a shadow support thread.
+    int osfd = open(abspath, flags, mode);
+    int errcode = errno;
 
     if (osfd < 0) {
         trace("RegularFile %p opening path '%s' returned %i: %s", file, abspath, osfd,
