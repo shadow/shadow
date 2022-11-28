@@ -1,5 +1,9 @@
 A list of user-facing changes since the latest Shadow release.
 
+* If running Shadow in Docker, you should use `--tmpfs
+  /dev/shm:rw,nosuid,nodev,exec,size=1024g` rather than `--shm-size=1024g` to
+  mount `/dev/shm` as executable. This fixes errors when the managed process
+  maps executable pages. https://github.com/shadow/shadow/issues/2400
 * Added latency modeling and potential thread-yield to rdtsc emulation,
   allowing managed code to avoid deadlock in busy-loops that use only the rdtsc
   instruction and no syscalls. https://github.com/shadow/shadow/pull/2314
@@ -24,6 +28,22 @@ by using an absolute path or prefixing with `./`.
   https://github.com/shadow/shadow/pull/2479
 * Changed the default scheduler from `thread-per-host` to `thread-per-core`, which has better
   performance on most machines.
+* Experimental host heartbeat log messages are enabled by default
+  (`experimental.host_heartbeat_interval` defaults to `"1 sec"`), but the
+  format of these messages is not stable.
+* Some of Shadow's emulated syscalls and object allocations are counted and
+  written to a `shadow.data/sim-stats.json` file.
+* Improved experimental strace logging for `brk`, `mmap`, `munmap`, `mremap`,
+  `mprotect`, `open`, and `openat` syscalls.
+* Several small simulation examples were added to an `examples/` directory.
+* Fixed the file access mode for stdin in the managed process (changed from
+  `O_WRONLY` to `O_RDONLY`).
+* Fixed support for `readv` and `writev` syscalls, and added support for
+  `preadv` and `pwritev`.
+* Fixed a rare crash in Shadow's shim while logging.
+  https://github.com/shadow/shadow/pull/2459
+* Set the `ifa_netmask` field in `getifaddrs()` to improve compatibility with
+  Node.js applications. https://github.com/shadow/shadow/pull/2456
 * (add entry here)
 
 Raw changes since v2.2.0:
