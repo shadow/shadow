@@ -7,7 +7,7 @@
 //! RUSTFLAGS="--cfg loom" \
 //! cargo test \
 //! --manifest-path=src/Cargo.toml \
-//! -p shadow-shim-helper-rs \
+//! -p shadow_shmem \
 //! --test scmutex-tests \
 //! --target-dir=loomtarget \
 //! -- --nocapture
@@ -20,7 +20,7 @@
 //! In particular LOOM_LOG=trace and/or LOOM_LOCATIONS=1 are a good place to start.
 //!
 //! [loom]: <https://docs.rs/loom/latest/loom/>
-use shadow_shim_helper_rs::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
+use shadow_shmem::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
 
 mod sync {
     #[cfg(loom)]
@@ -30,7 +30,7 @@ mod sync {
     {
         loom::model(move || {
             f();
-            shadow_shim_helper_rs::scmutex::loom_reset();
+            shadow_shmem::scmutex::loom_reset();
         });
     }
     #[cfg(not(loom))]

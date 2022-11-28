@@ -14,12 +14,11 @@ nix = "0.25.0"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 logger = { path = "../logger" }
-shadow_shmem = { path = "../shmem" }
-rkyv = "0.7.39"
 once_cell = "1.16.0"
 rand = "0.8.5"
-vasi = { path = "../vasi" }
+shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
+vasi = { path = "../vasi" }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
@@ -33,6 +32,3 @@ rand = "0.8.5"
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in src/CMakeLists.txt
 glib = { name = "glib-2.0", version = "2.32" }
-
-[target.'cfg(loom)'.dependencies]
-loom = "0.5"
