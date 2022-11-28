@@ -252,6 +252,7 @@ impl<'a> Manager<'a> {
         let mut hosts: Vec<_> = manager_config
             .hosts
             .iter()
+            .rev()
             .enumerate()
             .map(|(i, x)| {
                 self.build_host(HostId::from(u32::try_from(i).unwrap()), x, dns)
