@@ -25,3 +25,8 @@ by using an absolute path or prefixing with `./`.
 * Changed the default scheduler from `thread-per-host` to `thread-per-core`, which has better
   performance on most machines.
 * (add entry here)
+
+Raw changes since v2.2.0:
+
+* [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2022-07-19T16%3A42-0400)
+* [Closed issues](https://github.com/shadow/shadow/issues?q=is%3Aissue+closed%3A%3E2022-07-19T16%3A42-0400)
