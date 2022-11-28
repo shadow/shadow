@@ -432,6 +432,10 @@ pub mod export {
             SimulationTime::from_c_simtime(unblocked_syscall_latency).unwrap(),
             SimulationTime::from_c_simtime(unblocked_vdso_latency).unwrap(),
         );
+        // This assertion fails under loom, due to its sync primitives not being FFI safe.
+        // It doesn't matter though, since this is dead code in our loom tests.
+        // TODO: Move sync primitives that we want to test with loom into their own module?
+        #[cfg(not(loom))]
         assert_shmem_safe!(HostShmem, _test_host_shmem);
         let host_mem = host_mem;
         unsafe { host_mem.write(h) };
