@@ -1,0 +1,455 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Extra Tests
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  CARGO_TERM_COLOR: always
+  CC: 'clang'
+  # When changing, search-and-replace the old value with the new value below,
+  # particularly in `image` fields.
+  #
+  # It'd be nice to instead use `${{ env.CONTAINER }}`, but unfortunately it
+  # doesn't work. The docs are a bit ambiguous - they show `env` as available
+  # from `container`, but doesn't explicitly say anything about
+  # `container.image`. We've verified experimentally that it *isn't* available
+  # from there.
+  # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
+  CONTAINER: 'ubuntu:22.04'
+  BUILDTYPE: 'release'
+  RUSTPROFILE: minimal
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  build_shadow:
+    runs-on: ubuntu-20.04
+    container:
+      # Should match env.CONTAINER.
+      image: ubuntu:22.04
+    steps:
+      - name: Checkout shadow
+        uses: actions/checkout@v3
+        with:
+          path: shadow
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Get month
+        id: get-month
+        run: |
+          echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
+      - name: Install dependencies
+        run: |
+          cd shadow
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Restore cargo registry cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          # invalidate the cache once per month
+          key: cargo-registry-${{ steps.get-month.outputs.month }}
+          restore-keys: |
+            cargo-registry-
+      - name: Build shadow
+        run: |
+          cd shadow
+          . ci/container_scripts/build_and_install.sh
+      # We need to wrap in a tarball to preserve permissions.
+      # We're grabbing the source directory and a lot of the build
+      # directory here, since there are scripts and generated
+      # outputs we reference in other jobs.
+      - name: Archive shadow
+        run: |
+          TARFILE=shadow.tar
+          tar -cf $TARFILE --files-from /dev/null
+          find shadow \
+            -name target -prune \
+            -or -name '*.o' -prune \
+            -or -print | xargs tar --no-recursion --append -f $TARFILE
+          gzip $TARFILE
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-shadow
+          path: shadow.tar.gz
+          # This is meant primarily to be used by the other jobs in this
+          # workflow. We don't typically need it for debugging.
+          retention-days: 1
+
+  build_tgen:
+    runs-on: ubuntu-20.04
+    container:
+      # Should match env.CONTAINER.
+      image: 'ubuntu:22.04'
+    steps:
+      - name: Restore cache
+        id: restore-tgen-build-cache
+        uses: actions/cache@v3
+        with:
+          path: opt/tgen
+          # Sync with env.CONTAINER, and with checkout ref below.
+          key: tgen-build-key-${{ env.CONTAINER }}-7a5cf4554f813cc996637d942f169aeb745e37ff
+      - name: Checkout tgen
+        if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          path: tgen
+          repository: shadow/tgen
+          # When updating, change cache key in "Restore cache" step above
+          ref: 7a5cf4554f813cc996637d942f169aeb745e37ff
+          persist-credentials: false
+      - name: Install dependencies
+        if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
+        run: |
+          apt-get update
+          apt-get install -y \
+            automake \
+            cmake \
+            $CC \
+            libevent-dev \
+            libssl-dev \
+            zlib1g-dev \
+            libglib2.0-dev \
+            libigraph-dev
+      - name: Build tgen
+        if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
+        run: |
+          cd tgen
+          mkdir build && cd build
+          cmake .. -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/opt/tgen"
+          make -j$(nproc)
+      - name: Install tgen
+        if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
+        run: |
+          cd tgen/build
+          make install
+      # We need to wrap in a tarball to preserve permissions.
+      - name: Archive tgen
+        run: tar -czf tgen.tar.gz opt/tgen
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-tgen
+          path: tgen.tar.gz
+          # This is meant primarily to be used by the other jobs in this
+          # workflow. We don't typically need it for debugging.
+          retention-days: 1
+
+  tor:
+    needs:
+      - build_shadow
+      - build_tgen
+
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-20.04
+
+    container:
+      # Should match env.CONTAINER.
+      image: 'ubuntu:22.04'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined'
+
+    strategy:
+      matrix:
+        # supported tor releases are here:
+        # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
+        # when changing the tor versions, make sure to also update the
+        # required CI tests in the GitHub repository settings
+        tor: ['tor-0.4.5.14', 'tor-0.4.6.12', 'tor-0.4.7.10']
+
+    steps:
+      - run: apt-get update
+
+      - name: Download shadow
+        uses: actions/download-artifact@v3
+        with:
+          name: build-shadow
+
+      - name: Extract shadow
+        run: tar xzf shadow.tar.gz
+
+      - name: Install shadow runtime dependencies
+        run: apt-get install -y libglib2.0-0
+
+      - name: Download tgen
+        uses: actions/download-artifact@v3
+        with:
+          name: build-tgen
+          path: .
+
+      - name: Extract tgen
+        run: tar xzf tgen.tar.gz
+
+      - name: Put tgen in path
+        run: echo "$GITHUB_WORKSPACE/opt/tgen/bin" >> $GITHUB_PATH
+
+      - name: Install tgen runtime dependencies
+        run: |
+          apt-get install -y \
+            libglib2.0-dev \
+            libigraph-dev
+
+      - name: Restore tor build cache
+        id: restore-tor-build-cache
+        uses: actions/cache@v3
+        with:
+          path: opt/tor
+          # sync with env.CONTAINER
+          key: tor-build-keyv3-${{ env.CONTAINER }}-${{ matrix.tor }}
+
+      - name: Install tor build deps
+        if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
+        run: |
+          apt-get install -y \
+            autoconf \
+            automake \
+            $CC \
+            libevent-dev \
+            libssl-dev \
+            make \
+            zlib1g-dev
+
+      - name: Checkout tor
+        if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          path: tor
+          # this is not the official tor repo, but it's managed by the Tor Project
+          # and allows us to simplify our CI script
+          repository: torproject/tor
+          ref: ${{ matrix.tor }}
+          persist-credentials: false
+
+      - name: Configure, build, and install tor
+        if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
+        run: |
+          cd tor
+          ./autogen.sh
+          ./configure --disable-asciidoc --disable-unittests --prefix="$GITHUB_WORKSPACE/opt/tor"
+          make -j$(nproc)
+          make install
+
+      - name: Install tor runtime deps
+        run: |
+          apt-get install -y \
+            libevent-dev \
+            libssl-dev \
+            zlib1g
+
+      - name: Put tor in path
+        run: echo "$GITHUB_WORKSPACE/opt/tor/bin" >> $GITHUB_PATH
+
+      - name: Install setup script dependencies
+        run: apt-get install -y cmake
+
+      - name: Test
+        run: |
+          cd shadow
+          ./setup test -- --build-config extra --label-regex tor
+      - name: Last 200 log lines
+        if: failure()
+        run: |
+          tail -n 200 shadow/build/Testing/Temporary/LastTest.log
+
+      - name: Compress logs
+        if: failure()
+        run: |
+          shopt -s globstar
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/src/test/tor/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+
+      - name: Upload shadow data directory
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: ${{ matrix.tor }}-shadow-data-dir
+          path: shadow/build/src/test/tor/**/*.data.tar.xz
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: ${{ matrix.tor }}-shadow-log-file
+          path: shadow/build/Testing/Temporary.tar.xz
+
+  tgen:
+    needs:
+      - build_shadow
+      - build_tgen
+
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-20.04
+
+    container:
+      # Should match env.CONTAINER.
+      image: 'ubuntu:22.04'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined'
+
+    steps:
+      - run: apt-get update
+
+      - name: Download shadow
+        uses: actions/download-artifact@v3
+        with:
+          name: build-shadow
+
+      - name: Extract shadow
+        run: tar xzf shadow.tar.gz
+
+      - name: Install shadow runtime dependencies
+        run: apt-get install -y libglib2.0-0
+
+      - name: Download tgen
+        uses: actions/download-artifact@v3
+        with:
+          name: build-tgen
+          path: .
+
+      - name: Extract tgen
+        run: tar xzf tgen.tar.gz
+
+      - name: Put tgen in path
+        run: echo "$GITHUB_WORKSPACE/opt/tgen/bin" >> $GITHUB_PATH
+
+      - name: Install tgen runtime dependencies
+        run: |
+          apt-get install -y \
+            libglib2.0-dev \
+            libigraph-dev
+
+      - name: Install setup script dependencies
+        run: apt-get install -y cmake
+
+      - name: Test
+        run: |
+          cd shadow
+          ./setup test -- --build-config extra --label-regex tgen
+
+      - name: Last 200 log lines
+        if: failure()
+        run: |
+          tail -n 200 shadow/build/Testing/Temporary/LastTest.log
+
+      - name: Compress logs
+        if: failure()
+        run: |
+          shopt -s globstar
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/src/test/tgen/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+
+      - name: Upload shadow data directory
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: tgen-shadow-data-dir
+          path: shadow/build/src/test/tgen/**/*.data.tar.xz
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: tgen-shadow-log-file
+          path: shadow/build/Testing/Temporary.tar.xz
+
+  examples:
+    needs:
+      - build_shadow
+
+    # use the oldest kernel supported by github's CI (make sure to update the
+    # minimum supported kernel version in documentation when changing)
+    # https://github.com/actions/virtual-environments
+    runs-on: ubuntu-20.04
+
+    container:
+      # Should match env.CONTAINER.
+      image: 'ubuntu:22.04'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined'
+
+    steps:
+      - run: apt-get update
+
+      - name: Download shadow
+        uses: actions/download-artifact@v3
+        with:
+          name: build-shadow
+
+      - name: Extract shadow
+        run: tar xzf shadow.tar.gz
+
+      - name: Install shadow runtime dependencies
+        run: apt-get install -y libglib2.0-0
+
+      - name: Install example dependencies 
+        run: |
+          cd shadow
+          # dependencies for examples
+          ./examples/curl/install_deps.sh
+          ./examples/http-server/install_deps.sh
+          ./examples/iperf-2/install_deps.sh
+          ./examples/nginx/install_deps.sh
+
+      - name: Install setup script dependencies
+        run: apt-get install -y cmake
+
+      - name: Test
+        run: |
+          cd shadow
+          ./setup test -- --build-config extra --label-regex example
+
+      - name: Last 200 log lines
+        if: failure()
+        run: |
+          tail -n 200 shadow/build/Testing/Temporary/LastTest.log
+
+      - name: Compress logs
+        if: failure()
+        run: |
+          shopt -s globstar
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/examples/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+
+      - name: Upload shadow data directory
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: examples-shadow-data-dir
+          path: shadow/build/examples/**/*.data.tar.xz
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: examples-shadow-log-file
+          path: shadow/build/Testing/Temporary.tar.xz

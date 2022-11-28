@@ -63,14 +63,16 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tgen
+    # Assumes `tgen` is on your shell's `PATH`.
+    # Otherwise use an absolute path here.
+    - path: tgen
       args: ../../../tgen.server.graphml.xml
       start_time: 1s
   client:
     network_node_id: 0
     quantity: 10
     processes:
-    - path: ~/.local/bin/tgen
+    - path: tgen
       args: ../../../tgen.client.graphml.xml
       start_time: 2s
 ```

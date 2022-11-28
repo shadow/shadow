@@ -23,7 +23,7 @@ hosts:
   fileserver:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.server.graphml.xml
@@ -31,12 +31,12 @@ hosts:
   hiddenserver:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address hiddenserver --Nickname hiddenserver
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
@@ -44,42 +44,42 @@ hosts:
     network_node_id: 0
     ip_addr: 100.0.0.1
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address 4uthority --Nickname 4uthority
             --defaults-torrc torrc-defaults -f torrc
       start_time: 1
   exit1:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address exit1 --Nickname exit1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   exit2:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address exit2 --Nickname exit2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay1:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address relay1 --Nickname relay1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay2:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   client:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.client.graphml.xml
@@ -87,11 +87,11 @@ hosts:
   torclient:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address torclient --Nickname torclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torclient.graphml.xml
@@ -99,12 +99,12 @@ hosts:
   torbridgeclient:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address torbridgeclient --Nickname torbridgeclient
             --UseBridges 1 --Bridge 100.0.0.1:9111
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torclient.graphml.xml
@@ -112,11 +112,11 @@ hosts:
   torhiddenclient:
     network_node_id: 0
     processes:
-    - path: ~/.local/bin/tor
+    - path: tor
       args: --Address torhiddenclient --Nickname torhiddenclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-    - path: ~/.local/bin/tgen
+    - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: OPENBLAS_NUM_THREADS=1
       args: ../../../conf/tgen.torhiddenclient.graphml.xml
