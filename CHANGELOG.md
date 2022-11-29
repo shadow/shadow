@@ -44,6 +44,10 @@ by using an absolute path or prefixing with `./`.
   https://github.com/shadow/shadow/pull/2459
 * Set the `ifa_netmask` field in `getifaddrs()` to improve compatibility with
   Node.js applications. https://github.com/shadow/shadow/pull/2456
+* Shadow no longer depends on its absolute installed location, allowing the
+installation directory to be safely moved. https://github.com/shadow/shadow/pull/2391
+* Shadow now emulated `PR_SET_DUMPABLE`, allowing it to work for programs that try to
+disable memory inspection. https://github.com/shadow/shadow/pull/2370
 * (add entry here)
 
 Raw changes since v2.2.0:
