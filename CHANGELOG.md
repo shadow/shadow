@@ -48,6 +48,14 @@ by using an absolute path or prefixing with `./`.
 installation directory to be safely moved. https://github.com/shadow/shadow/pull/2391
 * Shadow now emulated `PR_SET_DUMPABLE`, allowing it to work for programs that try to
 disable memory inspection. https://github.com/shadow/shadow/pull/2370
+* Added new test cases to check Shadow's simulated network performance. These
+  new tests help us verify that Shadow's network stack is capable of
+  facilitating high-bandwidth transfers when using a single TCP stream or when
+  using many streams in parallel, and across networks with various latency and
+  bandwidth characteristics. Since we run the tests as part of our CI, it is now
+  much more likely that we will notice when we make changes that significantly
+  reduces Shadow's simulated network performance. We plan to expand the cases
+  that we test in future releases. https://github.com/shadow/shadow/pull/2549
 * (add entry here)
 
 Raw changes since v2.2.0:
