@@ -210,7 +210,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: opt/tor
-          key: tor-build-keyv3-${{ matrix.tor }}
+          # sync with env.CONTAINER
+          key: tor-build-keyv3-ubuntu:22.04-${{ matrix.tor }}
 
       - name: Install tor build deps
         if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
