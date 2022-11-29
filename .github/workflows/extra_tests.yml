@@ -99,7 +99,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: opt/tgen
-          key: tgen-build-key-7a5cf4554f813cc996637d942f169aeb745e37ff
+          # Sync with env.CONTAINER, and with checkout ref below.
+          key: tgen-build-key-ubuntu:22.04-7a5cf4554f813cc996637d942f169aeb745e37ff
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
