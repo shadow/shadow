@@ -3,10 +3,8 @@
 Shadow includes tests that require additional dependencies, such as Tor, TGen,
 networkx, and golang. These aren't run by default, but are run as part of the CI tests.
 
-To run them locally, first make sure that both tor and tgen are located at
-`~/.local/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries
-elsewhere in the filesystem. You should also install all of Shadow's optional
-dependencies.
+To run them locally, first make sure that both tor and tgen are located on your
+shell's `PATH` You should also install all of Shadow's optional dependencies.
 
 To run the golang tests you will need to both install golang, and install
 a dynamic version of the golang standard library. The latter can be done with
