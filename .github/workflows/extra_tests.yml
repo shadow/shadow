@@ -18,8 +18,11 @@ env:
   CARGO_TERM_COLOR: always
   CC: 'clang'
   # When changing, search-and-replace the old value with the new value below.
-  # Sadly we can't access this variable outside of shell snippets, so need to
-  # duplicate it in `image` fields, cache keys, etc.
+  #
+  # The docs *seem* to indicate we ought to be able to reference this as
+  # ${{ env.CONTAINER }}, in our `container` fields, but experimentally
+  # we just get an empty string.
+  # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
   CONTAINER: 'ubuntu:22.04'
   BUILDTYPE: 'release'
   RUSTPROFILE: minimal
@@ -30,7 +33,7 @@ jobs:
     runs-on: ubuntu-20.04
     container:
       # Should match env.CONTAINER.
-      image: 'ubuntu:22.04'
+      image: ${{ env.CONTAINER }}
     steps:
       - name: Checkout shadow
         uses: actions/checkout@v3
