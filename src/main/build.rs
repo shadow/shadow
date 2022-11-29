@@ -278,7 +278,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/descriptor/tcp_cong.c",
         "host/descriptor/tcp_cong_reno.c",
         "host/descriptor/timerfd.c",
-        "host/descriptor/transport.c",
         "host/descriptor/udp.c",
         "host/affinity.c",
         "host/process.c",

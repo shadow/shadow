@@ -16,8 +16,9 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/descriptor/transport.h"
 #include "main/host/protocol.h"
+#include "main/host/syscall_types.h"
+#include "main/host/thread.h"
 #include "main/routing/packet.minimal.h"
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);
@@ -26,12 +27,17 @@ typedef gint (*SocketConnectToPeerFunc)(LegacySocket* socket, const Host* host, 
 typedef void (*SocketProcessFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 typedef void (*SocketDropFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 
+typedef gssize (*SocketSendFunc)(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                 gsize nBytes, in_addr_t ip, in_port_t port);
+typedef gssize (*SocketReceiveFunc)(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                    gsize nBytes, in_addr_t* ip, in_port_t* port);
+
 struct _SocketFunctionTable {
     LegacyFileCloseFunc close;
     LegacyFileCleanupFunc cleanup;
     LegacyFileFreeFunc free;
-    TransportSendFunc send;
-    TransportReceiveFunc receive;
+    SocketSendFunc send;
+    SocketReceiveFunc receive;
     SocketProcessFunc process;
     SocketIsFamilySupportedFunc isFamilySupported;
     SocketConnectToPeerFunc connectToPeer;
@@ -47,7 +53,7 @@ enum SocketFlags {
 };
 
 struct _LegacySocket {
-    Transport super;
+    LegacyFile super;
     SocketFunctionTable* vtable;
 
     enum SocketFlags flags;
@@ -87,6 +93,11 @@ void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* pac
 Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host);
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket);
 Packet* legacysocket_peekNextInPacket(const LegacySocket* socket);
+
+gssize legacysocket_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                 gsize nBytes, in_addr_t ip, in_port_t port);
+gssize legacysocket_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                    gsize nBytes, in_addr_t* ip, in_port_t* port);
 
 gsize legacysocket_getInputBufferSize(LegacySocket* socket);
 void legacysocket_setInputBufferSize(LegacySocket* socket, gsize newSize);

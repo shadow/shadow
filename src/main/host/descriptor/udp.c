@@ -16,7 +16,6 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
-#include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -107,9 +106,9 @@ static void _udp_dropPacket(LegacySocket* socket, const Host* host, Packet* pack
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+static gssize _udp_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    UDP* udp = _udp_fromLegacyFile((LegacyFile*)transport);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
     const gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
@@ -174,9 +173,9 @@ static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirt
 }
 
 /* Address and port must be in network byte order. */
-static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+static gssize _udp_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    UDP* udp = _udp_fromLegacyFile((LegacyFile*)transport);
+    UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
     if (legacysocket_peekNextInPacket(&(udp->super)) == NULL) {

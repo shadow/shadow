@@ -616,8 +616,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        retval = transport_receiveUserData((Transport*)socket_desc, sys->thread, bufPtr, sizeNeeded,
-                                           &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
+        retval = legacysocket_receiveUserData(socket_desc, sys->thread, bufPtr, sizeNeeded,
+                                              &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
 
         trace("recv returned %zd", retval);
     }
@@ -786,8 +786,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        retval = transport_sendUserData(
-            (Transport*)socket_desc, sys->thread, bufPtr, sizeNeeded, dest_ip, dest_port);
+        retval = legacysocket_sendUserData(
+            socket_desc, sys->thread, bufPtr, sizeNeeded, dest_ip, dest_port);
 
         trace("send returned %zd", retval);
     }
@@ -1378,7 +1378,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
-        legacyfile_addFlags(&sock_desc->super.super, O_NONBLOCK);
+        legacyfile_addFlags(&sock_desc->super, O_NONBLOCK);
     }
 
     trace("socket() returning fd %i", sockfd);
