@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-20.04
     container:
       # Should match env.CONTAINER.
-      image: ${{ env.CONTAINER }}
+      image: ubuntu:22.04
     steps:
       - name: Checkout shadow
         uses: actions/checkout@v3
@@ -103,7 +103,7 @@ jobs:
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
-          key: tgen-build-key-ubuntu:22.04-7a5cf4554f813cc996637d942f169aeb745e37ff
+          key: tgen-build-key-${{ env.CONTAINER }}-7a5cf4554f813cc996637d942f169aeb745e37ff
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -214,7 +214,7 @@ jobs:
         with:
           path: opt/tor
           # sync with env.CONTAINER
-          key: tor-build-keyv3-ubuntu:22.04-${{ matrix.tor }}
+          key: tor-build-keyv3-${{ env.CONTAINER }}-${{ matrix.tor }}
 
       - name: Install tor build deps
         if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
