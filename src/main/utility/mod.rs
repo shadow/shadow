@@ -16,6 +16,7 @@ pub mod perf_timer;
 pub mod pod;
 pub mod proc_maps;
 pub mod shm_cleanup;
+pub mod sockaddr;
 pub mod status_bar;
 pub mod stream_len;
 pub mod synchronization;

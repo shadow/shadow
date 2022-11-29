@@ -328,7 +328,7 @@ dependencies = [
  "autocfg",
  "cfg-if",
  "crossbeam-utils",
- "memoffset",
+ "memoffset 0.6.5",
  "scopeguard",
 ]
 
@@ -606,6 +606,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "merge"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,7 +661,7 @@ dependencies = [
  "bitflags",
  "cfg-if",
  "libc",
- "memoffset",
+ "memoffset 0.6.5",
  "pin-utils",
 ]
 
@@ -1128,6 +1137,7 @@ dependencies = [
  "log",
  "logger",
  "lzma-rs",
+ "memoffset 0.7.1",
  "merge",
  "nix",
  "once_cell",
@@ -1147,6 +1157,7 @@ dependencies = [
  "shadow_shmem",
  "shadow_tsc",
  "signal-hook",
+ "static_assertions",
  "syscall-logger",
  "system-deps",
  "tempfile",

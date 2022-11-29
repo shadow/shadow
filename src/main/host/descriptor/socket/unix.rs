@@ -9,7 +9,7 @@ use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::descriptor::socket::{empty_sockaddr, Socket};
+use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     File, FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
@@ -18,6 +18,7 @@ use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
 use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
 
@@ -90,21 +91,21 @@ impl UnixSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         // return the bound address if set, otherwise return an empty unix sockaddr
         Ok(Some(
             self.protocol_state
                 .bound_address()?
-                .unwrap_or_else(|| empty_unix_sockaddr()),
+                .unwrap_or_else(|| SockaddrUnix::new_unnamed()),
         ))
     }
 
-    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         // return the peer address if set, otherwise return an empty unix sockaddr
         Ok(Some(
             self.protocol_state
                 .peer_address()?
-                .unwrap_or_else(|| empty_unix_sockaddr()),
+                .unwrap_or_else(|| SockaddrUnix::new_unnamed()),
         ))
     }
 
@@ -130,11 +131,9 @@ impl UnixSocket {
             .refresh_file_state(&mut self.common, cb_queue)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn bind(
         socket: &Arc<AtomicRefCell<Self>>,
-        addr: Option<&nix::sys::socket::SockAddr>,
+        addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         let socket_ref = &mut *socket.borrow_mut();
@@ -173,12 +172,10 @@ impl UnixSocket {
         panic!("Called UnixSocket::write() on a unix socket");
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn sendto<R>(
         &mut self,
         bytes: R,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -188,13 +185,11 @@ impl UnixSocket {
             .sendto(&mut self.common, bytes, addr, cb_queue)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn recvfrom<W>(
         &mut self,
         bytes: W,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -221,11 +216,9 @@ impl UnixSocket {
             .listen(&mut self.common, backlog, cb_queue)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn connect(
         socket: &Arc<AtomicRefCell<Self>>,
-        addr: &nix::sys::socket::SockAddr,
+        addr: &SockaddrStorage,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
@@ -304,16 +297,16 @@ impl UnixSocket {
 }
 
 struct ConnOrientedInitial {
-    bound_addr: Option<nix::sys::socket::UnixAddr>,
+    bound_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
 }
 struct ConnOrientedListening {
-    bound_addr: nix::sys::socket::UnixAddr,
+    bound_addr: SockaddrUnix<libc::sockaddr_un>,
     queue: VecDeque<Arc<AtomicRefCell<UnixSocket>>>,
     queue_limit: u32,
 }
 struct ConnOrientedConnected {
-    bound_addr: Option<nix::sys::socket::UnixAddr>,
-    peer_addr: Option<nix::sys::socket::UnixAddr>,
+    bound_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
+    peer_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
     peer: Arc<AtomicRefCell<UnixSocket>>,
     reader_handle: ReaderHandle,
     writer_handle: WriterHandle,
@@ -325,8 +318,8 @@ struct ConnOrientedClosed {}
 
 struct ConnLessInitial {
     this_socket: Weak<AtomicRefCell<UnixSocket>>,
-    bound_addr: Option<nix::sys::socket::UnixAddr>,
-    peer_addr: Option<nix::sys::socket::UnixAddr>,
+    bound_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
+    peer_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
     peer: Option<Arc<AtomicRefCell<UnixSocket>>>,
     recv_data: LinkedList<ByteData>,
     reader_handle: ReaderHandle,
@@ -420,7 +413,7 @@ impl ProtocolState {
         }
     }
 
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().peer_address(),
@@ -431,7 +424,7 @@ impl ProtocolState {
         }
     }
 
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().bound_address(),
@@ -477,13 +470,11 @@ impl ProtocolState {
         rv
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: Option<&nix::sys::socket::SockAddr>,
+        addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         match self {
@@ -496,13 +487,11 @@ impl ProtocolState {
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: R,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -526,14 +515,12 @@ impl ProtocolState {
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -633,13 +620,11 @@ impl ProtocolState {
         rv
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn connect(
         &mut self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: &nix::sys::socket::SockAddr,
+        addr: &SockaddrStorage,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let (new_state, rv) = match self {
@@ -720,7 +705,7 @@ impl ProtocolState {
     fn queue_incoming_conn(
         &mut self,
         common: &mut UnixSocketCommon,
-        from_address: Option<nix::sys::socket::UnixAddr>,
+        from_address: Option<SockaddrUnix<libc::sockaddr_un>>,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         cb_queue: &mut CallbackQueue,
@@ -779,8 +764,8 @@ trait Protocol
 where
     Self: Sized + Into<ProtocolState>,
 {
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError>;
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
     fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue);
 
     fn close(
@@ -792,26 +777,22 @@ where
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn bind(
         &mut self,
         _common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
-        _addr: Option<&nix::sys::socket::SockAddr>,
+        _addr: Option<&SockaddrStorage>,
         _rng: impl rand::Rng,
     ) -> SyscallResult {
         log::warn!("bind() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         _common: &mut UnixSocketCommon,
         _bytes: R,
-        _addr: Option<nix::sys::socket::SockAddr>,
+        _addr: Option<SockaddrStorage>,
         _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -821,14 +802,12 @@ where
         Err(Errno::EOPNOTSUPP.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         _common: &mut UnixSocketCommon,
         _bytes: W,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -872,13 +851,11 @@ where
         (self.into(), Err(Errno::EOPNOTSUPP.into()))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn connect(
         self,
         _common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
-        _addr: &nix::sys::socket::SockAddr,
+        _addr: &SockaddrStorage,
         _cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         log::warn!("connect() while in state {}", std::any::type_name::<Self>());
@@ -911,7 +888,7 @@ where
     fn queue_incoming_conn(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _from_address: Option<nix::sys::socket::UnixAddr>,
+        _from_address: Option<SockaddrUnix<libc::sockaddr_un>>,
         _peer: &Arc<AtomicRefCell<UnixSocket>>,
         _child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         _cb_queue: &mut CallbackQueue,
@@ -925,11 +902,11 @@ where
 }
 
 impl Protocol for ConnOrientedInitial {
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(self.bound_addr)
     }
 
@@ -951,13 +928,11 @@ impl Protocol for ConnOrientedInitial {
         (new_state.into(), common.close(cb_queue))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: Option<&nix::sys::socket::SockAddr>,
+        addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         // if already bound
@@ -969,13 +944,11 @@ impl Protocol for ConnOrientedInitial {
         Ok(0.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
         _bytes: R,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
         _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -992,14 +965,12 @@ impl Protocol for ConnOrientedInitial {
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
         _bytes: W,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -1047,22 +1018,23 @@ impl Protocol for ConnOrientedInitial {
         (new_state.into(), Ok(()))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn connect(
         self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: &nix::sys::socket::SockAddr,
+        addr: &SockaddrStorage,
         cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
-        let addr = match addr {
-            nix::sys::socket::SockAddr::Unix(x) => x,
-            _ => return (self.into(), Err(Errno::EINVAL.into())),
+        let Some(addr) = addr.as_unix() else {
+            return (self.into(), Err(Errno::EINVAL.into()));
         };
 
         // look up the server socket
-        let server = match lookup_address(&common.namespace.borrow(), common.socket_type, addr) {
+        let server = match lookup_address(
+            &common.namespace.borrow(),
+            common.socket_type,
+            &addr.as_ref(),
+        ) {
             Ok(x) => x,
             Err(e) => return (self.into(), Err(e.into())),
         };
@@ -1134,7 +1106,7 @@ impl Protocol for ConnOrientedInitial {
 
         let new_state = ConnOrientedConnected {
             bound_addr: self.bound_addr,
-            peer_addr: Some(addr.clone()),
+            peer_addr: Some(addr.into_owned()),
             peer: Arc::clone(peer),
             reader_handle,
             writer_handle,
@@ -1216,11 +1188,11 @@ impl Protocol for ConnOrientedInitial {
 }
 
 impl Protocol for ConnOrientedListening {
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Err(Errno::ENOTCONN.into())
     }
 
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(Some(self.bound_addr))
     }
 
@@ -1291,7 +1263,7 @@ impl Protocol for ConnOrientedListening {
     fn queue_incoming_conn(
         &mut self,
         common: &mut UnixSocketCommon,
-        from_address: Option<nix::sys::socket::UnixAddr>,
+        from_address: Option<SockaddrUnix<libc::sockaddr_un>>,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
         child_send_buffer: &Arc<AtomicRefCell<SharedBuf>>,
         cb_queue: &mut CallbackQueue,
@@ -1372,15 +1344,11 @@ impl Protocol for ConnOrientedListening {
 }
 
 impl Protocol for ConnOrientedConnected {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(self.peer_addr)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(self.bound_addr)
     }
 
@@ -1428,13 +1396,11 @@ impl Protocol for ConnOrientedConnected {
         (new_state.into(), common.close(cb_queue))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: R,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -1448,14 +1414,12 @@ impl Protocol for ConnOrientedConnected {
         Ok(rv.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -1473,10 +1437,7 @@ impl Protocol for ConnOrientedConnected {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((
-            num_copied.into(),
-            self.peer_addr.map(nix::sys::socket::SockAddr::Unix),
-        ))
+        Ok((num_copied.into(), self.peer_addr.map(|x| x.into())))
     }
 
     fn inform_bytes_read(
@@ -1510,15 +1471,11 @@ impl Protocol for ConnOrientedConnected {
 }
 
 impl Protocol for ConnOrientedClosed {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Err(Errno::ENOTCONN.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Err(Errno::EBADFD.into())
     }
 
@@ -1550,18 +1507,14 @@ impl Protocol for ConnOrientedClosed {
 }
 
 impl Protocol for ConnLessInitial {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         match self.peer {
             Some(_) => Ok(self.peer_addr),
             None => Err(Errno::ENOTCONN.into()),
         }
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(self.bound_addr)
     }
 
@@ -1604,13 +1557,11 @@ impl Protocol for ConnLessInitial {
         (new_state.into(), common.close(cb_queue))
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn bind(
         &mut self,
         common: &mut UnixSocketCommon,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: Option<&nix::sys::socket::SockAddr>,
+        addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         // if already bound
@@ -1622,13 +1573,11 @@ impl Protocol for ConnLessInitial {
         Ok(0.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn sendto<R>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: R,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -1658,14 +1607,12 @@ impl Protocol for ConnLessInitial {
         Ok(rv.into())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn recvfrom<W>(
         &mut self,
         common: &mut UnixSocketCommon,
         bytes: W,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<nix::sys::socket::SockAddr>), SyscallError>
+    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
     where
         W: std::io::Write + std::io::Seek,
     {
@@ -1685,10 +1632,7 @@ impl Protocol for ConnLessInitial {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((
-            num_copied.into(),
-            byte_data.from_addr.map(nix::sys::socket::SockAddr::Unix),
-        ))
+        Ok((num_copied.into(), byte_data.from_addr.map(|x| x.into())))
     }
 
     fn inform_bytes_read(
@@ -1711,29 +1655,26 @@ impl Protocol for ConnLessInitial {
         common.ioctl(request, arg_ptr, memory_manager)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     fn connect(
         self,
         common: &mut UnixSocketCommon,
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: &nix::sys::socket::SockAddr,
+        addr: &SockaddrStorage,
         cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         // TODO: support AF_UNSPEC to disassociate
-        let addr = match addr {
-            nix::sys::socket::SockAddr::Unix(x) => x,
-            _ => return (self.into(), Err(Errno::EINVAL.into())),
+        let Some(addr) = addr.as_unix() else {
+            return (self.into(), Err(Errno::EINVAL.into()));
         };
 
         // find the socket bound at the address
-        let peer = match lookup_address(&common.namespace.borrow(), common.socket_type, addr) {
+        let peer = match lookup_address(&common.namespace.borrow(), common.socket_type, &addr) {
             Ok(x) => x,
             Err(e) => return (self.into(), Err(e.into())),
         };
 
         let new_state = Self {
-            peer_addr: Some(addr.clone()),
+            peer_addr: Some(addr.into_owned()),
             peer: Some(peer),
             ..self
         };
@@ -1767,15 +1708,11 @@ impl Protocol for ConnLessInitial {
 }
 
 impl Protocol for ConnLessClosed {
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn peer_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(None)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
-    fn bound_address(&self) -> Result<Option<nix::sys::socket::UnixAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
         Ok(None)
     }
 
@@ -1842,24 +1779,19 @@ impl UnixSocketCommon {
         Ok(())
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn bind(
         &mut self,
         socket: &Arc<AtomicRefCell<UnixSocket>>,
-        addr: Option<&nix::sys::socket::SockAddr>,
+        addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
-    ) -> Result<nix::sys::socket::UnixAddr, SyscallError> {
+    ) -> Result<SockaddrUnix<libc::sockaddr_un>, SyscallError> {
         // get the unix address
-        let addr = match addr {
-            Some(nix::sys::socket::SockAddr::Unix(x)) => x,
-            _ => {
-                log::warn!(
-                    "Attempted to bind unix socket to non-unix address {:?}",
-                    addr
-                );
-                return Err(Errno::EINVAL.into());
-            }
+        let Some(addr) = addr.map(|x| x.as_unix()).flatten() else {
+            log::warn!(
+                "Attempted to bind unix socket to non-unix address {:?}",
+                addr
+            );
+            return Err(Errno::EINVAL.into());
         };
 
         // bind the socket
@@ -1873,11 +1805,11 @@ impl UnixSocketCommon {
                 socket,
                 &mut self.event_source,
             ) {
-                Ok(()) => *addr,
+                Ok(()) => addr.into_owned(),
                 // address is in use
                 Err(_) => return Err(Errno::EADDRINUSE.into()),
             }
-        } else if addr.path_len() == 0 {
+        } else if addr.is_unnamed() {
             // if given an "unnamed" address
             let namespace = Arc::clone(&self.namespace);
             match AbstractUnixNamespace::autobind(
@@ -1887,7 +1819,7 @@ impl UnixSocketCommon {
                 &mut self.event_source,
                 rng,
             ) {
-                Ok(ref name) => nix::sys::socket::UnixAddr::new_abstract(name).unwrap(),
+                Ok(ref name) => SockaddrUnix::new_abstract(name).unwrap(),
                 Err(_) => return Err(Errno::EADDRINUSE.into()),
             }
         } else {
@@ -1898,17 +1830,14 @@ impl UnixSocketCommon {
         Ok(bound_addr)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn resolve_destination(
         &self,
         peer: Option<&Arc<AtomicRefCell<UnixSocket>>>,
-        addr: Option<nix::sys::socket::SockAddr>,
+        addr: Option<SockaddrStorage>,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         let addr = match addr {
-            Some(nix::sys::socket::SockAddr::Unix(x)) => Some(x),
+            Some(ref addr) => Some(addr.as_unix().ok_or(Errno::EINVAL)?),
             None => None,
-            _ => return Err(Errno::EINVAL.into()),
         };
 
         // returns either the send buffer, or None if we should look up the send buffer from the
@@ -1948,8 +1877,6 @@ impl UnixSocketCommon {
         return Ok(peer);
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn sendto<R>(
         &mut self,
         mut bytes: R,
@@ -2024,8 +1951,6 @@ impl UnixSocketCommon {
         Ok(num_copied)
     }
 
-    // https://github.com/shadow/shadow/issues/2093
-    #[allow(deprecated)]
     pub fn recvfrom<W>(
         &mut self,
         mut bytes: W,
@@ -2091,7 +2016,7 @@ impl UnixSocketCommon {
 fn lookup_address(
     namespace: &AbstractUnixNamespace,
     socket_type: UnixSocketType,
-    addr: &nix::sys::socket::UnixAddr,
+    addr: &SockaddrUnix<&libc::sockaddr_un>,
 ) -> Result<Arc<AtomicRefCell<UnixSocket>>, nix::errno::Errno> {
     // if an abstract address
     if let Some(name) = addr.as_abstract() {
@@ -2116,15 +2041,6 @@ fn backlog_to_queue_size(backlog: i32) -> u32 {
     // linux uses a limit of one greater than the provided backlog (ex: a backlog value of 0 allows
     // for one incoming connection at a time)
     queue_limit.saturating_add(1)
-}
-
-fn empty_unix_sockaddr() -> nix::sys::socket::UnixAddr {
-    match empty_sockaddr(nix::sys::socket::AddressFamily::Unix) {
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::SockAddr::Unix(x) => x,
-        x => panic!("Unexpected socket address type: {:?}", x),
-    }
 }
 
 // WARNING: don't add new enum variants without updating 'AbstractUnixNamespace::new()'
@@ -2170,6 +2086,6 @@ enum IncomingConnError {
 
 struct ByteData {
     from_socket: Arc<AtomicRefCell<UnixSocket>>,
-    from_addr: Option<nix::sys::socket::UnixAddr>,
+    from_addr: Option<SockaddrUnix<libc::sockaddr_un>>,
     num_bytes: u64,
 }

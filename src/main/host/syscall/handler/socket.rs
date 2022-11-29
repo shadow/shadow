@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
@@ -12,6 +14,7 @@ use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::sockaddr::SockaddrStorage;
 
 use log::*;
 use nix::errno::Errno;
@@ -329,7 +332,7 @@ impl SyscallHandler {
         });
 
         // if the syscall would block, it's a blocking descriptor, and the `MSG_DONTWAIT` flag is not set
-        if result == Err(Errno::EWOULDBLOCK.into())
+        if matches!(result, Err(ref err) if err == &Errno::EWOULDBLOCK.into())
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
@@ -349,7 +352,7 @@ impl SyscallHandler {
         if !addr_ptr.is_null() {
             write_sockaddr(
                 ctx.process.memory_mut(),
-                from_addr,
+                from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             )?;
@@ -397,7 +400,7 @@ impl SyscallHandler {
         debug!("Returning socket address of {:?}", addr_to_write);
         write_sockaddr(
             ctx.process.memory_mut(),
-            addr_to_write,
+            addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
         )?;
@@ -444,7 +447,7 @@ impl SyscallHandler {
         debug!("Returning peer address of {:?}", addr_to_write);
         write_sockaddr(
             ctx.process.memory_mut(),
-            addr_to_write,
+            addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
         )?;
@@ -609,7 +612,7 @@ impl SyscallHandler {
         if !addr_ptr.is_null() {
             if let Err(e) = write_sockaddr(
                 ctx.process.memory_mut(),
-                from_addr,
+                from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             ) {
@@ -895,15 +898,9 @@ impl SyscallHandler {
     }
 }
 
-/// Copy the socket address to the plugin. Will return an error if either the address or address
-/// length pointers are NULL. The plugin's address length will be updated to store the size of the
-/// socket address, even if greater than the provided buffer size. If the address is `None`, the
-/// plugin's address length will be set to 0.
-// https://github.com/shadow/shadow/issues/2093
-#[allow(deprecated)]
 fn write_sockaddr(
     mem: &mut MemoryManager,
-    addr: Option<nix::sys::socket::SockAddr>,
+    addr: Option<&SockaddrStorage>,
     plugin_addr: PluginPtr,
     plugin_addr_len: TypedPluginPtr<libc::socklen_t>,
 ) -> Result<(), SyscallError> {
@@ -915,16 +912,8 @@ fn write_sockaddr(
         }
     };
 
-    let (from_addr, from_len) = addr.as_ffi_pair();
-
-    // make sure that we have a real libc sockaddr before converting to a u8 pointer
-    let from_addr: &libc::sockaddr = from_addr;
-    let from_addr_slice = unsafe {
-        std::slice::from_raw_parts(
-            from_addr as *const _ as *const u8,
-            from_len.try_into().unwrap(),
-        )
-    };
+    let from_addr_slice = addr.as_slice();
+    let from_len: u32 = from_addr_slice.len().try_into().unwrap();
 
     // get the provided address buffer length, and overwrite it with the real address length
     let plugin_addr_len = {
@@ -948,290 +937,45 @@ fn write_sockaddr(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = TypedPluginPtr::new::<u8>(plugin_addr, len_to_copy);
+    let plugin_addr = TypedPluginPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
 }
 
-/// Reads a sockaddr pointer from the plugin. Returns `None` if the pointer is null, otherwise
-/// returns a nix `SockAddr`. The address length must be at most the size of
-/// [`nix::sys::socket::sockaddr_storage`].
-// https://github.com/shadow/shadow/issues/2093
-#[allow(deprecated)]
 fn read_sockaddr(
     mem: &MemoryManager,
     addr_ptr: PluginPtr,
     addr_len: libc::socklen_t,
-) -> Result<Option<nix::sys::socket::SockAddr>, SyscallError> {
+) -> Result<Option<SockaddrStorage>, SyscallError> {
     if addr_ptr.is_null() {
         return Ok(None);
     }
 
-    let addr_len: usize = addr_len.try_into().unwrap();
+    let addr_len_usize: usize = addr_len.try_into().unwrap();
 
-    let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
+    // this won't have the correct alignment, but that's fine since `SockaddrStorage::from_bytes()`
+    // doesn't require alignment
+    let mut addr_buf = [MaybeUninit::new(0u8); std::mem::size_of::<libc::sockaddr_storage>()];
 
     // make sure we will not lose data when we copy
-    if addr_len > std::mem::size_of_val(&addr) {
+    if addr_len_usize > std::mem::size_of_val(&addr_buf) {
         warn!(
             "Shadow does not support the address length {}, which is larger than {}",
             addr_len,
-            std::mem::size_of_val(&addr),
+            std::mem::size_of_val(&addr_buf),
         );
         return Err(Errno::EINVAL.into());
     }
 
-    // make sure that we have at least the address family
-    if addr_len < 2 {
-        return Err(Errno::EINVAL.into());
-    }
+    let addr_buf = &mut addr_buf[..addr_len_usize];
 
-    // limit the scope of the unsafe slice
-    {
-        // safety: do not make any other references to addr within this scope
-        let slice = unsafe {
-            std::slice::from_raw_parts_mut(
-                &mut addr as *mut _ as *mut u8,
-                std::mem::size_of_val(&addr),
-            )
-        };
+    mem.copy_from_ptr(
+        addr_buf,
+        TypedPluginPtr::new::<MaybeUninit<u8>>(addr_ptr, addr_len_usize),
+    )?;
 
-        mem.copy_from_ptr(
-            &mut slice[..addr_len],
-            TypedPluginPtr::new::<u8>(addr_ptr, addr_len),
-        )?;
-    }
+    let addr = unsafe { SockaddrStorage::from_bytes(&addr_buf).ok_or(Errno::EINVAL)? };
 
-    // nix will panic if given an AF_UNSPEC sockaddr, so we'll just return an error and log a
-    // warning
-    if addr.ss_family == libc::AF_UNSPEC as u16 {
-        log::warn!("Addresses with a family of AF_UNSPEC are unsupported");
-        return Err(Errno::EINVAL.into());
-    }
-
-    // apply a nix bug workaround that may shorten the addr length
-    let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-    assert!(corrected_addr_len <= addr_len);
-
-    Ok(Some(nix::sys::socket::sockaddr_storage_to_addr(
-        &addr,
-        corrected_addr_len,
-    )?))
-}
-
-/// Workaround for a nix bug. It's unclear if the bug is that the documentation for
-/// `sockaddr_storage_to_addr()` is incorrect, or if the implemention of
-/// `sockaddr_storage_to_addr()` is incorrect.
-///
-/// https://github.com/nix-rust/nix/issues/1680
-///
-/// At the time of writing, the nix main branch has changed the structure of nix's sockaddr types
-/// and calling `sockaddr_storage_to_addr()` no longer panics. But the documentation is still
-/// inconsistent, so it's unclear if the "working" behaviour in nix is still considered a bug.
-///
-/// A function called from within 'sockaddr_storage_to_addr()' assumes that the given length is the
-/// exact length of the address, whereas the documentation for 'sockaddr_storage_to_addr()' only
-/// specifies "[The len] must be at least as large as all the useful parts of the structure".  For
-/// example if a unix address containing 'sockaddr_un { family: AF_UNIX, path: b"test\0" }' is given
-/// to 'sockaddr_storage_to_addr()' with a length of 'sizeof(sockaddr_un)', it may panic due to an
-/// out-of-bounds read.
-fn sockaddr_storage_len_workaround(
-    addr: &nix::sys::socket::sockaddr_storage,
-    addr_len: usize,
-) -> usize {
-    // if not an AF_UNIX sockaddr, no change is required
-    if addr_len < std::mem::size_of_val(&addr.ss_family) || addr.ss_family != libc::AF_UNIX as u16 {
-        return addr_len;
-    }
-
-    // copy the bytes from the 'sockaddr_storage' into a 'sockaddr_un'
-    let mut tmp_addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    unsafe {
-        std::ptr::copy(
-            addr as *const nix::sys::socket::sockaddr_storage as *const u8,
-            &mut tmp_addr as *mut libc::sockaddr_un as *mut u8,
-            std::mem::size_of_val(&tmp_addr),
-        )
-    };
-
-    // find the position of the first null byte
-    let null_position = tmp_addr.sun_path.iter().position(|c| *c == 0);
-
-    // if there was at least one null byte
-    if let Some(null_position) = null_position {
-        // if a pathname address and not an abstract address
-        if null_position != 0 {
-            // return a reduced length if necessary
-            return std::cmp::min(
-                addr_len,
-                std::mem::size_of_val(&addr.ss_family) + null_position,
-            );
-        }
-    }
-
-    // no change is required
-    addr_len
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Make sure we can convert a unix pathname sockaddr with 'len == sizeof(sockaddr_un)' to a nix
-    /// type without panicking. See https://github.com/nix-rust/nix/issues/1680.
-    #[test]
-    fn test_unix_pathname_sockaddr_with_large_addrlen_conversion_to_nix() {
-        // a valid unix pathname sockaddr with a path of length 3
-        let mut addr_un: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-        addr_un.sun_family = libc::AF_UNIX as u16;
-        // pretend the path array has unitialized bytes (this causes nix to panic if we didn't run
-        // the workaround below)
-        addr_un.sun_path = [1; 108];
-        // set a valid pathname
-        addr_un.sun_path[..4].copy_from_slice(&[1, 2, 3, 0]);
-
-        // length of the 'sockaddr_un', which is larger than 'sizeof(sun_family) + strlen(sun_path)'
-        // (this causes nix to panic if we didn't run the workaround below)
-        let addr_len = std::mem::size_of_val(&addr_un);
-
-        // copy the 'sockaddr_un' bytes to a 'sockaddr_storage'
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        unsafe {
-            std::ptr::copy(
-                &addr_un as *const libc::sockaddr_un as *const u8,
-                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
-                addr_len,
-            )
-        };
-
-        // apply a nix bug workaround that may shorten the addr length
-        let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert_eq!(corrected_addr_len, 5);
-
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
-    }
-
-    /// Make sure we can convert a unix pathname sockaddr with 'len > sizeof(sockaddr_un)' to a nix
-    /// type without panicking. See https://github.com/nix-rust/nix/issues/1680.
-    #[test]
-    fn test_unix_pathname_sockaddr_with_even_larger_addrlen_conversion_to_nix() {
-        // a valid unix pathname sockaddr with a path of length 3
-        let mut addr_un: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-        addr_un.sun_family = libc::AF_UNIX as u16;
-        // pretend the path array has unitialized bytes (this causes nix to panic if we didn't run
-        // the workaround below)
-        addr_un.sun_path = [1; 108];
-        // set a valid pathname
-        addr_un.sun_path[..4].copy_from_slice(&[1, 2, 3, 0]);
-
-        // copy the 'sockaddr_un' bytes to a 'sockaddr_storage'
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        unsafe {
-            std::ptr::copy(
-                &addr_un as *const libc::sockaddr_un as *const u8,
-                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
-                std::mem::size_of_val(&addr_un),
-            )
-        };
-
-        // length of the 'sockaddr_storage', which is larger than the length of a 'sockaddr_un'
-        // (this causes nix to panic if we didn't run the workaround below)
-        let addr_len = std::mem::size_of_val(&addr);
-
-        // apply a nix bug workaround that may shorten the addr length
-        let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert_eq!(corrected_addr_len, 5);
-
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
-    }
-
-    /// Make sure we can convert a unix unnamed sockaddr to a nix type without panicking
-    #[test]
-    fn test_unix_unnamed_sockaddr_conversion_to_nix() {
-        // an unnamed unix sockaddr
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        addr.ss_family = libc::AF_UNIX as u16;
-
-        let addr_len = 2;
-
-        // apply a nix bug workaround that may shorten the addr length
-        let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert!(corrected_addr_len <= addr_len);
-
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
-    }
-
-    /// Make sure we can convert an inet sockaddr to a nix type without panicking
-    #[test]
-    fn test_inet_sockaddr_conversion_to_nix() {
-        // a valid inet sockaddr
-        let mut addr_in: libc::sockaddr_in = unsafe { std::mem::zeroed() };
-        addr_in.sin_family = libc::AF_INET as u16;
-        addr_in.sin_port = 9000u16.to_be();
-        addr_in.sin_addr = libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        };
-
-        // length of the 'sockaddr_in'
-        let addr_len = std::mem::size_of_val(&addr_in);
-
-        // copy the 'sockaddr_un' bytes to a 'sockaddr_storage'
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        unsafe {
-            std::ptr::copy(
-                &addr_in as *const libc::sockaddr_in as *const u8,
-                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
-                addr_len,
-            )
-        };
-
-        // apply a nix bug workaround that may shorten the addr length
-        let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert!(corrected_addr_len <= addr_len);
-
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
-    }
-
-    /// Make sure we can convert an inet sockaddr with 'len > sizeof(sockaddr_in)' to a nix type
-    /// without panicking
-    #[test]
-    fn test_inet_sockaddr_with_large_addrlen_conversion_to_nix() {
-        // a valid unix pathname sockaddr with a path of length 3
-        let mut addr_in: libc::sockaddr_in = unsafe { std::mem::zeroed() };
-        addr_in.sin_family = libc::AF_INET as u16;
-        addr_in.sin_port = 9000u16.to_be();
-        addr_in.sin_addr = libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        };
-
-        // copy the 'sockaddr_un' bytes to a 'sockaddr_storage'
-        let mut addr: nix::sys::socket::sockaddr_storage = unsafe { std::mem::zeroed() };
-        unsafe {
-            std::ptr::copy(
-                &addr_in as *const libc::sockaddr_in as *const u8,
-                &mut addr as *mut nix::sys::socket::sockaddr_storage as *mut u8,
-                std::mem::size_of_val(&addr_in),
-            )
-        };
-
-        // length of the 'sockaddr_storage', which is larger than the length of a 'sockaddr_in'
-        let addr_len = std::mem::size_of_val(&addr);
-
-        // apply a nix bug workaround that may shorten the addr length
-        let corrected_addr_len = sockaddr_storage_len_workaround(&addr, addr_len);
-        assert!(corrected_addr_len <= addr_len);
-
-        // https://github.com/shadow/shadow/issues/2093
-        #[allow(deprecated)]
-        nix::sys::socket::sockaddr_storage_to_addr(&addr, corrected_addr_len).unwrap();
-    }
+    Ok(Some(addr))
 }
