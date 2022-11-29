@@ -172,10 +172,29 @@ impl SockaddrStorage {
 
 impl std::fmt::Debug for SockaddrStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SockaddrStorage")
-            .field("family", &self.family())
-            .field("len", &self.len)
-            .finish_non_exhaustive()
+        let as_inet = self.as_inet();
+        let as_inet6 = self.as_inet6();
+        let as_unix = self.as_unix();
+
+        let as_inet = as_inet.map(|x| &*x as &dyn std::fmt::Debug);
+        let as_inet6 = as_inet6.map(|x| &*x as &dyn std::fmt::Debug);
+        let as_unix = as_unix.as_ref().map(|x| x as &dyn std::fmt::Debug);
+
+        // find a representation that is not None
+        let options = [as_inet, as_inet6, as_unix];
+        let addr = options.into_iter().find_map(std::convert::identity);
+
+        if let Some(ref addr) = addr {
+            f.debug_struct("SockaddrStorage")
+                .field("len", &self.len)
+                .field("addr", addr)
+                .finish()
+        } else {
+            f.debug_struct("SockaddrStorage")
+                .field("len", &self.len)
+                .field("family", &self.family())
+                .finish_non_exhaustive()
+        }
     }
 }
 
