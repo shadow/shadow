@@ -14,7 +14,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -89,33 +88,28 @@ static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
     socket->vtable->close((LegacyFile*)socket, host);
 }
 
-static gssize _legacysocket_sendUserData(Transport* transport, Thread* thread,
-                                         PluginVirtualPtr buffer, gsize nBytes, in_addr_t ip,
-                                         in_port_t port) {
-    LegacySocket* socket = _legacysocket_fromLegacyFile((LegacyFile*)transport);
+gssize legacysocket_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                 gsize nBytes, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
-    return socket->vtable->send((Transport*)socket, thread, buffer, nBytes, ip, port);
+    return socket->vtable->send(socket, thread, buffer, nBytes, ip, port);
 }
 
-static gssize _legacysocket_receiveUserData(Transport* transport, Thread* thread,
-                                            PluginVirtualPtr buffer, gsize nBytes, in_addr_t* ip,
-                                            in_port_t* port) {
-    LegacySocket* socket = _legacysocket_fromLegacyFile((LegacyFile*)transport);
+gssize legacysocket_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
-    return socket->vtable->receive((Transport*)socket, thread, buffer, nBytes, ip, port);
+    return socket->vtable->receive(socket, thread, buffer, nBytes, ip, port);
 }
 
-TransportFunctionTable socket_functions = {
-    _legacysocket_close,        _legacysocket_cleanup,         _legacysocket_free,
-    _legacysocket_sendUserData, _legacysocket_receiveUserData, MAGIC_VALUE};
+LegacyFileFunctionTable socket_functions = {
+    _legacysocket_close, _legacysocket_cleanup, _legacysocket_free, MAGIC_VALUE};
 
 void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTable* vtable,
                        LegacyFileType type, guint receiveBufferSize, guint sendBufferSize) {
     utility_debugAssert(socket && vtable);
 
-    transport_init(&(socket->super), &socket_functions, type);
+    legacyfile_init(&(socket->super), type, &socket_functions);
 
     MAGIC_INIT(socket);
     MAGIC_INIT(vtable);
@@ -266,7 +260,7 @@ void legacysocket_setSocketName(LegacySocket* socket, in_addr_t ip, in_port_t po
     gchar* ipString = address_ipToNewString(ip);
     GString* stringBuffer = g_string_new(ipString);
     g_free(ipString);
-    g_string_append_printf(stringBuffer, ":%u (descriptor %p)", ntohs(port), &socket->super.super);
+    g_string_append_printf(stringBuffer, ":%u (descriptor %p)", ntohs(port), &socket->super);
     socket->boundString = g_string_free(stringBuffer, FALSE);
 
     /* the socket is now bound */

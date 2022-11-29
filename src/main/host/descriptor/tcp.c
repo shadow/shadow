@@ -28,7 +28,6 @@
 #include "main/host/descriptor/tcp_cong.h"
 #include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/tcp_retransmit_tally.h"
-#include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
@@ -1647,7 +1646,7 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
         utility_debugAssert(legacysocket_getInputBufferLength(&tcp->super) == 0);
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
         return -EWOULDBLOCK;
     }
 
@@ -1673,13 +1672,13 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
 
     /* update child descriptor status */
     legacyfile_adjustStatus(
-        &(tcpChild->super.super.super), STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
+        &(tcpChild->super.super), STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
     } else {
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
     }
 
     *acceptedHandle = tcpChild->child->handle;
@@ -1912,7 +1911,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
           "retrans=%" G_GSIZE_FORMAT " ploss=%f desc=%p",
           tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed, outSize,
           outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
-          &tcp->super.super.super);
+          &tcp->super.super);
 }
 
 static void _tcp_sendACKTaskCallback(const Host* host, gpointer voidTcp, gpointer userData) {
@@ -2074,7 +2073,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                     g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
                     legacyfile_adjustStatus(
-                        &(tcp->child->parent->super.super.super), STATUS_FILE_READABLE, TRUE);
+                        &(tcp->child->parent->super.super), STATUS_FILE_READABLE, TRUE);
                 }
             }
             break;
@@ -2310,15 +2309,15 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* user can no longer access socket */
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_CLOSED, TRUE);
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_ACTIVE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_CLOSED, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_ACTIVE, FALSE);
     }
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+static gssize _tcp_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2386,9 +2385,9 @@ static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer d
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+static gssize _tcp_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)transport);
+    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
 
     const Host* host = thread_getHost(thread);
@@ -2500,7 +2499,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     if ((legacysocket_getInputBufferLength(&(tcp->super)) > 0) ||
         (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
-        legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
         more_readable_data = true;
     } else {
         /* all of our ordered user data has been read */
@@ -2509,7 +2508,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
             if(totalCopied > 0) {
                 /* we just received bytes, so we can't EOF until the next call.
                  * make sure we stay readable so we DO actually EOF the socket */
-                legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, TRUE);
+                legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
                 if(tcp->state == TCPS_CLOSED) {
@@ -2521,7 +2520,7 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
             }
         } else {
             /* our socket still has unordered data or is still open, but empty for now */
-            legacyfile_adjustStatus(&(tcp->super.super.super), STATUS_FILE_READABLE, FALSE);
+            legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
         }
     }
 
