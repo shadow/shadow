@@ -61,13 +61,6 @@ HostCInternal* hostc_new(HostId id, const char* hostName) {
     return host;
 }
 
-/* this function is called by manager before the workers exist */
-void hostc_setup(const Host* rhost) {
-    HostCInternal* host = host_internal(rhost);
-    MAGIC_ASSERT(host);
-
-}
-
 static void _hostc_free(HostCInternal* host) {
     MAGIC_ASSERT(host);
     MAGIC_CLEAR(host);

@@ -33,7 +33,6 @@ typedef struct _HostCInternal HostCInternal;
 HostCInternal* hostc_new(HostId id, const char* hostName);
 void hostc_unref(HostCInternal* host);
 
-void hostc_setup(const Host* host);
 void hostc_shutdown(const Host* rhost);
 
 void hostc_addApplication(const Host* host, CSimulationTime startTime, CSimulationTime stopTime,

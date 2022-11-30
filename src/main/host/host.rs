@@ -304,8 +304,6 @@ impl Host {
         assert!(!inet_addr.is_null());
         *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
 
-        unsafe { cshadow::hostc_setup(self) }
-
         // Virtual addresses and interfaces for managing network I/O
         let localhost = unsafe {
             NetworkInterface::new(
