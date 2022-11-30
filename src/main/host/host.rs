@@ -539,10 +539,10 @@ impl Host {
         res
     }
 
-    pub fn get_new_process_id(&self) -> u32 {
+    pub fn get_new_process_id(&self) -> ProcessId {
         let res = self.process_id_counter.get();
         self.process_id_counter.set(res + 1);
-        res
+        res.into()
     }
 
     pub fn get_new_packet_id(&self) -> u64 {
@@ -916,7 +916,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getNewProcessID(hostrc: *const Host) -> u32 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.get_new_process_id()
+        hostrc.get_new_process_id().into()
     }
 
     #[no_mangle]
