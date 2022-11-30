@@ -385,7 +385,7 @@ impl Host {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        envv: &[CString],
+        envv: Vec<CString>,
         argv: &[CString],
         pause_for_debugging: bool,
     ) {

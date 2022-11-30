@@ -633,7 +633,7 @@ impl<'a> Manager<'a> {
                 proc.stop_time,
                 &plugin_name,
                 &plugin_path,
-                &envv,
+                envv,
                 &argv,
                 pause_for_debugging,
             );
