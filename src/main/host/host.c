@@ -106,8 +106,9 @@ void hostc_addApplication(const Host* rhost, CSimulationTime startTime, CSimulat
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
     }
     guint processID = host_getNewProcessID(rhost);
-    Process* proc = process_new(rhost, processID, startTime, stopTime, host_getName(rhost),
-                                pluginName, pluginPath, envv_dup, argv, pause_for_debugging);
+    Process* proc =
+        process_new(rhost, processID, startTime, stopTime, host_getName(rhost), pluginName,
+                    pluginPath, (const gchar* const*)envv_dup, argv, pause_for_debugging);
     g_queue_push_tail(host->processes, proc);
 
     /* schedule the start and stop events */

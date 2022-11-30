@@ -42,7 +42,7 @@ typedef struct _Process Process;
 
 Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, gchar** envv, const gchar* const* argv,
+                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
                      bool pause_for_debugging);
 void process_ref(Process* proc);
 void process_unref(Process* proc);

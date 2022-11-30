@@ -815,7 +815,7 @@ static void _process_itimer_real_expiration(const Host* host, void* voidProcess,
 
 Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, gchar** envv, const gchar* const* argv,
+                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
                      bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
@@ -861,7 +861,7 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
     shimshmemprocess_init(proc->shimSharedMemBlock.p, host_getShimShmemLock(host));
 
-    envv = g_strdupv(envv);
+    gchar** envv_dup = g_strdupv((gchar**)envv);
 
     {
         ShMemBlockSerialized sharedMemBlockSerial =
@@ -871,23 +871,23 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        envv = g_environ_setenv(envv, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
+        envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
     }
 
     /* add log file to env */
     {
         gchar* logFileName = _process_outputFileName(proc, host, "shimlog");
-        envv = g_environ_setenv(envv, "SHADOW_LOG_FILE", logFileName, TRUE);
+        envv_dup = g_environ_setenv(envv_dup, "SHADOW_LOG_FILE", logFileName, TRUE);
         g_free(logFileName);
     }
 
     if (!_use_shim_syscall_handler) {
-        envv = g_environ_setenv(envv, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
+        envv_dup = g_environ_setenv(envv_dup, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
     }
 
     /* save args and env */
     proc->argv = g_strdupv((gchar**)argv);
-    proc->envv = envv;
+    proc->envv = envv_dup;
 
     proc->descTable = descriptortable_new();
 
