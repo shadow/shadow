@@ -11,7 +11,8 @@ use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+/// Virtual pid of a shadow process
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
 
 impl From<u32> for ProcessId {
