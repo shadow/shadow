@@ -23,7 +23,7 @@ use shadow_shmem::allocator::ShMemBlock;
 use shadow_shmem::scmutex::SelfContainedMutexGuard;
 use shadow_tsc::Tsc;
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
-use std::ffi::{CString, OsString};
+use std::ffi::{CStr, CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
@@ -379,25 +379,38 @@ impl Host {
         path.canonicalize().ok()
     }
 
-    pub unsafe fn add_application(
+    pub fn add_application(
         &self,
         start_time: SimulationTime,
         stop_time: Option<SimulationTime>,
-        plugin_name: *const c_char,
-        plugin_path: *const c_char,
-        envv: *const *const c_char,
-        argv: *const *const c_char,
+        plugin_name: &CStr,
+        plugin_path: &CStr,
+        envv: &[CString],
+        argv: &[CString],
         pause_for_debugging: bool,
     ) {
+        let envv_ptrs: Vec<*const i8> = envv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of envv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+        let argv_ptrs: Vec<*const i8> = argv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of argv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+
         unsafe {
             cshadow::hostc_addApplication(
                 self,
                 SimulationTime::to_c_simtime(Some(start_time)),
                 SimulationTime::to_c_simtime(stop_time),
-                plugin_name,
-                plugin_path,
-                envv,
-                argv,
+                plugin_name.as_ptr(),
+                plugin_path.as_ptr(),
+                envv_ptrs.as_ptr(),
+                argv_ptrs.as_ptr(),
                 pause_for_debugging,
             )
         }

@@ -626,46 +626,19 @@ impl<'a> Manager<'a> {
                 .map(|x| CString::new(x.as_bytes()).unwrap())
                 .collect();
 
-            // scope used to enforce drop order for pointers
-            {
-                let argv_ptrs: Vec<*const i8> = argv
-                    .iter()
-                    .map(|x| x.as_ptr())
-                    // the last element of argv must be NULL
-                    .chain(std::iter::once(std::ptr::null()))
-                    .collect();
+            host.continue_execution_timer();
 
-                let envv_ptrs: Vec<*const i8> = envv
-                    .iter()
-                    .map(|x| x.as_ptr())
-                    // the last element of envv must be NULL
-                    .chain(std::iter::once(std::ptr::null()))
-                    .collect();
+            host.add_application(
+                proc.start_time,
+                proc.stop_time,
+                &plugin_name,
+                &plugin_path,
+                &envv,
+                &argv,
+                pause_for_debugging,
+            );
 
-                host.continue_execution_timer();
-
-                unsafe {
-                    host.add_application(
-                        proc.start_time,
-                        proc.stop_time,
-                        plugin_name.as_ptr(),
-                        plugin_path.as_ptr(),
-                        envv_ptrs.as_ptr(),
-                        argv_ptrs.as_ptr(),
-                        pause_for_debugging,
-                    )
-                };
-
-                host.stop_execution_timer();
-
-                // make sure we never accidentally drop the following objects before running the
-                // unsafe code (will be a compile-time error if they were dropped)
-                let _ = &plugin_path;
-                let _ = &plugin_name;
-                let _ = &envv;
-                let _ = &argv;
-                let _ = &argv_ptrs;
-            }
+            host.stop_execution_timer();
         }
 
         host.unlock_shmem();
