@@ -6,7 +6,7 @@ use vasi::VirtualAddressSpaceIndependent;
 use crate::{
     emulated_time::{AtomicEmulatedTime, EmulatedTime},
     rootedcell::{refcell::RootedRefCell, Root},
-    scmutex::SelfContainedMutex,
+    shadow_shmem::scmutex::SelfContainedMutex,
     signals::{
         shd_kernel_sigaction, shd_kernel_sigset_t, SHD_SIGRT_MAX, SHD_STANDARD_SIGNAL_MAX_NO,
     },
@@ -396,10 +396,8 @@ fn signal_from_i32(s: i32) -> Signal {
 pub mod export {
     use std::sync::atomic::Ordering;
 
-    use crate::{
-        emulated_time::CEmulatedTime, scmutex::SelfContainedMutexGuard,
-        simulation_time::CSimulationTime,
-    };
+    use crate::{emulated_time::CEmulatedTime, simulation_time::CSimulationTime};
+    use shadow_shmem::scmutex::SelfContainedMutexGuard;
 
     use super::*;
 
@@ -432,10 +430,6 @@ pub mod export {
             SimulationTime::from_c_simtime(unblocked_syscall_latency).unwrap(),
             SimulationTime::from_c_simtime(unblocked_vdso_latency).unwrap(),
         );
-        // This assertion fails under loom, due to its sync primitives not being FFI safe.
-        // It doesn't matter though, since this is dead code in our loom tests.
-        // TODO: Move sync primitives that we want to test with loom into their own module?
-        #[cfg(not(loom))]
         assert_shmem_safe!(HostShmem, _test_host_shmem);
         let host_mem = host_mem;
         unsafe { host_mem.write(h) };

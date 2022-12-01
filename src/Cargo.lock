@@ -1174,11 +1174,9 @@ dependencies = [
  "libc",
  "log",
  "logger",
- "loom",
  "nix",
  "once_cell",
  "rand",
- "rkyv",
  "shadow-build-common",
  "shadow_shmem",
  "static_assertions",
@@ -1204,9 +1202,15 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "cc",
+ "libc",
  "logger",
+ "loom",
+ "nix",
  "once_cell",
+ "rand",
+ "rkyv",
  "shadow-build-common",
+ "static_assertions",
  "vasi",
 ]
 
