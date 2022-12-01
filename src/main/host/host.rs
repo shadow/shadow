@@ -7,9 +7,9 @@ use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::NetworkInterface;
 use crate::network::router::Router;
-use crate::utility::{self, SyncSendPointer};
+use crate::utility::{self, HostTreePointer, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
 use rand::{Rng, SeedableRng};
@@ -23,10 +23,10 @@ use shadow_shmem::allocator::ShMemBlock;
 use shadow_shmem::scmutex::SelfContainedMutexGuard;
 use shadow_tsc::Tsc;
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
+use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{Deref, DerefMut};
-use std::os::raw::c_char;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -72,6 +72,7 @@ pub struct HostParameters {
 }
 
 use super::cpu::Cpu;
+use super::process::ProcessId;
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -84,10 +85,6 @@ pub struct HostInfo {
 
 /// A simulated Host.
 pub struct Host {
-    // Legacy C implementation of the host. Fields and functionality should be
-    // migrated from here to this Host.
-    chost: SyncSendPointer<cshadow::HostCInternal>,
-
     // Store immutable info in an Arc, that we can safely clone into the
     // ShadowLogger. We can't use a RootedRc here since this needs to be cloned
     // into the logger thread, which doesn't have access to the Host's Root.
@@ -155,6 +152,9 @@ pub struct Host {
     // track the order in which the application sent us application data
     packet_priority_counter: Cell<f64>,
 
+    // Owned pointers to processes.
+    processes: RefCell<BTreeMap<ProcessId, HostTreePointer<cshadow::Process>>>,
+
     tsc: Tsc,
     // Cached lock for shim_shmem. `[Host::shmem_lock]` uses unsafe code to give it
     // a 'static lifetime.
@@ -189,9 +189,8 @@ impl crate::utility::IsSend for Host {}
 impl std::fmt::Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Host")
-            .field("chost", &self.chost)
             .field("info", &self.info)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -200,7 +199,6 @@ impl Host {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
 
-        let chost = unsafe { cshadow::hostc_new(params.id, params.hostname.as_ptr()) };
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let cpu = RefCell::new(None);
@@ -227,7 +225,6 @@ impl Host {
         let tsc = Tsc::new(params.native_tsc_frequency);
 
         let res = Self {
-            chost: unsafe { SyncSendPointer::new(chost) },
             default_address,
             info: OnceCell::new(),
             root,
@@ -250,6 +247,7 @@ impl Host {
             packet_priority_counter,
             determinism_sequence_counter,
             tsc,
+            processes: RefCell::new(BTreeMap::new()),
             #[cfg(feature = "perf_timers")]
             execution_timer,
         };
@@ -385,10 +383,21 @@ impl Host {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        envv: &[CString],
+        mut envv: Vec<CString>,
         argv: &[CString],
         pause_for_debugging: bool,
     ) {
+        {
+            // SAFETY: We're not touching the data inside the block, only
+            // using its metadata to create a serialized pointer to it.
+            let block = unsafe { &*self.shim_shmem.get() };
+            let mut envvar = String::from("SHADOW_SHM_HOST_BLK=");
+            envvar.push_str(&block.serialize().to_string());
+            envv.push(CString::new(envvar).unwrap());
+        }
+
+        let process_id = self.get_new_process_id();
+
         let envv_ptrs: Vec<*const i8> = envv
             .iter()
             .map(|x| x.as_ptr())
@@ -402,18 +411,27 @@ impl Host {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
-        unsafe {
-            cshadow::hostc_addApplication(
+        let process = unsafe {
+            cshadow::process_new(
                 self,
+                process_id.into(),
                 SimulationTime::to_c_simtime(Some(start_time)),
                 SimulationTime::to_c_simtime(stop_time),
+                self.params.hostname.as_ptr(),
                 plugin_name.as_ptr(),
                 plugin_path.as_ptr(),
                 envv_ptrs.as_ptr(),
                 argv_ptrs.as_ptr(),
                 pause_for_debugging,
             )
-        }
+        };
+
+        unsafe { cshadow::process_schedule(process, self) };
+
+        self.processes.borrow_mut().insert(
+            process_id,
+            HostTreePointer::new_for_host(self.id(), process),
+        );
     }
 
     /// Information about the Host. Made available as an Arc for cheap cloning
@@ -539,10 +557,10 @@ impl Host {
         res
     }
 
-    pub fn get_new_process_id(&self) -> u32 {
+    pub fn get_new_process_id(&self) -> ProcessId {
         let res = self.process_id_counter.get();
         self.process_id_counter.set(res + 1);
-        res
+        res.into()
     }
 
     pub fn get_new_packet_id(&self) -> u64 {
@@ -630,6 +648,8 @@ impl Host {
     pub fn shutdown(&self) {
         self.continue_execution_timer();
 
+        debug!("shutting down host {}", self.name());
+
         // Need to drop the interfaces early because they trigger worker accesses
         // that will not be valid at the normal drop time. The interfaces will
         // become None after this and should not be unwrapped anymore.
@@ -639,7 +659,7 @@ impl Host {
             self.internet.replace(None);
         }
 
-        unsafe { cshadow::hostc_shutdown(self) };
+        assert!(self.processes.borrow().is_empty());
 
         // Deregistering localhost is a no-op, so we skip it.
         let _ = Worker::with_dns(|dns| unsafe {
@@ -657,7 +677,13 @@ impl Host {
     }
 
     pub fn free_all_applications(&self) {
-        unsafe { cshadow::hostc_freeAllApplications(self) };
+        trace!("start freeing applications for host '{}'", self.name());
+        let processes = std::mem::replace(&mut *self.processes.borrow_mut(), BTreeMap::new());
+        for (_id, process) in processes.into_iter() {
+            unsafe { cshadow::process_stop(process.ptr()) };
+            unsafe { cshadow::process_unref(process.ptr()) };
+        }
+        trace!("done freeing application for host '{}'", self.name());
     }
 
     pub fn execute(&self, until: EmulatedTime) {
@@ -852,10 +878,6 @@ impl Host {
     pub fn tsc(&self) -> &Tsc {
         &self.tsc
     }
-
-    pub fn chost(&self) -> *mut cshadow::HostCInternal {
-        self.chost.ptr()
-    }
 }
 
 impl Drop for Host {
@@ -874,7 +896,6 @@ impl Drop for Host {
         debug_assert!(!futex_table.is_null());
         unsafe { cshadow::futextable_unref(futex_table) };
 
-        unsafe { cshadow::hostc_unref(self.chost()) };
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
         // guarantee about the order in which fields are dropped)
@@ -894,7 +915,7 @@ mod export {
     };
 
     use crate::{
-        cshadow::{CEmulatedTime, CSimulationTime, HostCInternal},
+        cshadow::{CEmulatedTime, CSimulationTime},
         network::router::Router,
     };
 
@@ -916,7 +937,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getNewProcessID(hostrc: *const Host) -> u32 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.get_new_process_id()
+        hostrc.get_new_process_id().into()
     }
 
     #[no_mangle]
@@ -1167,22 +1188,35 @@ mod export {
     /// converts a virtual (shadow) tid into the native tid
     #[no_mangle]
     pub unsafe extern "C" fn host_getNativeTID(
-        hostrc: *const Host,
+        host: *const Host,
         virtual_pid: libc::pid_t,
         virtual_tid: libc::pid_t,
     ) -> libc::pid_t {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getNativeTID(hostrc.chost(), virtual_pid, virtual_tid) }
+        let host = unsafe { host.as_ref().unwrap() };
+        for process in host.processes.borrow().values() {
+            let process = unsafe { process.ptr() };
+            let native_tid =
+                unsafe { cshadow::process_findNativeTID(process, virtual_pid, virtual_tid) };
+            if native_tid > 0 {
+                return native_tid;
+            }
+        }
+        0
     }
 
     /// Returns the specified process, or NULL if it doesn't exist.
     #[no_mangle]
     pub unsafe extern "C" fn host_getProcess(
-        hostrc: *const Host,
+        host: *const Host,
         virtual_pid: libc::pid_t,
     ) -> *mut cshadow::Process {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getProcess(hostrc.chost(), virtual_pid) }
+        let host = unsafe { host.as_ref().unwrap() };
+        let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
+        let processes = host.processes.borrow();
+        let Some(process) = processes.get(&virtual_pid) else {
+            return std::ptr::null_mut();
+        };
+        unsafe { process.ptr() }
     }
 
     /// Returns the specified thread, or NULL if it doesn't exist.
@@ -1190,11 +1224,18 @@ mod export {
     /// efficient.
     #[no_mangle]
     pub unsafe extern "C" fn host_getThread(
-        hostrc: *const Host,
+        host: *const Host,
         virtual_tid: libc::pid_t,
     ) -> *mut cshadow::Thread {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        unsafe { cshadow::hostc_getThread(hostrc.chost(), virtual_tid) }
+        let host = unsafe { host.as_ref().unwrap() };
+        for process in host.processes.borrow().values() {
+            let process = unsafe { process.ptr() };
+            let thread = unsafe { cshadow::process_getThread(process, virtual_tid) };
+            if !thread.is_null() {
+                return thread;
+            }
+        }
+        return std::ptr::null_mut();
     }
 
     /// Returns host-specific state that's kept in memory shared with the shim(s).
@@ -1334,13 +1375,6 @@ mod export {
     pub extern "C" fn host_paramsHeartbeatLogInfo(host: *const Host) -> cshadow::LogInfoFlags {
         let host = unsafe { host.as_ref().unwrap() };
         host.params.heartbeat_log_info
-    }
-
-    /// Should only be used from host.c
-    #[no_mangle]
-    pub unsafe extern "C" fn host_internal(hostrc: *const Host) -> *mut HostCInternal {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.chost()
     }
 
     #[no_mangle]

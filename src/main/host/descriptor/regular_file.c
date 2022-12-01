@@ -26,7 +26,6 @@
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/host.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"

@@ -28,7 +28,6 @@
 #include "main/host/descriptor/tcp_cong.h"
 #include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/tcp_retransmit_tally.h"
-#include "main/host/host.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"

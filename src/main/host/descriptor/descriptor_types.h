@@ -8,6 +8,8 @@
 
 #include <glib.h>
 
+#include "main/bindings/c/bindings-opaque.h"
+
 typedef enum _LegacyFileType LegacyFileType;
 enum _LegacyFileType {
     DT_NONE,
@@ -21,12 +23,6 @@ enum _LegacyFileType {
 
 typedef struct _LegacyFile LegacyFile;
 typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
-
-/* Including host.h here would introduce a circular dependency.
- * We work around it by forward declaring Host here, and including host.h below
- * to ensure we get an error if host.h's forward declaration somehow changes.
- */
-typedef struct Host Host;
 
 /* required functions */
 typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, const Host* host);
@@ -60,11 +56,5 @@ struct _LegacyFile {
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;
 };
-
-/* Included to ensure our forward declaration of Host is compatible with
- * the canonical one. We can't include this sooner without causing the  build to fail
- * due to circular dependencies.
- */
-#include "main/host/host.h"
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_ */

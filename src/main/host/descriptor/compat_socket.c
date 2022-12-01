@@ -9,6 +9,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings-opaque.h"
+#include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/utility/tagged_ptr.h"
 

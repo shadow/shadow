@@ -14,7 +14,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/host.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"

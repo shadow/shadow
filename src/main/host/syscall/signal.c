@@ -11,7 +11,6 @@
 #include <sys/syscall.h>
 
 #include "lib/logger/logger.h"
-#include "main/host/host.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
