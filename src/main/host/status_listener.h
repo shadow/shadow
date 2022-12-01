@@ -9,7 +9,7 @@
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _StatusListener StatusListener;
 
-#include "main/host/host.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/status.h"
 
 /* Indicates when the listener should trigger a callback, i.e.,

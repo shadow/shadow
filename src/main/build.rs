@@ -13,7 +13,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "SysCallArgs".into(),
             "Packet".into(),
             "Process".into(),
-            "Host".into(),
             "Thread".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
@@ -30,12 +29,13 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         .with_config(cbindgen::Config {
             include_guard: Some("main_bindings_h".into()),
             includes: vec![
+                "lib/logger/log_level.h".into(),
                 "lib/shadow-shim-helper-rs/shim_helper.h".into(),
+                "lib/tsc/tsc.h".into(),
                 "main/bindings/c/bindings-opaque.h".into(),
                 "main/core/worker.h".into(),
                 "main/host/descriptor/descriptor_types.h".into(),
                 "main/host/futex_table.h".into(),
-                "main/host/host.h".into(),
                 "main/host/network_interface.h".into(),
                 "main/host/protocol.h".into(),
                 "main/host/status_listener.h".into(),
@@ -100,7 +100,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("core/worker.h")
         .header("host/affinity.h")
         .header("host/descriptor/descriptor.h")
-        .header("host/host.h")
         .header("host/process.h")
         .header("host/status.h")
         .header("host/status_listener.h")
@@ -177,7 +176,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("syscallhandler_unref")
         .blocklist_function("syscallhandler_make_syscall")
         .allowlist_function("return_code_for_signal")
-        .allowlist_type("HostCInternal")
         .allowlist_type("PluginPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")
@@ -205,7 +203,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .opaque_type("MemoryManager")
         .opaque_type("TaskRef")
         .opaque_type("GList")
-        .blocklist_type("Host")
         .blocklist_type("Logger")
         .blocklist_type("Timer")
         .blocklist_type("Controller")
@@ -224,7 +221,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::main::ShadowBuildInfo;")
         .raw_line("use crate::core::support::configuration::ConfigOptions;")
         .raw_line("use crate::core::support::configuration::QDiscMode;")
-        .raw_line("use crate::core::work::task::TaskRef;")
         .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")
@@ -306,7 +302,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
         "host/thread.c",
-        "host/host.c",
         "host/syscall_condition.c",
         "host/managed_thread.c",
         "host/network_interface.c",

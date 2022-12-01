@@ -11,7 +11,6 @@
 #include <sys/epoll.h>
 
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/host.h"
 
 typedef struct _Epoll Epoll;
 

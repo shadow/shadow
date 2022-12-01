@@ -16,7 +16,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/host/network_queuing_disciplines.h"
 #include "main/host/protocol.h"

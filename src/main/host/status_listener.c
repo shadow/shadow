@@ -11,7 +11,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/host.h"
 #include "main/utility/utility.h"
 
 struct _StatusListener {
