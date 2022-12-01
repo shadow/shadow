@@ -1,3 +1,4 @@
+use std::num::TryFromIntError;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 
 use nix::unistd::Pid;
@@ -21,9 +22,25 @@ impl From<u32> for ProcessId {
     }
 }
 
+impl TryFrom<libc::pid_t> for ProcessId {
+    type Error = TryFromIntError;
+
+    fn try_from(value: libc::pid_t) -> Result<Self, Self::Error> {
+        Ok(ProcessId(value.try_into()?))
+    }
+}
+
 impl From<ProcessId> for u32 {
     fn from(val: ProcessId) -> Self {
         val.0
+    }
+}
+
+impl TryFrom<ProcessId> for libc::pid_t {
+    type Error = TryFromIntError;
+
+    fn try_from(value: ProcessId) -> Result<Self, Self::Error> {
+        value.0.try_into()
     }
 }
 
