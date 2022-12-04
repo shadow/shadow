@@ -474,10 +474,7 @@ mod tests {
         // low-delay packets should put us back into store mode.
         for _ in 0..3 {
             // Add some low-delay packets
-            cdq.push(
-                Packet::mock_new(),
-                start + TARGET + INTERVAL * 2u64 - one,
-            );
+            cdq.push(Packet::mock_new(), start + TARGET + INTERVAL * 2u64 - one);
         }
         cdq.pop(start + TARGET + INTERVAL * 2u64);
         assert_eq!(cdq.mode, CoDelMode::Store);

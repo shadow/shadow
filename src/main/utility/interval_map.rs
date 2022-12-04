@@ -269,7 +269,8 @@ impl<V: Clone> IntervalMap<V> {
 
     // Returns the entry of the interval containing `x`.
     pub fn get(&self, x: usize) -> Option<(Interval, &V)> {
-        self.get_index(x).map(|i| (self.starts[i]..self.ends[i], &self.vals[i]))
+        self.get_index(x)
+            .map(|i| (self.starts[i]..self.ends[i], &self.vals[i]))
     }
 
     // Returns the entry of the interval containing `x`.

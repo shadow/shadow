@@ -276,10 +276,7 @@ fn test_negative_backlog(
         bind_fd(fd, address);
     }
 
-    let args = ListenArguments {
-        fd,
-        backlog: -1,
-    };
+    let args = ListenArguments { fd, backlog: -1 };
 
     let expected_errno = match (domain, sock_type, bind) {
         (libc::AF_INET, libc::SOCK_STREAM, _) => None,
@@ -302,10 +299,7 @@ fn test_negative_backlog_connect(
 
     let (bind_address, bind_len) = socket_utils::autobind_helper(fd, domain);
 
-    let args = ListenArguments {
-        fd,
-        backlog: -1,
-    };
+    let args = ListenArguments { fd, backlog: -1 };
 
     let expected_errno = match (domain, sock_type) {
         (libc::AF_INET, libc::SOCK_STREAM) => None,
@@ -389,10 +383,7 @@ fn test_listen_twice(
         bind_fd(fd, address);
     }
 
-    let args1 = ListenArguments {
-        fd,
-        backlog: 10,
-    };
+    let args1 = ListenArguments { fd, backlog: 10 };
 
     let args2 = ListenArguments { fd, backlog: 0 };
 
@@ -428,10 +419,7 @@ fn test_after_close(
     let rv = unsafe { libc::close(fd) };
     assert_eq!(rv, 0);
 
-    let args = ListenArguments {
-        fd,
-        backlog: 100,
-    };
+    let args = ListenArguments { fd, backlog: 100 };
 
     check_listen_call(&args, Some(libc::EBADF))
 }

@@ -118,8 +118,7 @@ impl Process {
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        unsafe { cshadow::process_straceLoggingMode(self.cprocess) }
-            .into()
+        unsafe { cshadow::process_straceLoggingMode(self.cprocess) }.into()
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.

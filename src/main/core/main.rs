@@ -127,7 +127,9 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     }
 
     // save the platform data required for CPU pinning
-    if shadow_config.experimental.use_cpu_pinning.unwrap() && unsafe { c::affinity_initPlatformInfo() } != 0 {
+    if shadow_config.experimental.use_cpu_pinning.unwrap()
+        && unsafe { c::affinity_initPlatformInfo() } != 0
+    {
         return Err(anyhow::anyhow!("Unable to initialize platform info"));
     }
 

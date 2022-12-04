@@ -346,9 +346,8 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
         .and_then(|p| p.canonicalize().map_err(anyhow::Error::from));
     // We previously used only `std::fs::canonicalize`, which doesn't search
     // `PATH`, and *does* search the current directory.
-    let legacy_canonical_path: Result<PathBuf, anyhow::Error> = expanded_path
-        .canonicalize()
-        .map_err(anyhow::Error::from);
+    let legacy_canonical_path: Result<PathBuf, anyhow::Error> =
+        expanded_path.canonicalize().map_err(anyhow::Error::from);
 
     let canonical_path = if new_canonical_path.is_ok()
         && legacy_canonical_path.is_ok()

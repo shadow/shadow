@@ -202,7 +202,6 @@ impl ShMemBlockSerialized {
 
 impl fmt::Display for ShMemBlockSerialized {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-
         let mut buf = Vec::new();
         buf.resize(Self::SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN, 0i8);
         unsafe { c_bindings::shmemblockserialized_toString(&self.internal, buf.as_mut_ptr()) };
@@ -242,8 +241,7 @@ impl Allocator {
         T: Sync + VirtualAddressSpaceIndependent,
     {
         let nbytes = std::mem::size_of_val(&val);
-        let raw_block =
-            unsafe { c_bindings::shmemallocator_alloc(self.internal, nbytes) };
+        let raw_block = unsafe { c_bindings::shmemallocator_alloc(self.internal, nbytes) };
         assert_eq!(raw_block.nbytes as usize, nbytes);
         assert!(!raw_block.p.is_null());
         assert_eq!(raw_block.p.align_offset(std::mem::align_of::<T>()), 0);

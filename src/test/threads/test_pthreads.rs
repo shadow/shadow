@@ -406,7 +406,10 @@ extern "C" fn thread_mutex_trylock(mx: *mut libc::c_void) -> *mut libc::c_void {
         unsafe { (*muxes).num_locked += 1 };
 
         let num_not_locked = unsafe { (*muxes).num_not_locked };
-        if num_not_locked == 0 && NUM_THREADS != 1 &&  unsafe { libc::pthread_cond_wait((*muxes).cond_ptr(), (*muxes).mux2_ptr()) } < 0 {
+        if num_not_locked == 0
+            && NUM_THREADS != 1
+            && unsafe { libc::pthread_cond_wait((*muxes).cond_ptr(), (*muxes).mux2_ptr()) } < 0
+        {
             rv = ThreadRetVal::CondWaitFailed;
         }
 

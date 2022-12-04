@@ -60,7 +60,7 @@ fn test_pipe() -> Result<(), String> {
         let mut ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
         match ready.cmp(&0) {
             Ordering::Less => {
-            return Err("error: poll failed".to_string());
+                return Err("error: poll failed".to_string());
             }
             Ordering::Greater => {
                 return Err(format!(

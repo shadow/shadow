@@ -134,8 +134,7 @@ impl<'a> Manager<'a> {
             .template_directory
             .flatten_ref()
             .map(|x| cwd.clone().join(x));
-        let data_path = cwd
-            .join(config.general.data_directory.as_ref().unwrap());
+        let data_path = cwd.join(config.general.data_directory.as_ref().unwrap());
         let hosts_path = data_path.join("hosts");
 
         if let Some(template_path) = template_path {
@@ -701,7 +700,8 @@ impl<'a> Manager<'a> {
 
             // if it's not LD_PRELOAD, insert if there's no existing entry
             if name != "LD_PRELOAD" {
-                env.entry(name.into()).or_insert_with(|| value.map(|x| x.into()));
+                env.entry(name.into())
+                    .or_insert_with(|| value.map(|x| x.into()));
                 continue;
             }
 
@@ -838,9 +838,11 @@ impl<'a> Manager<'a> {
 
         let avl_pages = nix::unistd::sysconf(nix::unistd::SysconfVar::_AVPHYS_PAGES)
             .context("Failed to get the number of available pages of physical memory")?
-            .ok_or_else(|| anyhow::anyhow!(
-                "Failed to get the number of available pages of physical memory (no errno)"
-            ))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Failed to get the number of available pages of physical memory (no errno)"
+                )
+            })?;
 
         let page_size: u64 = page_size.try_into().unwrap();
         let avl_pages: u64 = avl_pages.try_into().unwrap();
