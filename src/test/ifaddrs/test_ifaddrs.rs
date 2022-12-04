@@ -35,10 +35,10 @@ fn main() {
         let netmask: &nix::sys::socket::SockaddrIn = netmask.as_sockaddr_in().unwrap();
 
         let address_str = address.to_string();
-        let ip = address_str.split(":").collect::<Vec<&str>>()[0];
+        let ip = address_str.split(':').collect::<Vec<&str>>()[0];
 
         let netmask = netmask.to_string();
-        let netmask = netmask.split(":").collect::<Vec<&str>>()[0];
+        let netmask = netmask.split(':').collect::<Vec<&str>>()[0];
 
         println!(
             "found ifaddr interface {} address {} netmask {:?}",

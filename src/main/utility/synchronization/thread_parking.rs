@@ -68,6 +68,12 @@ impl ThreadUnparkerUnassigned {
     }
 }
 
+impl Default for ThreadUnparkerUnassigned {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ThreadUnparker {
     fn new(
         ready_flag: Arc<AtomicBool>,

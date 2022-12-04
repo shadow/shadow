@@ -373,6 +373,12 @@ impl SiginfoWrapper {
     }
 }
 
+impl Default for SiginfoWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<libc::siginfo_t> for SiginfoWrapper {
     fn from(s: libc::siginfo_t) -> Self {
         Self(s)
@@ -579,7 +585,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
         let info = unsafe { info.as_ref().unwrap() };
-        protected.set_pending_standard_siginfo(signal_from_i32(sig), &info);
+        protected.set_pending_standard_siginfo(signal_from_i32(sig), info);
     }
 
     #[no_mangle]
@@ -618,7 +624,7 @@ pub mod export {
         lock: *const ShimShmemHostLock,
     ) {
         let lock = unsafe { lock.as_ref().unwrap() };
-        let t = ThreadShmem::new(&lock);
+        let t = ThreadShmem::new(lock);
         assert_shmem_safe!(ThreadShmem, _test_thread_shmem);
         unsafe { thread_mem.write(t) }
     }
@@ -751,7 +757,7 @@ pub mod export {
             } else {
                 let process = unsafe { process.as_ref().unwrap() };
                 let mut process_protected = process.protected.borrow_mut(&lock.root);
-                process_protected.take_pending_unblocked_signal(&*thread_protected)
+                process_protected.take_pending_unblocked_signal(&thread_protected)
             }
         };
 

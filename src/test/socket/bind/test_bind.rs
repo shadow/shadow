@@ -22,16 +22,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -69,8 +63,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     let sock_types = &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET];
     let sock_type_combinations: Vec<(libc::c_int, libc::c_int)> = sock_types
         .iter()
-        .map(|item_x| sock_types.iter().map(move |item_y| (*item_x, *item_y)))
-        .flatten()
+        .flat_map(|item_x| sock_types.iter().map(move |item_y| (*item_x, *item_y)))
         .collect();
 
     for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
@@ -262,7 +255,7 @@ fn test_null_addr(
     assert!(fd >= 0);
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: 5,
     };
@@ -301,9 +294,9 @@ fn test_short_addr(
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
-        addr_len: addr_len,
+        addr_len,
     };
 
     test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EINVAL)))
@@ -324,7 +317,7 @@ fn test_ipv4(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -354,7 +347,7 @@ fn test_all_ports_used() -> Result<(), String> {
             };
 
             let args = BindArguments {
-                fd: fd,
+                fd,
                 addr: Some(SockAddr::Inet(addr)),
                 addr_len: std::mem::size_of_val(&addr) as u32,
             };
@@ -377,7 +370,7 @@ fn test_all_ports_used() -> Result<(), String> {
         };
 
         let args = BindArguments {
-            fd: fd,
+            fd,
             addr: Some(SockAddr::Inet(addr)),
             addr_len: std::mem::size_of_val(&addr) as u32,
         };
@@ -473,7 +466,7 @@ fn test_ipv6(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet6(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -497,7 +490,7 @@ fn test_loopback(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -520,7 +513,7 @@ fn test_any_interface(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), S
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -563,7 +556,7 @@ fn test_double_bind_socket(
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len,
     };
@@ -720,7 +713,7 @@ fn test_autobind(
     };
 
     let args = BindArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len,
     };

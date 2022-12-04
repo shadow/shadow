@@ -43,7 +43,7 @@ use quote::ToTokens;
 /// ```
 #[proc_macro_attribute]
 pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
-    let mut item: syn::Item = syn::parse(input.clone()).unwrap();
+    let mut item: syn::Item = syn::parse(input).unwrap();
     let mut fn_item = match &mut item {
         syn::Item::Fn(fn_item) => fn_item,
         _ => panic!("expected fn"),

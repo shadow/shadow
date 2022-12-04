@@ -25,16 +25,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -316,7 +310,7 @@ fn test_null_addr() -> Result<(), String> {
     assert!(fd >= 0);
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: std::mem::size_of::<libc::sockaddr_in>() as u32,
     };
@@ -339,7 +333,7 @@ fn test_short_len() -> Result<(), String> {
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: (std::mem::size_of_val(&addr) - 1) as u32,
     };
@@ -362,7 +356,7 @@ fn test_zero_len() -> Result<(), String> {
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: 0u32,
     };
@@ -386,7 +380,7 @@ fn test_non_existent_server(sock_type: libc::c_int, flag: libc::c_int) -> Result
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -417,7 +411,7 @@ fn test_port_zero(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), Strin
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -453,7 +447,7 @@ fn test_after_close(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), Str
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
@@ -665,7 +659,7 @@ fn test_non_existent_path(sock_type: libc::c_int, flag: libc::c_int) -> Result<(
     };
 
     let args = ConnectArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Unix(addr)),
         addr_len: std::mem::size_of_val(&addr) as u32,
     };

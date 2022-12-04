@@ -35,7 +35,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     }
 
     cbindgen::Builder::new()
-        .with_crate(crate_dir.clone())
+        .with_crate(crate_dir)
         .with_config(config)
         .generate()
         .expect("Unable to generate bindings")
@@ -44,7 +44,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 
 fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
-    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), Some(deps));
+    let build_common = ShadowBuildCommon::new(Path::new("../../.."), Some(deps));
 
     run_cbindgen(&build_common);
 

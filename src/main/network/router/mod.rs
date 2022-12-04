@@ -72,6 +72,12 @@ impl Router {
     }
 }
 
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod export {
     use super::*;
 
@@ -146,15 +152,15 @@ mod tests {
         const N: usize = 10;
 
         for i in 1..=N {
-            assert_eq!(router.push_inner(Packet::mock_new(), now.clone()), i == 1);
+            assert_eq!(router.push_inner(Packet::mock_new(), now), i == 1);
             assert!(router.peek().is_some());
         }
         for _ in 1..=N {
             assert!(router.peek().is_some());
-            assert!(router.pop_inner(now.clone()).is_some());
+            assert!(router.pop_inner(now).is_some());
         }
 
         assert!(router.peek().is_none());
-        assert!(router.pop_inner(now.clone()).is_none());
+        assert!(router.pop_inner(now).is_none());
     }
 }

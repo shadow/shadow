@@ -157,7 +157,7 @@ impl FromStr for Mapping {
             // Undocumented whether this is actually base 10; change to 16 if we find
             // counter-examples.
             inode: parse_field(caps.get(10).unwrap().as_str(), "inode", |s| {
-                u64::from_str_radix(s, 10)
+                s.parse()
             })?,
             path: parse_field::<_, _, Box<dyn Error>>(
                 caps.get(11).unwrap().as_str(),

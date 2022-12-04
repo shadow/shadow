@@ -21,7 +21,7 @@ impl SyscallHandler {
         trace!("Trying to read {} random bytes.", count);
 
         // Get a native-process mem buffer where we can copy the random bytes.
-        let dst_ptr = TypedPluginPtr::new::<u8>(PluginPtr::from(buf_ptr), count);
+        let dst_ptr = TypedPluginPtr::new::<u8>(buf_ptr, count);
         let mut mem_ref = match ctx.process.memory_mut().memory_ref_mut_uninit(dst_ptr) {
             Ok(m) => m,
             Err(e) => {

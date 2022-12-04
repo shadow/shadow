@@ -321,6 +321,7 @@ pub const SIMTIME_INVALID: CSimulationTime = u64::MAX;
 // cbindgen refuses to do the arithmetic here, so we we pre-compute,
 // and validate in the static assertion below.
 pub const SIMTIME_MAX: CSimulationTime = 17500059273709551614u64;
+#[allow(clippy::assertions_on_constants)]
 const _: () =
     assert!(SIMTIME_MAX == emulated_time::EMUTIME_MAX - emulated_time::EMUTIME_SIMULATION_START);
 

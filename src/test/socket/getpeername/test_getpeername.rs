@@ -24,16 +24,11 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
+
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -255,7 +250,7 @@ fn test_non_connected_fd(domain: libc::c_int, sock_type: libc::c_int) -> Result<
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
@@ -481,7 +476,7 @@ fn test_unbound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<()
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
@@ -503,7 +498,7 @@ fn test_bound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), 
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
@@ -556,7 +551,7 @@ fn test_connected_dgram_socket(domain: libc::c_int) -> Result<(), String> {
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };

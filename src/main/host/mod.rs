@@ -1,6 +1,7 @@
 pub mod context;
 pub mod cpu;
 pub mod descriptor;
+#[allow(clippy::module_inception)]
 pub mod host;
 pub mod memory_manager;
 pub mod network_interface;

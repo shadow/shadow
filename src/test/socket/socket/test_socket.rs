@@ -426,15 +426,14 @@ fn check_socket_call(
     };
 
     let errno = test_utils::get_errno();
-    let fd;
 
     // if we expect the socket creation to return an error
-    if should_error {
+    let fd = if should_error {
         if rv != -1 {
             return Err(format!("Expecting a return value of -1, received {}", rv));
         }
 
-        fd = None;
+        None
     } else {
         if rv < 0 {
             return Err(format!(
@@ -443,8 +442,8 @@ fn check_socket_call(
             ));
         }
 
-        fd = Some(rv);
-    }
+        Some(rv)
+    };
 
     // check the errno if we were given one
     if let Some(expected_errno) = expected_errno {

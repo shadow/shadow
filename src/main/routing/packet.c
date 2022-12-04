@@ -628,7 +628,7 @@ gchar* packet_toString(Packet* packet) {
 
             g_string_append_printf(packetString, "%s:%u -> ",
                     sourceIPString, ntohs(header->sourcePort));
-            g_string_append_printf(packetString, "%s:%u seq=%u ack=%u sack=", 
+            g_string_append_printf(packetString, "%s:%u seq=%u ack=%u sack=",
                     destinationIPString, ntohs(header->destinationPort),
                     header->sequence, header->acknowledgment);
 
@@ -691,7 +691,7 @@ gchar* packet_toString(Packet* packet) {
             break;
         }
     }
-    
+
     guint statusLength = g_queue_get_length(packet->orderedStatus);
     if(statusLength > 0) {
         g_string_append_printf(packetString, " status=");

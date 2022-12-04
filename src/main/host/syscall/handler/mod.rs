@@ -112,6 +112,12 @@ impl SyscallHandler {
     }
 }
 
+impl Default for SyscallHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod export {
     use crate::{core::worker::Worker, utility::notnull::notnull_mut_debug};
 

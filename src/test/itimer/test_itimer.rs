@@ -374,20 +374,14 @@ fn main() -> anyhow::Result<()> {
         // Must be last.
         // Validate proper cleanup for a timer that's still running when the
         // process exits.
-        ShadowTest::new("leave_running", test_leave_running, all_envs.clone()),
+        ShadowTest::new("leave_running", test_leave_running, all_envs),
     ];
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnvironment::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnvironment::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnvironment::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

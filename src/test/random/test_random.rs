@@ -34,16 +34,10 @@ fn main() -> Result<(), String> {
         ),
     ];
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow))
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc))
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -73,9 +67,9 @@ fn check_randomness(fracs: &[f64]) -> Result<(), String> {
     }
 
     if fail {
-        return Err("failed to get random values across entire range".to_string());
+        Err("failed to get random values across entire range".to_string())
     } else {
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -112,7 +106,7 @@ fn test_rand() -> Result<(), String> {
         let random_value = unsafe { libc::rand() };
 
         #[allow(clippy::absurd_extreme_comparisons)]
-        if random_value < 0 || random_value > libc::RAND_MAX {
+        if !(0..=libc::RAND_MAX).contains(&random_value) {
             return Err("error: rand returned bytes outside of expected range".to_string());
         }
 

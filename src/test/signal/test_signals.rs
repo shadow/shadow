@@ -44,7 +44,7 @@ struct Record {
 // to be async-signal-safe.
 fn signal_channel() -> &'static SignalSafeChannel<Record> {
     static INSTANCE: OnceCell<SignalSafeChannel<Record>> = OnceCell::new();
-    INSTANCE.get_or_init(|| SignalSafeChannel::new())
+    INSTANCE.get_or_init(SignalSafeChannel::new)
 }
 
 // Signal handler used throughout. Tests read from `signal_channel` to validate
@@ -122,14 +122,11 @@ fn test_raise(
 
             raise_fn(signal);
 
-            match handler {
-                signal::SigHandler::SigIgn => {
-                    // Should be ignored.
-                    assert_eq!(signal_channel().recv(), None);
-                    continue;
-                }
-                _ => (),
-            };
+            if handler == &signal::SigHandler::SigIgn {
+                // Should be ignored.
+                assert_eq!(signal_channel().recv(), None);
+                continue;
+            }
 
             // Exactly one signal should have been delivered, synchronously.
             let record = signal_channel().recv().unwrap();
@@ -697,7 +694,7 @@ unsafe impl Send for SigaltstackRecord {}
 // to be async-signal-safe.
 fn sigaltstack_channel() -> &'static SignalSafeChannel<SigaltstackRecord> {
     static INSTANCE: OnceCell<SignalSafeChannel<SigaltstackRecord>> = OnceCell::new();
-    INSTANCE.get_or_init(|| SignalSafeChannel::new())
+    INSTANCE.get_or_init(SignalSafeChannel::new)
 }
 
 extern "C" fn sigaltstack_action(
@@ -980,7 +977,7 @@ extern "C" fn recover_from_hardware_error(
     panic!("Unreachable");
 }
 
-fn test_hardware_error_signal<F: FnOnce() -> ()>(
+fn test_hardware_error_signal<F: FnOnce()>(
     sig: signal::Signal,
     setcontext_and_raise_err: F,
 ) -> Result<(), Box<dyn Error>> {
@@ -1080,7 +1077,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new(
             "raise",
-            &|| {
+            || {
                 test_raise(
                     &|s| signal::raise(s).unwrap(),
                     // The documentation for `raise` is ambiguous whether the signal is
@@ -1094,7 +1091,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ),
         ShadowTest::new(
             "raise via kill",
-            &|| {
+            || {
                 test_raise(
                     &|s| signal::kill(unistd::getpid(), s).unwrap(),
                     Some(SignalCode::SI_USER),
@@ -1104,7 +1101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ),
         ShadowTest::new(
             "raise via tkill",
-            &|| {
+            || {
                 test_raise(
                     &|s| tkill(unistd::gettid(), s).unwrap(),
                     Some(SignalCode::SI_TKILL),
@@ -1114,7 +1111,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ),
         ShadowTest::new(
             "raise via tgkill",
-            &|| {
+            || {
                 test_raise(
                     &|s| tgkill(unistd::getpid(), unistd::gettid(), s).unwrap(),
                     Some(SignalCode::SI_TKILL),
@@ -1192,21 +1189,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "hardware error signals",
             test_hardware_error_signals,
-            all_envs.clone(),
+            all_envs,
         ),
     ];
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

@@ -337,7 +337,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_ref<'a, T: Pod + Debug>(&'a self, ptr: TypedPluginPtr<T>) -> Option<&[T]> {
+    fn mapped_ref<T: Pod + Debug>(&self, ptr: TypedPluginPtr<T>) -> Option<&[T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No mutable refs to process memory exist by preconditions of
         // MemoryManager::new + we have a reference.
@@ -347,7 +347,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_mut<'a, T: Pod + Debug>(&'a mut self, ptr: TypedPluginPtr<T>) -> Option<&mut [T]> {
+    fn mapped_mut<T: Pod + Debug>(&mut self, ptr: TypedPluginPtr<T>) -> Option<&mut [T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No other refs to process memory exist by preconditions of
         // MemoryManager::new + we have an exclusive reference.
@@ -356,10 +356,10 @@ impl MemoryManager {
 
     /// Returns a reference to the given memory, copying to a local buffer if
     /// the memory isn't mapped into Shadow.
-    pub fn memory_ref<'a, T: Pod + Debug>(
-        &'a self,
+    pub fn memory_ref<T: Pod + Debug>(
+        &self,
         ptr: TypedPluginPtr<T>,
-    ) -> Result<ProcessMemoryRef<'a, T>, Errno> {
+    ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
         if let Some(mref) = self.mapped_ref(ptr) {
             Ok(ProcessMemoryRef::new_mapped(mref))
         } else {
@@ -396,7 +396,7 @@ impl MemoryManager {
     /// Creates a std::io::Read accessor for the specified plugin memory. Useful
     /// for handing off the ability to read process memory to non-Shadow APIs,
     /// without copying it to local memory first.
-    pub fn reader<'a>(&'a self, ptr: TypedPluginPtr<u8>) -> MemoryReaderCursor<'a> {
+    pub fn reader(&self, ptr: TypedPluginPtr<u8>) -> MemoryReaderCursor<'_> {
         MemoryReaderCursor {
             memory_manager: self,
             ptr,
@@ -415,7 +415,6 @@ impl MemoryManager {
         assert_eq!(ptr.len(), N);
 
         // SAFETY: any values are valid for Pod.
-        // UNSAFETY: this is actually UB: https://rust-lang.github.io/rust-clippy/master/#uninit_assumed_init
         #[allow(clippy::uninit_assumed_init)]
         let mut res: [T; N] = unsafe { MaybeUninit::uninit().assume_init() };
         self.copy_from_ptr(&mut res, ptr)?;
@@ -477,10 +476,10 @@ impl MemoryManager {
     /// Returns a mutable reference to the given memory. If the memory isn't
     /// mapped into Shadow, copies the data to a local buffer, which is written
     /// back into the process if and when the reference is flushed.
-    pub fn memory_ref_mut<'a, T: Pod + Debug>(
-        &'a mut self,
+    pub fn memory_ref_mut<T: Pod + Debug>(
+        &mut self,
         ptr: TypedPluginPtr<T>,
-    ) -> Result<ProcessMemoryRefMut<'a, T>, Errno> {
+    ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
         // Work around a limitation of the borrow checker by getting this
         // immutable borrow of self out of the way before we do a mutable
         // borrow.
@@ -506,10 +505,10 @@ impl MemoryManager {
     // overwrites the data.
     // TODO: return ProcessMemoryRefMut<MaybeUninit<T>> instead.
     #[inline(always)]
-    pub fn memory_ref_mut_uninit<'a, T: Pod + Debug>(
-        &'a mut self,
+    pub fn memory_ref_mut_uninit<T: Pod + Debug>(
+        &mut self,
         ptr: TypedPluginPtr<T>,
-    ) -> Result<ProcessMemoryRefMut<'a, T>, Errno> {
+    ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
         // Work around a limitation of the borrow checker by getting this
         // immutable borrow of self out of the way before we do a mutable
         // borrow.
@@ -576,7 +575,7 @@ impl MemoryManager {
     }
 
     /// Create a write accessor for the specified plugin memory.
-    pub fn writer<'a>(&'a mut self, ptr: TypedPluginPtr<u8>) -> MemoryWriterCursor<'a> {
+    pub fn writer(&mut self, ptr: TypedPluginPtr<u8>) -> MemoryWriterCursor<'_> {
         MemoryWriterCursor {
             memory_manager: self,
             ptr,
@@ -814,20 +813,20 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeRef<'a>(memory_ref: *mut ProcessMemoryRef<'a, u8>) {
+    pub unsafe extern "C" fn memorymanager_freeRef(memory_ref: *mut ProcessMemoryRef<'_, u8>) {
         unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) };
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagerref_ptr<'a>(
-        memory_ref: *const ProcessMemoryRef<'a, u8>,
+    pub unsafe extern "C" fn memorymanagerref_ptr(
+        memory_ref: *const ProcessMemoryRef<'_, u8>,
     ) -> *const c_void {
         unsafe { memory_ref.as_ref() }.unwrap().as_ptr() as *const c_void
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagerref_sizeof<'a>(
-        memory_ref: *const ProcessMemoryRef<'a, u8>,
+    pub unsafe extern "C" fn memorymanagerref_sizeof(
+        memory_ref: *const ProcessMemoryRef<'_, u8>,
     ) -> libc::size_t {
         unsafe { memory_ref.as_ref() }.unwrap().len()
     }
@@ -842,7 +841,7 @@ mod export {
     ) -> *mut ProcessMemoryRef<'a, u8> {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
         let plugin_src: PluginPtr = plugin_src.into();
-        let memory_ref = memory_manager.memory_ref(TypedPluginPtr::new::<u8>(plugin_src.into(), n));
+        let memory_ref = memory_manager.memory_ref(TypedPluginPtr::new::<u8>(plugin_src, n));
         match memory_ref {
             Ok(mr) => Box::into_raw(Box::new(mr)),
             Err(e) => {
@@ -871,7 +870,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_readString<'a>(
+    pub unsafe extern "C" fn memorymanager_readString(
         memory_manager: *const MemoryManager,
         ptr: c::PluginPtr,
         strbuf: *mut libc::c_char,
@@ -968,23 +967,23 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagermut_ptr<'a>(
-        memory_ref: *mut ProcessMemoryRefMut<'a, u8>,
+    pub unsafe extern "C" fn memorymanagermut_ptr(
+        memory_ref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> *mut c_void {
         unsafe { memory_ref.as_ref() }.unwrap().as_ptr() as *mut c_void
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagermut_sizeof<'a>(
-        memory_ref: *mut ProcessMemoryRefMut<'a, u8>,
+    pub unsafe extern "C" fn memorymanagermut_sizeof(
+        memory_ref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> libc::size_t {
         unsafe { memory_ref.as_ref() }.unwrap().len()
     }
 
     /// Write-back any previously returned writable memory, and free the writer.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeMutRefWithFlush<'a>(
-        mref: *mut ProcessMemoryRefMut<'a, u8>,
+    pub unsafe extern "C" fn memorymanager_freeMutRefWithFlush(
+        mref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> i32 {
         let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
         // No way to safely recover here if the flush fails.
@@ -999,8 +998,8 @@ mod export {
 
     /// Write-back any previously returned writable memory, and free the writer.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeMutRefWithoutFlush<'a>(
-        mref: *mut ProcessMemoryRefMut<'a, u8>,
+    pub unsafe extern "C" fn memorymanager_freeMutRefWithoutFlush(
+        mref: *mut ProcessMemoryRefMut<'_, u8>,
     ) {
         let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
         // No way to safely recover here if the flush fails.

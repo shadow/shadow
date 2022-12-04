@@ -19,7 +19,7 @@ pub const SS_AUTODISARM: i32 = 1 << 31;
 ///
 /// This is analagous to, but typically smaller than, libc's sigset_t.
 #[repr(C)]
-#[derive(Copy, Clone, Eq, PartialEq, Debug, VirtualAddressSpaceIndependent)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
 pub struct shd_kernel_sigset_t {
     val: u64,
 }
@@ -55,12 +55,6 @@ impl shd_kernel_sigset_t {
 
     pub fn add(&mut self, sig: Signal) {
         *self |= shd_kernel_sigset_t::from(sig);
-    }
-}
-
-impl Default for shd_kernel_sigset_t {
-    fn default() -> Self {
-        Self { val: 0 }
     }
 }
 

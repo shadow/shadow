@@ -5,7 +5,7 @@ use nix::unistd::Pid;
 
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
-use crate::host::syscall::format::{FmtOptions, StraceFmtMode};
+use crate::host::syscall::format::FmtOptions;
 
 use super::memory_manager::MemoryManager;
 use super::timer::Timer;
@@ -118,8 +118,7 @@ impl Process {
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        StraceFmtMode::try_from(unsafe { cshadow::process_straceLoggingMode(self.cprocess) })
-            .unwrap()
+        unsafe { cshadow::process_straceLoggingMode(self.cprocess) }
             .into()
     }
 

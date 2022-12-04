@@ -344,8 +344,8 @@ fn work_loop(
         fn drop(&mut self) {
             start_next_thread(
                 self.current_processor_idx,
-                &self.shared_state,
-                &self.logical_processors,
+                self.shared_state,
+                self.logical_processors,
             );
         }
     }

@@ -43,3 +43,9 @@ impl PerfTimer {
         e
     }
 }
+
+impl Default for PerfTimer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

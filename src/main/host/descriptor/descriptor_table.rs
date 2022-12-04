@@ -133,11 +133,17 @@ impl DescriptorTable {
     }
 
     /// Remove and return all descriptors.
-    pub fn remove_all<'a>(&mut self) -> impl Iterator<Item = Descriptor> {
+    pub fn remove_all(&mut self) -> impl Iterator<Item = Descriptor> {
         // reset the descriptor table
         let old_self = std::mem::replace(self, Self::new());
         // return the old descriptors
         old_self.descriptors.into_values()
+    }
+}
+
+impl Default for DescriptorTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

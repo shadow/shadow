@@ -25,16 +25,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -236,7 +230,7 @@ fn test_invalid_sock_type() -> Result<(), String> {
     let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
     assert!(fd >= 0);
 
-    let args = ListenArguments { fd: fd, backlog: 0 };
+    let args = ListenArguments { fd, backlog: 0 };
 
     test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, Some(libc::EOPNOTSUPP)))
 }
@@ -255,7 +249,7 @@ fn test_zero_backlog(
         bind_fd(fd, address);
     }
 
-    let args = ListenArguments { fd: fd, backlog: 0 };
+    let args = ListenArguments { fd, backlog: 0 };
 
     let expected_errno = match (domain, sock_type, bind) {
         (libc::AF_INET, libc::SOCK_STREAM, _) => None,
@@ -283,7 +277,7 @@ fn test_negative_backlog(
     }
 
     let args = ListenArguments {
-        fd: fd,
+        fd,
         backlog: -1,
     };
 
@@ -309,7 +303,7 @@ fn test_negative_backlog_connect(
     let (bind_address, bind_len) = socket_utils::autobind_helper(fd, domain);
 
     let args = ListenArguments {
-        fd: fd,
+        fd,
         backlog: -1,
     };
 
@@ -333,7 +327,7 @@ fn test_negative_backlog_connect(
             std::iter::repeat_with(|| unsafe { libc::socket(domain, sock_type, 0) })
                 .take(num_clients)
                 // make sure the fds are valid
-                .map(|x| (x >= 0).then(|| x))
+                .map(|x| (x >= 0).then_some(x))
                 .collect::<Option<_>>()
                 .unwrap();
 
@@ -366,7 +360,7 @@ fn test_large_backlog(
     }
 
     let args = ListenArguments {
-        fd: fd,
+        fd,
         backlog: libc::INT_MAX,
     };
 
@@ -396,11 +390,11 @@ fn test_listen_twice(
     }
 
     let args1 = ListenArguments {
-        fd: fd,
+        fd,
         backlog: 10,
     };
 
-    let args2 = ListenArguments { fd: fd, backlog: 0 };
+    let args2 = ListenArguments { fd, backlog: 0 };
 
     let expected_errno = match (domain, sock_type, bind) {
         (libc::AF_INET, libc::SOCK_STREAM, _) => None,
@@ -435,7 +429,7 @@ fn test_after_close(
     assert_eq!(rv, 0);
 
     let args = ListenArguments {
-        fd: fd,
+        fd,
         backlog: 100,
     };
 
@@ -453,7 +447,7 @@ fn test_listening_not_readable(
 
     socket_utils::autobind_helper(fd, domain);
 
-    let args = ListenArguments { fd: fd, backlog: 5 };
+    let args = ListenArguments { fd, backlog: 5 };
 
     test_utils::run_and_close_fds(&[fd], || {
         check_listen_call(&args, None)?;
@@ -479,7 +473,7 @@ fn test_listening_not_writable(
 
     socket_utils::autobind_helper(fd, domain);
 
-    let args = ListenArguments { fd: fd, backlog: 5 };
+    let args = ListenArguments { fd, backlog: 5 };
 
     test_utils::run_and_close_fds(&[fd], || {
         check_listen_call(&args, None)?;
@@ -514,7 +508,7 @@ fn test_backlog_size(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), 
                 // linux will support backlog+1 incoming connections
                 .take(*backlog as usize + 1)
                 // make sure the fds are valid
-                .map(|x| (x >= 0).then(|| x))
+                .map(|x| (x >= 0).then_some(x))
                 .collect::<Option<_>>()
                 .unwrap();
 
@@ -616,7 +610,10 @@ fn test_reduced_backlog(domain: libc::c_int, sock_type: libc::c_int) -> Result<(
 
     // the new backlog should be lower than the number of clients we plan to connect;
     // a listening socket with a backlog 'x' can queue 'x+1' sockets
-    assert!(NEW_BACKLOG + 1 < NUM_CLIENTS);
+    #[allow(clippy::assertions_on_constants)]
+    {
+        assert!(NEW_BACKLOG + 1 < NUM_CLIENTS);
+    }
 
     // bind the server socket
     let (addr, addr_len) = test_utils::socket_utils::autobind_helper(server_fd, domain);
@@ -631,7 +628,7 @@ fn test_reduced_backlog(domain: libc::c_int, sock_type: libc::c_int) -> Result<(
             // linux will support backlog+1 incoming connections
             .take(NUM_CLIENTS)
             // make sure the fds are valid
-            .map(|x| (x >= 0).then(|| x))
+            .map(|x| (x >= 0).then_some(x))
             .collect::<Option<_>>()
             .unwrap();
 

@@ -84,6 +84,7 @@ impl<T> HostTreePointer<T> {
     /// SAFETY: Pointer must only be dereferenced while the configures Host is
     /// still active, in addition to the normal safety requirements for
     /// dereferencing a pointer.
+    #[allow(unused_must_use)]
     pub unsafe fn ptr(&self) -> *mut T {
         // While a caller might conceivably get the pointer without the lock
         // held but only dereference after it actually is held, better to be
@@ -149,6 +150,12 @@ impl<T> Magic<T> {
             // Ensure no other operations are performed on the object before validating.
             std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
         }
+    }
+}
+
+impl<T> Default for Magic<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

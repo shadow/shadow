@@ -30,16 +30,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -296,7 +290,7 @@ fn test_invalid_sock_type(accept_fn: AcceptFn) -> Result<(), String> {
     assert!(fd >= 0);
 
     let mut args = AcceptArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: None,
         flags: 0,
@@ -324,7 +318,7 @@ fn test_non_listening_fd(
     assert!(fd >= 0);
 
     let mut args = AcceptArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: None,
         flags: accept_flag,
@@ -713,7 +707,7 @@ fn test_after_close(
 
     // accept() may mutate addr and addr_len
     let mut args = AcceptArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: None,
         flags: accept_flag,
@@ -1036,9 +1030,8 @@ fn check_accept_call(
     };
 
     let errno = test_utils::get_errno();
-    let fd;
 
-    match expected_errno {
+    let fd = match expected_errno {
         // if we expect the accept() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
@@ -1053,7 +1046,7 @@ fn check_accept_call(
                     test_utils::get_errno_message(errno)
                 ));
             }
-            fd = None;
+            None
         }
         // if no error is expected (rv should be non-negative)
         None => {
@@ -1064,9 +1057,9 @@ fn check_accept_call(
                     test_utils::get_errno_message(errno)
                 ));
             }
-            fd = Some(rv);
+            Some(rv)
         }
-    }
+    };
 
     Ok(fd)
 }

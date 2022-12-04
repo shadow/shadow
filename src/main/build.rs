@@ -74,7 +74,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         .write_to_file("../../build/src/main/bindings/c/bindings.h");
 
     cbindgen::Builder::new()
-        .with_crate(crate_dir.clone())
+        .with_crate(crate_dir)
         .with_config(cbindgen::Config {
             include_guard: Some("main_opaque_bindings_h".into()),
             no_includes: true,
@@ -83,7 +83,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 item_types: vec![cbindgen::ItemType::OpaqueItems, cbindgen::ItemType::Enums],
                 ..base_config.export.clone()
             },
-            ..base_config.clone()
+            ..base_config
         })
         .generate()
         .expect("Unable to generate bindings")
@@ -324,7 +324,7 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
 fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common =
-        shadow_build_common::ShadowBuildCommon::new(&std::path::Path::new("../.."), Some(deps));
+        shadow_build_common::ShadowBuildCommon::new(std::path::Path::new("../.."), Some(deps));
 
     // The C bindings should be generated first since cbindgen doesn't require
     // the Rust code to be valid, whereas bindgen does require the C code to be

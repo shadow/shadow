@@ -170,7 +170,7 @@ impl Drop for Attr {
 // Undefined behavior if called on an already initialized pthread_attr_t,
 // without first calling attr_destroy
 fn attr_init(ptr: *mut libc::pthread_attr_t) -> Result<(), String> {
-    if ptr == std::ptr::null_mut() {
+    if ptr.is_null() {
         Err("null pthread_mutex_t pointer".into())
     } else if unsafe { libc::pthread_attr_init(ptr) } < 0 {
         Err("pthread_attr_init failed".into())
@@ -181,7 +181,7 @@ fn attr_init(ptr: *mut libc::pthread_attr_t) -> Result<(), String> {
 
 // Destroy a pthread_attr_t
 fn attr_destroy(ptr: *mut libc::pthread_attr_t) {
-    if ptr != std::ptr::null_mut() {
+    if !ptr.is_null() {
         unsafe { libc::pthread_attr_destroy(ptr) };
     }
 }
@@ -193,7 +193,7 @@ fn attr_destroy(ptr: *mut libc::pthread_attr_t) {
 // Undefined behavior if called on an already initialized pthread_mutex_t,
 // without first calling mutex_destroy
 fn mutex_init(ptr: *mut libc::pthread_mutex_t) -> Result<(), String> {
-    if ptr == std::ptr::null_mut() {
+    if ptr.is_null() {
         Err("null pthread_mutex_t pointer".into())
     } else if unsafe { libc::pthread_mutex_init(ptr, std::ptr::null_mut()) } < 0 {
         Err("pthread_mutex_init failed".into())
@@ -204,7 +204,7 @@ fn mutex_init(ptr: *mut libc::pthread_mutex_t) -> Result<(), String> {
 
 // Destroy a pthread_mutex_t
 fn mutex_destroy(ptr: *mut libc::pthread_mutex_t) {
-    if ptr != std::ptr::null_mut() {
+    if !ptr.is_null() {
         unsafe { libc::pthread_mutex_destroy(ptr) };
     }
 }
@@ -216,7 +216,7 @@ fn mutex_destroy(ptr: *mut libc::pthread_mutex_t) {
 // Undefined behavior if called on an already initialized pthread_cond_t,
 // without first calling cond_destroy
 fn cond_init(ptr: *mut libc::pthread_cond_t) -> Result<(), String> {
-    if ptr == std::ptr::null_mut() {
+    if ptr.is_null() {
         Err("null pthread_cond_t pointer".into())
     } else if unsafe { libc::pthread_cond_init(ptr, std::ptr::null_mut()) } < 0 {
         Err("pthread_cond_init failed".into())
@@ -227,7 +227,7 @@ fn cond_init(ptr: *mut libc::pthread_cond_t) -> Result<(), String> {
 
 // Destroy a pthread_cond_t
 fn cond_destroy(ptr: *mut libc::pthread_cond_t) {
-    if ptr != std::ptr::null_mut() {
+    if !ptr.is_null() {
         unsafe { libc::pthread_cond_destroy(ptr) };
     }
 }
@@ -316,7 +316,7 @@ extern "C" fn thread_mutex_lock(data: *mut libc::c_void) -> *mut libc::c_void {
 
     let ms = data as *mut _ as *mut MuxSum;
 
-    if ms == std::ptr::null_mut() {
+    if ms.is_null() {
         rv = ThreadRetVal::NullThreadArg;
         return rv as u32 as *mut libc::c_void;
     }
@@ -389,7 +389,7 @@ fn test_mutex_lock() -> Result<(), String> {
 extern "C" fn thread_mutex_trylock(mx: *mut libc::c_void) -> *mut libc::c_void {
     let mut rv = ThreadRetVal::Success;
 
-    if mx == std::ptr::null_mut() {
+    if mx.is_null() {
         rv = ThreadRetVal::NullThreadArg;
         return rv as u32 as *mut libc::c_void;
     }
@@ -406,10 +406,8 @@ extern "C" fn thread_mutex_trylock(mx: *mut libc::c_void) -> *mut libc::c_void {
         unsafe { (*muxes).num_locked += 1 };
 
         let num_not_locked = unsafe { (*muxes).num_not_locked };
-        if num_not_locked == 0 && NUM_THREADS != 1 {
-            if unsafe { libc::pthread_cond_wait((*muxes).cond_ptr(), (*muxes).mux2_ptr()) } < 0 {
-                rv = ThreadRetVal::CondWaitFailed;
-            }
+        if num_not_locked == 0 && NUM_THREADS != 1 &&  unsafe { libc::pthread_cond_wait((*muxes).cond_ptr(), (*muxes).mux2_ptr()) } < 0 {
+            rv = ThreadRetVal::CondWaitFailed;
         }
 
         if unsafe { libc::pthread_mutex_unlock((*muxes).mux2_ptr()) } < 0 {
@@ -512,17 +510,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     ];
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
 
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

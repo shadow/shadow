@@ -20,7 +20,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 type NetGraphError = Box<dyn Error + Send + Sync + 'static>;
 
 /// A graph node.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ShadowNode {
     pub id: u32,
     pub bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
@@ -418,6 +418,12 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
             },
             std::net::IpAddr::V6(_) => unimplemented!(),
         }
+    }
+}
+
+impl<T: Copy + Eq + Hash + std::fmt::Display> Default for IpAssignment<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

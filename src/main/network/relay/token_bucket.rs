@@ -169,21 +169,21 @@ mod tests {
     #[test]
     fn test_new_invalid_args() {
         let now = mock_time_millis(1000);
-        assert!(TokenBucket::new_inner(0, 1, SimulationTime::from_nanos(1), now.clone()).is_none());
-        assert!(TokenBucket::new_inner(1, 0, SimulationTime::from_nanos(1), now.clone()).is_none());
+        assert!(TokenBucket::new_inner(0, 1, SimulationTime::from_nanos(1), now).is_none());
+        assert!(TokenBucket::new_inner(1, 0, SimulationTime::from_nanos(1), now).is_none());
         assert!(TokenBucket::new_inner(1, 1, SimulationTime::ZERO, now).is_none());
     }
 
     #[test]
     fn test_new_valid_args() {
         let now = mock_time_millis(1000);
-        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_nanos(1), now.clone()).is_some());
+        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_nanos(1), now).is_some());
         assert!(
-            TokenBucket::new_inner(1, 1, SimulationTime::from_millis(1), now.clone()).is_some()
+            TokenBucket::new_inner(1, 1, SimulationTime::from_millis(1), now).is_some()
         );
-        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_secs(1), now.clone()).is_some());
+        assert!(TokenBucket::new_inner(1, 1, SimulationTime::from_secs(1), now).is_some());
 
-        let tb = TokenBucket::new_inner(54321, 12345, SimulationTime::from_secs(1), now.clone())
+        let tb = TokenBucket::new_inner(54321, 12345, SimulationTime::from_secs(1), now)
             .unwrap();
         assert_eq!(tb.capacity, 54321);
         assert_eq!(tb.refill_increment, 12345);
@@ -197,7 +197,7 @@ mod tests {
         let increment = 10;
         let now = mock_time_millis(1000);
 
-        let mut tb = TokenBucket::new_inner(capacity, increment, interval, now.clone()).unwrap();
+        let mut tb = TokenBucket::new_inner(capacity, increment, interval, now).unwrap();
         assert_eq!(tb.balance, capacity);
 
         // Remove all tokens
@@ -219,7 +219,7 @@ mod tests {
     fn test_refill_after_multiple_intervals() {
         let now = mock_time_millis(1000);
         let mut tb =
-            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now.clone()).unwrap();
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now).unwrap();
 
         // Remove all tokens
         assert!(tb.conforming_remove_inner(100, &now).is_ok());
@@ -238,7 +238,7 @@ mod tests {
     fn test_capacity_limit() {
         let now = mock_time_millis(1000);
         let mut tb =
-            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now.clone()).unwrap();
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now).unwrap();
 
         // Remove all tokens
         assert!(tb.conforming_remove_inner(100, &now).is_ok());
@@ -258,7 +258,7 @@ mod tests {
     fn test_remove_error() {
         let now = mock_time_millis(1000);
         let mut tb =
-            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(123), now.clone()).unwrap();
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(123), now).unwrap();
 
         // This many tokens are not available
         let result = tb.conforming_remove_inner(1000, &now);

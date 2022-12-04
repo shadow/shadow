@@ -21,7 +21,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 }
 
 fn main() {
-    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), None);
+    let build_common = ShadowBuildCommon::new(Path::new("../../.."), None);
 
     run_bindgen(&build_common);
 

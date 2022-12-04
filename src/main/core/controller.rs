@@ -107,7 +107,7 @@ impl SimController for Controller<'_> {
         let new_end = std::cmp::min(new_end, self.end_time);
 
         let continue_running = new_start < new_end;
-        continue_running.then(|| (new_start, new_end))
+        continue_running.then_some((new_start, new_end))
     }
 }
 
@@ -125,8 +125,8 @@ impl std::fmt::Display for ShadowStatusBarState {
         let sim_end = self.end.duration_since(&EmulatedTime::SIMULATION_START);
         let frac = sim_current.as_millis() as f32 / sim_end.as_millis() as f32;
 
-        let sim_current = TimeParts::from_nanos(sim_current.as_nanos().into());
-        let sim_end = TimeParts::from_nanos(sim_end.as_nanos().into());
+        let sim_current = TimeParts::from_nanos(sim_current.as_nanos());
+        let sim_end = TimeParts::from_nanos(sim_end.as_nanos());
         let realtime = TimeParts::from_nanos(self.start.elapsed().as_nanos());
 
         write!(

@@ -377,6 +377,7 @@ impl Host {
         path.canonicalize().ok()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_application(
         &self,
         start_time: SimulationTime,
@@ -662,7 +663,7 @@ impl Host {
         assert!(self.processes.borrow().is_empty());
 
         // Deregistering localhost is a no-op, so we skip it.
-        let _ = Worker::with_dns(|dns| unsafe {
+        Worker::with_dns(|dns| unsafe {
             let dns = dns as *const cshadow::DNS;
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
         });
@@ -678,7 +679,7 @@ impl Host {
 
     pub fn free_all_applications(&self) {
         trace!("start freeing applications for host '{}'", self.name());
-        let processes = std::mem::replace(&mut *self.processes.borrow_mut(), BTreeMap::new());
+        let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, process) in processes.into_iter() {
             unsafe { cshadow::process_stop(process.ptr()) };
             unsafe { cshadow::process_unref(process.ptr()) };
@@ -1235,7 +1236,7 @@ mod export {
                 return thread;
             }
         }
-        return std::ptr::null_mut();
+        std::ptr::null_mut()
     }
 
     /// Returns host-specific state that's kept in memory shared with the shim(s).

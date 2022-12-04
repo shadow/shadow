@@ -82,7 +82,7 @@ impl Pipe {
         }
 
         // drop the event listener handle so that we stop receiving new events
-        self.buffer_event_handle.take().map(|h| h.stop_listening());
+        if let Some(h) = self.buffer_event_handle.take() { h.stop_listening() }
 
         // if acting as a writer, inform the buffer that there is one fewer writers
         if let Some(writer_handle) = self.writer_handle.take() {

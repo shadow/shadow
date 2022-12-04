@@ -45,7 +45,8 @@ mod sync {
                 u32::from(val),
                 std::ptr::null() as *const libc::timespec,
                 std::ptr::null_mut() as *mut u32,
-                032,
+                32, //TODO was 032: is it supposed to be octal? man futex suggest val3 is unused
+                    //for FUTEX_WAIT, so this should probably be set to zero?
             )
         })
     }
@@ -100,7 +101,8 @@ mod sync {
                 1,
                 std::ptr::null() as *const libc::timespec,
                 std::ptr::null_mut() as *mut u32,
-                032,
+                32, //TODO was 032: is it supposed to be octal? man futex suggest val3 is unused
+                    //for FUTEX_WAKE, so this should probably be set to zero?
             )
         })?;
         Ok(())
@@ -137,6 +139,7 @@ mod sync {
     pub struct MutPtr<T: ?Sized>(loom::cell::MutPtr<T>);
     #[cfg(loom)]
     impl<T: ?Sized> MutPtr<T> {
+        #[allow(clippy::mut_from_ref)]
         pub unsafe fn deref(&self) -> &mut T {
             unsafe { self.0.deref() }
         }
@@ -364,12 +367,11 @@ impl<T> SelfContainedMutex<T> {
             if current.lock_state == UNLOCKED {
                 // Try to take the lock.
                 let current_res = self.futex.compare_exchange(
-                    current.into(),
+                    current,
                     FutexWord {
                         lock_state: LOCKED,
                         num_sleepers: current.num_sleepers,
-                    }
-                    .into(),
+                    },
                     sync::Ordering::Acquire,
                     sync::Ordering::Relaxed,
                 );
@@ -538,7 +540,9 @@ impl<'a, T> Drop for SelfContainedMutexGuard<'a, T> {
         if let Some(mutex) = self.mutex {
             // We have to drop this pointer before unlocking when running
             // under loom, which could otherwise detect multiple mutable
-            // references to the underlying cell.
+            // references to the underlying cell. Under non loom, the drop
+            // has no effect.
+            #[allow(clippy::drop_non_drop)]
             drop(self.ptr.take());
             mutex.unlock();
         }

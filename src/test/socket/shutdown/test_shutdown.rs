@@ -20,16 +20,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -652,7 +646,7 @@ fn test_conn_reset(
             )?;
 
             // if it didn't return an error, make sure we successfully read the byte/message
-            if expected_errnos.len() == 0 {
+            if expected_errnos.is_empty() {
                 test_utils::result_assert_eq(rv, 1, "Unexpected return value when read()ing")?;
             }
         }
@@ -678,7 +672,7 @@ fn test_conn_reset(
             )?;
 
             // if it didn't return an error, we expect read() to signal EOF
-            if expected_errnos.len() == 0 {
+            if expected_errnos.is_empty() {
                 test_utils::result_assert_eq(
                     rv,
                     0,

@@ -24,6 +24,12 @@ impl LocalSimStats {
     }
 }
 
+impl Default for LocalSimStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Simulation statistics to be accessed by multiple threads.
 #[derive(Debug)]
 pub struct SharedSimStats {
@@ -58,6 +64,12 @@ impl SharedSimStats {
         *local_alloc_counts = Counter::new();
         *local_dealloc_counts = Counter::new();
         *local_syscall_counts = Counter::new();
+    }
+}
+
+impl Default for SharedSimStats {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -101,7 +113,7 @@ pub fn write_stats_to_file(
 ) -> anyhow::Result<()> {
     let stats = SimStatsForOutput::new(stats);
 
-    let file = std::fs::File::create(&filename)
+    let file = std::fs::File::create(filename)
         .with_context(|| format!("Failed to create file '{}'", filename.display()))?;
 
     serde_json::to_writer_pretty(file, &stats).with_context(|| {

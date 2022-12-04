@@ -19,16 +19,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -235,8 +229,7 @@ fn test_large_read_write() -> Result<(), String> {
             write_buf.push(random_value as u8)
         }
 
-        let mut read_buf = Vec::<u8>::with_capacity(write_buf.len());
-        read_buf.resize(read_buf.capacity(), 0);
+        let mut read_buf = vec![0u8; write_buf.len()];
 
         let mut bytes_written = 0;
         let mut bytes_read = 0;
