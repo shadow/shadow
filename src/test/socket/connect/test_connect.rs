@@ -603,6 +603,7 @@ fn test_double_connect(
     };
 
     // expected errno for the second connect() call
+    #[allow(clippy::if_same_then_else)]
     let expected_errno_2 = if sock_type == libc::SOCK_DGRAM {
         None
     } else if flag & libc::SOCK_NONBLOCK != 0 {

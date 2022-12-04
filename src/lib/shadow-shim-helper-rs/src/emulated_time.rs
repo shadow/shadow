@@ -48,9 +48,7 @@ impl EmulatedTime {
 
     /// Get the instance corresponding to `val` SimulationTime units since the Unix Epoch.
     pub const fn from_c_emutime(val: CEmulatedTime) -> Option<Self> {
-        if val == EMUTIME_INVALID {
-            None
-        } else if val > EMUTIME_MAX {
+        if val == EMUTIME_INVALID || val > EMUTIME_MAX {
             None
         } else {
             Some(Self(val))

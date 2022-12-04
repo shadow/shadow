@@ -119,6 +119,7 @@ mod sync {
     pub struct MutPtr<T: ?Sized>(*mut T);
     #[cfg(not(loom))]
     impl<T: ?Sized> MutPtr<T> {
+        #[allow(clippy::mut_from_ref)]
         pub unsafe fn deref(&self) -> &mut T {
             unsafe { &mut *self.0 }
         }

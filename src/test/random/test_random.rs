@@ -111,6 +111,7 @@ fn test_rand() -> Result<(), String> {
     for val in values.iter_mut() {
         let random_value = unsafe { libc::rand() };
 
+        #[allow(clippy::absurd_extreme_comparisons)]
         if random_value < 0 || random_value > libc::RAND_MAX {
             return Err("error: rand returned bytes outside of expected range".to_string());
         }

@@ -290,6 +290,7 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
         s.truncate(DISPLAY_LEN);
         let s: std::ffi::CString = s.into();
 
+        #[allow(clippy::absurd_extreme_comparisons)]
         if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
             write!(f, "{:?}...", s)
         } else {
