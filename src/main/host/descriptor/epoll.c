@@ -171,6 +171,7 @@ static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
 /* forward declaration */
 static void _epoll_fileStatusChanged(Epoll* epoll, const EpollKey* key);
 
+// Will take its own reference to the file object.
 static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
                                    EpollWatchObject object, const struct epoll_event* event,
                                    const Host* host) {
@@ -183,6 +184,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
      * (which is freed below in _epollwatch_free) */
     if (type == EWT_LEGACY_FILE) {
         legacyfile_ref(object.as_legacy_file);
+    } else if (type == EWT_GENERIC_FILE) {
+        object.as_file = file_cloneRef(object.as_file);
     }
 
     watch->id = ++epoll->watch_id_counter;
@@ -432,6 +435,7 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
+// Increases the reference count of the inner file.
 static void _getWatchObject(const Descriptor* descriptor, EpollWatchTypes* watchType,
                             EpollWatchObject* watchObject) {
     LegacyFile* legacyDescriptor = descriptor_asLegacyFile(descriptor);
@@ -439,6 +443,7 @@ static void _getWatchObject(const Descriptor* descriptor, EpollWatchTypes* watch
     /* if the descriptor is for a legacy file */
     if (legacyDescriptor != NULL) {
         *watchType = EWT_LEGACY_FILE;
+        legacyfile_ref(legacyDescriptor);
         watchObject->as_legacy_file = legacyDescriptor;
     } else {
         const File* file = descriptor_newRefFile(descriptor);
@@ -475,17 +480,20 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
         case EWT_GENERIC_FILE:
             key.objectPtr = file_getCanonicalHandle(watchObject.as_file);
             break;
-        default: utility_panic("unrecognized watch type"); return -ENOENT;
+        default: utility_panic("unrecognized watch type");
     }
 
     EpollWatch* watch = g_hash_table_lookup(epoll->watching, &key);
+
+    int rv = 0;
 
     switch (operation) {
         case EPOLL_CTL_ADD: {
             /* EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor
              * fd is already registered with this epoll instance. */
             if(watch) {
-                return -EEXIST;
+                rv = -EEXIST;
+                break;
             }
 
             /* start watching for status changes */
@@ -517,7 +525,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
         case EPOLL_CTL_MOD: {
             /* ENOENT op was EPOLL_CTL_MOD, and fd is not registered with this epoll instance */
             if(!watch) {
-                return -ENOENT;
+                rv = -ENOENT;
+                break;
             }
 
             MAGIC_ASSERT(watch);
@@ -538,7 +547,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
         case EPOLL_CTL_DEL: {
             /* ENOENT op was EPOLL_CTL_DEL, and fd is not registered with this epoll instance */
             if(!watch) {
-                return -ENOENT;
+                rv = -ENOENT;
+                break;
             }
 
             MAGIC_ASSERT(watch);
@@ -567,7 +577,17 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
         }
     }
 
-    return 0;
+    switch (watchType) {
+        case EWT_LEGACY_FILE:
+            legacyfile_unref(watchObject.as_legacy_file);
+            break;
+        case EWT_GENERIC_FILE:
+            file_drop(watchObject.as_file);
+            break;
+        default: utility_panic("unrecognized watch type");
+    }
+
+    return rv;
 }
 
 guint epoll_getNumReadyEvents(Epoll* epoll) {
