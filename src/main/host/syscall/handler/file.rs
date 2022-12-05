@@ -9,22 +9,12 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* pathname */ *const libc::c_char,
                   /* flags */ nix::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
     pub fn open(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        SyscallResult::from(unsafe {
-            cshadow::syscallhandler_open(
-                ctx.thread.csyscallhandler(),
-                args as *const cshadow::SysCallArgs,
-            )
-        })
+        Self::legacy_syscall(cshadow::syscallhandler_open, ctx, args)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* dirfd */ libc::c_int, /* pathname */ *const libc::c_char,
                   /* flags */ nix::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
     pub fn openat(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        SyscallResult::from(unsafe {
-            cshadow::syscallhandler_openat(
-                ctx.thread.csyscallhandler(),
-                args as *const cshadow::SysCallArgs,
-            )
-        })
+        Self::legacy_syscall(cshadow::syscallhandler_openat, ctx, args)
     }
 }

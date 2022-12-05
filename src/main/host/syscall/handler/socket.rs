@@ -36,13 +36,7 @@ impl SyscallHandler {
 
         // if it's not a unix socket, use the C syscall handler instead
         if domain != libc::AF_UNIX {
-            return unsafe {
-                c::syscallhandler_socket(
-                    ctx.thread.csyscallhandler(),
-                    args as *const c::SysCallArgs,
-                )
-                .into()
-            };
+            return Self::legacy_syscall(c::syscallhandler_socket, ctx, args);
         }
 
         let mut file_flags = FileStatus::empty();
@@ -108,13 +102,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_bind(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_bind, ctx, args);
             }
         };
 
@@ -160,13 +148,7 @@ impl SyscallHandler {
                 CompatFile::New(file) => file.clone(),
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
-                    return unsafe {
-                        c::syscallhandler_sendto(
-                            ctx.thread.csyscallhandler(),
-                            args as *const SysCallArgs,
-                        )
-                        .into()
-                    };
+                    return Self::legacy_syscall(c::syscallhandler_sendto, ctx, args);
                 }
             },
         };
@@ -273,13 +255,7 @@ impl SyscallHandler {
                 CompatFile::New(file) => file.clone(),
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
-                    return unsafe {
-                        c::syscallhandler_recvfrom(
-                            ctx.thread.csyscallhandler(),
-                            args as *const SysCallArgs,
-                        )
-                        .into()
-                    };
+                    return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx, args);
                 }
             },
         };
@@ -376,13 +352,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_getsockname(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_getsockname, ctx, args);
             }
         };
 
@@ -423,13 +393,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_getpeername(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_getpeername, ctx, args);
             }
         };
 
@@ -467,13 +431,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_listen(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_listen, ctx, args);
             }
         };
 
@@ -510,13 +468,7 @@ impl SyscallHandler {
                 CompatFile::New(file) => file.clone(),
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
-                    return unsafe {
-                        c::syscallhandler_accept(
-                            ctx.thread.csyscallhandler(),
-                            args as *const SysCallArgs,
-                        )
-                        .into()
-                    };
+                    return Self::legacy_syscall(c::syscallhandler_accept, ctx, args);
                 }
             },
         };
@@ -549,13 +501,7 @@ impl SyscallHandler {
                 CompatFile::New(file) => file.clone(),
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
-                    return unsafe {
-                        c::syscallhandler_accept4(
-                            ctx.thread.csyscallhandler(),
-                            args as *const SysCallArgs,
-                        )
-                        .into()
-                    };
+                    return Self::legacy_syscall(c::syscallhandler_accept4, ctx, args);
                 }
             },
         };
@@ -662,13 +608,7 @@ impl SyscallHandler {
                 CompatFile::New(file) => file.clone(),
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
-                    return unsafe {
-                        c::syscallhandler_connect(
-                            ctx.thread.csyscallhandler(),
-                            args as *const SysCallArgs,
-                        )
-                        .into()
-                    };
+                    return Self::legacy_syscall(c::syscallhandler_connect, ctx, args);
                 }
             },
         };
@@ -704,13 +644,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_shutdown(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_shutdown, ctx, args);
             }
         };
 
@@ -838,13 +772,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_getsockopt(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx, args);
             }
         };
 
@@ -874,13 +802,7 @@ impl SyscallHandler {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
-                return unsafe {
-                    c::syscallhandler_setsockopt(
-                        ctx.thread.csyscallhandler(),
-                        args as *const c::SysCallArgs,
-                    )
-                    .into()
-                }
+                return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx, args);
             }
         };
 
