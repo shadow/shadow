@@ -41,13 +41,9 @@ impl SyscallHandler {
         let file = match desc.file() {
             CompatFile::New(file) => file,
             // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => unsafe {
-                return c::syscallhandler_ioctl(
-                    ctx.thread.csyscallhandler(),
-                    args as *const SysCallArgs,
-                )
-                .into();
-            },
+            CompatFile::Legacy(_) => {
+                return Self::legacy_syscall(c::syscallhandler_ioctl, ctx, args);
+            }
         };
 
         let file = file.inner_file().clone();

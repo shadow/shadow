@@ -19,6 +19,9 @@ mod sysinfo;
 mod time;
 mod unistd;
 
+type LegacySyscallFn =
+    unsafe extern "C" fn(*mut c::SysCallHandler, *const c::SysCallArgs) -> c::SysCallReturn;
+
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler
 }
@@ -109,6 +112,15 @@ impl SyscallHandler {
             Some(desc) => Ok(desc),
             None => Err(nix::errno::Errno::EBADF),
         }
+    }
+
+    /// Run a legacy C syscall handler.
+    fn legacy_syscall(
+        syscall: LegacySyscallFn,
+        ctx: &mut ThreadContext,
+        args: &SysCallArgs,
+    ) -> SyscallResult {
+        unsafe { syscall(ctx.thread.csyscallhandler(), args as *const _) }.into()
     }
 }
 

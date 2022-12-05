@@ -21,12 +21,7 @@ impl SyscallHandler {
 
         // helper function to run the C syscall handler
         let legacy_syscall_fn = |ctx: &mut ThreadContext, args: &SysCallArgs| {
-            SyscallResult::from(unsafe {
-                cshadow::syscallhandler_fcntl(
-                    ctx.thread.csyscallhandler(),
-                    args as *const cshadow::SysCallArgs,
-                )
-            })
+            Self::legacy_syscall(cshadow::syscallhandler_fcntl, ctx, args)
         };
 
         // get the descriptor, or return early if it doesn't exist
