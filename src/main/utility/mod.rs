@@ -84,7 +84,6 @@ impl<T> HostTreePointer<T> {
     /// SAFETY: Pointer must only be dereferenced while the configures Host is
     /// still active, in addition to the normal safety requirements for
     /// dereferencing a pointer.
-    #[allow(unused_must_use)]
     pub unsafe fn ptr(&self) -> *mut T {
         // While a caller might conceivably get the pointer without the lock
         // held but only dereference after it actually is held, better to be

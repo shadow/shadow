@@ -55,7 +55,6 @@ impl Packet {
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet
     /// object.
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
         assert!(!c_ptr.is_null());
         Self {

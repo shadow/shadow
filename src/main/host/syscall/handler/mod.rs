@@ -24,6 +24,7 @@ pub struct SyscallHandler {
 }
 
 impl SyscallHandler {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> SyscallHandler {
         SyscallHandler {}
     }
@@ -109,12 +110,6 @@ impl SyscallHandler {
             Some(desc) => Ok(desc),
             None => Err(nix::errno::Errno::EBADF),
         }
-    }
-}
-
-impl Default for SyscallHandler {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

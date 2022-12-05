@@ -43,12 +43,10 @@ impl NetworkInterface {
         }
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn associate(&self, socket_ptr: *const c::CompatSocket) {
         unsafe { c::networkinterface_associate(self.c_ptr.ptr(), socket_ptr) };
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn disassociate(&self, socket_ptr: *const c::CompatSocket) {
         unsafe { c::networkinterface_disassociate(self.c_ptr.ptr(), socket_ptr) };
     }

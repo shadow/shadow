@@ -6,6 +6,11 @@
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::enum_variant_names)]
+#![allow(clippy::too_many_arguments)]
+
+
 /// cbindgen:ignore
 pub mod cshadow {
     #![allow(non_upper_case_globals)]

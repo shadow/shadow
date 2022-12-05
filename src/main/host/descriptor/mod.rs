@@ -657,7 +657,6 @@ impl Descriptor {
         Box::into_raw(descriptor)
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn from_raw(descriptor: *mut Self) -> Option<Box<Self>> {
         if descriptor.is_null() {
             return None;

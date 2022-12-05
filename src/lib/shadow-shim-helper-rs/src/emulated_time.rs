@@ -31,7 +31,6 @@ pub const EMUTIME_MIN: CEmulatedTime = 0u64;
 // cbindgen won't do the constant propagation here. We use the static assertion below
 // to ensure this definition is equal to the intended canonical definition.
 pub const EMUTIME_SIMULATION_START: CEmulatedTime = 946684800u64 * 1_000_000_000u64;
-#[allow(clippy::assertions_on_constants)]
 const _: () =
     assert!(EMUTIME_SIMULATION_START == SIMULATION_START_SEC * simulation_time::SIMTIME_ONE_SECOND);
 

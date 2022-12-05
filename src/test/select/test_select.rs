@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#![allow(clippy::too_many_arguments)]
 
 use std::mem;
 use std::time::Duration;
@@ -221,7 +222,6 @@ fn get_selectable_fd() -> Result<libc::c_int, String> {
     Ok(fd)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn test_select_args_common(
     select_fn: SelectFn,
     readfds_null: bool,
@@ -380,7 +380,6 @@ fn test_select_args_common(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn get_select_args_test(
     select_fn: SelectFn,
     readfds_null: bool,

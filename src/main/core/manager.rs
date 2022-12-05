@@ -408,7 +408,7 @@ impl<'a> Manager<'a> {
                                 };
                                 *next_event_time = [*next_event_time, host_next_event_time]
                                     .into_iter()
-                                    .flatten()
+                                    .flatten() // filter out None
                                     .reduce(std::cmp::min);
                             });
 
@@ -416,7 +416,7 @@ impl<'a> Manager<'a> {
 
                             *next_event_time = [*next_event_time, packet_next_event_time]
                                 .into_iter()
-                                .flatten()
+                                .flatten() // filter out None
                                 .reduce(std::cmp::min);
                         },
                     );

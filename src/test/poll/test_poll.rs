@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#![allow(clippy::too_many_arguments)]
 
 use std::cmp::Ordering;
 
@@ -169,7 +170,6 @@ fn get_pollable_fd() -> Result<libc::c_int, String> {
     Ok(fd)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn test_poll_args_common(
     poll_fn: PollFn,
     pfd_null: bool,
@@ -280,7 +280,6 @@ fn test_poll_args_common(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn get_poll_args_test(
     poll_fn: PollFn,
     pfd_null: bool,

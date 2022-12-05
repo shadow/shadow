@@ -377,7 +377,6 @@ impl Host {
         path.canonicalize().ok()
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn add_application(
         &self,
         start_time: SimulationTime,

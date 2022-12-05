@@ -337,7 +337,6 @@ impl ConnOrientedListening {
 /// The current protocol state of the unix socket. An `Option` is required for each variant so that
 /// the inner state object can be removed, transformed into a new state, and then re-added as a
 /// different variant.
-#[allow(clippy::enum_variant_names)]
 enum ProtocolState {
     ConnOrientedInitial(Option<ConnOrientedInitial>),
     ConnOrientedListening(Option<ConnOrientedListening>),

@@ -415,6 +415,7 @@ impl MemoryManager {
         assert_eq!(ptr.len(), N);
 
         // SAFETY: any values are valid for Pod.
+        // see https://github.com/shadow/shadow/issues/2555
         #[allow(clippy::uninit_assumed_init)]
         let mut res: [T; N] = unsafe { MaybeUninit::uninit().assume_init() };
         self.copy_from_ptr(&mut res, ptr)?;
@@ -590,7 +591,6 @@ impl MemoryManager {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn do_mmap(
         &mut self,
         thread: &mut ThreadRef,

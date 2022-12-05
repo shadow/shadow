@@ -487,7 +487,6 @@ impl MemoryMapper {
     /// the plugin's address space, and in some cases remaps the given region into the
     /// MemoryManager's shared memory file for fast access. Currently only private anonymous
     /// mappings are remapped.
-    #[allow(clippy::too_many_arguments)]
     pub fn handle_mmap_result(
         &mut self,
         thread: &mut ThreadRef,

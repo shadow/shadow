@@ -22,6 +22,7 @@ pub struct Router {
 }
 
 impl Router {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Router {
         Router {
             magic: Magic::new(),
@@ -69,12 +70,6 @@ impl Router {
         // TODO: move _worker_runDeliverPacketTask to here.
         // Rob: Coming in future PR.
         todo!()
-    }
-}
-
-impl Default for Router {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

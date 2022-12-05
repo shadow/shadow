@@ -173,7 +173,6 @@ impl SyscallHandler {
         self.sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn sendto_helper(
         &self,
         ctx: &mut ThreadContext,
@@ -286,7 +285,6 @@ impl SyscallHandler {
         self.recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn recvfrom_helper(
         &self,
         ctx: &mut ThreadContext,

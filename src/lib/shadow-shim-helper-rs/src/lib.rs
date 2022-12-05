@@ -1,5 +1,7 @@
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
+// we do some static assersions to make sure C bindings are okay.
+#![allow(clippy::assertions_on_constants)]
 
 use vasi::VirtualAddressSpaceIndependent;
 
