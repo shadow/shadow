@@ -1,6 +1,5 @@
+use std::net::SocketAddrV4;
 use std::path::PathBuf;
-
-use libc::{in_addr_t, in_port_t};
 
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow as c;
@@ -51,17 +50,14 @@ impl NetworkInterface {
         unsafe { c::networkinterface_disassociate(self.c_ptr.ptr(), socket_ptr) };
     }
 
-    pub fn is_associated(
-        &self,
-        protocol: c::ProtocolType,
-        port: in_port_t,
-        peer_addr: in_addr_t,
-        peer_port: in_port_t,
-    ) -> bool {
-        unsafe {
-            c::networkinterface_isAssociated(self.c_ptr.ptr(), protocol, port, peer_addr, peer_port)
-                != 0
-        }
+    pub fn is_associated(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer.ip()).to_be();
+        let peer_port = peer.port().to_be();
+
+        (unsafe {
+            c::networkinterface_isAssociated(self.c_ptr.ptr(), protocol, port, peer_ip, peer_port)
+        }) != 0
     }
 
     pub fn start_refilling_token_buckets(&self, bw_down_kibps: u64, bw_up_kibps: u64) {

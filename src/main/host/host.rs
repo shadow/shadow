@@ -787,27 +787,23 @@ impl Host {
         src: SocketAddrV4,
         dst: SocketAddrV4,
     ) -> bool {
-        let port = src.port().to_be();
-        let peer_addr = u32::from(*dst.ip()).to_be();
-        let peer_port = dst.port().to_be();
-
         if src.ip().is_unspecified() {
             // Check that all interfaces are available.
-            !self.localhost.borrow().as_ref().unwrap().is_associated(
-                protocol_type,
-                port,
-                peer_addr,
-                peer_port,
-            ) && !self.internet.borrow().as_ref().unwrap().is_associated(
-                protocol_type,
-                port,
-                peer_addr,
-                peer_port,
-            )
+            !self
+                .localhost
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .is_associated(protocol_type, src.port(), dst)
+                && !self.internet.borrow().as_ref().unwrap().is_associated(
+                    protocol_type,
+                    src.port(),
+                    dst,
+                )
         } else {
             // The interface is not available if it does not exist.
             match self.interface(*src.ip()) {
-                Some(i) => !i.is_associated(protocol_type, port, peer_addr, peer_port),
+                Some(i) => !i.is_associated(protocol_type, src.port(), dst),
                 None => false,
             }
         }
