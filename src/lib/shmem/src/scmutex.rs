@@ -45,8 +45,7 @@ mod sync {
                 u32::from(val),
                 std::ptr::null() as *const libc::timespec,
                 std::ptr::null_mut() as *mut u32,
-                32, //TODO was 032: is it supposed to be octal? man futex suggest val3 is unused
-                    //for FUTEX_WAIT, so this should probably be set to zero?
+                0u32,
             )
         })
     }
@@ -101,8 +100,7 @@ mod sync {
                 1,
                 std::ptr::null() as *const libc::timespec,
                 std::ptr::null_mut() as *mut u32,
-                32, //TODO was 032: is it supposed to be octal? man futex suggest val3 is unused
-                    //for FUTEX_WAKE, so this should probably be set to zero?
+                0u32,
             )
         })?;
         Ok(())

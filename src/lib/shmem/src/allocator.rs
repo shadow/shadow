@@ -1,4 +1,4 @@
-use std::{fmt, marker::PhantomData, ops::Deref};
+use std::{marker::PhantomData, ops::Deref};
 
 use once_cell::sync::OnceCell;
 use vasi::VirtualAddressSpaceIndependent;
@@ -182,7 +182,19 @@ impl ShMemBlockSerialized {
     // Keep in sync with macro of same name in shmem_allocator.h.
     const SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN: usize = 21 + 21 + 21 + 256 + 1;
 
-    pub fn from_string(s: &str) -> Option<Self> {
+    pub fn encode_to_string(&self) -> String {
+        let mut buf = Vec::new();
+        buf.resize(Self::SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN, 0i8);
+        unsafe { c_bindings::shmemblockserialized_toString(&self.internal, buf.as_mut_ptr()) };
+        let buf = buf
+            .iter()
+            .take_while(|c| **c != 0)
+            .map(|c| *c as u8)
+            .collect();
+        String::from_utf8(buf).unwrap()
+    }
+
+    pub fn decode_from_string(s: &str) -> Option<Self> {
         let mut err: bool = false;
         let mut buf: Vec<i8> = s.as_bytes().iter().map(|b| *b as i8).collect();
         // Null terminate.
@@ -197,21 +209,6 @@ impl ShMemBlockSerialized {
         } else {
             Some(res)
         }
-    }
-}
-
-impl fmt::Display for ShMemBlockSerialized {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut buf = Vec::new();
-        buf.resize(Self::SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN, 0i8);
-        unsafe { c_bindings::shmemblockserialized_toString(&self.internal, buf.as_mut_ptr()) };
-        let buf: Vec<_> = buf
-            .iter()
-            .take_while(|c| **c != 0)
-            .map(|c| *c as u8)
-            .collect();
-
-        f.write_str(std::str::from_utf8(&buf).unwrap())
     }
 }
 
@@ -308,8 +305,9 @@ mod tests {
         let original_block: ShMemBlock<T> = Allocator::global().alloc(x);
         {
             let serialized_block = original_block.serialize();
-            let serialized_str = serialized_block.to_string();
-            let serialized_block = ShMemBlockSerialized::from_string(&serialized_str).unwrap();
+            let serialized_str = serialized_block.encode_to_string();
+            let serialized_block =
+                ShMemBlockSerialized::decode_from_string(&serialized_str).unwrap();
             let block = unsafe { Serializer::global().deserialize::<T>(&serialized_block) };
             assert_eq!(*block, 42);
         }

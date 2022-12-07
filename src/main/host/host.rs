@@ -392,7 +392,7 @@ impl Host {
             // using its metadata to create a serialized pointer to it.
             let block = unsafe { &*self.shim_shmem.get() };
             let mut envvar = String::from("SHADOW_SHM_HOST_BLK=");
-            envvar.push_str(&block.serialize().to_string());
+            envvar.push_str(&block.serialize().encode_to_string());
             envv.push(CString::new(envvar).unwrap());
         }
 
