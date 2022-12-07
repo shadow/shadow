@@ -9,9 +9,6 @@ mod codel_queue;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
-// temporary re-export of the C wrapper function
-pub use export::router_enqueue;
-
 /// A router assists with moving packets between hosts across the simulated
 /// network.
 pub struct Router {
@@ -76,11 +73,6 @@ impl Router {
 mod export {
     use super::*;
 
-    #[no_mangle]
-    pub extern "C" fn router_new() -> *mut Router {
-        Box::into_raw(Box::new(Router::new()))
-    }
-
     /// # Safety
     ///
     /// The returned `c::Packet` must not live longer than the next time the
@@ -104,33 +96,6 @@ mod export {
         match router.pop() {
             Some(packet) => packet.into_inner(),
             None => std::ptr::null_mut(),
-        }
-    }
-
-    /// # Safety
-    ///
-    /// Ownership of the `c::Packet` passed to this function transfers to the router. The caller
-    /// should not use the packet after calling this function, and should not call `packet_unref`.
-    #[no_mangle]
-    pub unsafe extern "C" fn router_enqueue(
-        router_ptr: *mut Router,
-        packet_ptr: *mut c::Packet,
-    ) -> bool {
-        let router = unsafe { router_ptr.as_mut() }.unwrap();
-        let packet = Packet::from_raw(packet_ptr);
-        router.push(packet)
-    }
-
-    /// # Safety
-    ///
-    /// `router_ptr` must be safely dereferenceable. It is consumed.
-    #[no_mangle]
-    pub extern "C" fn router_free(router_ptr: *mut Router) {
-        if router_ptr.is_null() {
-            return;
-        }
-        unsafe {
-            drop(Box::from_raw(router_ptr));
         }
     }
 }
