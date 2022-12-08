@@ -33,11 +33,18 @@ env:
 
 jobs:
   build_shadow:
+    env:
+      # used by cargo
+      RUSTC_WRAPPER: sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_DIR: /home/runner/.cache/sccache
+      # SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
     runs-on: ubuntu-20.04
     container:
       # Should match env.CONTAINER.
       image: ubuntu:22.04
     steps:
+      - run: apt-get update
       - name: Checkout shadow
         uses: actions/checkout@v3
         with:
@@ -48,31 +55,59 @@ jobs:
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Get month
-        id: get-month
-        run: |
-          echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
       - name: Install dependencies
         run: |
           cd shadow
           . ci/container_scripts/install_deps.sh
           . ci/container_scripts/install_extra_deps.sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Get month
+        id: get-month
+        run: |
+          echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
       - name: Restore cargo registry cache
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          # invalidate the cache once per month
-          key: cargo-registry-${{ steps.get-month.outputs.month }}
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ steps.get-month.outputs.month }}-${{ hashFiles('shadow/src/Cargo.lock') }}
           restore-keys: |
-            cargo-registry-
+            cargo-registry-${{ steps.get-month.outputs.month }}
+      - name: Get rust version
+        id: get-rustv
+        run: |
+          echo rustv=\"$(rustc --version)\" >> $GITHUB_OUTPUT
+      - name: Restore sccache cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ hashFiles('shadow/src/Cargo.lock') }}
+          restore-keys: |
+                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-
+      - name: Install sccache
+        env:
+          LINK: https://github.com/mozilla/sccache/releases/download
+          SCCACHE_VERSION: v0.3.1
+        run: |
+          apt-get install -y curl
+          SCCACHE_FILE=sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl
+          mkdir -p $HOME/.local/bin
+          curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+          mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+          chmod +x $HOME/.local/bin/sccache
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Start sccache server
+        run: sccache --start-server
       - name: Build shadow
         run: |
           cd shadow
           . ci/container_scripts/build_and_install.sh
+      - name: Print sccache stats
+        run: sccache --show-stats
+      - name: Stop sccache server
+        run: sccache --stop-server || true
       # We need to wrap in a tarball to preserve permissions.
       # We're grabbing the source directory and a lot of the build
       # directory here, since there are scripts and generated

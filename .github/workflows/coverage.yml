@@ -76,13 +76,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          # invalidate the cache once per month
-          key: cargo-registry-${{ steps.get-month.outputs.month }}
+            ~/.cargo/registry
+            ~/.cargo/git
+          # key *and* restore-keys include the month to force a monthly reset instead
+          # of unbounded growth.
+          key: cargo-registry-${{ steps.get-month.outputs.month }}-${{ hashFiles('src/Cargo.lock') }}
           restore-keys: |
-            cargo-registry-
+            cargo-registry-${{ steps.get-month.outputs.month }}
 
       - name: Build
         run: . ci/container_scripts/build_and_install.sh
