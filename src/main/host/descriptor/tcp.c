@@ -681,6 +681,19 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
             /* user can no longer use socket */
             legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE);
 
+            bool disassociate = true;
+
+            in_addr_t sock_ip = 0;
+            in_port_t sock_port = 0;
+            if (!legacysocket_getSocketName(&tcp->super, &sock_ip, &sock_port)) {
+                /* socket isn't bound, so don't try to disassociate */
+                disassociate = false;
+            }
+
+            in_addr_t peer_ip = 0;
+            in_port_t peer_port = 0;
+            legacysocket_getPeerName(&tcp->super, &peer_ip, &peer_port);
+
             /*
              * servers have to wait for all children to close.
              * children need to notify their parents when closing.
@@ -697,15 +710,18 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
 
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
-                        /* this will unbind from the network interface and free socket */
-                        CompatSocket compat_socket = compatsocket_fromLegacySocket(&parent->super);
-                        host_disassociateInterface(host, &compat_socket);
+                        if (disassociate) {
+                            /* this will unbind from the network interface and free socket */
+                            host_disassociateInterface(
+                                host, PTCP, sock_ip, sock_port, peer_ip, peer_port);
+                        }
                     }
                 }
 
-                /* this will unbind from the network interface and free socket */
-                CompatSocket compat_socket = compatsocket_fromLegacySocket(&tcp->super);
-                host_disassociateInterface(host, &compat_socket);
+                if (disassociate) {
+                    /* TODO: we should only be disassociating non-child sockets */
+                    host_disassociateInterface(host, PTCP, sock_ip, sock_port, peer_ip, peer_port);
+                }
             }
             break;
         }

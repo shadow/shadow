@@ -279,9 +279,18 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
     legacysocket_setPeerName(socket_desc, peerAddr, peerPort);
     legacysocket_setSocketName(socket_desc, addr, port);
 
+    /* we associate/disassociate UDP sockets without a peer since if the peer is changed with
+     * `connect()`, we wouldn't be able to disassociate again later. See
+     * https://github.com/shadow/shadow/issues/2590 */
+    if (ptype == PUDP) {
+        peerAddr = 0;
+        peerPort = 0;
+    }
+
     /* set associations */
     CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-    host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, addr);
+    host_associateInterface(
+        _syscallhandler_getHost(sys), &compat_socket, ptype, addr, port, peerAddr, peerPort);
     return 0;
 }
 
@@ -745,7 +754,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
             /* set netiface->socket associations */
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-            host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, bindAddr);
+            host_associateInterface(
+                _syscallhandler_getHost(sys), &compat_socket, ptype, bindAddr, bindPort, 0, 0);
         }
     } else if (legacyfile_getType(desc) == DT_TCPSOCKET) {
         errcode = tcp_getConnectionError((TCP*)socket_desc);

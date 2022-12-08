@@ -145,25 +145,6 @@ static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
     return g_string_free(strBuffer, FALSE);
 }
 
-static gchar* _networkinterface_socketToAssociationKey(NetworkInterface* interface, const CompatSocket* socket) {
-    MAGIC_ASSERT(interface);
-
-    ProtocolType type = compatsocket_getProtocol(socket);
-
-    /* address and port are in network byte order */
-    in_addr_t peerIP = 0;
-    in_port_t peerPort = 0;
-    compatsocket_getPeerName(socket, &peerIP, &peerPort);
-
-    /* address and port are in network byte order */
-    in_addr_t boundIP = 0;
-    in_port_t boundPort = 0;
-    compatsocket_getSocketName(socket, &boundIP, &boundPort);
-
-    gchar* key = _networkinterface_getAssociationKey(interface, type, boundPort, peerIP, peerPort);
-    return key;
-}
-
 /* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
@@ -189,10 +170,12 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType
     return isFound;
 }
 
-void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
+                                ProtocolType type, in_port_t port, in_addr_t peerIP,
+                                in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
-    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
+    gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerIP, peerPort);
 
     /* make sure there is no collision */
     utility_debugAssert(!g_hash_table_contains(interface->boundSockets, key));
@@ -201,17 +184,28 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     CompatSocket newSocketRef = compatsocket_refAs(socket);
 
     /* insert to our storage, key is now owned by table */
-    g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
+    bool key_did_not_exist = g_hash_table_replace(
+        interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
+
+    utility_debugAssert(key_did_not_exist);
 
     trace("associated socket key %s", key);
 }
 
-void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_disassociate(NetworkInterface* interface, ProtocolType type, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
-    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
+    gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerIP, peerPort);
 
     /* we will no longer receive packets for this port, this unrefs descriptor */
+    /* TODO: Return an error if the disassociation fails. Generally the
+     * calling code should only try to disassociate a socket if it thinks that the
+     * socket is actually associated with this interface, and if it's not, then
+     * it's probably an error. But TCP sockets will disassociate all sockets
+     * (including ones that have never been associated) and will try to
+     * disassociate the same socket multiple times, so we can't just add an assert
+     * here. */
     g_hash_table_remove(interface->boundSockets, key);
 
     trace("disassociated socket key %s", key);

@@ -1,6 +1,5 @@
+use std::net::SocketAddrV4;
 use std::path::PathBuf;
-
-use libc::{in_addr_t, in_port_t};
 
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow as c;
@@ -43,25 +42,53 @@ impl NetworkInterface {
         }
     }
 
-    pub fn associate(&self, socket_ptr: *const c::CompatSocket) {
-        unsafe { c::networkinterface_associate(self.c_ptr.ptr(), socket_ptr) };
-    }
-
-    pub fn disassociate(&self, socket_ptr: *const c::CompatSocket) {
-        unsafe { c::networkinterface_disassociate(self.c_ptr.ptr(), socket_ptr) };
-    }
-
-    pub fn is_associated(
+    pub fn associate(
         &self,
-        protocol: c::ProtocolType,
-        port: in_port_t,
-        peer_addr: in_addr_t,
-        peer_port: in_port_t,
-    ) -> bool {
+        socket_ptr: *const c::CompatSocket,
+        protocol_type: c::ProtocolType,
+        port: u16,
+        peer_addr: SocketAddrV4,
+    ) {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer_addr.ip()).to_be();
+        let peer_port = peer_addr.port().to_be();
+
         unsafe {
-            c::networkinterface_isAssociated(self.c_ptr.ptr(), protocol, port, peer_addr, peer_port)
-                != 0
-        }
+            c::networkinterface_associate(
+                self.c_ptr.ptr(),
+                socket_ptr,
+                protocol_type,
+                port,
+                peer_ip,
+                peer_port,
+            )
+        };
+    }
+
+    pub fn disassociate(&self, protocol_type: c::ProtocolType, port: u16, peer_addr: SocketAddrV4) {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer_addr.ip()).to_be();
+        let peer_port = peer_addr.port().to_be();
+
+        unsafe {
+            c::networkinterface_disassociate(
+                self.c_ptr.ptr(),
+                protocol_type,
+                port,
+                peer_ip,
+                peer_port,
+            )
+        };
+    }
+
+    pub fn is_associated(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer.ip()).to_be();
+        let peer_port = peer.port().to_be();
+
+        (unsafe {
+            c::networkinterface_isAssociated(self.c_ptr.ptr(), protocol, port, peer_ip, peer_port)
+        }) != 0
     }
 
     pub fn start_refilling_token_buckets(&self, bw_down_kibps: u64, bw_up_kibps: u64) {
