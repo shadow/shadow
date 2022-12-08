@@ -243,11 +243,8 @@ static void _udp_close(LegacyFile* descriptor, const Host* host) {
         return;
     }
 
-    in_addr_t peer_ip = 0;
-    in_port_t peer_port = 0;
-    legacysocket_getPeerName(&udp->super, &peer_ip, &peer_port);
-
-    host_disassociateInterface(host, PUDP, sock_ip, sock_port, peer_ip, peer_port);
+    /* we associate/disassociate UDP sockets without a peer */
+    host_disassociateInterface(host, PUDP, sock_ip, sock_port, 0, 0);
 }
 
 gint udp_shutdown(UDP* udp, gint how) {
