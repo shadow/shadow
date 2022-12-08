@@ -1179,14 +1179,17 @@ mod export {
         peer_port: in_port_t,
     ) -> in_port_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let Some(port) = hostrc.get_random_free_port(
-            protocol_type,
-            Ipv4Addr::from(u32::from_be(interface_ip)),
-            SocketAddrV4::new(Ipv4Addr::from(u32::from_be(peer_ip)),
-            u16::from_be(peer_port))) else {
-                return 0;
-            };
-        port.to_be()
+
+        let interface_ip = Ipv4Addr::from(u32::from_be(interface_ip));
+        let peer_addr = SocketAddrV4::new(
+            Ipv4Addr::from(u32::from_be(peer_ip)),
+            u16::from_be(peer_port),
+        );
+
+        hostrc
+            .get_random_free_port(protocol_type, interface_ip, peer_addr)
+            .unwrap_or(0)
+            .to_be()
     }
 
     /// Returns a pointer to the Host's FutexTable.
