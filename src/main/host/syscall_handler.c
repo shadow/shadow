@@ -90,7 +90,6 @@ SysCallHandler* syscallhandler_new(const Host* host, Process* process, Thread* t
 
     MAGIC_INIT(sys);
 
-    process_ref(process);
     thread_ref(thread);
 
     worker_count_allocation(SysCallHandler);
@@ -120,9 +119,6 @@ static void _syscallhandler_free(SysCallHandler* sys) {
         counter_free(sys->syscall_counter);
     }
 
-    if (sys->process) {
-        process_unref(sys->process);
-    }
     if (sys->thread) {
         thread_unref(sys->thread);
     }
