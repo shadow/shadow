@@ -184,7 +184,10 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     CompatSocket newSocketRef = compatsocket_refAs(socket);
 
     /* insert to our storage, key is now owned by table */
-    g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
+    bool key_did_not_exist = g_hash_table_replace(
+        interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
+
+    utility_debugAssert(key_did_not_exist);
 
     trace("associated socket key %s", key);
 }
@@ -196,6 +199,13 @@ void networkinterface_disassociate(NetworkInterface* interface, ProtocolType typ
     gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerIP, peerPort);
 
     /* we will no longer receive packets for this port, this unrefs descriptor */
+    /* TODO: Return an error if the disassociation fails. Generally the
+     * calling code should only try to disassociate a socket if it thinks that the
+     * socket is actually associated with this interface, and if it's not, then
+     * it's probably an error. But TCP sockets will disassociate all sockets
+     * (including ones that have never been associated) and will try to
+     * disassociate the same socket multiple times, so we can't just add an assert
+     * here. */
     g_hash_table_remove(interface->boundSockets, key);
 
     trace("disassociated socket key %s", key);
