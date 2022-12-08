@@ -13,7 +13,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     };
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     cbindgen::Builder::new()
-        .with_crate(crate_dir.clone())
+        .with_crate(crate_dir)
         .with_config(config)
         .generate()
         .expect("Unable to generate bindings")
@@ -34,7 +34,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 }
 
 fn main() {
-    let build_common = ShadowBuildCommon::new(&Path::new("../../.."), None);
+    let build_common = ShadowBuildCommon::new(Path::new("../../.."), None);
 
     // The C bindings should be generated first since cbindgen doesn't require
     // the Rust code to be valid, whereas bindgen does require the C code to be

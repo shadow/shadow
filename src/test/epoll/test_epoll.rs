@@ -126,20 +126,14 @@ fn main() -> anyhow::Result<()> {
     let all_envs = set![TestEnvironment::Libc, TestEnvironment::Shadow];
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![
         ShadowTest::new("threads-edge", test_threads_edge, all_envs.clone()),
-        ShadowTest::new("threads-level", test_threads_level, all_envs.clone()),
+        ShadowTest::new("threads-level", test_threads_level, all_envs),
     ];
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnvironment::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnvironment::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnvironment::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

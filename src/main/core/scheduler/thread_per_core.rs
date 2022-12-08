@@ -81,7 +81,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
         // we can't swap after the below `pool.scope()` due to lifetime restrictions, so we need to
         // do it before instead
         if self.hosts_need_swap {
-            debug_assert!(self.thread_hosts.iter().all(|queue| queue.len() == 0));
+            debug_assert!(self.thread_hosts.iter().all(|queue| queue.is_empty()));
 
             std::mem::swap(&mut self.thread_hosts, &mut self.thread_hosts_processed);
             self.hosts_need_swap = false;
@@ -137,7 +137,7 @@ impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope
     ) {
         self.runner.run(move |i| {
             let mut host_iter = HostIter {
-                thread_hosts_from: &self.thread_hosts,
+                thread_hosts_from: self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
             };
@@ -160,7 +160,7 @@ impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope
             let this_elem = &data[i];
 
             let mut host_iter = HostIter {
-                thread_hosts_from: &self.thread_hosts,
+                thread_hosts_from: self.thread_hosts,
                 thread_hosts_to: &self.thread_hosts_processed[i],
                 this_thread_index: i,
             };
@@ -294,7 +294,7 @@ mod tests {
         let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
 
         let data = vec![0u32; sched.parallelism()];
-        let data: Vec<_> = data.into_iter().map(|x| std::sync::Mutex::new(x)).collect();
+        let data: Vec<_> = data.into_iter().map(std::sync::Mutex::new).collect();
 
         for _ in 0..3 {
             sched.scope(|s| {

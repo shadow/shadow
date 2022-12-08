@@ -134,10 +134,8 @@ impl<'a> Manager<'a> {
             .template_directory
             .flatten_ref()
             .map(|x| cwd.clone().join(x));
-        let data_path = cwd
-            .clone()
-            .join(config.general.data_directory.as_ref().unwrap());
-        let hosts_path = data_path.clone().join("hosts");
+        let data_path = cwd.join(config.general.data_directory.as_ref().unwrap());
+        let hosts_path = data_path.join("hosts");
 
         if let Some(template_path) = template_path {
             log::debug!(
@@ -179,7 +177,7 @@ impl<'a> Manager<'a> {
         }
 
         // save the processed config as yaml
-        let config_out_filename = data_path.clone().join("processed-config.yaml");
+        let config_out_filename = data_path.join("processed-config.yaml");
         let config_out_file = std::fs::File::create(&config_out_filename).with_context(|| {
             format!("Failed to create file '{}'", config_out_filename.display())
         })?;
@@ -267,7 +265,7 @@ impl<'a> Manager<'a> {
         // the configuration file's yaml format generally prevents duplicate hostnames, but using
         // the `quantity` field can lead to hosts with the same name
         let duplicate_hostnames = find_duplicates(hosts.iter().map(|x| x.name()));
-        if duplicate_hostnames.len() > 0 {
+        if !duplicate_hostnames.is_empty() {
             return Err(anyhow::anyhow!(
                 "Duplicate hostnames: {:?}",
                 duplicate_hostnames
@@ -307,7 +305,7 @@ impl<'a> Manager<'a> {
                 dns: unsafe { SyncSendPointer::new(dns) },
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
-                status_logger_state: status_logger_state.map(|x| Arc::clone(x)),
+                status_logger_state: status_logger_state.map(Arc::clone),
                 runahead: Runahead::new(
                     self.config.experimental.use_dynamic_runahead.unwrap(),
                     smallest_latency,
@@ -410,7 +408,7 @@ impl<'a> Manager<'a> {
                                 };
                                 *next_event_time = [*next_event_time, host_next_event_time]
                                     .into_iter()
-                                    .filter_map(std::convert::identity)
+                                    .flatten() // filter out None
                                     .reduce(std::cmp::min);
                             });
 
@@ -418,7 +416,7 @@ impl<'a> Manager<'a> {
 
                             *next_event_time = [*next_event_time, packet_next_event_time]
                                 .into_iter()
-                                .filter_map(std::convert::identity)
+                                .flatten() // filter out None
                                 .reduce(std::cmp::min);
                         },
                     );
@@ -618,7 +616,7 @@ impl<'a> Manager<'a> {
 
             let shim_log_level = host_info
                 .log_level
-                .unwrap_or(self.config.general.log_level.unwrap());
+                .unwrap_or_else(|| self.config.general.log_level.unwrap());
 
             let envv = self.generate_env_vars(&proc.env, shim_log_level);
             let envv: Vec<CString> = envv
@@ -694,15 +692,16 @@ impl<'a> Manager<'a> {
         }
 
         // scan the other env variables that were given in the shadow config file
-        for entry in user_env.split(";") {
+        for entry in user_env.split(';') {
             let (name, value) = entry
-                .split_once("=")
+                .split_once('=')
                 .map(|(name, value)| (name, Some(value)))
                 .unwrap_or((entry, None));
 
             // if it's not LD_PRELOAD, insert if there's no existing entry
             if name != "LD_PRELOAD" {
-                env.entry(name.into()).or_insert(value.map(|x| x.into()));
+                env.entry(name.into())
+                    .or_insert_with(|| value.map(|x| x.into()));
                 continue;
             }
 
@@ -724,7 +723,7 @@ impl<'a> Manager<'a> {
             let mut preload_string = OsString::new();
             for (x, path) in preload.iter().enumerate() {
                 if x > 0 {
-                    preload_string.push(&":");
+                    preload_string.push(":");
                 }
                 preload_string.push(path);
             }
@@ -828,20 +827,22 @@ impl<'a> Manager<'a> {
             nix::sys::resource::getrlimit(nix::sys::resource::Resource::RLIMIT_NOFILE)
                 .context("Failed to get the fd limit")?;
 
-        Ok((fd_count, u64::try_from(soft_limit).unwrap()))
+        Ok((fd_count, soft_limit))
     }
 
     /// Returns the number of bytes remaining.
     fn memory_remaining(&mut self) -> anyhow::Result<u64> {
         let page_size = nix::unistd::sysconf(nix::unistd::SysconfVar::PAGE_SIZE)
             .context("Failed to get the page size")?
-            .ok_or(anyhow::anyhow!("Failed to get the page size (no errno)"))?;
+            .ok_or_else(|| anyhow::anyhow!("Failed to get the page size (no errno)"))?;
 
         let avl_pages = nix::unistd::sysconf(nix::unistd::SysconfVar::_AVPHYS_PAGES)
             .context("Failed to get the number of available pages of physical memory")?
-            .ok_or(anyhow::anyhow!(
-                "Failed to get the number of available pages of physical memory (no errno)"
-            ))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Failed to get the number of available pages of physical memory (no errno)"
+                )
+            })?;
 
         let page_size: u64 = page_size.try_into().unwrap();
         let avl_pages: u64 = avl_pages.try_into().unwrap();

@@ -216,7 +216,7 @@ fn call_clock_gettime() -> Duration {
     }
     assert!(rv >= 0);
     // valid tv_nsec values are [0, 999999999], which fit in a u32
-    return Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32);
+    Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
 }
 
 fn syscall_clock_gettime() -> Duration {
@@ -230,5 +230,5 @@ fn syscall_clock_gettime() -> Duration {
     }
     assert!(rv >= 0);
     // valid tv_nsec values are [0, 999999999], which fit in a u32
-    return Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32);
+    Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
 }

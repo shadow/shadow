@@ -27,6 +27,7 @@ pub struct SyscallHandler {
 }
 
 impl SyscallHandler {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> SyscallHandler {
         SyscallHandler {}
     }

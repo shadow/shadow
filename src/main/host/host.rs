@@ -392,7 +392,7 @@ impl Host {
             // using its metadata to create a serialized pointer to it.
             let block = unsafe { &*self.shim_shmem.get() };
             let mut envvar = String::from("SHADOW_SHM_HOST_BLK=");
-            envvar.push_str(&block.serialize().to_string());
+            envvar.push_str(&block.serialize().encode_to_string());
             envv.push(CString::new(envvar).unwrap());
         }
 
@@ -662,7 +662,7 @@ impl Host {
         assert!(self.processes.borrow().is_empty());
 
         // Deregistering localhost is a no-op, so we skip it.
-        let _ = Worker::with_dns(|dns| unsafe {
+        Worker::with_dns(|dns| unsafe {
             let dns = dns as *const cshadow::DNS;
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
         });
@@ -678,7 +678,7 @@ impl Host {
 
     pub fn free_all_applications(&self) {
         trace!("start freeing applications for host '{}'", self.name());
-        let processes = std::mem::replace(&mut *self.processes.borrow_mut(), BTreeMap::new());
+        let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, process) in processes.into_iter() {
             unsafe { cshadow::process_stop(process.ptr()) };
             unsafe { cshadow::process_unref(process.ptr()) };
@@ -1235,7 +1235,7 @@ mod export {
                 return thread;
             }
         }
-        return std::ptr::null_mut();
+        std::ptr::null_mut()
     }
 
     /// Returns host-specific state that's kept in memory shared with the shim(s).

@@ -48,7 +48,7 @@ pub trait Prefix: Clone + Copy + Default + PartialEq + FromStr + Display + Debug
 }
 
 /// Common SI prefixes (including base-2 prefixes since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SiPrefix {
     Nano,
     Micro,
@@ -138,7 +138,7 @@ impl Prefix for SiPrefix {
 
 /// Common SI prefixes larger than the base unit (including base-2 prefixes
 /// since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SiPrefixUpper {
     Base,
     Kilo,
@@ -214,7 +214,7 @@ impl Prefix for SiPrefixUpper {
 /// Time units, which we pretend are prefixes for implementation simplicity. These
 /// contain both the prefix ("n", "u", "m") and the suffix ("sec", "min", "hr")
 /// and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimePrefix {
     Nano,
     Micro,
@@ -282,7 +282,7 @@ impl Prefix for TimePrefix {
 /// Time units larger than the base unit, which we pretend are prefixes for
 /// implementation simplicity. These really contain the unit suffix ("sec",
 /// "min", "hr") and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimePrefixUpper {
     Sec,
     Min,
@@ -537,7 +537,7 @@ pub trait Unit: Sized {
 
 /// An amount of time. Should only use the time prefix types ([`TimePrefix`] and
 /// [`TimePrefixUpper`]) with this type.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Time<T: Prefix> {
     value: u64,
     prefix: T,
@@ -560,7 +560,7 @@ impl From<Time<TimePrefixUpper>> for std::time::Duration {
 }
 
 /// A number of bytes.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bytes<T: Prefix> {
     pub value: u64,
     pub prefix: T,
@@ -569,7 +569,7 @@ pub struct Bytes<T: Prefix> {
 unit_impl!(Bytes, u64, ["B", "byte", "bytes"]);
 
 /// A throughput in bits-per-second.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitsPerSec<T: Prefix> {
     pub value: u64,
     pub prefix: T,

@@ -96,7 +96,7 @@ impl UnixSocket {
         Ok(Some(
             self.protocol_state
                 .bound_address()?
-                .unwrap_or_else(|| SockaddrUnix::new_unnamed()),
+                .unwrap_or_else(SockaddrUnix::new_unnamed),
         ))
     }
 
@@ -105,7 +105,7 @@ impl UnixSocket {
         Ok(Some(
             self.protocol_state
                 .peer_address()?
-                .unwrap_or_else(|| SockaddrUnix::new_unnamed()),
+                .unwrap_or_else(SockaddrUnix::new_unnamed),
         ))
     }
 
@@ -1200,7 +1200,7 @@ impl Protocol for ConnOrientedListening {
         let mut new_state = FileState::ACTIVE;
 
         // socket is readable if the queue is not empty
-        new_state.set(FileState::READABLE, self.queue.len() > 0);
+        new_state.set(FileState::READABLE, !self.queue.is_empty());
 
         // socket allows connections if the queue is not full
         new_state.set(FileState::SOCKET_ALLOWING_CONNECT, !self.queue_is_full());
@@ -1312,7 +1312,7 @@ impl Protocol for ConnOrientedListening {
 
         let new_child_state = ConnOrientedConnected {
             // use the parent's bind address
-            bound_addr: Some(self.bound_addr.clone()),
+            bound_addr: Some(self.bound_addr),
             peer_addr: from_address,
             peer: Arc::clone(peer),
             reader_handle,
@@ -1786,7 +1786,7 @@ impl UnixSocketCommon {
         rng: impl rand::Rng,
     ) -> Result<SockaddrUnix<libc::sockaddr_un>, SyscallError> {
         // get the unix address
-        let Some(addr) = addr.map(|x| x.as_unix()).flatten() else {
+        let Some(addr) = addr.and_then(|x| x.as_unix()) else {
             log::warn!(
                 "Attempted to bind unix socket to non-unix address {:?}",
                 addr
@@ -1864,7 +1864,7 @@ impl UnixSocketCommon {
 
         // either use the existing send buffer, or look up the send buffer from the address
         let peer = match peer {
-            Some(ref x) => Arc::clone(x),
+            Some(x) => Arc::clone(x),
             None => {
                 // look up the socket from the address name
                 let recv_socket =
@@ -1874,7 +1874,7 @@ impl UnixSocketCommon {
             }
         };
 
-        return Ok(peer);
+        Ok(peer)
     }
 
     pub fn sendto<R>(
@@ -1941,7 +1941,7 @@ impl UnixSocketCommon {
             }
             UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
                 send_buffer.write_packet(bytes, len, cb_queue)?;
-                len.try_into().unwrap()
+                len
             }
         };
 
@@ -2036,7 +2036,7 @@ fn backlog_to_queue_size(backlog: i32) -> u32 {
     let backlog = backlog as u32;
 
     // the linux '__sys_listen()' applies the somaxconn max to all protocols, including unix sockets
-    let queue_limit = std::cmp::min(backlog, c::SHADOW_SOMAXCONN.try_into().unwrap());
+    let queue_limit = std::cmp::min(backlog, c::SHADOW_SOMAXCONN);
 
     // linux uses a limit of one greater than the provided backlog (ex: a backlog value of 0 allows
     // for one incoming connection at a time)

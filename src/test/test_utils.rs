@@ -264,7 +264,7 @@ macro_rules! set {
 pub fn running_in_shadow() -> bool {
     // There is the same function in the C tests common code
     match std::env::var("SHADOW_SPAWNED") {
-        Ok(val) => val != "",
+        Ok(val) => !val.is_empty(),
         _ => false,
     }
 }
@@ -307,15 +307,10 @@ impl Interruptor {
         let tid = nix::unistd::gettid();
 
         let handle = thread::spawn(move || {
-            match receiver.recv_timeout(t) {
-                Ok(_) => {
-                    // Cancelled
-                    return;
-                }
-                Err(_) => {
-                    // Timed out.
-                }
-            };
+            if receiver.recv_timeout(t).is_ok() {
+                // Cancelled
+                return;
+            } // else Timed out.
             unsafe { libc::syscall(libc::SYS_tkill, tid.as_raw(), signal as i32) };
         });
 
@@ -327,16 +322,12 @@ impl Interruptor {
 
     /// Cancel the interruption.
     pub fn cancel(&mut self) {
-        match self.handle.take() {
-            Some(handle) => {
-                // Send a cancellation message. Ignore failure,
-                // which will happen if the thread has already exited,
-                // closing the receiver side of the channel.
-                self.cancellation_sender.send(()).ok();
-                handle.join().unwrap();
-            }
-            // Already cancelled
-            None => (),
+        if let Some(handle) = self.handle.take() {
+            // Send a cancellation message. Ignore failure,
+            // which will happen if the thread has already exited,
+            // closing the receiver side of the channel.
+            self.cancellation_sender.send(()).ok();
+            handle.join().unwrap();
         }
     }
 }

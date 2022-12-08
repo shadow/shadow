@@ -992,11 +992,11 @@ pub trait Flatten<T> {
 
 impl<T> Flatten<T> for Option<NullableOption<T>> {
     fn flatten(self) -> Option<T> {
-        self.map(|x| x.to_option()).flatten()
+        self.and_then(|x| x.to_option())
     }
 
     fn flatten_ref(&self) -> Option<&T> {
-        self.as_ref().map(|x| x.as_ref().to_option()).flatten()
+        self.as_ref().and_then(|x| x.as_ref().to_option())
     }
 }
 
@@ -1064,7 +1064,7 @@ fn generate_help_strs(
     let mut defaults = std::collections::HashMap::<String, String>::new();
     for (name, obj) in &schema.schema.object.as_ref().unwrap().properties {
         if let Some(meta) = obj.clone().into_object().metadata {
-            let description = meta.description.or(Some("".to_string())).unwrap();
+            let description = meta.description.unwrap_or_default();
             let space = if !description.is_empty() { " " } else { "" };
             match meta.default {
                 Some(default) => defaults.insert(

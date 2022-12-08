@@ -35,7 +35,7 @@ use super::work::event_queue::EventQueue;
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
 // global counters to be used when there is no worker active
-static SIM_STATS: Lazy<SharedSimStats> = Lazy::new(|| SharedSimStats::new());
+static SIM_STATS: Lazy<SharedSimStats> = Lazy::new(SharedSimStats::new);
 
 // thread-local global state
 std::thread_local! {
@@ -126,10 +126,7 @@ impl Worker {
     {
         Worker::with(|w| {
             let h = &*w.active_host.borrow();
-            match h {
-                Some(h) => Some(f(&*h)),
-                None => None,
-            }
+            h.as_ref().map(|h| f(h))
         })
         .flatten()
     }
@@ -195,7 +192,7 @@ impl Worker {
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
         let old = Worker::with(|w| w.active_thread_info.borrow_mut().take());
-        debug_assert!(!old.is_none());
+        debug_assert!(old.is_some());
     }
 
     /// Whether currently running on a live Worker.

@@ -74,16 +74,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -448,7 +442,7 @@ fn test_zero_len_buf(init_method: SocketInitMethod, sock_type: libc::c_int) -> R
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 0 bytes; no errors expected
-        simple_sendto_helper(fd_client, &vec![], &[], true)?;
+        simple_sendto_helper(fd_client, &[], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -460,16 +454,16 @@ fn test_zero_len_buf(init_method: SocketInitMethod, sock_type: libc::c_int) -> R
             libc::SOCK_DGRAM | libc::SOCK_SEQPACKET => vec![],
             _ => unimplemented!(),
         };
-        simple_recvfrom_helper(fd_server, &mut vec![], &e, true)?;
+        simple_recvfrom_helper(fd_server, &mut [], &e, true)?;
 
         // send >0 bytes; no errors expected
-        simple_sendto_helper(fd_client, &vec![1, 2, 3], &[], true)?;
+        simple_sendto_helper(fd_client, &[1, 2, 3], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
         // receive 0 bytes; no errors expected
-        simple_recvfrom_helper(fd_server, &mut vec![], &[], true)?;
+        simple_recvfrom_helper(fd_server, &mut [], &[], true)?;
 
         Ok(())
     })
@@ -562,22 +556,22 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
     test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         // try to read 10 bytes; an EAGAIN error expected
         assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
-        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], true)?;
+        simple_recvfrom_helper(fd_peer, &mut [0u8; 10], &[libc::EAGAIN], true)?;
 
         // send 10 bytes; no errors expected
         assert!(test_utils::is_writable(fd_client, 0).unwrap());
-        simple_sendto_helper(fd_client, &vec![1u8; 10], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8; 10], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
         // read 10 bytes into a 20 byte buffer; no errors expected
         assert!(test_utils::is_readable(fd_peer, 0).unwrap());
-        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 20], &[], false)?;
+        simple_recvfrom_helper(fd_peer, &mut [0u8; 20], &[], false)?;
 
         // try to read 10 bytes; an EAGAIN error expected
         assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
-        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], false)?;
+        simple_recvfrom_helper(fd_peer, &mut [0u8; 10], &[libc::EAGAIN], false)?;
 
         let mut send_hash = std::collections::hash_map::DefaultHasher::new();
         let mut recv_hash = std::collections::hash_map::DefaultHasher::new();
@@ -856,7 +850,7 @@ fn test_null_addr_len(
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 3 bytes; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8, 2, 3], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -890,7 +884,7 @@ fn test_null_both(
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 3 bytes; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8, 2, 3], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -944,7 +938,7 @@ fn test_nonnull_addr(
         buf: Some(&sendto_buf),
         flags: 0,
         addr: Some(addr),
-        addr_len: addr_len,
+        addr_len,
     };
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
@@ -1002,7 +996,7 @@ fn test_recv_addr(
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 3 bytes to the server; no error expected
-        simple_sendto_helper(fd_client, &vec![1, 2, 3], &[], true)?;
+        simple_sendto_helper(fd_client, &[1, 2, 3], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -1068,7 +1062,7 @@ fn test_after_peer_close_empty_buf(
 
         // read 3 bytes using a null sockaddr and a null sockaddr length
         // connection-oriented sockets will return EOF
-        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        let rv = simple_recvfrom_helper(fd_client, &mut [1u8, 2, 3], expected_errnos, false)?;
         if expected_errnos.is_empty() {
             // if there was no error, should have returned EOF
             assert_eq!(0, rv);
@@ -1084,7 +1078,7 @@ fn test_after_peer_close_empty_buf(
         };
 
         // send 3 bytes; unix sockets will return an error
-        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+        simple_sendto_helper(fd_client, &[1u8, 2, 3], expected_errnos, true)?;
 
         Ok(())
     })
@@ -1105,8 +1099,8 @@ fn test_after_peer_close_nonempty_buf(
     }
 
     // send 2 bytes in each direction
-    simple_sendto_helper(fd_client, &vec![1u8, 2], &[], true)?;
-    simple_sendto_helper(fd_peer, &vec![1u8, 2], &[], true)?;
+    simple_sendto_helper(fd_client, &[1u8, 2], &[], true)?;
+    simple_sendto_helper(fd_peer, &[1u8, 2], &[], true)?;
 
     nix::unistd::close(fd_peer).unwrap();
 
@@ -1121,7 +1115,7 @@ fn test_after_peer_close_nonempty_buf(
         };
 
         // read 3 bytes using a null sockaddr and a null sockaddr length
-        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        let rv = simple_recvfrom_helper(fd_client, &mut [1u8, 2, 3], expected_errnos, false)?;
         if expected_errnos.is_empty() {
             // if there was no error, should have returned EOF
             assert_eq!(2, rv);
@@ -1138,7 +1132,7 @@ fn test_after_peer_close_nonempty_buf(
         };
 
         // send 3 bytes; unix and tcp sockets will return an error
-        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+        simple_sendto_helper(fd_client, &[1u8, 2, 3], expected_errnos, true)?;
 
         Ok(())
     })
@@ -1169,7 +1163,7 @@ fn test_recvfrom_econnrefused_after_sendto(
         };
 
         // send 3 bytes; unix sockets will return an error
-        simple_sendto_helper(fd_client, &vec![1u8, 2, 3], expected_errnos, true)?;
+        simple_sendto_helper(fd_client, &[1u8, 2, 3], expected_errnos, true)?;
 
         let expected_errnos = match (init_method.domain(), sock_type) {
             // connectionless unix sockets
@@ -1183,7 +1177,7 @@ fn test_recvfrom_econnrefused_after_sendto(
         // read 3 bytes using a null sockaddr and a null sockaddr length
         // connection-oriented sockets will return EOF
         // inet dgram (udp) socket will return ECONNREFUSED due to the previous sendto()
-        let rv = simple_recvfrom_helper(fd_client, &mut vec![1u8, 2, 3], expected_errnos, false)?;
+        let rv = simple_recvfrom_helper(fd_client, &mut [1u8, 2, 3], expected_errnos, false)?;
         if expected_errnos.is_empty() {
             // if there was no error, should have returned EOF
             assert_eq!(0, rv);
@@ -1235,10 +1229,10 @@ fn test_msg_order_dgram(
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
         // read 500 bytes of the 1000 byte message; no error expected
-        simple_recvfrom_helper(fd_server, &mut vec![0u8; 500], &[], true)?;
+        simple_recvfrom_helper(fd_server, &mut [0u8; 500], &[], true)?;
 
         // send 200 bytes; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8; 200], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8; 200], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -1248,9 +1242,9 @@ fn test_msg_order_dgram(
         test_utils::result_assert_eq(received_bytes, 200, "Unexpected number of bytes read")?;
 
         // send 3 messages of different lengths; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8; 1], &[], true)?;
-        simple_sendto_helper(fd_client, &vec![1u8; 3], &[], true)?;
-        simple_sendto_helper(fd_client, &vec![1u8; 5], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8; 1], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8; 3], &[], true)?;
+        simple_sendto_helper(fd_client, &[1u8; 5], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -1283,7 +1277,7 @@ fn test_large_buf(
             (_, libc::SOCK_SEQPACKET) => &[libc::EMSGSIZE][..],
             _ => &[],
         };
-        simple_sendto_helper(fd_client, &vec![1u8; 1_000_000], &expected_err, false)?;
+        simple_sendto_helper(fd_client, &[1u8; 1_000_000], expected_err, false)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
@@ -1294,7 +1288,7 @@ fn test_large_buf(
             (_, libc::SOCK_SEQPACKET) => &[libc::EAGAIN][..],
             _ => &[],
         };
-        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 1_000_000], &expected_err, false)?;
+        simple_recvfrom_helper(fd_peer, &mut [0u8; 1_000_000], expected_err, false)?;
 
         Ok(())
     })
@@ -1360,7 +1354,7 @@ fn test_send_after_dgram_peer_close(domain: libc::c_int) -> Result<(), String> {
             _ => &[],
         };
 
-        simple_sendto_helper(fd_client, &vec![1u8; 100], expected_err, true)?;
+        simple_sendto_helper(fd_client, &[1u8; 100], expected_err, true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10_000) }, 0);
@@ -1372,7 +1366,7 @@ fn test_send_after_dgram_peer_close(domain: libc::c_int) -> Result<(), String> {
             _ => &[],
         };
 
-        simple_recvfrom_helper(fd_new_peer, &mut vec![0u8; 100], &expected_err, true)?;
+        simple_recvfrom_helper(fd_new_peer, &mut [0u8; 100], expected_err, true)?;
 
         Ok(())
     })
@@ -1512,7 +1506,7 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
     })
     .take(10)
     // make sure the fds are valid
-    .map(|x| (x >= 0).then(|| x))
+    .map(|x| (x >= 0).then_some(x))
     .collect::<Option<_>>()
     .unwrap();
 
@@ -1575,7 +1569,7 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
             .iter()
             .filter(|x| x.revents().unwrap().contains(nix::poll::PollFlags::POLLOUT))
             .map(|x| x.as_raw_fd());
-        assert!(ready_fds.find(|x| *x == src_fd).is_some());
+        assert!(ready_fds.any(|x| x == src_fd));
     }
 
     for src_fd in &src_fds {
@@ -1668,7 +1662,7 @@ fn simple_sendto_helper(
     verify_num_bytes: bool,
 ) -> Result<libc::ssize_t, String> {
     let args = SendtoArguments {
-        fd: fd,
+        fd,
         len: buf.len(),
         buf: Some(buf),
         ..Default::default()
@@ -1689,7 +1683,7 @@ fn simple_recvfrom_helper(
     verify_num_bytes: bool,
 ) -> Result<libc::ssize_t, String> {
     let mut args = RecvfromArguments {
-        fd: fd,
+        fd,
         len: buf.len(),
         buf: Some(buf),
         ..Default::default()
@@ -1737,7 +1731,7 @@ fn check_sendto_call(
     )?;
 
     // only check that all bytes were sent if there were no expected errors
-    if verify_num_bytes && expected_errnos.len() == 0 {
+    if verify_num_bytes && expected_errnos.is_empty() {
         // check that sendto() returned the number of bytes in the buffer,
         // or 0 if the buffer is NULL
         test_utils::result_assert_eq(
@@ -1790,7 +1784,7 @@ fn check_recvfrom_call(
 
     // only check that all bytes were received (recv buffer was filled) if there
     // were no expected errors
-    if verify_num_bytes && expected_errnos.len() == 0 {
+    if verify_num_bytes && expected_errnos.is_empty() {
         // check that recvfrom() returned the number of bytes in the buffer,
         // or 0 if the buffer is NULL
         test_utils::result_assert_eq(

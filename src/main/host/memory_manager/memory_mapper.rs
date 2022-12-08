@@ -487,7 +487,6 @@ impl MemoryMapper {
     /// the plugin's address space, and in some cases remaps the given region into the
     /// MemoryManager's shared memory file for fast access. Currently only private anonymous
     /// mappings are remapped.
-    #[allow(clippy::too_many_arguments)]
     pub fn handle_mmap_result(
         &mut self,
         thread: &mut ThreadRef,
@@ -501,7 +500,7 @@ impl MemoryMapper {
             usize::from(ptr.ptr()),
             ptr.len()
         );
-        if ptr.len() == 0 {
+        if ptr.is_empty() {
             return;
         }
         let addr = usize::from(ptr.ptr());
@@ -950,7 +949,7 @@ impl MemoryMapper {
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
     // Panics if called with zero-length `src`.
     fn get_mapped_ptr<T: Pod + Debug>(&self, src: TypedPluginPtr<T>) -> Option<*mut T> {
-        assert!(src.len() > 0);
+        assert!(!src.is_empty());
 
         if usize::from(src.ptr()) % std::mem::align_of::<T>() != 0 {
             // Creating a reference from an unaligned pointer is undefined
@@ -1002,7 +1001,7 @@ impl MemoryMapper {
     }
 
     pub unsafe fn get_ref<T: Debug + Pod>(&self, src: TypedPluginPtr<T>) -> Option<&[T]> {
-        if src.len() == 0 {
+        if src.is_empty() {
             return Some(&[]);
         }
         let ptr = self.get_mapped_ptr_and_count(src)?;
@@ -1010,7 +1009,7 @@ impl MemoryMapper {
     }
 
     pub unsafe fn get_mut<T: Debug + Pod>(&self, src: TypedPluginPtr<T>) -> Option<&mut [T]> {
-        if src.len() == 0 {
+        if src.is_empty() {
             return Some(&mut []);
         }
         let ptr = self.get_mapped_ptr_and_count(src)?;

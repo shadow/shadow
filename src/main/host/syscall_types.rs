@@ -176,8 +176,8 @@ impl From<SysCallReg> for PluginPtr {
 }
 
 // Useful for syscalls whose strongly-typed wrappers return some Result<(), ErrType>
-impl Into<SysCallReg> for () {
-    fn into(self) -> SysCallReg {
+impl From<()> for SysCallReg {
+    fn from(_: ()) -> SysCallReg {
         SysCallReg { as_i64: 0 }
     }
 }
@@ -272,6 +272,10 @@ impl<T> TypedPluginPtr<T> {
         self.count
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
     pub fn is_null(&self) -> bool {
         self.base.is_null()
     }
@@ -355,7 +359,7 @@ impl From<c::SysCallReturn> for SyscallResult {
                 }) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(SyscallError::Failed(Failed {
-                        errno: e.into(),
+                        errno: e,
                         restartable: unsafe { r.u.done.restartable },
                     })),
                 }
@@ -378,7 +382,7 @@ impl From<SyscallResult> for c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 u: c::SysCallReturnBody {
                     done: c::SysCallReturnDone {
-                        retval: r.into(),
+                        retval: r,
                         // N/A for non-error result (and non-EINTR result in particular)
                         restartable: false,
                     },

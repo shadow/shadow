@@ -108,7 +108,7 @@ impl Tsc {
         // dereference `ip.offset(1)`, which would be unsound.
         insn.iter()
             .enumerate()
-            .all(|(offset, byte)| unsafe { *ip.offset(offset as isize) == *byte })
+            .all(|(offset, byte)| unsafe { *ip.add(offset) == *byte })
     }
 
     /// Whether `ip` points to an rdtsc instruction.

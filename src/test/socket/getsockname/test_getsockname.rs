@@ -24,16 +24,10 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
@@ -208,7 +202,7 @@ fn test_null_addr(method: SocketInitMethod, sock_type: libc::c_int) -> Result<()
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: None,
         addr_len: Some(5),
     };
@@ -226,7 +220,7 @@ fn test_null_len(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(),
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Generic(addr)),
         addr_len: None,
     };
@@ -264,7 +258,7 @@ fn test_short_len_inet() -> Result<(), String> {
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(SockAddr::Inet(addr)),
         addr_len: Some((std::mem::size_of_val(&addr) - 1) as u32),
     };
@@ -295,7 +289,7 @@ fn test_zero_len(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(),
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(0u32),
     };
@@ -335,7 +329,7 @@ fn test_unbound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<()
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(addr.ptr_size()),
     };
@@ -430,7 +424,7 @@ fn test_bound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), 
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(addr.ptr_size()),
     };
@@ -495,7 +489,7 @@ fn test_autobound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(addr.ptr_size()),
     };
@@ -587,7 +581,7 @@ fn test_after_close(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), S
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(addr.ptr_size()),
     };
@@ -717,7 +711,7 @@ fn test_implicit_bind(domain: libc::c_int, sock_type: libc::c_int) -> Result<(),
 
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
-        fd: fd,
+        fd,
         addr: Some(addr),
         addr_len: Some(addr.ptr_size()),
     };

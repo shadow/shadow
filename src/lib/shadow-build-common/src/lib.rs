@@ -69,7 +69,7 @@ impl ShadowBuildCommon {
             b.includes(deps.all_include_paths());
         }
 
-        if let Some("true") = std::env::var("DEBUG").ok().as_ref().map(|s| s.as_str()) {
+        if let Some("true") = std::env::var("DEBUG").ok().as_deref() {
             b.flag("-DDEBUG")
                 // we only check for unused functions when builing in debug mode since some
                 // functions are only called when logging, which can be #ifdef'd out in

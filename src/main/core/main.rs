@@ -17,12 +17,12 @@ use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
 /// Main entry point for the simulator.
-pub fn run_shadow<'a>(build_info: &ShadowBuildInfo, args: Vec<&'a OsStr>) -> anyhow::Result<()> {
+pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Result<()> {
     if unsafe { c::main_checkGlibVersion() } != 0 {
         return Err(anyhow::anyhow!("Unsupported GLib version"));
     }
 
-    let mut signals_list = Signals::new(&[consts::signal::SIGINT, consts::signal::SIGTERM])?;
+    let mut signals_list = Signals::new([consts::signal::SIGINT, consts::signal::SIGTERM])?;
     thread::spawn(move || {
         for signal in signals_list.forever() {
             log::info!("Received signal {}. Flushing log and exiting", signal);
@@ -128,6 +128,7 @@ pub fn run_shadow<'a>(build_info: &ShadowBuildInfo, args: Vec<&'a OsStr>) -> any
 
     // save the platform data required for CPU pinning
     if shadow_config.experimental.use_cpu_pinning.unwrap() {
+        #[allow(clippy::collapsible_if)]
         if unsafe { c::affinity_initPlatformInfo() } != 0 {
             return Err(anyhow::anyhow!("Unable to initialize platform info"));
         }
@@ -233,7 +234,7 @@ fn load_config_file(
         }
     }
 
-    Ok(serde_yaml::from_value(config_file).context("Could not parse configuration file")?)
+    serde_yaml::from_value(config_file).context("Could not parse configuration file")
 }
 
 fn pause_for_gdb_attach() -> anyhow::Result<()> {
@@ -279,7 +280,7 @@ fn disable_aslr() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn log_environment<'a>(args: Vec<&'a OsStr>) {
+fn log_environment(args: Vec<&OsStr>) {
     for arg in args {
         log::info!("arg: {}", arg.to_string_lossy());
     }

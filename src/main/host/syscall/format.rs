@@ -282,7 +282,7 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
                 if !x.get().is_ascii_graphic() {
                     non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
                 }
-                (non_graphic_remaining > 0).then(|| x)
+                (non_graphic_remaining > 0).then_some(x)
             })
             .collect();
 
@@ -290,6 +290,7 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
         s.truncate(DISPLAY_LEN);
         let s: std::ffi::CString = s.into();
 
+        #[allow(clippy::absurd_extreme_comparisons)]
         if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
             write!(f, "{:?}...", s)
         } else {
@@ -568,7 +569,7 @@ pub fn write_syscall(
     rv: impl Display,
 ) -> std::io::Result<()> {
     let sim_time = sim_time.duration_since(&EmulatedTime::SIMULATION_START);
-    let sim_time = TimeParts::from_nanos(sim_time.as_nanos().into());
+    let sim_time = TimeParts::from_nanos(sim_time.as_nanos());
     let sim_time = sim_time.fmt_hr_min_sec_milli();
 
     writeln!(
@@ -604,7 +605,7 @@ mod export {
         let args = unsafe { CStr::from_ptr(args) }.to_str().unwrap();
         let result = SyscallResult::from(result);
 
-        let logging_mode = StraceFmtMode::try_from(logging_mode).unwrap().into();
+        let logging_mode = logging_mode.into();
         let Some(logging_mode) = logging_mode else {
             // logging was disabled
             return result.into()

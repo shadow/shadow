@@ -18,7 +18,7 @@ impl ThreadRef {
         // below; we avoided it because argument evaluation order is currently a bit of a murky
         // issue, even though it'll *probably* always be left-to-right.
         // https://internals.rust-lang.org/t/rust-expression-order-of-evaluation/2605/16
-        let arg = |i| c::SysCallReg::from(args[i]);
+        let arg = |i| args[i];
         // Safety: self.cthread initialized in CThread::new.
         let raw_res = unsafe {
             match args.len() {

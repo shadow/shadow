@@ -6,14 +6,14 @@ use nix::errno::Errno;
 const MAX_ERRNO: i64 = 4095;
 
 pub fn raw_return_value_to_errno(rv: i64) -> Result<SysCallReg, i32> {
-    if rv <= -1 && rv >= -MAX_ERRNO {
+    if (-MAX_ERRNO..=-1).contains(&rv) {
         return Err(-rv as i32);
     }
     Ok(rv.into())
 }
 
 pub fn raw_return_value_to_result(rv: i64) -> nix::Result<SysCallReg> {
-    if rv <= -1 && rv >= -MAX_ERRNO {
+    if (-MAX_ERRNO..=-1).contains(&rv) {
         return Err(Errno::from_i32(-rv as i32));
     }
     Ok(rv.into())

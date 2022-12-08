@@ -119,6 +119,6 @@ impl<'a> ThreadContextObjs<'a> {
     }
 
     pub fn borrow(&mut self) -> ThreadContext {
-        ThreadContext::new(&mut self.host, &mut self.process, &mut self.thread)
+        ThreadContext::new(self.host, &mut self.process, &mut self.thread)
     }
 }

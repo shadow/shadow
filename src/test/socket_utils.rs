@@ -1,7 +1,7 @@
 use crate::get_errno;
 
 /// A container for different types of socket addresses.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SockAddr {
     Generic(libc::sockaddr_storage),
     Inet(libc::sockaddr_in),

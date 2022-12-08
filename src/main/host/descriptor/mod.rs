@@ -78,6 +78,7 @@ impl FileMode {
 
     /// Returns a tuple of the `FileMode` and any remaining flags, or an empty `Err` if
     /// the flags aren't valid (for example specifying both `O_RDWR` and `O_WRONLY`).
+    #[allow(clippy::result_unit_err)]
     pub fn from_o_flags(flags: OFlag) -> Result<(Self, OFlag), ()> {
         // apply the access mode mask (the O_PATH flag is not contained within the access
         // mode mask, so we need to add it separately)
@@ -270,6 +271,12 @@ impl StateEventSource {
         cb_queue: &mut CallbackQueue,
     ) {
         self.inner.notify_listeners((state, changed), cb_queue)
+    }
+}
+
+impl Default for StateEventSource {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -505,7 +512,7 @@ impl OpenFile {
     }
 
     pub fn inner_file(&self) -> &File {
-        &self.inner.file.as_ref().unwrap()
+        self.inner.file.as_ref().unwrap()
     }
 
     /// Will close the inner `File` object if this is the last `OpenFile` for that `File`. This

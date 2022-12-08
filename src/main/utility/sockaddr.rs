@@ -176,8 +176,8 @@ impl std::fmt::Debug for SockaddrStorage {
         let as_inet6 = self.as_inet6();
         let as_unix = self.as_unix();
 
-        let as_inet = as_inet.map(|x| &*x as &dyn std::fmt::Debug);
-        let as_inet6 = as_inet6.map(|x| &*x as &dyn std::fmt::Debug);
+        let as_inet = as_inet.map(|x| x as &dyn std::fmt::Debug);
+        let as_inet6 = as_inet6.map(|x| x as &dyn std::fmt::Debug);
         let as_unix = as_unix.as_ref().map(|x| x as &dyn std::fmt::Debug);
 
         // find a representation that is not None
@@ -287,7 +287,7 @@ where
             return None;
         }
 
-        return Some(&name[1..]);
+        Some(&name[1..])
     }
 
     /// Is the unix socket address unnamed? On Linux, unnamed unix sockets are unnamed if their

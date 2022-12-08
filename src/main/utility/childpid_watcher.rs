@@ -123,7 +123,7 @@ impl ChildPidWatcher {
             let epoll = watcher.epoll;
             thread::Builder::new()
                 .name("child-pid-watcher".into())
-                .spawn(move || ChildPidWatcher::thread_loop(&*inner, epoll))
+                .spawn(move || ChildPidWatcher::thread_loop(&inner, epoll))
                 .unwrap()
         };
         watcher.inner.lock().unwrap().thread_handle = Some(thread_handle);
@@ -321,6 +321,12 @@ impl ChildPidWatcher {
         let pid_data = inner.pids.get_mut(&pid).unwrap();
         pid_data.callbacks.remove(&handle);
         inner.maybe_remove_pid(self.epoll, pid);
+    }
+}
+
+impl Default for ChildPidWatcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -9,6 +9,7 @@ use std::sync::{Arc, Weak};
 
 /// A queue of events (functions/closures) which when run can add their own events to the queue.
 /// This allows events to be deferred and run later.
+#[allow(clippy::type_complexity)]
 pub struct CallbackQueue(std::collections::VecDeque<Box<dyn FnOnce(&mut Self)>>);
 
 impl CallbackQueue {
@@ -57,6 +58,12 @@ impl CallbackQueue {
         let rv = (f)(&mut cb_queue);
         cb_queue.run();
         rv
+    }
+}
+
+impl Default for CallbackQueue {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -132,11 +139,16 @@ impl<T: Clone + Copy + 'static> EventSource<T> {
     }
 }
 
+impl<T: Clone + Copy + 'static> Default for EventSource<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+type Listener<T> = Arc<Box<dyn Fn(T, &mut CallbackQueue) + Send + Sync>>;
+
 struct EventSourceInner<T> {
-    listeners: std::vec::Vec<(
-        HandleId,
-        Arc<Box<dyn Fn(T, &mut CallbackQueue) + Send + Sync>>,
-    )>,
+    listeners: std::vec::Vec<(HandleId, Listener<T>)>,
     next_id: std::num::Wrapping<u32>,
 }
 
@@ -151,15 +163,14 @@ impl<T> EventSourceInner<T> {
     fn get_unused_id(&mut self) -> HandleId {
         // it's very unlikely that there will be collisions, but we loop anyways since we
         // don't care about worst-case performance here
-        let handle_id = loop {
+        loop {
             let id = HandleId(self.next_id.0);
             self.next_id += std::num::Wrapping(1);
 
             if !self.listeners.iter().any(|x| x.0 == id) {
                 break id;
             }
-        };
-        handle_id
+        }
     }
 
     pub fn add_listener(

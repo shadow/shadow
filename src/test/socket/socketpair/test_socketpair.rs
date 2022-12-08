@@ -23,24 +23,17 @@ fn main() -> Result<(), String> {
 
     let mut tests = get_tests();
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     let results = test_utils::run_tests(&tests, summarize)?;
     let used_fds: Vec<_> = results
         .into_iter()
-        .filter_map(|x| x)
-        .map(|x| x.to_vec())
         .flatten()
+        .flat_map(|x| x.to_vec())
         .collect();
     let dedup: std::collections::HashSet<_> = used_fds.iter().cloned().collect();
 
@@ -140,7 +133,7 @@ fn test_arguments(
         expected_errnos.push(libc::EPROTONOSUPPORT);
     }
 
-    let expected_errnos = if expected_errnos.len() > 0 {
+    let expected_errnos = if !expected_errnos.is_empty() {
         Some(expected_errnos.as_slice())
     } else {
         None
@@ -149,7 +142,7 @@ fn test_arguments(
     check_socketpair_call(&mut args, expected_errnos)?;
 
     // if there was an (expected) error, make sure the fds array did not change
-    if !expected_errnos.is_none() {
+    if expected_errnos.is_some() {
         // unlike what the man page specifies, linux will modify the "sv" on failure because
         // of a kernel bug(?) caused by:
         // https://github.com/torvalds/linux/commit/016a266bdfeda268afb2228b6217fd4771334635

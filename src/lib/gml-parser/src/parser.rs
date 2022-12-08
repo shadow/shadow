@@ -38,7 +38,7 @@ fn take_verify<'a, E: GmlParseError<'a>>(
     count: u32,
     cond: impl Fn(char) -> bool,
 ) -> impl Fn(&'a str) -> IResult<&'a str, &'a str, E> {
-    move |i| verify(take(count), |s: &str| s.chars().all(|c| cond(c)))(i)
+    move |i| verify(take(count), |s: &str| s.chars().all(&cond))(i)
 }
 
 /// Parse a GML key.
@@ -277,7 +277,7 @@ fn result_str_to_nom<'a, T, E: GmlParseError<'a>>(
     result: Result<T, &'a str>,
     error_kind: ErrorKind,
 ) -> Result<T, nom::Err<E>> {
-    Ok(result.map_err(|e| nom::Err::Failure(E::from_external_error(input, error_kind, e)))?)
+    result.map_err(|e| nom::Err::Failure(E::from_external_error(input, error_kind, e)))
 }
 
 fn partition<I, B, F, const N: usize>(iter: I, f: F) -> [B; N]

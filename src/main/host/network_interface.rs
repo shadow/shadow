@@ -29,7 +29,7 @@ impl NetworkInterface {
         qdisc: QDiscMode,
         uses_router: bool,
     ) -> NetworkInterface {
-        let maybe_pcap_dir = maybe_pcap_dir.map(|p| utility::pathbuf_to_nul_term_cstring(p));
+        let maybe_pcap_dir = maybe_pcap_dir.map(utility::pathbuf_to_nul_term_cstring);
         let pcap_dir_cptr = maybe_pcap_dir
             .as_ref()
             .map_or(std::ptr::null(), |p| p.as_ptr());

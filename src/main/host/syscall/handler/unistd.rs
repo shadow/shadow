@@ -143,8 +143,7 @@ impl SyscallHandler {
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
-            .map(|x| x.active_file().cloned())
-            .flatten();
+            .and_then(|x| x.active_file().cloned());
 
         let file = match file {
             // we were previously blocked, so re-use the file from the previous syscall invocation
@@ -176,8 +175,7 @@ impl SyscallHandler {
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
-            .map(|x| x.active_file().cloned())
-            .flatten();
+            .and_then(|x| x.active_file().cloned());
 
         let file = match file {
             // we were previously blocked, so re-use the file from the previous syscall invocation
@@ -265,8 +263,7 @@ impl SyscallHandler {
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
-            .map(|x| x.active_file().cloned())
-            .flatten();
+            .and_then(|x| x.active_file().cloned());
 
         let file = match file {
             // we were previously blocked, so re-use the file from the previous syscall invocation
@@ -298,8 +295,7 @@ impl SyscallHandler {
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
-            .map(|x| x.active_file().cloned())
-            .flatten();
+            .and_then(|x| x.active_file().cloned());
 
         let file = match file {
             // we were previously blocked, so re-use the file from the previous syscall invocation
@@ -451,7 +447,7 @@ impl SyscallHandler {
         let write_res = ctx
             .process
             .memory_mut()
-            .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr.into(), 2), &fds);
+            .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {

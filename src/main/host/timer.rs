@@ -82,11 +82,7 @@ impl Timer {
     /// armed, or None otherwise.
     pub fn remaining_time(&self) -> Option<SimulationTime> {
         self.magic.debug_check();
-        let t = if let Some(t) = self.internal.borrow().next_expire_time {
-            t
-        } else {
-            return None;
-        };
+        let t = self.internal.borrow().next_expire_time?;
         let now = Worker::current_time().unwrap();
         Some(t.saturating_duration_since(&now))
     }
@@ -127,7 +123,7 @@ impl Timer {
         let next_expire_time = internal_brw.next_expire_time.unwrap();
         if next_expire_time > Worker::current_time().unwrap() {
             // Hasn't expired yet. Check again later.
-            Self::schedule_new_expire_event(&mut *internal_brw, internal_weak.clone(), host);
+            Self::schedule_new_expire_event(&mut internal_brw, internal_weak.clone(), host);
             return;
         }
 
@@ -135,7 +131,7 @@ impl Timer {
         if internal_brw.expire_interval > SimulationTime::ZERO {
             internal_brw.next_expire_time =
                 Some(internal_brw.next_expire_time.unwrap() + internal_brw.expire_interval);
-            Self::schedule_new_expire_event(&mut *internal_brw, internal_weak.clone(), host);
+            Self::schedule_new_expire_event(&mut internal_brw, internal_weak.clone(), host);
         }
 
         // Re-borrow as an immutable reference while executing the callback.
@@ -174,7 +170,7 @@ impl Timer {
 
         let mut internal = self.internal.borrow_mut();
         internal.reset(Some(expire_time), expire_interval);
-        Self::schedule_new_expire_event(&mut *internal, Arc::downgrade(&self.internal), host);
+        Self::schedule_new_expire_event(&mut internal, Arc::downgrade(&self.internal), host);
     }
 }
 

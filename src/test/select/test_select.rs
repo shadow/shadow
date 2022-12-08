@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#![allow(clippy::too_many_arguments)]
 
 use std::mem;
 use std::time::Duration;
@@ -67,7 +68,7 @@ fn test_pipe() -> Result<(), String> {
                 },
             )
         };
-        let mut fd_is_readable = unsafe { libc::FD_ISSET(pfd_read, &mut readfds) };
+        let mut fd_is_readable = unsafe { libc::FD_ISSET(pfd_read, &readfds) };
 
         if ready < 0 {
             return Err("error: select failed".to_string());
@@ -108,7 +109,7 @@ fn test_pipe() -> Result<(), String> {
         }
 
         // Make sure the event is set for the correct fd
-        fd_is_readable = unsafe { libc::FD_ISSET(pfd_read, &mut readfds) };
+        fd_is_readable = unsafe { libc::FD_ISSET(pfd_read, &readfds) };
 
         if !fd_is_readable {
             return Err(format!(
@@ -147,7 +148,7 @@ fn test_regular_file() -> Result<(), String> {
                 },
             )
         };
-        let fd_is_readable = unsafe { libc::FD_ISSET(fd, &mut readfds) };
+        let fd_is_readable = unsafe { libc::FD_ISSET(fd, &readfds) };
 
         if ready < 0 {
             return Err("error: select on empty file failed".to_string());
@@ -196,7 +197,7 @@ fn test_regular_file() -> Result<(), String> {
                 },
             )
         };
-        let fd_is_readable = unsafe { libc::FD_ISSET(fd, &mut readfds) };
+        let fd_is_readable = unsafe { libc::FD_ISSET(fd, &readfds) };
 
         if ready != 1 {
             return Err(format!("error: select returned {} instead of 1", ready));
@@ -485,16 +486,10 @@ fn main() -> Result<(), String> {
     }
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

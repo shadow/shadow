@@ -49,6 +49,12 @@ impl EventQueue {
     }
 }
 
+impl Default for EventQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A wrapper type that implements [`Ord`] for types that implement [`PartialOrd`]. If the two
 /// objects cannot be compared (`PartialOrd::partial_cmp` returns `None`), the comparison will
 /// panic.

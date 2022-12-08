@@ -86,7 +86,7 @@ impl AbstractUnixNamespace {
 
         // when the socket closes, remove this entry from the namespace
         let handle =
-            Self::on_socket_close(Arc::downgrade(&ns_arc), socket_event_source, move |ns| {
+            Self::on_socket_close(Arc::downgrade(ns_arc), socket_event_source, move |ns| {
                 assert!(ns.unbind(sock_type, &name_copy).is_ok());
             });
 
@@ -149,7 +149,7 @@ impl AbstractUnixNamespace {
 
         // when the socket closes, remove this entry from the namespace
         let handle =
-            Self::on_socket_close(Arc::downgrade(&ns_arc), socket_event_source, move |ns| {
+            Self::on_socket_close(Arc::downgrade(ns_arc), socket_event_source, move |ns| {
                 assert!(ns.unbind(sock_type, &name_copy).is_ok());
             });
 
@@ -203,6 +203,12 @@ impl AbstractUnixNamespace {
     }
 }
 
+impl Default for AbstractUnixNamespace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BindError {
     /// The name is already in use.
@@ -237,8 +243,8 @@ fn random_name<const L: usize>(mut rng: impl rand::Rng) -> [u8; L] {
     let mut name = [0u8; L];
 
     // set each character of the name
-    for x in 0..L {
-        name[x] = *CHARSET.choose(&mut rng).unwrap();
+    for c in &mut name {
+        *c = *CHARSET.choose(&mut rng).unwrap();
     }
 
     name

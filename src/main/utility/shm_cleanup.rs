@@ -30,7 +30,7 @@ fn get_shadow_shm_file_paths(dir_path: &Path) -> anyhow::Result<Vec<PathBuf>> {
             Some(name) => name
                 .to_string_lossy()
                 .starts_with(SHADOW_SHM_FILE_PREFIX)
-                .then(|| Some(path)),
+                .then_some(Some(path)),
             None => None, // ignore paths ending in '..'
         })
         .flatten()
@@ -55,11 +55,11 @@ fn get_running_pid_set(dir_path: &Path) -> anyhow::Result<HashSet<i32>> {
 // part after the '-', e.g., 2738869 in the example file name:
 // `shadow_shmemfile_6379761.950298775-2738869`
 fn pid_from_shadow_shm_file_name(file_name: &str) -> anyhow::Result<i32> {
-    let pid_str = file_name.split("-").last().context(format!(
+    let pid_str = file_name.split('-').last().context(format!(
         "Parsing PID separator '-' from shm file name {:?}",
         file_name
     ))?;
-    let pid = i32::from_str(&pid_str).context(format!(
+    let pid = i32::from_str(pid_str).context(format!(
         "Parsing PID '{}' from shm file name {:?}",
         pid_str, file_name
     ))?;
@@ -78,7 +78,7 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
         shm_dir.as_ref().display()
     );
 
-    let running_pids = get_running_pid_set(&Path::new(PROC_DIR_PATH))?;
+    let running_pids = get_running_pid_set(Path::new(PROC_DIR_PATH))?;
     log::debug!(
         "Found {} running PIDs in {}",
         running_pids.len(),
@@ -108,7 +108,7 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
             // Do not remove the file if it's owner process is still running.
             if !running_pids.contains(&creator_pid) {
                 log::trace!("Removing orphaned shared memory file {:?}", path);
-                if let Ok(_) = fs::remove_file(path) {
+                if fs::remove_file(path).is_ok() {
                     num_removed += 1;
                 }
             }

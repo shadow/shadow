@@ -20,7 +20,7 @@ use std::ops::{Add, Sub};
 use serde::ser::SerializeMap;
 
 /// The main counter object that maps individual keys to count values.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Counter {
     // TODO: convert this so we could count generic types instead of Strings
     items: HashMap<String, i64>,
@@ -124,11 +124,11 @@ impl Counter {
 
     /// Get an iterator that returns elements in the order best suited for human-readable output
     /// (currently sorted by value with the largest value first).
-    fn sorted_for_display<'a>(
-        &'a self,
+    fn sorted_for_display(
+        &self,
     ) -> impl IntoIterator<
-        IntoIter = impl Iterator<Item = (&'a String, &'a i64)> + ExactSizeIterator + 'a,
-        Item = (&'a String, &'a i64),
+        IntoIter = impl Iterator<Item = (&String, &i64)> + ExactSizeIterator,
+        Item = (&String, &i64),
     > {
         // Get the items in a vector so we can sort them.
         let mut item_vec = Vec::from_iter(&self.items);
@@ -140,6 +140,12 @@ impl Counter {
         });
 
         item_vec
+    }
+}
+
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

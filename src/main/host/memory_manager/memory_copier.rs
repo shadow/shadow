@@ -20,6 +20,7 @@ impl MemoryCopier {
 
     /// Copy the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
+    #[allow(clippy::uninit_vec)]
     pub unsafe fn clone_mem<T: Pod + Debug>(
         &self,
         ptr: TypedPluginPtr<T>,
@@ -32,6 +33,7 @@ impl MemoryCopier {
 
     /// Copy the readable prefix of the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
+    #[allow(clippy::uninit_vec)]
     pub unsafe fn clone_mem_prefix<T: Pod + Debug>(
         &self,
         ptr: TypedPluginPtr<T>,

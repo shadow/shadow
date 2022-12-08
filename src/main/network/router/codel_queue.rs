@@ -177,7 +177,7 @@ impl CoDelQueue {
         // Drop as many packets as the control law dictates.
         while item.is_some() && self.mode == CoDelMode::Drop && self.should_drop(now) {
             self.drop_packet(item.unwrap().packet);
-            self.current_drop_count = self.current_drop_count + 1;
+            self.current_drop_count += 1;
 
             item = self.codel_pop(now);
 
@@ -242,13 +242,10 @@ impl CoDelQueue {
             match self.interval_end {
                 Some(end) => {
                     // We were already in a bad state, and now we stayed in it.
-                    if now >= &end {
-                        // We have been in a bad state for a full interval worth
-                        // of time, so drop this packet.
-                        true
-                    } else {
-                        false
-                    }
+
+                    // if we have been in a bad state for a full interval worth
+                    // of time, drop this packet.
+                    now >= &end
                 }
                 None => {
                     // None means we were in a good state, but now we just
@@ -350,17 +347,17 @@ mod tests {
 
         for i in 1..=N {
             assert_eq!(cdq.len(), i - 1);
-            cdq.push(Packet::mock_new(), now.clone());
+            cdq.push(Packet::mock_new(), now);
             assert_eq!(cdq.len(), i);
         }
         for i in 1..=N {
             assert_eq!(cdq.len(), N - i + 1);
-            assert!(cdq.pop(now.clone()).is_some());
+            assert!(cdq.pop(now).is_some());
             assert_eq!(cdq.len(), N - i);
         }
         assert_eq!(cdq.len(), 0);
         assert!(cdq.is_empty());
-        assert!(cdq.pop(now.clone()).is_none());
+        assert!(cdq.pop(now).is_none());
     }
 
     #[test]
@@ -395,7 +392,7 @@ mod tests {
 
         let mut cdq = CoDelQueue::new();
         for _ in 0..5 {
-            cdq.push(Packet::mock_new(), start.clone());
+            cdq.push(Packet::mock_new(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
 
@@ -444,7 +441,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 6;
         for _ in 0..N {
-            cdq.push(Packet::mock_new(), start.clone());
+            cdq.push(Packet::mock_new(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
         assert_eq!(cdq.len(), N);
@@ -454,22 +451,22 @@ mod tests {
         // time in order to enter the drop state.
 
         // We didn't reach target yet.
-        cdq.pop((start + TARGET - one).clone());
+        cdq.pop(start + TARGET - one);
         assert_eq!(cdq.len(), N - 1);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // We now reached target.
-        cdq.pop((start + TARGET).clone());
+        cdq.pop(start + TARGET);
         assert_eq!(cdq.len(), N - 2);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Still not above target for a full interval.
-        cdq.pop((start + TARGET + INTERVAL - one).clone());
+        cdq.pop(start + TARGET + INTERVAL - one);
         assert_eq!(cdq.len(), N - 3);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Now above target for interval, should enter drop mode and drop one packet.
-        cdq.pop((start + TARGET + INTERVAL).clone());
+        cdq.pop(start + TARGET + INTERVAL);
         assert_eq!(cdq.len(), N - 5);
         assert_eq!(cdq.mode, CoDelMode::Drop);
 
@@ -477,12 +474,9 @@ mod tests {
         // low-delay packets should put us back into store mode.
         for _ in 0..3 {
             // Add some low-delay packets
-            cdq.push(
-                Packet::mock_new(),
-                (start + TARGET + INTERVAL * 2u64 - one).clone(),
-            );
+            cdq.push(Packet::mock_new(), start + TARGET + INTERVAL * 2u64 - one);
         }
-        cdq.pop((start + TARGET + INTERVAL * 2u64).clone());
+        cdq.pop(start + TARGET + INTERVAL * 2u64);
         assert_eq!(cdq.mode, CoDelMode::Store);
     }
 
@@ -504,7 +498,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 20;
         for _ in 0..N {
-            cdq.push(Packet::mock_new(), start.clone());
+            cdq.push(Packet::mock_new(), start);
         }
         assert_eq!(cdq.len(), N);
 

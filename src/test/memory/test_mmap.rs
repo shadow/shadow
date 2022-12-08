@@ -18,7 +18,7 @@ fn validate_shadow_access(buf: &[u8]) -> Result<(), Box<dyn Error>> {
     nix::errno::Errno::result(temp_fd)?;
 
     // Write buffer contents to file.
-    nix::unistd::write(temp_fd, &buf)?;
+    nix::unistd::write(temp_fd, buf)?;
 
     // Seek to beginning of file.
     let rv = nix::unistd::lseek(temp_fd, 0, nix::unistd::Whence::SeekSet)?;
@@ -119,14 +119,14 @@ fn mmap_and_init_buf(size: usize) -> *mut libc::c_void {
     };
     test_utils::assert_true_else_errno(buf_ptr != libc::MAP_FAILED);
 
-    let mut buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, size) };
+    let buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, size) };
 
     // mmap'd private anonymous pages should always be zero'd
     for x in buf.iter() {
         assert_eq!(*x, 0u8);
     }
 
-    init_buf(&mut buf);
+    init_buf(buf);
 
     buf_ptr
 }
@@ -141,7 +141,7 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
     let initial_size = 2 * page_size();
     let mut buf_ptr = mmap_and_init_buf(initial_size);
 
-    validate_shadow_access(&unsafe {
+    validate_shadow_access(unsafe {
         std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, initial_size)
     })?;
 
@@ -152,7 +152,7 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
     buf_ptr = unsafe { libc::mremap(buf_ptr, initial_size, grown_size, libc::MREMAP_MAYMOVE) };
     test_utils::assert_true_else_errno(buf_ptr != libc::MAP_FAILED);
 
-    let mut buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, grown_size) };
+    let buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, grown_size) };
 
     // Validate that initial contents are still there.
     check_buf(&buf[..initial_size]);
@@ -160,12 +160,12 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
     validate_shadow_access(&buf[..initial_size])?;
 
     // Fill the new portion of the buffer.
-    init_buf(&mut buf);
+    init_buf(buf);
 
     // Validate the whole contents of the buffer.
-    check_buf(&buf);
+    check_buf(buf);
 
-    validate_shadow_access(&buf)?;
+    validate_shadow_access(buf)?;
 
     // Shrink the buffer.
     let shrunk_size = initial_size / 2;
@@ -176,9 +176,9 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
 
     let buf = unsafe { std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, shrunk_size) };
 
-    check_buf(&buf);
+    check_buf(buf);
 
-    validate_shadow_access(&buf)?;
+    validate_shadow_access(buf)?;
 
     // Unmap allocated memory
     let rv = unsafe { libc::munmap(buf_ptr, shrunk_size) };
@@ -216,7 +216,7 @@ fn test_munmap_front() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr, page_size()) };
     nix::errno::Errno::result(rv)?;
-    validate_shadow_access(&unsafe {
+    validate_shadow_access(unsafe {
         std::slice::from_raw_parts::<u8>(buf_ptr.add(page_size()) as *const u8, 2 * page_size())
     })?;
     let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
@@ -231,7 +231,7 @@ fn test_munmap_back() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr.add(page_size() * 2), page_size()) };
     nix::errno::Errno::result(rv)?;
-    validate_shadow_access(&unsafe {
+    validate_shadow_access(unsafe {
         std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, 2 * page_size())
     })?;
     let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
@@ -246,10 +246,10 @@ fn test_munmap_middle() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr.add(page_size()), page_size()) };
     nix::errno::Errno::result(rv)?;
-    validate_shadow_access(&unsafe {
+    validate_shadow_access(unsafe {
         std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, page_size())
     })?;
-    validate_shadow_access(&unsafe {
+    validate_shadow_access(unsafe {
         std::slice::from_raw_parts::<u8>(buf_ptr.add(2 * page_size()) as *const u8, page_size())
     })?;
     let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
@@ -263,7 +263,7 @@ fn test_mremap_clobber() -> Result<(), Box<dyn Error>> {
     let smolbuf = mmap_and_init_buf(page_size());
 
     // mremap smolbuf into the middle of bigbuf, clobbering it.
-    let req_new_address = unsafe { bigbuf.offset(page_size() as isize) as *mut libc::c_void };
+    let req_new_address = unsafe { bigbuf.add(page_size()) as *mut libc::c_void };
     let actual_new_address = unsafe {
         libc::mremap(
             smolbuf,
@@ -297,7 +297,7 @@ fn test_mremap_clobber() -> Result<(), Box<dyn Error>> {
     validate_shadow_access(&bb[2 * page_size()..])?;
 
     // Validate Shadow access of the whole buffer (which crosses mmap'd regions) at once.
-    validate_shadow_access(&bb[..])?;
+    validate_shadow_access(bb)?;
 
     // Unmap allocated memory
     let rv = unsafe { libc::munmap(bigbuf, 3 * page_size()) };
@@ -311,12 +311,12 @@ fn test_mremap_clobber() -> Result<(), Box<dyn Error>> {
 //   * using PROT_NONE (and then following up with an mprotect to make it accessible).
 //   * using MAP_STACK.
 fn test_mmap_prot_none_mprotect() -> Result<(), Box<dyn Error>> {
-    let size = 8 * 1 << 20;
+    let size = 8 * (1 << 20);
 
     // Initially mapped with PROT_NONE, making it inaccessible.
     let buf_ptr = unsafe {
         libc::mmap(
-            0 as *mut libc::c_void,
+            std::ptr::null_mut(),
             size,
             libc::PROT_NONE,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_STACK,
@@ -330,10 +330,10 @@ fn test_mmap_prot_none_mprotect() -> Result<(), Box<dyn Error>> {
     let rv = unsafe { libc::mprotect(buf_ptr, size, libc::PROT_READ | libc::PROT_WRITE) };
     test_utils::assert_true_else_errno(rv == 0);
 
-    let mut buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, size) };
+    let buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, size) };
     // Validate that it's accessible both to the plugin and to Shadow.
-    init_buf(&mut buf);
-    validate_shadow_access(&buf)?;
+    init_buf(buf);
+    validate_shadow_access(buf)?;
 
     // Unmap allocated memory
     let rv = unsafe { libc::munmap(buf_ptr, size) };
@@ -476,16 +476,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;

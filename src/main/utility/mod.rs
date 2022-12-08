@@ -152,6 +152,12 @@ impl<T> Magic<T> {
     }
 }
 
+impl<T> Default for Magic<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Drop for Magic<T> {
     fn drop(&mut self) {
         self.debug_check();

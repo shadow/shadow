@@ -346,9 +346,8 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
         .and_then(|p| p.canonicalize().map_err(anyhow::Error::from));
     // We previously used only `std::fs::canonicalize`, which doesn't search
     // `PATH`, and *does* search the current directory.
-    let legacy_canonical_path: Result<PathBuf, anyhow::Error> = expanded_path
-        .canonicalize()
-        .map_err(|e| anyhow::Error::from(e));
+    let legacy_canonical_path: Result<PathBuf, anyhow::Error> =
+        expanded_path.canonicalize().map_err(anyhow::Error::from);
 
     let canonical_path = if new_canonical_path.is_ok()
         && legacy_canonical_path.is_ok()
@@ -371,7 +370,7 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
             .unwrap_err());
     };
 
-    verify_plugin_path(&canonical_path)
+    verify_plugin_path(canonical_path)
         .with_context(|| format!("Failed to verify plugin path '{:?}'", canonical_path))?;
     log::info!(
         "Resolved binary path {:?} to {:?}",
@@ -387,7 +386,7 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
             plugin: canonical_path.clone(),
             start_time,
             stop_time,
-            args: args,
+            args,
             env: proc.environment.clone(),
         };
         (*proc.quantity).try_into().unwrap()
@@ -396,7 +395,7 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
 
 /// Generate an IP assignment map using hosts' configured IP addresses and graph node IDs. For hosts
 /// without IP addresses, they will be assigned an arbitrary IP address.
-fn assign_ips(hosts: &mut Vec<HostInfo>) -> anyhow::Result<IpAssignment<u32>> {
+fn assign_ips(hosts: &mut [HostInfo]) -> anyhow::Result<IpAssignment<u32>> {
     let mut ip_assignment = IpAssignment::new();
 
     // first register hosts that have a specific IP address
@@ -463,7 +462,7 @@ fn generate_routing_info(
 /// Check that the plugin path is valid.
 fn verify_plugin_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
-    let metadata = std::fs::metadata(&path)?;
+    let metadata = std::fs::metadata(path)?;
 
     if !metadata.is_file() {
         return Err(anyhow::anyhow!("The path is not a file"));

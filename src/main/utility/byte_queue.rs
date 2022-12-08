@@ -57,7 +57,7 @@ impl ByteQueue {
 
     /// Returns true if the queue has data/chunks, which may include packets with 0 bytes.
     pub fn has_chunks(&self) -> bool {
-        self.bytes.len() > 0
+        !self.bytes.is_empty()
     }
 
     #[must_use]
@@ -88,12 +88,12 @@ impl ByteQueue {
 
             total_copied += bytes.len();
 
-            if unused.len() != 0 {
+            if !unused.is_empty() {
                 // restore the remaining unused buffer
                 self.unused_buffer = Some(unused);
             }
 
-            if bytes.len() == 0 {
+            if bytes.is_empty() {
                 break;
             }
 
@@ -149,7 +149,7 @@ impl ByteQueue {
 
         // we may have used up all of the space in 'unused_buffer'
         if let Some(ref unused_buffer) = self.unused_buffer {
-            if unused_buffer.len() == 0 {
+            if unused_buffer.is_empty() {
                 self.unused_buffer = None;
             }
         }
@@ -232,7 +232,7 @@ impl ByteQueue {
             self.length -= copied;
             total_copied += copied;
 
-            if bytes.len() == 0 {
+            if bytes.is_empty() {
                 self.bytes.pop_front();
             }
         }
@@ -294,7 +294,7 @@ impl ByteQueue {
                 let temp = chunk
                     .data
                     .split_to(std::cmp::min(chunk.data.len(), size_hint));
-                if chunk.data.len() == 0 {
+                if chunk.data.is_empty() {
                     self.bytes.pop_front();
                 }
                 temp
@@ -321,7 +321,7 @@ impl std::ops::Drop for ByteQueue {
 }
 
 /// The types of data that are supported by the [`ByteQueue`].
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ChunkType {
     Stream,
     Packet,
@@ -357,8 +357,8 @@ impl From<BytesWrapper> for Bytes {
 impl std::convert::AsRef<[u8]> for BytesWrapper {
     fn as_ref(&self) -> &[u8] {
         match self {
-            BytesWrapper::Mutable(x) => &x,
-            BytesWrapper::Immutable(x) => &x,
+            BytesWrapper::Mutable(x) => x,
+            BytesWrapper::Immutable(x) => x,
         }
     }
 }

@@ -48,9 +48,7 @@ impl EmulatedTime {
 
     /// Get the instance corresponding to `val` SimulationTime units since the Unix Epoch.
     pub const fn from_c_emutime(val: CEmulatedTime) -> Option<Self> {
-        if val == EMUTIME_INVALID {
-            None
-        } else if val > EMUTIME_MAX {
+        if val == EMUTIME_INVALID || val > EMUTIME_MAX {
             None
         } else {
             Some(Self(val))
@@ -72,7 +70,7 @@ impl EmulatedTime {
 
     /// Convert to the SimulationTime since the simulation began.
     pub fn to_abs_simtime(self) -> SimulationTime {
-        SimulationTime::from(self.duration_since(&Self::SIMULATION_START))
+        self.duration_since(&Self::SIMULATION_START)
     }
 
     /// Returns the duration since `earlier`, or panics if `earlier` is after `self`, or

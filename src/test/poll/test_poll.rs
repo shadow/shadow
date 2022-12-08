@@ -2,6 +2,9 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#![allow(clippy::too_many_arguments)]
+
+use std::cmp::Ordering;
 
 use nix::sys::signal;
 use nix::sys::signal::Signal;
@@ -56,13 +59,17 @@ fn test_pipe() -> Result<(), String> {
 
         /* First make sure there's nothing there */
         let mut ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
-        if ready < 0 {
-            return Err("error: poll failed".to_string());
-        } else if ready > 0 {
-            return Err(format!(
-                "error: pipe marked readable. revents={}",
-                read_poll.revents
-            ));
+        match ready.cmp(&0) {
+            Ordering::Less => {
+                return Err("error: poll failed".to_string());
+            }
+            Ordering::Greater => {
+                return Err(format!(
+                    "error: pipe marked readable. revents={}",
+                    read_poll.revents
+                ));
+            }
+            _ => (),
         }
 
         /* Now put information in pipe to be read */
@@ -95,20 +102,24 @@ fn test_regular_file() -> Result<(), String> {
     test_utils::run_and_close_fds(&[fd], || {
         /* poll will check when testpoll has info to read */
         let mut read_poll = libc::pollfd {
-            fd: fd,
+            fd,
             events: libc::POLLIN,
             revents: 0,
         };
         let ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
-        if ready < 0 {
-            return Err("error: poll on empty file failed".to_string());
-        } else if ready == 0 {
-            /* Note: Even though the file is 0 bytes, has no data inside of it, it is still instantly
-             * available for 'reading' the EOF. */
-            return Err(format!(
-                "error: expected EOF to be readable from empty file. revents={}",
-                read_poll.revents
-            ));
+        match ready.cmp(&0) {
+            Ordering::Less => {
+                return Err("error: poll on empty file failed".to_string());
+            }
+            Ordering::Equal => {
+                /* Note: Even though the file is 0 bytes, has no data inside of it, it is still instantly
+                 * available for 'reading' the EOF. */
+                return Err(format!(
+                    "error: expected EOF to be readable from empty file. revents={}",
+                    read_poll.revents
+                ));
+            }
+            _ => (),
         }
 
         /* write to file */
@@ -128,7 +139,7 @@ fn test_regular_file() -> Result<(), String> {
     test_utils::run_and_close_fds(&[fd], || {
         /* poll will check when testpoll has info to read */
         let mut read_poll = libc::pollfd {
-            fd: fd,
+            fd,
             events: libc::POLLIN,
             revents: 0,
         };
@@ -176,8 +187,8 @@ fn test_poll_args_common(
     test_utils::run_and_close_fds(&[fd], || {
         // The main struct for the poll syscall
         let mut pfd = libc::pollfd {
-            fd: fd,
-            events: events,
+            fd,
+            events,
             revents: 0,
         };
         if fd_inval {
@@ -375,16 +386,11 @@ fn main() -> Result<(), String> {
     }
 
     if filter_shadow_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Shadow))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Shadow));
     }
+
     if filter_libc_passing {
-        tests = tests
-            .into_iter()
-            .filter(|x| x.passing(TestEnv::Libc))
-            .collect()
+        tests.retain(|x| x.passing(TestEnv::Libc));
     }
 
     test_utils::run_tests(&tests, summarize)?;
