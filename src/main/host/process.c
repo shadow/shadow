@@ -636,7 +636,13 @@ static void _process_start(Process* proc) {
 
 static void _start_thread_task(const Host* host, gpointer callbackObject,
                                gpointer callbackArgument) {
-    Process* process = callbackObject;
+    pid_t pid = GPOINTER_TO_INT(callbackObject);
+    Process* process = host_getProcess(host, pid);
+    if (!process) {
+        debug("Process %d no longer exists", pid);
+        return;
+    }
+
     Thread* thread = callbackArgument;
     process_continue(process, thread);
 }
@@ -657,10 +663,10 @@ void process_addThread(Process* proc, Thread* thread) {
 
     // Schedule thread to start.
     thread_ref(thread);
-    process_ref(proc);
     const Host* host = _host(proc);
-    TaskRef* task = taskref_new_bound(
-        host_getID(host), _start_thread_task, proc, thread, _unref_process_cb, _unref_thread_cb);
+    TaskRef* task = taskref_new_bound(host_getID(host), _start_thread_task,
+                                      GINT_TO_POINTER(process_getProcessID(proc)), thread, NULL,
+                                      _unref_thread_cb);
     host_scheduleTaskWithDelay(host, task, 0);
     taskref_drop(task);
 }
