@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::num::NonZeroUsize;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
@@ -113,8 +114,8 @@ impl ShmFile {
     fn mmap_into_shadow(&self, interval: &Interval, prot: i32) -> *mut c_void {
         unsafe {
             sys::mman::mmap(
-                std::ptr::null_mut(),
-                interval.len(),
+                None,
+                NonZeroUsize::new(interval.len()).unwrap(),
                 sys::mman::ProtFlags::from_bits(prot).unwrap(),
                 sys::mman::MapFlags::MAP_SHARED,
                 self.shm_file.as_raw_fd(),
