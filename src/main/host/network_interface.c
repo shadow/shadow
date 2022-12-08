@@ -145,25 +145,6 @@ static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
     return g_string_free(strBuffer, FALSE);
 }
 
-static gchar* _networkinterface_socketToAssociationKey(NetworkInterface* interface, const CompatSocket* socket) {
-    MAGIC_ASSERT(interface);
-
-    ProtocolType type = compatsocket_getProtocol(socket);
-
-    /* address and port are in network byte order */
-    in_addr_t peerIP = 0;
-    in_port_t peerPort = 0;
-    compatsocket_getPeerName(socket, &peerIP, &peerPort);
-
-    /* address and port are in network byte order */
-    in_addr_t boundIP = 0;
-    in_port_t boundPort = 0;
-    compatsocket_getSocketName(socket, &boundIP, &boundPort);
-
-    gchar* key = _networkinterface_getAssociationKey(interface, type, boundPort, peerIP, peerPort);
-    return key;
-}
-
 /* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
@@ -189,10 +170,12 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType
     return isFound;
 }
 
-void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
+                                ProtocolType type, in_port_t port, in_addr_t peerIP,
+                                in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
-    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
+    gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerIP, peerPort);
 
     /* make sure there is no collision */
     utility_debugAssert(!g_hash_table_contains(interface->boundSockets, key));
@@ -206,10 +189,11 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     trace("associated socket key %s", key);
 }
 
-void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_disassociate(NetworkInterface* interface, ProtocolType type, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
-    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
+    gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerIP, peerPort);
 
     /* we will no longer receive packets for this port, this unrefs descriptor */
     g_hash_table_remove(interface->boundSockets, key);

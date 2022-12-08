@@ -1090,25 +1090,41 @@ mod export {
     pub unsafe extern "C" fn host_associateInterface(
         hostrc: *const Host,
         socket: *const cshadow::CompatSocket,
-        bind_addr: in_addr_t,
+        protocol: cshadow::ProtocolType,
+        bind_ip: in_addr_t,
+        bind_port: in_port_t,
+        peer_ip: in_addr_t,
+        peer_port: in_port_t,
     ) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let ipv4 = Ipv4Addr::from(u32::from_be(bind_addr));
+
+        let bind_ip = Ipv4Addr::from(u32::from_be(bind_ip));
+        let peer_ip = Ipv4Addr::from(u32::from_be(peer_ip));
+        let bind_port = u16::from_be(bind_port);
+        let peer_port = u16::from_be(peer_port);
+
+        let bind_addr = SocketAddrV4::new(bind_ip, bind_port);
+        let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
 
         // Associate the interfaces corresponding to bind_addr with socket
-        if ipv4.is_unspecified() {
+        if bind_addr.ip().is_unspecified() {
             // Need to associate all interfaces.
-            hostrc
-                .localhost
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .associate(socket);
-            hostrc.internet.borrow().as_ref().unwrap().associate(socket);
+            hostrc.localhost.borrow().as_ref().unwrap().associate(
+                socket,
+                protocol,
+                bind_addr.port(),
+                peer_addr,
+            );
+            hostrc.internet.borrow().as_ref().unwrap().associate(
+                socket,
+                protocol,
+                bind_addr.port(),
+                peer_addr,
+            );
         } else {
             // TODO: return error if interface does not exist.
-            if let Some(iface) = hostrc.interface_mut(ipv4) {
-                iface.associate(socket);
+            if let Some(iface) = hostrc.interface_mut(*bind_addr.ip()) {
+                iface.associate(socket, protocol, bind_addr.port(), peer_addr);
             }
         }
     }
@@ -1116,37 +1132,40 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_disassociateInterface(
         hostrc: *const Host,
-        socket: *const cshadow::CompatSocket,
+        protocol: cshadow::ProtocolType,
+        sock_ip: in_addr_t,
+        sock_port: in_port_t,
+        peer_ip: in_addr_t,
+        peer_port: in_port_t,
     ) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
 
-        let mut bind_addr = 0;
-        let found = unsafe {
-            cshadow::compatsocket_getSocketName(socket, &mut bind_addr, std::ptr::null_mut())
-        };
-        if found {
-            let ipv4 = Ipv4Addr::from(u32::from_be(bind_addr));
+        let sock_ip = Ipv4Addr::from(u32::from_be(sock_ip));
+        let peer_ip = Ipv4Addr::from(u32::from_be(peer_ip));
+        let sock_port = u16::from_be(sock_port);
+        let peer_port = u16::from_be(peer_port);
 
-            // Associate the interfaces corresponding to bind_addr with socket
-            if ipv4.is_unspecified() {
-                // Need to disassociate all interfaces.
-                hostrc
-                    .localhost
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .disassociate(socket);
-                hostrc
-                    .internet
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .disassociate(socket);
-            } else {
-                // TODO: return error if interface does not exist.
-                if let Some(iface) = hostrc.interface_mut(ipv4) {
-                    iface.disassociate(socket);
-                }
+        let sock_addr = SocketAddrV4::new(sock_ip, sock_port);
+        let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
+
+        // Associate the interfaces corresponding to bind_addr with socket
+        if sock_addr.ip().is_unspecified() {
+            // Need to disassociate all interfaces.
+            hostrc.localhost.borrow().as_ref().unwrap().disassociate(
+                protocol,
+                sock_addr.port(),
+                peer_addr,
+            );
+
+            hostrc.internet.borrow().as_ref().unwrap().disassociate(
+                protocol,
+                sock_addr.port(),
+                peer_addr,
+            );
+        } else {
+            // TODO: return error if interface does not exist.
+            if let Some(iface) = hostrc.interface_mut(*sock_addr.ip()) {
+                iface.disassociate(protocol, sock_addr.port(), peer_addr);
             }
         }
     }

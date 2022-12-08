@@ -26,8 +26,11 @@ void networkinterface_free(NetworkInterface* interface);
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
         in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
 
-void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket);
-void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket);
+void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
+                                ProtocolType type, in_port_t port, in_addr_t peerIP,
+                                in_port_t peerPort);
+void networkinterface_disassociate(NetworkInterface* interface, ProtocolType type, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort);
 
 void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
                                 const CompatSocket* socket);

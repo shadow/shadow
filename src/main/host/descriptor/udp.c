@@ -236,8 +236,18 @@ static void _udp_close(LegacyFile* descriptor, const Host* host) {
     MAGIC_ASSERT(udp);
     _udp_setState(udp, UDPS_CLOSED);
 
-    CompatSocket compat_socket = compatsocket_fromLegacySocket(&udp->super);
-    host_disassociateInterface(host, &compat_socket);
+    in_addr_t sock_ip = 0;
+    in_port_t sock_port = 0;
+    if (!legacysocket_getSocketName(&udp->super, &sock_ip, &sock_port)) {
+        /* socket isn't bound, so don't try to disassociate */
+        return;
+    }
+
+    in_addr_t peer_ip = 0;
+    in_port_t peer_port = 0;
+    legacysocket_getPeerName(&udp->super, &peer_ip, &peer_port);
+
+    host_disassociateInterface(host, PUDP, sock_ip, sock_port, peer_ip, peer_port);
 }
 
 gint udp_shutdown(UDP* udp, gint how) {

@@ -42,12 +42,43 @@ impl NetworkInterface {
         }
     }
 
-    pub fn associate(&self, socket_ptr: *const c::CompatSocket) {
-        unsafe { c::networkinterface_associate(self.c_ptr.ptr(), socket_ptr) };
+    pub fn associate(
+        &self,
+        socket_ptr: *const c::CompatSocket,
+        protocol_type: c::ProtocolType,
+        port: u16,
+        peer_addr: SocketAddrV4,
+    ) {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer_addr.ip()).to_be();
+        let peer_port = peer_addr.port().to_be();
+
+        unsafe {
+            c::networkinterface_associate(
+                self.c_ptr.ptr(),
+                socket_ptr,
+                protocol_type,
+                port,
+                peer_ip,
+                peer_port,
+            )
+        };
     }
 
-    pub fn disassociate(&self, socket_ptr: *const c::CompatSocket) {
-        unsafe { c::networkinterface_disassociate(self.c_ptr.ptr(), socket_ptr) };
+    pub fn disassociate(&self, protocol_type: c::ProtocolType, port: u16, peer_addr: SocketAddrV4) {
+        let port = port.to_be();
+        let peer_ip = u32::from(*peer_addr.ip()).to_be();
+        let peer_port = peer_addr.port().to_be();
+
+        unsafe {
+            c::networkinterface_disassociate(
+                self.c_ptr.ptr(),
+                protocol_type,
+                port,
+                peer_ip,
+                peer_port,
+            )
+        };
     }
 
     pub fn is_associated(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {

@@ -281,7 +281,8 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
 
     /* set associations */
     CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-    host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, addr);
+    host_associateInterface(
+        _syscallhandler_getHost(sys), &compat_socket, ptype, addr, port, peerAddr, peerPort);
     return 0;
 }
 
@@ -745,7 +746,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
             /* set netiface->socket associations */
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
-            host_associateInterface(_syscallhandler_getHost(sys), &compat_socket, bindAddr);
+            host_associateInterface(
+                _syscallhandler_getHost(sys), &compat_socket, ptype, bindAddr, bindPort, 0, 0);
         }
     } else if (legacyfile_getType(desc) == DT_TCPSOCKET) {
         errcode = tcp_getConnectionError((TCP*)socket_desc);
