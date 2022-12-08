@@ -30,7 +30,7 @@ struct _Thread {
     int tid;
 
     HostId hostId;
-    Process* process;
+    pid_t processId;
     // If non-null, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
     PluginPtr tidAddress;
@@ -53,11 +53,10 @@ Thread* thread_new(const Host* host, Process* process, int threadID) {
     Thread* thread = g_new(Thread, 1);
     *thread = (Thread){.referenceCount = 1,
                        .hostId = host_getID(host),
-                       .process = process,
+                       .processId = process_getProcessID(process),
                        .tid = threadID,
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
-    process_ref(process);
 
     thread->sys = syscallhandler_new(host, process, thread);
     thread->mthread = managedthread_new(thread);
@@ -88,10 +87,6 @@ void thread_unref(Thread* thread) {
     if(thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
         managedthread_free(thread->mthread);
-        if (thread->process) {
-            process_unref(thread->process);
-            thread->process = NULL;
-        }
         if (thread->sys) {
             syscallhandler_unref(thread->sys);
             thread->sys = NULL;
@@ -129,7 +124,7 @@ void thread_resume(Thread* thread) {
     thread->cond = cond;
     if (thread->cond) {
         syscallcondition_waitNonblock(
-            thread->cond, thread_getHost(thread), thread->process, thread);
+            thread->cond, thread_getHost(thread), thread_getProcess(thread), thread);
     } else {
         utility_debugAssert(!managedthread_isRunning(thread->mthread));
         if (thread->sys) {
@@ -179,7 +174,11 @@ SysCallHandler* thread_getSysCallHandler(Thread* thread) {
     return thread->sys;
 }
 
-Process* thread_getProcess(Thread* thread) { return thread->process; }
+Process* thread_getProcess(Thread* thread) {
+    Process* p = host_getProcess(thread_getHost(thread), thread->processId);
+    utility_alwaysAssert(p);
+    return p;
+}
 
 const Host* thread_getHost(Thread* thread) {
     const Host* host = worker_getCurrentHost();
@@ -206,7 +205,7 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
     MAGIC_ASSERT(thread);
 
     const Host* host = thread_getHost(thread);
-    *child = thread_new(host, thread->process, host_getNewProcessID(host));
+    *child = thread_new(host, host_getProcess(host, thread->processId), host_getNewProcessID(host));
 
     int rv = managedthread_clone(
         (*child)->mthread, thread->mthread, flags, child_stack, ptid, ctid, newtls);
@@ -219,7 +218,7 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
 
 uint32_t thread_getProcessId(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return process_getProcessID(thread->process);
+    return thread->processId;
 }
 
 HostId thread_getHostId(Thread* thread) {
@@ -262,7 +261,7 @@ void thread_setTidAddress(Thread* thread, PluginPtr addr) {
 
 bool thread_isLeader(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->tid == process_getProcessID(thread->process);
+    return thread->tid == thread->processId;
 }
 
 bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host_lock) {
@@ -281,8 +280,8 @@ bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host
     }
 
     {
-        shd_kernel_sigset_t process_pending =
-            shimshmem_getProcessPendingSignals(host_lock, process_getSharedMem(thread->process));
+        shd_kernel_sigset_t process_pending = shimshmem_getProcessPendingSignals(
+            host_lock, process_getSharedMem(thread_getProcess(thread)));
         shd_kernel_sigset_t process_unblocked_pending =
             shd_sigandset(&process_pending, &unblocked_signals);
         if (!shd_sigisemptyset(&process_unblocked_pending)) {
