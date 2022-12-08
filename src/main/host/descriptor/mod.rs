@@ -950,6 +950,15 @@ mod export {
         unsafe { Box::from_raw(file as *mut File) };
     }
 
+    /// Increment the ref count of the `File` object. The returned pointer will not be the same as
+    /// the given pointer (they are distinct references), and they both must be dropped with
+    /// `file_drop` separately later.
+    #[no_mangle]
+    pub extern "C" fn file_cloneRef(file: *const File) -> *const File {
+        let file = unsafe { file.as_ref() }.unwrap();
+        Box::into_raw(Box::new(file.clone()))
+    }
+
     /// Get the state of the `File` object.
     #[no_mangle]
     pub extern "C" fn file_getStatus(file: *const File) -> c::Status {

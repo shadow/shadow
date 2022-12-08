@@ -69,3 +69,6 @@ Now if everything looks good, push to GitHub:
     git push origin "v$VERSION"
 
 Our releases will then be tagged off of the main branch.
+
+You probably want to also reset the `CHANGELOG.md` file in a new commit after
+tagging/pushing the release.
