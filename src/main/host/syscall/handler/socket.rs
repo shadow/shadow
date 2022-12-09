@@ -2,6 +2,7 @@ use std::mem::MaybeUninit;
 
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
+use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::Socket;
@@ -35,8 +36,9 @@ impl SyscallHandler {
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
 
-        // if it's not a unix socket, use the C syscall handler instead
-        if domain != libc::AF_UNIX {
+        // if it's not a unix socket or tcp socket, use the C syscall handler instead
+        if domain != libc::AF_UNIX && (domain != libc::AF_INET || socket_type != libc::SOCK_STREAM)
+        {
             return Self::legacy_syscall(c::syscallhandler_socket, ctx, args);
         }
 
@@ -76,6 +78,16 @@ impl SyscallHandler {
                     ctx.host.abstract_unix_namespace(),
                 ))
             }
+            libc::AF_INET => match socket_type {
+                libc::SOCK_STREAM => {
+                    if protocol != 0 && protocol != libc::IPPROTO_TCP {
+                        warn!("Unsupported inet stream socket protocol {protocol}");
+                        return Err(Errno::EPROTONOSUPPORT.into());
+                    }
+                    Socket::Inet(InetSocket::Tcp(TcpSocket::new(file_flags, ctx.host)))
+                }
+                _ => panic!("Should have called the C syscall handler"),
+            },
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 

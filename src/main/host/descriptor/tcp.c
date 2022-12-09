@@ -2019,8 +2019,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
                 /* we need to multiplex a new child */
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
-                Descriptor* desc =
-                    descriptor_fromLegacyFile((LegacyFile*)multiplexed, /* flags= */ 0);
+                Descriptor* desc = descriptor_fromLegacyTcp(multiplexed, /* flags= */ 0);
                 int handle = process_registerDescriptor(registerInProcess, desc);
 
                 multiplexed->child =

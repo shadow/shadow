@@ -1363,12 +1363,13 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     guint64 recvBufSize = host_getConfiguredRecvBufSize(_syscallhandler_getHost(sys));
     guint64 sendBufSize = host_getConfiguredSendBufSize(_syscallhandler_getHost(sys));
 
-    LegacySocket* sock_desc = NULL;
     if (type_no_flags == SOCK_STREAM) {
-        sock_desc = (LegacySocket*)tcp_new(_syscallhandler_getHost(sys), recvBufSize, sendBufSize);
-    } else {
-        sock_desc = (LegacySocket*)udp_new(_syscallhandler_getHost(sys), recvBufSize, sendBufSize);
+        panic("TCP sockets should be created by the rust socket() syscall handler");
     }
+
+    utility_alwaysAssert(type_no_flags == SOCK_DGRAM);
+    LegacySocket* sock_desc = sock_desc =
+        (LegacySocket*)udp_new(_syscallhandler_getHost(sys), recvBufSize, sendBufSize);
 
     int descFlags = 0;
     if (type & SOCK_CLOEXEC) {
