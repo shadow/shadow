@@ -3,6 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::sys::socket::SockaddrIn;
 
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
@@ -110,7 +111,11 @@ impl TcpSocket {
     }
 
     pub fn close(&mut self, _cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
-        todo!()
+        Worker::with_active_host(|h| {
+            unsafe { c::legacyfile_close(self.as_legacy_file(), h) };
+        })
+        .unwrap();
+        Ok(())
     }
 
     pub fn bind(

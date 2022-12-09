@@ -223,7 +223,11 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
 
         /* Call only if the listener is still in the table. */
         if (g_hash_table_contains(descriptor->listeners, listener)) {
-            statuslistener_onStatusChanged(listener, descriptor->status, statusesChanged);
+            /* First try adding to the global callback queue if it exists. */
+            if (!add_to_global_cb_queue(listener, descriptor->status, statusesChanged)) {
+                /* If there was no global callback queue, run the callback immediately. */
+                statuslistener_onStatusChanged(listener, descriptor->status, statusesChanged);
+            }
         }
 
         /* The above callback may have changes status again,

@@ -41,9 +41,11 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
-            .unwrap_or(Ok(()))
-            .map(|()| 0.into())
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
+                .unwrap_or(Ok(()))
+                .map(|()| 0.into())
+        })
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
