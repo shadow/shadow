@@ -383,10 +383,6 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        if let Socket::Inet(InetSocket::Tcp(_)) = socket {
-            return Self::legacy_syscall(c::syscallhandler_getsockname, ctx, args);
-        }
-
         // linux will return an EFAULT before other errors
         if addr_ptr.is_null() || addr_len_ptr.is_null() {
             return Err(Errno::EFAULT.into());
@@ -427,10 +423,6 @@ impl SyscallHandler {
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
-
-        if let Socket::Inet(InetSocket::Tcp(_)) = socket {
-            return Self::legacy_syscall(c::syscallhandler_getpeername, ctx, args);
-        }
 
         // linux will return an EFAULT before other errors like ENOTCONN
         if addr_ptr.is_null() || addr_len_ptr.is_null() {
