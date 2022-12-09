@@ -12,7 +12,7 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
@@ -211,11 +211,64 @@ impl TcpSocket {
 
     pub fn ioctl(
         &mut self,
-        _request: u64,
-        _arg_ptr: PluginPtr,
-        _memory_manager: &mut MemoryManager,
+        request: u64,
+        arg_ptr: PluginPtr,
+        memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        todo!()
+        match request {
+            // equivalent to SIOCINQ
+            libc::FIONREAD => {
+                let len = unsafe { c::tcp_getInputBufferLength(self.as_legacy_tcp()) }
+                    .try_into()
+                    .unwrap();
+
+                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+
+                Ok(0.into())
+            }
+            // equivalent to SIOCOUTQ
+            libc::TIOCOUTQ => {
+                let len = unsafe { c::tcp_getOutputBufferLength(self.as_legacy_tcp()) }
+                    .try_into()
+                    .unwrap();
+
+                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+
+                Ok(0.into())
+            }
+            libc::SIOCOUTQNSD => {
+                let len = unsafe { c::tcp_getNotSentBytes(self.as_legacy_tcp()) }
+                    .try_into()
+                    .unwrap();
+
+                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+
+                Ok(0.into())
+            }
+            libc::FIONBIO => {
+                panic!("This should have been handled by the ioctl syscall handler");
+            }
+            libc::TCGETS
+            | libc::TCSETS
+            | libc::TCSETSW
+            | libc::TCSETSF
+            | libc::TCGETA
+            | libc::TCSETA
+            | libc::TCSETAW
+            | libc::TCSETAF
+            | libc::TIOCGWINSZ
+            | libc::TIOCSWINSZ => {
+                // not a terminal
+                Err(Errno::ENOTTY.into())
+            }
+            _ => {
+                log::warn!("We do not yet handle ioctl request {request} on tcp sockets");
+                Err(Errno::EINVAL.into())
+            }
+        }
     }
 
     pub fn listen(

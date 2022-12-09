@@ -56,98 +56,6 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* fil
     return result;
 }
 
-static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
-                                          unsigned long request, PluginPtr argPtr) {
-    int result = -EINVAL;
-
-    switch (request) {
-        case SIOCINQ: { // equivalent to FIONREAD
-            int lenout = tcp_getInputBufferLength(tcp);
-            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
-
-            if (rv != 0) {
-                utility_debugAssert(rv < 0);
-                result = rv;
-                break;
-            }
-
-            result = 0;
-            break;
-        }
-
-        case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int lenout = tcp_getOutputBufferLength(tcp);
-            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
-
-            if (rv != 0) {
-                utility_debugAssert(rv < 0);
-                result = rv;
-                break;
-            }
-
-            result = 0;
-            break;
-        }
-
-        case SIOCOUTQNSD: {
-            int lenout = tcp_getNotSentBytes(tcp);
-            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
-
-            if (rv != 0) {
-                utility_debugAssert(rv < 0);
-                result = rv;
-                break;
-            }
-
-            result = 0;
-            break;
-        }
-
-        case FIONBIO: {
-            int val = 0;
-            int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
-
-            if (rv != 0) {
-                utility_debugAssert(rv < 0);
-                result = rv;
-                break;
-            }
-
-            if (val == 0) {
-                legacyfile_removeFlags((LegacyFile*)tcp, O_NONBLOCK);
-            } else {
-                legacyfile_addFlags((LegacyFile*)tcp, O_NONBLOCK);
-            }
-
-            result = 0;
-            break;
-        }
-
-        case TCGETS:
-        case TCSETS:
-        case TCSETSW:
-        case TCSETSF:
-        case TCGETA:
-        case TCSETA:
-        case TCSETAW:
-        case TCSETAF:
-        case TIOCGWINSZ:
-        case TIOCSWINSZ: {
-            // not a terminal
-            result = -ENOTTY;
-            break;
-        }
-
-        default: {
-            result = -EINVAL;
-            warning("We do not yet handle ioctl request %lu on tcp socket %i", request, fd);
-            break;
-        }
-    }
-
-    return result;
-}
-
 static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
                                           unsigned long request, PluginPtr argPtr) {
     int result = -EINVAL;
@@ -250,7 +158,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
     if (dtype == DT_FILE) {
         result = _syscallhandler_ioctlFileHelper(sys, (RegularFile*)desc, fd, request, argPtr);
     } else if (dtype == DT_TCPSOCKET) {
-        result = _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
+        utility_panic("Should have handled this in the rust syscall handler");
     } else if (dtype == DT_UDPSOCKET) {
         result = _syscallhandler_ioctlUDPHelper(sys, (UDP*)desc, fd, request, argPtr);
     } else {
