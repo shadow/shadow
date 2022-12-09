@@ -1,6 +1,8 @@
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use nix::errno::Errno;
 use nix::sys::socket::SockaddrIn;
 
 use crate::core::worker::Worker;
@@ -99,11 +101,39 @@ impl TcpSocket {
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
-        todo!()
+        let mut ip: libc::in_addr_t = 0;
+        let mut port: libc::in_port_t = 0;
+
+        // should return ip and port in network byte order
+        let okay =
+            unsafe { c::legacysocket_getSocketName(self.as_legacy_socket(), &mut ip, &mut port) };
+        if okay != 1 {
+            return Ok(Some(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into()));
+        }
+
+        let ip = Ipv4Addr::from(u32::from_be(ip));
+        let port = u16::from_be(port);
+        let addr = SocketAddrV4::new(ip, port);
+
+        Ok(Some(addr.into()))
     }
 
     pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
-        todo!()
+        let mut ip: libc::in_addr_t = 0;
+        let mut port: libc::in_port_t = 0;
+
+        // should return ip and port in network byte order
+        let okay =
+            unsafe { c::legacysocket_getPeerName(self.as_legacy_socket(), &mut ip, &mut port) };
+        if okay != 1 {
+            return Err(Errno::ENOTCONN.into());
+        }
+
+        let ip = Ipv4Addr::from(u32::from_be(ip));
+        let port = u16::from_be(port);
+        let addr = SocketAddrV4::new(ip, port);
+
+        Ok(Some(addr.into()))
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
