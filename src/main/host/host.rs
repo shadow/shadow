@@ -120,7 +120,7 @@ pub struct Host {
     #[cfg(feature = "perf_timers")]
     execution_timer: RefCell<PerfTimer>,
 
-    params: HostParameters,
+    pub params: HostParameters,
 
     cpu: RefCell<Option<Cpu>>,
 

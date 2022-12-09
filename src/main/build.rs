@@ -35,6 +35,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "main/bindings/c/bindings-opaque.h".into(),
                 "main/core/worker.h".into(),
                 "main/host/descriptor/descriptor_types.h".into(),
+                "main/host/descriptor/tcp.h".into(),
                 "main/host/futex_table.h".into(),
                 "main/host/network_interface.h".into(),
                 "main/host/protocol.h".into(),
@@ -132,11 +133,10 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("thread_sharedMem")
         .allowlist_function("affinity_.*")
         .allowlist_function("thread_.*")
-        .allowlist_function("legacyfile_close")
-        .allowlist_function("legacyfile_(ref|unref)")
-        .allowlist_function("legacyfile_getHandle")
-        .allowlist_function("legacyfile_setHandle")
-        .allowlist_function("legacyfile_shutdownHelper")
+        .allowlist_function("tcp_.*")
+        .allowlist_function("legacyfile_.*")
+        .allowlist_function("legacysocket_.*")
+        .blocklist_function("legacysocket_init")
         .allowlist_function("networkinterface_.*")
         .allowlist_function("hostc_.*")
         // used by shadow's main function

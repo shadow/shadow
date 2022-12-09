@@ -172,6 +172,10 @@ impl Process {
 mod export {
     use super::*;
 
+    use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::host::descriptor::socket::Socket;
+    use crate::host::descriptor::File;
+
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
     /// after.
     #[no_mangle]
@@ -248,12 +252,17 @@ mod export {
 
         match proc.get_descriptor(handle).map(|x| x.file()) {
             Some(CompatFile::Legacy(file)) => unsafe { file.ptr() },
-            Some(_) => {
-                log::warn!(
-                    "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
-                    handle
-                );
-                std::ptr::null_mut()
+            Some(CompatFile::New(file)) => {
+                // we have a special case for the legacy C TCP objects
+                if let File::Socket(Socket::Inet(InetSocket::Tcp(tcp))) = file.inner_file() {
+                    tcp.borrow().as_legacy_file()
+                } else {
+                    log::warn!(
+                        "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
+                        handle
+                    );
+                    std::ptr::null_mut()
+                }
             }
             None => std::ptr::null_mut(),
         }

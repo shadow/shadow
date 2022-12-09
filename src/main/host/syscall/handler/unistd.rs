@@ -2,6 +2,8 @@ use crate::cshadow as c;
 use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::socket::inet::InetSocket;
+use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
@@ -39,9 +41,11 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
-            .unwrap_or(Ok(()))
-            .map(|()| 0.into())
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
+                .unwrap_or(Ok(()))
+                .map(|()| 0.into())
+        })
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
@@ -158,6 +162,10 @@ impl SyscallHandler {
             },
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_read, ctx, args);
+        }
+
         self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
@@ -189,6 +197,10 @@ impl SyscallHandler {
                 }
             },
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_pread64, ctx, args);
+        }
 
         self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
@@ -278,6 +290,10 @@ impl SyscallHandler {
             },
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_write, ctx, args);
+        }
+
         self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
@@ -309,6 +325,10 @@ impl SyscallHandler {
                 }
             },
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx, args);
+        }
 
         self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }

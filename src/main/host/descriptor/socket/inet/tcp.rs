@@ -3,45 +3,99 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::sys::socket::SockaddrIn;
 
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
 };
+use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
+use crate::utility::{HostTreePointer, ObjectCounter};
 
-pub struct TcpSocket {}
+pub struct TcpSocket {
+    socket: HostTreePointer<c::TCP>,
+    // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
+    // this file
+    has_open_file: bool,
+    _counter: ObjectCounter,
+}
 
 impl TcpSocket {
-    pub fn new() -> Arc<AtomicRefCell<Self>> {
-        todo!()
+    pub fn new(status: FileStatus, host: &Host) -> Arc<AtomicRefCell<Self>> {
+        let recv_buf_size = host.params.init_sock_recv_buf_size.try_into().unwrap();
+        let send_buf_size = host.params.init_sock_send_buf_size.try_into().unwrap();
+
+        let tcp = unsafe { c::tcp_new(host, recv_buf_size, send_buf_size) };
+        let tcp = unsafe { Self::new_from_legacy(tcp) };
+
+        tcp.borrow_mut().set_status(status);
+
+        tcp
+    }
+
+    /// Takes ownership of the [`TCP`](c::TCP) reference.
+    pub unsafe fn new_from_legacy(legacy_tcp: *mut c::TCP) -> Arc<AtomicRefCell<Self>> {
+        assert!(!legacy_tcp.is_null());
+
+        let socket = Self {
+            socket: HostTreePointer::new(legacy_tcp),
+            has_open_file: false,
+            _counter: ObjectCounter::new("TcpSocket"),
+        };
+
+        Arc::new(AtomicRefCell::new(socket))
+    }
+
+    /// Get the [`c::TCP`] pointer.
+    pub fn as_legacy_tcp(&self) -> *mut c::TCP {
+        unsafe { self.socket.ptr() }
+    }
+
+    /// Get the [`c::TCP`] pointer as a [`c::LegacySocket`] pointer.
+    pub fn as_legacy_socket(&self) -> *mut c::LegacySocket {
+        self.as_legacy_tcp() as *mut c::LegacySocket
+    }
+
+    /// Get the [`c::TCP`] pointer as a [`c::LegacyFile`] pointer.
+    pub fn as_legacy_file(&self) -> *mut c::LegacyFile {
+        self.as_legacy_tcp() as *mut c::LegacyFile
     }
 
     pub fn get_status(&self) -> FileStatus {
-        todo!()
+        let o_flags = unsafe { c::legacyfile_getFlags(self.as_legacy_file()) };
+        let o_flags =
+            nix::fcntl::OFlag::from_bits(o_flags).expect("Not a valid OFlag: {o_flags:?}");
+        let (status, extra_flags) = FileStatus::from_o_flags(o_flags);
+        assert!(
+            extra_flags.is_empty(),
+            "Rust wrapper doesn't support {extra_flags:?} flags",
+        );
+        status
     }
 
-    pub fn set_status(&mut self, _status: FileStatus) {
-        todo!();
+    pub fn set_status(&mut self, status: FileStatus) {
+        let o_flags = status.as_o_flags().bits();
+        unsafe { c::legacyfile_setFlags(self.as_legacy_file(), o_flags) };
     }
 
     pub fn mode(&self) -> FileMode {
-        todo!()
+        FileMode::READ | FileMode::WRITE
     }
 
     pub fn has_open_file(&self) -> bool {
-        todo!()
+        self.has_open_file
     }
 
     pub fn supports_sa_restart(&self) -> bool {
-        todo!()
+        // TODO: false if a timeout has been set via setsockopt
+        true
     }
 
-    pub fn set_has_open_file(&mut self, _val: bool) {
-        todo!();
+    pub fn set_has_open_file(&mut self, val: bool) {
+        self.has_open_file = val;
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
@@ -53,11 +107,15 @@ impl TcpSocket {
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        todo!()
+        nix::sys::socket::AddressFamily::Inet
     }
 
     pub fn close(&mut self, _cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
-        todo!()
+        Worker::with_active_host(|h| {
+            unsafe { c::legacyfile_close(self.as_legacy_file(), h) };
+        })
+        .unwrap();
+        Ok(())
     }
 
     pub fn bind(
@@ -162,15 +220,21 @@ impl TcpSocket {
         todo!()
     }
 
-    pub fn add_legacy_listener(&mut self, _ptr: HostTreePointer<c::StatusListener>) {
-        todo!();
+    pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
+        unsafe { c::legacyfile_addListener(self.as_legacy_file(), ptr.ptr()) };
     }
 
-    pub fn remove_legacy_listener(&mut self, _ptr: *mut c::StatusListener) {
-        todo!();
+    pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        unsafe { c::legacyfile_removeListener(self.as_legacy_file(), ptr) };
     }
 
     pub fn state(&self) -> FileState {
-        todo!()
+        unsafe { c::legacyfile_getStatus(self.as_legacy_file()) }.into()
+    }
+}
+
+impl std::ops::Drop for TcpSocket {
+    fn drop(&mut self) {
+        unsafe { c::legacyfile_unref(self.socket.ptr() as *mut libc::c_void) };
     }
 }
