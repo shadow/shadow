@@ -641,14 +641,6 @@ mod export {
         Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
-    #[no_mangle]
-    pub extern "C" fn worker_setMinEventTimeNextRound(time: cshadow::CSimulationTime) {
-        let time = SimulationTime::from_c_simtime(time).unwrap();
-        let time = EmulatedTime::from_abs_simtime(time);
-
-        Worker::update_next_event_time(time);
-    }
-
     // TODO: move to Router::_route_outgoing_packet
     #[no_mangle]
     pub extern "C" fn worker_sendPacket(src_host: *const Host, packet: *mut cshadow::Packet) {
@@ -687,12 +679,6 @@ mod export {
         Worker::add_syscall_counts(syscall_counts);
     }
 
-    /// ID of the current thread's Worker. Panics if the thread has no Worker.
-    #[no_mangle]
-    pub extern "C" fn worker_threadID() -> i32 {
-        Worker::thread_id().unwrap().0.try_into().unwrap()
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn worker_setActiveProcess(process: *mut cshadow::Process) {
         if process.is_null() {
@@ -714,25 +700,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setRoundEndTime(t: CSimulationTime) {
-        Worker::set_round_end_time(EmulatedTime::from_abs_simtime(
-            SimulationTime::from_c_simtime(t).unwrap(),
-        ));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn _worker_getRoundEndTime() -> CSimulationTime {
-        SimulationTime::to_c_simtime(Worker::round_end_time().map(|t| t.to_abs_simtime()))
-    }
-
-    #[no_mangle]
     pub extern "C" fn worker_setCurrentEmulatedTime(t: CEmulatedTime) {
         Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_clearCurrentTime() {
-        Worker::clear_current_time();
     }
 
     #[no_mangle]
@@ -746,24 +715,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateLowestUsedLatency(min_path_latency: CSimulationTime) {
-        let min_path_latency = SimulationTime::from_c_simtime(min_path_latency).unwrap();
-        Worker::update_lowest_used_latency(min_path_latency);
-    }
-
-    #[no_mangle]
     pub extern "C" fn worker_isBootstrapActive() -> bool {
         Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_isSimCompleted() -> bool {
-        Worker::with(|w| w.clock.borrow().now.unwrap() >= w.shared.sim_end_time).unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_isAlive() -> bool {
-        Worker::is_alive()
     }
 
     #[no_mangle]
