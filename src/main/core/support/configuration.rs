@@ -13,9 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::format::StraceFmtMode;
-use shadow_shim_helper_rs::simulation_time::{
-    CSimulationTime, SimulationTime, SIMTIME_INVALID, SIMTIME_ONE_SECOND,
-};
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use logger as c_log;
 
@@ -1305,73 +1303,6 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn clioptions_freeString(string: *mut libc::c_char) {
-        if !string.is_null() {
-            unsafe { CString::from_raw(string) };
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_getGdb(options: *const CliOptions) -> bool {
-        assert!(!options.is_null());
-        let options = unsafe { &*options };
-        options.gdb
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_getShmCleanup(options: *const CliOptions) -> bool {
-        assert!(!options.is_null());
-        let options = unsafe { &*options };
-        options.shm_cleanup
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_getShowBuildInfo(options: *const CliOptions) -> bool {
-        assert!(!options.is_null());
-        let options = unsafe { &*options };
-        options.show_build_info
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_getShowConfig(options: *const CliOptions) -> bool {
-        assert!(!options.is_null());
-        let options = unsafe { &*options };
-        options.show_config
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_getConfig(options: *const CliOptions) -> *mut libc::c_char {
-        assert!(!options.is_null());
-        let options = unsafe { &*options };
-
-        match &options.config {
-            Some(s) => CString::into_raw(CString::new(s.clone()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_freeString(string: *mut libc::c_char) {
-        if !string.is_null() {
-            unsafe { CString::from_raw(string) };
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_showConfig(config: *const ConfigOptions) {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        eprintln!("{:#?}", config);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseSchedFifo(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_sched_fifo.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseExplicitBlockMessage(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1407,72 +1338,10 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> NonZeroU32 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.general.parallelism.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_legacy_working_dir.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getProgress(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.general.progress.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getHostHeartbeatLogLevel(
-        config: *const ConfigOptions,
-    ) -> c_log::LogLevel {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        match &config.experimental.host_heartbeat_log_level {
-            Some(x) => x.to_c_loglevel(),
-            None => c_log::_LogLevel_LOGLEVEL_UNSET,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getHostHeartbeatLogInfo(
-        config: *const ConfigOptions,
-    ) -> c::LogInfoFlags {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        let mut flags = 0;
-
-        for f in config
-            .experimental
-            .host_heartbeat_log_info
-            .as_ref()
-            .unwrap()
-        {
-            flags |= f.to_c_loginfoflag();
-        }
-
-        flags
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getHostHeartbeatInterval(
-        config: *const ConfigOptions,
-    ) -> CSimulationTime {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config
-            .experimental
-            .host_heartbeat_interval
-            .flatten()
-            .map(|x| x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND)
-            .unwrap_or(SIMTIME_INVALID)
     }
 
     #[no_mangle]
