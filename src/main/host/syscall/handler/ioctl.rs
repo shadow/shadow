@@ -1,5 +1,8 @@
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
+use crate::host::descriptor::socket::inet::InetSocket;
+use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::File;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
@@ -47,6 +50,11 @@ impl SyscallHandler {
         };
 
         let file = file.inner_file().clone();
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file {
+            return Self::legacy_syscall(c::syscallhandler_ioctl, ctx, args);
+        }
+
         let mut file = file.borrow_mut();
 
         // all file types that shadow implements should support non-blocking operation

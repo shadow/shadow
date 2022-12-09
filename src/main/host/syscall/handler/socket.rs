@@ -2,6 +2,7 @@ use std::mem::MaybeUninit;
 
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
@@ -108,6 +109,10 @@ impl SyscallHandler {
 
         let file = file.inner_file().clone();
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file {
+            return Self::legacy_syscall(c::syscallhandler_bind, ctx, args);
+        }
+
         let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
@@ -151,6 +156,10 @@ impl SyscallHandler {
                 }
             },
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_sendto, ctx, args);
+        }
 
         self.sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
     }
@@ -258,6 +267,10 @@ impl SyscallHandler {
             },
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx, args);
+        }
+
         self.recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
     }
 
@@ -358,6 +371,10 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
+        if let Socket::Inet(InetSocket::Tcp(_)) = socket {
+            return Self::legacy_syscall(c::syscallhandler_getsockname, ctx, args);
+        }
+
         // linux will return an EFAULT before other errors
         if addr_ptr.is_null() || addr_len_ptr.is_null() {
             return Err(Errno::EFAULT.into());
@@ -399,6 +416,10 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
+        if let Socket::Inet(InetSocket::Tcp(_)) = socket {
+            return Self::legacy_syscall(c::syscallhandler_getpeername, ctx, args);
+        }
+
         // linux will return an EFAULT before other errors like ENOTCONN
         if addr_ptr.is_null() || addr_len_ptr.is_null() {
             return Err(Errno::EFAULT.into());
@@ -432,6 +453,10 @@ impl SyscallHandler {
                 return Self::legacy_syscall(c::syscallhandler_listen, ctx, args);
             }
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_listen, ctx, args);
+        }
 
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
@@ -470,6 +495,10 @@ impl SyscallHandler {
             },
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_accept, ctx, args);
+        }
+
         self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
@@ -501,6 +530,10 @@ impl SyscallHandler {
                 }
             },
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_accept4, ctx, args);
+        }
 
         self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
     }
@@ -608,6 +641,10 @@ impl SyscallHandler {
             },
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_connect, ctx, args);
+        }
+
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
@@ -642,6 +679,10 @@ impl SyscallHandler {
                 return Self::legacy_syscall(c::syscallhandler_shutdown, ctx, args);
             }
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_shutdown, ctx, args);
+        }
 
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
@@ -771,6 +812,10 @@ impl SyscallHandler {
             }
         };
 
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx, args);
+        }
+
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
@@ -800,6 +845,10 @@ impl SyscallHandler {
                 return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx, args);
             }
         };
+
+        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+            return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx, args);
+        }
 
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
