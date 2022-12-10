@@ -39,9 +39,6 @@ uintptr_t compatsocket_toTagged(const CompatSocket* socket);
 CompatSocket compatsocket_fromTagged(uintptr_t ptr);
 
 /* compatability wrappers */
-ProtocolType compatsocket_getProtocol(const CompatSocket* socket);
-bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
-bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket);
 void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet);
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);

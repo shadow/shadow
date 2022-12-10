@@ -94,35 +94,6 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
     return socket;
 }
 
-ProtocolType compatsocket_getProtocol(const CompatSocket* socket) {
-    switch (socket->type) {
-        case CST_LEGACY_SOCKET: return legacysocket_getProtocol(socket->object.as_legacy_socket);
-        case CST_NONE: utility_panic("Unexpected CompatSocket type");
-    }
-
-    utility_panic("Invalid CompatSocket type");
-}
-
-bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
-    switch (socket->type) {
-        case CST_LEGACY_SOCKET:
-            return legacysocket_getPeerName(socket->object.as_legacy_socket, ip, port);
-        case CST_NONE: utility_panic("Unexpected CompatSocket type");
-    }
-
-    utility_panic("Invalid CompatSocket type");
-}
-
-bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
-    switch (socket->type) {
-        case CST_LEGACY_SOCKET:
-            return legacysocket_getSocketName(socket->object.as_legacy_socket, ip, port);
-        case CST_NONE: utility_panic("Unexpected CompatSocket type");
-    }
-
-    utility_panic("Invalid CompatSocket type");
-}
-
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
