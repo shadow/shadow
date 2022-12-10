@@ -157,7 +157,6 @@ struct _Process {
     /* Pause shadow after launching this process, to give the user time to attach gdb */
     bool pause_for_debugging;
 
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -899,7 +898,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
-    proc->referenceCount = 1;
     proc->isExiting = false;
 
     proc->straceLoggingMode = _strace_logging_mode;
@@ -924,7 +922,7 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     return proc;
 }
 
-static void _process_free(Process* proc) {
+void process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
     process_freePtrsWithoutFlushing(proc);
@@ -989,15 +987,6 @@ static void _process_free(Process* proc) {
 
     MAGIC_CLEAR(proc);
     g_free(proc);
-}
-
-void process_unref(Process* proc) {
-    MAGIC_ASSERT(proc);
-    (proc->referenceCount)--;
-    utility_debugAssert(proc->referenceCount >= 0);
-    if(proc->referenceCount == 0) {
-        _process_free(proc);
-    }
 }
 
 MemoryManager* process_getMemoryManager(Process* proc) {
