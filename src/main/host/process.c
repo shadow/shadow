@@ -991,11 +991,6 @@ static void _process_free(Process* proc) {
     g_free(proc);
 }
 
-void process_ref(Process* proc) {
-    MAGIC_ASSERT(proc);
-    (proc->referenceCount)++;
-}
-
 void process_unref(Process* proc) {
     MAGIC_ASSERT(proc);
     (proc->referenceCount)--;
