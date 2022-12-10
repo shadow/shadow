@@ -767,7 +767,10 @@ static void _process_runStartTask(const Host* host, gpointer pid_ptr, gpointer n
     _process_start(proc);
 }
 
-static void _process_runStopTask(const Host* host, gpointer proc, gpointer nothing) {
+static void _process_runStopTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
+    pid_t pid = GPOINTER_TO_INT(pid_ptr);
+    Process* proc = host_getProcess(host, pid);
+    utility_alwaysAssert(proc);
     process_stop(proc);
 }
 
@@ -783,9 +786,9 @@ void process_schedule(Process* proc, const Host* host) {
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
-        process_ref(proc);
-        TaskRef* stopProcessTask = taskref_new_bound(proc->hostId, _process_runStopTask, proc, NULL,
-                                                     (TaskObjectFreeFunc)process_unref, NULL);
+        TaskRef* stopProcessTask =
+            taskref_new_bound(proc->hostId, _process_runStopTask,
+                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
         host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
         taskref_drop(stopProcessTask);
     }
