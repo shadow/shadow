@@ -13,6 +13,7 @@ use crate::host::descriptor::{
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::network::packet::Packet;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
@@ -98,6 +99,49 @@ impl TcpSocket {
 
     pub fn set_has_open_file(&mut self, val: bool) {
         self.has_open_file = val;
+    }
+
+    pub fn push_in_packet(&mut self, packet: Packet, _cb_queue: &mut CallbackQueue) {
+        let packet = packet.into_inner();
+
+        Worker::with_active_host(|host| {
+            unsafe { c::legacysocket_pushInPacket(self.as_legacy_socket(), host, packet) };
+        })
+        .unwrap();
+    }
+
+    pub fn pull_out_packet(&mut self, _cb_queue: &mut CallbackQueue) -> Option<Packet> {
+        let packet = Worker::with_active_host(|host| unsafe {
+            c::legacysocket_pullOutPacket(self.as_legacy_socket(), host)
+        })
+        .unwrap();
+
+        if packet.is_null() {
+            return None;
+        }
+
+        Some(Packet::from_raw(packet))
+    }
+
+    pub fn peek_next_out_packet(&self) -> Option<Packet> {
+        let packet = unsafe { c::legacysocket_peekNextOutPacket(self.as_legacy_socket()) };
+
+        if packet.is_null() {
+            return None;
+        }
+
+        Some(Packet::from_raw(packet))
+    }
+
+    pub fn update_packet_header(&self, packet: &mut Packet) {
+        Worker::with_active_host(|host| unsafe {
+            c::tcp_networkInterfaceIsAboutToSendPacket(
+                self.as_legacy_tcp(),
+                host,
+                packet.borrow_inner(),
+            );
+        })
+        .unwrap();
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {

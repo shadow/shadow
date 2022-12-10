@@ -17,10 +17,12 @@ typedef struct _CompatSocket CompatSocket;
 enum _CompatSocketTypes {
     CST_NONE,
     CST_LEGACY_SOCKET,
+    CST_INET_SOCKET,
 };
 
 union _CompatSocketObject {
     LegacySocket* as_legacy_socket;
+    const InetSocket* as_inet_socket;
 };
 
 struct _CompatSocket {
@@ -29,6 +31,7 @@ struct _CompatSocket {
 };
 
 CompatSocket compatsocket_fromLegacySocket(LegacySocket* socket);
+CompatSocket compatsocket_fromInetSocket(const InetSocket* socket);
 
 /* reference counting */
 CompatSocket compatsocket_refAs(const CompatSocket* socket);

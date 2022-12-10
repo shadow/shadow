@@ -291,6 +291,10 @@ static void _networkinterface_process_packet_in(const Host* host, NetworkInterfa
         case CST_LEGACY_SOCKET:
             legacySocket = socket.object.as_legacy_socket;
             break;
+        case CST_INET_SOCKET:
+            // TODO: handle rust sockets in the tracker
+            legacySocket = NULL;
+            break;
         case CST_NONE:
             legacySocket = NULL;
             break;
@@ -388,6 +392,10 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
             case CST_LEGACY_SOCKET:
                 *socketOut = socket.object.as_legacy_socket;
                 break;
+            case CST_INET_SOCKET:
+                // TODO: handle rust sockets in the tracker
+                *socketOut = NULL;
+                break;
             case CST_NONE:
                 *socketOut = NULL;
                 break;
@@ -430,6 +438,10 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         switch (socket.type) {
             case CST_LEGACY_SOCKET:
                 *socketOut = socket.object.as_legacy_socket;
+                break;
+            case CST_INET_SOCKET:
+                // TODO: handle rust sockets in the tracker
+                *socketOut = NULL;
                 break;
             case CST_NONE:
                 *socketOut = NULL;
