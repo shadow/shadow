@@ -86,7 +86,7 @@ int process_getStraceFd(Process* proc);
 const gchar* process_getPluginName(Process* proc);
 
 /* Returns the processID that was assigned to us in process_new */
-guint process_getProcessID(Process* proc);
+pid_t process_getProcessID(Process* proc);
 
 /* Returns the native pid of the process */
 pid_t process_getNativePid(const Process* proc);

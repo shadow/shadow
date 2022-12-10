@@ -79,7 +79,7 @@ struct _Process {
     HostId hostId;
 
     /* unique id of the program that this process should run */
-    guint processID;
+    pid_t processID;
     GString* processName;
 
     /* All of the descriptors opened by this process. */
@@ -216,7 +216,7 @@ const char* process_getWorkingDir(Process* proc) {
     return proc->workingDir;
 }
 
-guint process_getProcessID(Process* proc) {
+pid_t process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
     return proc->processID;
 }
