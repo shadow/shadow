@@ -161,7 +161,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-static void _unref_process_cb(gpointer data);
 static void _unref_thread_cb(gpointer data);
 
 static const Host* _host(Process* proc) {
@@ -647,11 +646,6 @@ static void _start_thread_task(const Host* host, gpointer callbackObject,
     process_continue(process, thread);
 }
 
-static void _unref_process_cb(gpointer data) {
-    Process* process = data;
-    process_unref(process);
-}
-
 static void _unref_thread_cb(gpointer data) {
     Thread* thread = data;
     thread_unref(thread);
@@ -810,8 +804,9 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-static void _process_itimer_real_expiration(const Host* host, void* voidProcess, void* _unused) {
-    Process* process = voidProcess;
+static void _process_itimer_real_expiration(const Host* host, void* voidPid, void* _unused) {
+    pid_t pid = GPOINTER_TO_INT(voidPid);
+    Process* process = host_getProcess(host, pid);
     MAGIC_ASSERT(process);
 
     int overrun = timer_getExpirationCount(process->itimerReal);
@@ -917,9 +912,9 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
 
     proc->dumpable = SUID_DUMP_USER;
 
-    process_ref(proc);
-    TaskRef* task = taskref_new_bound(
-        host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
+    TaskRef* task =
+        taskref_new_bound(host_getID(host), _process_itimer_real_expiration,
+                          GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
     proc->itimerReal = timer_new(task);
     // timer_new clones the task; we don't need our own reference anymore.
     taskref_drop(task);

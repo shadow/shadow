@@ -1,5 +1,4 @@
 use std::{
-    mem::MaybeUninit,
     ops::Sub,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -8,40 +7,7 @@ use nix::sys::{
     signal::{SaFlags, SigAction, SigHandler, SigSet, Signal},
     time::{TimeVal, TimeValLike},
 };
-use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-struct ITimer {
-    pub interval: TimeVal,
-    pub value: TimeVal,
-}
-
-impl From<libc::itimerval> for ITimer {
-    fn from(val: libc::itimerval) -> Self {
-        Self {
-            interval: TimeVal::from(val.it_interval),
-            value: TimeVal::from(val.it_value),
-        }
-    }
-}
-
-// Neither `libc` nor `nix` wrap `getitimer`.
-fn getitimer(which: i32) -> nix::Result<ITimer> {
-    let mut old_value: libc::itimerval = unsafe { MaybeUninit::zeroed().assume_init() };
-    if unsafe { libc::syscall(libc::SYS_getitimer, which, &mut old_value as *mut _) } == -1 {
-        return Err(nix::errno::Errno::last());
-    }
-    Ok(old_value.into())
-}
-
-// Neither `libc` nor `nix` wrap `setitimer`.
-fn setitimer(which: i32, new_value: &libc::itimerval) -> nix::Result<ITimer> {
-    let mut old_value: libc::itimerval = unsafe { MaybeUninit::zeroed().assume_init() };
-    if unsafe { libc::syscall(libc::SYS_setitimer, which, new_value, &mut old_value) } == -1 {
-        return Err(nix::errno::Errno::last());
-    }
-    Ok(old_value.into())
-}
+use test_utils::{ensure_ord, getitimer, set, setitimer, ITimer, ShadowTest, TestEnvironment};
 
 // Counts how many times the SIGALRM handler ran.
 static SIGNAL_CTR: AtomicU64 = AtomicU64::new(0);
