@@ -33,9 +33,13 @@ impl LegacyCallbackQueue {
         // loop until there are no more events
         let mut count = 0;
 
-        // the mutable borrow is short-lived so that new callbacks can be added to the queue while
-        // running `f`
-        while let Some(f) = queue.borrow_mut().as_mut().unwrap().0.pop_front() {
+        loop {
+            // the mutable borrow is short-lived so that new callbacks can be added to the queue
+            // while running `f`
+            let Some(f) = queue.borrow_mut().as_mut().unwrap().0.pop_front() else {
+                break;
+            };
+
             // run the event and allow it to add new events
             (f)();
 
