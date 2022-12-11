@@ -66,6 +66,8 @@ impl SyscallHandler {
             libc::SYS_rseq => self.rseq(ctx, args),
             libc::SYS_read => self.read(ctx, args),
             libc::SYS_recvfrom => self.recvfrom(ctx, args),
+            libc::SYS_sched_getaffinity => self.sched_getaffinity(ctx, args),
+            libc::SYS_sched_setaffinity => self.sched_setaffinity(ctx, args),
             libc::SYS_sched_yield => self.sched_yield(ctx, args),
             libc::SYS_sendto => self.sendto(ctx, args),
             libc::SYS_setitimer => self.setitimer(ctx, args),
