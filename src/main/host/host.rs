@@ -6,6 +6,7 @@ use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::{NetworkInterface, PcapOptions};
+use crate::host::process::Process;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
 use crate::utility::{self, HostTreePointer, SyncSendPointer};
@@ -457,10 +458,10 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn processes(
-        &self,
-    ) -> impl Deref<Target = BTreeMap<ProcessId, HostTreePointer<cshadow::Process>>> + '_ {
-        self.processes.borrow()
+    pub fn process(&self, id: &ProcessId) -> Option<Process> {
+        let processes = self.processes.borrow();
+        let process = processes.get(id)?;
+        Some(unsafe { Process::borrow_from_c(process.ptr()) })
     }
 
     #[allow(non_snake_case)]

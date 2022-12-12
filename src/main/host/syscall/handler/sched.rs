@@ -34,8 +34,7 @@ impl SyscallHandler {
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        let processes = ctx.host.processes();
-        if !processes.contains_key(&pid) && pid_t != 0 {
+        if ctx.host.process(&pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
 
@@ -65,8 +64,7 @@ impl SyscallHandler {
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        let processes = ctx.host.processes();
-        if !processes.contains_key(&pid) && pid_t != 0 {
+        if ctx.host.process(&pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
 
