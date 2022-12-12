@@ -368,19 +368,6 @@ void networkinterface_receivePackets(NetworkInterface* interface, const Host* ho
     }
 }
 
-static void _networkinterface_updatePacketHeader(const Host* host, const CompatSocket* socket,
-                                                 Packet* packet) {
-    if (socket->type == CST_LEGACY_SOCKET) {
-        LegacyFile* descriptor = (LegacyFile*)socket->object.as_legacy_socket;
-
-        LegacyFileType type = legacyfile_getType(descriptor);
-        if (type == DT_TCPSOCKET) {
-            TCP* tcp = (TCP*)descriptor;
-            tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);
-        }
-    }
-}
-
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, const Host* host,
                                                   LegacySocket** socketOut) {
@@ -407,7 +394,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(host, &socket, packet);
+            compatsocket_updatePacketHeader(&socket, host, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {
@@ -450,7 +437,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(host, &socket, packet);
+            compatsocket_updatePacketHeader(&socket, host, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {
