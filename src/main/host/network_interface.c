@@ -291,6 +291,10 @@ static void _networkinterface_process_packet_in(const Host* host, NetworkInterfa
         case CST_LEGACY_SOCKET:
             legacySocket = socket.object.as_legacy_socket;
             break;
+        case CST_INET_SOCKET:
+            // TODO: handle rust sockets in the tracker
+            legacySocket = NULL;
+            break;
         case CST_NONE:
             legacySocket = NULL;
             break;
@@ -368,19 +372,6 @@ void networkinterface_receivePackets(NetworkInterface* interface, const Host* ho
     }
 }
 
-static void _networkinterface_updatePacketHeader(const Host* host, const CompatSocket* socket,
-                                                 Packet* packet) {
-    if (socket->type == CST_LEGACY_SOCKET) {
-        LegacyFile* descriptor = (LegacyFile*)socket->object.as_legacy_socket;
-
-        LegacyFileType type = legacyfile_getType(descriptor);
-        if (type == DT_TCPSOCKET) {
-            TCP* tcp = (TCP*)descriptor;
-            tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);
-        }
-    }
-}
-
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, const Host* host,
                                                   LegacySocket** socketOut) {
@@ -401,13 +392,17 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
             case CST_LEGACY_SOCKET:
                 *socketOut = socket.object.as_legacy_socket;
                 break;
+            case CST_INET_SOCKET:
+                // TODO: handle rust sockets in the tracker
+                *socketOut = NULL;
+                break;
             case CST_NONE:
                 *socketOut = NULL;
                 break;
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(host, &socket, packet);
+            compatsocket_updatePacketHeader(&socket, host, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {
@@ -444,13 +439,17 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             case CST_LEGACY_SOCKET:
                 *socketOut = socket.object.as_legacy_socket;
                 break;
+            case CST_INET_SOCKET:
+                // TODO: handle rust sockets in the tracker
+                *socketOut = NULL;
+                break;
             case CST_NONE:
                 *socketOut = NULL;
                 break;
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(host, &socket, packet);
+            compatsocket_updatePacketHeader(&socket, host, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {

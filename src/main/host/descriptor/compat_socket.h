@@ -17,10 +17,12 @@ typedef struct _CompatSocket CompatSocket;
 enum _CompatSocketTypes {
     CST_NONE,
     CST_LEGACY_SOCKET,
+    CST_INET_SOCKET,
 };
 
 union _CompatSocketObject {
     LegacySocket* as_legacy_socket;
+    const InetSocket* as_inet_socket;
 };
 
 struct _CompatSocket {
@@ -29,6 +31,7 @@ struct _CompatSocket {
 };
 
 CompatSocket compatsocket_fromLegacySocket(LegacySocket* socket);
+CompatSocket compatsocket_fromInetSocket(const InetSocket* socket);
 
 /* reference counting */
 CompatSocket compatsocket_refAs(const CompatSocket* socket);
@@ -39,11 +42,9 @@ uintptr_t compatsocket_toTagged(const CompatSocket* socket);
 CompatSocket compatsocket_fromTagged(uintptr_t ptr);
 
 /* compatability wrappers */
-ProtocolType compatsocket_getProtocol(const CompatSocket* socket);
-bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
-bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port);
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket);
 void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet);
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);
+void compatsocket_updatePacketHeader(const CompatSocket* socket, const Host* host, Packet* packet);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_COMPAT_SOCKET_H_ */

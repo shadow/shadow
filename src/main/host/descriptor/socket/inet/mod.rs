@@ -6,6 +6,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::network::packet::Packet;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
@@ -132,6 +133,16 @@ impl InetSocketRef<'_> {
     );
 }
 
+// inet socket-specific functions
+impl InetSocketRef<'_> {
+    enum_passthrough!(self, (), Tcp;
+        pub fn peek_next_out_packet(&self) -> Option<Packet>
+    );
+    enum_passthrough!(self, (packet), Tcp;
+        pub fn update_packet_header(&self, packet: &mut Packet)
+    );
+}
+
 // file functions
 impl InetSocketRefMut<'_> {
     enum_passthrough!(self, (), Tcp;
@@ -220,6 +231,22 @@ impl InetSocketRefMut<'_> {
     }
 }
 
+// inet socket-specific functions
+impl InetSocketRefMut<'_> {
+    enum_passthrough!(self, (packet, cb_queue), Tcp;
+        pub fn push_in_packet(&mut self, packet: Packet, cb_queue: &mut CallbackQueue)
+    );
+    enum_passthrough!(self, (cb_queue), Tcp;
+        pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<Packet>
+    );
+    enum_passthrough!(self, (), Tcp;
+        pub fn peek_next_out_packet(&self) -> Option<Packet>
+    );
+    enum_passthrough!(self, (packet), Tcp;
+        pub fn update_packet_header(&self, packet: &mut Packet)
+    );
+}
+
 impl std::fmt::Debug for InetSocketRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -247,5 +274,74 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
             self.state(),
             self.get_status()
         )
+    }
+}
+
+mod export {
+    use super::*;
+
+    /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
+    /// calling this function.
+    #[no_mangle]
+    pub extern "C" fn inetsocket_drop(socket: *const InetSocket) {
+        assert!(!socket.is_null());
+        unsafe { Box::from_raw(socket as *mut InetSocket) };
+    }
+
+    /// Increment the ref count of the `InetSocket` object. The returned pointer will not be the
+    /// same as the given pointer (they are distinct references), and they both must be dropped
+    /// with `inetsocket_drop` separately later.
+    #[no_mangle]
+    pub extern "C" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        Box::into_raw(Box::new(socket.clone()))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn inetsocket_pushInPacket(socket: *const InetSocket, packet: *mut c::Packet) {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        let packet = Packet::from_raw(packet);
+
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket.borrow_mut().push_in_packet(packet, cb_queue);
+            });
+        });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn inetsocket_pullOutPacket(socket: *const InetSocket) -> *mut c::Packet {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket
+                    .borrow_mut()
+                    .pull_out_packet(cb_queue)
+                    .map(|p| p.into_inner())
+                    .unwrap_or(std::ptr::null_mut())
+            })
+        })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn inetsocket_peekNextOutPacket(socket: *const InetSocket) -> *const c::Packet {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        socket
+            .borrow()
+            .peek_next_out_packet()
+            .map(|p| p.borrow_inner().cast_const())
+            .unwrap_or(std::ptr::null())
+    }
+
+    #[no_mangle]
+    pub extern "C" fn inetsocket_updatePacketHeader(
+        socket: *const InetSocket,
+        packet: *mut c::Packet,
+    ) {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        let mut packet = Packet::from_raw(packet);
+        socket.borrow().update_packet_header(&mut packet);
+        packet.into_inner();
     }
 }
