@@ -78,18 +78,20 @@ struct _RegularFile {
 
 int regularfile_getFlagsAtOpen(RegularFile* file) {
     MAGIC_ASSERT(file);
-    if (file->type != FILE_TYPE_IN_MEMORY)
+    if (file->type != FILE_TYPE_IN_MEMORY) {
         return file->osfile.flagsAtOpen;
-    else
+    } else {
         return file->inMemoryFile.flagsAtOpen;
+    }
 }
 
 mode_t regularfile_getModeAtOpen(RegularFile* file) {
     MAGIC_ASSERT(file);
-    if (file->type != FILE_TYPE_IN_MEMORY)
+    if (file->type != FILE_TYPE_IN_MEMORY) {
         return file->osfile.modeAtOpen;
-    else
+    } else {
         return file->inMemoryFile.modeAtOpen;
+    }
 }
 
 int regularfile_getShadowFlags(RegularFile* file) {
@@ -106,11 +108,14 @@ static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc
 
 static inline int _regularfile_getOSBackedFD(RegularFile* file) {
     MAGIC_ASSERT(file);
-    if (file->type != FILE_TYPE_IN_MEMORY)
+    if (file->type != FILE_TYPE_IN_MEMORY) {
         return file->osfile.fd;
-    else
-        // TODO returning 0 would be ambiguous, but also possibly better as caller usually check for nullity, not for OSFILE_INVALID
+    } else {
+        // TODO verify calling site check for this value, some did check for 0
+        // instead, which is somewhat valid
+        // see https://github.com/shadow/shadow/issues/2604
         return OSFILE_INVALID;
+    }
 }
 int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBackedFD(file); }
 
@@ -125,9 +130,6 @@ static void _regularfile_closeHelper(RegularFile* file) {
             /* The os-backed file is no longer ready. */
             legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE);
         }
-    } else if (file && file->inMemoryFile.content != NULL) {
-        free(file->inMemoryFile.content);
-        file->inMemoryFile.content = NULL;
     }
 }
 
@@ -149,6 +151,10 @@ static void _regularfile_free(LegacyFile* desc) {
 
     if (file->type != FILE_TYPE_IN_MEMORY && file->osfile.absPathAtOpen) {
         free(file->osfile.absPathAtOpen);
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY && file->inMemoryFile.content != NULL) {
+        free(file->inMemoryFile.content);
     }
 
     legacyfile_clear((LegacyFile*)file);
@@ -451,13 +457,27 @@ ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iov
     }
 
     if (file->type == FILE_TYPE_IN_MEMORY) {
-        if (file->inMemoryFile.content == NULL)
+        if (file->inMemoryFile.content == NULL) {
             return -EBADF;
+        }
+        if (iovcnt == 0) {
+            return 0;
+        }
+        if (iov == NULL) {
+            return -EINVAL;
+        }
         ssize_t read = 0;
         for (int i = 0; i < iovcnt; i++) {
+            if (iov[i].iov_len == 0) {
+                continue;
+            }
+            if (iov[i].iov_base == NULL) {
+                return -EINVAL;
+            }
             ssize_t left = file->inMemoryFile.contentLen - offset;
-            if (!left)
+            if (!left) {
                 break;
+            }
             ssize_t to_read = MIN(left, iov[i].iov_len);
             memcpy(iov[i].iov_base, file->inMemoryFile.content + offset, to_read);
             offset += to_read;
