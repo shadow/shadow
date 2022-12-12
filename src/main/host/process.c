@@ -79,7 +79,7 @@ struct _Process {
     HostId hostId;
 
     /* unique id of the program that this process should run */
-    guint processID;
+    pid_t processID;
     GString* processName;
 
     /* All of the descriptors opened by this process. */
@@ -157,11 +157,9 @@ struct _Process {
     /* Pause shadow after launching this process, to give the user time to attach gdb */
     bool pause_for_debugging;
 
-    gint referenceCount;
     MAGIC_DECLARE;
 };
 
-static void _unref_process_cb(gpointer data);
 static void _unref_thread_cb(gpointer data);
 
 static const Host* _host(Process* proc) {
@@ -216,7 +214,7 @@ const char* process_getWorkingDir(Process* proc) {
     return proc->workingDir;
 }
 
-guint process_getProcessID(Process* proc) {
+pid_t process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
     return proc->processID;
 }
@@ -636,14 +634,15 @@ static void _process_start(Process* proc) {
 
 static void _start_thread_task(const Host* host, gpointer callbackObject,
                                gpointer callbackArgument) {
-    Process* process = callbackObject;
+    pid_t pid = GPOINTER_TO_INT(callbackObject);
+    Process* process = host_getProcess(host, pid);
+    if (!process) {
+        debug("Process %d no longer exists", pid);
+        return;
+    }
+
     Thread* thread = callbackArgument;
     process_continue(process, thread);
-}
-
-static void _unref_process_cb(gpointer data) {
-    Process* process = data;
-    process_unref(process);
 }
 
 static void _unref_thread_cb(gpointer data) {
@@ -657,10 +656,10 @@ void process_addThread(Process* proc, Thread* thread) {
 
     // Schedule thread to start.
     thread_ref(thread);
-    process_ref(proc);
     const Host* host = _host(proc);
-    TaskRef* task = taskref_new_bound(
-        host_getID(host), _start_thread_task, proc, thread, _unref_process_cb, _unref_thread_cb);
+    TaskRef* task = taskref_new_bound(host_getID(host), _start_thread_task,
+                                      GINT_TO_POINTER(process_getProcessID(proc)), thread, NULL,
+                                      _unref_thread_cb);
     host_scheduleTaskWithDelay(host, task, 0);
     taskref_drop(task);
 }
@@ -754,11 +753,17 @@ void process_stop(Process* proc) {
     _process_check(proc);
 }
 
-static void _process_runStartTask(const Host* host, gpointer proc, gpointer nothing) {
+static void _process_runStartTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
+    pid_t pid = GPOINTER_TO_INT(pid_ptr);
+    Process* proc = host_getProcess(host, pid);
+    utility_alwaysAssert(proc);
     _process_start(proc);
 }
 
-static void _process_runStopTask(const Host* host, gpointer proc, gpointer nothing) {
+static void _process_runStopTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
+    pid_t pid = GPOINTER_TO_INT(pid_ptr);
+    Process* proc = host_getProcess(host, pid);
+    utility_alwaysAssert(proc);
     process_stop(proc);
 }
 
@@ -766,18 +771,17 @@ void process_schedule(Process* proc, const Host* host) {
     MAGIC_ASSERT(proc);
 
     if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
-        process_ref(proc);
         TaskRef* startProcessTask =
-            taskref_new_bound(proc->hostId, _process_runStartTask, proc, NULL,
-                              (TaskObjectFreeFunc)process_unref, NULL);
+            taskref_new_bound(proc->hostId, _process_runStartTask,
+                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
         host_scheduleTaskAtEmulatedTime(host, startProcessTask, proc->startTime);
         taskref_drop(startProcessTask);
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
-        process_ref(proc);
-        TaskRef* stopProcessTask = taskref_new_bound(proc->hostId, _process_runStopTask, proc, NULL,
-                                                     (TaskObjectFreeFunc)process_unref, NULL);
+        TaskRef* stopProcessTask =
+            taskref_new_bound(proc->hostId, _process_runStopTask,
+                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
         host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
         taskref_drop(stopProcessTask);
     }
@@ -799,8 +803,9 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-static void _process_itimer_real_expiration(const Host* host, void* voidProcess, void* _unused) {
-    Process* process = voidProcess;
+static void _process_itimer_real_expiration(const Host* host, void* voidPid, void* _unused) {
+    pid_t pid = GPOINTER_TO_INT(voidPid);
+    Process* process = host_getProcess(host, pid);
     MAGIC_ASSERT(process);
 
     int overrun = timer_getExpirationCount(process->itimerReal);
@@ -893,7 +898,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
-    proc->referenceCount = 1;
     proc->isExiting = false;
 
     proc->straceLoggingMode = _strace_logging_mode;
@@ -906,9 +910,9 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
 
     proc->dumpable = SUID_DUMP_USER;
 
-    process_ref(proc);
-    TaskRef* task = taskref_new_bound(
-        host_getID(host), _process_itimer_real_expiration, proc, NULL, _unref_process_cb, NULL);
+    TaskRef* task =
+        taskref_new_bound(host_getID(host), _process_itimer_real_expiration,
+                          GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
     proc->itimerReal = timer_new(task);
     // timer_new clones the task; we don't need our own reference anymore.
     taskref_drop(task);
@@ -918,7 +922,7 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     return proc;
 }
 
-static void _process_free(Process* proc) {
+void process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
     process_freePtrsWithoutFlushing(proc);
@@ -983,20 +987,6 @@ static void _process_free(Process* proc) {
 
     MAGIC_CLEAR(proc);
     g_free(proc);
-}
-
-void process_ref(Process* proc) {
-    MAGIC_ASSERT(proc);
-    (proc->referenceCount)++;
-}
-
-void process_unref(Process* proc) {
-    MAGIC_ASSERT(proc);
-    (proc->referenceCount)--;
-    utility_debugAssert(proc->referenceCount >= 0);
-    if(proc->referenceCount == 0) {
-        _process_free(proc);
-    }
 }
 
 MemoryManager* process_getMemoryManager(Process* proc) {

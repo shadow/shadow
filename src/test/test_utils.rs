@@ -13,6 +13,7 @@ use std::{fmt, thread};
 
 use nix::poll::PollFlags;
 use nix::sys::signal;
+use nix::sys::time::TimeVal;
 
 pub mod socket_utils;
 
@@ -386,4 +387,37 @@ pub fn i8_to_u8_slice(s: &[i8]) -> &[u8] {
     // assume that if try_from() was successful, then a direct cast would also be
     assert!(s.iter().all(|x| u8::try_from(*x).is_ok()));
     unsafe { std::slice::from_raw_parts(s.as_ptr() as *const u8, s.len()) }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct ITimer {
+    pub interval: TimeVal,
+    pub value: TimeVal,
+}
+
+impl From<libc::itimerval> for ITimer {
+    fn from(val: libc::itimerval) -> Self {
+        Self {
+            interval: TimeVal::from(val.it_interval),
+            value: TimeVal::from(val.it_value),
+        }
+    }
+}
+
+// Neither `libc` nor `nix` wrap `getitimer`.
+pub fn getitimer(which: i32) -> nix::Result<ITimer> {
+    let mut old_value: libc::itimerval = unsafe { std::mem::zeroed() };
+    if unsafe { libc::syscall(libc::SYS_getitimer, which, &mut old_value as *mut _) } == -1 {
+        return Err(nix::errno::Errno::last());
+    }
+    Ok(old_value.into())
+}
+
+// Neither `libc` nor `nix` wrap `setitimer`.
+pub fn setitimer(which: i32, new_value: &libc::itimerval) -> nix::Result<ITimer> {
+    let mut old_value: libc::itimerval = unsafe { std::mem::zeroed() };
+    if unsafe { libc::syscall(libc::SYS_setitimer, which, new_value, &mut old_value) } == -1 {
+        return Err(nix::errno::Errno::last());
+    }
+    Ok(old_value.into())
 }

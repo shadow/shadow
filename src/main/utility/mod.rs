@@ -93,11 +93,10 @@ impl<T> HostTreePointer<T> {
         // This function is still `unsafe` since it's now the caller's
         // responsibility to not release the lock and *then* dereference the
         // pointer.
-        //
-        // FIXME: unwrap result. See https://github.com/shadow/shadow/issues/2514
         Worker::with_active_host(|h| {
             assert_eq!(self.host_id, h.info().id);
-        });
+        })
+        .unwrap();
         self.ptr
     }
 }

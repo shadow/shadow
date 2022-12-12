@@ -681,7 +681,7 @@ impl Host {
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, process) in processes.into_iter() {
             unsafe { cshadow::process_stop(process.ptr()) };
-            unsafe { cshadow::process_unref(process.ptr()) };
+            unsafe { cshadow::process_free(process.ptr()) };
         }
         trace!("done freeing application for host '{}'", self.name());
     }

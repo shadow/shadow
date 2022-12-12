@@ -158,6 +158,10 @@ name = "test_itimer"
 path = "itimer/test_itimer.rs"
 
 [[bin]]
+name = "test_itimer_scheduled_after_exit"
+path = "itimer/test_itimer_scheduled_after_exit.rs"
+
+[[bin]]
 name = "test_stdio"
 path = "stdio/test_stdio.rs"
 

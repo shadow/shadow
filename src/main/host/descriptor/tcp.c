@@ -97,7 +97,7 @@ struct _TCPChild {
 typedef struct _TCPServer TCPServer;
 struct _TCPServer {
     /* children will be registered in this process' descriptor table */
-    Process* processForChildren;
+    pid_t processForChildren;
     /* all children of this server */
     GHashTable* children;
     /* pending children to accept in order. */
@@ -341,8 +341,7 @@ static TCPServer* _tcpserver_new(gint backlog, Process* processForChildren) {
     server->pending = g_queue_new();
     server->pendingMax = 0;
 
-    process_ref(processForChildren);
-    server->processForChildren = processForChildren;
+    server->processForChildren = process_getProcessID(processForChildren);
 
     _tcpserver_updateBacklog(server, backlog);
 
@@ -358,9 +357,6 @@ static void _tcpserver_free(TCPServer* server) {
     if(server->children) {
         g_hash_table_destroy(server->children);
     }
-
-    process_unref(server->processForChildren);
-    server->processForChildren = NULL;
 
     MAGIC_CLEAR(server);
     g_free(server);
@@ -2015,7 +2011,12 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                  * whichever process eventually calls accept() on the parent socket, but this is
                  * difficult to fix and isn't an issue until we support fork().
                  * See: https://github.com/shadow/shadow/issues/1780 */
-                Process* registerInProcess = tcp->server->processForChildren;
+                Process* registerInProcess = host_getProcess(host, tcp->server->processForChildren);
+                if (!registerInProcess) {
+                    debug("Listening process no longer exists");
+                    packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
+                    return;
+                }
 
                 /* we need to multiplex a new child */
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);

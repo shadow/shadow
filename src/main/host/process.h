@@ -44,8 +44,7 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
                      const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
                      bool pause_for_debugging);
-void process_ref(Process* proc);
-void process_unref(Process* proc);
+void process_free(Process* proc);
 
 void process_schedule(Process* proc, const Host* host);
 void process_continue(Process* proc, Thread* thread);
@@ -86,7 +85,7 @@ int process_getStraceFd(Process* proc);
 const gchar* process_getPluginName(Process* proc);
 
 /* Returns the processID that was assigned to us in process_new */
-guint process_getProcessID(Process* proc);
+pid_t process_getProcessID(Process* proc);
 
 /* Returns the native pid of the process */
 pid_t process_getNativePid(const Process* proc);

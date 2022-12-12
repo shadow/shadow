@@ -66,7 +66,7 @@ impl Process {
     }
 
     pub fn id(&self) -> ProcessId {
-        ProcessId(unsafe { cshadow::process_getProcessID(self.cprocess) })
+        ProcessId::try_from(unsafe { cshadow::process_getProcessID(self.cprocess) }).unwrap()
     }
 
     pub fn host_id(&self) -> HostId {
