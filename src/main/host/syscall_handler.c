@@ -398,14 +398,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
             HANDLE_RUST(rseq);
+            HANDLE_RUST(sched_getaffinity);
+            HANDLE_RUST(sched_setaffinity);
             HANDLE_RUST(sched_yield);
             HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
             HANDLE_C(shadow_hostname_to_addr_ipv4);
             HANDLE_C(shadow_init_memory_manager);
             HANDLE_C(shadow_yield);
-            HANDLE_RUST(sched_getaffinity);
-            HANDLE_RUST(sched_setaffinity);
             HANDLE_C(select);
             HANDLE_RUST(sendto);
             HANDLE_RUST(setsockopt);

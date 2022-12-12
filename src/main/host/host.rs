@@ -456,6 +456,13 @@ impl Host {
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
 
+    #[track_caller]
+    pub fn processes(
+        &self,
+    ) -> impl Deref<Target = BTreeMap<ProcessId, HostTreePointer<cshadow::Process>>> + '_ {
+        self.processes.borrow()
+    }
+
     #[allow(non_snake_case)]
     pub fn bw_up_kiBps(&self) -> u64 {
         self.params.requested_bw_up_bits / (8 * 1024)

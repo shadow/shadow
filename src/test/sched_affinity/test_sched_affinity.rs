@@ -25,6 +25,8 @@ fn get_affinity(shadow: bool) {
             assert_eq!(cpu_set_count(&cpu_set), 1);
         }
     }
+    assert_eq!(unsafe { libc::sched_getaffinity(0, 0, 0 as _) }, -1,);
+    assert_eq!(unsafe { *libc::__errno_location() }, libc::EINVAL,);
 }
 
 fn cpu_set_count(cpu_set: &CpuSet) -> usize {
@@ -45,13 +47,15 @@ fn set_affinity() {
 
     cpu_set.unset(0).unwrap();
     sched_setaffinity(Pid::from_raw(0), &cpu_set).unwrap_err();
+    assert_eq!(unsafe { libc::sched_setaffinity(0, 0, 0 as _) }, -1,);
+    assert_eq!(unsafe { *libc::__errno_location() }, libc::EINVAL,);
 }
 
 fn sysconf(shadow: bool) {
     let online = nix::unistd::sysconf(nix::unistd::SysconfVar::_NPROCESSORS_ONLN)
         .unwrap()
         .unwrap();
-    let configured = nix::unistd::sysconf(nix::unistd::SysconfVar::_NPROCESSORS_CONF)
+    let _configured = nix::unistd::sysconf(nix::unistd::SysconfVar::_NPROCESSORS_CONF)
         .unwrap()
         .unwrap();
     if shadow {
