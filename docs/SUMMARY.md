@@ -20,6 +20,7 @@
     - [Simulation Configuration]()
         - [Shadow Config Overview](shadow_config_overview.md)
         - [Shadow Config Specification](shadow_config_spec.md)
+        - [Managing Complex Configurations](shadow_config_complex.md)
     - [Network Configuration]()
         - [Network Graph Overview](network_graph_overview.md)
         - [Network Graph Specification](network_graph_spec.md)
