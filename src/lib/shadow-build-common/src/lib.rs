@@ -150,3 +150,35 @@ impl ShadowBuildCommon {
         }
     }
 }
+
+pub trait CBindgenExt {
+    fn get_mut(&mut self) -> &mut cbindgen::Config;
+
+    // Export the given types opaquely.
+    //
+    // This overrides cbindgen's behavior of making any `repr(C)` type
+    // non-opaque.
+    // https://github.com/eqrion/cbindgen/issues/104
+    fn add_opaque_types(&mut self, types: &[&str]) {
+        let c = self.get_mut();
+        if types.is_empty() {
+            return;
+        }
+        if c.after_includes.is_none() {
+            c.after_includes.replace("".into());
+        }
+        for t in types {
+            c.after_includes
+                .as_mut()
+                .unwrap()
+                .push_str(&format!("typedef struct {t} {t};\n"));
+            c.export.exclude.push((*t).into());
+        }
+    }
+}
+
+impl CBindgenExt for cbindgen::Config {
+    fn get_mut(&mut self) -> &mut cbindgen::Config {
+        self
+    }
+}

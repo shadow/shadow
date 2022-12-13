@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use shadow_build_common::ShadowBuildCommon;
+use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = build_common.cbindgen_base_config();
@@ -17,22 +17,12 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         ..base_config
     };
 
-    // Force these types to be opaque. This overrides cbindgen's behavior of
-    // making any `repr(C)` type non-opaque.
-    // https://github.com/eqrion/cbindgen/issues/104
-    for t in [
+    config.add_opaque_types(&[
         "ShimShmemHost",
         "ShimShmemHostLock",
         "ShimShmemProcess",
         "ShimShmemThread",
-    ] {
-        config
-            .after_includes
-            .as_mut()
-            .unwrap()
-            .push_str(&format!("typedef struct {t} {t};\n"));
-        config.export.exclude.push(t.into());
-    }
+    ]);
 
     cbindgen::Builder::new()
         .with_crate(crate_dir)
