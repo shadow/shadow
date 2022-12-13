@@ -183,16 +183,7 @@ impl NetworkNamespace {
         // to a linear search to make sure we get a free port if we have one.
         // but start from a random port instead of the min.
         let start = rng.gen_range(MIN_RANDOM_PORT..=u16::MAX);
-        let mut port = start;
-        loop {
-            port = if port == u16::MAX {
-                MIN_RANDOM_PORT
-            } else {
-                port + 1
-            };
-            if port == start {
-                break;
-            }
+        for port in (start..=u16::MAX).chain(MIN_RANDOM_PORT..start) {
             if self.is_interface_available(
                 protocol_type,
                 SocketAddrV4::new(interface_ip, port),
