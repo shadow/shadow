@@ -267,54 +267,61 @@ impl Host {
         res
     }
 
+    /// Must free the returned `*mut cshadow::Address` using [`cshadow::address_unref`].
+    unsafe fn setup_net_interface(
+        params: &HostParameters,
+        ip: Ipv4Addr,
+        uses_router: bool,
+        pcap_dir_path: Option<PathBuf>,
+        dns: *mut cshadow::DNS,
+    ) -> (NetworkInterface, *mut cshadow::Address) {
+        let ip = u32::from(ip).to_be();
+        let addr = unsafe { cshadow::dns_register(dns, params.id, params.hostname.as_ptr(), ip) };
+        assert!(!addr.is_null());
+
+        let interface = unsafe {
+            NetworkInterface::new(
+                params.id,
+                addr,
+                pcap_dir_path,
+                params.pcap_capture_size,
+                params.qdisc,
+                uses_router,
+            )
+        };
+
+        (interface, addr)
+    }
+
     pub unsafe fn setup(&self, dns: *mut cshadow::DNS) {
         // Register using the param hints.
         // We already checked that the addresses are available, so fail if they are not.
-        let local_ipv4 = u32::from(Ipv4Addr::LOCALHOST).to_be();
-        let local_addr = unsafe {
-            cshadow::dns_register(
-                dns,
-                self.params.id,
-                self.params.hostname.as_ptr(),
-                local_ipv4,
-            )
-        };
-        assert!(!local_addr.is_null());
 
-        let inet_addr = unsafe {
-            cshadow::dns_register(
+        let (localhost, local_addr) = unsafe {
+            Self::setup_net_interface(
+                &self.params,
+                Ipv4Addr::LOCALHOST,
+                /* uses_router= */ false,
+                self.pcap_dir_path(),
                 dns,
-                self.params.id,
-                self.params.hostname.as_ptr(),
-                self.params.ip_addr,
             )
         };
-        assert!(!inet_addr.is_null());
+
+        let public_ip: Ipv4Addr = u32::from_be(self.params.ip_addr).into();
+        let (internet, inet_addr) = unsafe {
+            Self::setup_net_interface(
+                &self.params,
+                public_ip,
+                /* uses_router= */ true,
+                self.pcap_dir_path(),
+                dns,
+            )
+        };
+
         *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
+        unsafe { cshadow::address_unref(local_addr) };
 
-        // Virtual addresses and interfaces for managing network I/O
-        let localhost = unsafe {
-            NetworkInterface::new(
-                self.id(),
-                local_addr,
-                self.pcap_dir_path(),
-                self.params.pcap_capture_size,
-                self.params.qdisc,
-                false,
-            )
-        };
         self.localhost.borrow_mut().replace(localhost);
-
-        let internet = unsafe {
-            NetworkInterface::new(
-                self.id(),
-                inet_addr,
-                self.pcap_dir_path(),
-                self.params.pcap_capture_size,
-                self.params.qdisc,
-                true,
-            )
-        };
         self.internet.borrow_mut().replace(internet);
 
         info!(
@@ -341,9 +348,6 @@ impl Host {
             cpu_threshold = format!("{:?}", self.params.cpu_threshold),
             cpu_precision = format!("{:?}", self.params.cpu_precision),
         );
-
-        // Cleanup
-        unsafe { cshadow::address_unref(local_addr) };
     }
 
     fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
