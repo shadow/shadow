@@ -137,9 +137,10 @@ pub struct Host {
     // Store as a CString so that we can return a borrowed pointer to C code
     // instead of having to allocate a new string.
     //
-    // TODO: Store as PathBuf once we can remove `host_getDataPath`. (Or maybe
-    // don't store it at all)
-    data_dir_path: RefCell<Option<CString>>,
+    // TODO: Remove `data_dir_path_cstring` once we can remove `host_getDataPath`. (Or maybe don't
+    // store it at all)
+    data_dir_path: PathBuf,
+    data_dir_path_cstring: CString,
 
     // virtual process and event id counter
     process_id_counter: Cell<u32>,
@@ -195,14 +196,15 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    pub fn new(params: HostParameters) -> Self {
+    pub fn new(params: HostParameters, host_root_path: &Path) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
 
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
         let cpu = RefCell::new(None);
-        let data_dir_path = RefCell::new(None);
+        let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
+        let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
         let host_shmem = HostShmem::new(
@@ -224,6 +226,8 @@ impl Host {
         let packet_priority_counter = Cell::new(1.0);
         let tsc = Tsc::new(params.native_tsc_frequency);
 
+        std::fs::create_dir_all(&data_dir_path).unwrap();
+
         let res = Self {
             default_address,
             info: OnceCell::new(),
@@ -241,6 +245,7 @@ impl Host {
             localhost: RefCell::new(None),
             internet: RefCell::new(None),
             data_dir_path,
+            data_dir_path_cstring,
             process_id_counter,
             event_id_counter,
             packet_id_counter,
@@ -257,26 +262,13 @@ impl Host {
         res
     }
 
-    pub unsafe fn setup(
-        &self,
-        dns: *mut cshadow::DNS,
-        raw_cpu_freq_khz: u64,
-        host_root_path: &Path,
-    ) {
+    pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq_khz: u64) {
         self.cpu.borrow_mut().replace(Cpu::new(
             self.params.cpu_frequency,
             raw_cpu_freq_khz,
             self.params.cpu_threshold,
             self.params.cpu_precision,
         ));
-
-        {
-            let data_dir_path = self.data_dir_path(host_root_path);
-            std::fs::create_dir_all(&data_dir_path).unwrap();
-
-            let data_dir_path = utility::pathbuf_to_nul_term_cstring(data_dir_path);
-            self.data_dir_path.borrow_mut().replace(data_dir_path);
-        }
 
         // Register using the param hints.
         // We already checked that the addresses are available, so fail if they are not.
@@ -307,7 +299,7 @@ impl Host {
             NetworkInterface::new(
                 self.id(),
                 local_addr,
-                self.pcap_dir_path(host_root_path),
+                self.pcap_dir_path(),
                 self.params.pcap_capture_size,
                 self.params.qdisc,
                 false,
@@ -319,7 +311,7 @@ impl Host {
             NetworkInterface::new(
                 self.id(),
                 inet_addr,
-                self.pcap_dir_path(host_root_path),
+                self.pcap_dir_path(),
                 self.params.pcap_capture_size,
                 self.params.qdisc,
                 true,
@@ -356,8 +348,8 @@ impl Host {
         unsafe { cshadow::address_unref(local_addr) };
     }
 
-    fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
-        let hostname: OsString = { OsString::from_vec(self.params.hostname.to_bytes().to_vec()) };
+    fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
+        let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
@@ -365,13 +357,13 @@ impl Host {
         data_dir_path
     }
 
-    fn pcap_dir_path(&self, host_root_path: &Path) -> Option<PathBuf> {
+    fn pcap_dir_path(&self) -> Option<PathBuf> {
         let Some(pcap_dir) = &self.params.pcap_dir else {
             return None;
         };
         let path_string: OsString = { OsString::from_vec(pcap_dir.to_bytes().to_vec()) };
 
-        let mut path = self.data_dir_path(host_root_path);
+        let mut path = self.data_dir_path.clone();
         // If relative it will append, if absolute it will replace.
         path.push(PathBuf::from(path_string));
         path.canonicalize().ok()
@@ -1052,7 +1044,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.data_dir_path.borrow().as_ref().unwrap().as_ptr()
+        hostrc.data_dir_path_cstring.as_ptr()
     }
 
     #[no_mangle]
