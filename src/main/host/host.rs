@@ -130,7 +130,7 @@ pub struct Host {
     // map abstract socket addresses to unix sockets
     abstract_unix_namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
 
-    // TODO: rearrange our setup process so we don't need Option types here.
+    // TODO: rearrange our shutdown process so we don't need Option types here
     localhost: RefCell<Option<NetworkInterface>>,
     internet: RefCell<Option<NetworkInterface>>,
 
@@ -139,7 +139,7 @@ pub struct Host {
     //
     // TODO: Remove `data_dir_path_cstring` once we can remove `host_getDataPath`. (Or maybe don't
     // store it at all)
-    data_dir_path: PathBuf,
+    _data_dir_path: PathBuf,
     data_dir_path_cstring: CString,
 
     // virtual process and event id counter
@@ -196,7 +196,12 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    pub fn new(params: HostParameters, host_root_path: &Path, raw_cpu_freq_khz: u64) -> Self {
+    pub unsafe fn new(
+        params: HostParameters,
+        host_root_path: &Path,
+        raw_cpu_freq_khz: u64,
+        dns: *mut cshadow::DNS,
+    ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
 
@@ -210,7 +215,6 @@ impl Host {
         ));
         let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
         let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
-        let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
 
         let host_shmem = HostShmem::new(
             params.id,
@@ -233,8 +237,34 @@ impl Host {
 
         std::fs::create_dir_all(&data_dir_path).unwrap();
 
+        // Register using the param hints.
+        // We already checked that the addresses are available, so fail if they are not.
+
+        let (localhost, local_addr) = unsafe {
+            Self::setup_net_interface(
+                &params,
+                Ipv4Addr::LOCALHOST,
+                /* uses_router= */ false,
+                Self::pcap_dir_path(&params, &data_dir_path),
+                dns,
+            )
+        };
+
+        unsafe { cshadow::address_unref(local_addr) };
+
+        let public_ip: Ipv4Addr = u32::from_be(params.ip_addr).into();
+        let (internet, public_addr) = unsafe {
+            Self::setup_net_interface(
+                &params,
+                public_ip,
+                /* uses_router= */ true,
+                Self::pcap_dir_path(&params, &data_dir_path),
+                dns,
+            )
+        };
+
         let res = Self {
-            default_address,
+            default_address: RefCell::new(unsafe { SyncSendPointer::new(public_addr) }),
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
@@ -247,9 +277,9 @@ impl Host {
             shim_shmem_lock: RefCell::new(None),
             abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             cpu,
-            localhost: RefCell::new(None),
-            internet: RefCell::new(None),
-            data_dir_path,
+            localhost: RefCell::new(Some(localhost)),
+            internet: RefCell::new(Some(internet)),
+            _data_dir_path: data_dir_path,
             data_dir_path_cstring,
             process_id_counter,
             event_id_counter,
@@ -261,6 +291,31 @@ impl Host {
             #[cfg(feature = "perf_timers")]
             execution_timer,
         };
+
+        info!(
+            concat!(
+                "Setup host id '{:?}'",
+                " name '{name}'",
+                " with seed {seed},",
+                " {bw_up_kiBps} bwUpKiBps,",
+                " {bw_down_kiBps} bwDownKiBps,",
+                " {init_sock_send_buf_size} initSockSendBufSize,",
+                " {init_sock_recv_buf_size} initSockRecvBufSize, ",
+                " {cpu_frequency} cpuFrequency, ",
+                " {cpu_threshold} cpuThreshold, ",
+                " {cpu_precision} cpuPrecision"
+            ),
+            res.id(),
+            name = res.info().name,
+            seed = res.params.node_seed,
+            bw_up_kiBps = res.bw_up_kiBps(),
+            bw_down_kiBps = res.bw_down_kiBps(),
+            init_sock_send_buf_size = res.params.init_sock_send_buf_size,
+            init_sock_recv_buf_size = res.params.init_sock_recv_buf_size,
+            cpu_frequency = format!("{:?}", res.params.cpu_frequency),
+            cpu_threshold = format!("{:?}", res.params.cpu_threshold),
+            cpu_precision = format!("{:?}", res.params.cpu_precision),
+        );
 
         res.stop_execution_timer();
 
@@ -293,63 +348,6 @@ impl Host {
         (interface, addr)
     }
 
-    pub unsafe fn setup(&self, dns: *mut cshadow::DNS) {
-        // Register using the param hints.
-        // We already checked that the addresses are available, so fail if they are not.
-
-        let (localhost, local_addr) = unsafe {
-            Self::setup_net_interface(
-                &self.params,
-                Ipv4Addr::LOCALHOST,
-                /* uses_router= */ false,
-                self.pcap_dir_path(),
-                dns,
-            )
-        };
-
-        let public_ip: Ipv4Addr = u32::from_be(self.params.ip_addr).into();
-        let (internet, inet_addr) = unsafe {
-            Self::setup_net_interface(
-                &self.params,
-                public_ip,
-                /* uses_router= */ true,
-                self.pcap_dir_path(),
-                dns,
-            )
-        };
-
-        *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
-        unsafe { cshadow::address_unref(local_addr) };
-
-        self.localhost.borrow_mut().replace(localhost);
-        self.internet.borrow_mut().replace(internet);
-
-        info!(
-            concat!(
-                "Setup host id '{:?}'",
-                " name '{name}'",
-                " with seed {seed},",
-                " {bw_up_kiBps} bwUpKiBps,",
-                " {bw_down_kiBps} bwDownKiBps,",
-                " {init_sock_send_buf_size} initSockSendBufSize,",
-                " {init_sock_recv_buf_size} initSockRecvBufSize, ",
-                " {cpu_frequency} cpuFrequency, ",
-                " {cpu_threshold} cpuThreshold, ",
-                " {cpu_precision} cpuPrecision"
-            ),
-            self.id(),
-            name = self.info().name,
-            seed = self.params.node_seed,
-            bw_up_kiBps = self.bw_up_kiBps(),
-            bw_down_kiBps = self.bw_down_kiBps(),
-            init_sock_send_buf_size = self.params.init_sock_send_buf_size,
-            init_sock_recv_buf_size = self.params.init_sock_recv_buf_size,
-            cpu_frequency = format!("{:?}", self.params.cpu_frequency),
-            cpu_threshold = format!("{:?}", self.params.cpu_threshold),
-            cpu_precision = format!("{:?}", self.params.cpu_precision),
-        );
-    }
-
     fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
@@ -359,13 +357,13 @@ impl Host {
         data_dir_path
     }
 
-    fn pcap_dir_path(&self) -> Option<PathBuf> {
-        let Some(pcap_dir) = &self.params.pcap_dir else {
+    fn pcap_dir_path(params: &HostParameters, data_dir_path: &Path) -> Option<PathBuf> {
+        let Some(pcap_dir) = &params.pcap_dir else {
             return None;
         };
         let path_string: OsString = { OsString::from_vec(pcap_dir.to_bytes().to_vec()) };
 
-        let mut path = self.data_dir_path.clone();
+        let mut path = data_dir_path.to_path_buf();
         // If relative it will append, if absolute it will replace.
         path.push(PathBuf::from(path_string));
         path.canonicalize().ok()
