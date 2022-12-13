@@ -122,7 +122,7 @@ pub struct Host {
 
     pub params: HostParameters,
 
-    cpu: RefCell<Option<Cpu>>,
+    cpu: RefCell<Cpu>,
 
     // TODO: Use a Rust address type.
     default_address: RefCell<SyncSendPointer<cshadow::Address>>,
@@ -196,13 +196,18 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    pub fn new(params: HostParameters, host_root_path: &Path) -> Self {
+    pub fn new(params: HostParameters, host_root_path: &Path, raw_cpu_freq_khz: u64) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
 
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
-        let cpu = RefCell::new(None);
+        let cpu = RefCell::new(Cpu::new(
+            params.cpu_frequency,
+            raw_cpu_freq_khz,
+            params.cpu_threshold,
+            params.cpu_precision,
+        ));
         let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
         let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
         let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
@@ -262,14 +267,7 @@ impl Host {
         res
     }
 
-    pub unsafe fn setup(&self, dns: *mut cshadow::DNS, raw_cpu_freq_khz: u64) {
-        self.cpu.borrow_mut().replace(Cpu::new(
-            self.params.cpu_frequency,
-            raw_cpu_freq_khz,
-            self.params.cpu_threshold,
-            self.params.cpu_precision,
-        ));
-
+    pub unsafe fn setup(&self, dns: *mut cshadow::DNS) {
         // Register using the param hints.
         // We already checked that the addresses are available, so fail if they are not.
         let local_ipv4 = u32::from(Ipv4Addr::LOCALHOST).to_be();
@@ -690,8 +688,7 @@ impl Host {
             };
 
             {
-                let mut opt_cpu = self.cpu.borrow_mut();
-                let cpu = opt_cpu.as_mut().unwrap();
+                let mut cpu = self.cpu.borrow_mut();
                 cpu.update_time(event.time());
                 let cpu_delay = cpu.delay();
                 if cpu_delay > SimulationTime::ZERO {
@@ -1366,7 +1363,7 @@ mod export {
     pub extern "C" fn host_addDelayNanos(host: *const Host, delay_nanos: u64) {
         let host = unsafe { host.as_ref().unwrap() };
         let delay = Duration::from_nanos(delay_nanos);
-        host.cpu.borrow_mut().as_mut().unwrap().add_delay(delay);
+        host.cpu.borrow_mut().add_delay(delay);
     }
 
     #[no_mangle]

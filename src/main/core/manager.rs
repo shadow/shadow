@@ -594,8 +594,8 @@ impl<'a> Manager<'a> {
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
             };
 
-            let host = Box::new(Host::new(params, &self.hosts_path));
-            unsafe { host.setup(dns, self.raw_frequency) };
+            let host = Box::new(Host::new(params, &self.hosts_path, self.raw_frequency));
+            unsafe { host.setup(dns) };
 
             host
         };
