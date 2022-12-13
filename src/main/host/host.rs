@@ -10,10 +10,10 @@ use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
 use crate::utility::{self, HostTreePointer, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -35,10 +35,6 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-
-// The start of our random port range in host order, used if application doesn't
-// specify the port it wants to bind to, and for client connections.
-const MIN_RANDOM_PORT: u16 = 10000;
 
 pub struct HostParameters {
     pub id: HostId,
@@ -468,41 +464,23 @@ impl Host {
 
     /// Returns `None` if there is no such interface.
     ///
-    /// Panics if we have not yet initialized our network interfaces yet.
+    /// Panics if we have shut down.
     #[track_caller]
     pub fn interface_mut(
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
-        if addr.is_loopback() {
-            Some(RefMut::map(self.net_ns.borrow_mut(), |x| {
-                &mut x.as_mut().unwrap().localhost
-            }))
-        } else if addr == self.info().default_ip {
-            Some(RefMut::map(self.net_ns.borrow_mut(), |x| {
-                &mut x.as_mut().unwrap().internet
-            }))
-        } else {
-            None
-        }
+        let borrow = self.net_ns.borrow_mut();
+        RefMut::filter_map(borrow, |x| x.as_mut().unwrap().interface_mut(addr)).ok()
     }
 
     /// Returns `None` if there is no such interface.
     ///
-    /// Panics if we have not yet initialized our network interfaces yet.
+    /// Panics if we have shut down.
     #[track_caller]
     pub fn interface(&self, addr: Ipv4Addr) -> Option<impl Deref<Target = NetworkInterface> + '_> {
-        if addr.is_loopback() {
-            Some(Ref::map(self.net_ns.borrow(), |x| {
-                &x.as_ref().unwrap().localhost
-            }))
-        } else if addr == self.info().default_ip {
-            Some(Ref::map(self.net_ns.borrow(), |x| {
-                &x.as_ref().unwrap().internet
-            }))
-        } else {
-            None
-        }
+        let borrow = self.net_ns.borrow();
+        Ref::filter_map(borrow, |x| x.as_ref().unwrap().interface(addr)).ok()
     }
 
     #[track_caller]
@@ -740,97 +718,6 @@ impl Host {
         assert!(prev.is_some());
     }
 
-    pub fn is_interface_available(
-        &self,
-        protocol_type: cshadow::ProtocolType,
-        src: SocketAddrV4,
-        dst: SocketAddrV4,
-    ) -> bool {
-        if src.ip().is_unspecified() {
-            // Check that all interfaces are available.
-            !self
-                .net_ns
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .localhost
-                .is_associated(protocol_type, src.port(), dst)
-                && !self
-                    .net_ns
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .internet
-                    .is_associated(protocol_type, src.port(), dst)
-        } else {
-            // The interface is not available if it does not exist.
-            match self.interface(*src.ip()) {
-                Some(i) => !i.is_associated(protocol_type, src.port(), dst),
-                None => false,
-            }
-        }
-    }
-
-    // Returns a random port in host byte order
-    pub fn get_random_free_port(
-        &self,
-        protocol_type: cshadow::ProtocolType,
-        interface_ip: Ipv4Addr,
-        peer: SocketAddrV4,
-    ) -> Option<u16> {
-        // we need a random port that is free everywhere we need it to be.
-        // we have two modes here: first we just try grabbing a random port until we
-        // get a free one. if we cannot find one fast enough, then as a fallback we
-        // do an inefficient linear search that is guaranteed to succeed or fail.
-
-        // if choosing randomly doesn't succeed within 10 tries, then we have already
-        // allocated a lot of ports (>90% on average). then we fall back to linear search.
-        for _ in 0..10 {
-            let random_port = self
-                .random
-                .borrow_mut()
-                .gen_range(MIN_RANDOM_PORT..=u16::MAX);
-
-            // this will check all interfaces in the case of INADDR_ANY
-            if self.is_interface_available(
-                protocol_type,
-                SocketAddrV4::new(interface_ip, random_port),
-                peer,
-            ) {
-                return Some(random_port);
-            }
-        }
-
-        // now if we tried too many times and still don't have a port, fall back
-        // to a linear search to make sure we get a free port if we have one.
-        // but start from a random port instead of the min.
-        let start = self
-            .random
-            .borrow_mut()
-            .gen_range(MIN_RANDOM_PORT..=u16::MAX);
-        let mut port = start;
-        loop {
-            port = if port == u16::MAX {
-                MIN_RANDOM_PORT
-            } else {
-                port + 1
-            };
-            if port == start {
-                break;
-            }
-            if self.is_interface_available(
-                protocol_type,
-                SocketAddrV4::new(interface_ip, port),
-                peer,
-            ) {
-                return Some(port);
-            }
-        }
-
-        warn!("unable to find free ephemeral port for {protocol_type} peer {peer}");
-        None
-    }
-
     /// Timestamp Counter emulation for this Host. It ticks at the same rate as
     /// the native Timestamp Counter, if we were able to find it.
     pub fn tsc(&self) -> &Tsc {
@@ -1046,7 +933,12 @@ mod export {
             Ipv4Addr::from(u32::from_be(peer_addr)),
             u16::from_be(peer_port),
         );
-        hostrc.is_interface_available(protocol_type, src, dst)
+        hostrc
+            .net_ns
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .is_interface_available(protocol_type, src, dst)
     }
 
     #[no_mangle]
@@ -1069,73 +961,45 @@ mod export {
         let bind_addr = SocketAddrV4::new(bind_ip, bind_port);
         let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
 
-        // Associate the interfaces corresponding to bind_addr with socket
-        if bind_addr.ip().is_unspecified() {
-            // Need to associate all interfaces.
+        // associate the interfaces corresponding to bind_addr with socket
+        unsafe {
             hostrc
                 .net_ns
                 .borrow()
                 .as_ref()
                 .unwrap()
-                .localhost
-                .associate(socket, protocol, bind_addr.port(), peer_addr);
-            hostrc.net_ns.borrow().as_ref().unwrap().internet.associate(
-                socket,
-                protocol,
-                bind_addr.port(),
-                peer_addr,
-            );
-        } else {
-            // TODO: return error if interface does not exist.
-            if let Some(iface) = hostrc.interface_mut(*bind_addr.ip()) {
-                iface.associate(socket, protocol, bind_addr.port(), peer_addr);
-            }
-        }
+                .associate_interface(socket, protocol, bind_addr, peer_addr)
+        };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn host_disassociateInterface(
         hostrc: *const Host,
         protocol: cshadow::ProtocolType,
-        sock_ip: in_addr_t,
-        sock_port: in_port_t,
+        bind_ip: in_addr_t,
+        bind_port: in_port_t,
         peer_ip: in_addr_t,
         peer_port: in_port_t,
     ) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
 
-        let sock_ip = Ipv4Addr::from(u32::from_be(sock_ip));
+        let bind_ip = Ipv4Addr::from(u32::from_be(bind_ip));
         let peer_ip = Ipv4Addr::from(u32::from_be(peer_ip));
-        let sock_port = u16::from_be(sock_port);
+        let bind_port = u16::from_be(bind_port);
         let peer_port = u16::from_be(peer_port);
 
-        let sock_addr = SocketAddrV4::new(sock_ip, sock_port);
+        let bind_addr = SocketAddrV4::new(bind_ip, bind_port);
         let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
 
-        // Associate the interfaces corresponding to bind_addr with socket
-        if sock_addr.ip().is_unspecified() {
-            // Need to disassociate all interfaces.
+        // associate the interfaces corresponding to bind_addr with socket
+        unsafe {
             hostrc
                 .net_ns
                 .borrow()
                 .as_ref()
                 .unwrap()
-                .localhost
-                .disassociate(protocol, sock_addr.port(), peer_addr);
-
-            hostrc
-                .net_ns
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .internet
-                .disassociate(protocol, sock_addr.port(), peer_addr);
-        } else {
-            // TODO: return error if interface does not exist.
-            if let Some(iface) = hostrc.interface_mut(*sock_addr.ip()) {
-                iface.disassociate(protocol, sock_addr.port(), peer_addr);
-            }
-        }
+                .disassociate_interface(protocol, bind_addr, peer_addr)
+        };
     }
 
     #[no_mangle]
@@ -1155,7 +1019,16 @@ mod export {
         );
 
         hostrc
-            .get_random_free_port(protocol_type, interface_ip, peer_addr)
+            .net_ns
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_random_free_port(
+                protocol_type,
+                interface_ip,
+                peer_addr,
+                hostrc.random.borrow_mut().deref_mut(),
+            )
             .unwrap_or(0)
             .to_be()
     }
