@@ -75,7 +75,7 @@ impl SyscallHandler {
                 Socket::Unix(UnixSocket::new(
                     file_flags,
                     socket_type,
-                    ctx.host.abstract_unix_namespace(),
+                    &ctx.host.abstract_unix_namespace(),
                 ))
             }
             libc::AF_INET => match socket_type {
@@ -751,7 +751,7 @@ impl SyscallHandler {
             UnixSocket::pair(
                 file_flags,
                 socket_type,
-                ctx.host.abstract_unix_namespace(),
+                &ctx.host.abstract_unix_namespace(),
                 cb_queue,
             )
         });

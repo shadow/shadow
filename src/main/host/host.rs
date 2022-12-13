@@ -5,7 +5,8 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::network_interface::NetworkInterface;
+use crate::host::network_interface::{NetworkInterface, PcapOptions};
+use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
 use crate::utility::{self, HostTreePointer, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
@@ -26,6 +27,7 @@ use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::num::NonZeroU8;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -124,15 +126,8 @@ pub struct Host {
 
     cpu: RefCell<Cpu>,
 
-    // TODO: Use a Rust address type.
-    default_address: RefCell<SyncSendPointer<cshadow::Address>>,
-
-    // map abstract socket addresses to unix sockets
-    abstract_unix_namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
-
-    // TODO: rearrange our shutdown process so we don't need Option types here
-    localhost: RefCell<Option<NetworkInterface>>,
-    internet: RefCell<Option<NetworkInterface>>,
+    // TODO: rearrange our shutdown process so we don't need an `Option` type here
+    net_ns: RefCell<Option<NetworkNamespace>>,
 
     // Store as a CString so that we can return a borrowed pointer to C code
     // instead of having to allocate a new string.
@@ -240,31 +235,27 @@ impl Host {
         // Register using the param hints.
         // We already checked that the addresses are available, so fail if they are not.
 
-        let (localhost, local_addr) = unsafe {
-            Self::setup_net_interface(
-                &params,
-                Ipv4Addr::LOCALHOST,
-                /* uses_router= */ false,
-                Self::pcap_dir_path(&params, &data_dir_path),
-                dns,
-            )
-        };
-
-        unsafe { cshadow::address_unref(local_addr) };
-
         let public_ip: Ipv4Addr = u32::from_be(params.ip_addr).into();
-        let (internet, public_addr) = unsafe {
-            Self::setup_net_interface(
-                &params,
+
+        let hostname: Vec<NonZeroU8> = params
+            .hostname
+            .as_bytes()
+            .into_iter()
+            .map(|x| (*x).try_into().unwrap())
+            .collect();
+
+        let net_ns = unsafe {
+            NetworkNamespace::new(
+                params.id,
+                hostname,
                 public_ip,
-                /* uses_router= */ true,
-                Self::pcap_dir_path(&params, &data_dir_path),
+                Self::pcap_options(&params, &data_dir_path),
+                params.qdisc,
                 dns,
             )
         };
 
         let res = Self {
-            default_address: RefCell::new(unsafe { SyncSendPointer::new(public_addr) }),
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
@@ -275,10 +266,8 @@ impl Host {
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
-            abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             cpu,
-            localhost: RefCell::new(Some(localhost)),
-            internet: RefCell::new(Some(internet)),
+            net_ns: RefCell::new(Some(net_ns)),
             _data_dir_path: data_dir_path,
             data_dir_path_cstring,
             process_id_counter,
@@ -322,32 +311,6 @@ impl Host {
         res
     }
 
-    /// Must free the returned `*mut cshadow::Address` using [`cshadow::address_unref`].
-    unsafe fn setup_net_interface(
-        params: &HostParameters,
-        ip: Ipv4Addr,
-        uses_router: bool,
-        pcap_dir_path: Option<PathBuf>,
-        dns: *mut cshadow::DNS,
-    ) -> (NetworkInterface, *mut cshadow::Address) {
-        let ip = u32::from(ip).to_be();
-        let addr = unsafe { cshadow::dns_register(dns, params.id, params.hostname.as_ptr(), ip) };
-        assert!(!addr.is_null());
-
-        let interface = unsafe {
-            NetworkInterface::new(
-                params.id,
-                addr,
-                pcap_dir_path,
-                params.pcap_capture_size,
-                params.qdisc,
-                uses_router,
-            )
-        };
-
-        (interface, addr)
-    }
-
     fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
@@ -357,7 +320,7 @@ impl Host {
         data_dir_path
     }
 
-    fn pcap_dir_path(params: &HostParameters, data_dir_path: &Path) -> Option<PathBuf> {
+    fn pcap_options(params: &HostParameters, data_dir_path: &Path) -> Option<PcapOptions> {
         let Some(pcap_dir) = &params.pcap_dir else {
             return None;
         };
@@ -366,7 +329,11 @@ impl Host {
         let mut path = data_dir_path.to_path_buf();
         // If relative it will append, if absolute it will replace.
         path.push(PathBuf::from(path_string));
-        path.canonicalize().ok()
+
+        Some(PcapOptions {
+            path: path.canonicalize().unwrap(),
+            capture_size_bytes: params.pcap_capture_size,
+        })
     }
 
     pub fn add_application(
@@ -450,13 +417,15 @@ impl Host {
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
-        let addr = self.default_address.borrow().ptr();
+        let addr = self.net_ns.borrow().as_ref().unwrap().default_address.ptr();
         let addr = unsafe { cshadow::address_toNetworkIP(addr) };
         u32::from_be(addr).into()
     }
 
-    pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
-        &self.abstract_unix_namespace
+    pub fn abstract_unix_namespace(
+        &self,
+    ) -> impl Deref<Target = Arc<AtomicRefCell<AbstractUnixNamespace>>> + '_ {
+        Ref::map(self.net_ns.borrow(), |x| &x.as_ref().unwrap().unix)
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
@@ -487,16 +456,6 @@ impl Host {
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
 
-    fn interface_cell(&self, addr: Ipv4Addr) -> Option<&RefCell<Option<NetworkInterface>>> {
-        if addr.is_loopback() {
-            Some(&self.localhost)
-        } else if addr == self.info().default_ip {
-            Some(&self.internet)
-        } else {
-            None
-        }
-    }
-
     #[allow(non_snake_case)]
     pub fn bw_up_kiBps(&self) -> u64 {
         self.params.requested_bw_up_bits / (8 * 1024)
@@ -515,12 +474,16 @@ impl Host {
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
-        match self.interface_cell(addr) {
-            Some(rc) => {
-                let interface = rc.borrow_mut();
-                Some(RefMut::map(interface, |i| i.as_mut().unwrap()))
-            }
-            None => None,
+        if addr.is_loopback() {
+            Some(RefMut::map(self.net_ns.borrow_mut(), |x| {
+                &mut x.as_mut().unwrap().localhost
+            }))
+        } else if addr == self.info().default_ip {
+            Some(RefMut::map(self.net_ns.borrow_mut(), |x| {
+                &mut x.as_mut().unwrap().internet
+            }))
+        } else {
+            None
         }
     }
 
@@ -529,12 +492,16 @@ impl Host {
     /// Panics if we have not yet initialized our network interfaces yet.
     #[track_caller]
     pub fn interface(&self, addr: Ipv4Addr) -> Option<impl Deref<Target = NetworkInterface> + '_> {
-        match self.interface_cell(addr) {
-            Some(rc) => {
-                let interface = rc.borrow();
-                Some(Ref::map(interface, |i| i.as_ref().unwrap()))
-            }
-            None => None,
+        if addr.is_loopback() {
+            Some(Ref::map(self.net_ns.borrow(), |x| {
+                &x.as_ref().unwrap().localhost
+            }))
+        } else if addr == self.info().default_ip {
+            Some(Ref::map(self.net_ns.borrow(), |x| {
+                &x.as_ref().unwrap().internet
+            }))
+        } else {
+            None
         }
     }
 
@@ -608,15 +575,17 @@ impl Host {
         // Start refilling the token buckets for all interfaces.
         let bw_down = self.bw_down_kiBps();
         let bw_up = self.bw_up_kiBps();
-        self.localhost
+        self.net_ns
             .borrow()
             .as_ref()
             .unwrap()
+            .localhost
             .start_refilling_token_buckets(bw_down, bw_up);
-        self.internet
+        self.net_ns
             .borrow()
             .as_ref()
             .unwrap()
+            .internet
             .start_refilling_token_buckets(bw_down, bw_up);
 
         // must be done after the default IP exists so tracker_heartbeat works
@@ -647,17 +616,10 @@ impl Host {
         // become None after this and should not be unwrapped anymore.
         // TODO: clean this up when removing the interface's C internals.
         {
-            self.localhost.replace(None);
-            self.internet.replace(None);
+            self.net_ns.replace(None);
         }
 
         assert!(self.processes.borrow().is_empty());
-
-        // Deregistering localhost is a no-op, so we skip it.
-        Worker::with_dns(|dns| unsafe {
-            let dns = dns as *const cshadow::DNS;
-            cshadow::dns_deregister(dns.cast_mut(), self.default_address.borrow().ptr())
-        });
 
         self.stop_execution_timer();
         #[cfg(feature = "perf_timers")]
@@ -732,10 +694,16 @@ impl Host {
 
     pub fn packets_are_available_to_receive(&self) {
         // TODO: ideally we call
-        //   `self.internet.borrow().as_ref().unwrap().receive_packets(self);`
+        //   `self.net_ns.borrow().as_ref().unwrap().internet.receive_packets(self);`
         // but that causes a double-borrow loop. See `host_socketWantsToSend()`.
         unsafe {
-            let netif_ptr = self.internet.borrow().as_ref().unwrap().borrow_inner();
+            let netif_ptr = self
+                .net_ns
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .internet
+                .borrow_inner();
             cshadow::networkinterface_receivePackets(netif_ptr, self)
         };
     }
@@ -781,16 +749,19 @@ impl Host {
         if src.ip().is_unspecified() {
             // Check that all interfaces are available.
             !self
-                .localhost
+                .net_ns
                 .borrow()
                 .as_ref()
                 .unwrap()
+                .localhost
                 .is_associated(protocol_type, src.port(), dst)
-                && !self.internet.borrow().as_ref().unwrap().is_associated(
-                    protocol_type,
-                    src.port(),
-                    dst,
-                )
+                && !self
+                    .net_ns
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .internet
+                    .is_associated(protocol_type, src.port(), dst)
         } else {
             // The interface is not available if it does not exist.
             match self.interface(*src.ip()) {
@@ -869,11 +840,6 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
-        let default_addr = self.default_address.borrow().ptr();
-        if !default_addr.is_null() {
-            unsafe { cshadow::address_unref(default_addr) };
-        }
-
         if let Some(tracker) = self.tracker.borrow_mut().take() {
             debug_assert!(!tracker.ptr().is_null());
             unsafe { cshadow::tracker_free(tracker.ptr()) };
@@ -964,7 +930,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDefaultAddress(hostrc: *const Host) -> *mut cshadow::Address {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.default_address.borrow().ptr()
+        hostrc
+            .net_ns
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .default_address
+            .ptr()
     }
 
     #[no_mangle]
@@ -1100,13 +1072,14 @@ mod export {
         // Associate the interfaces corresponding to bind_addr with socket
         if bind_addr.ip().is_unspecified() {
             // Need to associate all interfaces.
-            hostrc.localhost.borrow().as_ref().unwrap().associate(
-                socket,
-                protocol,
-                bind_addr.port(),
-                peer_addr,
-            );
-            hostrc.internet.borrow().as_ref().unwrap().associate(
+            hostrc
+                .net_ns
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .localhost
+                .associate(socket, protocol, bind_addr.port(), peer_addr);
+            hostrc.net_ns.borrow().as_ref().unwrap().internet.associate(
                 socket,
                 protocol,
                 bind_addr.port(),
@@ -1142,17 +1115,21 @@ mod export {
         // Associate the interfaces corresponding to bind_addr with socket
         if sock_addr.ip().is_unspecified() {
             // Need to disassociate all interfaces.
-            hostrc.localhost.borrow().as_ref().unwrap().disassociate(
-                protocol,
-                sock_addr.port(),
-                peer_addr,
-            );
+            hostrc
+                .net_ns
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .localhost
+                .disassociate(protocol, sock_addr.port(), peer_addr);
 
-            hostrc.internet.borrow().as_ref().unwrap().disassociate(
-                protocol,
-                sock_addr.port(),
-                peer_addr,
-            );
+            hostrc
+                .net_ns
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .internet
+                .disassociate(protocol, sock_addr.port(), peer_addr);
         } else {
             // TODO: return error if interface does not exist.
             if let Some(iface) = hostrc.interface_mut(*sock_addr.ip()) {
