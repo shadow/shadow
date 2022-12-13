@@ -434,6 +434,10 @@ impl Host {
         self.router.borrow_mut()
     }
 
+    pub fn network_namespace(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
+        Ref::map(self.net_ns.borrow(), |x| x.as_ref().unwrap())
+    }
+
     #[track_caller]
     pub fn tracker_mut(&self) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
         let tracker = self.tracker.borrow_mut();
