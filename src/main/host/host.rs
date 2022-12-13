@@ -122,7 +122,7 @@ pub struct Host {
 
     pub params: HostParameters,
 
-    cpu: RefCell<Option<Cpu>>,
+    cpu: RefCell<Cpu>,
 
     // TODO: Use a Rust address type.
     default_address: RefCell<SyncSendPointer<cshadow::Address>>,
@@ -130,16 +130,17 @@ pub struct Host {
     // map abstract socket addresses to unix sockets
     abstract_unix_namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
 
-    // TODO: rearrange our setup process so we don't need Option types here.
+    // TODO: rearrange our shutdown process so we don't need Option types here
     localhost: RefCell<Option<NetworkInterface>>,
     internet: RefCell<Option<NetworkInterface>>,
 
     // Store as a CString so that we can return a borrowed pointer to C code
     // instead of having to allocate a new string.
     //
-    // TODO: Store as PathBuf once we can remove `host_getDataPath`. (Or maybe
-    // don't store it at all)
-    data_dir_path: RefCell<Option<CString>>,
+    // TODO: Remove `data_dir_path_cstring` once we can remove `host_getDataPath`. (Or maybe don't
+    // store it at all)
+    _data_dir_path: PathBuf,
+    data_dir_path_cstring: CString,
 
     // virtual process and event id counter
     process_id_counter: Cell<u32>,
@@ -195,15 +196,25 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    pub fn new(params: HostParameters) -> Self {
+    pub unsafe fn new(
+        params: HostParameters,
+        host_root_path: &Path,
+        raw_cpu_freq_khz: u64,
+        dns: *mut cshadow::DNS,
+    ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
 
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));
-        let cpu = RefCell::new(None);
-        let data_dir_path = RefCell::new(None);
-        let default_address = RefCell::new(unsafe { SyncSendPointer::new(std::ptr::null_mut()) });
+        let cpu = RefCell::new(Cpu::new(
+            params.cpu_frequency,
+            raw_cpu_freq_khz,
+            params.cpu_threshold,
+            params.cpu_precision,
+        ));
+        let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
+        let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
 
         let host_shmem = HostShmem::new(
             params.id,
@@ -224,8 +235,36 @@ impl Host {
         let packet_priority_counter = Cell::new(1.0);
         let tsc = Tsc::new(params.native_tsc_frequency);
 
+        std::fs::create_dir_all(&data_dir_path).unwrap();
+
+        // Register using the param hints.
+        // We already checked that the addresses are available, so fail if they are not.
+
+        let (localhost, local_addr) = unsafe {
+            Self::setup_net_interface(
+                &params,
+                Ipv4Addr::LOCALHOST,
+                /* uses_router= */ false,
+                Self::pcap_dir_path(&params, &data_dir_path),
+                dns,
+            )
+        };
+
+        unsafe { cshadow::address_unref(local_addr) };
+
+        let public_ip: Ipv4Addr = u32::from_be(params.ip_addr).into();
+        let (internet, public_addr) = unsafe {
+            Self::setup_net_interface(
+                &params,
+                public_ip,
+                /* uses_router= */ true,
+                Self::pcap_dir_path(&params, &data_dir_path),
+                dns,
+            )
+        };
+
         let res = Self {
-            default_address,
+            default_address: RefCell::new(unsafe { SyncSendPointer::new(public_addr) }),
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
@@ -238,9 +277,10 @@ impl Host {
             shim_shmem_lock: RefCell::new(None),
             abstract_unix_namespace: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             cpu,
-            localhost: RefCell::new(None),
-            internet: RefCell::new(None),
-            data_dir_path,
+            localhost: RefCell::new(Some(localhost)),
+            internet: RefCell::new(Some(internet)),
+            _data_dir_path: data_dir_path,
+            data_dir_path_cstring,
             process_id_counter,
             event_id_counter,
             packet_id_counter,
@@ -251,81 +291,6 @@ impl Host {
             #[cfg(feature = "perf_timers")]
             execution_timer,
         };
-
-        res.stop_execution_timer();
-
-        res
-    }
-
-    pub unsafe fn setup(
-        &self,
-        dns: *mut cshadow::DNS,
-        raw_cpu_freq_khz: u64,
-        host_root_path: &Path,
-    ) {
-        self.cpu.borrow_mut().replace(Cpu::new(
-            self.params.cpu_frequency,
-            raw_cpu_freq_khz,
-            self.params.cpu_threshold,
-            self.params.cpu_precision,
-        ));
-
-        {
-            let data_dir_path = self.data_dir_path(host_root_path);
-            std::fs::create_dir_all(&data_dir_path).unwrap();
-
-            let data_dir_path = utility::pathbuf_to_nul_term_cstring(data_dir_path);
-            self.data_dir_path.borrow_mut().replace(data_dir_path);
-        }
-
-        // Register using the param hints.
-        // We already checked that the addresses are available, so fail if they are not.
-        let local_ipv4 = u32::from(Ipv4Addr::LOCALHOST).to_be();
-        let local_addr = unsafe {
-            cshadow::dns_register(
-                dns,
-                self.params.id,
-                self.params.hostname.as_ptr(),
-                local_ipv4,
-            )
-        };
-        assert!(!local_addr.is_null());
-
-        let inet_addr = unsafe {
-            cshadow::dns_register(
-                dns,
-                self.params.id,
-                self.params.hostname.as_ptr(),
-                self.params.ip_addr,
-            )
-        };
-        assert!(!inet_addr.is_null());
-        *self.default_address.borrow_mut() = unsafe { SyncSendPointer::new(inet_addr) };
-
-        // Virtual addresses and interfaces for managing network I/O
-        let localhost = unsafe {
-            NetworkInterface::new(
-                self.id(),
-                local_addr,
-                self.pcap_dir_path(host_root_path),
-                self.params.pcap_capture_size,
-                self.params.qdisc,
-                false,
-            )
-        };
-        self.localhost.borrow_mut().replace(localhost);
-
-        let internet = unsafe {
-            NetworkInterface::new(
-                self.id(),
-                inet_addr,
-                self.pcap_dir_path(host_root_path),
-                self.params.pcap_capture_size,
-                self.params.qdisc,
-                true,
-            )
-        };
-        self.internet.borrow_mut().replace(internet);
 
         info!(
             concat!(
@@ -340,24 +305,51 @@ impl Host {
                 " {cpu_threshold} cpuThreshold, ",
                 " {cpu_precision} cpuPrecision"
             ),
-            self.id(),
-            name = self.info().name,
-            seed = self.params.node_seed,
-            bw_up_kiBps = self.bw_up_kiBps(),
-            bw_down_kiBps = self.bw_down_kiBps(),
-            init_sock_send_buf_size = self.params.init_sock_send_buf_size,
-            init_sock_recv_buf_size = self.params.init_sock_recv_buf_size,
-            cpu_frequency = format!("{:?}", self.params.cpu_frequency),
-            cpu_threshold = format!("{:?}", self.params.cpu_threshold),
-            cpu_precision = format!("{:?}", self.params.cpu_precision),
+            res.id(),
+            name = res.info().name,
+            seed = res.params.node_seed,
+            bw_up_kiBps = res.bw_up_kiBps(),
+            bw_down_kiBps = res.bw_down_kiBps(),
+            init_sock_send_buf_size = res.params.init_sock_send_buf_size,
+            init_sock_recv_buf_size = res.params.init_sock_recv_buf_size,
+            cpu_frequency = format!("{:?}", res.params.cpu_frequency),
+            cpu_threshold = format!("{:?}", res.params.cpu_threshold),
+            cpu_precision = format!("{:?}", res.params.cpu_precision),
         );
 
-        // Cleanup
-        unsafe { cshadow::address_unref(local_addr) };
+        res.stop_execution_timer();
+
+        res
     }
 
-    fn data_dir_path(&self, host_root_path: &Path) -> PathBuf {
-        let hostname: OsString = { OsString::from_vec(self.params.hostname.to_bytes().to_vec()) };
+    /// Must free the returned `*mut cshadow::Address` using [`cshadow::address_unref`].
+    unsafe fn setup_net_interface(
+        params: &HostParameters,
+        ip: Ipv4Addr,
+        uses_router: bool,
+        pcap_dir_path: Option<PathBuf>,
+        dns: *mut cshadow::DNS,
+    ) -> (NetworkInterface, *mut cshadow::Address) {
+        let ip = u32::from(ip).to_be();
+        let addr = unsafe { cshadow::dns_register(dns, params.id, params.hostname.as_ptr(), ip) };
+        assert!(!addr.is_null());
+
+        let interface = unsafe {
+            NetworkInterface::new(
+                params.id,
+                addr,
+                pcap_dir_path,
+                params.pcap_capture_size,
+                params.qdisc,
+                uses_router,
+            )
+        };
+
+        (interface, addr)
+    }
+
+    fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
+        let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
@@ -365,13 +357,13 @@ impl Host {
         data_dir_path
     }
 
-    fn pcap_dir_path(&self, host_root_path: &Path) -> Option<PathBuf> {
-        let Some(pcap_dir) = &self.params.pcap_dir else {
+    fn pcap_dir_path(params: &HostParameters, data_dir_path: &Path) -> Option<PathBuf> {
+        let Some(pcap_dir) = &params.pcap_dir else {
             return None;
         };
         let path_string: OsString = { OsString::from_vec(pcap_dir.to_bytes().to_vec()) };
 
-        let mut path = self.data_dir_path(host_root_path);
+        let mut path = data_dir_path.to_path_buf();
         // If relative it will append, if absolute it will replace.
         path.push(PathBuf::from(path_string));
         path.canonicalize().ok()
@@ -698,8 +690,7 @@ impl Host {
             };
 
             {
-                let mut opt_cpu = self.cpu.borrow_mut();
-                let cpu = opt_cpu.as_mut().unwrap();
+                let mut cpu = self.cpu.borrow_mut();
                 cpu.update_time(event.time());
                 let cpu_delay = cpu.delay();
                 if cpu_delay > SimulationTime::ZERO {
@@ -1052,7 +1043,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.data_dir_path.borrow().as_ref().unwrap().as_ptr()
+        hostrc.data_dir_path_cstring.as_ptr()
     }
 
     #[no_mangle]
@@ -1374,7 +1365,7 @@ mod export {
     pub extern "C" fn host_addDelayNanos(host: *const Host, delay_nanos: u64) {
         let host = unsafe { host.as_ref().unwrap() };
         let delay = Duration::from_nanos(delay_nanos);
-        host.cpu.borrow_mut().as_mut().unwrap().add_delay(delay);
+        host.cpu.borrow_mut().add_delay(delay);
     }
 
     #[no_mangle]
