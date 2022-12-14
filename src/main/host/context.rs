@@ -32,6 +32,8 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+
 use super::{host::Host, process::Process, thread::ThreadRef};
 use crate::cshadow;
 
@@ -90,7 +92,7 @@ impl<'a> ThreadContext<'a> {
 /// Rust code, we can build them from C pointers.
 pub struct ThreadContextObjs<'a> {
     host: &'a Host,
-    process: Process,
+    process: &'a RootedRefCell<Process>,
     thread: ThreadRef,
 }
 
@@ -100,7 +102,11 @@ impl<'a> ThreadContextObjs<'a> {
     /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
+        let process = unsafe {
+            cshadow::process_getRustProcess(sys.process)
+                .as_ref()
+                .unwrap()
+        };
         let thread = unsafe { ThreadRef::new(sys.thread) };
         Self {
             host,
@@ -115,16 +121,15 @@ impl<'a> ThreadContextObjs<'a> {
     pub unsafe fn from_thread(host: &'a Host, thread: *mut cshadow::Thread) -> Self {
         let sys = unsafe { cshadow::thread_getSysCallHandler(thread) };
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
-        let thread = unsafe { ThreadRef::new(sys.thread) };
-        Self {
-            host,
-            process,
-            thread,
-        }
+        unsafe { Self::from_syscallhandler(host, sys) }
     }
 
-    pub fn borrow(&mut self) -> ThreadContext {
-        ThreadContext::new(self.host, &mut self.process, &mut self.thread)
+    pub fn with_ctx<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut ThreadContext) -> R,
+    {
+        let mut process = self.process.borrow_mut(self.host.root());
+        let mut ctx = ThreadContext::new(self.host, &mut process, &mut self.thread);
+        f(&mut ctx)
     }
 }

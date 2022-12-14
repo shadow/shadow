@@ -686,8 +686,9 @@ mod export {
         if process.is_null() {
             Worker::clear_active_process();
         } else {
-            let process = unsafe { Process::borrow_from_c(notnull_mut_debug(process)) };
-            Worker::set_active_process(&process);
+            let process = unsafe { cshadow::process_getRustProcess(process).as_ref().unwrap() };
+            Worker::with_active_host(|h| Worker::set_active_process(&process.borrow(h.root())))
+                .unwrap();
         }
     }
 

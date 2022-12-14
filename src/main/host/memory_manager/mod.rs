@@ -777,7 +777,7 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
-            Box::into_raw(Box::new(AllocdMem::new(&mut objs.borrow(), len)))
+            objs.with_ctx(|ctx| Box::into_raw(Box::new(AllocdMem::new(ctx, len))))
         })
         .unwrap()
     }
@@ -791,7 +791,9 @@ mod export {
             let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
             let mut objs =
                 unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
-            allocd_mem.free(&mut objs.borrow());
+            objs.with_ctx(|ctx| {
+                allocd_mem.free(ctx);
+            });
         })
         .unwrap()
     }

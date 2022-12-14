@@ -158,8 +158,7 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            sys.syscall(&mut objs.borrow(), unsafe { args.as_ref().unwrap() })
-                .into()
+            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
         })
         .unwrap()
     }

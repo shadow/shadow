@@ -97,10 +97,8 @@ impl<T> HostTreePointer<T> {
         // This function is still `unsafe` since it's now the caller's
         // responsibility to not release the lock and *then* dereference the
         // pointer.
-        Worker::with_active_host(|h| {
-            self.ptr_with_host(h)
-        })
-        .unwrap()
+        // SAFETY: caller's responsibility
+        Worker::with_active_host(|h| unsafe { self.ptr_with_host(h) }).unwrap()
     }
 
     /// Get the pointer.

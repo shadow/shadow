@@ -76,6 +76,9 @@ static gchar* _process_outputFileName(Process* proc, const Host* host, const cha
 static void _process_check(Process* proc);
 
 struct _Process {
+    /* Pointer to the RustProcess that owns this Process */
+    const RustProcess* rustProcess;
+
     HostId hostId;
 
     /* unique id of the program that this process should run */
@@ -920,6 +923,18 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     worker_count_allocation(Process);
 
     return proc;
+}
+
+void process_setRustProcess(Process* proc, const RustProcess* rproc) {
+    MAGIC_ASSERT(proc);
+    utility_alwaysAssert(proc->rustProcess == NULL);
+    proc->rustProcess = rproc;
+}
+
+const RustProcess* process_getRustProcess(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_alwaysAssert(proc->rustProcess);
+    return proc->rustProcess;
 }
 
 void process_free(Process* proc) {
