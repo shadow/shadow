@@ -7,12 +7,14 @@ use nix::sys::socket::SockaddrIn;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
+use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;
@@ -197,11 +199,67 @@ impl TcpSocket {
     }
 
     pub fn bind(
-        _socket: &Arc<AtomicRefCell<Self>>,
-        _addr: Option<&SockaddrStorage>,
-        _rng: impl rand::Rng,
+        socket: &Arc<AtomicRefCell<Self>>,
+        addr: Option<&SockaddrStorage>,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
     ) -> SyscallResult {
-        todo!()
+        // if the address pointer was NULL
+        let Some(addr) = addr else {
+            return Err(Errno::EFAULT.into());
+        };
+
+        // if not an inet socket address
+        let Some(addr) = addr.as_inet() else {
+            return Err(Errno::EINVAL.into());
+        };
+
+        let addr: SocketAddrV4 = (*addr).into();
+
+        // if the socket is already bound
+        {
+            let socket = socket.borrow();
+            let socket = socket.as_legacy_socket();
+            if unsafe { c::legacysocket_isBound(socket) } == 1 {
+                return Err(Errno::EINVAL.into());
+            }
+        }
+
+        // make sure the socket doesn't have a peer
+        {
+            // Since we're not bound, we're not connected and have no peer. We may have a peer in
+            // the future if `connect()` is called on this socket.
+            let socket = socket.borrow();
+            let socket = socket.as_legacy_socket();
+            assert_eq!(0, unsafe {
+                c::legacysocket_getPeerName(socket, std::ptr::null_mut(), std::ptr::null_mut())
+            });
+        }
+
+        // this will allow us to receive packets from any peer
+        let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+
+        // associate the socket
+        let addr = inet::associate_socket(
+            InetSocket::Tcp(Arc::clone(socket)),
+            addr,
+            peer_addr,
+            net_ns,
+            rng,
+        )?;
+
+        // update the socket's local address
+        let socket = socket.borrow_mut();
+        let socket = socket.as_legacy_socket();
+        unsafe {
+            c::legacysocket_setSocketName(
+                socket,
+                u32::from(*addr.ip()).to_be(),
+                addr.port().to_be(),
+            )
+        };
+
+        Ok(0.into())
     }
 
     pub fn read<W>(

@@ -121,10 +121,6 @@ impl SyscallHandler {
 
         let file = file.inner_file().clone();
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file {
-            return Self::legacy_syscall(c::syscallhandler_bind, ctx, args);
-        }
-
         let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
@@ -134,7 +130,8 @@ impl SyscallHandler {
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
         let mut rng = ctx.host.random_mut();
-        Socket::bind(socket, addr.as_ref(), &mut *rng)
+        let net_ns = ctx.host.network_namespace();
+        Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,

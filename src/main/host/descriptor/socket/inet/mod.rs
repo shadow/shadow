@@ -1,11 +1,14 @@
+use std::net::SocketAddrV4;
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use nix::errno::Errno;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -51,9 +54,14 @@ impl InetSocket {
         }
     }
 
-    pub fn bind(&self, addr: Option<&SockaddrStorage>, rng: impl rand::Rng) -> SyscallResult {
+    pub fn bind(
+        &self,
+        addr: Option<&SockaddrStorage>,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
         match self {
-            Self::Tcp(socket) => TcpSocket::bind(socket, addr, rng),
+            Self::Tcp(socket) => TcpSocket::bind(socket, addr, net_ns, rng),
         }
     }
 
@@ -275,6 +283,62 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
             self.get_status()
         )
     }
+}
+
+/// Associate the socket with a network interface. If the local address is unspecified, the socket
+/// will be associated with every available interface. If the local address has a port of 0, a
+/// non-zero port will be chosen. The final local address will be returned. If the peer address is
+/// unspecified and has a port of 0, the socket will receive packets from every peer address.
+fn associate_socket(
+    socket: InetSocket,
+    local_addr: SocketAddrV4,
+    peer_addr: SocketAddrV4,
+    net_ns: &NetworkNamespace,
+    rng: impl rand::Rng,
+) -> Result<SocketAddrV4, SyscallError> {
+    log::trace!("Trying to associate socket with addresses (local={local_addr}, peer={peer_addr})");
+
+    if !local_addr.ip().is_unspecified() && net_ns.interface(*local_addr.ip()).is_none() {
+        log::debug!(
+            "No network interface exists for the provided local address {}",
+            local_addr.ip(),
+        );
+        return Err(Errno::EINVAL.into());
+    };
+
+    let protocol = match socket {
+        InetSocket::Tcp(_) => c::_ProtocolType_PTCP,
+    };
+
+    // get a free ephemeral port if they didn't specify one
+    let local_addr = if local_addr.port() != 0 {
+        local_addr
+    } else {
+        let Some(new_port) = net_ns.get_random_free_port(protocol, *local_addr.ip(), peer_addr, rng) else {
+            log::debug!("Association required an ephemeral port but none are available");
+            return Err(Errno::EADDRINUSE.into());
+        };
+
+        log::debug!("Associating with generated ephemeral port {new_port}");
+
+        // update the address with the same ip, but new port
+        SocketAddrV4::new(*local_addr.ip(), new_port)
+    };
+
+    // make sure the port is available at this address for this protocol
+    if !net_ns.is_interface_available(protocol, local_addr, peer_addr) {
+        log::debug!(
+            "The provided addresses (local={local_addr}, peer={peer_addr}) are not available"
+        );
+        return Err(Errno::EADDRINUSE.into());
+    }
+
+    let socket = unsafe { c::compatsocket_fromInetSocket(&socket) };
+
+    // associate the interfaces corresponding to addr with socket
+    unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
+
+    Ok(local_addr)
 }
 
 mod export {
