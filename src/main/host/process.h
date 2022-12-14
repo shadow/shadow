@@ -103,9 +103,6 @@ pid_t process_getNativePid(const Process* proc);
  * - If we don't find a matching thread, return 0. */
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
 
-/* This should only be called from the rust 'Process' object. */
-DescriptorTable* process_getDescriptorTable(Process* proc);
-
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
 

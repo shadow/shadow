@@ -16,37 +16,41 @@ impl SyscallHandler {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = Self::get_descriptor_mut(ctx.process, fd)?;
+        let file = {
+            let mut desc_table = ctx.process.descriptor_table_mut();
+            let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
-        // add the CLOEXEC flag
-        if request == libc::FIOCLEX {
-            let mut flags = desc.flags();
-            flags.insert(DescriptorFlags::CLOEXEC);
-            desc.set_flags(flags);
+            // add the CLOEXEC flag
+            if request == libc::FIOCLEX {
+                let mut flags = desc.flags();
+                flags.insert(DescriptorFlags::CLOEXEC);
+                desc.set_flags(flags);
 
-            return Ok(0.into());
-        }
-
-        // remove the CLOEXEC flag
-        if request == libc::FIONCLEX {
-            let mut flags = desc.flags();
-            flags.remove(DescriptorFlags::CLOEXEC);
-            desc.set_flags(flags);
-
-            return Ok(0.into());
-        }
-
-        // NOTE: anything past this point should only modify the file, not the descriptor
-
-        let file = match desc.file() {
-            CompatFile::New(file) => file,
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                return Self::legacy_syscall(c::syscallhandler_ioctl, ctx, args);
+                return Ok(0.into());
             }
-        };
 
-        let file = file.inner_file().clone();
+            // remove the CLOEXEC flag
+            if request == libc::FIONCLEX {
+                let mut flags = desc.flags();
+                flags.remove(DescriptorFlags::CLOEXEC);
+                desc.set_flags(flags);
+
+                return Ok(0.into());
+            }
+
+            // NOTE: anything past this point should only modify the file, not the descriptor
+
+            let file = match desc.file() {
+                CompatFile::New(file) => file,
+                // if it's a legacy file, use the C syscall handler instead
+                CompatFile::Legacy(_) => {
+                    drop(desc_table);
+                    return Self::legacy_syscall(c::syscallhandler_ioctl, ctx, args);
+                }
+            };
+
+            file.inner_file().clone()
+        };
 
         let mut file = file.borrow_mut();
 

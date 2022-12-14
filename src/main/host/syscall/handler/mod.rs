@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
+use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::descriptor::Descriptor;
-use crate::host::process::Process;
 use crate::host::syscall_types::SysCallArgs;
 use crate::host::syscall_types::SyscallResult;
 
@@ -90,13 +90,13 @@ impl SyscallHandler {
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor(
-        process: &Process,
+        descriptor_table: &DescriptorTable,
         fd: impl TryInto<u32>,
     ) -> Result<&Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
         let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
-        match process.get_descriptor(fd) {
+        match descriptor_table.get(fd) {
             Some(desc) => Ok(desc),
             None => Err(nix::errno::Errno::EBADF),
         }
@@ -105,13 +105,13 @@ impl SyscallHandler {
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor_mut(
-        process: &mut Process,
+        descriptor_table: &mut DescriptorTable,
         fd: impl TryInto<u32>,
     ) -> Result<&mut Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
         let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
-        match process.get_descriptor_mut(fd) {
+        match descriptor_table.get_mut(fd) {
             Some(desc) => Ok(desc),
             None => Err(nix::errno::Errno::EBADF),
         }

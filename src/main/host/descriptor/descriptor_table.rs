@@ -1,5 +1,7 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, Descriptor};
+use crate::host::host::Host;
+use crate::utility::callback_queue::CallbackQueue;
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -131,6 +133,15 @@ impl DescriptorTable {
         }
     }
 
+    /// Close all descriptors. The `host` option is a legacy option for legacy files.
+    pub fn remove_and_close_all(&mut self, host: &Host) {
+        CallbackQueue::queue_and_run(|cb_queue| {
+            for desc in self.remove_all() {
+                desc.close(host, cb_queue);
+            }
+        });
+    }
+
     /// Remove and return all descriptors.
     pub fn remove_all(&mut self) -> impl Iterator<Item = Descriptor> {
         // reset the descriptor table
@@ -143,71 +154,5 @@ impl DescriptorTable {
 impl Default for DescriptorTable {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-mod export {
-    use super::*;
-    use crate::host::{descriptor::CallbackQueue, host::Host};
-    use libc::c_int;
-    use shadow_shim_helper_rs::notnull::*;
-
-    /// Create an object that can be used to store all descriptors created by a
-    /// process. When the table is no longer required, use descriptortable_free
-    /// to release the reference.
-    #[no_mangle]
-    pub unsafe extern "C" fn descriptortable_new() -> *mut DescriptorTable {
-        Box::into_raw(Box::new(DescriptorTable::new()))
-    }
-
-    /// Free the table.
-    #[no_mangle]
-    pub unsafe extern "C" fn descriptortable_free(table: *mut DescriptorTable) {
-        unsafe { Box::from_raw(notnull_mut_debug(table)) };
-    }
-
-    /// Store the given descriptor at the given index. Any previous descriptor that was
-    /// stored there will be returned. This consumes a ref to the given descriptor as in
-    /// add(), and any returned descriptor must be freed manually.
-    #[no_mangle]
-    pub unsafe extern "C" fn descriptortable_set(
-        table: *mut DescriptorTable,
-        index: c_int,
-        descriptor: *mut Descriptor,
-    ) -> *mut Descriptor {
-        let table = unsafe { table.as_mut().unwrap() };
-        let descriptor = Descriptor::from_raw(descriptor);
-
-        match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
-            Some(d) => Descriptor::into_raw(Box::new(d)),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    /// This is a helper function that handles some corner cases where some
-    /// descriptors are linked to each other and we must remove that link in
-    /// order to ensure that the reference count reaches zero and they are properly
-    /// freed. Otherwise the circular reference will prevent the free operation.
-    /// TODO: remove this once the TCP layer is better designed.
-    #[no_mangle]
-    pub unsafe extern "C" fn descriptortable_shutdownHelper(table: *mut DescriptorTable) {
-        let table = unsafe { table.as_mut().unwrap() };
-        table.shutdown_helper();
-    }
-
-    /// Close all descriptors. The `host` option is a legacy option for legacy files.
-    #[no_mangle]
-    pub unsafe extern "C" fn descriptortable_removeAndCloseAll(
-        table: *mut DescriptorTable,
-        host: *const Host,
-    ) {
-        let table = unsafe { table.as_mut().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-
-        CallbackQueue::queue_and_run(|cb_queue| {
-            for desc in table.remove_all() {
-                desc.close(host, cb_queue);
-            }
-        });
     }
 }

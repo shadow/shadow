@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::num::TryFromIntError;
+use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 
 use nix::unistd::Pid;
@@ -12,6 +13,7 @@ use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::format::FmtOptions;
 use crate::utility::SyncSendPointer;
 
+use super::descriptor::descriptor_table::DescriptorTable;
 use super::memory_manager::MemoryManager;
 use super::timer::Timer;
 
@@ -54,6 +56,8 @@ pub type RustProcess = RootedRefCell<Process>;
 
 pub struct Process {
     cprocess: SyncSendPointer<cshadow::Process>,
+
+    desc_table: RefCell<DescriptorTable>,
 }
 
 impl Process {
@@ -76,7 +80,17 @@ impl Process {
         // we ensure that the pointer doesn't "escape" in a way that would allow it to be
         // accessed by threads that don't have access to the enclosing Process.
         let cprocess = unsafe { SyncSendPointer::new(p) };
-        let process = RootedRc::new(root, RootedRefCell::new(root, Process { cprocess }));
+        let desc_table = RefCell::new(DescriptorTable::new());
+        let process = RootedRc::new(
+            root,
+            RootedRefCell::new(
+                root,
+                Self {
+                    cprocess,
+                    desc_table,
+                },
+            ),
+        );
         // We're storing a raw pointer to the inner RootedRefCell here. This is a bit
         // fragile, but should be ok since its never moved out of the enclosing RootedRc,
         // so its address won't change. Since the Rust Process owns the C Process, the
@@ -84,7 +98,7 @@ impl Process {
         //
         // We could store the outer RootedRc, but then need to deal with a reference cycle.
         let process_refcell: &RustProcess = &process;
-        unsafe { cshadow::process_setRustProcess(cprocess.ptr(), process_refcell) }
+        unsafe { cshadow::process_setRustProcess(cprocess.ptr(), process_refcell) };
         process
     }
 
@@ -117,34 +131,26 @@ impl Process {
     }
 
     /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor(&mut self, desc: Descriptor) -> u32 {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
+    pub fn register_descriptor(&self, desc: Descriptor) -> u32 {
+        let mut desc_table = self.desc_table.borrow_mut();
         desc_table.add(desc, 0)
     }
 
     /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor_with_min_fd(&mut self, desc: Descriptor, min_fd: u32) -> u32 {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
+    pub fn register_descriptor_with_min_fd(&self, desc: Descriptor, min_fd: u32) -> u32 {
+        let mut desc_table = self.desc_table.borrow_mut();
         desc_table.add(desc, min_fd)
     }
 
     /// Register a descriptor with a given fd handle and return the descriptor that it replaced.
-    pub fn register_descriptor_with_fd(
-        &mut self,
-        desc: Descriptor,
-        new_fd: u32,
-    ) -> Option<Descriptor> {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
+    pub fn register_descriptor_with_fd(&self, desc: Descriptor, new_fd: u32) -> Option<Descriptor> {
+        let mut desc_table = self.desc_table.borrow_mut();
         desc_table.set(new_fd, desc)
     }
 
     /// Deregister the descriptor with the given fd handle and return it.
-    pub fn deregister_descriptor(&mut self, fd: u32) -> Option<Descriptor> {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
+    pub fn deregister_descriptor(&self, fd: u32) -> Option<Descriptor> {
+        let mut desc_table = self.desc_table.borrow_mut();
         desc_table.remove(fd)
     }
 
@@ -166,18 +172,12 @@ impl Process {
         Some(rv)
     }
 
-    /// Get a reference to the descriptor with the given fd handle.
-    pub fn get_descriptor(&self, fd: u32) -> Option<&Descriptor> {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
-        desc_table.get(fd)
+    pub fn descriptor_table(&self) -> impl Deref<Target = DescriptorTable> + '_ {
+        self.desc_table.borrow()
     }
 
-    /// Get a mutable reference to the descriptor with the given fd handle.
-    pub fn get_descriptor_mut(&mut self, fd: u32) -> Option<&mut Descriptor> {
-        let desc_table =
-            unsafe { cshadow::process_getDescriptorTable(self.cprocess.ptr()).as_mut() }.unwrap();
-        desc_table.get_mut(fd)
+    pub fn descriptor_table_mut(&self) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
+        self.desc_table.borrow_mut()
     }
 
     pub fn native_pid(&self) -> Pid {
@@ -203,7 +203,8 @@ impl Drop for Process {
 }
 
 mod export {
-    use super::*;
+    use std::ffi::c_int;
+    use shadow_shim_helper_rs::notnull::*;
 
     use crate::core::worker::Worker;
     use crate::host::descriptor::socket::inet::InetSocket;
@@ -220,8 +221,8 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         let desc = Descriptor::from_raw(desc).unwrap();
 
-        let fd = Worker::with_active_host(|h| proc.borrow_mut(h.root()).register_descriptor(*desc))
-            .unwrap();
+        let fd =
+            Worker::with_active_host(|h| proc.borrow(h.root()).register_descriptor(*desc)).unwrap();
         fd.try_into().unwrap()
     }
 
@@ -241,10 +242,12 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| match proc.borrow(h.root()).get_descriptor(handle) {
-            Some(d) => d as *const Descriptor,
-            None => std::ptr::null(),
-        })
+        Worker::with_active_host(
+            |h| match proc.borrow(h.root()).descriptor_table().get(handle) {
+                Some(d) => d as *const Descriptor,
+                None => std::ptr::null(),
+            },
+        )
         .unwrap()
     }
 
@@ -264,12 +267,12 @@ mod export {
             }
         };
 
-        Worker::with_active_host(
-            |h| match proc.borrow_mut(h.root()).get_descriptor_mut(handle) {
+        Worker::with_active_host(|h| {
+            match proc.borrow(h.root()).descriptor_table_mut().get_mut(handle) {
                 Some(d) => d as *mut Descriptor,
                 None => std::ptr::null_mut(),
-            },
-        )
+            }
+        })
         .unwrap()
     }
 
@@ -289,7 +292,7 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| match proc.borrow(h.root()).get_descriptor(handle).map(|x| x.file()) {
+        Worker::with_active_host(|h| match proc.borrow(h.root()).descriptor_table().get(handle).map(|x| x.file()) {
             Some(CompatFile::Legacy(file)) => unsafe { file.ptr() },
             Some(CompatFile::New(file)) => {
                 // we have a special case for the legacy C TCP objects
@@ -305,5 +308,54 @@ mod export {
             }
             None => std::ptr::null_mut(),
         }).unwrap()
+    }
+
+    /// Temporary; meant to be called from process.c.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_descriptorTableShutdownHelper(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            proc.borrow(h.root())
+                .descriptor_table_mut()
+                .shutdown_helper();
+        })
+        .unwrap();
+    }
+
+    /// Temporary; meant to be called from process.c.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_descriptorTableRemoveAndCloseAll(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            proc.borrow(h.root())
+                .descriptor_table_mut()
+                .remove_and_close_all(h);
+        })
+        .unwrap();
+    }
+
+    /// Temporary; meant to be called from process.c.
+    ///
+    /// Store the given descriptor at the given index. Any previous descriptor that was
+    /// stored there will be returned. This consumes a ref to the given descriptor as in
+    /// add(), and any returned descriptor must be freed manually.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_descriptorTableSet(
+        proc: *const RustProcess,
+        index: c_int,
+        desc: *mut Descriptor,
+    ) -> *mut Descriptor {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let descriptor = Descriptor::from_raw(desc);
+
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut table = proc.descriptor_table_mut();
+            match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
+                Some(d) => Descriptor::into_raw(Box::new(d)),
+                None => std::ptr::null_mut(),
+            }
+        })
+        .unwrap()
     }
 }

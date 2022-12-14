@@ -85,9 +85,6 @@ struct _Process {
     pid_t processID;
     GString* processName;
 
-    /* All of the descriptors opened by this process. */
-    DescriptorTable* descTable;
-
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
 
@@ -481,8 +478,9 @@ static void _process_check(Process* proc) {
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 #endif
 
-    descriptortable_shutdownHelper(proc->descTable);
-    descriptortable_removeAndCloseAll(proc->descTable, _host(proc));
+    utility_alwaysAssert(proc->rustProcess);
+    _process_descriptorTableShutdownHelper(proc->rustProcess);
+    _process_descriptorTableRemoveAndCloseAll(proc->rustProcess);
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -510,7 +508,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
 
     RegularFile* stdfile = regularfile_new();
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
-    Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
+    Descriptor* replacedDesc = _process_descriptorTableSet(proc->rustProcess, fd, desc);
 
     // assume the fd was not previously in use
     utility_debugAssert(replacedDesc == NULL);
@@ -896,8 +894,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->argv = g_strdupv((gchar**)argv);
     proc->envv = envv_dup;
 
-    proc->descTable = descriptortable_new();
-
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
@@ -984,11 +980,6 @@ void process_free(Process* proc) {
     }
     if (proc->straceFd >= 0) {
         close(proc->straceFd);
-    }
-
-    /* Now free all remaining descriptors stored in our table. */
-    if (proc->descTable) {
-        descriptortable_free(proc->descTable);
     }
 
     if (proc->itimerReal) {
@@ -1217,12 +1208,6 @@ void process_freePtrsWithoutFlushing(Process* proc) {
 // ******************************************************
 // Handle the descriptors owned by this process
 // ******************************************************
-
-/* This should only be called from the rust 'Process' object. */
-DescriptorTable* process_getDescriptorTable(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->descTable;
-}
 
 bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error) {
     GError* gError = NULL;
