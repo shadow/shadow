@@ -23,15 +23,21 @@ impl NetworkInterface {
     pub unsafe fn new(
         host_id: HostId,
         addr: *mut c::Address,
-        maybe_pcap_dir: Option<PathBuf>,
-        pcap_capture_size: u32,
+        pcap_options: Option<PcapOptions>,
         qdisc: QDiscMode,
         uses_router: bool,
     ) -> NetworkInterface {
-        let maybe_pcap_dir = maybe_pcap_dir.map(utility::pathbuf_to_nul_term_cstring);
+        let maybe_pcap_dir = pcap_options
+            .as_ref()
+            .map(|x| utility::pathbuf_to_nul_term_cstring(x.path.clone()));
         let pcap_dir_cptr = maybe_pcap_dir
             .as_ref()
             .map_or(std::ptr::null(), |p| p.as_ptr());
+
+        let pcap_capture_size = pcap_options
+            .as_ref()
+            .map(|x| x.capture_size_bytes)
+            .unwrap_or(0);
 
         let c_ptr = unsafe {
             c::networkinterface_new(addr, pcap_dir_cptr, pcap_capture_size, qdisc, uses_router)
@@ -130,4 +136,10 @@ impl Drop for NetworkInterface {
     fn drop(&mut self) {
         unsafe { c::networkinterface_free(self.c_ptr.ptr()) };
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PcapOptions {
+    pub path: PathBuf,
+    pub capture_size_bytes: u32,
 }

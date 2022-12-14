@@ -1,4 +1,5 @@
 pub mod graph;
+pub mod net_namespace;
 pub mod packet;
 mod relay;
 pub mod router;
