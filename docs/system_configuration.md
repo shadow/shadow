@@ -90,7 +90,7 @@ tasks.
 If this task limit is too small, it can be removed with the following command:
 
 ```
-$ sudo systemctl set-property user-$UID.slice TasksMax=-1
+$ sudo systemctl set-property user-$UID.slice TasksMax=infinity
 ```
 
 ## Number of Maps
