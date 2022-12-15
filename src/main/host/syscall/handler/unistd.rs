@@ -36,6 +36,7 @@ impl SyscallHandler {
         // closing
         let desc = ctx
             .process
+            .descriptor_table_mut()
             .deregister_descriptor(fd)
             .ok_or(nix::errno::Errno::EBADF)?;
 
@@ -53,12 +54,12 @@ impl SyscallHandler {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
+        let mut desc_table = ctx.process.descriptor_table_mut();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
-        let new_fd = ctx.process.register_descriptor(new_desc);
+        let new_fd = desc_table.register_descriptor(new_desc);
 
         // return the new fd
         Ok(libc::c_int::try_from(new_fd).unwrap().into())
@@ -70,8 +71,8 @@ impl SyscallHandler {
         let new_fd = libc::c_int::from(args.get(1));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
-        let desc = Self::get_descriptor(&*desc_table, old_fd)?;
+        let mut desc_table = ctx.process.descriptor_table_mut();
+        let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
         // value as oldfd, then dup2() does nothing, and returns newfd"
@@ -83,7 +84,7 @@ impl SyscallHandler {
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
-        let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
+        let replaced_desc = desc_table.register_descriptor_with_fd(new_desc, new_fd);
 
         // close the replaced descriptor
         if let Some(replaced_desc) = replaced_desc {
@@ -104,8 +105,8 @@ impl SyscallHandler {
         let flags = libc::c_int::from(args.get(2));
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
-        let desc = Self::get_descriptor(&*desc_table, old_fd)?;
+        let mut desc_table = ctx.process.descriptor_table_mut();
+        let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
         if old_fd == new_fd {
@@ -123,7 +124,7 @@ impl SyscallHandler {
 
         // duplicate the descriptor
         let new_desc = desc.dup(flags);
-        let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
+        let replaced_desc = desc_table.register_descriptor_with_fd(new_desc, new_fd);
 
         // close the replaced descriptor
         if let Some(replaced_desc) = replaced_desc {
@@ -475,8 +476,9 @@ impl SyscallHandler {
         writer_desc.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let read_fd = ctx.process.register_descriptor(reader_desc);
-        let write_fd = ctx.process.register_descriptor(writer_desc);
+        let mut dt = ctx.process.descriptor_table_mut();
+        let read_fd = dt.register_descriptor(reader_desc);
+        let write_fd = dt.register_descriptor(writer_desc);
 
         // try to write them to the caller
         let fds = [
@@ -494,12 +496,10 @@ impl SyscallHandler {
             Err(e) => {
                 CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
-                    ctx.process
-                        .deregister_descriptor(read_fd)
+                    dt.deregister_descriptor(read_fd)
                         .unwrap()
                         .close(ctx.host, cb_queue);
-                    ctx.process
-                        .deregister_descriptor(write_fd)
+                    dt.deregister_descriptor(write_fd)
                         .unwrap()
                         .close(ctx.host, cb_queue);
                 });

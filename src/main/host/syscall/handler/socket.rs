@@ -94,7 +94,7 @@ impl SyscallHandler {
         let mut desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(socket))));
         desc.set_flags(descriptor_flags);
 
-        let fd = ctx.process.register_descriptor(desc);
+        let fd = ctx.process.descriptor_table_mut().register_descriptor(desc);
 
         debug!("Created socket fd {}", fd);
 
@@ -643,7 +643,10 @@ impl SyscallHandler {
             new_desc.set_flags(DescriptorFlags::CLOEXEC);
         }
 
-        let new_fd = ctx.process.register_descriptor(new_desc);
+        let new_fd = ctx
+            .process
+            .descriptor_table_mut()
+            .register_descriptor(new_desc);
 
         Ok(new_fd.into())
     }
@@ -809,8 +812,9 @@ impl SyscallHandler {
         desc_2.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let fd_1 = ctx.process.register_descriptor(desc_1);
-        let fd_2 = ctx.process.register_descriptor(desc_2);
+        let mut dt = ctx.process.descriptor_table_mut();
+        let fd_1 = dt.register_descriptor(desc_1);
+        let fd_2 = dt.register_descriptor(desc_2);
 
         // try to write them to the caller
         let fds = [i32::try_from(fd_1).unwrap(), i32::try_from(fd_2).unwrap()];
@@ -825,12 +829,10 @@ impl SyscallHandler {
             Err(e) => {
                 CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
-                    ctx.process
-                        .deregister_descriptor(fd_1)
+                    dt.deregister_descriptor(fd_1)
                         .unwrap()
                         .close(ctx.host, cb_queue);
-                    ctx.process
-                        .deregister_descriptor(fd_2)
+                    dt.deregister_descriptor(fd_2)
                         .unwrap()
                         .close(ctx.host, cb_queue);
                 });

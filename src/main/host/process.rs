@@ -152,30 +152,6 @@ impl Process {
         Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
     }
 
-    /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor(&self, desc: Descriptor) -> u32 {
-        let mut desc_table = self.desc_table.borrow_mut();
-        desc_table.add(desc, 0)
-    }
-
-    /// Register a descriptor and return its fd handle.
-    pub fn register_descriptor_with_min_fd(&self, desc: Descriptor, min_fd: u32) -> u32 {
-        let mut desc_table = self.desc_table.borrow_mut();
-        desc_table.add(desc, min_fd)
-    }
-
-    /// Register a descriptor with a given fd handle and return the descriptor that it replaced.
-    pub fn register_descriptor_with_fd(&self, desc: Descriptor, new_fd: u32) -> Option<Descriptor> {
-        let mut desc_table = self.desc_table.borrow_mut();
-        desc_table.set(new_fd, desc)
-    }
-
-    /// Deregister the descriptor with the given fd handle and return it.
-    pub fn deregister_descriptor(&self, fd: u32) -> Option<Descriptor> {
-        let mut desc_table = self.desc_table.borrow_mut();
-        desc_table.remove(fd)
-    }
-
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
         unsafe { cshadow::process_straceLoggingMode(self.cprocess.ptr()) }.into()
     }
@@ -236,6 +212,7 @@ mod export {
     use crate::host::memory_manager::{ProcessMemoryRef, ProcessMemoryRefMut};
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
     use crate::host::thread::ThreadRef;
+    use crate::utility::callback_queue::CallbackQueue;
 
     use super::*;
 
@@ -249,8 +226,12 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         let desc = Descriptor::from_raw(desc).unwrap();
 
-        let fd =
-            Worker::with_active_host(|h| proc.borrow(h.root()).register_descriptor(*desc)).unwrap();
+        let fd = Worker::with_active_host(|h| {
+            proc.borrow(h.root())
+                .descriptor_table_mut()
+                .register_descriptor(*desc)
+        })
+        .unwrap();
         fd.try_into().unwrap()
     }
 
@@ -518,14 +499,18 @@ mod export {
         .unwrap();
     }
 
+    /// Close all descriptors. The `host` option is a legacy option for legacy files.
     /// Temporary; meant to be called from process.c.
     #[no_mangle]
     pub unsafe extern "C" fn _process_descriptorTableRemoveAndCloseAll(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            proc.borrow(h.root())
-                .descriptor_table_mut()
-                .remove_and_close_all(h);
+        Worker::with_active_host(|host| {
+            let descriptors = proc.borrow(host.root()).descriptor_table_mut().remove_all();
+            CallbackQueue::queue_and_run(|cb_queue| {
+                for desc in descriptors {
+                    desc.close(host, cb_queue);
+                }
+            });
         })
         .unwrap();
     }
