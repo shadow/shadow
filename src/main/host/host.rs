@@ -6,6 +6,7 @@ use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::{NetworkInterface, PcapOptions};
+use crate::host::process::Process;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
 use crate::utility::{self, HostTreePointer, SyncSendPointer};
@@ -454,6 +455,13 @@ impl Host {
     pub fn futextable_mut(&self) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
+    }
+
+    #[track_caller]
+    pub fn process(&self, id: &ProcessId) -> Option<Process> {
+        let processes = self.processes.borrow();
+        let process = processes.get(id)?;
+        Some(unsafe { Process::borrow_from_c(process.ptr()) })
     }
 
     #[allow(non_snake_case)]

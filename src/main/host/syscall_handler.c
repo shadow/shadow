@@ -398,6 +398,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
             HANDLE_RUST(rseq);
+            HANDLE_RUST(sched_getaffinity);
+            HANDLE_RUST(sched_setaffinity);
             HANDLE_RUST(sched_yield);
             HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
@@ -455,10 +457,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             // NATIVE(io_getevents);
             // NATIVE(waitid);
             // NATIVE(msync);
-
-            //// operations on pids (shadow overrides pids)
-            // NATIVE(sched_getaffinity);
-            // NATIVE(sched_setaffinity);
 
             //// copying data between various types of fds
             // NATIVE(copy_file_range);
@@ -534,9 +532,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             // as the default case (returning ENOSYS), but allows the logging to include the
             // syscall name instead of just the number.
             // ***************************************
-
-            UNSUPPORTED(sched_getaffinity);
-            UNSUPPORTED(sched_setaffinity);
 
             default: {
                 warning("Detected unsupported syscall %ld called from thread %i in process %s on "

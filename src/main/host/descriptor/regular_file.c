@@ -41,6 +41,7 @@ enum _FileType {
     FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
     FILE_TYPE_HOSTS,     // special handling for /etc/hosts
     FILE_TYPE_LOCALTIME, // special handling for /etc/localtime
+    FILE_TYPE_IN_MEMORY, // special handling for emulated files like /sys/*
 };
 
 struct _RegularFile {
@@ -51,26 +52,46 @@ struct _RegularFile {
      * Shadow and handle manually. A subset of SHADOW_FLAG_MASK. */
     int shadowFlags;
     /* Info related to our OS-backed file. */
-    struct {
-        int fd;
-        /* The flags used when opening the file; Not the file's current flags. */
-        int flagsAtOpen;
-        /* The permission mode the file was opened with. */
-        mode_t modeAtOpen;
-        /* The path of the file when it was opened. */
-        char* absPathAtOpen;
-    } osfile;
+    union {
+        struct {
+            int fd;
+            /* The flags used when opening the file; Not the file's current flags. */
+            int flagsAtOpen;
+            /* The permission mode the file was opened with. */
+            mode_t modeAtOpen;
+            /* The path of the file when it was opened. */
+            char* absPathAtOpen;
+        } osfile;
+        struct {
+            off_t cursor;
+            ssize_t contentLen;
+            char* content;
+            /* The flags used when opening the file; Not the file's current flags. */
+            int flagsAtOpen;
+            /* The permission mode the file was opened with. */
+            mode_t modeAtOpen;
+            /* The path of the file when it was opened. */
+        } inMemoryFile;
+    };
     MAGIC_DECLARE;
 };
 
 int regularfile_getFlagsAtOpen(RegularFile* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.flagsAtOpen;
+    if (file->type != FILE_TYPE_IN_MEMORY) {
+        return file->osfile.flagsAtOpen;
+    } else {
+        return file->inMemoryFile.flagsAtOpen;
+    }
 }
 
 mode_t regularfile_getModeAtOpen(RegularFile* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.modeAtOpen;
+    if (file->type != FILE_TYPE_IN_MEMORY) {
+        return file->osfile.modeAtOpen;
+    } else {
+        return file->inMemoryFile.modeAtOpen;
+    }
 }
 
 int regularfile_getShadowFlags(RegularFile* file) {
@@ -87,19 +108,28 @@ static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc
 
 static inline int _regularfile_getOSBackedFD(RegularFile* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.fd;
+    if (file->type != FILE_TYPE_IN_MEMORY) {
+        return file->osfile.fd;
+    } else {
+        // TODO verify calling site check for this value, some did check for 0
+        // instead, which is somewhat valid
+        // see https://github.com/shadow/shadow/issues/2604
+        return OSFILE_INVALID;
+    }
 }
 int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBackedFD(file); }
 
 static void _regularfile_closeHelper(RegularFile* file) {
-    if (file && file->osfile.fd != OSFILE_INVALID) {
-        trace("On file %p, closing os-backed file %i", file, _regularfile_getOSBackedFD(file));
+    if(file && file->type != FILE_TYPE_IN_MEMORY) {
+        if (file && file->osfile.fd != OSFILE_INVALID) {
+            trace("On file %p, closing os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
-        close(file->osfile.fd);
-        file->osfile.fd = OSFILE_INVALID;
+            close(file->osfile.fd);
+            file->osfile.fd = OSFILE_INVALID;
 
-        /* The os-backed file is no longer ready. */
-        legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE);
+            /* The os-backed file is no longer ready. */
+            legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE);
+        }
     }
 }
 
@@ -119,8 +149,12 @@ static void _regularfile_free(LegacyFile* desc) {
 
     _regularfile_closeHelper(file);
 
-    if (file->osfile.absPathAtOpen) {
+    if (file->type != FILE_TYPE_IN_MEMORY && file->osfile.absPathAtOpen) {
         free(file->osfile.absPathAtOpen);
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY && file->inMemoryFile.content != NULL) {
+        free(file->inMemoryFile.content);
     }
 
     legacyfile_clear((LegacyFile*)file);
@@ -171,7 +205,7 @@ static char* _regularfile_getAbsolutePath(RegularFile* dir, const char* pathname
     }
 
     /* The path is relative, try dir prefix first. */
-    if (dir && dir->osfile.absPathAtOpen) {
+    if (dir && dir->type != FILE_TYPE_IN_MEMORY && dir->osfile.absPathAtOpen) {
         return _regularfile_getConcatStr(dir->osfile.absPathAtOpen, '/', pathname);
     }
 
@@ -221,10 +255,29 @@ static void _regularfile_print_flags(int flags) {
 #undef CHECK_FLAG
 #endif
 
+int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode, size_t contentLen, const char* content) {
+    if (flags & O_DIRECTORY) {
+        return -ENOTDIR;
+    }
+
+    if (mode != O_RDONLY) {
+        return -EPERM;
+    }
+
+    file->type = FILE_TYPE_IN_MEMORY;
+    file->inMemoryFile.cursor = 0;
+    file->inMemoryFile.contentLen = contentLen;
+    file->inMemoryFile.content = (char*) malloc(contentLen);
+    memcpy(file->inMemoryFile.content, content, contentLen);
+    file->inMemoryFile.flagsAtOpen = flags;
+    file->inMemoryFile.modeAtOpen = mode;
+    return 0;
+}
+
 int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname, int flags,
                        mode_t mode, const char* workingDir) {
     MAGIC_ASSERT(file);
-    utility_debugAssert(file->osfile.fd == OSFILE_INVALID);
+    utility_debugAssert(file->type == FILE_TYPE_NOTSET && file->osfile.fd == OSFILE_INVALID);
 
     trace("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
           flags, (int)mode, workingDir);
@@ -255,6 +308,14 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         }
         // Shadow time is in UTC.
         abspath = strdup("/usr/share/zoneinfo/Etc/UTC");
+    } else if (!strcmp("/sys/devices/system/cpu/possible", abspath) ||
+               !strcmp("/sys/devices/system/cpu/online", abspath)) {
+        if (abspath) {
+            free(abspath);
+        }
+        char content[] = "0\n";
+        // size - 1 to strip the \0;
+        return _regularfile_initRoInMemoryFile(file, flags, mode, sizeof(content) - 1, content);
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
@@ -338,6 +399,12 @@ ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t 
         return (ssize_t)bufSize;
     }
 
+    if (file->type == FILE_TYPE_IN_MEMORY) {
+        ssize_t read = regularfile_pread(file, host, buf, bufSize, file->inMemoryFile.cursor);
+        file->inMemoryFile.cursor += read;
+        return read;
+    }
+
     trace("RegularFile %p will read %zu bytes from os-backed file %i at path '%s'", file, bufSize,
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
@@ -360,6 +427,14 @@ ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t
         return (ssize_t)bufSize;
     }
 
+    if (file->type == FILE_TYPE_IN_MEMORY) {
+        struct iovec iov[1];
+        ssize_t nwritten;
+        iov[0].iov_base = buf;
+        iov[0].iov_len = bufSize;
+        return regularfile_preadv(file, host, iov, 1, offset);
+    }
+
     trace("RegularFile %p will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
           file, bufSize, _regularfile_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
@@ -379,6 +454,37 @@ ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iov
 
     if (file->type == FILE_TYPE_RANDOM) {
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY) {
+        if (file->inMemoryFile.content == NULL) {
+            return -EBADF;
+        }
+        if (iovcnt == 0) {
+            return 0;
+        }
+        if (iov == NULL) {
+            return -EINVAL;
+        }
+        ssize_t read = 0;
+        for (int i = 0; i < iovcnt; i++) {
+            if (iov[i].iov_len == 0) {
+                continue;
+            }
+            if (iov[i].iov_base == NULL) {
+                return -EINVAL;
+            }
+            ssize_t left = file->inMemoryFile.contentLen - offset;
+            if (!left) {
+                break;
+            }
+            ssize_t to_read = MIN(left, iov[i].iov_len);
+            memcpy(iov[i].iov_base, file->inMemoryFile.content + offset, to_read);
+            offset += to_read;
+            read += to_read;
+        }
+
+        return read;
     }
 
     trace("RegularFile %p will preadv %d vector items from os-backed file %i at path '%s'", file,
@@ -403,6 +509,11 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
     }
 
+    if (file->type == FILE_TYPE_IN_MEMORY) {
+        // flags can be ignored: none really impart in memory files
+        return regularfile_preadv(file, host, iov, iovcnt, offset);
+    }
+
     trace("RegularFile %p will preadv2 %d vector items from os-backed file %i at path '%s'", file,
           iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
@@ -418,6 +529,10 @@ ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
@@ -437,6 +552,10 @@ ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, o
         return -EBADF;
     }
 
+    if (file->type == FILE_TYPE_IN_MEMORY) {
+        return -EBADF;
+    }
+
     trace("RegularFile %p will pwrite %zu bytes to os-backed file %i offset %ld at path '%s'", file,
           bufSize, _regularfile_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
@@ -450,6 +569,10 @@ ssize_t regularfile_pwritev(RegularFile* file, const struct iovec* iov, int iovc
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
@@ -468,6 +591,10 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
     MAGIC_ASSERT(file);
 
     if (!_regularfile_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
@@ -796,7 +923,8 @@ int regularfile_poll(RegularFile* file, struct pollfd* pfd) {
 static inline int _regularfile_getOSDirFD(RegularFile* dir) {
     if (dir) {
         MAGIC_ASSERT(dir);
-        return dir->osfile.fd != OSFILE_INVALID ? dir->osfile.fd : AT_FDCWD;
+        return dir->type != FILE_TYPE_IN_MEMORY && dir->osfile.fd != OSFILE_INVALID ?
+            dir->osfile.fd : AT_FDCWD;
     } else {
         return AT_FDCWD;
     }
