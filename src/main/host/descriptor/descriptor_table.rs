@@ -1,6 +1,5 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, Descriptor};
-use crate::utility::notnull::*;
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -151,6 +150,7 @@ mod export {
     use super::*;
     use crate::host::{descriptor::CallbackQueue, host::Host};
     use libc::c_int;
+    use shadow_shim_helper_rs::notnull::*;
 
     /// Create an object that can be used to store all descriptors created by a
     /// process. When the table is no longer required, use descriptortable_free

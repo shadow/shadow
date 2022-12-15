@@ -18,7 +18,6 @@ use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::network::packet::Packet;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
-use crate::utility::notnull::*;
 use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -587,6 +586,7 @@ mod export {
     use super::*;
 
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+    use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     #[no_mangle]

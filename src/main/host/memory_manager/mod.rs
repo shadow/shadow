@@ -18,7 +18,6 @@
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
 use crate::host::thread::ThreadRef;
-use crate::utility::notnull::*;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
 use log::*;
@@ -746,6 +745,8 @@ where
 }
 
 mod export {
+    use shadow_shim_helper_rs::notnull::*;
+
     use crate::{core::worker::Worker, host::context::ThreadContextObjs};
 
     use super::*;

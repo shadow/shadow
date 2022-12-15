@@ -572,8 +572,9 @@ mod tests {
 }
 
 mod export {
+    use shadow_shim_helper_rs::notnull::*;
+
     use super::*;
-    use crate::utility::notnull::*;
     use crate::utility::SyncSendPointer;
 
     #[no_mangle]
