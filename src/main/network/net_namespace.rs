@@ -63,7 +63,7 @@ impl NetworkNamespace {
             Self::setup_net_interface(
                 &InterfaceOptions {
                     host_id,
-                    hostname: hostname,
+                    hostname,
                     ip: public_ip,
                     uses_router: true,
                     pcap,

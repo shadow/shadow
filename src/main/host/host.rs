@@ -237,7 +237,7 @@ impl Host {
         let hostname: Vec<NonZeroU8> = params
             .hostname
             .as_bytes()
-            .into_iter()
+            .iter()
             .map(|x| (*x).try_into().unwrap())
             .collect();
 
