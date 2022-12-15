@@ -319,16 +319,24 @@ static void _process_handleProcessExit(Process* proc) {
 }
 
 static void _process_terminate(Process* proc) {
-    trace("Terminating");
-    if (process_isRunning(proc)) {
-        proc->killedByShadow = true;
-
-        if (kill(proc->nativePid, SIGKILL)) {
-            warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
-        }
-        process_markAsExiting(proc);
+    if (!process_hasStarted(proc)) {
+        trace("Never started");
+        return;
     }
 
+    if (!process_isRunning(proc)) {
+        trace("Already dead");
+        // We should have already cleaned up.
+        utility_debugAssert(proc->didLogReturnCode);
+        return;
+    }
+    trace("Terminating");
+    proc->killedByShadow = true;
+
+    if (kill(proc->nativePid, SIGKILL)) {
+        warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
+    }
+    process_markAsExiting(proc);
     _process_handleProcessExit(proc);
 }
 
