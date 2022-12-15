@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
@@ -58,6 +58,7 @@ pub struct Process {
     cprocess: SyncSendPointer<cshadow::Process>,
 
     desc_table: RefCell<DescriptorTable>,
+    memory_manager: RefCell<Option<MemoryManager>>,
 }
 
 impl Process {
@@ -81,12 +82,14 @@ impl Process {
         // accessed by threads that don't have access to the enclosing Process.
         let cprocess = unsafe { SyncSendPointer::new(p) };
         let desc_table = RefCell::new(DescriptorTable::new());
+        let memory_manager = RefCell::new(None);
         let process = RootedRc::new(
             root,
             RootedRefCell::new(
                 root,
                 Self {
                     cprocess,
+                    memory_manager,
                     desc_table,
                 },
             ),
@@ -118,16 +121,12 @@ impl Process {
         unsafe { cshadow::process_getHostId(self.cprocess.ptr()) }
     }
 
-    fn memory_manager_ptr(&self) -> *mut MemoryManager {
-        unsafe { cshadow::process_getMemoryManager(self.cprocess.ptr()) }
+    pub fn memory_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
+        RefMut::map(self.memory_manager.borrow_mut(), |mm| mm.as_mut().unwrap())
     }
 
-    pub fn memory_mut(&mut self) -> &mut MemoryManager {
-        unsafe { &mut *self.memory_manager_ptr() }
-    }
-
-    pub fn memory(&self) -> &MemoryManager {
-        unsafe { &*self.memory_manager_ptr() }
+    pub fn memory(&self) -> impl Deref<Target = MemoryManager> + '_ {
+        Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
     }
 
     /// Register a descriptor and return its fd handle.
@@ -204,12 +203,20 @@ impl Drop for Process {
 
 mod export {
     use std::ffi::c_int;
+    use std::os::raw::c_void;
+    
     use shadow_shim_helper_rs::notnull::*;
+    use log::{trace, warn};
 
     use crate::core::worker::Worker;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
+    use crate::host::memory_manager::{ProcessMemoryRef, ProcessMemoryRefMut};
+    use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
+    use crate::host::thread::ThreadRef;
+
+    use super::*;
 
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
     /// after.
@@ -310,6 +317,174 @@ mod export {
         }).unwrap()
     }
 
+    #[no_mangle]
+    pub extern "C" fn _process_readPtr(
+        proc: *const RustProcess,
+        dst: *mut c_void,
+        src: cshadow::PluginPtr,
+        n: usize,
+    ) -> i32 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let src = TypedPluginPtr::new::<u8>(src.into(), n);
+        let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
+
+        Worker::with_active_host(
+            |h| match proc.borrow(h.root()).memory().copy_from_ptr(dst, src) {
+                Ok(_) => 0,
+                Err(e) => {
+                    trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                    -(e as i32)
+                }
+            },
+        )
+        .unwrap()
+    }
+
+    /// Write data to this writer's memory.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_writePtr(
+        proc: *const RustProcess,
+        dst: cshadow::PluginPtr,
+        src: *const c_void,
+        n: usize,
+    ) -> i32 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let dst = TypedPluginPtr::new::<u8>(dst.into(), n);
+        let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
+        Worker::with_active_host(|h| {
+            match proc.borrow(h.root()).memory_mut().copy_to_ptr(dst, src) {
+                Ok(_) => 0,
+                Err(e) => {
+                    trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                    -(e as i32)
+                }
+            }
+        })
+        .unwrap()
+    }
+
+    /// Get a read-accessor to the specified plugin memory.
+    /// Must be freed via `memorymanager_freeReader`.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getReadablePtr(
+        proc: *const RustProcess,
+        plugin_src: cshadow::PluginPtr,
+        n: usize,
+    ) -> *mut ProcessMemoryRef<'static, u8> {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let plugin_src: PluginPtr = plugin_src.into();
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let memory = proc.memory();
+            let memory_ref = memory.memory_ref(TypedPluginPtr::new::<u8>(plugin_src, n));
+            match memory_ref {
+                Ok(mr) => {
+                    // SAFETY: This should only be called from process.c, which
+                    // tries to detect incompatible borrows.
+                    let mr = unsafe { std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(mr)};
+                    Box::into_raw(Box::new(mr))
+                },
+                Err(e) => {
+                    warn!("Failed to get memory ref: {:?}", e);
+                    std::ptr::null_mut()
+                }
+            }
+        }).unwrap()
+    }
+
+    /// Get a writable pointer to this writer's memory. Initial contents are unspecified.
+    #[no_mangle]
+    pub unsafe extern "C" fn process_getWritablePtrRef(
+        proc: *mut cshadow::Process,
+        plugin_src: cshadow::PluginPtr,
+        n: usize,
+    ) -> *mut ProcessMemoryRefMut<'static, u8> {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
+            let memory_ref = memory_manager.memory_ref_mut_uninit(plugin_src);
+            match memory_ref {
+                Ok(mr) => {
+                    // SAFETY: This should only be called from process.c, which
+                    // tries to detect incompatible borrows.
+                    let mr = unsafe {
+                        std::mem::transmute::<
+                            ProcessMemoryRefMut<'_, u8>,
+                            ProcessMemoryRefMut<'static, u8>,
+                        >(mr)
+                    };
+                    Box::into_raw(Box::new(mr))
+                }
+                Err(e) => {
+                    warn!("Failed to get memory ref: {:?}", e);
+                    std::ptr::null_mut()
+                }
+            }
+        })
+        .unwrap()
+    }
+
+    /// Get a readable and writable pointer to this writer's memory.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getMutablePtr(
+        proc: *const RustProcess,
+        plugin_src: cshadow::PluginPtr,
+        n: usize,
+    ) -> *mut ProcessMemoryRefMut<'static, u8> {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
+            let memory_ref = memory_manager.memory_ref_mut(plugin_src);
+            match memory_ref {
+                Ok(mr) => {
+                    // SAFETY: This should only be called from process.c, which
+                    // tries to detect incompatible borrows.
+                    let mr = unsafe {
+                        std::mem::transmute::<
+                            ProcessMemoryRefMut<'_, u8>,
+                            ProcessMemoryRefMut<'static, u8>,
+                        >(mr)
+                    };
+                    Box::into_raw(Box::new(mr))
+                }
+                Err(e) => {
+                    warn!("Failed to get memory ref: {:?}", e);
+                    std::ptr::null_mut()
+                }
+            }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_readString(
+        proc: *const RustProcess,
+        ptr: cshadow::PluginPtr,
+        strbuf: *mut libc::c_char,
+        maxlen: libc::size_t,
+    ) -> libc::ssize_t {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let memory_manager = proc.memory();
+            let buf = unsafe {
+                std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
+            };
+            let cstr = match memory_manager
+                .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(PluginPtr::from(ptr), maxlen))
+            {
+                Ok(cstr) => cstr,
+                Err(e) => return -(e as libc::ssize_t),
+            };
+            cstr.to_bytes().len().try_into().unwrap()
+        })
+        .unwrap()
+    }
+
     /// Temporary; meant to be called from process.c.
     #[no_mangle]
     pub unsafe extern "C" fn _process_descriptorTableShutdownHelper(proc: *const RustProcess) {
@@ -355,6 +530,198 @@ mod export {
                 Some(d) => Descriptor::into_raw(Box::new(d)),
                 None => std::ptr::null_mut(),
             }
+        })
+        .unwrap()
+    }
+
+    /// Temporary; meant to be called from process.c.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_createMemoryManager(
+        proc: *const RustProcess,
+        native_pid: libc::pid_t,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let mman = unsafe { MemoryManager::new(nix::unistd::Pid::from_raw(native_pid)) };
+        Worker::with_active_host(move |h| {
+            let prev = proc
+                .borrow(h.root())
+                .memory_manager
+                .borrow_mut()
+                .replace(mman);
+            assert!(prev.is_none());
+        })
+        .unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getReadablePtrPrefix(
+        proc: *const RustProcess,
+        plugin_src: cshadow::PluginPtr,
+        n: usize,
+    ) -> *mut ProcessMemoryRef<'static, u8> {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let memory_manager = proc.memory();
+            match memory_manager
+                .memory_ref_prefix(TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n))
+            {
+                Ok(mr) => {
+                    let mr = unsafe { std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(mr)};
+                    Box::into_raw(Box::new(mr))}
+                ,
+                Err(e) => {
+                    warn!("Couldn't read memory for string: {:?}", e);
+                    std::ptr::null_mut()
+                }
+            }
+        }).unwrap()
+    }
+
+    /// Fully handles the `mmap` syscall
+    #[no_mangle]
+    pub unsafe extern "C" fn process_handleMmap(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+        addr: cshadow::PluginPtr,
+        len: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> cshadow::SysCallReturn {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            memory_manager
+                .do_mmap(
+                    &mut thread,
+                    PluginPtr::from(addr),
+                    len,
+                    prot,
+                    flags,
+                    fd,
+                    offset,
+                )
+                .into()
+        })
+        .unwrap()
+    }
+
+    /// Fully handles the `munmap` syscall
+    #[no_mangle]
+    pub unsafe extern "C" fn process_handleMunmap(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+        addr: cshadow::PluginPtr,
+        len: usize,
+    ) -> cshadow::SysCallReturn {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            memory_manager
+                .handle_munmap(&mut thread, PluginPtr::from(addr), len)
+                .into()
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_handleMremap(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+        old_addr: cshadow::PluginPtr,
+        old_size: usize,
+        new_size: usize,
+        flags: i32,
+        new_addr: cshadow::PluginPtr,
+    ) -> cshadow::SysCallReturn {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            memory_manager
+                .handle_mremap(
+                    &mut thread,
+                    PluginPtr::from(old_addr),
+                    old_size,
+                    new_size,
+                    flags,
+                    PluginPtr::from(new_addr),
+                )
+                .into()
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_handleMprotect(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+        addr: cshadow::PluginPtr,
+        size: usize,
+        prot: i32,
+    ) -> cshadow::SysCallReturn {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            memory_manager
+                .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
+                .into()
+        })
+        .unwrap()
+    }
+
+    /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
+    #[no_mangle]
+    pub unsafe extern "C" fn process_handleBrk(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+        plugin_src: cshadow::PluginPtr,
+    ) -> cshadow::SysCallReturn {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            memory_manager
+                .handle_brk(&mut thread, PluginPtr::from(plugin_src))
+                .into()
+        })
+        .unwrap()
+    }
+
+    /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
+    /// be running and ready to make native syscalls.
+    #[no_mangle]
+    pub unsafe extern "C" fn process_initMapperIfNeeded(
+        proc: *mut cshadow::Process,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            let proc = proc.borrow(h.root());
+            let mut memory_manager = proc.memory_mut();
+            if !memory_manager.has_mapper() {
+                let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+                memory_manager.init_mapper(&mut thread)
+            }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_resetMemoryManager(proc: *mut cshadow::Process) {
+        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+        Worker::with_active_host(|h| {
+            drop(proc.borrow(h.root()).memory_manager.borrow_mut().take());
         })
         .unwrap()
     }

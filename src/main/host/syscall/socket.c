@@ -1133,8 +1133,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
 
     /* The optval pointer must be non-null since optlen is non-zero. */
 
-    MemoryManager* mm = process_getMemoryManager(sys->process);
-    ProcessMemoryRefMut_u8* optvalref = memorymanager_getWritablePtr(mm, optvalPtr, optlen);
+    ProcessMemoryRefMut_u8* optvalref = process_getWritablePtrRef(sys->process, optvalPtr, optlen);
     if (!optvalref) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }

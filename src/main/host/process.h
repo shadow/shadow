@@ -170,9 +170,6 @@ void process_flushPtrs(Process* proc);
 // write back whatever garbage data was in the uninialized bueffer).
 void process_freePtrsWithoutFlushing(Process* proc);
 
-MemoryManager* process_getMemoryManager(Process* proc);
-void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
-
 HostId process_getHostId(const Process* proc);
 
 // A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned

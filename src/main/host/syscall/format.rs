@@ -583,7 +583,6 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
-    use crate::host::process::Process;
     use std::ffi::CStr;
 
     #[no_mangle]
@@ -614,7 +613,8 @@ mod export {
             let proc = proc.borrow(host.root());
 
             // we don't know the type, so just show it as an int
-            let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, proc.memory());
+            let memory = proc.memory();
+            let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, &memory);
 
             if let Some(ref rv) = rv {
                 proc.with_strace_file(|file| {

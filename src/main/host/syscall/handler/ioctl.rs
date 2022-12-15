@@ -67,6 +67,6 @@ impl SyscallHandler {
         }
 
         // handle file-specific ioctls
-        file.ioctl(request, arg_ptr, ctx.process.memory_mut())
+        file.ioctl(request, arg_ptr, &mut ctx.process.memory_mut())
     }
 }

@@ -151,7 +151,7 @@ SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
 SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
     // The MemoryManager's state is no longer valid after an exec.
     // Destroy it, to be recreated on the next syscall.
-    process_setMemoryManager(sys->process, NULL);
+    process_resetMemoryManager(sys->process);
 
     // Have the plugin execute it natively.
     return syscallreturn_makeNative();

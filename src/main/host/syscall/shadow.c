@@ -113,7 +113,7 @@ SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, con
     utility_debugAssert(sys && args);
     if (_useMM) {
         trace("Initializing memory manager");
-        memorymanager_initMapperIfNeeded(process_getMemoryManager(sys->process), sys->thread);
+        process_initMapperIfNeeded(sys->process, sys->thread);
     } else {
         trace("Not initializing memory manager");
     }

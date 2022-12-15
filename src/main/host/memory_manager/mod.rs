@@ -585,14 +585,14 @@ impl MemoryManager {
         }
     }
 
-    fn handle_brk(&mut self, thread: &mut ThreadRef, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &mut ThreadRef, ptr: PluginPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
         }
     }
 
-    fn do_mmap(
+    pub fn do_mmap(
         &mut self,
         thread: &mut ThreadRef,
         addr: PluginPtr,
@@ -615,7 +615,7 @@ impl MemoryManager {
         Ok(addr.into())
     }
 
-    fn handle_munmap(
+    pub fn handle_munmap(
         &mut self,
         thread: &mut ThreadRef,
         addr: PluginPtr,
@@ -646,7 +646,7 @@ impl MemoryManager {
         Ok(())
     }
 
-    fn handle_mremap(
+    pub fn handle_mremap(
         &mut self,
         thread: &mut ThreadRef,
         old_address: PluginPtr,
@@ -663,7 +663,7 @@ impl MemoryManager {
         }
     }
 
-    fn handle_mprotect(
+    pub fn handle_mprotect(
         &mut self,
         thread: &mut ThreadRef,
         addr: PluginPtr,
@@ -803,20 +803,6 @@ mod export {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().into() }
     }
 
-    /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
-    /// be running and ready to make native syscalls.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_initMapperIfNeeded(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-    ) {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        if !memory_manager.has_mapper() {
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-            memory_manager.init_mapper(&mut thread)
-        }
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeRef(memory_ref: *mut ProcessMemoryRef<'_, u8>) {
         unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) };
@@ -834,141 +820,6 @@ mod export {
         memory_ref: *const ProcessMemoryRef<'_, u8>,
     ) -> libc::size_t {
         unsafe { memory_ref.as_ref() }.unwrap().len()
-    }
-
-    /// Get a read-accessor to the specified plugin memory.
-    /// Must be freed via `memorymanager_freeReader`.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getReadablePtr<'a>(
-        memory_manager: *const MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-    ) -> *mut ProcessMemoryRef<'a, u8> {
-        let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        let plugin_src: PluginPtr = plugin_src.into();
-        let memory_ref = memory_manager.memory_ref(TypedPluginPtr::new::<u8>(plugin_src, n));
-        match memory_ref {
-            Ok(mr) => Box::into_raw(Box::new(mr)),
-            Err(e) => {
-                warn!("Failed to get memory ref: {:?}", e);
-                std::ptr::null_mut()
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getReadablePtrPrefix<'a>(
-        memory_manager: *const MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-    ) -> *mut ProcessMemoryRef<'a, u8> {
-        let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        match memory_manager
-            .memory_ref_prefix(TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n))
-        {
-            Ok(mr) => Box::into_raw(Box::new(mr)),
-            Err(e) => {
-                warn!("Couldn't read memory for string: {:?}", e);
-                std::ptr::null_mut()
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_readString(
-        memory_manager: *const MemoryManager,
-        ptr: c::PluginPtr,
-        strbuf: *mut libc::c_char,
-        maxlen: libc::size_t,
-    ) -> libc::ssize_t {
-        let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        let buf =
-            unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen) };
-        let cstr = match memory_manager
-            .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(PluginPtr::from(ptr), maxlen))
-        {
-            Ok(cstr) => cstr,
-            Err(e) => return -(e as libc::ssize_t),
-        };
-        cstr.to_bytes().len().try_into().unwrap()
-    }
-
-    /// Copy data from this reader's memory.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_readPtr(
-        memory_manager: *const MemoryManager,
-        dst: *mut c_void,
-        src: c::PluginPtr,
-        n: usize,
-    ) -> i32 {
-        let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        let src = TypedPluginPtr::new::<u8>(src.into(), n);
-        let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
-        match memory_manager.copy_from_ptr(dst, src) {
-            Ok(_) => 0,
-            Err(e) => {
-                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
-            }
-        }
-    }
-
-    /// Write data to this writer's memory.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_writePtr(
-        memory_manager: *mut MemoryManager,
-        dst: c::PluginPtr,
-        src: *const c_void,
-        n: usize,
-    ) -> i32 {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let dst = TypedPluginPtr::new::<u8>(dst.into(), n);
-        let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
-        match memory_manager.copy_to_ptr(dst, src) {
-            Ok(_) => 0,
-            Err(e) => {
-                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
-            }
-        }
-    }
-
-    /// Get a writable pointer to this writer's memory. Initial contents are unspecified.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getWritablePtr<'a>(
-        memory_manager: *mut MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-    ) -> *mut ProcessMemoryRefMut<'a, u8> {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
-        let memory_ref = memory_manager.memory_ref_mut_uninit(plugin_src);
-        match memory_ref {
-            Ok(mr) => Box::into_raw(Box::new(mr)),
-            Err(e) => {
-                warn!("Failed to get memory ref: {:?}", e);
-                std::ptr::null_mut()
-            }
-        }
-    }
-
-    /// Get a readable and writable pointer to this writer's memory.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getMutablePtr<'a>(
-        memory_manager: *mut MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-    ) -> *mut ProcessMemoryRefMut<'a, u8> {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
-        let memory_ref = memory_manager.memory_ref_mut(plugin_src);
-        match memory_ref {
-            Ok(mr) => Box::into_raw(Box::new(mr)),
-            Err(e) => {
-                warn!("Failed to get memory ref: {:?}", e);
-                std::ptr::null_mut()
-            }
-        }
     }
 
     #[no_mangle]
@@ -1009,100 +860,5 @@ mod export {
         let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
         // No way to safely recover here if the flush fails.
         mref.noflush()
-    }
-
-    /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_handleBrk(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        plugin_src: c::PluginPtr,
-    ) -> c::SysCallReturn {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-        memory_manager
-            .handle_brk(&mut thread, PluginPtr::from(plugin_src))
-            .into()
-    }
-
-    /// Fully handles the `mmap` syscall
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_handleMmap(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        addr: c::PluginPtr,
-        len: usize,
-        prot: i32,
-        flags: i32,
-        fd: i32,
-        offset: i64,
-    ) -> c::SysCallReturn {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-        memory_manager
-            .do_mmap(
-                &mut thread,
-                PluginPtr::from(addr),
-                len,
-                prot,
-                flags,
-                fd,
-                offset,
-            )
-            .into()
-    }
-
-    /// Fully handles the `munmap` syscall
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_handleMunmap(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        addr: c::PluginPtr,
-        len: usize,
-    ) -> c::SysCallReturn {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-        memory_manager
-            .handle_munmap(&mut thread, PluginPtr::from(addr), len)
-            .into()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_handleMremap(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        old_addr: c::PluginPtr,
-        old_size: usize,
-        new_size: usize,
-        flags: i32,
-        new_addr: c::PluginPtr,
-    ) -> c::SysCallReturn {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-        memory_manager
-            .handle_mremap(
-                &mut thread,
-                PluginPtr::from(old_addr),
-                old_size,
-                new_size,
-                flags,
-                PluginPtr::from(new_addr),
-            )
-            .into()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_handleMprotect(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        addr: c::PluginPtr,
-        size: usize,
-        prot: i32,
-    ) -> c::SysCallReturn {
-        let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-        memory_manager
-            .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
-            .into()
     }
 }

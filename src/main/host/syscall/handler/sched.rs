@@ -44,7 +44,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let mem = ctx.process.memory_mut();
+        let mut mem = ctx.process.memory_mut();
         let mut mask = mem.memory_ref_mut(mask_ptr)?;
 
         // this assumes little endian
@@ -130,7 +130,7 @@ impl SyscallHandler {
             //   state.
             return Ok(0.into());
         }
-        let mem = ctx.process.memory_mut();
+        let mut mem = ctx.process.memory_mut();
         let mut rseq = mem.memory_ref_mut(rseq_ptr)?;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.

@@ -129,7 +129,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?;
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
@@ -216,7 +216,7 @@ impl SyscallHandler {
             return Err(Errno::EOPNOTSUPP.into());
         }
 
-        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?;
 
         debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -359,7 +359,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             write_sockaddr(
-                ctx.process.memory_mut(),
+                &mut ctx.process.memory_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -406,7 +406,7 @@ impl SyscallHandler {
 
         debug!("Returning socket address of {:?}", addr_to_write);
         write_sockaddr(
-            ctx.process.memory_mut(),
+            &mut ctx.process.memory_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -452,7 +452,7 @@ impl SyscallHandler {
 
         debug!("Returning peer address of {:?}", addr_to_write);
         write_sockaddr(
-            ctx.process.memory_mut(),
+            &mut ctx.process.memory_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -621,7 +621,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             if let Err(e) = write_sockaddr(
-                ctx.process.memory_mut(),
+                &mut ctx.process.memory_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -688,7 +688,8 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
+        let addr =
+            read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
 
         let mut rv =
             CallbackQueue::queue_and_run(|cb_queue| Socket::connect(socket, &addr, cb_queue));

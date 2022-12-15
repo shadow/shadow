@@ -221,9 +221,8 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     }
 
     // Delegate execution of the mmap itself to the memorymanager.
-    MemoryManager* mm = process_getMemoryManager(sys->process);
     SysCallReturn result =
-        memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
+        process_handleMmap(sys->process, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
     if (result.state == SYSCALL_NATIVE) {
         return syscallreturn_makeDoneI64(thread_nativeSyscall(
             sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
@@ -250,8 +249,7 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr newBrk = args->args[0].as_ptr;
 
     // Delegate to the memoryManager.
-    MemoryManager* mm = process_getMemoryManager(sys->process);
-    return memorymanager_handleBrk(mm, sys->thread, newBrk);
+    return process_handleBrk(sys->process, sys->thread, newBrk);
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -272,9 +270,8 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
     PluginPtr new_addr = args->args[4].as_ptr;
 
     // Delegate to the memoryManager.
-    MemoryManager* mm = process_getMemoryManager(sys->process);
-    return memorymanager_handleMremap(
-        mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
+    return process_handleMremap(
+        sys->process, sys->thread, old_addr, old_size, new_size, flags, new_addr);
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -282,8 +279,7 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
     uint64_t len = args->args[1].as_u64;
 
     // Delegate to the memoryManager.
-    MemoryManager* mm = process_getMemoryManager(sys->process);
-    return memorymanager_handleMunmap(mm, sys->thread, addr, len);
+    return process_handleMunmap(sys->process, sys->thread, addr, len);
 }
 
 SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
@@ -292,6 +288,5 @@ SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* ar
     int prot = args->args[2].as_i64;
 
     // Delegate to the memoryManager.
-    MemoryManager* mm = process_getMemoryManager(sys->process);
-    return memorymanager_handleMprotect(mm, sys->thread, addr, len, prot);
+    return process_handleMprotect(sys->process, sys->thread, addr, len, prot);
 }

@@ -125,9 +125,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    // Owned exclusively by the process.
-    MemoryManager* memoryManager;
-
     /* File descriptors to handle plugin out and err streams. */
     RegularFile* stdoutFile;
     RegularFile* stderrFile;
@@ -596,7 +593,7 @@ static void _process_start(Process* proc) {
     /* exec the process */
     thread_run(mainThread, proc->plugin.exePath->str, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
-    proc->memoryManager = memorymanager_new(proc->nativePid);
+    _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -953,10 +950,6 @@ void process_free(Process* proc) {
     if(proc->processName) {
         g_string_free(proc->processName, TRUE);
     }
-    if (proc->memoryManager) {
-        memorymanager_free(proc->memoryManager);
-    }
-
     if (proc->workingDir) {
         free(proc->workingDir);
     }
@@ -993,19 +986,6 @@ void process_free(Process* proc) {
 
     MAGIC_CLEAR(proc);
     g_free(proc);
-}
-
-MemoryManager* process_getMemoryManager(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->memoryManager;
-}
-
-void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
-    MAGIC_ASSERT(proc);
-    if (proc->memoryManager) {
-        memorymanager_free(proc->memoryManager);
-    }
-    proc->memoryManager = memoryManager;
 }
 
 HostId process_getHostId(const Process* proc) {
@@ -1053,7 +1033,7 @@ int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    return memorymanager_readPtr(proc->memoryManager, dst, src, n);
+    return _process_readPtr(proc->rustProcess, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
@@ -1063,7 +1043,7 @@ int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    return memorymanager_writePtr(proc->memoryManager, dst, src, n);
+    return _process_writePtr(proc->rustProcess, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
@@ -1072,7 +1052,7 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    ProcessMemoryRef_u8* ref = memorymanager_getReadablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRef_u8* ref = _process_getReadablePtr(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return NULL;
     }
@@ -1088,8 +1068,7 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    ProcessMemoryRef_u8* ref =
-        memorymanager_getReadablePtrPrefix(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRef_u8* ref = _process_getReadablePtrPrefix(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return -EFAULT;
     }
@@ -1120,7 +1099,7 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    return memorymanager_readString(proc->memoryManager, src, str, n);
+    return _process_readString(proc->rustProcess, src, str, n);
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
@@ -1134,7 +1113,7 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    ProcessMemoryRefMut_u8* ref = memorymanager_getWritablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRefMut_u8* ref = process_getWritablePtrRef(proc, plugin_src, n);
     if (!ref) {
         return NULL;
     }
@@ -1154,7 +1133,7 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    ProcessMemoryRefMut_u8* ref = memorymanager_getMutablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRefMut_u8* ref = _process_getMutablePtr(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return NULL;
     }
