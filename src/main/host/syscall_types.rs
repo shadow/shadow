@@ -292,7 +292,7 @@ impl<T> TypedPluginPtr<T> {
         ))
     }
 
-    /// Cast to u8. Infallible since size_of<u8> is 1.
+    /// Cast to u8. Infallible since `size_of<u8>` is 1.
     pub fn cast_u8(&self) -> TypedPluginPtr<u8> {
         self.cast::<u8>().unwrap()
     }
