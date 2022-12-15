@@ -25,8 +25,8 @@ fn get_affinity(shadow: bool) {
             assert_eq!(cpu_set_count(&cpu_set), 1);
         }
     }
-    assert_eq!(unsafe { libc::sched_getaffinity(0, 0, 0 as _) }, -1,);
-    assert_eq!(unsafe { *libc::__errno_location() }, libc::EINVAL,);
+    assert_eq!(unsafe { libc::sched_getaffinity(0, 0, std::ptr::null_mut()) }, -1,);
+    assert_eq!(test_utils::get_errno(), libc::EINVAL,);
 }
 
 fn cpu_set_count(cpu_set: &CpuSet) -> usize {
