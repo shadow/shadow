@@ -50,7 +50,7 @@ impl<'a> HostContext<'a> {
     }
 
     /// Add the given process to the context.
-    pub fn with_process(&'a mut self, process: &'a mut Process) -> ProcessContext<'a> {
+    pub fn with_process(&'a mut self, process: &'a Process) -> ProcessContext<'a> {
         ProcessContext::new(self.host, process)
     }
 }
@@ -58,11 +58,11 @@ impl<'a> HostContext<'a> {
 /// Represent the "current" `Host` and `Process`.
 pub struct ProcessContext<'a> {
     pub host: &'a Host,
-    pub process: &'a mut Process,
+    pub process: &'a Process,
 }
 
 impl<'a> ProcessContext<'a> {
-    pub fn new(host: &'a Host, process: &'a mut Process) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process) -> Self {
         Self { host, process }
     }
 
@@ -74,12 +74,12 @@ impl<'a> ProcessContext<'a> {
 /// Represent the "current" `Host`, `Process`, and `Thread`.
 pub struct ThreadContext<'a> {
     pub host: &'a Host,
-    pub process: &'a mut Process,
+    pub process: &'a Process,
     pub thread: &'a mut ThreadRef,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a Host, process: &'a mut Process, thread: &'a mut ThreadRef) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process, thread: &'a mut ThreadRef) -> Self {
         Self {
             host,
             process,
@@ -128,8 +128,8 @@ impl<'a> ThreadContextObjs<'a> {
     where
         F: FnOnce(&mut ThreadContext) -> R,
     {
-        let mut process = self.process.borrow_mut(self.host.root());
-        let mut ctx = ThreadContext::new(self.host, &mut process, &mut self.thread);
+        let process = self.process.borrow(self.host.root());
+        let mut ctx = ThreadContext::new(self.host, &process, &mut self.thread);
         f(&mut ctx)
     }
 }
