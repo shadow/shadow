@@ -31,6 +31,15 @@ Examples:
 (cd src/lib/logger/rust_bindings && cargo fmt)
 ```
 
+### Clippy
+
+We use [Clippy](https://doc.rust-lang.org/stable/clippy/index.html) to help
+detect errors and non-idiomatic Rust code. You can run `clippy` locally with:
+
+```bash
+(cd src && cargo clippy)
+```
+
 ## Including headers
 
 ### Which headers to include
