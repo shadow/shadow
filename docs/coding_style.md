@@ -20,15 +20,10 @@ tool on the command-line to modify the lines touched by your commits.
 
 ### Rustfmt
 
-To format your Rust code, run `cargo fmt` once in each Rust crate that you
-modify.
-
-Examples:
+To format your Rust code, run `cargo fmt` in the `src` directory.
 
 ```bash
-(cd src/main && cargo fmt)
-(cd src/test && cargo fmt)
-(cd src/lib/logger/rust_bindings && cargo fmt)
+(cd src && cargo fmt)
 ```
 
 ### Clippy
