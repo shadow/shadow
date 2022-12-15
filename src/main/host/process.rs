@@ -3,6 +3,7 @@ use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 
+use log::debug;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -14,6 +15,7 @@ use crate::host::syscall::format::FmtOptions;
 use crate::utility::SyncSendPointer;
 
 use super::descriptor::descriptor_table::DescriptorTable;
+use super::host::Host;
 use super::memory_manager::MemoryManager;
 use super::timer::Timer;
 
@@ -59,6 +61,22 @@ pub struct Process {
 
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
+    itimer_real: RefCell<Timer>,
+}
+
+fn itimer_real_expiration(host: &Host, pid: ProcessId) {
+    let Some(process) = host.process(pid) else {
+        debug!("Process {:?} no longer exists", pid);
+        return;
+    };
+    let process = process.borrow(host.root());
+    let timer = process.itimer_real.borrow();
+    let mut siginfo: cshadow::siginfo_t = unsafe { std::mem::zeroed() };
+    // The siginfo_t structure only has an i32. Presumably we want to just truncate in
+    // case of overflow.
+    let expiration_count = timer.expiration_count() as i32;
+    unsafe { cshadow::process_initSiginfoForAlarm(&mut siginfo, expiration_count) };
+    unsafe { cshadow::process_signal(process.cprocess(), std::ptr::null_mut(), &siginfo) };
 }
 
 impl Process {
@@ -81,8 +99,12 @@ impl Process {
         // we ensure that the pointer doesn't "escape" in a way that would allow it to be
         // accessed by threads that don't have access to the enclosing Process.
         let cprocess = unsafe { SyncSendPointer::new(p) };
+        let id = unsafe { cshadow::process_getProcessID(cprocess.ptr()) }
+            .try_into()
+            .unwrap();
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = RefCell::new(None);
+        let itimer_real = RefCell::new(Timer::new(move |host| itimer_real_expiration(host, id)));
         let process = RootedRc::new(
             root,
             RootedRefCell::new(
@@ -91,6 +113,7 @@ impl Process {
                     cprocess,
                     memory_manager,
                     desc_table,
+                    itimer_real,
                 },
             ),
         );
@@ -184,14 +207,12 @@ impl Process {
         Pid::from_raw(pid)
     }
 
-    pub fn realtime_timer(&self) -> &Timer {
-        let timer = unsafe { cshadow::process_getRealtimeTimer(self.cprocess.ptr()) };
-        unsafe { timer.as_ref().unwrap() }
+    pub fn realtime_timer(&self) -> impl Deref<Target = Timer> + '_ {
+        self.itimer_real.borrow()
     }
 
-    pub fn realtime_timer_mut(&mut self) -> &mut Timer {
-        let timer = unsafe { cshadow::process_getRealtimeTimer(self.cprocess.ptr()) };
-        unsafe { timer.as_mut().unwrap() }
+    pub fn realtime_timer_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
+        self.itimer_real.borrow_mut()
     }
 }
 

@@ -186,12 +186,13 @@ ShimShmemProcess* process_getSharedMem(Process* proc);
 // handler), and NULL otherwise (e.g. when called from a timer expiration event).
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo);
 
-// Access the process's realtime timer; e.g. corresponding to ITIMER_REAL.
-Timer* process_getRealtimeTimer(Process* process);
-
 // Process's "dumpable" state, as manipulated by the prctl operations
 // PR_SET_DUMPABLE and PR_GET_DUMPABLE.
 int process_getDumpable(Process* process);
 void process_setDumpable(Process* process, int dumpable);
+
+// Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
+// due to opaque fields and macro magic in its C definition.
+void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 
 #endif /* SHD_PROCESS_H_ */

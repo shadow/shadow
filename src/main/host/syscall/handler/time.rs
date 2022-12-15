@@ -33,7 +33,7 @@ impl SyscallHandler {
             return Err(Errno::ENOSYS.into());
         }
 
-        let itimerval = itimerval_from_timer(ctx.process.realtime_timer());
+        let itimerval = itimerval_from_timer(&ctx.process.realtime_timer());
         ctx.process
             .memory_mut()
             .copy_to_ptr(curr_value_ptr, &[itimerval])?;
@@ -53,7 +53,7 @@ impl SyscallHandler {
         }
 
         if !old_value_ptr.is_null() {
-            let itimerval = itimerval_from_timer(ctx.process.realtime_timer());
+            let itimerval = itimerval_from_timer(&ctx.process.realtime_timer());
             ctx.process
                 .memory_mut()
                 .copy_to_ptr(old_value_ptr, &[itimerval])?;

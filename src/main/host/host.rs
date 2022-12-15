@@ -394,6 +394,14 @@ impl Host {
         self.processes.borrow_mut().insert(process_id, process);
     }
 
+    #[track_caller]
+    pub fn process(
+        &self,
+        id: ProcessId,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + '_> {
+        Ref::filter_map(self.processes.borrow(), |processes| processes.get(&id)).ok()
+    }
+
     /// Information about the Host. Made available as an Arc for cheap cloning
     /// into, e.g. Worker and ShadowLogger. When there's no need to clone the
     /// Arc, generally prefer the top-level `Host` methods for accessing this

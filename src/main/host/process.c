@@ -142,10 +142,6 @@ struct _Process {
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
 
-    /* ITIMER_REAL, as manipulated by `getitimer` and `setitimer`.
-     */
-    Timer* itimerReal;
-
     /* "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
      * and PR_GET_DUMPABLE.
      */
@@ -320,13 +316,6 @@ static void _process_handleProcessExit(Process* proc) {
     }
 
     _process_check(proc);
-
-    // Drop the timer now, so that it stops running, and so that it breaks its
-    // circular reference to the process.
-    if (proc->itimerReal) {
-        timer_drop(proc->itimerReal);
-        proc->itimerReal = NULL;
-    }
 }
 
 static void _process_terminate(Process* proc) {
@@ -801,18 +790,12 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-static void _process_itimer_real_expiration(const Host* host, void* voidPid, void* _unused) {
-    pid_t pid = GPOINTER_TO_INT(voidPid);
-    Process* process = host_getProcess(host, pid);
-    MAGIC_ASSERT(process);
-
-    int overrun = timer_getExpirationCount(process->itimerReal);
-    siginfo_t siginfo = {
+void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
+    *siginfo = (siginfo_t){
         .si_signo = SIGALRM,
         .si_code = SI_TIMER,
         .si_overrun = overrun,
     };
-    process_signal(process, NULL, &siginfo);
 }
 
 Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
@@ -906,13 +889,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
 
     proc->dumpable = SUID_DUMP_USER;
 
-    TaskRef* task =
-        taskref_new_bound(host_getID(host), _process_itimer_real_expiration,
-                          GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
-    proc->itimerReal = timer_new(task);
-    // timer_new clones the task; we don't need our own reference anymore.
-    taskref_drop(task);
-
     worker_count_allocation(Process);
 
     return proc;
@@ -973,11 +949,6 @@ void process_free(Process* proc) {
     }
     if (proc->straceFd >= 0) {
         close(proc->straceFd);
-    }
-
-    if (proc->itimerReal) {
-        timer_drop(proc->itimerReal);
-        proc->itimerReal = NULL;
     }
 
     shmemallocator_globalFree(&proc->shimSharedMemBlock);
@@ -1280,11 +1251,6 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
     }
 
     _process_interruptWithSignal(process, host_getShimShmemLock(host), siginfo->si_signo);
-}
-
-Timer* process_getRealtimeTimer(Process* process) {
-    MAGIC_ASSERT(process);
-    return process->itimerReal;
 }
 
 int process_getDumpable(Process* process) {
