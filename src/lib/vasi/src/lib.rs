@@ -3,8 +3,7 @@
 pub use static_assertions::assert_impl_all;
 
 pub use vasi_macro::VirtualAddressSpaceIndependent;
-
-/// SAFETY: A type implementing this trait guarantees that accessing instances
+/// A type implementing this trait guarantees that accessing instances
 /// of that type outside of their original virtual address space does not
 /// violate Rust's safety requirements.
 ///
@@ -21,6 +20,10 @@ pub use vasi_macro::VirtualAddressSpaceIndependent;
 /// *Relative* pointers, e.g. as implemented in
 /// [rkyv](https://crates.io/crates/rkyv), are acceptable as long as they point
 /// within the boundaries of the enclosing type.
+///
+/// # Safety
+///
+/// The type must actually be self-contained, as above.
 pub unsafe trait VirtualAddressSpaceIndependent {}
 
 // Types not containing any pointers are trivially VirtualAddressSpaceIndependent.

@@ -313,7 +313,9 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
-    /// SAFETY: `pid`'s memory must not be modified without holding an exclusive
+    /// # Safety
+    ///
+    /// `pid`'s memory must not be modified without holding an exclusive
     /// (mutable) reference to the returned MemoryManager. In Shadow we ensure
     /// this by:
     /// * Creating only one MemoryManager for a given process.

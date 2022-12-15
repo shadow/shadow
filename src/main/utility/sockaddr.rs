@@ -34,7 +34,8 @@ assert_eq_size!(libc::sockaddr_storage, Addr);
 // field of `sockaddr_un` would then cause UB.
 
 impl SockaddrStorage {
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - The address must be fully initialized, including padding fields (for example
     ///   `sockaddr_in.sin_zero`), up until `len` bytes.
     /// - Padding bytes do not need to be initialized.
@@ -68,7 +69,9 @@ impl SockaddrStorage {
         })
     }
 
-    /// SAFETY: See [`Self::from_ptr`].
+    /// # Safety
+    ///
+    /// See [`Self::from_ptr`].
     pub unsafe fn from_bytes(address: &[MaybeUninit<u8>]) -> Option<Self> {
         unsafe { Self::from_ptr(address.as_ptr(), address.len().try_into().ok()?) }
     }

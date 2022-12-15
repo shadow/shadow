@@ -82,8 +82,10 @@ pub mod export {
     }
 
     impl CTaskHostTreePtrs {
-        /// SAFETY: Given that the host lock is held when execution of a
-        /// callback starts, they must not cause `object` or `argument` to be
+        /// # Safety
+        ///
+        /// Given that the host lock is held when execution of a callback
+        /// starts, they must not cause `object` or `argument` to be
         /// dereferenced without the host lock held. (e.g. by releasing the host
         /// lock or exfiltrating the pointers to be dereferenced by other code
         /// that might not hold the lock).
@@ -134,10 +136,12 @@ pub mod export {
     }
 
     impl CTaskSyncSendPtrs {
-        /// SAFETY: callbacks must be safe to call from another thread,
-        /// with the given `object` and `argument`. If `object` and/or `argument`
-        /// require the host lock to be held by the calling thread to access safely,
-        /// use CTaskHostTreePtrs instead.
+        /// # Safety
+        ///
+        /// callbacks must be safe to call from another thread, with the given
+        /// `object` and `argument`. If `object` and/or `argument` require the
+        /// host lock to be held by the calling thread to access safely, use
+        /// CTaskHostTreePtrs instead.
         unsafe fn new(
             callback: TaskCallbackFunc,
             object: SyncSendPointer<libc::c_void>,
@@ -177,7 +181,8 @@ pub mod export {
     /// given host. The callbacks can safely assume that they will only be called
     /// with the lock for the specified host held.
     ///
-    /// SAFETY:
+    /// # Safety
+    ///
     /// * `object` and `argument` must meet the requirements
     ///    for `HostTreePointer::new`.
     /// * Given that the host lock is held when execution of a callback
@@ -219,7 +224,8 @@ pub mod export {
 
     /// Create a new reference-counted task that may be executed on any Host.
     ///
-    /// SAFETY:
+    /// # Safety
+    ///
     /// * The callbacks must be safe to call with `object` and `argument`
     ///   with *any* Host. (e.g. even if task is expected to execute on another Host,
     ///   must be safe to execute or free the Task from the current Host.)
@@ -259,7 +265,9 @@ pub mod export {
     ///
     /// Panics if task's Host lock isn't held.
     ///
-    /// SAFETY: `task` must be legally dereferencable.
+    /// # Safety
+    ///
+    /// `task` must be legally dereferencable.
     #[no_mangle]
     pub unsafe extern "C" fn taskref_drop(task: *mut TaskRef) {
         unsafe { Box::from_raw(notnull_mut(task)) };

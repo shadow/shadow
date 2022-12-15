@@ -16,6 +16,7 @@ pub mod cshadow {
     #![allow(non_snake_case)]
     // https://github.com/rust-lang/rust/issues/66220
     #![allow(improper_ctypes)]
+    #![allow(clippy::all)]
     include!(concat!(env!("OUT_DIR"), "/cshadow.rs"));
 }
 

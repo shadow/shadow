@@ -95,6 +95,9 @@ pub struct ThreadContextObjs<'a> {
 }
 
 impl<'a> ThreadContextObjs<'a> {
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
         let process = unsafe { Process::borrow_from_c(sys.process) };
@@ -106,6 +109,9 @@ impl<'a> ThreadContextObjs<'a> {
         }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_thread(host: &'a Host, thread: *mut cshadow::Thread) -> Self {
         let sys = unsafe { cshadow::thread_getSysCallHandler(thread) };
         let sys = unsafe { sys.as_mut().unwrap() };

@@ -230,6 +230,13 @@ impl ChildPidWatcher {
     ///
     /// TODO: add a vfork version when Rust supports vfork:
     /// <https://github.com/rust-lang/rust/issues/58314>
+    ///
+    /// # Safety
+    ///
+    /// As for fork in Rust in general. *Probably*, *mostly*, safe, since the
+    /// child process gets its own copy of the address space and OS resources etc.
+    /// Still, there may be some dragons here. Best to call exec before too long
+    /// in the child.
     pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, nix::Error> {
         unsafe { self.fork_watchable_internal(libc::SYS_fork, child_fn) }
     }

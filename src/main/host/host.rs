@@ -188,6 +188,9 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
+    /// # Safety
+    ///
+    /// `dns` must be a valid pointer, and must outlive the returned Host.
     pub unsafe fn new(
         params: HostParameters,
         host_root_path: &Path,
@@ -1004,14 +1007,12 @@ mod export {
         let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
 
         // associate the interfaces corresponding to bind_addr with socket
-        unsafe {
-            hostrc
-                .net_ns
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .disassociate_interface(protocol, bind_addr, peer_addr)
-        };
+        hostrc
+            .net_ns
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .disassociate_interface(protocol, bind_addr, peer_addr);
     }
 
     #[no_mangle]

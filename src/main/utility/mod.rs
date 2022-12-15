@@ -41,7 +41,9 @@ unsafe impl<T> Send for SyncSendPointer<T> {}
 unsafe impl<T> Sync for SyncSendPointer<T> {}
 
 impl<T> SyncSendPointer<T> {
-    /// SAFETY: The object pointed to by `ptr` must actually be `Send` and
+    /// # Safety
+    ///
+    /// The object pointed to by `ptr` must actually be `Send` and
     /// `Sync`, or else not subsequently used in contexts where it matters.
     pub unsafe fn new(ptr: *mut T) -> Self {
         Self(ptr)
@@ -81,7 +83,9 @@ impl<T> HostTreePointer<T> {
     ///
     /// Panics if the configured host is not active.
     ///
-    /// SAFETY: Pointer must only be dereferenced while the configures Host is
+    /// # Safety
+    ///
+    /// Pointer must only be dereferenced while the configures Host is
     /// still active, in addition to the normal safety requirements for
     /// dereferencing a pointer.
     pub unsafe fn ptr(&self) -> *mut T {

@@ -678,7 +678,9 @@ impl CountedLegacyFileRef {
         Self(ptr)
     }
 
-    /// SAFETY: See `HostTreePointer::ptr`.
+    /// # Safety
+    ///
+    /// See `HostTreePointer::ptr`.
     pub unsafe fn ptr(&self) -> *mut c::LegacyFile {
         unsafe { self.0.ptr() }
     }
@@ -719,6 +721,9 @@ impl LegacyFileCounter {
         }
     }
 
+    /// # Safety
+    ///
+    /// TODO
     pub unsafe fn ptr(&self) -> *mut c::LegacyFile {
         unsafe { self.file.ptr() }
     }

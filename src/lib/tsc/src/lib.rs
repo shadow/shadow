@@ -113,15 +113,19 @@ impl Tsc {
 
     /// Whether `ip` points to an rdtsc instruction.
     ///
-    /// SAFETY: `ip` must be a dereferenceable pointer, pointing to the
+    /// # Safety
+    ///
+    /// `ip` must be a dereferenceable pointer, pointing to the
     /// beginning of a valid x86_64 instruction.
     pub unsafe fn ip_is_rdtsc(ip: *const u8) -> bool {
         unsafe { Self::ip_matches(ip, &Self::RDTSC) }
     }
 
-    // Whether `ip` points to an rdtscp instruction.
+    /// Whether `ip` points to an rdtscp instruction.
     ///
-    /// SAFETY: `ip` must be a dereferenceable pointer, pointing to the
+    /// # Safety
+    ///
+    /// `ip` must be a dereferenceable pointer, pointing to the
     /// beginning of a valid x86_64 instruction.
     pub unsafe fn ip_is_rdtscp(ip: *const u8) -> bool {
         unsafe { Self::ip_matches(ip, &Self::RDTSCP) }

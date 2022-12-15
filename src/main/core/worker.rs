@@ -97,7 +97,7 @@ pub struct Worker {
 
 impl Worker {
     // Create worker for this thread.
-    pub unsafe fn new_for_this_thread(worker_id: WorkerThreadID) {
+    pub fn new_for_this_thread(worker_id: WorkerThreadID) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
@@ -273,7 +273,9 @@ impl Worker {
         .unwrap();
     }
 
-    /// SAFETY: `packet` must be valid and not accessed by another thread while this function is
+    /// # Safety
+    ///
+    /// `packet` must be valid and not accessed by another thread while this function is
     /// running.
     pub unsafe fn send_packet(src_host: &Host, packet: *mut cshadow::Packet) {
         assert!(!packet.is_null());

@@ -54,7 +54,9 @@ impl Process {
     /// Process, or from the exported functions below. This will ensure there is
     /// only one reference to a given Process in Rust.
     ///
-    /// SAFETY: `p` must point to a valid c::Process, to which this Process will
+    /// # Safety
+    ///
+    /// `p` must point to a valid c::Process, to which this Process will
     /// have exclusive access over its lifetime. `p` must outlive the returned object.
     pub unsafe fn borrow_from_c(p: *mut cshadow::Process) -> Self {
         assert!(!p.is_null());

@@ -9,6 +9,10 @@ use std::mem::MaybeUninit;
 /// We require `Copy` to also rule out anything that implements `Drop`.
 ///
 /// References are inherently non-Pod, so we can require a 'static lifetime.
+///
+/// # Safety
+///
+/// Any pattern of bits must be a valid value of the given type.
 pub unsafe trait Pod: Copy + 'static {}
 
 /// Convert to a slice of raw bytes.
@@ -31,7 +35,9 @@ where
 ///
 /// Some bytes may be uninialized if T has padding.
 ///
-/// SAFETY: Uninitialized bytes ([`MaybeUninit::uninit`] must not be written
+/// # Safety
+///
+/// Uninitialized bytes (e.g. [`MaybeUninit::uninit`]) must not be written
 /// into the returned slice, which would invalidate the source `slice`.
 pub unsafe fn to_u8_slice_mut<T>(slice: &mut [T]) -> &mut [MaybeUninit<u8>]
 where

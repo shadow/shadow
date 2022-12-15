@@ -271,7 +271,8 @@ impl Serializer {
         })
     }
 
-    /// SAFETY:
+    /// # Safety
+    ///
     /// * `block` must have been created from a `ShMemBlock<T>`
     /// * The returned `ShMemBlockAlias` must not outlive the original `ShMemBlock`
     ///   that `block` was serialized from. We can't guarantee this with normal
