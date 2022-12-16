@@ -420,10 +420,8 @@ mod tests {
 
         assert_eq!(
             SimulationTime::from_c_simtime(SIMTIME_MAX).unwrap(),
-            SimulationTime::try_from(Duration::from_nanos(
-                (SIMTIME_MAX / SIMTIME_ONE_NANOSECOND).try_into().unwrap()
-            ))
-            .unwrap()
+            SimulationTime::try_from(Duration::from_nanos(SIMTIME_MAX / SIMTIME_ONE_NANOSECOND))
+                .unwrap()
         );
         assert_eq!(SimulationTime::from_c_simtime(SIMTIME_MAX + 1), None);
     }

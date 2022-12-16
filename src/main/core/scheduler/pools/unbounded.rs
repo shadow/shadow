@@ -1,3 +1,7 @@
+// When comparing a loaded value that happens to be bool,
+// assert_eq! reads better than assert!.
+#![allow(clippy::bool_assert_comparison)]
+
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
