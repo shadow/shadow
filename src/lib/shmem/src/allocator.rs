@@ -44,7 +44,7 @@ where
     /// to an instance of `T`, and must not be deallocated while the returned
     /// object is still alive.
     unsafe fn new(internal: c_bindings::ShMemBlock, allocator: &'allocator Allocator) -> Self {
-        assert_eq!(internal.nbytes as usize, std::mem::size_of::<T>());
+        assert_eq!(internal.nbytes, std::mem::size_of::<T>());
         assert!(!internal.p.is_null());
         assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
         Self {
@@ -132,7 +132,7 @@ where
     /// to an instance of `T`, and must not be deallocated while the returned
     /// object is still alive.
     unsafe fn new(internal: c_bindings::ShMemBlock, serializer: &'serializer Serializer) -> Self {
-        assert_eq!(internal.nbytes as usize, std::mem::size_of::<T>());
+        assert_eq!(internal.nbytes, std::mem::size_of::<T>());
         assert!(!internal.p.is_null());
         assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
         Self {
@@ -239,7 +239,7 @@ impl Allocator {
     {
         let nbytes = std::mem::size_of_val(&val);
         let raw_block = unsafe { c_bindings::shmemallocator_alloc(self.internal, nbytes) };
-        assert_eq!(raw_block.nbytes as usize, nbytes);
+        assert_eq!(raw_block.nbytes, nbytes);
         assert!(!raw_block.p.is_null());
         assert_eq!(raw_block.p.align_offset(std::mem::align_of::<T>()), 0);
         // Safety: We've validated non-null, size, and alignment.
