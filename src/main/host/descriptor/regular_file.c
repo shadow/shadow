@@ -117,11 +117,14 @@ static inline int _regularfile_getOSBackedFD(RegularFile* file) {
         return OSFILE_INVALID;
     }
 }
+
+static inline bool _fd_isValid(int fd) { return fd >= 0; }
+
 int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBackedFD(file); }
 
 static void _regularfile_closeHelper(RegularFile* file) {
     if(file && file->type != FILE_TYPE_IN_MEMORY) {
-        if (file && file->osfile.fd != OSFILE_INVALID) {
+        if (file && _fd_isValid(file->osfile.fd)) {
             trace("On file %p, closing os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
             close(file->osfile.fd);
@@ -390,7 +393,7 @@ static size_t _regularfile_readvRandomBytes(RegularFile* file, const Host* host,
 ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -418,7 +421,7 @@ ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t
                           off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -448,7 +451,7 @@ ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iov
                            off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -501,7 +504,7 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
                             int iovcnt, off_t offset, int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -528,7 +531,7 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
 ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -548,7 +551,7 @@ ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
 ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -568,7 +571,7 @@ ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, o
 ssize_t regularfile_pwritev(RegularFile* file, const struct iovec* iov, int iovcnt, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -590,7 +593,7 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
                              int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -612,7 +615,7 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
 int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -625,7 +628,7 @@ int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
 int regularfile_fstatfs(RegularFile* file, struct statfs* statbuf) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -638,7 +641,7 @@ int regularfile_fstatfs(RegularFile* file, struct statfs* statbuf) {
 int regularfile_fsync(RegularFile* file) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -651,7 +654,7 @@ int regularfile_fsync(RegularFile* file) {
 int regularfile_fchown(RegularFile* file, uid_t owner, gid_t group) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -664,7 +667,7 @@ int regularfile_fchown(RegularFile* file, uid_t owner, gid_t group) {
 int regularfile_fchmod(RegularFile* file, mode_t mode) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -677,7 +680,7 @@ int regularfile_fchmod(RegularFile* file, mode_t mode) {
 int regularfile_ftruncate(RegularFile* file, off_t length) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -690,7 +693,7 @@ int regularfile_ftruncate(RegularFile* file, off_t length) {
 int regularfile_fallocate(RegularFile* file, int mode, off_t offset, off_t length) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -703,7 +706,7 @@ int regularfile_fallocate(RegularFile* file, int mode, off_t offset, off_t lengt
 int regularfile_fadvise(RegularFile* file, off_t offset, off_t len, int advice) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -716,7 +719,7 @@ int regularfile_fadvise(RegularFile* file, off_t offset, off_t len, int advice) 
 int regularfile_flock(RegularFile* file, int operation) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -730,7 +733,7 @@ int regularfile_fsetxattr(RegularFile* file, const char* name, const void* value
                           int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -743,7 +746,7 @@ int regularfile_fsetxattr(RegularFile* file, const char* name, const void* value
 ssize_t regularfile_fgetxattr(RegularFile* file, const char* name, void* value, size_t size) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -756,7 +759,7 @@ ssize_t regularfile_fgetxattr(RegularFile* file, const char* name, void* value, 
 ssize_t regularfile_flistxattr(RegularFile* file, char* list, size_t size) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -769,7 +772,7 @@ ssize_t regularfile_flistxattr(RegularFile* file, char* list, size_t size) {
 int regularfile_fremovexattr(RegularFile* file, const char* name) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -782,7 +785,7 @@ int regularfile_fremovexattr(RegularFile* file, const char* name) {
 int regularfile_sync_range(RegularFile* file, off64_t offset, off64_t nbytes, unsigned int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -797,7 +800,7 @@ int regularfile_sync_range(RegularFile* file, off64_t offset, off64_t nbytes, un
 ssize_t regularfile_readahead(RegularFile* file, off64_t offset, size_t count) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -810,7 +813,7 @@ ssize_t regularfile_readahead(RegularFile* file, off64_t offset, size_t count) {
 off_t regularfile_lseek(RegularFile* file, off_t offset, int whence) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -823,7 +826,7 @@ off_t regularfile_lseek(RegularFile* file, off_t offset, int whence) {
 int regularfile_getdents(RegularFile* file, struct linux_dirent* dirp, unsigned int count) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -839,7 +842,7 @@ int regularfile_getdents64(RegularFile* file, struct linux_dirent64* dirp,
                     unsigned int count) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -853,7 +856,7 @@ int regularfile_getdents64(RegularFile* file, struct linux_dirent64* dirp,
 int regularfile_ioctl(RegularFile* file, unsigned long request, void* arg) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -866,7 +869,7 @@ int regularfile_ioctl(RegularFile* file, unsigned long request, void* arg) {
 int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -902,7 +905,7 @@ int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
 int regularfile_poll(RegularFile* file, struct pollfd* pfd) {
     MAGIC_ASSERT(file);
 
-    if (!_regularfile_getOSBackedFD(file)) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
