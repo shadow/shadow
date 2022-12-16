@@ -7,7 +7,6 @@ WORKDIR /src
 ENV CC gcc
 ENV CONTAINER ubuntu:20.04
 ENV BUILDTYPE release
-ENV RUSTPROFILE minimal
 
 RUN ci/container_scripts/install_deps.sh
 

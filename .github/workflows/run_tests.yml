@@ -81,7 +81,6 @@ jobs:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
       BUILDTYPE: ${{ matrix.buildtype }}
-      RUSTPROFILE: minimal
 
     steps:
       - name: Checkout

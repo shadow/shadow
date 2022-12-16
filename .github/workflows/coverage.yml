@@ -38,7 +38,6 @@ jobs:
       CC: 'clang-12'
       CONTAINER: 'ubuntu:22.04'
       BUILDTYPE: 'coverage'
-      RUSTPROFILE: minimal
 
     steps:
       # The coverage uploader wants git metadata.

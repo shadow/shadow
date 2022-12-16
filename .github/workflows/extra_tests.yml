@@ -28,7 +28,6 @@ env:
   # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
   CONTAINER: 'ubuntu:22.04'
   BUILDTYPE: 'release'
-  RUSTPROFILE: minimal
   DEBIAN_FRONTEND: noninteractive
 
 jobs:

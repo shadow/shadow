@@ -83,7 +83,6 @@ run_one () {
         FROM $CONTAINER
 
         ENV CARGO_TERM_COLOR=always
-        ENV RUSTPROFILE=minimal
 
         ENV CONTAINER "$CONTAINER"
         SHELL ["/bin/bash", "-c"]

@@ -59,21 +59,17 @@ case "$CC" in
         ;;
 esac
 
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal
+source "$HOME/.cargo/env"
+
 if [ "${BUILDTYPE:-}" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly-2022-10-14
-else
-    RUST_TOOLCHAIN=stable
+  # Add a directory override, which overrides rust-toolchain.toml
+  rustup override set nightly-2022-10-14
 fi
 
-if [ -n "${RUSTPROFILE:+x}" ]
-then
-    RUSTPROFILE="--profile=${RUSTPROFILE}"
-fi
-
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN" ${RUSTPROFILE:+"$RUSTPROFILE"}
-PATH="$HOME/.cargo/bin:$PATH"
-rustup default "${RUST_TOOLCHAIN}"
+# For debugging
+cargo --version
 
 # Install a version of the golang std library that supports dynamic linking
 go install -buildmode=shared -linkshared std
