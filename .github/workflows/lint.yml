@@ -12,9 +12,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Pins Rust version.
-  # https://rust-lang.github.io/rustup/overrides.html
-  RUSTUP_TOOLCHAIN: "1.66.0"
 
 jobs:
 
@@ -45,8 +42,8 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Validate rust version
-        run: cargo --version | grep "${RUSTUP_TOOLCHAIN}"
+      - name: check rust version
+        run: cargo --version
       - name: Add rustfmt
         run: rustup component add rustfmt
       - name: Rustfmt check
@@ -72,8 +69,8 @@ jobs:
           cd build
           cmake ..
 
-      - name: Validate rust version
-        run: cargo --version | grep "${RUSTUP_TOOLCHAIN}"
+      - name: check rust version
+        run: cargo --version
 
       - name: Add clippy
         run: rustup component add clippy
@@ -102,8 +99,8 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Validate rust version
-        run: cargo --version | grep "${RUSTUP_TOOLCHAIN}"
+      - name: check rust version
+        run: cargo --version
       - name: Add rustdoc
         run: rustup component add rust-docs
       - name: Cargo doc check
