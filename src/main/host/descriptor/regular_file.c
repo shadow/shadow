@@ -393,10 +393,6 @@ static size_t _regularfile_readvRandomBytes(RegularFile* file, const Host* host,
 ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
-        return -EBADF;
-    }
-
     if (file->type == FILE_TYPE_RANDOM) {
         _regularfile_readRandomBytes(file, host, buf, bufSize);
         return (ssize_t)bufSize;
@@ -406,6 +402,10 @@ ssize_t regularfile_read(RegularFile* file, const Host* host, void* buf, size_t 
         ssize_t read = regularfile_pread(file, host, buf, bufSize, file->inMemoryFile.cursor);
         file->inMemoryFile.cursor += read;
         return read;
+    }
+
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+        return -EBADF;
     }
 
     trace("RegularFile %p will read %zu bytes from os-backed file %i at path '%s'", file, bufSize,
@@ -421,10 +421,6 @@ ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t
                           off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
-        return -EBADF;
-    }
-
     if (file->type == FILE_TYPE_RANDOM) {
         _regularfile_readRandomBytes(file, host, buf, bufSize);
         return (ssize_t)bufSize;
@@ -436,6 +432,10 @@ ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t
         iov[0].iov_base = buf;
         iov[0].iov_len = bufSize;
         return regularfile_preadv(file, host, iov, 1, offset);
+    }
+
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+        return -EBADF;
     }
 
     trace("RegularFile %p will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
@@ -450,10 +450,6 @@ ssize_t regularfile_pread(RegularFile* file, const Host* host, void* buf, size_t
 ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iovec* iov, int iovcnt,
                            off_t offset) {
     MAGIC_ASSERT(file);
-
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
-        return -EBADF;
-    }
 
     if (file->type == FILE_TYPE_RANDOM) {
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
@@ -490,6 +486,10 @@ ssize_t regularfile_preadv(RegularFile* file, const Host* host, const struct iov
         return read;
     }
 
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+        return -EBADF;
+    }
+
     trace("RegularFile %p will preadv %d vector items from os-backed file %i at path '%s'", file,
           iovcnt, _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
@@ -504,10 +504,6 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
                             int iovcnt, off_t offset, int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
-        return -EBADF;
-    }
-
     if (file->type == FILE_TYPE_RANDOM) {
         return (ssize_t)_regularfile_readvRandomBytes(file, host, iov, iovcnt);
     }
@@ -515,6 +511,10 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
     if (file->type == FILE_TYPE_IN_MEMORY) {
         // flags can be ignored: none really impart in memory files
         return regularfile_preadv(file, host, iov, iovcnt, offset);
+    }
+
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+        return -EBADF;
     }
 
     trace("RegularFile %p will preadv2 %d vector items from os-backed file %i at path '%s'", file,
@@ -531,11 +531,11 @@ ssize_t regularfile_preadv2(RegularFile* file, const Host* host, const struct io
 ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
-    if (file->type == FILE_TYPE_IN_MEMORY) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -551,11 +551,11 @@ ssize_t regularfile_write(RegularFile* file, const void* buf, size_t bufSize) {
 ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
-    if (file->type == FILE_TYPE_IN_MEMORY) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -571,11 +571,11 @@ ssize_t regularfile_pwrite(RegularFile* file, const void* buf, size_t bufSize, o
 ssize_t regularfile_pwritev(RegularFile* file, const struct iovec* iov, int iovcnt, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
-    if (file->type == FILE_TYPE_IN_MEMORY) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -593,11 +593,11 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
                              int flags) {
     MAGIC_ASSERT(file);
 
-    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
+    if (file->type == FILE_TYPE_IN_MEMORY) {
         return -EBADF;
     }
 
-    if (file->type == FILE_TYPE_IN_MEMORY) {
+    if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
 
@@ -869,11 +869,11 @@ int regularfile_ioctl(RegularFile* file, unsigned long request, void* arg) {
 int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
     MAGIC_ASSERT(file);
 
+    trace("RegularFile %p fcntl os-backed file %i", file, _regularfile_getOSBackedFD(file));
+
     if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
         return -EBADF;
     }
-
-    trace("RegularFile %p fcntl os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
     if (command == F_SETFD) {
         intptr_t arg_int = (intptr_t)arg;
