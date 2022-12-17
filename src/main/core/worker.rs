@@ -456,6 +456,13 @@ impl Worker {
     pub fn increment_plugin_error_count() {
         Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
     }
+
+    /// Shadow allows configuration of a "bootstrapping" interval, during which
+    /// hosts' network activity does not consume bandwidth. Returns `true` if we
+    /// are still within this preliminary interval, or `false` otherwise.
+    pub fn is_bootstrapping() -> bool {
+        Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
+    }
 }
 
 #[derive(Debug)]

@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::net::Ipv4Addr;
 
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
@@ -8,16 +9,12 @@ pub enum PacketStatus {
     RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,
     RouterDequeued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DEQUEUED as isize,
     RouterDropped = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DROPPED as isize,
+    RelayCached = c::_PacketDeliveryStatusFlags_PDS_RELAY_CACHED as isize,
+    RelayForwarded = c::_PacketDeliveryStatusFlags_PDS_RELAY_FORWARDED as isize,
 }
 
 pub struct Packet {
     c_ptr: SyncSendPointer<c::Packet>,
-
-    // There isn't currently a reason why we would need a packet to by Sync, and we probably won't
-    // ever need it to be Sync. By ensuring calling code doesn't assume Packet is Sync, we have more
-    // flexibility in how we implement Packet internally. Since Cell is !Sync, this will make Packet
-    // !Sync.
-    _make_unsync: std::marker::PhantomData<std::cell::Cell<()>>,
 }
 
 impl Packet {
@@ -53,13 +50,18 @@ impl Packet {
         unsafe { c::packet_addDeliveryStatus(self.c_ptr.ptr(), status_flag) };
     }
 
+    pub fn dst_address(&self) -> Ipv4Addr {
+        Ipv4Addr::from(u32::from_be(unsafe {
+            c::packet_getDestinationIP(self.c_ptr.ptr())
+        }))
+    }
+
     /// Transfers ownership of the given c_ptr reference into a new rust packet
     /// object.
     pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
         assert!(!c_ptr.is_null());
         Self {
             c_ptr: unsafe { SyncSendPointer::new(c_ptr) },
-            _make_unsync: Default::default(),
         }
     }
 

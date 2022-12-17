@@ -10,6 +10,7 @@ use crate::host::process::Process;
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
+use crate::network::PacketDevice;
 use crate::utility::{self, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
 use log::{debug, info, trace};
@@ -782,6 +783,10 @@ impl Host {
     /// the native Timestamp Counter, if we were able to find it.
     pub fn tsc(&self) -> &Tsc {
         &self.tsc
+    }
+
+    pub fn get_packet_device(&self, _address: Ipv4Addr) -> Ref<dyn PacketDevice> {
+        todo!()
     }
 }
 

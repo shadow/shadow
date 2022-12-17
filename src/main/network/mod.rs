@@ -1,8 +1,18 @@
+use std::net::Ipv4Addr;
+
+use crate::network::packet::Packet;
+
 pub mod graph;
 pub mod net_namespace;
 pub mod packet;
-mod relay;
+pub mod relay;
 pub mod router;
+
+pub trait PacketDevice {
+    fn get_address(&self) -> Ipv4Addr;
+    fn pop(&self) -> Option<Packet>;
+    fn push(&self, packet: Packet);
+}
 
 #[cfg(test)]
 mod tests {
