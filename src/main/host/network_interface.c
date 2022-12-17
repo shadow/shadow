@@ -330,31 +330,6 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
     return packet;
 }
 
-const Packet* networkinterface_peek(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-
-    CompatSocket socket = {0};
-    bool found = false;
-
-    switch (interface->qdisc) {
-        case Q_DISC_MODE_ROUND_ROBIN: {
-            found = rrsocketqueue_peek(&interface->rrQueue, &socket);
-            break;
-        }
-        case Q_DISC_MODE_FIFO:
-        default: {
-            found = fifosocketqueue_peek(&interface->fifoQueue, &socket);
-            break;
-        }
-    }
-
-    if (found) {
-        return compatsocket_peekNextOutPacket(&socket);
-    } else {
-        return NULL;
-    }
-}
-
 // Add the socket to the list of sockets that have data ready for us to send
 // out to the network.
 void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket) {

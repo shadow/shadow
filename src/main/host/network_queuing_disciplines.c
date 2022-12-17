@@ -47,19 +47,6 @@ bool rrsocketqueue_isEmpty(RrSocketQueue* self) {
     return g_queue_is_empty(self->queue);
 }
 
-bool rrsocketqueue_peek(RrSocketQueue* self, CompatSocket* socket) {
-    utility_debugAssert(self != NULL);
-    utility_debugAssert(self->queue != NULL);
-
-    uintptr_t taggedSocket = (uintptr_t)g_queue_peek_head(self->queue);
-    if (taggedSocket == 0) {
-        return false;
-    }
-
-    *socket = compatsocket_fromTagged(taggedSocket);
-    return true;
-}
-
 bool rrsocketqueue_pop(RrSocketQueue* self, CompatSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
@@ -143,19 +130,6 @@ bool fifosocketqueue_isEmpty(FifoSocketQueue* self) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
     return priorityqueue_isEmpty(self->queue);
-}
-
-bool fifosocketqueue_peek(FifoSocketQueue* self, CompatSocket* socket) {
-    utility_debugAssert(self != NULL);
-    utility_debugAssert(self->queue != NULL);
-
-    uintptr_t taggedSocket = (uintptr_t)priorityqueue_peek(self->queue);
-    if (taggedSocket == 0) {
-        return false;
-    }
-
-    *socket = compatsocket_fromTagged(taggedSocket);
-    return true;
 }
 
 bool fifosocketqueue_pop(FifoSocketQueue* self, CompatSocket* socket) {

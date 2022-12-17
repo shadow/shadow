@@ -652,13 +652,6 @@ mod export {
         Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
-    // TODO: move to Router::_route_outgoing_packet
-    #[no_mangle]
-    pub extern "C" fn worker_sendPacket(src_host: *const Host, packet: *mut cshadow::Packet) {
-        let src_host = unsafe { src_host.as_ref() }.unwrap();
-        unsafe { Worker::send_packet(src_host, packet) };
-    }
-
     /// Implementation for counting allocated objects. Do not use this function directly.
     /// Use worker_count_allocation instead from the call site.
     #[no_mangle]
@@ -703,11 +696,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
         EmulatedTime::to_c_emutime(Worker::current_time())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
 
     #[no_mangle]
