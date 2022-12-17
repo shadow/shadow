@@ -21,17 +21,23 @@ impl TokenBucket {
         refill_increment: u64,
         refill_interval: SimulationTime,
     ) -> Option<TokenBucket> {
-        let now = Worker::current_time().unwrap();
-        TokenBucket::new_inner(capacity, refill_increment, refill_interval, now)
+        // Since we start at full capacity, starting with a last refill time of
+        // 0 is inconsequential.
+        TokenBucket::new_inner(
+            capacity,
+            refill_increment,
+            refill_interval,
+            EmulatedTime::SIMULATION_START,
+        )
     }
 
-    /// Implements the functionality of `new()` without calling into the
-    /// `Worker` module. Useful for testing.
+    /// Implements the functionality of `new()` allowing the caller to set the
+    /// last refill time. Useful for testing.
     fn new_inner(
         capacity: u64,
         refill_increment: u64,
         refill_interval: SimulationTime,
-        now: EmulatedTime,
+        last_refill: EmulatedTime,
     ) -> Option<TokenBucket> {
         if capacity > 0 && refill_increment > 0 && !refill_interval.is_zero() {
             Some(TokenBucket {
@@ -39,7 +45,7 @@ impl TokenBucket {
                 balance: capacity,
                 refill_increment,
                 refill_interval,
-                last_refill: now,
+                last_refill,
             })
         } else {
             None
