@@ -17,9 +17,10 @@ typedef struct _NetworkInterface NetworkInterface;
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
 #include "main/routing/address.h"
+#include "main/routing/packet.minimal.h"
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
-                                       guint32 pcapCaptureSize, QDiscMode qdisc, bool uses_router);
+                                       guint32 pcapCaptureSize, QDiscMode qdisc);
 void networkinterface_free(NetworkInterface* interface);
 
 /* The address and ports must be in network byte order. */
@@ -32,12 +33,9 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
 void networkinterface_disassociate(NetworkInterface* interface, ProtocolType type, in_port_t port,
                                    in_addr_t peerIP, in_port_t peerPort);
 
-void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
-                                const CompatSocket* socket);
+void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket);
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
-                                                 uint64_t bwUpKiBps);
-
-void networkinterface_receivePackets(NetworkInterface* interface, const Host* host);
+Packet* networkinterface_pop(NetworkInterface* interface);
+void networkinterface_push(NetworkInterface* interface, Packet* packet);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */

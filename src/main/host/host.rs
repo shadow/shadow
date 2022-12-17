@@ -9,6 +9,7 @@ use crate::host::network_interface::{NetworkInterface, PcapOptions};
 use crate::host::process::Process;
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
+use crate::network::relay::{RateLimit, Relay};
 use crate::network::router::Router;
 use crate::network::PacketDevice;
 use crate::utility::{self, SyncSendPointer};
@@ -110,10 +111,17 @@ pub struct Host {
 
     random: RefCell<Xoshiro256PlusPlus>,
 
-    // the upstream router that will queue packets until we can receive them.
-    // this only applies the the ethernet interface, the loopback interface
+    // The upstream router that will queue packets until we can receive them.
+    // This only applies to the internet interface; the localhost interface
     // does not receive packets from a router.
     router: RefCell<Router>,
+
+    // Forwards packets out from our internet interface to the router.
+    relay_inet_out: Arc<Relay>,
+    // Forwards packets from the router in to our internet interface.
+    relay_inet_in: Arc<Relay>,
+    // Forwards packets from the localhost interface back to itself.
+    relay_loopback: Arc<Relay>,
 
     // a statistics tracker for in/out bytes, CPU, memory, etc.
     tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
@@ -259,12 +267,32 @@ impl Host {
             )
         };
 
+        // Packets that are not for localhost or our public ip go to the router.
+        // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
+        // routing table logic inside of `Host::get_packet_device()`.
+        let router = Router::new(Ipv4Addr::UNSPECIFIED);
+        let relay_inet_out = Relay::new(
+            RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8),
+            net_ns.internet.borrow().get_address(),
+        );
+        let relay_inet_in = Relay::new(
+            RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8),
+            router.get_address(),
+        );
+        let relay_loopback = Relay::new(
+            RateLimit::Unlimited,
+            net_ns.localhost.borrow().get_address(),
+        );
+
         let res = Self {
             info: OnceCell::new(),
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
-            router: RefCell::new(Router::new()),
+            router: RefCell::new(router),
+            relay_inet_out: Arc::new(relay_inet_out),
+            relay_inet_in: Arc::new(relay_inet_in),
+            relay_loopback: Arc::new(relay_loopback),
             tracker: RefCell::new(None),
             futex_table: RefCell::new(unsafe { SyncSendPointer::new(cshadow::futextable_new()) }),
             random,
@@ -574,18 +602,6 @@ impl Host {
     }
 
     pub fn boot(&self) {
-        // Start refilling the token buckets for all interfaces.
-        let bw_down = self.bw_down_kiBps();
-        let bw_up = self.bw_up_kiBps();
-        self.net_ns
-            .localhost
-            .borrow()
-            .start_refilling_token_buckets(bw_down, bw_up);
-        self.net_ns
-            .internet
-            .borrow()
-            .start_refilling_token_buckets(bw_down, bw_up);
-
         // must be done after the default IP exists so tracker_heartbeat works
         if let Some(heartbeat_interval) = self.params.heartbeat_interval {
             let heartbeat_interval = SimulationTime::to_c_simtime(Some(heartbeat_interval));
@@ -686,16 +702,6 @@ impl Host {
         self.event_queue.lock().unwrap().next_event_time()
     }
 
-    pub fn packets_are_available_to_receive(&self) {
-        // TODO: ideally we call
-        //   `self.net_ns.borrow().as_ref().unwrap().internet.receive_packets(self);`
-        // but that causes a double-borrow loop. See `host_socketWantsToSend()`.
-        unsafe {
-            let netif_ptr = self.net_ns.internet.borrow().borrow_inner();
-            cshadow::networkinterface_receivePackets(netif_ptr, self)
-        };
-    }
-
     /// The unprotected part of the Host's shared memory.
     ///
     /// Do not try to take the lock of [`HostShmem::protected`] directly.
@@ -785,8 +791,42 @@ impl Host {
         &self.tsc
     }
 
-    pub fn get_packet_device(&self, _address: Ipv4Addr) -> Ref<dyn PacketDevice> {
-        todo!()
+    /// Get the packet device that handles packets for the given address. This
+    /// could be the source device from which we forward packets, or the device
+    /// that will receive and process packets with a given destination address.
+    /// In the latter case, if the packet destination is not on this host, we
+    /// return the router to route it to the correct host.
+    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<dyn PacketDevice> {
+        if address == Ipv4Addr::LOCALHOST {
+            self.net_ns.localhost.borrow()
+        } else if address == self.default_ip() {
+            self.net_ns.internet.borrow()
+        } else {
+            self.router.borrow()
+        }
+    }
+
+    /// Call to trigger the forwarding of packets from the router to the network
+    /// interface.
+    pub fn notify_router_has_packets(&self) {
+        self.relay_inet_in.notify(self);
+    }
+
+    /// Call to trigger the forwarding of packets from the network interface to
+    /// the next hop (either back to the network interface for loopback, or up to
+    /// the router for internet-bound packets).
+    pub fn notify_socket_has_packets(
+        &self,
+        addr: Ipv4Addr,
+        socket_ptr: *const cshadow::CompatSocket,
+    ) {
+        if let Some(iface) = self.interface_borrow(addr) {
+            iface.add_data_source(socket_ptr);
+            match addr {
+                Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
+                _ => self.relay_inet_out.notify(self),
+            };
+        }
     }
 }
 
@@ -1268,16 +1308,7 @@ mod export {
         addr: in_addr_t,
     ) {
         let host = unsafe { hostrc.as_ref().unwrap() };
-        let ipv4 = u32::from_be(addr).into();
-
-        // TODO: ideally we call `iface.wants_send(socket, hostrc)` in the closure,
-        // but that causes a double borrow loop. This will be fixed in Rob's next
-        // PR, but will cause us to process packets slightly differently than we do now.
-        // For now, we mimic the call flow of the old C code.
-        if let Some(iface) = host.interface_borrow_mut(ipv4) {
-            unsafe {
-                cshadow::networkinterface_wantsSend(iface.borrow_inner(), host, socket);
-            };
-        }
+        let addr = u32::from_be(addr).into();
+        host.notify_socket_has_packets(addr, socket);
     }
 }

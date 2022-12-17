@@ -361,15 +361,9 @@ impl Worker {
 
         let packet_task = TaskRef::new(move |host| {
             let packet = packet.take().expect("Packet task ran twice");
-
-            let became_nonempty = {
-                let mut router = host.upstream_router_borrow_mut();
-                router.push(packet)
-            };
-
-            if became_nonempty {
-                host.packets_are_available_to_receive();
-            }
+            host.upstream_router_borrow_mut()
+                .route_incoming_packet(packet);
+            host.notify_router_has_packets();
         });
 
         let mut packet_event = Event::new(packet_task, deliver_time, src_host, dst_host_id);

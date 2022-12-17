@@ -27,14 +27,9 @@
 #include "main/utility/utility.h"
 
 struct _NetworkInterface {
-    /* If we use the upstream ISP router on this interface.
-     * Will be false for loopback interfaces. */
-    bool uses_router;
-
     /* The queuing discipline used by this interface to schedule the
      * sending of packets from sockets. */
     QDiscMode qdisc;
-
     /* The address associated with this interface */
     Address* address;
 
@@ -45,26 +40,11 @@ struct _NetworkInterface {
     RrSocketQueue rrQueue;
     FifoSocketQueue fifoQueue;
 
-    /* the outgoing token bucket implements traffic shaping, i.e.,
-     * packets are delayed until they conform with outgoing rate limits.*/
-    TokenBucket* tb_send;
-    /* If we have scheduled a send task but it has not yet executed. */
-    bool tb_send_refill_pending;
-
-    /* the incoming token bucket implements traffic policing, i.e.,
-     * packets that do not conform to incoming rate limits are dropped. */
-    TokenBucket* tb_receive;
-    /* If we have scheduled a receive task but it has not yet executed. */
-    bool tb_receive_refill_pending;
-
     /* To support capturing incoming and outgoing packets */
     PcapWriter_BufWriter_File* pcap;
 
     MAGIC_DECLARE;
 };
-
-/* forward declarations */
-static void _networkinterface_sendPackets(NetworkInterface* interface, const Host* src);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     utility_debugAssert(taggedSocketPtr != NULL);
@@ -75,59 +55,6 @@ static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     uintptr_t taggedSocket = (uintptr_t)taggedSocketPtr;
     CompatSocket socket = compatsocket_fromTagged(taggedSocket);
     compatsocket_unref(&socket);
-}
-
-static TokenBucket* _networkinterface_create_tb(uint64_t bwKiBps) {
-    uint64_t refill_interval_nanos = SIMTIME_ONE_MILLISECOND;
-    uint64_t refill_size = bwKiBps * 1024 / 1000;
-
-    // The `CONFIG_MTU` part represents a "burst allowance" which is common in
-    // token buckets. Only the `capacity` of the bucket is increased by
-    // `CONFIG_MTU`, not the `refill_size`. Therefore, the long term rate limit
-    // enforced by the token bucket (configured by `refill_size`) is not
-    // affected much.
-    //
-    // What the burst allowance ensures is that we don't lose tokens that are
-    // unused because we don't fragment packets. If we set the capacity of the
-    // bucket to exactly the refill size (i.e., without the `CONFIG_MTU` burst
-    // allowance) and there are only 1499 tokens left in this sending round, a
-    // full packet would not fit. The next time the bucket refills, it adds
-    // `refill_size` tokens but in doing so 1499 tokens would fall over the top
-    // of the bucket; these tokens would represent wasted bandwidth, and could
-    // potentially accumulate in every refill interval leading to a
-    // significantly lower achievable bandwidth.
-    //
-    // A downside of the `CONFIG_MTU` burst allowance is that the sending rate
-    // could possibly become "bursty" with a behavior such as:
-    // - interval 1: send `refill_size` + `CONFIG_MTU` bytes, sending over the
-    //   allowance by 1500 bytes
-    // - refill: `refill_size` token gets added to the bucket
-    // - interval 2: send `refill_size` - `CONFIG_MTU` bytes, sending under the
-    //   allowance by 1500 bytes
-    // - refill: `refill_size` token gets added to the bucket
-    // - interval 3: send `refill_size` + `CONFIG_MTU` bytes, sending over the
-    //   allowance by 1500 bytes
-    // - repeat
-    //
-    // So it could become less smooth and more "bursty" even though the long
-    // term average is maintained. But I don't think this would happen much in
-    // practice, and we are batching sends for performance reasons.
-    uint64_t capacity = refill_size + CONFIG_MTU;
-
-    debug("creating token bucket with capacity=%" G_GUINT64_FORMAT " refill_size=%" G_GUINT64_FORMAT
-          " refill_interval_nanos=%" G_GUINT64_FORMAT,
-          capacity, refill_size, refill_interval_nanos);
-
-    return tokenbucket_new(capacity, refill_size, refill_interval_nanos);
-}
-
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, uint64_t bwDownKiBps,
-                                                 uint64_t bwUpKiBps) {
-    MAGIC_ASSERT(interface);
-    // Set size and refill rates for token buckets.
-    // This needs to be called when host is booting, i.e. when the worker exists.
-    interface->tb_send = _networkinterface_create_tb(bwUpKiBps);
-    interface->tb_receive = _networkinterface_create_tb(bwDownKiBps);
 }
 
 /* The address and ports must be in network byte order. */
@@ -241,9 +168,10 @@ static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
-static void _networkinterface_process_packet_in(const Host* host, NetworkInterface* interface,
-                                                Packet* packet) {
+void networkinterface_push(NetworkInterface* interface, Packet* packet) {
     MAGIC_ASSERT(interface);
+
+    const Host* host = worker_getCurrentHost();
 
     /* get the next packet */
     utility_debugAssert(packet);
@@ -289,71 +217,6 @@ static void _networkinterface_process_packet_in(const Host* host, NetworkInterfa
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL && socket.type != CST_NONE) {
         tracker_addInputBytes(tracker, packet, &socket);
-    }
-}
-
-static void _networkinterface_local_packet_arrived_CB(const Host* host, gpointer voidInterface,
-                                                      gpointer voidPacket) {
-    _networkinterface_process_packet_in(host, voidInterface, voidPacket);
-}
-
-static uint64_t _networkinterface_packet_tokens(const Packet* packet) {
-    return (uint64_t)packet_getTotalSize(packet);
-}
-
-static void _networkinterface_continue_receiving_CB(const Host* host, gpointer voidInterface,
-                                                    gpointer userData) {
-    NetworkInterface* interface = voidInterface;
-    MAGIC_ASSERT(interface);
-    interface->tb_receive_refill_pending = false;
-    networkinterface_receivePackets(interface, host);
-}
-
-void networkinterface_receivePackets(NetworkInterface* interface, const Host* host) {
-    MAGIC_ASSERT(interface);
-
-    /* we can only receive packets from the upstream router if we actually have one.
-     * sending on loopback means we don't have a router, sending to a remote host
-     * means we do have a router. */
-    if(!interface->uses_router) {
-        return;
-    }
-
-    /* get the bootstrapping mode */
-    gboolean is_bootstrapping = worker_isBootstrapActive();
-    const Packet* peeked_packet = NULL;
-
-    while ((peeked_packet = router_peek(host_getUpstreamRouter(host)))) {
-        // Check if our rate limits allow us to receive the packet.
-        if (!is_bootstrapping) {
-            uint64_t required = _networkinterface_packet_tokens(peeked_packet);
-            uint64_t remaining = 0, next_refill_nanos = 0;
-            if (!tokenbucket_consume(
-                    interface->tb_receive, required, &remaining, &next_refill_nanos)) {
-                // We are rate limited for now, call back when we have more tokens.
-                if (!interface->tb_receive_refill_pending) {
-                    /* Call back when we'll have more receive tokens. */
-                    TaskRef* recv_again =
-                        taskref_new_bound(host_getID(host), _networkinterface_continue_receiving_CB,
-                                          interface, NULL, NULL, NULL);
-                    host_scheduleTaskWithDelay(
-                        host, recv_again, (CSimulationTime)next_refill_nanos);
-                    taskref_drop(recv_again);
-                    interface->tb_receive_refill_pending = true;
-                }
-                return;
-            }
-        }
-
-        /* we are now the owner of the packet reference from the router */
-        Packet* packet = router_dequeue(host_getUpstreamRouter(host));
-        // We already peeked it, so it better be here when we pop it.
-        utility_debugAssert(packet);
-
-        _networkinterface_process_packet_in(host, interface, packet);
-
-        /* release reference from router */
-        packet_unref(packet);
     }
 }
 
@@ -441,7 +304,33 @@ static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface
     }
 }
 
-static const Packet* _networkinterface_peek_next_packet_out(NetworkInterface* interface) {
+Packet* networkinterface_pop(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+
+    const Host* src = worker_getCurrentHost();
+
+    // Now actually pop and send the packet.
+    CompatSocket socket = {0};
+    Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &socket);
+
+    if (packet != NULL) {
+        packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
+
+        /* record the packet early before we do anything else */
+        if(interface->pcap) {
+            _networkinterface_capturePacket(interface, packet);
+        }
+
+        Tracker* tracker = host_getTracker(src);
+        if (tracker != NULL && socket.type != CST_NONE) {
+            tracker_addOutputBytes(tracker, packet, &socket);
+        }
+    }
+
+    return packet;
+}
+
+const Packet* networkinterface_peek(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
     CompatSocket socket = {0};
@@ -466,88 +355,9 @@ static const Packet* _networkinterface_peek_next_packet_out(NetworkInterface* in
     }
 }
 
-static void _networkinterface_continue_sending_CB(const Host* host, gpointer voidInterface,
-                                                  gpointer userData) {
-    NetworkInterface* interface = voidInterface;
-    MAGIC_ASSERT(interface);
-    interface->tb_send_refill_pending = false;
-    _networkinterface_sendPackets(interface, host);
-}
-
-static void _networkinterface_sendPackets(NetworkInterface* interface, const Host* src) {
-    MAGIC_ASSERT(interface);
-
-    gboolean is_bootstrapping = worker_isBootstrapActive();
-    const Packet* peeked_packet = NULL;
-
-    while ((peeked_packet = _networkinterface_peek_next_packet_out(interface))) {
-        // Local packets arrive on our own interface, they do not go through the
-        // upstream router and do not consume bandwidth.
-        bool is_local =
-            address_toNetworkIP(interface->address) == packet_getDestinationIP(peeked_packet);
-
-        // Check if our rate limits allows us to send the packet.
-        if (!is_bootstrapping && !is_local) {
-            uint64_t required = _networkinterface_packet_tokens(peeked_packet);
-            uint64_t remaining = 0, next_refill_nanos = 0;
-            if (!tokenbucket_consume(
-                    interface->tb_send, required, &remaining, &next_refill_nanos)) {
-                // We are rate limited for now, call back when we have more tokens.
-                if (!interface->tb_send_refill_pending) {
-                    /* Call back when we'll have more send tokens. */
-                    TaskRef* send_again =
-                        taskref_new_bound(host_getID(src), _networkinterface_continue_sending_CB,
-                                          interface, NULL, NULL, NULL);
-                    host_scheduleTaskWithDelay(src, send_again, (CSimulationTime)next_refill_nanos);
-                    taskref_drop(send_again);
-                    interface->tb_send_refill_pending = true;
-                }
-                return;
-            }
-        }
-
-        // Now actually pop and send the packet.
-        CompatSocket socket = {0};
-        Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &socket);
-        // We already peeked it, so it better be here when we pop it.
-        utility_debugAssert(packet);
-
-        packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
-
-        /* record the packet early before we do anything else */
-        if(interface->pcap) {
-            _networkinterface_capturePacket(interface, packet);
-        }
-
-        /* now actually send the packet somewhere */
-        if (is_local) {
-            // Arrives directly back on our interface.
-            packet_ref(packet);
-            TaskRef* packetTask =
-                taskref_new_bound(host_getID(src), _networkinterface_local_packet_arrived_CB,
-                                  interface, packet, NULL, packet_unrefTaskFreeFunc);
-            host_scheduleTaskWithDelay(src, packetTask, 1);
-            taskref_drop(packetTask);
-        } else {
-            /* send to destination over the virtual internet with appropriate delays.
-             * if we get here we are not loopback and should have been assigned a router. */
-            utility_debugAssert(interface->uses_router);
-            // TODO: move worker_sendPacket into the rust Router
-            worker_sendPacket(src, packet);
-        }
-
-        Tracker* tracker = host_getTracker(src);
-        if (tracker != NULL && socket.type != CST_NONE) {
-            tracker_addOutputBytes(tracker, packet, &socket);
-        }
-
-        /* sending side is done with its ref */
-        packet_unref(packet);
-    }
-}
-
-void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
-                                const CompatSocket* socket) {
+// Add the socket to the list of sockets that have data ready for us to send
+// out to the network.
+void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket) {
     MAGIC_ASSERT(interface);
 
     if (compatsocket_peekNextOutPacket(socket) == NULL) {
@@ -573,13 +383,10 @@ void networkinterface_wantsSend(NetworkInterface* interface, const Host* host,
             break;
         }
     }
-
-    /* send packets if we can */
-    _networkinterface_sendPackets(interface, host);
 }
 
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
-                                       guint32 pcapCaptureSize, QDiscMode qdisc, bool uses_router) {
+                                       guint32 pcapCaptureSize, QDiscMode qdisc) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -613,8 +420,6 @@ NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
         g_string_free(filename, TRUE);
     }
 
-    interface->uses_router = uses_router;
-
     debug("bringing up network interface '%s' at '%s' using queuing discipline %s",
           address_toHostName(interface->address), address_toHostIPString(interface->address),
           interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
@@ -643,4 +448,3 @@ void networkinterface_free(NetworkInterface* interface) {
 
     worker_count_deallocation(NetworkInterface);
 }
-
