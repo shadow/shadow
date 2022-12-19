@@ -2,6 +2,12 @@
 
 ## Tagging Shadow releases
 
+Before creating a new release, be sure to handle all issues in its
+[GitHub Project](https://github.com/shadow/shadow/projects?type=classic).
+Issues that can wait until the next release
+can be moved to the next release's project (which you may need to create).
+Remaining issues should be resolved before continuing with the release process.
+
 We use [Semantic Versioning](https://semver.org/), and increment version
 numbers with the [bumpversion](https://pypi.org/project/bumpversion/) tool.
 
