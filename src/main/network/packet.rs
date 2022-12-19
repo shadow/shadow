@@ -199,7 +199,14 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     } else {
         0u32.to_be_bytes()
     };
-    let header_len: u8 = 0x80;
+
+    // c::CONFIG_HEADER_SIZE is in bytes. Ultimately, TCP header len is represented in 32-bit
+    // words, so we divide by 4. The right-shift of 4 is because the header len is represented
+    // in the top 4 bits.
+    let mut header_len: u8 = c::CONFIG_HEADER_SIZE_TCP.try_into().unwrap();
+    header_len /= 4;
+    header_len <<= 4;
+
     let mut tcp_flags: u8 = 0;
     if tcp_header.flags & c::ProtocolTCPFlags_PTCP_RST != 0 {
         tcp_flags |= 0x04;

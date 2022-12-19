@@ -190,6 +190,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
         .allowlist_type("PacketDeliveryStatusFlags")
+        .allowlist_var("CONFIG_HEADER_SIZE_TCP")
         .allowlist_var("CONFIG_PIPE_BUFFER_SIZE")
         .allowlist_var("CONFIG_MTU")
         .allowlist_var("SYSCALL_IO_BUFSIZE")
