@@ -17,6 +17,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
+use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
 use crate::utility::stream_len::StreamLen;
@@ -134,6 +135,7 @@ impl UnixSocket {
     pub fn bind(
         socket: &Arc<AtomicRefCell<Self>>,
         addr: Option<&SockaddrStorage>,
+        _net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
     ) -> SyscallResult {
         let socket_ref = &mut *socket.borrow_mut();

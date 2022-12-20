@@ -6,6 +6,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
@@ -59,10 +60,15 @@ impl Socket {
         }
     }
 
-    pub fn bind(&self, addr: Option<&SockaddrStorage>, rng: impl rand::Rng) -> SyscallResult {
+    pub fn bind(
+        &self,
+        addr: Option<&SockaddrStorage>,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
         match self {
-            Self::Unix(socket) => UnixSocket::bind(socket, addr, rng),
-            Self::Inet(socket) => InetSocket::bind(socket, addr, rng),
+            Self::Unix(socket) => UnixSocket::bind(socket, addr, net_ns, rng),
+            Self::Inet(socket) => InetSocket::bind(socket, addr, net_ns, rng),
         }
     }
 
