@@ -201,9 +201,9 @@ impl Drop for Process {
 mod export {
     use std::ffi::c_int;
     use std::os::raw::c_void;
-    
-    use shadow_shim_helper_rs::notnull::*;
+
     use log::{trace, warn};
+    use shadow_shim_helper_rs::notnull::*;
 
     use crate::core::worker::Worker;
     use crate::host::descriptor::socket::inet::InetSocket;
