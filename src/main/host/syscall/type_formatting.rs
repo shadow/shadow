@@ -7,7 +7,7 @@ use super::formatter::{
     FmtOptions, SyscallDataDisplay, SyscallPtr, SyscallPtrDisplay, TryFromSyscallReg,
 };
 
-/// Display the data using its `Display` implementation.
+/// Implement `SyscallDataDisplay` using its `Display` implementation.
 macro_rules! simple_display_impl {
     ($type:ty, $($types:ty),+) => {
         simple_display_impl!($type);
@@ -22,7 +22,7 @@ macro_rules! simple_display_impl {
     };
 }
 
-/// Display the data using its `Debug` implementation.
+/// Implement `SyscallDataDisplay` using its `Debug` implementation.
 macro_rules! simple_debug_impl {
     ($type:ty, $($types:ty),+) => {
         simple_debug_impl!($type);
@@ -38,10 +38,10 @@ macro_rules! simple_debug_impl {
 }
 
 /// Display the pointer and data. Accesses plugin memory. Can only be used for pod types.
-macro_rules! simple_pointer_impl {
+macro_rules! deref_pointer_impl {
     ($type:ty, $($types:ty),+) => {
-        simple_pointer_impl!($type);
-        simple_pointer_impl!($($types),+);
+        deref_pointer_impl!($type);
+        deref_pointer_impl!($($types),+);
     };
     ($type:ty) => {
         impl SyscallPtrDisplay for SyscallPtr<*const $type> {
@@ -88,10 +88,10 @@ macro_rules! safe_pointer_impl {
 }
 
 /// Display the array pointer and data. Accesses plugin memory. Can only be used for pod types.
-macro_rules! simple_array_impl {
+macro_rules! deref_array_impl {
     ($type:ty, $($types:ty),+) => {
-        simple_array_impl!($type);
-        simple_array_impl!($($types),+);
+        deref_array_impl!($type);
+        deref_array_impl!($($types),+);
     };
     ($type:ty) => {
         impl<const K: usize> SyscallPtrDisplay for SyscallPtr<[$type; K]> {
@@ -169,11 +169,11 @@ simple_display_impl!(i8, i16, i32, i64, isize);
 simple_display_impl!(u8, u16, u32, u64, usize);
 
 // skip *const i8 since we have a custom string format impl below
-simple_pointer_impl!(i16, i32, i64, isize);
-simple_pointer_impl!(u8, u16, u32, u64, usize);
+deref_pointer_impl!(i16, i32, i64, isize);
+deref_pointer_impl!(u8, u16, u32, u64, usize);
 
-simple_array_impl!(i8, i16, i32, i64, isize);
-simple_array_impl!(u8, u16, u32, u64, usize);
+deref_array_impl!(i8, i16, i32, i64, isize);
+deref_array_impl!(u8, u16, u32, u64, usize);
 
 safe_pointer_impl!(libc::c_void);
 safe_pointer_impl!(libc::sockaddr);
