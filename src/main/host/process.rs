@@ -59,6 +59,7 @@ pub type RustProcess = RootedRefCell<Process>;
 
 pub struct Process {
     cprocess: SyncSendPointer<cshadow::Process>,
+    id: ProcessId,
 
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
@@ -116,7 +117,7 @@ impl Process {
         let cprocess = unsafe {
             cshadow::process_new(
                 host,
-                process_id.into(),
+                process_id.try_into().unwrap(),
                 SimulationTime::to_c_simtime(Some(start_time)),
                 SimulationTime::to_c_simtime(stop_time),
                 host_name.as_ptr(),
@@ -133,17 +134,17 @@ impl Process {
         // we ensure that the pointer doesn't "escape" in a way that would allow it to be
         // accessed by threads that don't have access to the enclosing Process.
         let cprocess = unsafe { SyncSendPointer::new(cprocess) };
-        let id = unsafe { cshadow::process_getProcessID(cprocess.ptr()) }
-            .try_into()
-            .unwrap();
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = RefCell::new(None);
-        let itimer_real = RefCell::new(Timer::new(move |host| itimer_real_expiration(host, id)));
+        let itimer_real = RefCell::new(Timer::new(move |host| {
+            itimer_real_expiration(host, process_id)
+        }));
         let process = RootedRc::new(
             host.root(),
             RootedRefCell::new(
                 host.root(),
                 Self {
+                    id: process_id,
                     cprocess,
                     memory_manager,
                     desc_table,
@@ -171,7 +172,7 @@ impl Process {
     }
 
     pub fn id(&self) -> ProcessId {
-        ProcessId::try_from(unsafe { cshadow::process_getProcessID(self.cprocess.ptr()) }).unwrap()
+        self.id
     }
 
     pub fn host_id(&self) -> HostId {
@@ -787,5 +788,25 @@ mod export {
             drop(proc.borrow(h.root()).memory_manager.borrow_mut().take());
         })
         .unwrap()
+    }
+
+    /// Returns the processID that was assigned to us in process_new
+    ///
+    /// Needed for early access from process_new, before there is an active
+    /// Host.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getProcessIDWithHost(
+        proc: *const RustProcess,
+        host: *const Host,
+    ) -> libc::pid_t {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let host = unsafe { host.as_ref().unwrap() };
+        proc.borrow(host.root()).id().try_into().unwrap()
+    }
+
+    /// Returns the processID that was assigned to us in process_new
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getProcessID(proc: *const RustProcess) -> libc::pid_t {
+        Worker::with_active_host(|h| unsafe { _process_getProcessIDWithHost(proc, h) }).unwrap()
     }
 }

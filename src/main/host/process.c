@@ -82,7 +82,6 @@ struct _Process {
     HostId hostId;
 
     /* unique id of the program that this process should run */
-    pid_t processID;
     GString* processName;
 
     /* Shared memory allocation for shared state with shim. */
@@ -163,7 +162,7 @@ static const Host* _host(Process* proc) {
 
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
-    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
+    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(process_getProcessID(proc)));
 }
 
 ShimShmemProcess* process_getSharedMem(Process* proc) {
@@ -209,7 +208,7 @@ const char* process_getWorkingDir(Process* proc) {
 
 pid_t process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->processID;
+    return _process_getProcessID(proc->rustProcess);
 }
 
 pid_t process_getNativePid(const Process* proc) {
@@ -436,14 +435,15 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
 
     Thread* thread = NULL;
 
+    pid_t pid = process_getProcessID(proc);
     if (virtualPID > 0 && virtualTID > 0) {
         // Both PID and TID must match
-        if (proc->processID == virtualPID) {
+        if (pid == virtualPID) {
             thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
         }
     } else if (virtualPID > 0) {
         // Get the TID of the main thread if the PID matches
-        if (proc->processID == virtualPID) {
+        if (pid == virtualPID) {
             thread = _process_threadLeader(proc);
         }
     } else if (virtualTID > 0) {
@@ -557,7 +557,7 @@ static void _process_start(Process* proc) {
     }
 
     // tid of first thread of a process is equal to the pid.
-    int tid = proc->processID;
+    int tid = process_getProcessID(proc);
     Thread* mainThread = thread_new(_host(proc), proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
@@ -665,13 +665,13 @@ Thread* process_getThread(Process* proc, pid_t virtualTID) {
 
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    trace("Process %d marked as exiting", proc->processID);
+    trace("Process %d marked as exiting", process_getProcessID(proc));
     proc->isExiting = true;
 }
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    trace("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
+    trace("Continuing thread %d in process %d", thread_getID(thread), process_getProcessID(proc));
 
     /* if we are not running, no need to notify anyone */
     if(!process_isRunning(proc)) {
@@ -766,17 +766,19 @@ void process_schedule(Process* proc, const Host* host) {
     MAGIC_ASSERT(proc);
 
     if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
-        TaskRef* startProcessTask =
-            taskref_new_bound(proc->hostId, _process_runStartTask,
-                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
+        TaskRef* startProcessTask = taskref_new_bound(
+            proc->hostId, _process_runStartTask,
+            GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
+            NULL);
         host_scheduleTaskAtEmulatedTime(host, startProcessTask, proc->startTime);
         taskref_drop(startProcessTask);
     }
 
     if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
-        TaskRef* stopProcessTask =
-            taskref_new_bound(proc->hostId, _process_runStopTask,
-                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
+        TaskRef* stopProcessTask = taskref_new_bound(
+            proc->hostId, _process_runStopTask,
+            GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
+            NULL);
         host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
         taskref_drop(stopProcessTask);
     }
@@ -806,7 +808,7 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
     };
 }
 
-Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
+Process* process_new(const Host* host, pid_t processID, CSimulationTime startTime,
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
                      const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
                      bool pause_for_debugging) {
@@ -815,8 +817,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
 
     proc->hostId = host_getID(host);
 
-    proc->processID = processID;
-
     /* plugin name and path are required so we know what to execute */
     utility_debugAssert(pluginName);
     utility_debugAssert(pluginPath);
@@ -824,10 +824,8 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->plugin.exePath = g_string_new(pluginPath);
 
     proc->processName = g_string_new(NULL);
-    g_string_printf(proc->processName, "%s.%s.%u",
-            hostName,
-            proc->plugin.exeName ? proc->plugin.exeName->str : "NULL",
-            proc->processID);
+    g_string_printf(proc->processName, "%s.%s.%u", hostName,
+                    proc->plugin.exeName ? proc->plugin.exeName->str : "NULL", processID);
 
 #ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
