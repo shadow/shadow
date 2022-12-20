@@ -105,10 +105,6 @@ struct _Process {
     gdouble totalRunTime;
 #endif
 
-    /* process boot and shutdown variables */
-    CEmulatedTime startTime;
-    CEmulatedTime stopTime;
-
     /* absolute path to the process's working directory */
     char* workingDir;
 
@@ -360,7 +356,8 @@ static void _process_getAndLogReturnCode(Process* proc) {
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
               process_getName(proc),
-              emutime_sub_emutime(proc->startTime, EMUTIME_SIMULATION_START));
+              emutime_sub_emutime(
+                  _process_getStartTime(proc->rustProcess), EMUTIME_SIMULATION_START));
         return;
     }
 
@@ -765,21 +762,24 @@ static void _process_runStopTask(const Host* host, gpointer pid_ptr, gpointer no
 void process_schedule(Process* proc, const Host* host) {
     MAGIC_ASSERT(proc);
 
-    if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
+    CEmulatedTime startTime = _process_getStartTimeWithHost(proc->rustProcess, host);
+    CEmulatedTime stopTime = _process_getStopTimeWithHost(proc->rustProcess, host);
+
+    if (stopTime == EMUTIME_INVALID || startTime < stopTime) {
         TaskRef* startProcessTask = taskref_new_bound(
             proc->hostId, _process_runStartTask,
             GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
             NULL);
-        host_scheduleTaskAtEmulatedTime(host, startProcessTask, proc->startTime);
+        host_scheduleTaskAtEmulatedTime(host, startProcessTask, startTime);
         taskref_drop(startProcessTask);
     }
 
-    if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
+    if (stopTime != EMUTIME_INVALID && stopTime > startTime) {
         TaskRef* stopProcessTask = taskref_new_bound(
             proc->hostId, _process_runStopTask,
             GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
             NULL);
-        host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
+        host_scheduleTaskAtEmulatedTime(host, stopProcessTask, stopTime);
         taskref_drop(stopProcessTask);
     }
 }
@@ -808,10 +808,9 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
     };
 }
 
-Process* process_new(const Host* host, pid_t processID, CSimulationTime startTime,
-                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
-                     bool pause_for_debugging) {
+Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
+                     const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
+                     const gchar* const* argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -830,10 +829,6 @@ Process* process_new(const Host* host, pid_t processID, CSimulationTime startTim
 #ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
 #endif
-
-    utility_debugAssert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
-    proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
 
     if (_use_legacy_working_dir) {
         /* use Shadow's working directory */

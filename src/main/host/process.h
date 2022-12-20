@@ -40,10 +40,9 @@ typedef struct _Process Process;
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-Process* process_new(const Host* host, pid_t processID, CSimulationTime startTime,
-                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
-                     bool pause_for_debugging);
+Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
+                     const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
+                     const gchar* const* argv, bool pause_for_debugging);
 
 // For use by the Rust Process.
 void process_setRustProcess(Process* proc, const RustProcess* rproc);

@@ -6,6 +6,7 @@ use std::os::unix::io::{FromRawFd, IntoRawFd};
 
 use log::debug;
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -60,6 +61,10 @@ pub type RustProcess = RootedRefCell<Process>;
 pub struct Process {
     cprocess: SyncSendPointer<cshadow::Process>,
     id: ProcessId,
+
+    // process boot and shutdown variables
+    start_time: EmulatedTime,
+    stop_time: Option<EmulatedTime>,
 
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
@@ -118,8 +123,6 @@ impl Process {
             cshadow::process_new(
                 host,
                 process_id.try_into().unwrap(),
-                SimulationTime::to_c_simtime(Some(start_time)),
-                SimulationTime::to_c_simtime(stop_time),
                 host_name.as_ptr(),
                 plugin_name.as_ptr(),
                 plugin_path.as_ptr(),
@@ -139,6 +142,7 @@ impl Process {
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
+        debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
         let process = RootedRc::new(
             host.root(),
             RootedRefCell::new(
@@ -149,6 +153,8 @@ impl Process {
                     memory_manager,
                     desc_table,
                     itimer_real,
+                    start_time: EmulatedTime::SIMULATION_START + start_time,
+                    stop_time: stop_time.map(|t| EmulatedTime::SIMULATION_START + t),
                 },
             ),
         );
@@ -249,6 +255,7 @@ mod export {
     use shadow_shim_helper_rs::notnull::*;
 
     use crate::core::worker::Worker;
+    use crate::cshadow::CEmulatedTime;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
@@ -808,5 +815,39 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn _process_getProcessID(proc: *const RustProcess) -> libc::pid_t {
         Worker::with_active_host(|h| unsafe { _process_getProcessIDWithHost(proc, h) }).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getStartTime(proc: *const RustProcess) -> CEmulatedTime {
+        Worker::with_active_host(|host| unsafe { _process_getStartTimeWithHost(proc, host) })
+            .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getStartTimeWithHost(
+        proc: *const RustProcess,
+        host: *const Host,
+    ) -> CEmulatedTime {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let host = unsafe { host.as_ref().unwrap() };
+        let start_time = proc.borrow(host.root()).start_time;
+        EmulatedTime::to_c_emutime(Some(start_time))
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getStopTime(proc: *const RustProcess) -> CEmulatedTime {
+        Worker::with_active_host(|host| unsafe { _process_getStopTimeWithHost(proc, host) })
+            .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getStopTimeWithHost(
+        proc: *const RustProcess,
+        host: *const Host,
+    ) -> CEmulatedTime {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let host = unsafe { host.as_ref().unwrap() };
+        let stop_time = proc.borrow(host.root()).stop_time;
+        EmulatedTime::to_c_emutime(stop_time)
     }
 }
