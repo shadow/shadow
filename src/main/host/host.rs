@@ -375,7 +375,7 @@ impl Host {
             )
         };
 
-        unsafe { cshadow::process_schedule(process.borrow(self.root()).cprocess(), self) };
+        process.borrow(self.root()).schedule(self);
 
         self.processes.borrow_mut().insert(process_id, process);
     }

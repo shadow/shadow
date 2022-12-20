@@ -11,6 +11,7 @@ use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
+use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
@@ -183,6 +184,33 @@ impl Process {
 
     pub fn host_id(&self) -> HostId {
         unsafe { cshadow::process_getHostId(self.cprocess.ptr()) }
+    }
+
+    pub fn schedule(&self, host: &Host) {
+        let id = self.id();
+        let schedule_start = match self.stop_time {
+            Some(t) => self.start_time < t,
+            None => true,
+        };
+        if schedule_start {
+            let task = TaskRef::new(move |host| {
+                let process = host.process_borrow(id).unwrap();
+                let cprocess = unsafe { process.borrow(host.root()).cprocess() };
+                unsafe { cshadow::process_start(cprocess) };
+            });
+            host.schedule_task_at_emulated_time(task, self.start_time);
+        }
+
+        if let Some(stop_time) = self.stop_time {
+            if stop_time > self.start_time {
+                let task = TaskRef::new(move |host| {
+                    let process = host.process_borrow(id).unwrap();
+                    let cprocess = unsafe { process.borrow(host.root()).cprocess() };
+                    unsafe { cshadow::process_stop(cprocess) };
+                });
+                host.schedule_task_at_emulated_time(task, stop_time);
+            }
+        }
     }
 
     #[track_caller]

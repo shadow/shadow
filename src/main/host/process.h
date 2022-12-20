@@ -50,7 +50,6 @@ const RustProcess* process_getRustProcess(Process* proc);
 
 void process_free(Process* proc);
 
-void process_schedule(Process* proc, const Host* host);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 void process_detachPlugin(gpointer procptr, gpointer nothing);
@@ -193,5 +192,8 @@ void process_setDumpable(Process* process, int dumpable);
 // Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
 // due to opaque fields and macro magic in its C definition.
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
+
+// To be called from Rust Process.
+void process_start(Process* process);
 
 #endif /* SHD_PROCESS_H_ */

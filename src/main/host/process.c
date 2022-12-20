@@ -523,7 +523,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
     return stdfile;
 }
 
-static void _process_start(Process* proc) {
+void process_start(Process* proc) {
     MAGIC_ASSERT(proc);
 
     /* dont do anything if we are already running */
@@ -743,45 +743,6 @@ void process_stop(Process* proc) {
 #endif
 
     _process_check(proc);
-}
-
-static void _process_runStartTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
-    pid_t pid = GPOINTER_TO_INT(pid_ptr);
-    Process* proc = host_getProcess(host, pid);
-    utility_alwaysAssert(proc);
-    _process_start(proc);
-}
-
-static void _process_runStopTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
-    pid_t pid = GPOINTER_TO_INT(pid_ptr);
-    Process* proc = host_getProcess(host, pid);
-    utility_alwaysAssert(proc);
-    process_stop(proc);
-}
-
-void process_schedule(Process* proc, const Host* host) {
-    MAGIC_ASSERT(proc);
-
-    CEmulatedTime startTime = _process_getStartTimeWithHost(proc->rustProcess, host);
-    CEmulatedTime stopTime = _process_getStopTimeWithHost(proc->rustProcess, host);
-
-    if (stopTime == EMUTIME_INVALID || startTime < stopTime) {
-        TaskRef* startProcessTask = taskref_new_bound(
-            proc->hostId, _process_runStartTask,
-            GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
-            NULL);
-        host_scheduleTaskAtEmulatedTime(host, startProcessTask, startTime);
-        taskref_drop(startProcessTask);
-    }
-
-    if (stopTime != EMUTIME_INVALID && stopTime > startTime) {
-        TaskRef* stopProcessTask = taskref_new_bound(
-            proc->hostId, _process_runStopTask,
-            GINT_TO_POINTER(_process_getProcessIDWithHost(proc->rustProcess, host)), NULL, NULL,
-            NULL);
-        host_scheduleTaskAtEmulatedTime(host, stopProcessTask, stopTime);
-        taskref_drop(stopProcessTask);
-    }
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
