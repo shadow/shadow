@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::rootedcell::Root;
 
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
-use crate::host::syscall::format::FmtOptions;
+use crate::host::syscall::formatter::FmtOptions;
 use crate::utility::SyncSendPointer;
 
 use super::descriptor::descriptor_table::DescriptorTable;

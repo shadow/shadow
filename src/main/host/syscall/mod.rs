@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 
-pub mod format;
+pub mod formatter;
 pub mod handler;
 
 // The helpers defined here are syscall-related but not handler-specific.

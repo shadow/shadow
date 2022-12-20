@@ -110,7 +110,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
             // make sure to include the full path to all used types
             use crate::core::worker::Worker;
-            use crate::host::syscall::format::{SyscallArgsFmt, SyscallResultFmt, write_syscall};
+            use crate::host::syscall::formatter::{SyscallArgsFmt, SyscallResultFmt, write_syscall};
 
             let syscall_args = {
                 let memory = ctx.process.memory_borrow();
