@@ -1,4 +1,5 @@
 use std::cell::{Ref, RefCell, RefMut};
+use std::ffi::{CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
@@ -7,7 +8,7 @@ use log::debug;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::rootedcell::Root;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
@@ -80,25 +81,58 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 }
 
 impl Process {
-    /// Takes ownership of `p`.
-    ///
     /// # Safety
     ///
-    /// `p` must point to a valid c::Process.
-    ///
     /// The returned `RootedRefCell<Self>` must not be moved out of its
-    /// RootedRc. TODO: statically enforce by wrapping the RootedRefCell in `Pin`,
-    /// and making Process `!Unpin`. Probably not worth the work though since
-    /// the inner C pointer should be removed soon.
-    pub unsafe fn new_from_c(
-        root: &Root,
-        p: *mut cshadow::Process,
+    /// RootedRc. TODO: statically enforce by wrapping the RootedRefCell in
+    /// `Pin`, and making Process `!Unpin`. Probably not worth the work though
+    /// since the inner C pointer should be removed soon, and then we can remove
+    /// this requirement.
+    pub unsafe fn new(
+        host: &Host,
+        process_id: ProcessId,
+        start_time: SimulationTime,
+        stop_time: Option<SimulationTime>,
+        host_name: &CStr,
+        plugin_name: &CStr,
+        plugin_path: &CStr,
+        envv: &[CString],
+        argv: &[CString],
+        pause_for_debugging: bool,
     ) -> RootedRc<RootedRefCell<Self>> {
+        let envv_ptrs: Vec<*const i8> = envv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of envv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+        let argv_ptrs: Vec<*const i8> = argv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of argv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+
+        let cprocess = unsafe {
+            cshadow::process_new(
+                host,
+                process_id.into(),
+                SimulationTime::to_c_simtime(Some(start_time)),
+                SimulationTime::to_c_simtime(stop_time),
+                host_name.as_ptr(),
+                plugin_name.as_ptr(),
+                plugin_path.as_ptr(),
+                envv_ptrs.as_ptr(),
+                argv_ptrs.as_ptr(),
+                pause_for_debugging,
+            )
+        };
+
         // SAFETY: The Process itself is wrapped in a RootedRefCell, which ensures
         // it can only be accessed by one thread at a time. Whenever we access its cprocess,
         // we ensure that the pointer doesn't "escape" in a way that would allow it to be
         // accessed by threads that don't have access to the enclosing Process.
-        let cprocess = unsafe { SyncSendPointer::new(p) };
+        let cprocess = unsafe { SyncSendPointer::new(cprocess) };
         let id = unsafe { cshadow::process_getProcessID(cprocess.ptr()) }
             .try_into()
             .unwrap();
@@ -106,9 +140,9 @@ impl Process {
         let memory_manager = RefCell::new(None);
         let itimer_real = RefCell::new(Timer::new(move |host| itimer_real_expiration(host, id)));
         let process = RootedRc::new(
-            root,
+            host.root(),
             RootedRefCell::new(
-                root,
+                host.root(),
                 Self {
                     cprocess,
                     memory_manager,

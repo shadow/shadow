@@ -360,34 +360,20 @@ impl Host {
 
         let process_id = self.get_new_process_id();
 
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
         let process = unsafe {
-            cshadow::process_new(
+            Process::new(
                 self,
-                process_id.into(),
-                SimulationTime::to_c_simtime(Some(start_time)),
-                SimulationTime::to_c_simtime(stop_time),
-                self.params.hostname.as_ptr(),
-                plugin_name.as_ptr(),
-                plugin_path.as_ptr(),
-                envv_ptrs.as_ptr(),
-                argv_ptrs.as_ptr(),
+                process_id,
+                start_time,
+                stop_time,
+                &self.params.hostname,
+                plugin_name,
+                plugin_path,
+                &envv,
+                argv,
                 pause_for_debugging,
             )
         };
-        let process = unsafe { Process::new_from_c(self.root(), process) };
 
         unsafe { cshadow::process_schedule(process.borrow(self.root()).cprocess(), self) };
 
