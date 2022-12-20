@@ -4,13 +4,15 @@ use vsprintf::vsprintf_raw;
 
 /// Flush Rust's log::logger().
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_flush() {
+pub extern "C" fn rustlogger_flush() {
     log::logger().flush();
 }
 
 /// Returns the `str` pointed to by `ptr` if it's non-NULL and points
 /// to a UTF-8 null-terminated string.
-/// SAFETY: `ptr` must point a NULL-terminated C String if non-null, and must
+/// # Safety
+///
+/// `ptr` must point a NULL-terminated C String if non-null, and must
 /// be immutable for the lifetime of the returned `str`.
 unsafe fn optional_str(ptr: *const c_char) -> Option<&'static str> {
     if ptr.is_null() {
@@ -36,19 +38,23 @@ pub fn c_to_rust_log_level(level: logger::LogLevel) -> Option<log::Level> {
 
 /// Set the max (noisiest) logging level to `level`.
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_setLevel(level: logger::LogLevel) {
+pub extern "C" fn rustlogger_setLevel(level: logger::LogLevel) {
     let level = c_to_rust_log_level(level).unwrap();
     log::set_max_level(level.to_level_filter());
 }
 
 /// Whether logging is currently enabled for `level`.
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
+pub extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
     let level = c_to_rust_log_level(level).unwrap();
     log_enabled!(level).into()
 }
 
 /// Log to Rust's log::logger().
+///
+/// # Safety
+///
+/// Pointer args must be safely dereferenceable.
 #[no_mangle]
 pub unsafe extern "C" fn rustlogger_log(
     level: logger::LogLevel,

@@ -18,7 +18,6 @@ use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::network::packet::Packet;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
-use crate::utility::notnull::*;
 use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -98,7 +97,7 @@ pub struct Worker {
 
 impl Worker {
     // Create worker for this thread.
-    pub unsafe fn new_for_this_thread(worker_id: WorkerThreadID) {
+    pub fn new_for_this_thread(worker_id: WorkerThreadID) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
@@ -274,7 +273,9 @@ impl Worker {
         .unwrap();
     }
 
-    /// SAFETY: `packet` must be valid and not accessed by another thread while this function is
+    /// # Safety
+    ///
+    /// `packet` must be valid and not accessed by another thread while this function is
     /// running.
     pub unsafe fn send_packet(src_host: &Host, packet: *mut cshadow::Packet) {
         assert!(!packet.is_null());
@@ -587,6 +588,7 @@ mod export {
     use super::*;
 
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+    use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     #[no_mangle]

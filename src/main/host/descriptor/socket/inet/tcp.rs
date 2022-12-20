@@ -40,6 +40,10 @@ impl TcpSocket {
     }
 
     /// Takes ownership of the [`TCP`](c::TCP) reference.
+    ///
+    /// # Safety
+    ///
+    /// `legacy_tcp` must be safely dereferenceable, and not directly accessed again.
     pub unsafe fn new_from_legacy(legacy_tcp: *mut c::TCP) -> Arc<AtomicRefCell<Self>> {
         assert!(!legacy_tcp.is_null());
 

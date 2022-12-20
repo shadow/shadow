@@ -81,10 +81,13 @@ mod export {
         Box::into_raw(Box::new(Router::new()))
     }
 
-    /// The returned `c::Packet` must not live longer than the next time the router is modified;
-    /// when the router is modified, the returned packet pointer becomes invalid/dangling.
+    /// # Safety
+    ///
+    /// The returned `c::Packet` must not live longer than the next time the
+    /// router is modified; when the router is modified, the returned packet
+    /// pointer becomes invalid/dangling.
     #[no_mangle]
-    pub extern "C" fn router_peek(router_ptr: *const Router) -> *const c::Packet {
+    pub unsafe extern "C" fn router_peek(router_ptr: *const Router) -> *const c::Packet {
         let router = unsafe { router_ptr.as_ref() }.unwrap();
         match router.peek() {
             Some(packet) => packet.borrow_inner(),
@@ -92,8 +95,11 @@ mod export {
         }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub extern "C" fn router_dequeue(router_ptr: *mut Router) -> *mut c::Packet {
+    pub unsafe extern "C" fn router_dequeue(router_ptr: *mut Router) -> *mut c::Packet {
         let router = unsafe { router_ptr.as_mut() }.unwrap();
         match router.pop() {
             Some(packet) => packet.into_inner(),
@@ -101,6 +107,8 @@ mod export {
         }
     }
 
+    /// # Safety
+    ///
     /// Ownership of the `c::Packet` passed to this function transfers to the router. The caller
     /// should not use the packet after calling this function, and should not call `packet_unref`.
     #[no_mangle]
@@ -113,6 +121,9 @@ mod export {
         router.push(packet)
     }
 
+    /// # Safety
+    ///
+    /// `router_ptr` must be safely dereferenceable. It is consumed.
     #[no_mangle]
     pub extern "C" fn router_free(router_ptr: *mut Router) {
         if router_ptr.is_null() {

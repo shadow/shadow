@@ -16,7 +16,9 @@ pub struct NetworkInterface {
 impl NetworkInterface {
     /// Create a new network interface for `host_id` with the assigned `addr`.
     ///
-    /// SAFETY: This function will trigger undefined behavior if `addr` is
+    /// # Safety
+    ///
+    /// This function will trigger undefined behavior if `addr` is
     /// invalid. The reference count of `addr` will be increased by one using
     /// `address_ref()`, so the caller should call `address_unref()` on it to
     /// drop their reference when they no longer need it.
@@ -124,7 +126,9 @@ impl NetworkInterface {
     /// Returns a pointer to our internal C network interface object so that
     /// network interface functions can be called outside of the rust API.
     ///
-    /// SAFETY: The returned pointer is only valid until the reference to this
+    /// # Safety
+    ///
+    /// The returned pointer is only valid until the reference to this
     /// `NetworkInterface` object is dropped.
     // TODO: Remove this function to remove unsafe access to internals.
     pub unsafe fn borrow_inner(&self) -> *mut c::NetworkInterface {

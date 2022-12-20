@@ -345,18 +345,23 @@ pub const SIMTIME_ONE_MINUTE: CSimulationTime = 60000000000u64;
 pub const SIMTIME_ONE_HOUR: CSimulationTime = 3600000000000u64;
 
 pub mod export {
+    use crate::notnull::*;
+
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
+    pub extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
+    pub extern "C" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safe to write to.
     #[must_use]
     #[no_mangle]
     pub unsafe extern "C" fn simtime_to_timeval(
@@ -373,10 +378,13 @@ pub mod export {
         } else {
             return false;
         };
-        *unsafe { out.as_mut() }.unwrap() = tv;
+        unsafe { std::ptr::write(notnull_mut(out), tv) };
         true
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safe to write to.
     #[must_use]
     #[no_mangle]
     pub unsafe extern "C" fn simtime_to_timespec(
@@ -393,7 +401,7 @@ pub mod export {
         } else {
             return false;
         };
-        *unsafe { out.as_mut() }.unwrap() = ts;
+        unsafe { std::ptr::write(out, ts) };
         true
     }
 }
@@ -412,10 +420,8 @@ mod tests {
 
         assert_eq!(
             SimulationTime::from_c_simtime(SIMTIME_MAX).unwrap(),
-            SimulationTime::try_from(Duration::from_nanos(
-                (SIMTIME_MAX / SIMTIME_ONE_NANOSECOND).try_into().unwrap()
-            ))
-            .unwrap()
+            SimulationTime::try_from(Duration::from_nanos(SIMTIME_MAX / SIMTIME_ONE_NANOSECOND))
+                .unwrap()
         );
         assert_eq!(SimulationTime::from_c_simtime(SIMTIME_MAX + 1), None);
     }
@@ -507,69 +513,55 @@ mod tests {
         use libc::timeval;
 
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: 0,
-                    tv_usec: 0,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            }),
             0
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: 1,
-                    tv_usec: 2,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: 1,
+                tv_usec: 2,
+            }),
             SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_MICROSECOND
         );
 
         // Out of range
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: libc::time_t::MAX,
-                    tv_usec: 999_999,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: libc::time_t::MAX,
+                tv_usec: 999_999,
+            }),
             SIMTIME_INVALID
         );
 
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: 0,
-                    tv_usec: 1_000_000,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: 0,
+                tv_usec: 1_000_000,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: 0,
-                    tv_usec: -1,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: 0,
+                tv_usec: -1,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: -1,
-                    tv_usec: 0,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: -1,
+                tv_usec: 0,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timeval(timeval {
-                    tv_sec: -1,
-                    tv_usec: -1,
-                })
-            },
+            simtime_from_timeval(timeval {
+                tv_sec: -1,
+                tv_usec: -1,
+            }),
             SIMTIME_INVALID
         );
     }
@@ -719,69 +711,55 @@ mod tests {
         use libc::timespec;
 
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            }),
             0
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: 1,
-                    tv_nsec: 2,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: 1,
+                tv_nsec: 2,
+            }),
             SIMTIME_ONE_SECOND + 2 * SIMTIME_ONE_NANOSECOND
         );
 
         // The C SimulatedTime type is too small to represent this value.
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: libc::time_t::MAX,
-                    tv_nsec: 999_999_999,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: libc::time_t::MAX,
+                tv_nsec: 999_999_999,
+            }),
             SIMTIME_INVALID
         );
 
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: 0,
-                    tv_nsec: 1_000_000_000,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: 0,
+                tv_nsec: 1_000_000_000,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: 0,
-                    tv_nsec: -1,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: 0,
+                tv_nsec: -1,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: -1,
-                    tv_nsec: 0,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: -1,
+                tv_nsec: 0,
+            }),
             SIMTIME_INVALID
         );
         assert_eq!(
-            unsafe {
-                simtime_from_timespec(timespec {
-                    tv_sec: -1,
-                    tv_nsec: -1,
-                })
-            },
+            simtime_from_timespec(timespec {
+                tv_sec: -1,
+                tv_nsec: -1,
+            }),
             SIMTIME_INVALID
         );
     }

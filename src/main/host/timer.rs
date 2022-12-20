@@ -181,8 +181,12 @@ pub mod export {
     use super::*;
 
     /// Create a new Timer that synchronously executes `task` on expiration.
-    /// `task` should not call mutable methods of the enclosing `Timer`; if it needs
-    /// to do so it should schedule a new task to do so.
+    ///
+    /// # Safety
+    ///
+    /// `task` must be dereferenceable, and must not call mutable methods of
+    /// the enclosing `Timer`; if it needs to do so it should schedule a new
+    /// task to do so.
     #[no_mangle]
     pub unsafe extern "C" fn timer_new(task: *const TaskRef) -> *mut Timer {
         let task = unsafe { task.as_ref() }.unwrap().clone();
@@ -190,17 +194,26 @@ pub mod export {
         Box::into_raw(Box::new(timer))
     }
 
+    /// # Safety
+    ///
+    /// `timer` must be safely dereferenceable. Consumes `timer`.
     #[no_mangle]
     pub unsafe extern "C" fn timer_drop(timer: *mut Timer) {
         unsafe { Box::from_raw(timer) };
     }
 
+    /// # Safety
+    ///
+    /// `timer` must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn timer_getExpirationCount(timer: *const Timer) -> u64 {
         let timer = unsafe { timer.as_ref() }.unwrap();
         timer.expiration_count()
     }
 
+    /// # Safety
+    ///
+    /// `timer` must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn timer_consumeExpirationCount(timer: *mut Timer) -> u64 {
         let timer = unsafe { timer.as_mut() }.unwrap();
@@ -209,6 +222,10 @@ pub mod export {
 
     /// Returns the remaining time until the next expiration. Returns 0 if the
     /// timer isn't armed.
+    ///
+    /// # Safety
+    ///
+    /// `timer` must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn timer_getRemainingTime(timer: *const Timer) -> CSimulationTime {
         let timer = unsafe { timer.as_ref() }.unwrap();
@@ -220,12 +237,18 @@ pub mod export {
         remaining.into()
     }
 
+    /// # Safety
+    ///
+    /// `timer` must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> CSimulationTime {
         let timer = unsafe { timer.as_ref() }.unwrap();
         timer.interval().into()
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     #[allow(non_snake_case)]
     pub unsafe extern "C" fn timer_arm(
@@ -241,6 +264,9 @@ pub mod export {
         timer.arm(host, nextExpireTime, expireInterval)
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn timer_disarm(timer: *mut Timer) {
         let timer = unsafe { timer.as_mut() }.unwrap();

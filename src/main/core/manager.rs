@@ -333,7 +333,7 @@ impl<'a> Manager<'a> {
 
             // initialize the thread-local Worker
             scheduler.scope(|s| {
-                s.run(|thread_id| unsafe {
+                s.run(|thread_id| {
                     worker::Worker::new_for_this_thread(worker::WorkerThreadID(thread_id as u32))
                 });
             });
@@ -594,10 +594,7 @@ impl<'a> Manager<'a> {
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
             };
 
-            let host =
-                Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) });
-
-            host
+            Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) })
         };
 
         host.lock_shmem();

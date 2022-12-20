@@ -128,7 +128,9 @@ impl SyscallHandler {
 }
 
 mod export {
-    use crate::{core::worker::Worker, utility::notnull::notnull_mut_debug};
+    use shadow_shim_helper_rs::notnull::*;
+
+    use crate::core::worker::Worker;
 
     use super::*;
 

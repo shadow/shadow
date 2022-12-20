@@ -42,8 +42,41 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: check rust version
+        run: cargo --version
+      - name: Add rustfmt
+        run: rustup component add rustfmt
       - name: Rustfmt check
         run: (cd src && cargo fmt -- --check)
+
+  lint-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Run on PR head instead of merge result. Running on the merge
+          # result can give confusing results, and we require PR to be up to
+          # date with target branch before merging, anyway.
+          # See https://github.com/shadow/shadow/issues/2166
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # No need to fully build shadow, but we need to run cmake to generate shd-config.h,
+      # which is required for some of the rust modules' build scripts that compile C code.
+      - name: run cmake
+        run: |
+          sudo apt-get install cmake
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: check rust version
+        run: cargo --version
+
+      - name: Add clippy
+        run: rustup component add clippy
+
+      - name: clippy
+        run: (cd src && cargo clippy -- -Dwarnings)
 
   lint-cargo-lock:
     runs-on: ubuntu-latest
@@ -66,8 +99,10 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Upgrade cargo/rust
-        run: rustup update
+      - name: check rust version
+        run: cargo --version
+      - name: Add rustdoc
+        run: rustup component add rust-docs
       - name: Cargo doc check
         run: |
           cmake -S . -B build

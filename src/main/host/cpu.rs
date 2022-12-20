@@ -49,7 +49,8 @@ impl Cpu {
     pub fn add_delay(&mut self, native_delay: Duration) {
         // first normalize the physical CPU to the virtual CPU. We use u128 here
         // to guarantee no overflow when multiplying two u64's.
-        let cycles = (native_delay.as_nanos() as u128)
+        let cycles = native_delay
+            .as_nanos()
             .checked_mul(self.native_frequency as u128)
             .unwrap();
         let simulated_delay_nanos = cycles / (self.simulated_frequency as u128);

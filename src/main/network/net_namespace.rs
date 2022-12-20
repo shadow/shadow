@@ -34,7 +34,9 @@ pub struct NetworkNamespace {
 }
 
 impl NetworkNamespace {
-    /// SAFETY: `dns` must be a valid pointer.
+    /// # Safety
+    ///
+    /// `dns` must be a valid pointer.
     pub unsafe fn new(
         host_id: HostId,
         hostname: Vec<NonZeroU8>,
@@ -63,7 +65,7 @@ impl NetworkNamespace {
             Self::setup_net_interface(
                 &InterfaceOptions {
                     host_id,
-                    hostname: hostname,
+                    hostname,
                     ip: public_ip,
                     uses_router: true,
                     pcap,
@@ -197,6 +199,9 @@ impl NetworkNamespace {
         None
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     pub unsafe fn associate_interface(
         &self,
         socket: *const cshadow::CompatSocket,
@@ -218,7 +223,7 @@ impl NetworkNamespace {
         }
     }
 
-    pub unsafe fn disassociate_interface(
+    pub fn disassociate_interface(
         &self,
         protocol: cshadow::ProtocolType,
         bind_addr: SocketAddrV4,

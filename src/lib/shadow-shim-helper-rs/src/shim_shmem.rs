@@ -183,14 +183,18 @@ impl ProcessShmemProtected {
         self.pending_standard_siginfos[signal as usize - 1] = (*info).into();
     }
 
-    /// SAFETY: Function pointers in `shd_kernel_sigaction::u` are valid only
+    /// # Safety
+    ///
+    /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
     pub unsafe fn signal_action(&self, signal: Signal) -> &shd_kernel_sigaction {
         &self.signal_actions[signal as usize - 1]
     }
 
-    /// SAFETY: Function pointers in `shd_kernel_sigaction::u` are valid only
+    /// # Safety
+    ///
+    /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
     pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut shd_kernel_sigaction {
@@ -278,13 +282,17 @@ impl ThreadShmemProtected {
         self.pending_standard_siginfos[signal as usize - 1] = *info;
     }
 
-    /// SAFETY: `stack_t::ss_sp` must not be dereferenced except from corresponding
+    /// # Safety
+    ///
+    /// `stack_t::ss_sp` must not be dereferenced except from corresponding
     /// managed thread.
     pub unsafe fn sigaltstack(&self) -> &stack_t {
         &self.sigaltstack.0
     }
 
-    /// SAFETY: `stack_t::ss_sp` must not be dereferenced except from corresponding
+    /// # Safety
+    ///
+    /// `stack_t::ss_sp` must not be dereferenced except from corresponding
     /// managed thread. Must be set to either std::ptr::null_mut, or a pointer valid
     /// in the managed thread.
     pub unsafe fn sigaltstack_mut(&mut self) -> &mut stack_t {
@@ -366,7 +374,9 @@ impl SiginfoWrapper {
         &mut self.0.si_code
     }
 
-    /// SAFETY: Pointer fields must not be dereferenced from outside of their
+    /// # Safety
+    ///
+    /// Pointer fields must not be dereferenced from outside of their
     /// native virtual address space.
     pub unsafe fn as_siginfo(&self) -> &libc::siginfo_t {
         &self.0
@@ -419,7 +429,9 @@ pub mod export {
         std::mem::size_of::<HostShmem>()
     }
 
-    /// SAFETY: `host_mem` must be valid
+    /// # Safety
+    ///
+    /// `host_mem` must be valid
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemhost_init(
         host_mem: *mut ShimShmemHost,
@@ -441,13 +453,17 @@ pub mod export {
         unsafe { host_mem.write(h) };
     }
 
-    /// SAFETY: `host_mem` must be valid, and no references to `host_mem` may exist.
+    /// # Safety
+    ///
+    /// `host_mem` must be valid, and no references to `host_mem` may exist.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemhost_destroy(host_mem: *mut ShimShmemHost) {
         unsafe { std::ptr::drop_in_place(host_mem) };
     }
 
-    /// SAFETY: `host` must be valid. The returned pointer must not be accessed from other threads.
+    /// # Safety
+    ///
+    /// `host` must be valid. The returned pointer must not be accessed from other threads.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemhost_lock(
         host: *const ShimShmemHost,
@@ -459,7 +475,9 @@ pub mod export {
         lock
     }
 
-    /// SAFETY: `host` and `lock` must be valid.
+    /// # Safety
+    ///
+    /// `host` and `lock` must be valid.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemhost_unlock(
         host: *const ShimShmemHost,
@@ -478,6 +496,9 @@ pub mod export {
         std::mem::size_of::<ProcessShmem>()
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemprocess_init(
         process_mem: *mut ShimShmemProcess,
@@ -489,6 +510,9 @@ pub mod export {
         unsafe { process_mem.write(m) }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getEmulatedTime(
         host_mem: *const ShimShmemHost,
@@ -497,6 +521,9 @@ pub mod export {
         EmulatedTime::to_c_emutime(Some(host_mem.sim_time.load(Ordering::Relaxed)))
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setEmulatedTime(
         host_mem: *const ShimShmemHost,
@@ -508,6 +535,9 @@ pub mod export {
             .store(EmulatedTime::from_c_emutime(t).unwrap(), Ordering::Relaxed);
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getMaxRunaheadTime(
         host_mem: *const ShimShmemHostLock,
@@ -516,6 +546,9 @@ pub mod export {
         EmulatedTime::to_c_emutime(Some(host_mem.max_runahead_time))
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setMaxRunaheadTime(
         host_mem: *mut ShimShmemHostLock,
@@ -526,6 +559,10 @@ pub mod export {
     }
 
     /// Get the process's pending signal set.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getProcessPendingSignals(
         lock: *const ShimShmemHostLock,
@@ -538,6 +575,10 @@ pub mod export {
     }
 
     /// Set the process's pending signal set.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setProcessPendingSignals(
         lock: *const ShimShmemHostLock,
@@ -550,10 +591,12 @@ pub mod export {
         protected.pending_signals = s;
     }
 
-    // Get the siginfo for the given signal number. Only valid when the signal
-    // is pending for the process.
-    //
-    // SAFETY: Pointers in siginfo_t are only valid in their original virtual address space.
+    /// Get the siginfo for the given signal number. Only valid when the signal
+    /// is pending for the process.
+    ///
+    /// # Safety
+    ///
+    /// Pointers in siginfo_t are only valid in their original virtual address space.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getProcessSiginfo(
         lock: *const ShimShmemHostLock,
@@ -573,7 +616,11 @@ pub mod export {
         }
     }
 
-    // Set the siginfo for the given signal number.
+    /// Set the siginfo for the given signal number.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setProcessSiginfo(
         lock: *const ShimShmemHostLock,
@@ -588,6 +635,9 @@ pub mod export {
         protected.set_pending_standard_siginfo(signal_from_i32(sig), info);
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getSignalAction(
         lock: *const ShimShmemHostLock,
@@ -600,6 +650,9 @@ pub mod export {
         *unsafe { protected.signal_action(signal_from_i32(sig)) }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setSignalAction(
         lock: *const ShimShmemHostLock,
@@ -618,6 +671,9 @@ pub mod export {
         std::mem::size_of::<ThreadShmem>()
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemthread_init(
         thread_mem: *mut ShimShmemThread,
@@ -629,6 +685,9 @@ pub mod export {
         unsafe { thread_mem.write(t) }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getThreadPendingSignals(
         lock: *const ShimShmemHostLock,
@@ -641,6 +700,10 @@ pub mod export {
     }
 
     /// Set the process's pending signal set.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setThreadPendingSignals(
         lock: *const ShimShmemHostLock,
@@ -653,11 +716,13 @@ pub mod export {
         protected.pending_signals = s;
     }
 
-    // Get the siginfo for the given signal number. Only valid when the signal
-    // is pending for the signal.
-    //
-    // SAFETY: Pointers in the returned siginfo_t must not be dereferenced except from the managed
-    // process's virtual address space.
+    /// Get the siginfo for the given signal number. Only valid when the signal
+    /// is pending for the signal.
+    ///
+    /// # Safety
+    ///
+    /// Pointers in the returned siginfo_t must not be dereferenced except from the managed
+    /// process's virtual address space.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getThreadSiginfo(
         lock: *const ShimShmemHostLock,
@@ -676,7 +741,11 @@ pub mod export {
         }
     }
 
-    // Set the siginfo for the given signal number.
+    /// Set the siginfo for the given signal number.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setThreadSiginfo(
         lock: *const ShimShmemHostLock,
@@ -691,6 +760,9 @@ pub mod export {
         protected.set_pending_standard_siginfo(signal_from_i32(sig), info.into());
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getBlockedSignals(
         lock: *const ShimShmemHostLock,
@@ -703,6 +775,10 @@ pub mod export {
     }
 
     /// Set the process's pending signal set.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setBlockedSignals(
         lock: *const ShimShmemHostLock,
@@ -715,7 +791,11 @@ pub mod export {
         protected.blocked_signals = s;
     }
 
-    // Get the signal stack as set by `sigaltstack(2)`.
+    /// Get the signal stack as set by `sigaltstack(2)`.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getSigAltStack(
         lock: *const ShimShmemHostLock,
@@ -727,7 +807,11 @@ pub mod export {
         *unsafe { protected.sigaltstack() }
     }
 
-    // Set the signal stack as set by `sigaltstack(2)`.
+    /// Set the signal stack as set by `sigaltstack(2)`.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setSigAltStack(
         lock: *const ShimShmemHostLock,
@@ -740,6 +824,9 @@ pub mod export {
         *unsafe { protected.sigaltstack_mut() } = stack;
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_takePendingUnblockedSignal(
         lock: *const ShimShmemHostLock,
@@ -771,6 +858,9 @@ pub mod export {
         }
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_incrementUnappliedCpuLatency(
         lock: *mut ShimShmemHostLock,
@@ -780,6 +870,9 @@ pub mod export {
         lock.unapplied_cpu_latency += SimulationTime::from_c_simtime(dt).unwrap();
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getUnappliedCpuLatency(
         lock: *const ShimShmemHostLock,
@@ -788,6 +881,9 @@ pub mod export {
         SimulationTime::to_c_simtime(Some(lock.unapplied_cpu_latency))
     }
 
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_resetUnappliedCpuLatency(lock: *mut ShimShmemHostLock) {
         let lock = unsafe { lock.as_mut().unwrap() };
@@ -795,6 +891,10 @@ pub mod export {
     }
 
     /// Get whether to model latency of unblocked syscalls.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getModelUnblockedSyscallLatency(
         host: *const ShimShmemHost,
@@ -805,6 +905,10 @@ pub mod export {
 
     /// Get the configured maximum unblocked syscall latency to accumulate before
     /// yielding.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_maxUnappliedCpuLatency(
         host: *const ShimShmemHost,
@@ -814,6 +918,10 @@ pub mod export {
     }
 
     /// Get the configured latency to emulate for each unblocked syscall.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_unblockedSyscallLatency(
         host: *const ShimShmemHost,
@@ -823,6 +931,10 @@ pub mod export {
     }
 
     /// Get the configured latency to emulate for each unblocked vdso "syscall".
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_unblockedVdsoLatency(
         host: *const ShimShmemHost,

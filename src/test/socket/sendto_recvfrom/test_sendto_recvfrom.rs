@@ -1705,7 +1705,7 @@ fn check_sendto_call(
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
     if args.buf.is_some() {
-        assert!(args.len as usize <= args.buf.unwrap().len());
+        assert!(args.len <= args.buf.unwrap().len());
     }
     if args.addr.is_some() {
         assert!(args.addr_len <= addr_max_len);
@@ -1757,7 +1757,7 @@ fn check_recvfrom_call(
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
     if args.buf.is_some() {
-        assert!(args.len as usize <= args.buf.as_ref().unwrap().len());
+        assert!(args.len <= args.buf.as_ref().unwrap().len());
     }
     if args.addr.is_some() && args.addr_len.is_some() {
         assert!(args.addr_len.unwrap() <= addr_max_len);

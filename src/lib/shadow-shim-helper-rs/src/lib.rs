@@ -6,6 +6,7 @@
 use vasi::VirtualAddressSpaceIndependent;
 
 pub mod emulated_time;
+pub mod notnull;
 pub mod rootedcell;
 pub mod shim_shmem;
 pub mod signals;

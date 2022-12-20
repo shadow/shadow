@@ -483,7 +483,7 @@ mod tests {
         bq.push_stream(&[][..]).unwrap();
         bq.push_stream(&src2[..]).unwrap();
 
-        assert_eq!(bq.num_bytes() as usize, src1.len() + src2.len());
+        assert_eq!(bq.num_bytes(), src1.len() + src2.len());
         // ceiling division
         assert_eq!(
             bq.bytes.len(),
@@ -512,7 +512,7 @@ mod tests {
         bq.push_packet(&[][..], 0).unwrap();
         bq.push_packet(&src2[..], src2.len()).unwrap();
 
-        assert_eq!(bq.num_bytes() as usize, src1.len() + src2.len());
+        assert_eq!(bq.num_bytes(), src1.len() + src2.len());
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 3);
 
@@ -533,7 +533,7 @@ mod tests {
         bq.push_packet(&[4, 5, 6][..], 3).unwrap();
         bq.push_stream(&[7, 8, 9][..]).unwrap();
 
-        assert_eq!(bq.num_bytes() as usize, 9);
+        assert_eq!(bq.num_bytes(), 9);
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 1);
 

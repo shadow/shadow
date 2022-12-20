@@ -15,6 +15,9 @@ pub struct SysCallConditionRef<'a> {
 impl<'a> SysCallConditionRef<'a> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
+    ///
+    /// # Safety
+    ///
     /// `ptr` must point to a valid object that will not be accessed by other threads
     /// for the lifetime of this object.
     pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
@@ -45,6 +48,9 @@ pub struct SysCallConditionRefMut<'a> {
 impl<'a> SysCallConditionRefMut<'a> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
+    ///
+    /// # Safety
+    ///
     /// `ptr` must point to a valid object that will not be accessed by other threads
     /// for the lifetime of this object.
     pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
@@ -77,6 +83,9 @@ pub struct SysCallCondition {
 impl SysCallCondition {
     /// "Steal" from a C pointer. i.e. doesn't increase ref count, but will decrease the ref count
     /// when dropped.
+    ///
+    /// # Safety
+    ///
     /// `ptr` must point to a valid object that will not be accessed by other threads
     /// for the lifetime of this object.
     pub unsafe fn consume_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {

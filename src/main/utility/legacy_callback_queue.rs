@@ -93,7 +93,7 @@ pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
         let rv = f();
 
         // run and drop the global queue
-        LegacyCallbackQueue::run(&cb_queue);
+        LegacyCallbackQueue::run(cb_queue);
         assert!(cb_queue.borrow_mut().take().is_some());
 
         rv
