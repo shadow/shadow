@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use shadow_build_common::ShadowBuildCommon;
+use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = {
@@ -19,6 +19,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
+        c.add_opaque_types(&["RustProcess"]);
         c
     };
 
@@ -222,15 +223,13 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::main::ShadowBuildInfo;")
         .raw_line("use crate::core::support::configuration::ConfigOptions;")
         .raw_line("use crate::core::support::configuration::QDiscMode;")
-        .raw_line("use crate::host::descriptor::descriptor_table::DescriptorTable;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")
         .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
         .raw_line("use crate::host::host::Host;")
-        .raw_line("use crate::host::memory_manager::MemoryManager;")
+        .raw_line("use crate::host::process::RustProcess;")
         .raw_line("use crate::host::syscall::format::StraceFmtMode;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
-        .raw_line("use crate::host::timer::Timer;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use logger::Logger;")
         .raw_line("use shadow_shim_helper_rs::HostId;")

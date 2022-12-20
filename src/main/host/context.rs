@@ -32,6 +32,8 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+
 use super::{host::Host, process::Process, thread::ThreadRef};
 use crate::cshadow;
 
@@ -48,7 +50,7 @@ impl<'a> HostContext<'a> {
     }
 
     /// Add the given process to the context.
-    pub fn with_process(&'a mut self, process: &'a mut Process) -> ProcessContext<'a> {
+    pub fn with_process(&'a mut self, process: &'a Process) -> ProcessContext<'a> {
         ProcessContext::new(self.host, process)
     }
 }
@@ -56,11 +58,11 @@ impl<'a> HostContext<'a> {
 /// Represent the "current" `Host` and `Process`.
 pub struct ProcessContext<'a> {
     pub host: &'a Host,
-    pub process: &'a mut Process,
+    pub process: &'a Process,
 }
 
 impl<'a> ProcessContext<'a> {
-    pub fn new(host: &'a Host, process: &'a mut Process) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process) -> Self {
         Self { host, process }
     }
 
@@ -72,12 +74,12 @@ impl<'a> ProcessContext<'a> {
 /// Represent the "current" `Host`, `Process`, and `Thread`.
 pub struct ThreadContext<'a> {
     pub host: &'a Host,
-    pub process: &'a mut Process,
+    pub process: &'a Process,
     pub thread: &'a mut ThreadRef,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a Host, process: &'a mut Process, thread: &'a mut ThreadRef) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process, thread: &'a mut ThreadRef) -> Self {
         Self {
             host,
             process,
@@ -90,7 +92,7 @@ impl<'a> ThreadContext<'a> {
 /// Rust code, we can build them from C pointers.
 pub struct ThreadContextObjs<'a> {
     host: &'a Host,
-    process: Process,
+    process: &'a RootedRefCell<Process>,
     thread: ThreadRef,
 }
 
@@ -100,7 +102,11 @@ impl<'a> ThreadContextObjs<'a> {
     /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
+        let process = unsafe {
+            cshadow::process_getRustProcess(sys.process)
+                .as_ref()
+                .unwrap()
+        };
         let thread = unsafe { ThreadRef::new(sys.thread) };
         Self {
             host,
@@ -115,16 +121,15 @@ impl<'a> ThreadContextObjs<'a> {
     pub unsafe fn from_thread(host: &'a Host, thread: *mut cshadow::Thread) -> Self {
         let sys = unsafe { cshadow::thread_getSysCallHandler(thread) };
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe { Process::borrow_from_c(sys.process) };
-        let thread = unsafe { ThreadRef::new(sys.thread) };
-        Self {
-            host,
-            process,
-            thread,
-        }
+        unsafe { Self::from_syscallhandler(host, sys) }
     }
 
-    pub fn borrow(&mut self) -> ThreadContext {
-        ThreadContext::new(self.host, &mut self.process, &mut self.thread)
+    pub fn with_ctx<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut ThreadContext) -> R,
+    {
+        let process = self.process.borrow(self.host.root());
+        let mut ctx = ThreadContext::new(self.host, &process, &mut self.thread);
+        f(&mut ctx)
     }
 }

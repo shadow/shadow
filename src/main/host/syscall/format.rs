@@ -583,7 +583,6 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
-    use crate::host::process::Process;
     use std::ffi::CStr;
 
     #[no_mangle]
@@ -599,8 +598,6 @@ mod export {
         assert!(!name.is_null());
         assert!(!args.is_null());
 
-        let proc = unsafe { Process::borrow_from_c(proc) };
-
         let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
         let args = unsafe { CStr::from_ptr(args) }.to_str().unwrap();
         let result = SyscallResult::from(result);
@@ -611,25 +608,32 @@ mod export {
             return result.into()
         };
 
-        // we don't know the type, so just show it as an int
-        let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, proc.memory());
+        Worker::with_active_host(|host| {
+            let proc = unsafe { c::process_getRustProcess(proc).as_ref().unwrap() };
+            let proc = proc.borrow(host.root());
 
-        if let Some(ref rv) = rv {
-            proc.with_strace_file(|file| {
-                let time = Worker::current_time();
+            // we don't know the type, so just show it as an int
+            let memory = proc.memory();
+            let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, &memory);
 
-                if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
-                    write_syscall(file, &time, tid, name, args, rv).unwrap();
-                } else {
-                    log::warn!(
-                        "Could not log syscall {} with time {:?} and tid {:?}",
-                        name,
-                        time,
-                        tid
-                    );
-                }
-            });
-        }
+            if let Some(ref rv) = rv {
+                proc.with_strace_file(|file| {
+                    let time = Worker::current_time();
+
+                    if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
+                        write_syscall(file, &time, tid, name, args, rv).unwrap();
+                    } else {
+                        log::warn!(
+                            "Could not log syscall {} with time {:?} and tid {:?}",
+                            name,
+                            time,
+                            tid
+                        );
+                    }
+                });
+            }
+        })
+        .unwrap();
 
         // need to return the result, otherwise the drop impl will free the condition pointer
         result.into()

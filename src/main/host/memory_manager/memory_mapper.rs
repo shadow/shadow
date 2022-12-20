@@ -34,6 +34,14 @@ struct Region {
     original_path: Option<proc_maps::MappingPath>,
 }
 
+// Safety: The Region owns the shadow_base pointer, and the mapper enforces
+// Rust's aliasing rules etc.
+//
+// TODO: Consider using something like SyncSendPointer for `shadow_base`
+// instead of this explicit Send implementation. SyncSendPointer adds quite a
+// lot of boiler-plate in this case, though.
+unsafe impl Send for Region {}
+
 #[allow(dead_code)]
 fn log_regions<It: Iterator<Item = (Interval, Region)>>(level: log::Level, regions: It) {
     if log::log_enabled!(level) {

@@ -30,6 +30,7 @@ use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::core::worker::Worker;
+use crate::host::host::Host;
 use shadow_shim_helper_rs::HostId;
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
@@ -96,10 +97,21 @@ impl<T> HostTreePointer<T> {
         // This function is still `unsafe` since it's now the caller's
         // responsibility to not release the lock and *then* dereference the
         // pointer.
-        Worker::with_active_host(|h| {
-            assert_eq!(self.host_id, h.info().id);
-        })
-        .unwrap();
+        // SAFETY: caller's responsibility
+        Worker::with_active_host(|h| unsafe { self.ptr_with_host(h) }).unwrap()
+    }
+
+    /// Get the pointer.
+    ///
+    /// Panics if `host` is not the one associated with `self`.
+    ///
+    /// # Safety
+    ///
+    /// Pointer must only be dereferenced while the configures Host is still
+    /// active, in addition to the normal safety requirements for dereferencing
+    /// a pointer.
+    pub unsafe fn ptr_with_host(&self, host: &Host) -> *mut T {
+        assert_eq!(self.host_id, host.info().id);
         self.ptr
     }
 }

@@ -9,7 +9,7 @@ use crate::host::network_interface::{NetworkInterface, PcapOptions};
 use crate::host::process::Process;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
-use crate::utility::{self, HostTreePointer, SyncSendPointer};
+use crate::utility::{self, SyncSendPointer};
 use atomic_refcell::AtomicRefCell;
 use log::{debug, info, trace};
 use logger::LogLevel;
@@ -17,6 +17,8 @@ use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -96,9 +98,6 @@ pub struct Host {
     // giving us atomic-free refcounting and checked borrowing.
     //
     // This makes the Host !Sync.
-    //
-    // Not used yet.
-    #[allow(unused)]
     root: Root,
 
     event_queue: Arc<Mutex<EventQueue>>,
@@ -146,7 +145,7 @@ pub struct Host {
     packet_priority_counter: Cell<f64>,
 
     // Owned pointers to processes.
-    processes: RefCell<BTreeMap<ProcessId, HostTreePointer<cshadow::Process>>>,
+    processes: RefCell<BTreeMap<ProcessId, RootedRc<RootedRefCell<Process>>>>,
 
     tsc: Tsc,
     // Cached lock for shim_shmem. `[Host::shmem_lock]` uses unsafe code to give it
@@ -311,6 +310,10 @@ impl Host {
         res
     }
 
+    pub fn root(&self) -> &Root {
+        &self.root
+    }
+
     fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
@@ -384,13 +387,19 @@ impl Host {
                 pause_for_debugging,
             )
         };
+        let process = unsafe { Process::new_from_c(self.root(), process) };
 
-        unsafe { cshadow::process_schedule(process, self) };
+        unsafe { cshadow::process_schedule(process.borrow(self.root()).cprocess(), self) };
 
-        self.processes.borrow_mut().insert(
-            process_id,
-            HostTreePointer::new_for_host(self.id(), process),
-        );
+        self.processes.borrow_mut().insert(process_id, process);
+    }
+
+    #[track_caller]
+    pub fn process(
+        &self,
+        id: ProcessId,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + '_> {
+        Ref::filter_map(self.processes.borrow(), |processes| processes.get(&id)).ok()
     }
 
     /// Information about the Host. Made available as an Arc for cheap cloning
@@ -458,13 +467,6 @@ impl Host {
     pub fn futextable_mut(&self) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
-    }
-
-    #[track_caller]
-    pub fn process(&self, id: &ProcessId) -> Option<Process> {
-        let processes = self.processes.borrow();
-        let process = processes.get(id)?;
-        Some(unsafe { Process::borrow_from_c(process.ptr()) })
     }
 
     #[allow(non_snake_case)]
@@ -627,8 +629,9 @@ impl Host {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, process) in processes.into_iter() {
-            unsafe { cshadow::process_stop(process.ptr()) };
-            unsafe { cshadow::process_free(process.ptr()) };
+            let cprocess = unsafe { process.borrow(self.root()).cprocess() };
+            unsafe { cshadow::process_stop(cprocess) };
+            process.safely_drop(self.root());
         }
         trace!("done freeing application for host '{}'", self.name());
     }
@@ -1066,7 +1069,7 @@ mod export {
     ) -> libc::pid_t {
         let host = unsafe { host.as_ref().unwrap() };
         for process in host.processes.borrow().values() {
-            let process = unsafe { process.ptr() };
+            let process = unsafe { process.borrow(host.root()).cprocess() };
             let native_tid =
                 unsafe { cshadow::process_findNativeTID(process, virtual_pid, virtual_tid) };
             if native_tid > 0 {
@@ -1088,7 +1091,8 @@ mod export {
         let Some(process) = processes.get(&virtual_pid) else {
             return std::ptr::null_mut();
         };
-        unsafe { process.ptr() }
+        let res = unsafe { process.borrow(host.root()).cprocess() };
+        res
     }
 
     /// Returns the specified thread, or NULL if it doesn't exist.
@@ -1101,7 +1105,7 @@ mod export {
     ) -> *mut cshadow::Thread {
         let host = unsafe { host.as_ref().unwrap() };
         for process in host.processes.borrow().values() {
-            let process = unsafe { process.ptr() };
+            let process = unsafe { process.borrow(host.root()).cprocess() };
             let thread = unsafe { cshadow::process_getThread(process, virtual_tid) };
             if !thread.is_null() {
                 return thread;

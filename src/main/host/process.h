@@ -44,6 +44,11 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
                      CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
                      const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
                      bool pause_for_debugging);
+
+// For use by the Rust Process.
+void process_setRustProcess(Process* proc, const RustProcess* rproc);
+const RustProcess* process_getRustProcess(Process* proc);
+
 void process_free(Process* proc);
 
 void process_schedule(Process* proc, const Host* host);
@@ -97,9 +102,6 @@ pid_t process_getNativePid(const Process* proc);
  * - If virtualTID is 0, then we return the TID of the main thread if the virutal PIDs match.
  * - If we don't find a matching thread, return 0. */
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
-
-/* This should only be called from the rust 'Process' object. */
-DescriptorTable* process_getDescriptorTable(Process* proc);
 
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
@@ -168,9 +170,6 @@ void process_flushPtrs(Process* proc);
 // write back whatever garbage data was in the uninialized bueffer).
 void process_freePtrsWithoutFlushing(Process* proc);
 
-MemoryManager* process_getMemoryManager(Process* proc);
-void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
-
 HostId process_getHostId(const Process* proc);
 
 // A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned
@@ -187,12 +186,13 @@ ShimShmemProcess* process_getSharedMem(Process* proc);
 // handler), and NULL otherwise (e.g. when called from a timer expiration event).
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo);
 
-// Access the process's realtime timer; e.g. corresponding to ITIMER_REAL.
-Timer* process_getRealtimeTimer(Process* process);
-
 // Process's "dumpable" state, as manipulated by the prctl operations
 // PR_SET_DUMPABLE and PR_GET_DUMPABLE.
 int process_getDumpable(Process* process);
 void process_setDumpable(Process* process, int dumpable);
+
+// Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
+// due to opaque fields and macro magic in its C definition.
+void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 
 #endif /* SHD_PROCESS_H_ */

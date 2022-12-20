@@ -76,14 +76,14 @@ static gchar* _process_outputFileName(Process* proc, const Host* host, const cha
 static void _process_check(Process* proc);
 
 struct _Process {
+    /* Pointer to the RustProcess that owns this Process */
+    const RustProcess* rustProcess;
+
     HostId hostId;
 
     /* unique id of the program that this process should run */
     pid_t processID;
     GString* processName;
-
-    /* All of the descriptors opened by this process. */
-    DescriptorTable* descTable;
 
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
@@ -125,9 +125,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    // Owned exclusively by the process.
-    MemoryManager* memoryManager;
-
     /* File descriptors to handle plugin out and err streams. */
     RegularFile* stdoutFile;
     RegularFile* stderrFile;
@@ -144,10 +141,6 @@ struct _Process {
     // Pending MemoryReaders and MemoryWriters
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
-
-    /* ITIMER_REAL, as manipulated by `getitimer` and `setitimer`.
-     */
-    Timer* itimerReal;
 
     /* "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
      * and PR_GET_DUMPABLE.
@@ -323,26 +316,27 @@ static void _process_handleProcessExit(Process* proc) {
     }
 
     _process_check(proc);
-
-    // Drop the timer now, so that it stops running, and so that it breaks its
-    // circular reference to the process.
-    if (proc->itimerReal) {
-        timer_drop(proc->itimerReal);
-        proc->itimerReal = NULL;
-    }
 }
 
 static void _process_terminate(Process* proc) {
-    trace("Terminating");
-    if (process_isRunning(proc)) {
-        proc->killedByShadow = true;
-
-        if (kill(proc->nativePid, SIGKILL)) {
-            warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
-        }
-        process_markAsExiting(proc);
+    if (!process_hasStarted(proc)) {
+        trace("Never started");
+        return;
     }
 
+    if (!process_isRunning(proc)) {
+        trace("Already dead");
+        // We should have already cleaned up.
+        utility_debugAssert(proc->didLogReturnCode);
+        return;
+    }
+    trace("Terminating");
+    proc->killedByShadow = true;
+
+    if (kill(proc->nativePid, SIGKILL)) {
+        warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
+    }
+    process_markAsExiting(proc);
     _process_handleProcessExit(proc);
 }
 
@@ -478,8 +472,9 @@ static void _process_check(Process* proc) {
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 #endif
 
-    descriptortable_shutdownHelper(proc->descTable);
-    descriptortable_removeAndCloseAll(proc->descTable, _host(proc));
+    utility_alwaysAssert(proc->rustProcess);
+    _process_descriptorTableShutdownHelper(proc->rustProcess);
+    _process_descriptorTableRemoveAndCloseAll(proc->rustProcess);
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -507,7 +502,7 @@ static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* f
 
     RegularFile* stdfile = regularfile_new();
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
-    Descriptor* replacedDesc = descriptortable_set(proc->descTable, fd, desc);
+    Descriptor* replacedDesc = _process_descriptorTableSet(proc->rustProcess, fd, desc);
 
     // assume the fd was not previously in use
     utility_debugAssert(replacedDesc == NULL);
@@ -595,7 +590,7 @@ static void _process_start(Process* proc) {
     /* exec the process */
     thread_run(mainThread, proc->plugin.exePath->str, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
-    proc->memoryManager = memorymanager_new(proc->nativePid);
+    _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -803,18 +798,12 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-static void _process_itimer_real_expiration(const Host* host, void* voidPid, void* _unused) {
-    pid_t pid = GPOINTER_TO_INT(voidPid);
-    Process* process = host_getProcess(host, pid);
-    MAGIC_ASSERT(process);
-
-    int overrun = timer_getExpirationCount(process->itimerReal);
-    siginfo_t siginfo = {
+void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
+    *siginfo = (siginfo_t){
         .si_signo = SIGALRM,
         .si_code = SI_TIMER,
         .si_overrun = overrun,
     };
-    process_signal(process, NULL, &siginfo);
 }
 
 Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
@@ -893,8 +882,6 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
     proc->argv = g_strdupv((gchar**)argv);
     proc->envv = envv_dup;
 
-    proc->descTable = descriptortable_new();
-
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
@@ -910,16 +897,21 @@ Process* process_new(const Host* host, guint processID, CSimulationTime startTim
 
     proc->dumpable = SUID_DUMP_USER;
 
-    TaskRef* task =
-        taskref_new_bound(host_getID(host), _process_itimer_real_expiration,
-                          GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
-    proc->itimerReal = timer_new(task);
-    // timer_new clones the task; we don't need our own reference anymore.
-    taskref_drop(task);
-
     worker_count_allocation(Process);
 
     return proc;
+}
+
+void process_setRustProcess(Process* proc, const RustProcess* rproc) {
+    MAGIC_ASSERT(proc);
+    utility_alwaysAssert(proc->rustProcess == NULL);
+    proc->rustProcess = rproc;
+}
+
+const RustProcess* process_getRustProcess(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_alwaysAssert(proc->rustProcess);
+    return proc->rustProcess;
 }
 
 void process_free(Process* proc) {
@@ -942,10 +934,6 @@ void process_free(Process* proc) {
     if(proc->processName) {
         g_string_free(proc->processName, TRUE);
     }
-    if (proc->memoryManager) {
-        memorymanager_free(proc->memoryManager);
-    }
-
     if (proc->workingDir) {
         free(proc->workingDir);
     }
@@ -971,35 +959,12 @@ void process_free(Process* proc) {
         close(proc->straceFd);
     }
 
-    /* Now free all remaining descriptors stored in our table. */
-    if (proc->descTable) {
-        descriptortable_free(proc->descTable);
-    }
-
-    if (proc->itimerReal) {
-        timer_drop(proc->itimerReal);
-        proc->itimerReal = NULL;
-    }
-
     shmemallocator_globalFree(&proc->shimSharedMemBlock);
 
     worker_count_deallocation(Process);
 
     MAGIC_CLEAR(proc);
     g_free(proc);
-}
-
-MemoryManager* process_getMemoryManager(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->memoryManager;
-}
-
-void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
-    MAGIC_ASSERT(proc);
-    if (proc->memoryManager) {
-        memorymanager_free(proc->memoryManager);
-    }
-    proc->memoryManager = memoryManager;
 }
 
 HostId process_getHostId(const Process* proc) {
@@ -1047,7 +1012,7 @@ int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    return memorymanager_readPtr(proc->memoryManager, dst, src, n);
+    return _process_readPtr(proc->rustProcess, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
@@ -1057,7 +1022,7 @@ int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    return memorymanager_writePtr(proc->memoryManager, dst, src, n);
+    return _process_writePtr(proc->rustProcess, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
@@ -1066,7 +1031,7 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    ProcessMemoryRef_u8* ref = memorymanager_getReadablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRef_u8* ref = _process_getReadablePtr(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return NULL;
     }
@@ -1082,8 +1047,7 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    ProcessMemoryRef_u8* ref =
-        memorymanager_getReadablePtrPrefix(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRef_u8* ref = _process_getReadablePtrPrefix(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return -EFAULT;
     }
@@ -1114,7 +1078,7 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
     // Disallow additional references while there's a mutable reference.
     utility_debugAssert(!proc->memoryMutRef);
 
-    return memorymanager_readString(proc->memoryManager, src, str, n);
+    return _process_readString(proc->rustProcess, src, str, n);
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
@@ -1128,7 +1092,7 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    ProcessMemoryRefMut_u8* ref = memorymanager_getWritablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRefMut_u8* ref = process_getWritablePtrRef(proc, plugin_src, n);
     if (!ref) {
         return NULL;
     }
@@ -1148,7 +1112,7 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     utility_debugAssert(!proc->memoryMutRef);
     utility_debugAssert(proc->memoryRefs->len == 0);
 
-    ProcessMemoryRefMut_u8* ref = memorymanager_getMutablePtr(proc->memoryManager, plugin_src, n);
+    ProcessMemoryRefMut_u8* ref = _process_getMutablePtr(proc->rustProcess, plugin_src, n);
     if (!ref) {
         return NULL;
     }
@@ -1202,12 +1166,6 @@ void process_freePtrsWithoutFlushing(Process* proc) {
 // ******************************************************
 // Handle the descriptors owned by this process
 // ******************************************************
-
-/* This should only be called from the rust 'Process' object. */
-DescriptorTable* process_getDescriptorTable(Process* proc) {
-    MAGIC_ASSERT(proc);
-    return proc->descTable;
-}
 
 bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error) {
     GError* gError = NULL;
@@ -1301,11 +1259,6 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
     }
 
     _process_interruptWithSignal(process, host_getShimShmemLock(host), siginfo->si_signo);
-}
-
-Timer* process_getRealtimeTimer(Process* process) {
-    MAGIC_ASSERT(process);
-    return process->itimerReal;
 }
 
 int process_getDumpable(Process* process) {

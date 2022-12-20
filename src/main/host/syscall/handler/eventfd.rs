@@ -75,7 +75,7 @@ impl SyscallHandler {
         let mut desc = Descriptor::new(CompatFile::New(OpenFile::new(File::EventFd(file))));
         desc.set_flags(descriptor_flags);
 
-        let fd = ctx.process.register_descriptor(desc);
+        let fd = ctx.process.descriptor_table_mut().register_descriptor(desc);
 
         log::trace!("eventfd() returning fd {}", fd);
 

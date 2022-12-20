@@ -25,7 +25,8 @@ impl SyscallHandler {
         };
 
         // get the descriptor, or return early if it doesn't exist
-        let desc = Self::get_descriptor_mut(ctx.process, fd)?;
+        let mut desc_table = ctx.process.descriptor_table_mut();
+        let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
         Ok(match cmd {
             libc::F_SETLK
@@ -40,6 +41,7 @@ impl SyscallHandler {
                     }
                     CompatFile::Legacy(_) => {
                         warn!("Using fcntl({}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258", cmd);
+                        drop(desc_table);
                         return legacy_syscall_fn(ctx, args);
                     }
                 };
@@ -48,7 +50,10 @@ impl SyscallHandler {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                    CompatFile::Legacy(_) => {
+                        drop(desc_table);
+                        return legacy_syscall_fn(ctx, args);
+                    }
                 };
 
                 let file = file.inner_file().borrow();
@@ -60,7 +65,10 @@ impl SyscallHandler {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                    CompatFile::Legacy(_) => {
+                        drop(desc_table);
+                        return legacy_syscall_fn(ctx, args);
+                    }
                 };
 
                 let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
@@ -133,9 +141,7 @@ impl SyscallHandler {
                 let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
 
                 let new_desc = desc.dup(DescriptorFlags::empty());
-                let new_fd = ctx
-                    .process
-                    .register_descriptor_with_min_fd(new_desc, min_fd);
+                let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_DUPFD_CLOEXEC => {
@@ -143,16 +149,16 @@ impl SyscallHandler {
                 let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
 
                 let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
-                let new_fd = ctx
-                    .process
-                    .register_descriptor_with_min_fd(new_desc, min_fd);
+                let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_GETPIPE_SZ => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => return legacy_syscall_fn(ctx, args),
+                    CompatFile::Legacy(_) => {
+                        return legacy_syscall_fn(ctx, args);
+                    }
                 };
 
                 #[allow(irrefutable_let_patterns)]
