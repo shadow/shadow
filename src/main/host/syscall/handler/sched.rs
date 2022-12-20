@@ -34,7 +34,7 @@ impl SyscallHandler {
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        if ctx.host.process(pid).is_none() && pid_t != 0 {
+        if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
 
@@ -44,7 +44,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let mut mem = ctx.process.memory_mut();
+        let mut mem = ctx.process.memory_borrow_mut();
         let mut mask = mem.memory_ref_mut(mask_ptr)?;
 
         // this assumes little endian
@@ -64,7 +64,7 @@ impl SyscallHandler {
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        if ctx.host.process(pid).is_none() && pid_t != 0 {
+        if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
 
@@ -74,7 +74,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let mem = ctx.process.memory_mut();
+        let mem = ctx.process.memory_borrow_mut();
         let mask = mem.memory_ref(mask_ptr)?;
 
         // this assumes little endian
@@ -130,7 +130,7 @@ impl SyscallHandler {
             //   state.
             return Ok(0.into());
         }
-        let mut mem = ctx.process.memory_mut();
+        let mut mem = ctx.process.memory_borrow_mut();
         let mut rseq = mem.memory_ref_mut(rseq_ptr)?;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.

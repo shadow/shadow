@@ -42,7 +42,9 @@ impl SyscallHandler {
         info.mem_unit = 1024 * 1024 * 1024; // GiB
 
         // Write the result to plugin memory.
-        ctx.process.memory_mut().copy_to_ptr(info_ptr, &[info])?;
+        ctx.process
+            .memory_borrow_mut()
+            .copy_to_ptr(info_ptr, &[info])?;
         Ok(0.into())
     }
 }

@@ -33,9 +33,9 @@ impl SyscallHandler {
             return Err(Errno::ENOSYS.into());
         }
 
-        let itimerval = itimerval_from_timer(&ctx.process.realtime_timer());
+        let itimerval = itimerval_from_timer(&ctx.process.realtime_timer_borrow());
         ctx.process
-            .memory_mut()
+            .memory_borrow_mut()
             .copy_to_ptr(curr_value_ptr, &[itimerval])?;
 
         Ok(0.into())
@@ -53,22 +53,25 @@ impl SyscallHandler {
         }
 
         if !old_value_ptr.is_null() {
-            let itimerval = itimerval_from_timer(&ctx.process.realtime_timer());
+            let itimerval = itimerval_from_timer(&ctx.process.realtime_timer_borrow());
             ctx.process
-                .memory_mut()
+                .memory_borrow_mut()
                 .copy_to_ptr(old_value_ptr, &[itimerval])?;
         }
 
-        let new_value = ctx.process.memory().read_vals::<_, 1>(new_value_ptr)?[0];
+        let new_value = ctx
+            .process
+            .memory_borrow()
+            .read_vals::<_, 1>(new_value_ptr)?[0];
         let new_value_value =
             SimulationTime::try_from(new_value.it_value).map_err(|_| Errno::EINVAL)?;
         let new_value_interval =
             SimulationTime::try_from(new_value.it_interval).map_err(|_| Errno::EINVAL)?;
 
         if new_value_value == SimulationTime::ZERO {
-            ctx.process.realtime_timer_mut().disarm();
+            ctx.process.realtime_timer_borrow_mut().disarm();
         } else {
-            ctx.process.realtime_timer_mut().arm(
+            ctx.process.realtime_timer_borrow_mut().arm(
                 ctx.host,
                 Worker::current_time().unwrap() + new_value_value,
                 new_value_interval,

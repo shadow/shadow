@@ -699,7 +699,7 @@ where
         // Allocate through the MemoryManager, so that it knows about this region.
         let ptr = PluginPtr::from(
             ctx.process
-                .memory_mut()
+                .memory_borrow_mut()
                 .do_mmap(
                     ctx.thread,
                     PluginPtr::from(0usize),
@@ -725,7 +725,7 @@ where
 
     pub fn free(mut self, ctx: &mut ThreadContext) {
         ctx.process
-            .memory_mut()
+            .memory_borrow_mut()
             .do_munmap(ctx.thread, self.ptr.ptr(), self.ptr.len())
             .unwrap();
         self.freed = true;

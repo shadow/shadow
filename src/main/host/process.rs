@@ -65,7 +65,7 @@ pub struct Process {
 }
 
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
-    let Some(process) = host.process(pid) else {
+    let Some(process) = host.process_borrow(pid) else {
         debug!("Process {:?} no longer exists", pid);
         return;
     };
@@ -144,11 +144,13 @@ impl Process {
         unsafe { cshadow::process_getHostId(self.cprocess.ptr()) }
     }
 
-    pub fn memory_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
+    #[track_caller]
+    pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
         RefMut::map(self.memory_manager.borrow_mut(), |mm| mm.as_mut().unwrap())
     }
 
-    pub fn memory(&self) -> impl Deref<Target = MemoryManager> + '_ {
+    #[track_caller]
+    pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
         Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
     }
 
@@ -170,11 +172,15 @@ impl Process {
         Some(rv)
     }
 
-    pub fn descriptor_table(&self) -> impl Deref<Target = DescriptorTable> + '_ {
+    #[track_caller]
+    pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
         self.desc_table.borrow()
     }
 
-    pub fn descriptor_table_mut(&self) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
+    #[track_caller]
+    pub fn descriptor_table_borrow_mut(
+        &self,
+    ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
         self.desc_table.borrow_mut()
     }
 
@@ -183,11 +189,13 @@ impl Process {
         Pid::from_raw(pid)
     }
 
-    pub fn realtime_timer(&self) -> impl Deref<Target = Timer> + '_ {
+    #[track_caller]
+    pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
         self.itimer_real.borrow()
     }
 
-    pub fn realtime_timer_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
+    #[track_caller]
+    pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
         self.itimer_real.borrow_mut()
     }
 }
@@ -228,7 +236,7 @@ mod export {
 
         let fd = Worker::with_active_host(|h| {
             proc.borrow(h.root())
-                .descriptor_table_mut()
+                .descriptor_table_borrow_mut()
                 .register_descriptor(*desc)
         })
         .unwrap();
@@ -251,12 +259,12 @@ mod export {
             }
         };
 
-        Worker::with_active_host(
-            |h| match proc.borrow(h.root()).descriptor_table().get(handle) {
+        Worker::with_active_host(|h| {
+            match proc.borrow(h.root()).descriptor_table_borrow().get(handle) {
                 Some(d) => d as *const Descriptor,
                 None => std::ptr::null(),
-            },
-        )
+            }
+        })
         .unwrap()
     }
 
@@ -277,7 +285,11 @@ mod export {
         };
 
         Worker::with_active_host(|h| {
-            match proc.borrow(h.root()).descriptor_table_mut().get_mut(handle) {
+            match proc
+                .borrow(h.root())
+                .descriptor_table_borrow_mut()
+                .get_mut(handle)
+            {
                 Some(d) => d as *mut Descriptor,
                 None => std::ptr::null_mut(),
             }
@@ -301,7 +313,7 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| match proc.borrow(h.root()).descriptor_table().get(handle).map(|x| x.file()) {
+        Worker::with_active_host(|h| match proc.borrow(h.root()).descriptor_table_borrow().get(handle).map(|x| x.file()) {
             Some(CompatFile::Legacy(file)) => unsafe { file.ptr() },
             Some(CompatFile::New(file)) => {
                 // we have a special case for the legacy C TCP objects
@@ -330,15 +342,19 @@ mod export {
         let src = TypedPluginPtr::new::<u8>(src.into(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
-        Worker::with_active_host(
-            |h| match proc.borrow(h.root()).memory().copy_from_ptr(dst, src) {
+        Worker::with_active_host(|h| {
+            match proc
+                .borrow(h.root())
+                .memory_borrow()
+                .copy_from_ptr(dst, src)
+            {
                 Ok(_) => 0,
                 Err(e) => {
                     trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
                     -(e as i32)
                 }
-            },
-        )
+            }
+        })
         .unwrap()
     }
 
@@ -354,7 +370,11 @@ mod export {
         let dst = TypedPluginPtr::new::<u8>(dst.into(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         Worker::with_active_host(|h| {
-            match proc.borrow(h.root()).memory_mut().copy_to_ptr(dst, src) {
+            match proc
+                .borrow(h.root())
+                .memory_borrow_mut()
+                .copy_to_ptr(dst, src)
+            {
                 Ok(_) => 0,
                 Err(e) => {
                     trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
@@ -377,7 +397,7 @@ mod export {
         let plugin_src: PluginPtr = plugin_src.into();
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let memory = proc.memory();
+            let memory = proc.memory_borrow();
             let memory_ref = memory.memory_ref(TypedPluginPtr::new::<u8>(plugin_src, n));
             match memory_ref {
                 Ok(mr) => {
@@ -404,7 +424,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
             let memory_ref = memory_manager.memory_ref_mut_uninit(plugin_src);
             match memory_ref {
@@ -438,7 +458,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
             let memory_ref = memory_manager.memory_ref_mut(plugin_src);
             match memory_ref {
@@ -472,7 +492,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let memory_manager = proc.memory();
+            let memory_manager = proc.memory_borrow();
             let buf = unsafe {
                 std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
             };
@@ -493,7 +513,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             proc.borrow(h.root())
-                .descriptor_table_mut()
+                .descriptor_table_borrow_mut()
                 .shutdown_helper();
         })
         .unwrap();
@@ -505,7 +525,10 @@ mod export {
     pub unsafe extern "C" fn _process_descriptorTableRemoveAndCloseAll(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let descriptors = proc.borrow(host.root()).descriptor_table_mut().remove_all();
+            let descriptors = proc
+                .borrow(host.root())
+                .descriptor_table_borrow_mut()
+                .remove_all();
             CallbackQueue::queue_and_run(|cb_queue| {
                 for desc in descriptors {
                     desc.close(host, cb_queue);
@@ -531,7 +554,7 @@ mod export {
 
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut table = proc.descriptor_table_mut();
+            let mut table = proc.descriptor_table_borrow_mut();
             match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
                 Some(d) => Descriptor::into_raw(Box::new(d)),
                 None => std::ptr::null_mut(),
@@ -568,7 +591,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let memory_manager = proc.memory();
+            let memory_manager = proc.memory_borrow();
             match memory_manager
                 .memory_ref_prefix(TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n))
             {
@@ -599,7 +622,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .do_mmap(
@@ -627,7 +650,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .handle_munmap(&mut thread, PluginPtr::from(addr), len)
@@ -649,7 +672,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .handle_mremap(
@@ -676,7 +699,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
@@ -695,7 +718,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .handle_brk(&mut thread, PluginPtr::from(plugin_src))
@@ -714,7 +737,7 @@ mod export {
         let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_mut();
+            let mut memory_manager = proc.memory_borrow_mut();
             if !memory_manager.has_mapper() {
                 let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
                 memory_manager.init_mapper(&mut thread)

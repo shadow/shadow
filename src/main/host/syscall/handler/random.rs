@@ -22,7 +22,7 @@ impl SyscallHandler {
 
         // Get a native-process mem buffer where we can copy the random bytes.
         let dst_ptr = TypedPluginPtr::new::<u8>(buf_ptr, count);
-        let mut memory = ctx.process.memory_mut();
+        let mut memory = ctx.process.memory_borrow_mut();
         let mut mem_ref = match memory.memory_ref_mut_uninit(dst_ptr) {
             Ok(m) => m,
             Err(e) => {
