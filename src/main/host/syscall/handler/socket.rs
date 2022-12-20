@@ -94,7 +94,10 @@ impl SyscallHandler {
         let mut desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(socket))));
         desc.set_flags(descriptor_flags);
 
-        let fd = ctx.process.descriptor_table_mut().register_descriptor(desc);
+        let fd = ctx
+            .process
+            .descriptor_table_borrow_mut()
+            .register_descriptor(desc);
 
         debug!("Created socket fd {}", fd);
 
@@ -110,7 +113,7 @@ impl SyscallHandler {
 
         let file = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table();
+            let desc_table = ctx.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -129,12 +132,12 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?;
 
         debug!("Attempting to bind fd {} to {:?}", fd, addr);
 
         let mut rng = ctx.host.random_mut();
-        let net_ns = ctx.host.network_namespace();
+        let net_ns = ctx.host.network_namespace_borrow();
         Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
@@ -162,7 +165,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -216,7 +219,7 @@ impl SyscallHandler {
             return Err(Errno::EOPNOTSUPP.into());
         }
 
-        let addr = read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?;
 
         debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -226,7 +229,7 @@ impl SyscallHandler {
         let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().sendto(
                 ctx.process
-                    .memory()
+                    .memory_borrow()
                     .reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
                 addr,
                 cb_queue,
@@ -276,7 +279,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -333,7 +336,7 @@ impl SyscallHandler {
         let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().recvfrom(
                 ctx.process
-                    .memory_mut()
+                    .memory_borrow_mut()
                     .writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
                 cb_queue,
             )
@@ -359,7 +362,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             write_sockaddr(
-                &mut ctx.process.memory_mut(),
+                &mut ctx.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -379,7 +382,7 @@ impl SyscallHandler {
 
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table();
+            let desc_table = ctx.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -406,7 +409,7 @@ impl SyscallHandler {
 
         debug!("Returning socket address of {:?}", addr_to_write);
         write_sockaddr(
-            &mut ctx.process.memory_mut(),
+            &mut ctx.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -425,7 +428,7 @@ impl SyscallHandler {
 
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table();
+            let desc_table = ctx.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -452,7 +455,7 @@ impl SyscallHandler {
 
         debug!("Returning peer address of {:?}", addr_to_write);
         write_sockaddr(
-            &mut ctx.process.memory_mut(),
+            &mut ctx.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -467,7 +470,7 @@ impl SyscallHandler {
         let backlog: libc::c_int = args.get(1).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
+        let desc_table = ctx.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -514,7 +517,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -554,7 +557,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -621,7 +624,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             if let Err(e) = write_sockaddr(
-                &mut ctx.process.memory_mut(),
+                &mut ctx.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -645,7 +648,7 @@ impl SyscallHandler {
 
         let new_fd = ctx
             .process
-            .descriptor_table_mut()
+            .descriptor_table_borrow_mut()
             .register_descriptor(new_desc);
 
         Ok(new_fd.into())
@@ -671,7 +674,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -691,8 +694,8 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr =
-            read_sockaddr(&ctx.process.memory(), addr_ptr, addr_len)?.ok_or(Errno::EINVAL)?;
+        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?
+            .ok_or(Errno::EINVAL)?;
 
         let mut rv =
             CallbackQueue::queue_and_run(|cb_queue| Socket::connect(socket, &addr, cb_queue));
@@ -713,7 +716,7 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
+        let desc_table = ctx.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -812,7 +815,7 @@ impl SyscallHandler {
         desc_2.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.process.descriptor_table_mut();
+        let mut dt = ctx.process.descriptor_table_borrow_mut();
         let fd_1 = dt.register_descriptor(desc_1);
         let fd_2 = dt.register_descriptor(desc_2);
 
@@ -820,7 +823,7 @@ impl SyscallHandler {
         let fds = [i32::try_from(fd_1).unwrap(), i32::try_from(fd_2).unwrap()];
         let write_res = ctx
             .process
-            .memory_mut()
+            .memory_borrow_mut()
             .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error
@@ -848,7 +851,7 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
+        let desc_table = ctx.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -885,7 +888,7 @@ impl SyscallHandler {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table();
+        let desc_table = ctx.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {

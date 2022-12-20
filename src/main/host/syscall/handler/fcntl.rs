@@ -25,7 +25,7 @@ impl SyscallHandler {
         };
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_mut();
+        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
         Ok(match cmd {

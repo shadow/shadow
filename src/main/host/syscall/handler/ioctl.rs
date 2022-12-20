@@ -17,7 +17,7 @@ impl SyscallHandler {
 
         // get the descriptor, or return early if it doesn't exist
         let file = {
-            let mut desc_table = ctx.process.descriptor_table_mut();
+            let mut desc_table = ctx.process.descriptor_table_borrow_mut();
             let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
             // add the CLOEXEC flag
@@ -57,7 +57,7 @@ impl SyscallHandler {
         // all file types that shadow implements should support non-blocking operation
         if request == libc::FIONBIO {
             let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
-            let arg = ctx.process.memory_mut().read_vals::<_, 1>(arg_ptr)?[0];
+            let arg = ctx.process.memory_borrow_mut().read_vals::<_, 1>(arg_ptr)?[0];
 
             let mut status = file.get_status();
             status.set(FileStatus::NONBLOCK, arg != 0);
@@ -67,6 +67,6 @@ impl SyscallHandler {
         }
 
         // handle file-specific ioctls
-        file.ioctl(request, arg_ptr, &mut ctx.process.memory_mut())
+        file.ioctl(request, arg_ptr, &mut ctx.process.memory_borrow_mut())
     }
 }

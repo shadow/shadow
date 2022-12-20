@@ -98,7 +98,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             use crate::host::syscall::format::{{SyscallArgsFmt, SyscallResultFmt, write_syscall}};
 
             let syscall_args = {{
-                let memory = ctx.process.memory();
+                let memory = ctx.process.memory_borrow();
                 let syscall_args = <SyscallArgsFmt::<{syscall_args}>>::new(args, strace_fmt_options, &*memory);
                 // need to convert to a string so that we read the plugin's memory before we potentially
                 // modify it during the syscall
@@ -109,7 +109,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             let rv = self.{syscall_name}_original(ctx, args);
 
             // format the result (returns None if the syscall didn't complete)
-            let memory = ctx.process.memory();
+            let memory = ctx.process.memory_borrow();
             let syscall_rv = SyscallResultFmt::<{syscall_rv}>::new(&rv, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {{

@@ -36,7 +36,7 @@ impl SyscallHandler {
         // closing
         let desc = ctx
             .process
-            .descriptor_table_mut()
+            .descriptor_table_borrow_mut()
             .deregister_descriptor(fd)
             .ok_or(nix::errno::Errno::EBADF)?;
 
@@ -54,7 +54,7 @@ impl SyscallHandler {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_mut();
+        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         // duplicate the descriptor
@@ -71,7 +71,7 @@ impl SyscallHandler {
         let new_fd = libc::c_int::from(args.get(1));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_mut();
+        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
@@ -105,7 +105,7 @@ impl SyscallHandler {
         let flags = libc::c_int::from(args.get(2));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_mut();
+        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
@@ -158,7 +158,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -198,7 +198,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -251,7 +251,7 @@ impl SyscallHandler {
             // call the file's read(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().read(
-                    ctx.process.memory_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                    ctx.process.memory_borrow_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
                 )
@@ -294,7 +294,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -334,7 +334,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table();
+                let desc_table = ctx.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -379,7 +379,7 @@ impl SyscallHandler {
             // call the file's write(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().write(
-                    ctx.process.memory().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                    ctx.process.memory_borrow().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
                 )
@@ -476,7 +476,7 @@ impl SyscallHandler {
         writer_desc.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.process.descriptor_table_mut();
+        let mut dt = ctx.process.descriptor_table_borrow_mut();
         let read_fd = dt.register_descriptor(reader_desc);
         let write_fd = dt.register_descriptor(writer_desc);
 
@@ -487,7 +487,7 @@ impl SyscallHandler {
         ];
         let write_res = ctx
             .process
-            .memory_mut()
+            .memory_borrow_mut()
             .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error

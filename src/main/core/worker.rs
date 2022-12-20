@@ -353,7 +353,7 @@ impl Worker {
             let packet = packet.take().expect("Packet task ran twice");
 
             let became_nonempty = {
-                let mut router = host.upstream_router_mut();
+                let mut router = host.upstream_router_borrow_mut();
                 unsafe { crate::network::router::router_enqueue(&mut *router, packet.into_inner()) }
             };
 

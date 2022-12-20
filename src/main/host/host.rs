@@ -395,7 +395,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn process(
+    pub fn process_borrow(
         &self,
         id: ProcessId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + '_> {
@@ -443,16 +443,18 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn upstream_router_mut(&self) -> impl Deref<Target = Router> + DerefMut + '_ {
+    pub fn upstream_router_borrow_mut(&self) -> impl Deref<Target = Router> + DerefMut + '_ {
         self.router.borrow_mut()
     }
 
-    pub fn network_namespace(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
+    pub fn network_namespace_borrow(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
         Ref::map(self.net_ns.borrow(), |x| x.as_ref().unwrap())
     }
 
     #[track_caller]
-    pub fn tracker_mut(&self) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
+    pub fn tracker_borrow_mut(
+        &self,
+    ) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
         let tracker = self.tracker.borrow_mut();
         if let Some(tracker) = &*tracker {
             debug_assert!(!tracker.ptr().is_null());
@@ -464,7 +466,9 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn futextable_mut(&self) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
+    pub fn futextable_borrow_mut(
+        &self,
+    ) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
@@ -483,7 +487,7 @@ impl Host {
     ///
     /// Panics if we have shut down.
     #[track_caller]
-    pub fn interface_mut(
+    pub fn interface_borrow_mut(
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
@@ -495,7 +499,10 @@ impl Host {
     ///
     /// Panics if we have shut down.
     #[track_caller]
-    pub fn interface(&self, addr: Ipv4Addr) -> Option<impl Deref<Target = NetworkInterface> + '_> {
+    pub fn interface_borrow(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
         let borrow = self.net_ns.borrow();
         Ref::filter_map(borrow, |x| x.as_ref().unwrap().interface(addr)).ok()
     }
@@ -884,7 +891,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        &mut *hostrc.upstream_router_mut()
+        &mut *hostrc.upstream_router_borrow_mut()
     }
 
     #[no_mangle]
@@ -908,7 +915,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        if let Some(mut tracker) = hostrc.tracker_mut() {
+        if let Some(mut tracker) = hostrc.tracker_borrow_mut() {
             &mut *tracker
         } else {
             std::ptr::null_mut()
@@ -930,7 +937,7 @@ mod export {
     ) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         let ipv4 = Ipv4Addr::from(u32::from_be(interface_ip));
-        ipv4.is_unspecified() || hostrc.interface(ipv4).is_some()
+        ipv4.is_unspecified() || hostrc.interface_borrow(ipv4).is_some()
     }
 
     #[no_mangle]
@@ -1057,7 +1064,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        &mut *hostrc.futextable_mut()
+        &mut *hostrc.futextable_borrow_mut()
     }
 
     /// converts a virtual (shadow) tid into the native tid
@@ -1266,7 +1273,7 @@ mod export {
         // but that causes a double borrow loop. This will be fixed in Rob's next
         // PR, but will cause us to process packets slightly differently than we do now.
         // For now, we mimic the call flow of the old C code.
-        if let Some(iface) = host.interface_mut(ipv4) {
+        if let Some(iface) = host.interface_borrow_mut(ipv4) {
             unsafe {
                 cshadow::networkinterface_wantsSend(iface.borrow_inner(), host, socket);
             };
