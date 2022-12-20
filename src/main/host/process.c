@@ -79,8 +79,6 @@ struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-    HostId hostId;
-
     /* unique id of the program that this process should run */
     GString* processName;
 
@@ -152,7 +150,7 @@ static void _unref_thread_cb(gpointer data);
 
 static const Host* _host(Process* proc) {
     const Host* host = worker_getCurrentHost();
-    utility_debugAssert(host_getID(host) == proc->hostId);
+    utility_debugAssert(host_getID(host) == process_getHostId(proc));
     return host;
 }
 
@@ -775,8 +773,6 @@ Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
-    proc->hostId = host_getID(host);
-
     /* plugin name and path are required so we know what to execute */
     utility_debugAssert(pluginName);
     utility_debugAssert(pluginPath);
@@ -923,7 +919,7 @@ void process_free(Process* proc) {
 
 HostId process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->hostId;
+    return _process_getHostId(proc->rustProcess);
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {

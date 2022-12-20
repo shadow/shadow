@@ -62,6 +62,7 @@ pub type RustProcess = RootedRefCell<Process>;
 pub struct Process {
     cprocess: SyncSendPointer<cshadow::Process>,
     id: ProcessId,
+    host_id: HostId,
 
     // process boot and shutdown variables
     start_time: EmulatedTime,
@@ -150,6 +151,7 @@ impl Process {
                 host.root(),
                 Self {
                     id: process_id,
+                    host_id: host.id(),
                     cprocess,
                     memory_manager,
                     desc_table,
@@ -183,7 +185,7 @@ impl Process {
     }
 
     pub fn host_id(&self) -> HostId {
-        unsafe { cshadow::process_getHostId(self.cprocess.ptr()) }
+        self.host_id
     }
 
     pub fn schedule(&self, host: &Host) {
@@ -877,5 +879,11 @@ mod export {
         let host = unsafe { host.as_ref().unwrap() };
         let stop_time = proc.borrow(host.root()).stop_time;
         EmulatedTime::to_c_emutime(stop_time)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getHostId(proc: *const RustProcess) -> HostId {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
     }
 }
