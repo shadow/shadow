@@ -41,6 +41,12 @@ where
     fn try_from_reg(reg: SysCallReg) -> Option<Self>;
 }
 
+impl<T: TryFrom<SysCallReg>> TryFromSyscallReg for T {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::try_from(reg).ok()
+    }
+}
+
 /// Format trait for syscall data.
 pub trait SyscallDataDisplay {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
@@ -55,12 +61,6 @@ pub trait SyscallPtrDisplay {
         options: FmtOptions,
         mem: &MemoryManager,
     ) -> std::fmt::Result;
-}
-
-impl<T: From<SysCallReg>> TryFromSyscallReg for T {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Some(Self::from(reg))
-    }
 }
 
 /// A typed PluginPtr.
