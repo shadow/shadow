@@ -1,62 +1,97 @@
 use std::num::NonZeroU8;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{SysCallReg, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, TypedPluginPtr};
 
-use super::formatter::{
-    FmtOptions, SyscallDataDisplay, SyscallPtr, SyscallPtrDisplay, TryFromSyscallReg,
-};
+use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 
-/// Implement `SyscallDataDisplay` using its `Display` implementation.
+/// Convert from a `SysCallReg`. This is a helper trait for the `simple_display_impl` and
+/// `simple_debug_impl` macros. This is used instead of just `TryFrom` so that we can implement this
+/// on any types without affecting `TryFrom` implementations in the rest of Shadow.
+pub trait TryFromSyscallReg
+where
+    Self: Sized,
+{
+    fn try_from_reg(reg: SysCallReg) -> Option<Self>;
+}
+
+impl<T: TryFrom<SysCallReg>> TryFromSyscallReg for T {
+    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
+        Self::try_from(reg).ok()
+    }
+}
+
+/// Implement `SyscallDisplay` using its `Display` implementation. The type must implement
+/// `TryFromSyscallReg`.
 macro_rules! simple_display_impl {
     ($type:ty, $($types:ty),+) => {
         simple_display_impl!($type);
         simple_display_impl!($($types),+);
     };
     ($type:ty) => {
-        impl SyscallDataDisplay for $type {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self)
+        impl SyscallDisplay for SyscallVal<'_, $type> {
+            fn fmt(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+                _options: FmtOptions,
+                _mem: &MemoryManager,
+            ) -> std::fmt::Result {
+                match <$type>::try_from_reg(self.reg) {
+                    Some(x) => write!(f, "{x}"),
+                    // if the conversion to type T was unsuccessful, just show an integer
+                    None => write!(f, "{:#x} <invalid>", unsafe { self.reg.as_u64 }),
+                }
             }
         }
     };
 }
 
-/// Implement `SyscallDataDisplay` using its `Debug` implementation.
+/// Implement `SyscallDisplay` using its `Debug` implementation. The type must implement
+/// `TryFromSyscallReg`.
 macro_rules! simple_debug_impl {
     ($type:ty, $($types:ty),+) => {
         simple_debug_impl!($type);
         simple_debug_impl!($($types),+);
     };
     ($type:ty) => {
-        impl SyscallDataDisplay for $type {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{:?}", self)
+        impl SyscallDisplay for SyscallVal<'_, $type> {
+            fn fmt(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+                _options: FmtOptions,
+                _mem: &MemoryManager,
+            ) -> std::fmt::Result {
+                match <$type>::try_from_reg(self.reg) {
+                    Some(x) => write!(f, "{x:?}"),
+                    // if the conversion to type T was unsuccessful, just show an integer
+                    None => write!(f, "{:#x} <invalid>", unsafe { self.reg.as_u64 }),
+                }
             }
         }
     };
 }
 
-/// Display the pointer and data. Accesses plugin memory. Can only be used for pod types.
+/// Display the pointer and data. Accesses plugin memory. Can only be used for pod types (enforced
+/// by the memory manager).
 macro_rules! deref_pointer_impl {
     ($type:ty, $($types:ty),+) => {
         deref_pointer_impl!($type);
         deref_pointer_impl!($($types),+);
     };
     ($type:ty) => {
-        impl SyscallPtrDisplay for SyscallPtr<*const $type> {
+        impl SyscallDisplay for SyscallVal<'_, *const $type> {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, 1))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], self.ptr),
-                    (FmtOptions::Deterministic, Ok(_)) => write!(f, "<pointer>"),
+                let ptr = PluginPtr::from(self.reg);
+                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(ptr, 1))) {
+                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{:p}", self.ptr),
-                    (FmtOptions::Deterministic, Err(_)) => write!(f, "<pointer>"),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
         }
@@ -71,15 +106,16 @@ macro_rules! safe_pointer_impl {
         safe_pointer_impl!($($types),+);
     };
     ($type:ty) => {
-        impl SyscallPtrDisplay for SyscallPtr<*const $type> {
+        impl SyscallDisplay for SyscallVal<'_, *const $type> {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
                 options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
+                let ptr = PluginPtr::from(self.reg);
                 match options {
-                    FmtOptions::Standard => write!(f, "{:p}", self.ptr),
+                    FmtOptions::Standard => write!(f, "{ptr:p}"),
                     FmtOptions::Deterministic => write!(f, "<pointer>"),
                 }
             }
@@ -87,26 +123,27 @@ macro_rules! safe_pointer_impl {
     };
 }
 
-/// Display the array pointer and data. Accesses plugin memory. Can only be used for pod types.
+/// Display the array pointer and data. Accesses plugin memory. Can only be used for pod types
+/// (enforced by the memory manager).
 macro_rules! deref_array_impl {
     ($type:ty, $($types:ty),+) => {
         deref_array_impl!($type);
         deref_array_impl!($($types),+);
     };
     ($type:ty) => {
-        impl<const K: usize> SyscallPtrDisplay for SyscallPtr<[$type; K]> {
+        impl<const K: usize> SyscallDisplay for SyscallVal<'_, [$type; K]> {
             fn fmt(
                 &self,
                 f: &mut std::fmt::Formatter<'_>,
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(self.ptr, K))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), self.ptr),
-                    (FmtOptions::Deterministic, Ok(_)) => write!(f, "<pointer>"),
+                let ptr = PluginPtr::from(self.reg);
+                match (options, mem.memory_ref(TypedPluginPtr::new::<$type>(ptr, K))) {
+                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{:p}", self.ptr),
-                    (FmtOptions::Deterministic, Err(_)) => write!(f, "<pointer>"),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
         }
@@ -188,7 +225,7 @@ simple_debug_impl!(nix::sys::mman::ProtFlags);
 simple_debug_impl!(nix::sys::mman::MapFlags);
 simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
-impl SyscallPtrDisplay for SyscallPtr<*const i8> {
+impl SyscallDisplay for SyscallVal<'_, *const i8> {
     fn fmt(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -202,12 +239,12 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
         }
 
         // read up to one extra character to check if it's a null byte
-        let mem_ref =
-            match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(self.ptr, DISPLAY_LEN + 1)) {
-                Ok(x) => x,
-                // the pointer didn't reference any valid memory
-                Err(_) => return write!(f, "{:p}", self.ptr),
-            };
+        let ptr = PluginPtr::from(self.reg);
+        let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
+            Ok(x) => x,
+            // the pointer didn't reference any valid memory
+            Err(_) => return write!(f, "{ptr:p}"),
+        };
 
         // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
         // characters
@@ -233,9 +270,9 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
 
         #[allow(clippy::absurd_extreme_comparisons)]
         if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
-            write!(f, "{:?}...", s)
+            write!(f, "{s:?}...")
         } else {
-            write!(f, "{:?}", s)
+            write!(f, "{s:?}")
         }
     }
 }

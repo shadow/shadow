@@ -161,6 +161,38 @@ impl From<SysCallReg> for i32 {
     }
 }
 
+impl TryFrom<SysCallReg> for u8 {
+    type Error = <u8 as TryFrom<u64>>::Error;
+
+    fn try_from(v: SysCallReg) -> Result<u8, Self::Error> {
+        (unsafe { v.as_u64 }).try_into()
+    }
+}
+
+impl TryFrom<SysCallReg> for u16 {
+    type Error = <u16 as TryFrom<u64>>::Error;
+
+    fn try_from(v: SysCallReg) -> Result<u16, Self::Error> {
+        (unsafe { v.as_u64 }).try_into()
+    }
+}
+
+impl TryFrom<SysCallReg> for i8 {
+    type Error = <i8 as TryFrom<i64>>::Error;
+
+    fn try_from(v: SysCallReg) -> Result<i8, Self::Error> {
+        (unsafe { v.as_i64 }).try_into()
+    }
+}
+
+impl TryFrom<SysCallReg> for i16 {
+    type Error = <i16 as TryFrom<i64>>::Error;
+
+    fn try_from(v: SysCallReg) -> Result<i16, Self::Error> {
+        (unsafe { v.as_i64 }).try_into()
+    }
+}
+
 impl From<PluginPtr> for SysCallReg {
     fn from(v: PluginPtr) -> Self {
         Self { as_ptr: v.into() }
