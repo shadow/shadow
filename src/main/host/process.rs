@@ -144,10 +144,12 @@ impl Process {
         unsafe { cshadow::process_getHostId(self.cprocess.ptr()) }
     }
 
+    #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
         RefMut::map(self.memory_manager.borrow_mut(), |mm| mm.as_mut().unwrap())
     }
 
+    #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
         Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
     }
@@ -170,10 +172,12 @@ impl Process {
         Some(rv)
     }
 
+    #[track_caller]
     pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
         self.desc_table.borrow()
     }
 
+    #[track_caller]
     pub fn descriptor_table_borrow_mut(
         &self,
     ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
@@ -185,10 +189,12 @@ impl Process {
         Pid::from_raw(pid)
     }
 
+    #[track_caller]
     pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
         self.itimer_real.borrow()
     }
 
+    #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
         self.itimer_real.borrow_mut()
     }

@@ -447,6 +447,7 @@ impl Host {
         self.router.borrow_mut()
     }
 
+    #[track_caller]
     pub fn network_namespace_borrow(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
         Ref::map(self.net_ns.borrow(), |x| x.as_ref().unwrap())
     }
