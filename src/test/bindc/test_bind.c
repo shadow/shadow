@@ -63,7 +63,7 @@ static int _do_accept(int fd) {
         result = accept(fd, NULL, NULL);
         saved_errno = errno;
         trace("accept() returned %i %s", result, strerror(errno));
-        if (result >= 0 || errno != EINPROGRESS) {
+        if (result >= 0 || errno != EAGAIN) {
             break;
         }
         if (count++ > 1000) {
@@ -178,7 +178,7 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
     g_assert_cmpint(server_accept_sockname.sin_port,==,client_peername.sin_port);
     g_assert_cmpint(server_accept_sockname.sin_addr.s_addr,==,client_peername.sin_addr.s_addr);
     g_assert_cmpint(client_sockname.sin_addr.s_addr,==,server_accept_peername.sin_addr.s_addr);
-    g_assert_cmpint(client_sockname.sin_port,!=,server_accept_peername.sin_port);
+    g_assert_cmpint(client_sockname.sin_port,==,server_accept_peername.sin_port);
 
     return EXIT_SUCCESS;
 }
@@ -206,8 +206,16 @@ static void _test_implicit_bind(gconstpointer gp) {
     trace("connecting client socket to server at 0.0.0.0");
     assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
+    trace("accepting client connection");
+    assert_true_errno((fd3 = _do_accept(fd1)) >= 0);
+
+    trace("checking that server and client addresses match");
+    g_assert_true(_check_matching_addresses(fd1, fd3, fd2) == EXIT_SUCCESS);
+
     close(fd2);
+    close(fd3);
     fd2 = 0;
+    fd3 = 0;
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     trace("connecting client socket to server at 127.0.0.1");
