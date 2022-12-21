@@ -154,6 +154,10 @@ impl ConfigOptions {
     pub fn use_legacy_working_dir(&self) -> bool {
         self.experimental.use_legacy_working_dir.unwrap()
     }
+
+    pub fn use_shim_syscall_handler(&self) -> bool {
+        self.experimental.use_shim_syscall_handler.unwrap()
+    }
 }
 
 /// Help messages used by Clap for command line arguments, combining the doc string with
@@ -1331,7 +1335,7 @@ mod export {
     pub extern "C" fn config_getUseShimSyscallHandler(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.use_shim_syscall_handler.unwrap()
+        config.use_shim_syscall_handler()
     }
 
     #[no_mangle]

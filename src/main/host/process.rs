@@ -125,6 +125,7 @@ impl Process {
         argv: &[CString],
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
+        use_shim_syscall_handler: bool,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
@@ -201,6 +202,9 @@ impl Process {
             ))
             .unwrap(),
         );
+        if !use_shim_syscall_handler {
+            envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
+        }
 
         let envv_ptrs: Vec<*const i8> = envv
             .iter()

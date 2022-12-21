@@ -71,6 +71,7 @@ pub struct HostParameters {
     pub unblocked_syscall_latency: SimulationTime,
     pub unblocked_vdso_latency: SimulationTime,
     pub use_legacy_working_dir: bool,
+    pub use_shim_syscall_handler: bool,
 }
 
 use super::cpu::Cpu;
@@ -377,6 +378,7 @@ impl Host {
                 argv,
                 pause_for_debugging,
                 self.params.use_legacy_working_dir,
+                self.params.use_shim_syscall_handler,
             )
         };
 

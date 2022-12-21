@@ -57,12 +57,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-// We normally attempt to serve hot-path syscalls on the shim-side to avoid a
-// more expensive inter-process syscall. This option disables the optimization.
-// This is defined here in Shadow because it breaks the shim.
-static bool _use_shim_syscall_handler = true;
-ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
-
 static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
 ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
 
@@ -701,12 +695,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
 #endif
 
     gchar** envv_dup = g_strdupv((gchar**)envv);
-
-    /* add log file to env */
-
-    if (!_use_shim_syscall_handler) {
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
-    }
 
     /* save args and env */
     proc->argv = g_strdupv((gchar**)argv);
