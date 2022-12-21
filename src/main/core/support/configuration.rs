@@ -158,6 +158,14 @@ impl ConfigOptions {
     pub fn use_shim_syscall_handler(&self) -> bool {
         self.experimental.use_shim_syscall_handler.unwrap()
     }
+
+    pub fn strace_logging_mode(&self) -> StraceFmtMode {
+        match self.experimental.strace_logging_mode.as_ref().unwrap() {
+            StraceLoggingMode::Standard => StraceFmtMode::Standard,
+            StraceLoggingMode::Deterministic => StraceFmtMode::Deterministic,
+            StraceLoggingMode::Off => StraceFmtMode::Off,
+        }
+    }
 }
 
 /// Help messages used by Clap for command line arguments, combining the doc string with
@@ -1356,11 +1364,6 @@ mod export {
     pub extern "C" fn config_getStraceLoggingMode(config: *const ConfigOptions) -> StraceFmtMode {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-
-        match config.experimental.strace_logging_mode.as_ref().unwrap() {
-            StraceLoggingMode::Standard => StraceFmtMode::Standard,
-            StraceLoggingMode::Deterministic => StraceFmtMode::Deterministic,
-            StraceLoggingMode::Off => StraceFmtMode::Off,
-        }
+        config.strace_logging_mode()
     }
 }

@@ -25,6 +25,7 @@ use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
 use super::descriptor::descriptor_table::DescriptorTable;
 use super::host::Host;
 use super::memory_manager::MemoryManager;
+use super::syscall::formatter::StraceFmtMode;
 use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
@@ -92,6 +93,8 @@ pub struct Process {
     start_time: EmulatedTime,
     stop_time: Option<EmulatedTime>,
 
+    strace_logging_mode: StraceFmtMode,
+
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
     itimer_real: RefCell<Timer>,
@@ -132,6 +135,7 @@ impl Process {
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
         use_shim_syscall_handler: bool,
+        strace_logging_mode: StraceFmtMode,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
@@ -206,6 +210,7 @@ impl Process {
                     name,
                     plugin_name,
                     plugin_path,
+                    strace_logging_mode,
                 },
             ),
         );
@@ -1104,5 +1109,11 @@ mod export {
     pub unsafe extern "C" fn _process_getWorkingDir(proc: *const RustProcess) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).working_dir.as_ptr()).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_straceLoggingMode(proc: *const RustProcess) -> StraceFmtMode {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).strace_logging_mode).unwrap()
     }
 }

@@ -72,10 +72,12 @@ pub struct HostParameters {
     pub unblocked_vdso_latency: SimulationTime,
     pub use_legacy_working_dir: bool,
     pub use_shim_syscall_handler: bool,
+    pub strace_logging_mode: StraceFmtMode,
 }
 
 use super::cpu::Cpu;
 use super::process::ProcessId;
+use super::syscall::formatter::StraceFmtMode;
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -379,6 +381,7 @@ impl Host {
                 pause_for_debugging,
                 self.params.use_legacy_working_dir,
                 self.params.use_shim_syscall_handler,
+                self.params.strace_logging_mode,
             )
         };
 

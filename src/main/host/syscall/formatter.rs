@@ -16,6 +16,7 @@ pub enum FmtOptions {
 }
 
 // this type is required until we no longer need to access the format options from C
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum StraceFmtMode {
     Off,

@@ -57,9 +57,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
-ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
-
 static void _process_check(Process* proc);
 
 struct _Process {
@@ -87,7 +84,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    StraceFmtMode straceLoggingMode;
     int straceFd;
 
     /* When true, threads are no longer runnable and should just be cleaned up. */
@@ -144,7 +140,7 @@ const gchar* process_getName(Process* proc) {
 
 StraceFmtMode process_straceLoggingMode(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->straceLoggingMode;
+    return _process_straceLoggingMode(proc->rustProcess);
 }
 
 int process_getStraceFd(Process* proc) {
@@ -455,7 +451,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     /* we shouldn't already be running */
     utility_alwaysAssert(!process_isRunning(proc));
 
-    if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
+    if (process_straceLoggingMode(proc) != STRACE_FMT_MODE_OFF) {
         char straceFileName[4000];
         _process_outputFileName(
             proc->rustProcess, _host(proc), "strace", &straceFileName[0], sizeof(straceFileName));
@@ -697,7 +693,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
 
     proc->isExiting = false;
 
-    proc->straceLoggingMode = _strace_logging_mode;
     proc->straceFd = -1;
 
     proc->memoryMutRef = NULL;
