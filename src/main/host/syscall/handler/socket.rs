@@ -99,7 +99,7 @@ impl SyscallHandler {
             .descriptor_table_borrow_mut()
             .register_descriptor(desc);
 
-        debug!("Created socket fd {}", fd);
+        log::trace!("Created socket fd {}", fd);
 
         Ok(fd.into())
     }
@@ -134,7 +134,7 @@ impl SyscallHandler {
 
         let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?;
 
-        debug!("Attempting to bind fd {} to {:?}", fd, addr);
+        log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
 
         let mut rng = ctx.host.random_mut();
         let net_ns = ctx.host.network_namespace_borrow();
