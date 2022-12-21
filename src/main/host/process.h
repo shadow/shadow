@@ -41,7 +41,7 @@ typedef struct _Process Process;
 #include "main/host/thread.h"
 
 Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
-                     const gchar* const* envv, const gchar* const* argv, bool pause_for_debugging);
+                     const gchar* const* argv, bool pause_for_debugging);
 
 // For use by the Rust Process.
 void process_setRustProcess(Process* proc, const RustProcess* rproc);
@@ -193,6 +193,6 @@ void process_setDumpable(Process* process, int dumpable);
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 
 // To be called from Rust Process.
-void process_start(Process* process);
+void process_start(Process* process, const gchar* const* envv);
 
 #endif /* SHD_PROCESS_H_ */

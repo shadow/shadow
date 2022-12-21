@@ -82,8 +82,6 @@ struct _Process {
 
     /* vector of argument strings passed to exec */
     gchar** argv;
-    /* vector of environment variables passed to exec */
-    gchar** envv;
 
     gint returnCode;
     gboolean didLogReturnCode;
@@ -454,7 +452,7 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc);
 }
 
-void process_start(Process* proc) {
+void process_start(Process* proc, const char* const* envv_in) {
     MAGIC_ASSERT(proc);
 
     /* we shouldn't already be running */
@@ -485,6 +483,8 @@ void process_start(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 #endif
 
+    gchar** envv = g_strdupv((gchar**)envv_in);
+
     /* Add shared mem block of first thread to env */
     {
         ShMemBlockSerialized sharedMemBlockSerial =
@@ -494,14 +494,15 @@ void process_start(Process* proc) {
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
+        envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
     }
 
     proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
-    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), proc->argv, proc->envv,
+    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), proc->argv, envv,
                process_getWorkingDir(proc));
+    g_strfreev(envv);
     proc->nativePid = thread_getNativePid(mainThread);
     _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
@@ -686,7 +687,7 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
 }
 
 Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
-                     const gchar* const* envv, const gchar* const* argv, bool pause_for_debugging) {
+                     const gchar* const* argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -694,11 +695,8 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
     proc->cpuDelayTimer = g_timer_new();
 #endif
 
-    gchar** envv_dup = g_strdupv((gchar**)envv);
-
     /* save args and env */
     proc->argv = g_strdupv((gchar**)argv);
-    proc->envv = envv_dup;
 
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
@@ -747,9 +745,6 @@ void process_free(Process* proc) {
 
     if(proc->argv) {
         g_strfreev(proc->argv);
-    }
-    if(proc->envv) {
-        g_strfreev(proc->envv);
     }
 
 #ifdef USE_PERF_TIMERS

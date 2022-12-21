@@ -79,6 +79,9 @@ pub struct Process {
     // absolute path to the process's working directory
     working_dir: CString,
 
+    // environment variables to pass to exec
+    envv: Vec<CString>,
+
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
@@ -121,7 +124,7 @@ impl Process {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        envv: &[CString],
+        mut envv: Vec<CString>,
         argv: &[CString],
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
@@ -148,7 +151,6 @@ impl Process {
             ProcessShmem::new(&host.shim_shmem_lock_borrow().unwrap().root, host.id());
         let shim_shared_mem_block =
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
-        let shim_shared_mem_block_string = shim_shared_mem_block.serialize().encode_to_string();
 
         let working_dir = pathbuf_to_nul_term_cstring(if use_legacy_working_dir {
             nix::unistd::getcwd().unwrap()
@@ -157,6 +159,26 @@ impl Process {
         });
 
         // TODO: ensure no duplicate env vars.
+        envv.push(
+            CString::new(format!(
+                "SHADOW_SHM_PROCESS_BLK={}",
+                shim_shared_mem_block.serialize().encode_to_string()
+            ))
+            .unwrap(),
+        );
+        envv.push(
+            CString::new(format!(
+                "SHADOW_LOG_FILE={}",
+                Self::static_output_file_name(name.to_str().unwrap(), host, "shimlog")
+                    .to_str()
+                    .unwrap()
+            ))
+            .unwrap(),
+        );
+        if !use_shim_syscall_handler {
+            envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
+        }
+
         // We've initialized all the parts of Self *except* for the cprocess.
         // `process_new` needs the Rust process though, so we create that now with
         // a NULL cprocess, then create the cprocess, then add it to the Self.
@@ -169,6 +191,7 @@ impl Process {
                     host_id: host.id(),
                     // We set this to non-null below.
                     cprocess: unsafe { SyncSendPointer::new(std::ptr::null_mut()) },
+                    envv,
                     working_dir,
                     shim_shared_mem_block,
                     memory_manager,
@@ -183,35 +206,6 @@ impl Process {
             ),
         );
 
-        let mut envv = envv.to_owned();
-        envv.push(
-            CString::new(format!(
-                "SHADOW_SHM_PROCESS_BLK={}",
-                shim_shared_mem_block_string
-            ))
-            .unwrap(),
-        );
-        envv.push(
-            CString::new(format!(
-                "SHADOW_LOG_FILE={}",
-                process
-                    .borrow(host.root())
-                    .output_file_name(host, "shimlog")
-                    .to_str()
-                    .unwrap()
-            ))
-            .unwrap(),
-        );
-        if !use_shim_syscall_handler {
-            envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
-        }
-
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
         let argv_ptrs: Vec<*const i8> = argv
             .iter()
             .map(|x| x.as_ptr())
@@ -231,7 +225,6 @@ impl Process {
                 process_refcell,
                 host,
                 process_id.try_into().unwrap(),
-                envv_ptrs.as_ptr(),
                 argv_ptrs.as_ptr(),
                 pause_for_debugging,
             )
@@ -303,7 +296,14 @@ impl Process {
         let name = self.output_file_name(host, "stderr");
         self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
 
-        unsafe { cshadow::process_start(self.cprocess()) };
+        let envv_ptrs: Vec<*const i8> = self
+            .envv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of envv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+        unsafe { cshadow::process_start(self.cprocess(), envv_ptrs.as_ptr()) };
     }
 
     fn open_stdio_file_helper(
@@ -346,8 +346,13 @@ impl Process {
     }
 
     fn output_file_name(&self, host: &Host, basename: &str) -> PathBuf {
+        Self::static_output_file_name(self.name(), host, basename)
+    }
+
+    // Needed during early init, before `Self` is created.
+    fn static_output_file_name(name: &str, host: &Host, basename: &str) -> PathBuf {
         let mut dirname = host.data_dir_path().to_owned();
-        let basename = format!("{}.{}", self.name(), basename);
+        let basename = format!("{}.{}", name, basename);
         dirname.push(basename);
         dirname
     }
