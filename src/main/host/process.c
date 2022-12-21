@@ -78,9 +78,6 @@ struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-    /* Shared memory allocation for shared state with shim. */
-    ShMemBlock shimSharedMemBlock;
-
     /* the shadow plugin executable */
     struct {
         /* TRUE from when we've called into plug-in code until the call completes.
@@ -147,10 +144,9 @@ static Thread* _process_threadLeader(Process* proc) {
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(process_getProcessID(proc)));
 }
 
-ShimShmemProcess* process_getSharedMem(Process* proc) {
+const ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->shimSharedMemBlock.p);
-    return proc->shimSharedMemBlock.p;
+    return _process_getSharedMem(proc->rustProcess);
 }
 
 // FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -727,21 +723,7 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
             "exist");
     }
 
-    proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
-    shimshmemprocess_init(proc->shimSharedMemBlock.p, host_getShimShmemLock(host));
-
     gchar** envv_dup = g_strdupv((gchar**)envv);
-
-    {
-        ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);
-
-        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
-        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
-
-        /* append to the env */
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
-    }
 
     /* add log file to env */
     {
@@ -820,8 +802,6 @@ void process_free(Process* proc) {
     if (proc->straceFd >= 0) {
         close(proc->straceFd);
     }
-
-    shmemallocator_globalFree(&proc->shimSharedMemBlock);
 
     worker_count_deallocation(Process);
 

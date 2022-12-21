@@ -176,7 +176,7 @@ bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char*
 void process_parseArgStrFree(char** argv, char* error);
 
 // Process state kept in memory shared with the managed process's shim.
-ShimShmemProcess* process_getSharedMem(Process* proc);
+const ShimShmemProcess* process_getSharedMem(Process* proc);
 
 // Send the signal described in `siginfo` to `process`. `currentRunningThread`
 // should be set if there is one (e.g. if this is being called from a syscall

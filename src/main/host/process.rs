@@ -12,7 +12,9 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::work::task::TaskRef;
 use crate::cshadow;
@@ -74,6 +76,9 @@ pub struct Process {
     plugin_name: CString,
     plugin_path: CString,
 
+    // Shared memory allocation for shared state with shim.
+    shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
+
     // process boot and shutdown variables
     start_time: EmulatedTime,
     stop_time: Option<EmulatedTime>,
@@ -117,18 +122,7 @@ impl Process {
         argv: &[CString],
         pause_for_debugging: bool,
     ) -> RootedRc<RootedRefCell<Self>> {
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
+        debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = RefCell::new(None);
@@ -145,7 +139,11 @@ impl Process {
         ))
         .unwrap();
 
-        debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
+        let shim_shared_mem =
+            ProcessShmem::new(&host.shim_shmem_lock_borrow().unwrap().root, host.id());
+        let shim_shared_mem_block =
+            shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
+        let shim_shared_mem_block_string = shim_shared_mem_block.serialize().encode_to_string();
 
         // We've initialized all the parts of Self *except* for the cprocess.
         // `process_new` needs the Rust process though, so we create that now with
@@ -159,6 +157,7 @@ impl Process {
                     host_id: host.id(),
                     // We set this to non-null below.
                     cprocess: unsafe { SyncSendPointer::new(std::ptr::null_mut()) },
+                    shim_shared_mem_block,
                     memory_manager,
                     desc_table,
                     itimer_real,
@@ -170,6 +169,28 @@ impl Process {
                 },
             ),
         );
+
+        let mut envv = envv.to_owned();
+        envv.push(
+            CString::new(format!(
+                "SHADOW_SHM_PROCESS_BLK={}",
+                shim_shared_mem_block_string
+            ))
+            .unwrap(),
+        );
+
+        let envv_ptrs: Vec<*const i8> = envv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of envv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+        let argv_ptrs: Vec<*const i8> = argv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of argv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
 
         // We're storing a raw pointer to the inner RootedRefCell here. This is a bit
         // fragile, but should be ok since its never moved out of the enclosing RootedRc,
@@ -384,6 +405,7 @@ mod export {
 
     use log::{trace, warn};
     use shadow_shim_helper_rs::notnull::*;
+    use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
 
     use crate::core::worker::Worker;
     use crate::cshadow::CEmulatedTime;
@@ -1025,5 +1047,20 @@ mod export {
         let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, dst_len) };
         let name = name.as_bytes_with_nul();
         dst[..name.len()].copy_from_slice(name);
+    }
+
+    /// Safety:
+    ///
+    /// The returned pointer is invalidated when the host shmem lock is released, e.g. via
+    /// Host::unlock_shmem.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getSharedMem(
+        proc: *const RustProcess,
+    ) -> *const ShimShmemProcess {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            proc.borrow(host.root()).shim_shared_mem_block.deref() as *const _
+        })
+        .unwrap()
     }
 }
