@@ -333,7 +333,9 @@ fn associate_socket(
         return Err(Errno::EADDRINUSE.into());
     }
 
-    let socket = unsafe { c::compatsocket_fromInetSocket(&socket) };
+    // TODO: create the CompatSocket from the InetSocket
+    let InetSocket::Tcp(socket) = socket;
+    let socket = unsafe { c::compatsocket_fromLegacySocket(socket.borrow().as_legacy_socket()) };
 
     // associate the interfaces corresponding to addr with socket
     unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
