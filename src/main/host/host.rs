@@ -728,9 +728,39 @@ impl Host {
         assert!(prev.is_none());
     }
 
+    /// Panics if there is still an outstanding reference returned by
+    /// `shim_shmem_lock_borrow` or `shim_shmem_lock_borrow_mut`.
     pub fn unlock_shmem(&self) {
         let prev = self.shim_shmem_lock.borrow_mut().take();
         assert!(prev.is_some());
+    }
+
+    pub fn shim_shmem_lock_borrow(&self) -> Option<impl Deref<Target = HostShmemProtected> + '_> {
+        Ref::filter_map(self.shim_shmem_lock.borrow(), |l| {
+            l.as_ref().map(|l| {
+                // SAFETY: Returned object holds a checked borrow of the lock;
+                // trying to release the lock before the returned object is
+                // dropped will result in a panic.
+                let guard = unsafe { &*l.get() };
+                guard.deref()
+            })
+        })
+        .ok()
+    }
+
+    pub fn shim_shmem_lock_borrow_mut(
+        &self,
+    ) -> Option<impl Deref<Target = HostShmemProtected> + DerefMut + '_> {
+        RefMut::filter_map(self.shim_shmem_lock.borrow_mut(), |l| {
+            l.as_ref().map(|l| {
+                // SAFETY: Returned object holds a checked borrow of the lock;
+                // trying to release the lock before the returned object is
+                // dropped will result in a panic.
+                let guard = unsafe { &mut *l.get() };
+                guard.deref_mut()
+            })
+        })
+        .ok()
     }
 
     /// Timestamp Counter emulation for this Host. It ticks at the same rate as
