@@ -51,34 +51,34 @@ macro_rules! assert_shmem_safe {
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct HostShmem {
-    host_id: HostId,
+    pub host_id: HostId,
 
-    protected: SelfContainedMutex<HostShmemProtected>,
+    pub protected: SelfContainedMutex<HostShmemProtected>,
 
     // Whether to model unblocked syscalls as taking non-zero time.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one.
-    model_unblocked_syscall_latency: bool,
+    pub model_unblocked_syscall_latency: bool,
 
     // Maximum accumulated CPU latency before updating clock.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
     // stays a global constant; Or down into the process if we make it a
     // per-process option.
-    max_unapplied_cpu_latency: SimulationTime,
+    pub max_unapplied_cpu_latency: SimulationTime,
 
     // How much to move time forward for each unblocked syscall.
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
     // stays a global constant; Or down into the process if we make it a
     // per-process option.
-    unblocked_syscall_latency: SimulationTime,
+    pub unblocked_syscall_latency: SimulationTime,
 
     // How much to move time forward for each unblocked vdso "syscall".
     // TODO: Move to a "ShimShmemGlobal" struct if we make one, and if this
     // stays a global constant; Or down into the process if we make it a
     // per-process option.
-    unblocked_vdso_latency: SimulationTime,
+    pub unblocked_vdso_latency: SimulationTime,
 
     // Current simulation time.
-    sim_time: AtomicEmulatedTime,
+    pub sim_time: AtomicEmulatedTime,
 }
 
 impl HostShmem {
@@ -113,16 +113,16 @@ impl HostShmem {
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct HostShmemProtected {
-    host_id: HostId,
+    pub host_id: HostId,
 
-    root: Root,
+    pub root: Root,
 
     // Modeled CPU latency that hasn't been applied to the clock yet.
-    unapplied_cpu_latency: SimulationTime,
+    pub unapplied_cpu_latency: SimulationTime,
 
     // Max simulation time to which sim_time may be incremented.  Moving time
     // beyond this value requires the current thread to be rescheduled.
-    max_runahead_time: EmulatedTime,
+    pub max_runahead_time: EmulatedTime,
 }
 
 #[derive(VirtualAddressSpaceIndependent)]
