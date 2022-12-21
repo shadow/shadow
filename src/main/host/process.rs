@@ -190,6 +190,17 @@ impl Process {
             ))
             .unwrap(),
         );
+        envv.push(
+            CString::new(format!(
+                "SHADOW_LOG_FILE={}",
+                process
+                    .borrow(host.root())
+                    .output_file_name(host, "shimlog")
+                    .to_str()
+                    .unwrap()
+            ))
+            .unwrap(),
+        );
 
         let envv_ptrs: Vec<*const i8> = envv
             .iter()

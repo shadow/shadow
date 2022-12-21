@@ -703,11 +703,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
     gchar** envv_dup = g_strdupv((gchar**)envv);
 
     /* add log file to env */
-    {
-        char logFileName[4000];
-        _process_outputFileName(rustProcess, host, "shimlog", &logFileName[0], sizeof(logFileName));
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_LOG_FILE", logFileName, TRUE);
-    }
 
     if (!_use_shim_syscall_handler) {
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
