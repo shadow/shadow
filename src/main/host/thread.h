@@ -23,8 +23,8 @@ Thread* thread_new(const Host* host, Process* process, int threadID);
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
-void thread_run(Thread* thread, const char* pluginPath, char** argv, char** envv,
-                const char* workingDir);
+void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
+                const char* const* envv, const char* workingDir);
 void thread_resume(Thread* thread);
 void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);

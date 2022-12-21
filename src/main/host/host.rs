@@ -352,7 +352,7 @@ impl Host {
         plugin_name: &CStr,
         plugin_path: &CStr,
         mut envv: Vec<CString>,
-        argv: &[CString],
+        argv: Vec<CString>,
         pause_for_debugging: bool,
     ) {
         {

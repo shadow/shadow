@@ -82,6 +82,9 @@ pub struct Process {
     // environment variables to pass to exec
     envv: Vec<CString>,
 
+    // argument strings to pass to exec
+    argv: Vec<CString>,
+
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
@@ -125,7 +128,7 @@ impl Process {
         plugin_name: &CStr,
         plugin_path: &CStr,
         mut envv: Vec<CString>,
-        argv: &[CString],
+        argv: Vec<CString>,
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
         use_shim_syscall_handler: bool,
@@ -191,6 +194,7 @@ impl Process {
                     host_id: host.id(),
                     // We set this to non-null below.
                     cprocess: unsafe { SyncSendPointer::new(std::ptr::null_mut()) },
+                    argv,
                     envv,
                     working_dir,
                     shim_shared_mem_block,
@@ -206,13 +210,6 @@ impl Process {
             ),
         );
 
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
         // We're storing a raw pointer to the inner RootedRefCell here. This is a bit
         // fragile, but should be ok since its never moved out of the enclosing RootedRc,
         // so its address won't change. Since the Rust Process owns the C Process, the
@@ -225,7 +222,6 @@ impl Process {
                 process_refcell,
                 host,
                 process_id.try_into().unwrap(),
-                argv_ptrs.as_ptr(),
                 pause_for_debugging,
             )
         };
@@ -296,6 +292,14 @@ impl Process {
         let name = self.output_file_name(host, "stderr");
         self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
 
+        let argv_ptrs: Vec<*const i8> = self
+            .argv
+            .iter()
+            .map(|x| x.as_ptr())
+            // the last element of argv must be NULL
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+
         let envv_ptrs: Vec<*const i8> = self
             .envv
             .iter()
@@ -303,7 +307,7 @@ impl Process {
             // the last element of envv must be NULL
             .chain(std::iter::once(std::ptr::null()))
             .collect();
-        unsafe { cshadow::process_start(self.cprocess(), envv_ptrs.as_ptr()) };
+        unsafe { cshadow::process_start(self.cprocess(), argv_ptrs.as_ptr(), envv_ptrs.as_ptr()) };
     }
 
     fn open_stdio_file_helper(

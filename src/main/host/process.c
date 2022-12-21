@@ -80,9 +80,6 @@ struct _Process {
     gdouble totalRunTime;
 #endif
 
-    /* vector of argument strings passed to exec */
-    gchar** argv;
-
     gint returnCode;
     gboolean didLogReturnCode;
     gboolean killedByShadow;
@@ -452,7 +449,7 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc);
 }
 
-void process_start(Process* proc, const char* const* envv_in) {
+void process_start(Process* proc, const char* const* argv, const char* const* envv_in) {
     MAGIC_ASSERT(proc);
 
     /* we shouldn't already be running */
@@ -500,8 +497,8 @@ void process_start(Process* proc, const char* const* envv_in) {
     proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
-    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), proc->argv, envv,
-               process_getWorkingDir(proc));
+    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
+               (const char* const*)envv, process_getWorkingDir(proc));
     g_strfreev(envv);
     proc->nativePid = thread_getNativePid(mainThread);
     _process_createMemoryManager(proc->rustProcess, proc->nativePid);
@@ -687,16 +684,13 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
 }
 
 Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
-                     const gchar* const* argv, bool pause_for_debugging) {
+                     bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
 #ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
 #endif
-
-    /* save args and env */
-    proc->argv = g_strdupv((gchar**)argv);
 
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
@@ -741,10 +735,6 @@ void process_free(Process* proc) {
     if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
-    }
-
-    if(proc->argv) {
-        g_strfreev(proc->argv);
     }
 
 #ifdef USE_PERF_TIMERS

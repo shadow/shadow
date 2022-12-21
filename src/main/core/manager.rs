@@ -631,7 +631,7 @@ impl<'a> Manager<'a> {
                 &plugin_name,
                 &plugin_path,
                 envv,
-                &argv,
+                argv,
                 pause_for_debugging,
             );
 
