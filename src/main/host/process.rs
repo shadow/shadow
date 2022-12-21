@@ -3,8 +3,11 @@ use std::ffi::{CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::path::PathBuf;
 
-use log::debug;
+use log::{debug, trace};
+use nix::fcntl::OFlag;
+use nix::sys::stat::Mode;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
@@ -15,7 +18,7 @@ use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
-use crate::utility::SyncSendPointer;
+use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
 
 use super::descriptor::descriptor_table::DescriptorTable;
 use super::host::Host;
@@ -64,6 +67,13 @@ pub struct Process {
     id: ProcessId,
     host_id: HostId,
 
+    // unique id of the program that this process should run
+    name: CString,
+
+    // the name and path to the executable that we will exec
+    plugin_name: CString,
+    plugin_path: CString,
+
     // process boot and shutdown variables
     start_time: EmulatedTime,
     stop_time: Option<EmulatedTime>,
@@ -101,7 +111,6 @@ impl Process {
         process_id: ProcessId,
         start_time: SimulationTime,
         stop_time: Option<SimulationTime>,
-        host_name: &CStr,
         plugin_name: &CStr,
         plugin_path: &CStr,
         envv: &[CString],
@@ -121,30 +130,26 @@ impl Process {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
-        let cprocess = unsafe {
-            cshadow::process_new(
-                host,
-                process_id.try_into().unwrap(),
-                host_name.as_ptr(),
-                plugin_name.as_ptr(),
-                plugin_path.as_ptr(),
-                envv_ptrs.as_ptr(),
-                argv_ptrs.as_ptr(),
-                pause_for_debugging,
-            )
-        };
-
-        // SAFETY: The Process itself is wrapped in a RootedRefCell, which ensures
-        // it can only be accessed by one thread at a time. Whenever we access its cprocess,
-        // we ensure that the pointer doesn't "escape" in a way that would allow it to be
-        // accessed by threads that don't have access to the enclosing Process.
-        let cprocess = unsafe { SyncSendPointer::new(cprocess) };
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = RefCell::new(None);
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
+        let plugin_name = plugin_name.to_owned();
+        let plugin_path = plugin_path.to_owned();
+        let name = CString::new(format!(
+            "{host_name}.{exe_name}.{id}",
+            host_name = host.name(),
+            exe_name = plugin_name.to_str().unwrap(),
+            id = u32::from(process_id)
+        ))
+        .unwrap();
+
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
+
+        // We've initialized all the parts of Self *except* for the cprocess.
+        // `process_new` needs the Rust process though, so we create that now with
+        // a NULL cprocess, then create the cprocess, then add it to the Self.
         let process = RootedRc::new(
             host.root(),
             RootedRefCell::new(
@@ -152,15 +157,20 @@ impl Process {
                 Self {
                     id: process_id,
                     host_id: host.id(),
-                    cprocess,
+                    // We set this to non-null below.
+                    cprocess: unsafe { SyncSendPointer::new(std::ptr::null_mut()) },
                     memory_manager,
                     desc_table,
                     itimer_real,
                     start_time: EmulatedTime::SIMULATION_START + start_time,
                     stop_time: stop_time.map(|t| EmulatedTime::SIMULATION_START + t),
+                    name,
+                    plugin_name,
+                    plugin_path,
                 },
             ),
         );
+
         // We're storing a raw pointer to the inner RootedRefCell here. This is a bit
         // fragile, but should be ok since its never moved out of the enclosing RootedRc,
         // so its address won't change. Since the Rust Process owns the C Process, the
@@ -168,7 +178,23 @@ impl Process {
         //
         // We could store the outer RootedRc, but then need to deal with a reference cycle.
         let process_refcell: &RustProcess = &process;
-        unsafe { cshadow::process_setRustProcess(cprocess.ptr(), process_refcell) };
+        let cprocess = unsafe {
+            cshadow::process_new(
+                process_refcell,
+                host,
+                process_id.try_into().unwrap(),
+                envv_ptrs.as_ptr(),
+                argv_ptrs.as_ptr(),
+                pause_for_debugging,
+            )
+        };
+        // SAFETY: The Process itself is wrapped in a RootedRefCell, which ensures
+        // it can only be accessed by one thread at a time. Whenever we access its cprocess,
+        // we ensure that the pointer doesn't "escape" in a way that would allow it to be
+        // accessed by threads that don't have access to the enclosing Process.
+        let cprocess = unsafe { SyncSendPointer::new(cprocess) };
+        process.borrow_mut(host.root()).cprocess = cprocess;
+
         process
     }
 
@@ -197,8 +223,7 @@ impl Process {
         if schedule_start {
             let task = TaskRef::new(move |host| {
                 let process = host.process_borrow(id).unwrap();
-                let cprocess = unsafe { process.borrow(host.root()).cprocess() };
-                unsafe { cshadow::process_start(cprocess) };
+                process.borrow(host.root()).start(host);
             });
             host.schedule_task_at_emulated_time(task, self.start_time);
         }
@@ -213,6 +238,80 @@ impl Process {
                 host.schedule_task_at_emulated_time(task, stop_time);
             }
         }
+    }
+
+    fn start(&self, host: &Host) {
+        self.open_stdio_file_helper(
+            libc::STDIN_FILENO as u32,
+            "/dev/null".into(),
+            OFlag::O_RDONLY,
+        );
+
+        let name = self.output_file_name(host, "stdout");
+        self.open_stdio_file_helper(libc::STDOUT_FILENO as u32, name, OFlag::O_WRONLY);
+
+        let name = self.output_file_name(host, "stderr");
+        self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
+
+        unsafe { cshadow::process_start(self.cprocess()) };
+    }
+
+    fn open_stdio_file_helper(
+        &self,
+        fd: u32,
+        path: PathBuf,
+        access_mode: OFlag,
+    ) -> *mut cshadow::RegularFile {
+        let stdfile = unsafe { cshadow::regularfile_new() };
+        let cwd = nix::unistd::getcwd().unwrap();
+        let path = pathbuf_to_nul_term_cstring(path);
+        let cwd = pathbuf_to_nul_term_cstring(cwd);
+        let errorcode = unsafe {
+            cshadow::regularfile_open(
+                stdfile,
+                path.as_ptr(),
+                (access_mode | OFlag::O_CREAT | OFlag::O_TRUNC).bits(),
+                (Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH).bits(),
+                cwd.as_ptr(),
+            )
+        };
+        if errorcode != 0 {
+            panic!(
+                "Opening {}: {:?}",
+                path.to_str().unwrap(),
+                nix::errno::Errno::from_i32(-errorcode)
+            );
+        }
+        let desc = unsafe {
+            Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
+        };
+        let prev = self.descriptor_table_borrow_mut().set(fd, desc);
+        assert!(prev.is_none());
+        trace!(
+            "Successfully opened fd {} at {}",
+            fd,
+            path.to_str().unwrap()
+        );
+        stdfile
+    }
+
+    fn output_file_name(&self, host: &Host, basename: &str) -> PathBuf {
+        let mut dirname = host.data_dir_path().to_owned();
+        let basename = format!("{}.{}", self.name(), basename);
+        dirname.push(basename);
+        dirname
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.to_str().unwrap()
+    }
+
+    pub fn plugin_name(&self) -> &str {
+        self.plugin_name.to_str().unwrap()
+    }
+
+    pub fn plugin_path(&self) -> &str {
+        self.plugin_path.to_str().unwrap()
     }
 
     #[track_caller]
@@ -278,7 +377,7 @@ impl Drop for Process {
 }
 
 mod export {
-    use std::ffi::c_int;
+    use std::ffi::{c_char, c_int};
     use std::os::raw::c_void;
 
     use log::{trace, warn};
@@ -885,5 +984,44 @@ mod export {
     pub unsafe extern "C" fn _process_getHostId(proc: *const RustProcess) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getName(proc: *const RustProcess) -> *const c_char {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).name.as_ptr()).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getPluginName(proc: *const RustProcess) -> *const c_char {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).plugin_name.as_ptr()).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getPluginPath(proc: *const RustProcess) -> *const c_char {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).plugin_path.as_ptr()).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_outputFileName(
+        proc: *const RustProcess,
+        host: *const Host,
+        typ: *const c_char,
+        dst: *mut c_char,
+        dst_len: usize,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let host = unsafe { host.as_ref().unwrap() };
+        let typ = unsafe { CStr::from_ptr(typ).to_str().unwrap() };
+        let name = proc.borrow(host.root()).output_file_name(host, typ);
+        let name = pathbuf_to_nul_term_cstring(name);
+        // XXX: Is this UB? Maybe the bytes at dst are never "undefined" from
+        // Rust's perspective since any initialization or lack thereof is
+        // invisible through FFI?
+        let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, dst_len) };
+        let name = name.as_bytes_with_nul();
+        dst[..name.len()].copy_from_slice(name);
     }
 }

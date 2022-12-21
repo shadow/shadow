@@ -9,7 +9,7 @@ typedef struct _ManagedThread ManagedThread;
 
 ManagedThread* managedthread_new(Thread* thread);
 void managedthread_free(ManagedThread* mthread);
-void managedthread_run(ManagedThread* methread, char* pluginPath, char** argv, char** envv,
+void managedthread_run(ManagedThread* methread, const char* pluginPath, char** argv, char** envv,
                        const char* workingDir);
 SysCallCondition* managedthread_resume(ManagedThread* mthread);
 void managedthread_handleProcessExit(ManagedThread* mthread);

@@ -664,6 +664,39 @@ impl Descriptor {
 
         unsafe { Some(Box::from_raw(descriptor)) }
     }
+
+    /// The new descriptor takes ownership of the reference to the legacy file and does not
+    /// increment its ref count, but will decrement the ref count when this descriptor is
+    /// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
+    /// `O_CLOEXEC`.
+    ///
+    /// If creating a descriptor for a `TCP` object, you should use `descriptor_fromLegacyTcp`
+    /// instead. If `legacy_file` is a TCP socket, this function will panic.
+    ///
+    /// # Safety
+    ///
+    /// Takes ownership of `legacy_file`, which must be safely dereferenceable.
+    pub unsafe fn from_legacy_file(
+        legacy_file: *mut c::LegacyFile,
+        descriptor_flags: OFlag,
+    ) -> Descriptor {
+        assert!(!legacy_file.is_null());
+
+        // if it's a TCP socket, `descriptor_fromLegacyTcp` should be used instead
+        assert_ne!(
+            unsafe { c::legacyfile_getType(legacy_file) },
+            c::_LegacyFileType_DT_TCPSOCKET,
+        );
+
+        let mut descriptor = Descriptor::new(CompatFile::Legacy(LegacyFileCounter::new(
+            CountedLegacyFileRef::new(HostTreePointer::new(legacy_file)),
+        )));
+
+        let (descriptor_flags, remaining) = DescriptorFlags::from_o_flags(descriptor_flags);
+        assert!(remaining.is_empty());
+        descriptor.set_flags(descriptor_flags);
+        descriptor
+    }
 }
 
 /// Represents a counted reference to a legacy file object. Will decrement the legacy file's ref
@@ -799,23 +832,8 @@ mod export {
         legacy_file: *mut c::LegacyFile,
         descriptor_flags: libc::c_int,
     ) -> *mut Descriptor {
-        assert!(!legacy_file.is_null());
-
-        // if it's a TCP socket, `descriptor_fromLegacyTcp` should be used instead
-        assert_ne!(
-            unsafe { c::legacyfile_getType(legacy_file) },
-            c::_LegacyFileType_DT_TCPSOCKET,
-        );
-
-        let mut descriptor = Descriptor::new(CompatFile::Legacy(LegacyFileCounter::new(
-            CountedLegacyFileRef::new(HostTreePointer::new(legacy_file)),
-        )));
-
         let descriptor_flags = OFlag::from_bits(descriptor_flags).unwrap();
-        let (descriptor_flags, remaining) = DescriptorFlags::from_o_flags(descriptor_flags);
-        assert!(remaining.is_empty());
-        descriptor.set_flags(descriptor_flags);
-
+        let descriptor = unsafe { Descriptor::from_legacy_file(legacy_file, descriptor_flags) };
         Descriptor::into_raw(Box::new(descriptor))
     }
 

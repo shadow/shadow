@@ -130,7 +130,7 @@ pub struct Host {
     //
     // TODO: Remove `data_dir_path_cstring` once we can remove `host_getDataPath`. (Or maybe don't
     // store it at all)
-    _data_dir_path: PathBuf,
+    data_dir_path: PathBuf,
     data_dir_path_cstring: CString,
 
     // virtual process and event id counter
@@ -207,7 +207,7 @@ impl Host {
             params.cpu_threshold,
             params.cpu_precision,
         ));
-        let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
+        let data_dir_path = Self::make_data_dir_path(&params.hostname, host_root_path);
         let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
 
         let host_shmem = HostShmem::new(
@@ -267,7 +267,7 @@ impl Host {
             shim_shmem_lock: RefCell::new(None),
             cpu,
             net_ns: RefCell::new(Some(net_ns)),
-            _data_dir_path: data_dir_path,
+            data_dir_path,
             data_dir_path_cstring,
             process_id_counter,
             event_id_counter,
@@ -314,13 +314,17 @@ impl Host {
         &self.root
     }
 
-    fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
+    fn make_data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
         data_dir_path.push(&hostname);
         data_dir_path
+    }
+
+    pub fn data_dir_path(&self) -> &Path {
+        &self.data_dir_path
     }
 
     fn pcap_options(params: &HostParameters, data_dir_path: &Path) -> Option<PcapOptions> {
@@ -366,7 +370,6 @@ impl Host {
                 process_id,
                 start_time,
                 stop_time,
-                &self.params.hostname,
                 plugin_name,
                 plugin_path,
                 &envv,

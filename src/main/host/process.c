@@ -72,25 +72,17 @@ ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
 ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
 
-static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type);
 static void _process_check(Process* proc);
 
 struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-    /* unique id of the program that this process should run */
-    GString* processName;
-
     /* Shared memory allocation for shared state with shim. */
     ShMemBlock shimSharedMemBlock;
 
     /* the shadow plugin executable */
     struct {
-        /* the name and path to the executable that we will exec */
-        GString* exeName;
-        GString* exePath;
-
         /* TRUE from when we've called into plug-in code until the call completes.
          * Note that the plug-in may get back into shadow code during execution, by
          * calling a function that we intercept. */
@@ -117,10 +109,6 @@ struct _Process {
 
     // int thread_id -> Thread*.
     GHashTable* threads;
-
-    /* File descriptors to handle plugin out and err streams. */
-    RegularFile* stdoutFile;
-    RegularFile* stderrFile;
 
     StraceFmtMode straceLoggingMode;
     int straceFd;
@@ -175,8 +163,7 @@ static void _process_setSharedTime(Process* proc) {
 
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->processName->str);
-    return proc->processName->str;
+    return _process_getName(proc->rustProcess);
 }
 
 StraceFmtMode process_straceLoggingMode(Process* proc) {
@@ -191,8 +178,7 @@ int process_getStraceFd(Process* proc) {
 
 const gchar* process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->plugin.exeName->str);
-    return proc->plugin.exeName->str;
+    return _process_getPluginName(proc->rustProcess);
 }
 
 const char* process_getWorkingDir(Process* proc) {
@@ -393,9 +379,10 @@ static void _process_getAndLogReturnCode(Process* proc) {
         }
     }
 
-    gchar* fileName = _process_outputFileName(proc, _host(proc), "exitcode");
+    char fileName[4000];
+    _process_outputFileName(
+        proc->rustProcess, _host(proc), "exitcode", &fileName[0], sizeof(fileName));
     FILE* exitcodeFile = fopen(fileName, "we");
-    g_free(fileName);
 
     if (exitcodeFile != NULL) {
         if (proc->killedByShadow) {
@@ -486,69 +473,18 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc);
 }
 
-static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type) {
-    return g_strdup_printf("%s/%s.%s", host_getDataPath(host), proc->processName->str, type);
-}
-
-static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName,
-                                                 int accessMode) {
-    MAGIC_ASSERT(proc);
-    utility_debugAssert(fileName != NULL);
-
-    RegularFile* stdfile = regularfile_new();
-    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
-    Descriptor* replacedDesc = _process_descriptorTableSet(proc->rustProcess, fd, desc);
-
-    // assume the fd was not previously in use
-    utility_debugAssert(replacedDesc == NULL);
-
-    char* cwd = getcwd(NULL, 0);
-    if (!cwd) {
-        utility_panic(
-            "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
-    }
-
-    int errcode = regularfile_open(stdfile, fileName, accessMode | O_CREAT | O_TRUNC,
-                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
-    free(cwd);
-
-    if (errcode < 0) {
-        utility_panic("Opening %s: %s", fileName, strerror(-errcode));
-    }
-
-    trace("Successfully opened fd %d at %s", fd, fileName);
-
-    return stdfile;
-}
-
 void process_start(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    /* dont do anything if we are already running */
-    if(process_isRunning(proc)) {
-        return;
-    }
-
-    // Set up stdin
-    _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null", O_RDONLY);
-
-    // Set up stdout
-    gchar* stdoutFileName = _process_outputFileName(proc, _host(proc), "stdout");
-    proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName, O_WRONLY);
-    legacyfile_ref((LegacyFile*)proc->stdoutFile);
-    g_free(stdoutFileName);
-
-    // Set up stderr
-    gchar* stderrFileName = _process_outputFileName(proc, _host(proc), "stderr");
-    proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName, O_WRONLY);
-    legacyfile_ref((LegacyFile*)proc->stderrFile);
-    g_free(stderrFileName);
+    /* we shouldn't already be running */
+    utility_alwaysAssert(!process_isRunning(proc));
 
     if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
-        gchar* straceFileName = _process_outputFileName(proc, _host(proc), "strace");
+        char straceFileName[4000];
+        _process_outputFileName(
+            proc->rustProcess, _host(proc), "strace", &straceFileName[0], sizeof(straceFileName));
         proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        g_free(straceFileName);
     }
 
     // tid of first thread of a process is equal to the pid.
@@ -583,7 +519,8 @@ void process_start(Process* proc) {
     proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
-    thread_run(mainThread, proc->plugin.exePath->str, proc->argv, proc->envv, proc->workingDir);
+    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), proc->argv, proc->envv,
+               proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
     _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
@@ -767,21 +704,10 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
     };
 }
 
-Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
-                     const gchar* pluginName, const gchar* pluginPath, const gchar* const* envv,
-                     const gchar* const* argv, bool pause_for_debugging) {
+Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
+                     const gchar* const* envv, const gchar* const* argv, bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
-
-    /* plugin name and path are required so we know what to execute */
-    utility_debugAssert(pluginName);
-    utility_debugAssert(pluginPath);
-    proc->plugin.exeName = g_string_new(pluginName);
-    proc->plugin.exePath = g_string_new(pluginPath);
-
-    proc->processName = g_string_new(NULL);
-    g_string_printf(proc->processName, "%s.%s.%u", hostName,
-                    proc->plugin.exeName ? proc->plugin.exeName->str : "NULL", processID);
 
 #ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
@@ -819,9 +745,9 @@ Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
 
     /* add log file to env */
     {
-        gchar* logFileName = _process_outputFileName(proc, host, "shimlog");
+        char logFileName[4000];
+        _process_outputFileName(rustProcess, host, "shimlog", &logFileName[0], sizeof(logFileName));
         envv_dup = g_environ_setenv(envv_dup, "SHADOW_LOG_FILE", logFileName, TRUE);
-        g_free(logFileName);
     }
 
     if (!_use_shim_syscall_handler) {
@@ -846,6 +772,7 @@ Process* process_new(const Host* host, pid_t processID, const gchar* hostName,
     proc->pause_for_debugging = pause_for_debugging;
 
     proc->dumpable = SUID_DUMP_USER;
+    proc->rustProcess = rustProcess;
 
     worker_count_allocation(Process);
 
@@ -875,15 +802,6 @@ void process_free(Process* proc) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
     }
-    if(proc->plugin.exePath) {
-        g_string_free(proc->plugin.exePath, TRUE);
-    }
-    if(proc->plugin.exeName) {
-        g_string_free(proc->plugin.exeName, TRUE);
-    }
-    if(proc->processName) {
-        g_string_free(proc->processName, TRUE);
-    }
     if (proc->workingDir) {
         free(proc->workingDir);
     }
@@ -899,12 +817,6 @@ void process_free(Process* proc) {
     g_timer_destroy(proc->cpuDelayTimer);
 #endif
 
-    if (proc->stderrFile) {
-        legacyfile_unref((LegacyFile*)proc->stderrFile);
-    }
-    if (proc->stdoutFile) {
-        legacyfile_unref((LegacyFile*)proc->stdoutFile);
-    }
     if (proc->straceFd >= 0) {
         close(proc->straceFd);
     }

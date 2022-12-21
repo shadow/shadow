@@ -182,7 +182,7 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
     ipcData_markPluginExited(ipc);
 }
 
-void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, char** envv,
+void managedthread_run(ManagedThread* mthread, const char* pluginPath, char** argv, char** envv,
                        const char* workingDir) {
     _managedthread_syncAffinityWithWorker(mthread);
 
