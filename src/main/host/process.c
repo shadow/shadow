@@ -63,12 +63,6 @@
 static bool _use_shim_syscall_handler = true;
 ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
 
-// Shadow 1.x did not adjust the plugins working directories, but Shadow now runs each plugin with
-// the working directory of the host data path. Using the legacy working directory is useful when
-// running the same experiment in multiple versions of Shadow for performacne comparison purposes.
-static bool _use_legacy_working_dir = false;
-ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
-
 static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
 ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
 
@@ -91,9 +85,6 @@ struct _Process {
     GTimer* cpuDelayTimer;
     gdouble totalRunTime;
 #endif
-
-    /* absolute path to the process's working directory */
-    char* workingDir;
 
     /* vector of argument strings passed to exec */
     gchar** argv;
@@ -179,7 +170,7 @@ const gchar* process_getPluginName(Process* proc) {
 
 const char* process_getWorkingDir(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->workingDir;
+    return _process_getWorkingDir(proc->rustProcess);
 }
 
 pid_t process_getProcessID(Process* proc) {
@@ -516,7 +507,7 @@ void process_start(Process* proc) {
     _process_setSharedTime(proc);
     /* exec the process */
     thread_run(mainThread, _process_getPluginPath(proc->rustProcess), proc->argv, proc->envv,
-               proc->workingDir);
+               process_getWorkingDir(proc));
     proc->nativePid = thread_getNativePid(mainThread);
     _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
@@ -709,20 +700,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
     proc->cpuDelayTimer = g_timer_new();
 #endif
 
-    if (_use_legacy_working_dir) {
-        /* use Shadow's working directory */
-        proc->workingDir = getcwd(NULL, 0);
-    } else {
-        /* use the host's data directory */
-        proc->workingDir = realpath(host_getDataPath(host), NULL);
-    }
-
-    if (proc->workingDir == NULL) {
-        utility_panic(
-            "Could not allocate memory for the process' working directory, or directory did not "
-            "exist");
-    }
-
     gchar** envv_dup = g_strdupv((gchar**)envv);
 
     /* add log file to env */
@@ -783,9 +760,6 @@ void process_free(Process* proc) {
     if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
-    }
-    if (proc->workingDir) {
-        free(proc->workingDir);
     }
 
     if(proc->argv) {

@@ -150,6 +150,10 @@ impl ConfigOptions {
         let nanos = nanos.convert(units::TimePrefix::Nano).unwrap().value();
         SimulationTime::from_nanos(nanos)
     }
+
+    pub fn use_legacy_working_dir(&self) -> bool {
+        self.experimental.use_legacy_working_dir.unwrap()
+    }
 }
 
 /// Help messages used by Clap for command line arguments, combining the doc string with
@@ -1341,7 +1345,7 @@ mod export {
     pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.use_legacy_working_dir.unwrap()
+        config.use_legacy_working_dir()
     }
 
     #[no_mangle]

@@ -76,6 +76,9 @@ pub struct Process {
     plugin_name: CString,
     plugin_path: CString,
 
+    // absolute path to the process's working directory
+    working_dir: CString,
+
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
@@ -121,6 +124,7 @@ impl Process {
         envv: &[CString],
         argv: &[CString],
         pause_for_debugging: bool,
+        use_legacy_working_dir: bool,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
@@ -145,6 +149,13 @@ impl Process {
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
         let shim_shared_mem_block_string = shim_shared_mem_block.serialize().encode_to_string();
 
+        let working_dir = pathbuf_to_nul_term_cstring(if use_legacy_working_dir {
+            nix::unistd::getcwd().unwrap()
+        } else {
+            std::fs::canonicalize(host.data_dir_path()).unwrap()
+        });
+
+        // TODO: ensure no duplicate env vars.
         // We've initialized all the parts of Self *except* for the cprocess.
         // `process_new` needs the Rust process though, so we create that now with
         // a NULL cprocess, then create the cprocess, then add it to the Self.
@@ -157,6 +168,7 @@ impl Process {
                     host_id: host.id(),
                     // We set this to non-null below.
                     cprocess: unsafe { SyncSendPointer::new(std::ptr::null_mut()) },
+                    working_dir,
                     shim_shared_mem_block,
                     memory_manager,
                     desc_table,
@@ -1062,5 +1074,11 @@ mod export {
             proc.borrow(host.root()).shim_shared_mem_block.deref() as *const _
         })
         .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getWorkingDir(proc: *const RustProcess) -> *const c_char {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).working_dir.as_ptr()).unwrap()
     }
 }

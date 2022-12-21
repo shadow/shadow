@@ -592,6 +592,7 @@ impl<'a> Manager<'a> {
                 max_unapplied_cpu_latency: self.config.max_unapplied_cpu_latency(),
                 unblocked_syscall_latency: self.config.unblocked_syscall_latency(),
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
+                use_legacy_working_dir: self.config.use_legacy_working_dir(),
             };
 
             Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) })
