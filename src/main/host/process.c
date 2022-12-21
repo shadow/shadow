@@ -84,8 +84,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    int straceFd;
-
     /* When true, threads are no longer runnable and should just be cleaned up. */
     bool isExiting;
 
@@ -145,7 +143,7 @@ StraceFmtMode process_straceLoggingMode(Process* proc) {
 
 int process_getStraceFd(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->straceFd;
+    return _process_straceFd(proc->rustProcess);
 }
 
 const gchar* process_getPluginName(Process* proc) {
@@ -451,14 +449,6 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     /* we shouldn't already be running */
     utility_alwaysAssert(!process_isRunning(proc));
 
-    if (process_straceLoggingMode(proc) != STRACE_FMT_MODE_OFF) {
-        char straceFileName[4000];
-        _process_outputFileName(
-            proc->rustProcess, _host(proc), "strace", &straceFileName[0], sizeof(straceFileName));
-        proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    }
-
     // tid of first thread of a process is equal to the pid.
     int tid = process_getProcessID(proc);
     Thread* mainThread = thread_new(_host(proc), proc, tid);
@@ -693,8 +683,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
 
     proc->isExiting = false;
 
-    proc->straceFd = -1;
-
     proc->memoryMutRef = NULL;
     proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
 
@@ -735,10 +723,6 @@ void process_free(Process* proc) {
 #ifdef USE_PERF_TIMERS
     g_timer_destroy(proc->cpuDelayTimer);
 #endif
-
-    if (proc->straceFd >= 0) {
-        close(proc->straceFd);
-    }
 
     worker_count_deallocation(Process);
 
