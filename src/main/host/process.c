@@ -63,14 +63,6 @@ struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-    /* the shadow plugin executable */
-    struct {
-        /* TRUE from when we've called into plug-in code until the call completes.
-         * Note that the plug-in may get back into shadow code during execution, by
-         * calling a function that we intercept. */
-        gboolean isExecuting;
-    } plugin;
-
 #ifdef USE_PERF_TIMERS
     /* timer that tracks the amount of CPU time we spend on plugin execution and processing */
     GTimer* cpuDelayTimer;
@@ -469,7 +461,6 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
         envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
     }
 
-    proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
     thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
@@ -577,9 +568,7 @@ void process_continue(Process* proc, Thread* thread) {
     _process_setSharedTime(proc);
 
     shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
-    proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
-    proc->plugin.isExecuting = FALSE;
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -613,9 +602,7 @@ void process_stop(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 #endif
 
-    proc->plugin.isExecuting = TRUE;
     _process_terminate(proc);
-    proc->plugin.isExecuting = FALSE;
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
