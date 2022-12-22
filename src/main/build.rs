@@ -228,7 +228,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::process::RustProcess;")
-        .raw_line("use crate::host::syscall::format::StraceFmtMode;")
+        .raw_line("use crate::host::syscall::formatter::StraceFmtMode;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use logger::Logger;")

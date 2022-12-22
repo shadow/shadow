@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::units::{self, Unit};
 use crate::cshadow as c;
-use crate::host::syscall::format::StraceFmtMode;
+use crate::host::syscall::formatter::StraceFmtMode;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use logger as c_log;
