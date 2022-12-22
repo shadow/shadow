@@ -157,8 +157,11 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Flushes and invalidates all previously returned readable/writable plugin
 // pointers, as if returning control to the plugin. This can be useful in
-// conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc);
+// conjunction with `thread_nativeSyscall` operations that touch memory, or
+// to gracefully handle failed writes.
+//
+// Returns 0 on success or a positive errno on failure.
+int process_flushPtrs(Process* proc) __attribute__((warn_unused_result));
 
 // Frees all readable/writable plugin pointers. Unlike process_flushPtrs, any
 // previously returned writable pointer is *not* written back. Useful

@@ -114,6 +114,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 
 static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFile* file) {
     utility_debugAssert(file);
+    int result = 0;
 
     trace("Trying to open file %i in the plugin", fd);
 
@@ -144,7 +145,10 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     snprintf(pluginBuf, maplen, "%s", mmap_path);
 
     /* Flush the buffer to the plugin. */
-    process_flushPtrs(sys->process);
+    result = process_flushPtrs(sys->process);
+    if (result) {
+        goto out;
+    }
 
     /* Attempt to open the file in the plugin with the same flags as what the
      * shadow RegularFile object has. */
@@ -168,7 +172,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     flags &= ~O_NOFOLLOW;
 
     /* Instruct the plugin to open the file at the path we sent. */
-    int result = thread_nativeSyscall(
+    result = thread_nativeSyscall(
         sys->thread, SYS_open, pluginBufPtr.val, flags, regularfile_getModeAtOpen(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
@@ -177,6 +181,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
         trace("Successfully opened path '%s' in plugin, got plugin fd %i.", mmap_path, result);
     }
 
+out:
     /* Release the PluginPtr memory. */
     allocdmem_free(sys->thread, allocdMem);
     free(mmap_path);

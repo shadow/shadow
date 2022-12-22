@@ -838,7 +838,7 @@ static void _process_freeReaders(Process* proc) {
 // Flushes and invalidates all previously returned readable/writeable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc) {
+int process_flushPtrs(Process* proc) {
     MAGIC_ASSERT(proc);
 
     _process_freeReaders(proc);
@@ -847,10 +847,13 @@ void process_flushPtrs(Process* proc) {
     if (proc->memoryMutRef) {
         int rv = memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
         if (rv) {
-            panic("Couldn't flush mutable reference");
+            warning("Couldn't flush mutable reference");
         }
         proc->memoryMutRef = NULL;
+        return rv;
     }
+
+    return 0;
 }
 
 void process_freePtrsWithoutFlushing(Process* proc) {

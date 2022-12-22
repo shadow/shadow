@@ -136,7 +136,10 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                process_flushPtrs(sys->process);
+                result = process_flushPtrs(sys->process);
+                if (result != 0) {
+                    break;
+                }
 
                 switch (scr.state) {
                     case SYSCALL_DONE: {
@@ -257,7 +260,10 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                process_flushPtrs(sys->process);
+                result = process_flushPtrs(sys->process);
+                if (result != 0) {
+                    break;
+                }
 
                 switch (scr.state) {
                     case SYSCALL_DONE: {

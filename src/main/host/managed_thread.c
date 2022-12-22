@@ -271,7 +271,12 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
-    process_flushPtrs(thread_getProcess(mthread->base));
+    {
+        int res = process_flushPtrs(thread_getProcess(mthread->base));
+        if (res) {
+            panic("Couldn't flush cached memory reference: %s", g_strerror(-res));
+        }
+    }
 
     while (true) {
         switch (mthread->currentEvent.event_id) {
@@ -321,7 +326,13 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 }
 
                 // Flush any writes the syscallhandler made.
-                process_flushPtrs(thread_getProcess(mthread->base));
+                {
+                    int res = process_flushPtrs(thread_getProcess(mthread->base));
+                    if (res) {
+                        panic(
+                            "Couldn't flush syscallhandler memory reference: %s", g_strerror(-res));
+                    }
+                }
 
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {
