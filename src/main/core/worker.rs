@@ -54,7 +54,7 @@ pub struct WorkerThreadID(pub u32);
 
 struct ProcessInfo {
     id: ProcessId,
-    native_pid: Pid,
+    native_pid: Option<Pid>,
 }
 
 struct ThreadInfo {
@@ -211,6 +211,7 @@ impl Worker {
                 .as_ref()
                 .map(|p| p.native_pid)
         })
+        .flatten()
         .flatten()
     }
 

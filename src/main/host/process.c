@@ -66,9 +66,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    /* Native pid of the process */
-    pid_t nativePid;
-
     // Pending MemoryReaders and MemoryWriters
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
@@ -134,7 +131,7 @@ pid_t process_getProcessID(Process* proc) {
 
 pid_t process_getNativePid(const Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->nativePid;
+    return _process_getNativePid(proc->rustProcess);
 }
 
 static void _process_reapThread(Process* process, Thread* thread) {
@@ -253,8 +250,9 @@ static void _process_terminate(Process* proc) {
     trace("Terminating");
     _process_setWasKilledByShadow(proc->rustProcess);
 
-    if (kill(proc->nativePid, SIGKILL)) {
-        warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
+    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
+    if (kill(nativePid, SIGKILL)) {
+        warning("kill(pid=%d) error %d: %s", nativePid, errno, g_strerror(errno));
     }
     process_markAsExiting(proc);
     _process_handleProcessExit(proc);
@@ -277,13 +275,14 @@ static void _process_getAndLogReturnCode(Process* proc) {
     int returnCode = EXIT_FAILURE;
 
     int wstatus = 0;
-    int rv = waitpid(proc->nativePid, &wstatus, __WALL);
+    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
+    int rv = waitpid(nativePid, &wstatus, __WALL);
     if (rv < 0) {
         // Getting here is a bug, but since the process is exiting anyway
         // not serious enough to merit `error`ing out.
         warning("waitpid: %s", g_strerror(errno));
-    } else if (rv != proc->nativePid) {
-        warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
+    } else if (rv != nativePid) {
+        warning("waitpid returned %d instead of the requested %d", rv, nativePid);
     } else {
         if (WIFEXITED(wstatus)) {
             returnCode = WEXITSTATUS(wstatus);
@@ -443,8 +442,9 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
                (const char* const*)envv, process_getWorkingDir(proc));
     g_strfreev(envv);
-    proc->nativePid = thread_getNativePid(mainThread);
-    _process_createMemoryManager(proc->rustProcess, proc->nativePid);
+    const pid_t nativePid = thread_getNativePid(mainThread);
+    _process_setNativePid(proc->rustProcess, nativePid);
+    _process_createMemoryManager(proc->rustProcess, nativePid);
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
@@ -471,7 +471,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
                 "this task and then typing \"fg\".\n"
                 "** (If you wish to kill Shadow, type \"kill %%%%\" instead.)\n"
                 "** If running Shadow under GDB, resume Shadow by typing \"signal SIGCONT\".\n",
-                process_getName(proc), proc->nativePid);
+                process_getName(proc), nativePid);
 
         raise(SIGTSTP);
     }
@@ -597,7 +597,7 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
 
 gboolean process_hasStarted(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->nativePid > 0;
+    return _process_hasStarted(proc->rustProcess);
 }
 
 gboolean process_isRunning(Process* proc) {

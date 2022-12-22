@@ -115,6 +115,8 @@ pub struct Process {
     return_code: Cell<Option<i32>>,
     killed_by_shadow: Cell<bool>,
 
+    native_pid: Cell<Option<Pid>>,
+
     // timer that tracks the amount of CPU time we spend on plugin execution and processing
     #[cfg(feature = "perf_timers")]
     cpu_delay_timer: RefCell<PerfTimer>,
@@ -264,6 +266,7 @@ impl Process {
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
                     total_run_time: Cell::new(Duration::ZERO),
+                    native_pid: Cell::new(None),
                 },
             ),
         );
@@ -471,9 +474,8 @@ impl Process {
         self.desc_table.borrow_mut()
     }
 
-    pub fn native_pid(&self) -> Pid {
-        let pid = unsafe { cshadow::process_getNativePid(self.cprocess.ptr()) };
-        Pid::from_raw(pid)
+    pub fn native_pid(&self) -> Option<Pid> {
+        self.native_pid.get()
     }
 
     #[track_caller]
@@ -1295,5 +1297,30 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).total_run_time.get().as_nanos())
             .unwrap() as f64
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getNativePid(proc: *const RustProcess) -> libc::pid_t {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().unwrap().as_raw())
+            .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_setNativePid(proc: *const RustProcess, pid: libc::pid_t) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            proc.borrow(host.root())
+                .native_pid
+                .set(Some(Pid::from_raw(pid)))
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_hasStarted(proc: *const RustProcess) -> bool {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid.get().is_some())
+            .unwrap()
     }
 }
