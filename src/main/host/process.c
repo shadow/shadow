@@ -69,10 +69,6 @@ struct _Process {
     gdouble totalRunTime;
 #endif
 
-    gint returnCode;
-    gboolean didLogReturnCode;
-    gboolean killedByShadow;
-
     // int thread_id -> Thread*.
     GHashTable* threads;
 
@@ -257,11 +253,11 @@ static void _process_terminate(Process* proc) {
     if (!process_isRunning(proc)) {
         trace("Already dead");
         // We should have already cleaned up.
-        utility_debugAssert(proc->didLogReturnCode);
+        utility_debugAssert(_process_didLogReturnCode(proc->rustProcess));
         return;
     }
     trace("Terminating");
-    proc->killedByShadow = true;
+    _process_setWasKilledByShadow(proc->rustProcess);
 
     if (kill(proc->nativePid, SIGKILL)) {
         warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
@@ -284,7 +280,7 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static void _process_getAndLogReturnCode(Process* proc) {
-    if (proc->didLogReturnCode) {
+    if (_process_didLogReturnCode(proc->rustProcess)) {
         return;
     }
 
@@ -297,7 +293,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
     }
 
     // Return an error if we can't get real exit code.
-    proc->returnCode = EXIT_FAILURE;
+    int returnCode = EXIT_FAILURE;
 
     int wstatus = 0;
     int rv = waitpid(proc->nativePid, &wstatus, __WALL);
@@ -309,21 +305,23 @@ static void _process_getAndLogReturnCode(Process* proc) {
         warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
     } else {
         if (WIFEXITED(wstatus)) {
-            proc->returnCode = WEXITSTATUS(wstatus);
+            returnCode = WEXITSTATUS(wstatus);
         } else if (WIFSIGNALED(wstatus)) {
-            proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
+            returnCode = return_code_for_signal(WTERMSIG(wstatus));
         } else {
             warning("Couldn't get exit status");
         }
     }
 
+    _process_setReturnCode(proc->rustProcess, returnCode);
+
     GString* mainResultString = g_string_new(NULL);
     g_string_printf(mainResultString, "process '%s'", process_getName(proc));
-    if (proc->killedByShadow) {
+    if (_process_wasKilledByShadow(proc->rustProcess)) {
         g_string_append_printf(mainResultString, " killed by Shadow");
     } else {
-        g_string_append_printf(mainResultString, " exited with code %d", proc->returnCode);
-        if (proc->returnCode == 0) {
+        g_string_append_printf(mainResultString, " exited with code %d", returnCode);
+        if (returnCode == 0) {
             g_string_append_printf(mainResultString, " (success)");
         } else {
             g_string_append_printf(mainResultString, " (error)");
@@ -336,12 +334,12 @@ static void _process_getAndLogReturnCode(Process* proc) {
     FILE* exitcodeFile = fopen(fileName, "we");
 
     if (exitcodeFile != NULL) {
-        if (proc->killedByShadow) {
+        if (_process_wasKilledByShadow(proc->rustProcess)) {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
             // Write out an empty exitcode file.
         } else {
-            fprintf(exitcodeFile, "%d", proc->returnCode);
+            fprintf(exitcodeFile, "%d", returnCode);
         }
         fclose(exitcodeFile);
     } else {
@@ -351,7 +349,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
     // if there was no error or was intentionally killed
     // TODO: once we've implemented clean shutdown via SIGTERM,
     //       treat death by SIGKILL as a plugin error
-    if (proc->returnCode == 0 || proc->killedByShadow) {
+    if (returnCode == 0 || _process_wasKilledByShadow(proc->rustProcess)) {
         info("%s", mainResultString->str);
     } else {
         warning("%s", mainResultString->str);
@@ -359,8 +357,6 @@ static void _process_getAndLogReturnCode(Process* proc) {
     }
 
     g_string_free(mainResultString, TRUE);
-
-    proc->didLogReturnCode = TRUE;
 }
 
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
