@@ -714,7 +714,14 @@ void process_free(Process* proc) {
     process_freePtrsWithoutFlushing(proc);
     g_array_free(proc->memoryRefs, true);
 
-    _process_terminate(proc);
+    // FIXME: call to _process_terminate removed.
+    // We can't call it here, since the Rust Process inside the RustProcess (RootededRefCell<Process>)
+    // has been extracted, invalidating proc->rustProcess.
+    //
+    // We *shouldn't* need to call _process_terminate here, since Host::free_all_applications
+    // already explicitly stops all processes before freeing them, but once the relevant code is
+    // all in Rust we should ensure the process is terminated in our Drop implementation.
+
     if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
