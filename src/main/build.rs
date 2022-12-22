@@ -198,6 +198,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_var("CONFIG_MTU")
         .allowlist_var("SYSCALL_IO_BUFSIZE")
         .allowlist_var("SHADOW_SOMAXCONN")
+        .allowlist_var("SUID_DUMP_USER")
+        .allowlist_var("SUID_DUMP_DISABLE")
         .opaque_type("LegacyFile")
         .opaque_type("Manager")
         .opaque_type("Descriptor")

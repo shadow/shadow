@@ -1,4 +1,4 @@
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::{Ref, RefCell, RefMut, Cell};
 use std::ffi::{CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
@@ -96,6 +96,16 @@ pub struct Process {
 
     strace_logging_mode: StraceFmtMode,
     strace_file: Option<std::fs::File>,
+
+    // Pause shadow after launching this process, to give the user time to attach gdb
+    pause_for_debugging: bool,
+
+    // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
+    // and PR_GET_DUMPABLE.
+    dumpable: Cell<u32>,
+
+    // When true, threads are no longer runnable and should just be cleaned up.
+    is_exiting: Cell<bool>,
 
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
@@ -224,6 +234,9 @@ impl Process {
                     plugin_path,
                     strace_logging_mode,
                     strace_file,
+                    pause_for_debugging,
+                    dumpable: Cell::new(cshadow::SUID_DUMP_USER),
+                    is_exiting: Cell::new(false),
                 },
             ),
         );
@@ -1138,6 +1151,46 @@ mod export {
             Some(f) => f.as_raw_fd(),
             None => -1,
         })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_isExiting(proc: *const RustProcess) -> bool {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).is_exiting.get())
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_markAsExiting(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.is_exiting.set(true);
+            trace!("Process {:?} marked as exiting", proc.id());
+        })
+        .unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_shouldPauseForDebugging(proc: *const RustProcess) -> bool {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).pause_for_debugging)
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getDumpable(proc: *const RustProcess) -> u32 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.get())
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_setDumpable(proc: *const RustProcess, val: u32) {
+        assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val))
         .unwrap()
     }
 }

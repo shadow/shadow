@@ -84,23 +84,12 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    /* When true, threads are no longer runnable and should just be cleaned up. */
-    bool isExiting;
-
     /* Native pid of the process */
     pid_t nativePid;
 
     // Pending MemoryReaders and MemoryWriters
     ProcessMemoryRefMut_u8* memoryMutRef;
     GArray* memoryRefs;
-
-    /* "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
-     * and PR_GET_DUMPABLE.
-     */
-    int dumpable;
-
-    /* Pause shadow after launching this process, to give the user time to attach gdb */
-    bool pause_for_debugging;
 
     MAGIC_DECLARE;
 };
@@ -174,7 +163,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
     // that address. This mechanism is typically used in `pthread_join` etc.
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
+    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !_process_isExiting(process->rustProcess)) {
         // Verify thread is really dead. This *should* no longer be needed, but doesn't
         // hurt to defensively do anyway, since waking the futex before the thread has
         // actually exited can (and has) led to difficult-to-track-down bugs.
@@ -500,7 +489,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     worker_setActiveProcess(NULL);
     worker_setActiveThread(NULL);
 
-    if (proc->pause_for_debugging) {
+    if (_process_shouldPauseForDebugging(proc->rustProcess)) {
         // will block until logger output has been flushed
         // there is a race condition where other threads may log between the fprintf() and raise()
         // below, but it should be rare
@@ -562,8 +551,7 @@ Thread* process_getThread(Process* proc, pid_t virtualTID) {
 
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    trace("Process %d marked as exiting", process_getProcessID(proc));
-    proc->isExiting = true;
+    _process_markAsExiting(proc->rustProcess);
 }
 
 void process_continue(Process* proc, Thread* thread) {
@@ -601,7 +589,7 @@ void process_continue(Process* proc, Thread* thread) {
     debug("process '%s' done continuing", process_getName(proc));
 #endif
 
-    if (proc->isExiting) {
+    if (_process_isExiting(proc->rustProcess)) {
         // If the whole process is already exiting, skip to cleaning up the
         // whole process exit; normal thread cleanup would likely fail.
         _process_handleProcessExit(proc);
@@ -656,7 +644,7 @@ gboolean process_hasStarted(Process* proc) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return !proc->isExiting && g_hash_table_size(proc->threads) > 0;
+    return !_process_isExiting(proc->rustProcess) && g_hash_table_size(proc->threads) > 0;
 }
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
@@ -681,14 +669,9 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
-    proc->isExiting = false;
-
     proc->memoryMutRef = NULL;
     proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
 
-    proc->pause_for_debugging = pause_for_debugging;
-
-    proc->dumpable = SUID_DUMP_USER;
     proc->rustProcess = rustProcess;
 
     worker_count_allocation(Process);
@@ -1032,10 +1015,9 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 }
 
 int process_getDumpable(Process* process) {
-    return process->dumpable;
+    return _process_getDumpable(process->rustProcess);
 }
 
 void process_setDumpable(Process* process, int dumpable) {
-    utility_alwaysAssert(dumpable == SUID_DUMP_DISABLE || dumpable == SUID_DUMP_USER);
-    process->dumpable = dumpable;
+    _process_setDumpable(process->rustProcess, dumpable);
 }
