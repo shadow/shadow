@@ -31,6 +31,11 @@ use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
 
+#[cfg(feature = "perf_timers")]
+use crate::utility::perf_timer::PerfTimer;
+#[cfg(feature = "perf_timers")]
+use std::time::Duration;
+
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
@@ -109,6 +114,12 @@ pub struct Process {
 
     return_code: Cell<Option<i32>>,
     killed_by_shadow: Cell<bool>,
+
+    // timer that tracks the amount of CPU time we spend on plugin execution and processing
+    #[cfg(feature = "perf_timers")]
+    cpu_delay_timer: RefCell<PerfTimer>,
+    #[cfg(feature = "perf_timers")]
+    total_run_time: Cell<Duration>,
 
     desc_table: RefCell<DescriptorTable>,
     memory_manager: RefCell<Option<MemoryManager>>,
@@ -211,6 +222,13 @@ impl Process {
             Some(unsafe { std::fs::File::from_raw_fd(fd) })
         };
 
+        #[cfg(feature = "perf_timers")]
+        let cpu_delay_timer = {
+            let mut t = PerfTimer::new();
+            t.stop();
+            RefCell::new(t)
+        };
+
         // We've initialized all the parts of Self *except* for the cprocess.
         // `process_new` needs the Rust process though, so we create that now with
         // a NULL cprocess, then create the cprocess, then add it to the Self.
@@ -242,6 +260,10 @@ impl Process {
                     is_exiting: Cell::new(false),
                     return_code: Cell::new(None),
                     killed_by_shadow: Cell::new(false),
+                    #[cfg(feature = "perf_timers")]
+                    cpu_delay_timer,
+                    #[cfg(feature = "perf_timers")]
+                    total_run_time: Cell::new(Duration::ZERO),
                 },
             ),
         );
@@ -1225,5 +1247,53 @@ mod export {
     pub unsafe extern "C" fn _process_wasKilledByShadow(proc: *const RustProcess) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).killed_by_shadow.get()).unwrap()
+    }
+
+    #[cfg(feature = "perf_timers")]
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_startCpuDelayTimer(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            proc.borrow(host.root())
+                .cpu_delay_timer
+                .borrow_mut()
+                .start()
+        })
+        .unwrap()
+    }
+
+    #[cfg(feature = "perf_timers")]
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_stopCpuDelayTimer(proc: *const RustProcess) -> f64 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let delta = Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let mut timer = proc.cpu_delay_timer.borrow_mut();
+            timer.stop();
+            let total_elapsed = timer.elapsed();
+            let prev_total = proc.total_run_time.replace(total_elapsed);
+            let delta = total_elapsed - prev_total;
+
+            if let Some(mut tracker) = host.tracker_borrow_mut() {
+                unsafe {
+                    cshadow::tracker_addProcessingTimeNanos(
+                        &mut *tracker,
+                        delta.as_nanos().try_into().unwrap(),
+                    )
+                };
+                host.cpu_borrow_mut().add_delay(delta);
+            }
+            delta
+        })
+        .unwrap();
+        delta.as_nanos() as f64
+    }
+
+    #[cfg(feature = "perf_timers")]
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getTotalRunTime(proc: *const RustProcess) -> f64 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).total_run_time.get().as_nanos())
+            .unwrap() as f64
     }
 }

@@ -398,6 +398,14 @@ impl Host {
         Ref::filter_map(self.processes.borrow(), |processes| processes.get(&id)).ok()
     }
 
+    pub fn cpu_borrow(&self) -> impl Deref<Target = Cpu> + '_ {
+        self.cpu.borrow()
+    }
+
+    pub fn cpu_borrow_mut(&self) -> impl Deref<Target = Cpu> + DerefMut + '_ {
+        self.cpu.borrow_mut()
+    }
+
     /// Information about the Host. Made available as an Arc for cheap cloning
     /// into, e.g. Worker and ShadowLogger. When there's no need to clone the
     /// Arc, generally prefer the top-level `Host` methods for accessing this

@@ -63,12 +63,6 @@ struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-#ifdef USE_PERF_TIMERS
-    /* timer that tracks the amount of CPU time we spend on plugin execution and processing */
-    GTimer* cpuDelayTimer;
-    gdouble totalRunTime;
-#endif
-
     // int thread_id -> Thread*.
     GHashTable* threads;
 
@@ -266,19 +260,6 @@ static void _process_terminate(Process* proc) {
     _process_handleProcessExit(proc);
 }
 
-#ifdef USE_PERF_TIMERS
-static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
-    uint64_t delayNanos = elapsedTimeSec * 1000000000ull;
-    const Host* host = _host(proc);
-    host_addDelayNanos(host, delayNanos);
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        tracker_addProcessingTimeNanos(tracker, delayNanos);
-    }
-    proc->totalRunTime += elapsedTimeSec;
-}
-#endif
-
 static void _process_getAndLogReturnCode(Process* proc) {
     if (_process_didLogReturnCode(proc->rustProcess)) {
         return;
@@ -397,8 +378,8 @@ static void _process_check(Process* proc) {
     info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
-    info(
-        "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
+    info("total runtime for process '%s' was %f seconds", process_getName(proc),
+         _process_getTotalRunTime(proc->rustProcess));
 #endif
 
     utility_alwaysAssert(proc->rustProcess);
@@ -440,7 +421,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
     gchar** envv = g_strdupv((gchar**)envv_in);
@@ -466,8 +447,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     _process_createMemoryManager(proc->rustProcess, proc->nativePid);
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' started", process_getName(proc));
@@ -558,7 +538,7 @@ void process_continue(Process* proc, Thread* thread) {
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
     _process_setSharedTime(proc);
@@ -567,8 +547,7 @@ void process_continue(Process* proc, Thread* thread) {
     thread_resume(thread);
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 #else
     debug("process '%s' done continuing", process_getName(proc));
@@ -595,23 +574,19 @@ void process_stop(Process* proc) {
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
     _process_terminate(proc);
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
-#endif
-
-    worker_setActiveProcess(NULL);
-
-#ifdef USE_PERF_TIMERS
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' stopped", process_getName(proc));
 #endif
+
+    worker_setActiveProcess(NULL);
 
     _process_check(proc);
 }
@@ -644,10 +619,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
                      bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
-
-#ifdef USE_PERF_TIMERS
-    proc->cpuDelayTimer = g_timer_new();
-#endif
 
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
@@ -692,10 +663,6 @@ void process_free(Process* proc) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
     }
-
-#ifdef USE_PERF_TIMERS
-    g_timer_destroy(proc->cpuDelayTimer);
-#endif
 
     worker_count_deallocation(Process);
 
