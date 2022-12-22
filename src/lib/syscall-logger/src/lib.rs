@@ -123,6 +123,14 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             // make the syscall
             let rv = self.#syscall_name_original(ctx, args);
 
+            // In case the syscall borrowed memory references without flushing them,
+            // we need to flush them here.
+            if rv.is_ok() {
+                ctx.process.free_unsafe_borrows_flush().unwrap();
+            } else {
+                ctx.process.free_unsafe_borrows_noflush();
+            }
+
             // format the result (returns None if the syscall didn't complete)
             let memory = ctx.process.memory_borrow();
             let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, strace_fmt_options, &*memory);

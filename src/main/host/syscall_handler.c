@@ -213,6 +213,20 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         sys->perfSecondsCurrent = 0;
 #endif
     }
+
+    // We need to flush pointers here, so that the syscall formatter can
+    // reliably borrow process memory without an incompatible borrow.
+    if (!(scr->state == SYSCALL_DONE &&
+          syscall_rawReturnValueToErrno(syscallreturn_done(scr)->retval.as_i64) == 0)) {
+        // The syscall didn't complete successfully; don't write back pointers.
+        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+        process_freePtrsWithoutFlushing(sys->process);
+    } else {
+        int res = process_flushPtrs(sys->process);
+        if (res != 0) {
+            panic("Flushing syscall ptrs: %s", g_strerror(-res));
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////
@@ -223,11 +237,11 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
         scr = syscallhandler_##s(sys, args);                                                       \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
                 sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
         }                                                                                          \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         break
 #define NATIVE(s)                                                                                  \
     case SYS_##s:                                                                                  \
@@ -582,11 +596,17 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         scr = syscallreturn_makeInterrupted(blocked->restartable);
     }
 
+    // Ensure pointers are flushed.
     if (!(scr.state == SYSCALL_DONE &&
           syscall_rawReturnValueToErrno(syscallreturn_done(&scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
         process_freePtrsWithoutFlushing(sys->process);
+    } else {
+        int res = process_flushPtrs(sys->process);
+        if (res != 0) {
+            panic("Flushing syscall ptrs: %s", g_strerror(-res));
+        }
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(host)) &&

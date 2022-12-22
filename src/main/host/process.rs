@@ -1,5 +1,5 @@
 use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::ffi::{CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::RawFd;
@@ -7,6 +7,7 @@ use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::PathBuf;
 
 use log::{debug, info, trace};
+use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
@@ -25,8 +26,9 @@ use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
 
 use super::descriptor::descriptor_table::DescriptorTable;
 use super::host::Host;
-use super::memory_manager::MemoryManager;
+use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
+use super::syscall_types::TypedPluginPtr;
 use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
@@ -124,8 +126,20 @@ pub struct Process {
     total_run_time: Cell<Duration>,
 
     desc_table: RefCell<DescriptorTable>,
-    memory_manager: RefCell<Option<MemoryManager>>,
     itimer_real: RefCell<Timer>,
+
+    // References to `Self::memory_manager` cached on behalf of C code using legacy
+    // C memory access APIs.
+    // TODO: Remove these when we've migrated Shadow off of the APIs that need
+    // them (probably by migrating all the calling code to Rust).
+    //
+    // SAFETY: Must be before memory_manager for drop order.
+    unsafe_borrow_mut: RefCell<Option<UnsafeBorrowMut>>,
+    unsafe_borrows: RefCell<Vec<UnsafeBorrow>>,
+
+    // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
+    // Boxed to avoid invalidating those if Self is moved.
+    memory_manager: Box<RefCell<Option<MemoryManager>>>,
 }
 
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
@@ -168,7 +182,7 @@ impl Process {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
         let desc_table = RefCell::new(DescriptorTable::new());
-        let memory_manager = RefCell::new(None);
+        let memory_manager = Box::new(RefCell::new(None));
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
@@ -267,6 +281,8 @@ impl Process {
                     #[cfg(feature = "perf_timers")]
                     total_run_time: Cell::new(Duration::ZERO),
                     native_pid: Cell::new(None),
+                    unsafe_borrow_mut: RefCell::new(None),
+                    unsafe_borrows: RefCell::new(Vec::new()),
                 },
             ),
         );
@@ -487,20 +503,236 @@ impl Process {
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
         self.itimer_real.borrow_mut()
     }
+
+    /// This cleans up memory references left over from legacy C code; usually
+    /// a syscall handler.
+    ///
+    /// Writes the leftover mutable ref to memory (if any), and frees
+    /// all memory refs.
+    pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
+        self.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        if let Some(borrow) = unsafe_borrow_mut {
+            borrow.flush()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// This cleans up memory references left over from legacy C code; usually
+    /// a syscall handler.
+    ///
+    /// Frees all memory refs without writing back to memory.
+    pub fn free_unsafe_borrows_noflush(&self) {
+        self.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        if let Some(borrow) = unsafe_borrow_mut {
+            borrow.noflush();
+        }
+    }
 }
 
 impl Drop for Process {
     fn drop(&mut self) {
         unsafe { cshadow::process_free(self.cprocess.ptr()) }
+        self.free_unsafe_borrows_noflush();
     }
 }
+
+/// Tracks a memory reference made by a legacy C memory-read API.
+struct UnsafeBorrow {
+    // Must come before `manager`, so that it's dropped first, since it's
+    // borrowed from it.
+    _memory: ProcessMemoryRef<'static, u8>,
+    _manager: Ref<'static, MemoryManager>,
+}
+
+impl UnsafeBorrow {
+    /// Creates a raw readable pointer, and saves an instance of `Self` into
+    /// `process` for later clean-up.
+    ///
+    /// # Safety
+    ///
+    /// The pointer is invalidated when one of the Process memory flush methods is called.
+    unsafe fn readable_ptr(
+        process: &Process,
+        ptr: TypedPluginPtr<u8>,
+    ) -> Result<*const c_void, Errno> {
+        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        // SAFETY: We ensure that the `memory` is dropped before the `manager`,
+        // and `Process` ensures that this whole object is dropped before
+        // `MemoryManager` can be moved, freed, etc.
+        let manager = unsafe {
+            std::mem::transmute::<Ref<'_, MemoryManager>, Ref<'static, MemoryManager>>(manager)
+        };
+        let memory = manager.memory_ref(ptr)?;
+        let memory = unsafe {
+            std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(memory)
+        };
+        let vptr = memory.as_ptr() as *mut c_void;
+        process.unsafe_borrows.borrow_mut().push(Self {
+            _manager: manager,
+            _memory: memory,
+        });
+        Ok(vptr)
+    }
+
+    /// Creates a raw readable string, and saves an instance of `Self` into
+    /// `process` for later clean-up.
+    ///
+    /// # Safety
+    ///
+    /// The pointer is invalidated when one of the Process memory flush methods is called.
+    unsafe fn readable_string(
+        process: &Process,
+        ptr: TypedPluginPtr<c_char>,
+    ) -> Result<(*const c_char, libc::size_t), Errno> {
+        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        // SAFETY: We ensure that the `memory` is dropped before the `manager`,
+        // and `Process` ensures that this whole object is dropped before
+        // `MemoryManager` can be moved, freed, etc.
+        let manager = unsafe {
+            std::mem::transmute::<Ref<'_, MemoryManager>, Ref<'static, MemoryManager>>(manager)
+        };
+        let ptr = ptr.cast_u8();
+        let memory = manager.memory_ref_prefix(ptr)?;
+        let memory = unsafe {
+            std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(memory)
+        };
+        if !memory.contains(&0) {
+            return Err(Errno::ENAMETOOLONG);
+        }
+        assert_eq!(std::mem::size_of::<c_char>(), std::mem::size_of::<u8>());
+        let ptr = memory.as_ptr() as *const c_char;
+        let len = memory.len();
+        process.unsafe_borrows.borrow_mut().push(Self {
+            _manager: manager,
+            _memory: memory,
+        });
+        Ok((ptr, len))
+    }
+}
+
+// Safety: Normally the Ref would make this non-Send, since it could end then
+// end up trying to manipulate the source RefCell (which is !Sync) from multiple
+// threads.  We ensure that these objects never escape Process, which itself is
+// non-Sync, ensuring this doesn't happen.
+//
+// This is admittedly hand-wavy and making some assumptions about the
+// implementation of RefCell, but this whole type is temporary scaffolding to
+// support legacy C code.
+unsafe impl Send for UnsafeBorrow {}
+
+/// Tracks a memory reference made by a legacy C memory-write API.
+struct UnsafeBorrowMut {
+    // Must come before `manager`, so that it's dropped first, since it's
+    // borrowed from it.
+    memory: Option<ProcessMemoryRefMut<'static, u8>>,
+    _manager: RefMut<'static, MemoryManager>,
+}
+
+impl UnsafeBorrowMut {
+    /// Creates a raw writable pointer, and saves an instance of `Self` into
+    /// `process` for later clean-up. The initial contents of the pointer is unspecified.
+    ///
+    /// # Safety
+    ///
+    /// The pointer is invalidated when one of the Process memory flush methods is called.
+    unsafe fn writable_ptr(
+        process: &Process,
+        ptr: TypedPluginPtr<u8>,
+    ) -> Result<*mut c_void, Errno> {
+        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
+            mm.as_mut().unwrap()
+        });
+        // SAFETY: We ensure that the `memory` is dropped before the `manager`,
+        // and `Process` ensures that this whole object is dropped before
+        // `MemoryManager` can be moved, freed, etc.
+        let mut manager = unsafe {
+            std::mem::transmute::<RefMut<'_, MemoryManager>, RefMut<'static, MemoryManager>>(
+                manager,
+            )
+        };
+        let memory = manager.memory_ref_mut_uninit(ptr)?;
+        let mut memory = unsafe {
+            std::mem::transmute::<ProcessMemoryRefMut<'_, u8>, ProcessMemoryRefMut<'static, u8>>(
+                memory,
+            )
+        };
+        let vptr = memory.as_mut_ptr() as *mut c_void;
+        let prev = process.unsafe_borrow_mut.borrow_mut().replace(Self {
+            _manager: manager,
+            memory: Some(memory),
+        });
+        assert!(prev.is_none());
+        Ok(vptr)
+    }
+
+    /// Creates a raw mutable pointer, and saves an instance of `Self` into
+    /// `process` for later clean-up.
+    ///
+    /// # Safety
+    ///
+    /// The pointer is invalidated when one of the Process memory flush methods is called.
+    unsafe fn mutable_ptr(
+        process: &Process,
+        ptr: TypedPluginPtr<u8>,
+    ) -> Result<*mut c_void, Errno> {
+        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
+            mm.as_mut().unwrap()
+        });
+        // SAFETY: We ensure that the `memory` is dropped before the `manager`,
+        // and `Process` ensures that this whole object is dropped before
+        // `MemoryManager` can be moved, freed, etc.
+        let mut manager = unsafe {
+            std::mem::transmute::<RefMut<'_, MemoryManager>, RefMut<'static, MemoryManager>>(
+                manager,
+            )
+        };
+        let memory = manager.memory_ref_mut(ptr)?;
+        let mut memory = unsafe {
+            std::mem::transmute::<ProcessMemoryRefMut<'_, u8>, ProcessMemoryRefMut<'static, u8>>(
+                memory,
+            )
+        };
+        let vptr = memory.as_mut_ptr() as *mut c_void;
+        let prev = process.unsafe_borrow_mut.borrow_mut().replace(Self {
+            _manager: manager,
+            memory: Some(memory),
+        });
+        assert!(prev.is_none());
+        Ok(vptr)
+    }
+
+    /// Free this reference, writing back to process memory.
+    fn flush(mut self) -> Result<(), Errno> {
+        self.memory.take().unwrap().flush()
+    }
+
+    /// Free this reference without writing back to process memory.
+    fn noflush(mut self) {
+        self.memory.take().unwrap().noflush()
+    }
+}
+
+// Safety: Normally the RefMut would make this non-Send, since it could end then
+// end up trying to manipulate the source RefCell (which is !Sync) from multiple
+// threads.  We ensure that these objects never escape Process, which itself is
+// non-Sync, ensuring this doesn't happen.
+//
+// This is admittedly hand-wavy and making some assumptions about the implementation of
+// RefCell, but this whole type is temporary scaffolding to support legacy C code.
+unsafe impl Send for UnsafeBorrowMut {}
 
 mod export {
     use std::ffi::{c_char, c_int};
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
 
-    use log::{trace, warn};
+    use libc::size_t;
+    use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
 
@@ -509,7 +741,6 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
-    use crate::host::memory_manager::{ProcessMemoryRef, ProcessMemoryRefMut};
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
     use crate::host::thread::ThreadRef;
     use crate::utility::callback_queue::CallbackQueue;
@@ -623,6 +854,8 @@ mod export {
         }).unwrap()
     }
 
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+    /// the specified range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
     pub extern "C" fn _process_readPtr(
         proc: *const RustProcess,
@@ -650,7 +883,8 @@ mod export {
         .unwrap()
     }
 
-    /// Write data to this writer's memory.
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+    /// the specified range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
     pub unsafe extern "C" fn _process_writePtr(
         proc: *const RustProcess,
@@ -677,103 +911,79 @@ mod export {
         .unwrap()
     }
 
-    /// Get a read-accessor to the specified plugin memory.
-    /// Must be freed via `memorymanager_freeReader`.
+    /// Make the data at plugin_src available in shadow's address space.
+    ///
+    /// The returned pointer is invalidated when one of the process memory flush
+    /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn _process_getReadablePtr(
         proc: *const RustProcess,
         plugin_src: cshadow::PluginPtr,
         n: usize,
-    ) -> *mut ProcessMemoryRef<'static, u8> {
+    ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src: PluginPtr = plugin_src.into();
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let memory = proc.memory_borrow();
-            let memory_ref = memory.memory_ref(TypedPluginPtr::new::<u8>(plugin_src, n));
-            match memory_ref {
-                Ok(mr) => {
-                    // SAFETY: This should only be called from process.c, which
-                    // tries to detect incompatible borrows.
-                    let mr = unsafe { std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(mr)};
-                    Box::into_raw(Box::new(mr))
-                },
-                Err(e) => {
-                    warn!("Failed to get memory ref: {:?}", e);
-                    std::ptr::null_mut()
-                }
-            }
-        }).unwrap()
+            unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
+        })
+        .unwrap()
     }
 
-    /// Get a writable pointer to this writer's memory. Initial contents are unspecified.
+    /// Returns a writable pointer corresponding to the named region. The
+    /// initial contents of the returned memory are unspecified.
+    ///
+    /// The returned pointer is invalidated when one of the process memory flush
+    /// methods is called; typically after a syscall has completed.
+    ///
+    /// CAUTION: if the unspecified contents aren't overwritten, and the pointer
+    /// isn't explicitly freed via `process_freePtrsWithoutFlushing`, those
+    /// unspecified contents may be written back into process memory.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getWritablePtrRef(
-        proc: *mut cshadow::Process,
+    pub unsafe extern "C" fn _process_getWriteablePtr(
+        proc: *const RustProcess,
         plugin_src: cshadow::PluginPtr,
         n: usize,
-    ) -> *mut ProcessMemoryRefMut<'static, u8> {
-        let proc = unsafe { cshadow::process_getRustProcess(proc).as_ref().unwrap() };
+    ) -> *mut c_void {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
-            let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
-            let memory_ref = memory_manager.memory_ref_mut_uninit(plugin_src);
-            match memory_ref {
-                Ok(mr) => {
-                    // SAFETY: This should only be called from process.c, which
-                    // tries to detect incompatible borrows.
-                    let mr = unsafe {
-                        std::mem::transmute::<
-                            ProcessMemoryRefMut<'_, u8>,
-                            ProcessMemoryRefMut<'static, u8>,
-                        >(mr)
-                    };
-                    Box::into_raw(Box::new(mr))
-                }
-                Err(e) => {
-                    warn!("Failed to get memory ref: {:?}", e);
-                    std::ptr::null_mut()
-                }
+            unsafe {
+                UnsafeBorrowMut::writable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null_mut())
             }
         })
         .unwrap()
     }
 
-    /// Get a readable and writable pointer to this writer's memory.
+    /// Returns a writeable pointer corresponding to the specified src. Use when
+    /// the data at the given address needs to be both read and written.
+    ///
+    /// The returned pointer is invalidated when one of the process memory flush
+    /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn _process_getMutablePtr(
         proc: *const RustProcess,
         plugin_src: cshadow::PluginPtr,
         n: usize,
-    ) -> *mut ProcessMemoryRefMut<'static, u8> {
+    ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
-            let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
-            let memory_ref = memory_manager.memory_ref_mut(plugin_src);
-            match memory_ref {
-                Ok(mr) => {
-                    // SAFETY: This should only be called from process.c, which
-                    // tries to detect incompatible borrows.
-                    let mr = unsafe {
-                        std::mem::transmute::<
-                            ProcessMemoryRefMut<'_, u8>,
-                            ProcessMemoryRefMut<'static, u8>,
-                        >(mr)
-                    };
-                    Box::into_raw(Box::new(mr))
-                }
-                Err(e) => {
-                    warn!("Failed to get memory ref: {:?}", e);
-                    std::ptr::null_mut()
-                }
+            unsafe {
+                UnsafeBorrowMut::mutable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null_mut())
             }
         })
         .unwrap()
     }
 
+    /// Reads up to `n` bytes into `str`.
+    ///
+    /// Returns:
+    /// strlen(str) on success.
+    /// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
+    /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
     pub unsafe extern "C" fn _process_readString(
         proc: *const RustProcess,
@@ -874,29 +1084,37 @@ mod export {
         .unwrap();
     }
 
+    /// Reads up to `n` bytes into `str`.
+    ///
+    /// Returns:
+    /// strlen(str) on success.
+    /// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
+    /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
-    pub unsafe extern "C" fn _process_getReadablePtrPrefix(
+    pub unsafe extern "C" fn _process_getReadableString(
         proc: *const RustProcess,
         plugin_src: cshadow::PluginPtr,
         n: usize,
-    ) -> *mut ProcessMemoryRef<'static, u8> {
+        out_str: *mut *const c_char,
+        out_strlen: *mut size_t,
+    ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let memory_manager = proc.memory_borrow();
-            match memory_manager
-                .memory_ref_prefix(TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n))
-            {
-                Ok(mr) => {
-                    let mr = unsafe { std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(mr)};
-                    Box::into_raw(Box::new(mr))}
-                ,
-                Err(e) => {
-                    warn!("Couldn't read memory for string: {:?}", e);
-                    std::ptr::null_mut()
+            let ptr = TypedPluginPtr::new::<c_char>(plugin_src.into(), n);
+            match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
+                Ok((str, strlen)) => {
+                    assert!(!out_str.is_null());
+                    unsafe { out_str.write(str) };
+                    if !out_strlen.is_null() {
+                        unsafe { out_strlen.write(strlen) };
+                    }
+                    0
                 }
+                Err(e) => -(e as i32),
             }
-        }).unwrap()
+        })
+        .unwrap()
     }
 
     /// Fully handles the `mmap` syscall
@@ -1322,5 +1540,39 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).native_pid.get().is_some())
             .unwrap()
+    }
+
+    /// Flushes and invalidates all previously returned readable/writable plugin
+    /// pointers, as if returning control to the plugin. This can be useful in
+    /// conjunction with `thread_nativeSyscall` operations that touch memory, or
+    /// to gracefully handle failed writes.
+    ///
+    /// Returns 0 on success or a negative errno on failure.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_flushPtrs(proc: *const RustProcess) -> i32 {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            match proc.free_unsafe_borrows_flush() {
+                Ok(_) => 0,
+                Err(e) => -(e as i32),
+            }
+        })
+        .unwrap()
+    }
+
+    /// Frees all readable/writable plugin pointers. Unlike process_flushPtrs, any
+    /// previously returned writable pointer is *not* written back. Useful
+    /// if an uninitialized writable pointer was obtained via `process_getWriteablePtr`,
+    /// and we end up not wanting to write anything after all (in particular, don't
+    /// write back whatever garbage data was in the uninialized bueffer).
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_freePtrsWithoutFlushing(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.free_unsafe_borrows_noflush();
+        })
+        .unwrap();
     }
 }

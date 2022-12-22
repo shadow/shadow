@@ -66,10 +66,6 @@ struct _Process {
     // int thread_id -> Thread*.
     GHashTable* threads;
 
-    // Pending MemoryReaders and MemoryWriters
-    ProcessMemoryRefMut_u8* memoryMutRef;
-    GArray* memoryRefs;
-
     MAGIC_DECLARE;
 };
 
@@ -623,9 +619,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
-    proc->memoryMutRef = NULL;
-    proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
-
     proc->rustProcess = rustProcess;
 
     worker_count_allocation(Process);
@@ -647,9 +640,6 @@ const RustProcess* process_getRustProcess(Process* proc) {
 
 void process_free(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    process_freePtrsWithoutFlushing(proc);
-    g_array_free(proc->memoryRefs, true);
 
     // FIXME: call to _process_terminate removed.
     // We can't call it here, since the Rust Process inside the RustProcess (RootededRefCell<Process>)
@@ -711,76 +701,27 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
     return _process_readPtr(proc->rustProcess, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
     return _process_writePtr(proc->rustProcess, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
-    ProcessMemoryRef_u8* ref = _process_getReadablePtr(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    g_array_append_val(proc->memoryRefs, ref);
-    return memorymanagerref_ptr(ref);
+    return _process_getReadablePtr(proc->rustProcess, plugin_src, n);
 }
 
 int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, const char** out_str,
                               size_t* out_strlen) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
-    ProcessMemoryRef_u8* ref = _process_getReadablePtrPrefix(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return -EFAULT;
-    }
-
-    size_t nbytes = memorymanagerref_sizeof(ref);
-    const char* str = memorymanagerref_ptr(ref);
-    size_t strlen = strnlen(str, nbytes);
-    if (strlen == nbytes) {
-        // No NULL byte.
-        memorymanager_freeRef(ref);
-        return -ENAMETOOLONG;
-    }
-
-    utility_debugAssert(out_str);
-    *out_str = str;
-    if (out_strlen) {
-        *out_strlen = strlen;
-    }
-
-    g_array_append_val(proc->memoryRefs, ref);
-
-    return 0;
+    return _process_getReadableString(proc->rustProcess, plugin_src, n, out_str, out_strlen);
 }
 
 ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
     return _process_readString(proc->rustProcess, src, str, n);
 }
 
@@ -790,18 +731,7 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
-    ProcessMemoryRefMut_u8* ref = process_getWritablePtrRef(proc, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    proc->memoryMutRef = ref;
-    return memorymanagermut_ptr(ref);
+    return _process_getWriteablePtr(proc->rustProcess, plugin_src, n);
 }
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -810,29 +740,7 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
-    ProcessMemoryRefMut_u8* ref = _process_getMutablePtr(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    proc->memoryMutRef = ref;
-    return memorymanagermut_ptr(ref);
-}
-
-static void _process_freeReaders(Process* proc) {
-    // Free any readers
-    if (proc->memoryRefs->len > 0) {
-        for (int i = 0; i < proc->memoryRefs->len; ++i) {
-            ProcessMemoryRef_u8* ref = g_array_index(proc->memoryRefs, ProcessMemoryRef_u8*, i);
-            memorymanager_freeRef(ref);
-        }
-        proc->memoryRefs = g_array_set_size(proc->memoryRefs, 0);
-    }
+    return _process_getMutablePtr(proc->rustProcess, plugin_src, n);
 }
 
 // Flushes and invalidates all previously returned readable/writeable plugin
@@ -840,33 +748,12 @@ static void _process_freeReaders(Process* proc) {
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 int process_flushPtrs(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    _process_freeReaders(proc);
-
-    // Flush and free any writers
-    if (proc->memoryMutRef) {
-        int rv = memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
-        if (rv) {
-            warning("Couldn't flush mutable reference");
-        }
-        proc->memoryMutRef = NULL;
-        return rv;
-    }
-
-    return 0;
+    return _process_flushPtrs(proc->rustProcess);
 }
 
 void process_freePtrsWithoutFlushing(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    _process_freeReaders(proc);
-
-    // Flush and free any writers
-    if (proc->memoryMutRef) {
-        trace("Discarding plugin ptr without writing back.");
-        memorymanager_freeMutRefWithoutFlush(proc->memoryMutRef);
-        proc->memoryMutRef = NULL;
-    }
+    return _process_freePtrsWithoutFlushing(proc->rustProcess);
 }
 
 // ******************************************************
