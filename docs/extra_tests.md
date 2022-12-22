@@ -17,7 +17,11 @@ not complete before the timeout.
 ./setup build --test --extra
 ./setup test --extra
 # To exclude the TGen and Tor tests (for example if you built Shadow in debug mode)
-./setup test --extra -- --label-exclude tgen|tor
+./setup test --extra -- --label-exclude "tgen|tor"
+# To include only the TGen tests
+./setup test --extra tgen
+# To run a specific TGen test
+./setup test --extra tgen-duration-1mbit_300ms-1000streams-shadow
 ```
 
 If you change the version of tor located at `~/.local/bin/tor`, make sure to
