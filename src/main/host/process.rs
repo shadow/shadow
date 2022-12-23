@@ -1266,57 +1266,30 @@ mod export {
     }
 
     /// Returns the processID that was assigned to us in process_new
-    ///
-    /// Needed for early access from process_new, before there is an active
-    /// Host.
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getProcessIDWithHost(
-        proc: *const RustProcess,
-        host: *const Host,
-    ) -> libc::pid_t {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-        proc.borrow(host.root()).id().try_into().unwrap()
-    }
-
-    /// Returns the processID that was assigned to us in process_new
     #[no_mangle]
     pub unsafe extern "C" fn _process_getProcessID(proc: *const RustProcess) -> libc::pid_t {
-        Worker::with_active_host(|h| unsafe { _process_getProcessIDWithHost(proc, h) }).unwrap()
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|h| proc.borrow(h.root()).id().try_into().unwrap()).unwrap()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn _process_getStartTime(proc: *const RustProcess) -> CEmulatedTime {
-        Worker::with_active_host(|host| unsafe { _process_getStartTimeWithHost(proc, host) })
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getStartTimeWithHost(
-        proc: *const RustProcess,
-        host: *const Host,
-    ) -> CEmulatedTime {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-        let start_time = proc.borrow(host.root()).start_time;
-        EmulatedTime::to_c_emutime(Some(start_time))
+        Worker::with_active_host(|host| {
+            let start_time = proc.borrow(host.root()).start_time;
+            EmulatedTime::to_c_emutime(Some(start_time))
+        })
+        .unwrap()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn _process_getStopTime(proc: *const RustProcess) -> CEmulatedTime {
-        Worker::with_active_host(|host| unsafe { _process_getStopTimeWithHost(proc, host) })
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getStopTimeWithHost(
-        proc: *const RustProcess,
-        host: *const Host,
-    ) -> CEmulatedTime {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-        let stop_time = proc.borrow(host.root()).stop_time;
-        EmulatedTime::to_c_emutime(stop_time)
+        Worker::with_active_host(|host| {
+            let stop_time = proc.borrow(host.root()).stop_time;
+            EmulatedTime::to_c_emutime(stop_time)
+        })
+        .unwrap()
     }
 
     #[no_mangle]
