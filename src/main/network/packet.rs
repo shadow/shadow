@@ -201,7 +201,7 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     };
 
     // c::CONFIG_HEADER_SIZE is in bytes. Ultimately, TCP header len is represented in 32-bit
-    // words, so we divide by 4. The right-shift of 4 is because the header len is represented
+    // words, so we divide by 4. The left-shift of 4 is because the header len is represented
     // in the top 4 bits.
     let mut header_len: u8 = c::CONFIG_HEADER_SIZE_TCP.try_into().unwrap();
     header_len /= 4;
@@ -222,7 +222,7 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     }
     let window: [u8; 2] = u16::try_from(tcp_header.window).unwrap().to_be_bytes();
     let checksum: u16 = 0x0;
-    let options = [0u8; 14];
+    let urgent_pointer: u16 = 0x0;
 
     // source port: 2 bytes
     writer.write_all(&source_port)?;
@@ -239,8 +239,8 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     writer.write_all(&window)?;
     // checksum: 2 bytes
     writer.write_all(&checksum.to_be_bytes())?;
-    // options: number of bytes dependent on the earlier data offset
-    writer.write_all(&options)?;
+
+    writer.write_all(&urgent_pointer.to_be_bytes())?;
 
     Ok(())
 }
