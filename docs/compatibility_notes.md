@@ -162,84 +162,14 @@ with Shadow and will cause Shadow to deadlock. A workaround is to use the
 
 ### Example
 
-Example for etcd version 3.5.x.
+Example for etcd version 3.3.x.
 
 ```yaml
-general:
-  stop_time: 30s
-  model_unblocked_syscall_latency: true
-
-network:
-  graph:
-    type: gml
-    inline: |
-      graph [
-        node [
-          id 0
-          host_bandwidth_down "20 Mbit"
-          host_bandwidth_up "20 Mbit"
-        ]
-        edge [
-          source 0
-          target 0
-          latency "150 ms"
-          packet_loss 0.01
-        ]
-      ]
-
-hosts:
-  server1:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/etcd
-      args:
-        --name server1
-        --log-outputs=stdout
-        --initial-cluster-token etcd-cluster-1
-        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
-        --listen-client-urls http://0.0.0.0:2379
-        --advertise-client-urls http://server1:2379
-        --listen-peer-urls http://0.0.0.0:2380
-        --initial-advertise-peer-urls http://server1:2380
-    - path: /usr/bin/etcdctl
-      args: put my-key my-value
-      start_time: 10s
-  server2:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/etcd
-      args:
-        --name server2
-        --log-outputs=stdout
-        --initial-cluster-token etcd-cluster-1
-        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
-        --listen-client-urls http://0.0.0.0:2379
-        --advertise-client-urls http://server2:2379
-        --listen-peer-urls http://0.0.0.0:2380
-        --initial-advertise-peer-urls http://server2:2380
-    - path: /usr/bin/etcdctl
-      args: get my-key
-      start_time: 12s
-  server3:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/etcd
-      args:
-        --name server3
-        --log-outputs=stdout
-        --initial-cluster-token etcd-cluster-1
-        --initial-cluster 'server1=http://server1:2380,server2=http://server2:2380,server3=http://server3:2380'
-        --listen-client-urls http://0.0.0.0:2379
-        --advertise-client-urls http://server3:2379
-        --listen-peer-urls http://0.0.0.0:2380
-        --initial-advertise-peer-urls http://server3:2380
-    - path: /usr/bin/etcdctl
-      args: get my-key
-      start_time: 12s
+{{#include ../examples/etcd/shadow.yaml}}
 ```
 
 ```bash
-rm -rf shadow.data; shadow shadow.yaml > shadow.log
+{{#include ../examples/etcd/run.sh:body}}
 ```
 
 ### Notes

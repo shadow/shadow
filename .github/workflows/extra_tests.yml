@@ -450,6 +450,7 @@ jobs:
           cd shadow
           # dependencies for examples
           ./examples/curl/install_deps.sh
+          ./examples/etcd/install_deps.sh
           ./examples/http-server/install_deps.sh
           ./examples/iperf-2/install_deps.sh
           ./examples/nginx/install_deps.sh
