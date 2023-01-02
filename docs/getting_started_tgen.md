@@ -66,6 +66,9 @@ hosts:
     # Assumes `tgen` is on your shell's `PATH`.
     # Otherwise use an absolute path here.
     - path: tgen
+      # The ../../../ prefix assumes that tgen.server.graph.xml in the same
+      # directory as the data directory (specified with the -d CLI argument).
+      # See notes below explaining Shadow's directory structure.
       args: ../../../tgen.server.graphml.xml
       start_time: 1s
   client:
@@ -86,7 +89,9 @@ directory](https://en.wikipedia.org/wiki/Working_directory) for the host's
 processes, which is why we specified `../../../tgen.server.graphml.xml` as the
 path to the TGen configuration in our Shadow configuration file
 (`./shadow.data/hosts/server/../../../tgen.server.graphml.xml` →
-`./tgen.server.graphml.xml`).
+`./tgen.server.graphml.xml`). The host directory structure is *stable*---it is
+guaranteed not to change between minor releases, so the `../../../` prefix may
+reliably be used to refer to files in the same directory as the data directory.
 
 `model_unblocked_syscall_latency` is used to avoid deadlock in case tgen was
 compiled with [libopenblas](compatibility_notes.md#libopenblas).
