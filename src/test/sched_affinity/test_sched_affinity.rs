@@ -50,8 +50,11 @@ fn set_affinity() {
 
     cpu_set.unset(0).unwrap();
     sched_setaffinity(Pid::from_raw(0), &cpu_set).unwrap_err();
-    assert_eq!(unsafe { libc::sched_setaffinity(0, 0, 0 as _) }, -1,);
-    assert_eq!(unsafe { *libc::__errno_location() }, libc::EINVAL,);
+    assert_eq!(
+        unsafe { libc::sched_setaffinity(0, 0, std::ptr::null()) },
+        -1
+    );
+    assert_eq!(test_utils::get_errno(), libc::EINVAL);
 }
 
 fn sysconf(shadow: bool) {
