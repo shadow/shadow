@@ -280,6 +280,8 @@ impl Host {
             execution_timer,
         };
 
+        res.stop_execution_timer();
+
         info!(
             concat!(
                 "Setup host id '{:?}'",
@@ -289,9 +291,9 @@ impl Host {
                 " {bw_down_kiBps} bwDownKiBps,",
                 " {init_sock_send_buf_size} initSockSendBufSize,",
                 " {init_sock_recv_buf_size} initSockRecvBufSize, ",
-                " {cpu_frequency} cpuFrequency, ",
-                " {cpu_threshold} cpuThreshold, ",
-                " {cpu_precision} cpuPrecision"
+                " {cpu_frequency:?} cpuFrequency, ",
+                " {cpu_threshold:?} cpuThreshold, ",
+                " {cpu_precision:?} cpuPrecision"
             ),
             res.id(),
             name = res.info().name,
@@ -300,12 +302,10 @@ impl Host {
             bw_down_kiBps = res.bw_down_kiBps(),
             init_sock_send_buf_size = res.params.init_sock_send_buf_size,
             init_sock_recv_buf_size = res.params.init_sock_recv_buf_size,
-            cpu_frequency = format!("{:?}", res.params.cpu_frequency),
-            cpu_threshold = format!("{:?}", res.params.cpu_threshold),
-            cpu_precision = format!("{:?}", res.params.cpu_precision),
+            cpu_frequency = res.params.cpu_frequency,
+            cpu_threshold = res.params.cpu_threshold,
+            cpu_precision = res.params.cpu_precision,
         );
-
-        res.stop_execution_timer();
 
         res
     }
