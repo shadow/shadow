@@ -52,7 +52,12 @@ except: pylab.rcParams.update({'figure.max_open_warning':50})
 try: pylab.rcParams.update({'legend.ncol':1.0})
 except: pass
 
-LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
+LINE_COLORS = ['k', 'r', 'b', 'g', 'c', 'm', 'y']
+LINE_STYLES = ['-', '--', ':', '-.']
+
+# since there are 7 colors and 4 styles (no common factor), there will be 28
+# distinct color/style combinations before it repeats
+LINE_FORMATS = ','.join([x[0] + x[1] for x in zip(LINE_COLORS*10, LINE_STYLES*10)])
 
 # a custom action for passing in experimental data directories when plotting
 class PlotDataAction(argparse.Action):
@@ -102,7 +107,7 @@ def main():
                 matplotlib's plot command (see matplotlib.pyplot.plot)""",
         metavar="LIST",
         action="store", dest="lineformats",
-        default=LINEFORMATS)
+        default=LINE_FORMATS)
 
     parser.add_argument('-s', '--skip',
         help="""Ignore the first N seconds of each log file while parsing""",
