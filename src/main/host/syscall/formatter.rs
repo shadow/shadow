@@ -236,7 +236,7 @@ pub fn write_syscall(
 ) -> std::io::Result<()> {
     let sim_time = sim_time.duration_since(&EmulatedTime::SIMULATION_START);
     let sim_time = TimeParts::from_nanos(sim_time.as_nanos());
-    let sim_time = sim_time.fmt_hr_min_sec_milli();
+    let sim_time = sim_time.fmt_hr_min_sec_nano();
 
     writeln!(writer, "{sim_time} [tid {tid}] {name}({args}) = {rv}")
 }
