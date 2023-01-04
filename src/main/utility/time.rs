@@ -41,6 +41,11 @@ impl TimeParts {
     pub fn fmt_hr_min_sec_milli(&self) -> TimePartsFmtHrMinSecMilli {
         TimePartsFmtHrMinSecMilli { time: self }
     }
+
+    /// Format as HH:MM:SS.nnnnnnnnn.
+    pub fn fmt_hr_min_sec_nano(&self) -> TimePartsFmtHrMinSecNano {
+        TimePartsFmtHrMinSecNano { time: self }
+    }
 }
 
 pub struct TimePartsFmtHrMinSec<'a> {
@@ -70,6 +75,20 @@ impl std::fmt::Display for TimePartsFmtHrMinSecMilli<'_> {
             self.time.mins,
             self.time.secs,
             self.time.nanos / 1_000_000
+        )
+    }
+}
+
+pub struct TimePartsFmtHrMinSecNano<'a> {
+    time: &'a TimeParts,
+}
+
+impl std::fmt::Display for TimePartsFmtHrMinSecNano<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:02}:{:02}:{:02}.{:09}",
+            self.time.hours, self.time.mins, self.time.secs, self.time.nanos,
         )
     }
 }
