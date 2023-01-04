@@ -254,21 +254,20 @@ static void _networkinterface_process_packet_in(const Host* host, NetworkInterfa
     /* hand it off to the correct socket layer */
     ProtocolType ptype = packet_getProtocol(packet);
     in_port_t bindPort = packet_getDestinationPort(packet);
+    in_addr_t peerIP = packet_getSourceIP(packet);
+    in_port_t peerPort = packet_getSourcePort(packet);
 
-    /* the first check is for servers who don't associate with specific destinations */
-    gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
-    trace("looking for socket associated with general key %s", key);
+    /* first check for a socket with the specific association */
+    gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
+    trace("looking for socket associated with specific key %s", key);
 
     CompatSocket socket = _boundsockets_lookup(interface->boundSockets, key);
     g_free(key);
 
     if (socket.type == CST_NONE) {
-        /* now check the destination-specific key */
-        in_addr_t peerIP = packet_getSourceIP(packet);
-        in_port_t peerPort = packet_getSourcePort(packet);
-
-        key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
-        trace("looking for socket associated with specific key %s", key);
+        /* then check for a socket with a wildcard association */
+        key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
+        trace("looking for socket associated with general key %s", key);
         socket = _boundsockets_lookup(interface->boundSockets, key);
         g_free(key);
     }
