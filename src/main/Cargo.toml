@@ -26,7 +26,7 @@ libc = "0.2"
 log = { version = "0.4", features = ["release_max_level_debug"] }
 logger = { path = "../lib/logger" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
-lzma-rs = "0.2"
+lzma-rs = "0.3"
 memoffset = "0.8.0"
 merge = "0.1"
 nix = "0.26.1"
