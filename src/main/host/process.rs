@@ -1,4 +1,5 @@
 use std::cell::{Cell, Ref, RefCell, RefMut};
+use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
@@ -29,6 +30,7 @@ use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::TypedPluginPtr;
+use super::thread::{ThreadId, ThreadRef};
 use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
@@ -132,6 +134,8 @@ pub struct Process {
 
     desc_table: RefCell<DescriptorTable>,
     itimer_real: RefCell<Timer>,
+
+    threads: RefCell<BTreeMap<ThreadId, ThreadRef>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -292,6 +296,7 @@ impl Process {
                     native_pid: Cell::new(None),
                     unsafe_borrow_mut: RefCell::new(None),
                     unsafe_borrows: RefCell::new(Vec::new()),
+                    threads: RefCell::new(BTreeMap::new()),
                 },
             ),
         );
@@ -737,9 +742,10 @@ mod export {
     use std::os::raw::c_void;
 
     use libc::size_t;
-    use log::trace;
+    use log::{trace, warn};
+    use nix::sys::signal::Signal;
     use shadow_shim_helper_rs::notnull::*;
-    use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
+    use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemProcess};
 
     use crate::core::worker::Worker;
     use crate::cshadow::CEmulatedTime;
@@ -1552,6 +1558,154 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.free_unsafe_borrows_noflush();
+        })
+        .unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_threadLeader(
+        proc: *const RustProcess,
+    ) -> *mut cshadow::Thread {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let tid = ThreadId::from(proc.id());
+            let threads = proc.threads.borrow();
+            match threads.get(&tid) {
+                Some(t) => unsafe { t.cthread() },
+                None => std::ptr::null_mut(),
+            }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getThread(
+        proc: *const RustProcess,
+        tid: libc::pid_t,
+    ) -> *mut cshadow::Thread {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let tid = ThreadId::try_from(tid).unwrap();
+            let threads = proc.threads.borrow();
+            match threads.get(&tid) {
+                Some(t) => unsafe { t.cthread() },
+                None => std::ptr::null_mut(),
+            }
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_removeThread(proc: *const RustProcess, tid: libc::pid_t) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let tid = ThreadId::try_from(tid).unwrap();
+            proc.threads.borrow_mut().remove(&tid);
+        })
+        .unwrap()
+    }
+
+    /// Inserts the thread into the process's thread list. Caller retains
+    /// ownership to its reference to `thread` (i.e. this function increments the reference
+    /// count).
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_insertThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let thread = unsafe { ThreadRef::new(thread) };
+            let tid = thread.id();
+            proc.threads.borrow_mut().insert(tid, thread);
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_isRunning(proc: *const RustProcess) -> bool {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            !proc.is_exiting.get() && proc.threads.borrow().len() > 0
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_numThreads(proc: *const RustProcess) -> usize {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let threads = proc.threads.borrow();
+            threads.len()
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_interruptWithSignal(
+        proc: *const RustProcess,
+        host_lock: *mut ShimShmemHostLock,
+        signo: i32,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let host_lock = unsafe { host_lock.as_mut().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            let signal = Signal::try_from(signo).unwrap();
+            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+            let mut threads = proc.threads.borrow_mut();
+            for thread in threads.values_mut() {
+                {
+                    let thread_shmem = thread.shmem();
+                    let thread_shmem_protected =
+                        thread_shmem.protected.borrow_mut(&host_shmem.root);
+                    let blocked_signals = thread_shmem_protected.blocked_signals;
+                    if blocked_signals.has(signal) {
+                        continue;
+                    }
+                }
+                let Some(mut cond) = thread.syscall_condition_mut() else {
+                    // Defensively handle this gracefully, but it probably shouldn't happen.
+                    // The only thread in the process not blocked on a syscall should be
+                    // the current-running thread (if any), but the caller should have
+                    // delivered the signal synchronously instead of using this function
+                    // in that case.
+                    warn!("thread {:?} has no syscall_condition. How?", thread.id());
+                    continue;
+                };
+                cond.wakeup_for_signal(host_lock, signal);
+                break;
+            }
+        })
+        .unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_handleProcessExit(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+
+        trace!("Handling process exit");
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            loop {
+                let (tid, cthread) = {
+                    let threads = proc.threads.borrow();
+                    let Some((tid, thread)) = threads.iter().next() else {
+                        break;
+                    };
+                    (*tid, unsafe { thread.cthread() })
+                };
+                unsafe { cshadow::thread_handleProcessExit(cthread) };
+                unsafe { cshadow::process_reapThread(proc.cprocess(), cthread) };
+                proc.threads.borrow_mut().remove(&tid);
+            }
+            unsafe { cshadow::process_check(proc.cprocess()) };
         })
         .unwrap();
     }

@@ -1,3 +1,6 @@
+use nix::sys::signal::Signal;
+use shadow_shim_helper_rs::shim_shmem::HostShmemProtected;
+
 use crate::cshadow;
 use crate::host::descriptor::OpenFile;
 use crate::host::syscall::Trigger;
@@ -63,6 +66,20 @@ impl<'a> SysCallConditionRefMut<'a> {
     pub fn set_active_file(&mut self, file: OpenFile) {
         let file_ptr = Box::into_raw(Box::new(file));
         unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr, file_ptr) };
+    }
+
+    pub fn wakeup_for_signal(
+        &mut self,
+        host_lock: &mut HostShmemProtected,
+        signal: Signal,
+    ) -> bool {
+        unsafe {
+            cshadow::syscallcondition_wakeupForSignal(
+                self.condition.c_ptr,
+                host_lock,
+                signal as i32,
+            )
+        }
     }
 }
 

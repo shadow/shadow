@@ -248,7 +248,7 @@ impl Drop for ThreadRef {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ThreadId(u32);
 
 impl TryFrom<libc::pid_t> for ThreadId {
@@ -256,6 +256,13 @@ impl TryFrom<libc::pid_t> for ThreadId {
 
     fn try_from(value: libc::pid_t) -> Result<Self, Self::Error> {
         Ok(Self(u32::try_from(value)?))
+    }
+}
+
+impl From<ProcessId> for ThreadId {
+    fn from(value: ProcessId) -> Self {
+        // A process ID is also a valid thread ID
+        ThreadId(value.into())
     }
 }
 
