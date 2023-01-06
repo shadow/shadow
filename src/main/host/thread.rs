@@ -4,6 +4,7 @@ use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, HostTreePointer, IsSend};
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
 
 /// Wraps the C Thread struct.
@@ -230,6 +231,11 @@ impl ThreadRef {
     pub unsafe fn cthread(&self) -> *mut c::Thread {
         // SAFETY: Enforced by caller.
         unsafe { self.cthread.ptr() }
+    }
+
+    /// Shared memory for this thread.
+    pub fn shmem(&self) -> &ThreadShmem {
+        unsafe { c::thread_sharedMem(self.cthread()).as_ref().unwrap() }
     }
 }
 
