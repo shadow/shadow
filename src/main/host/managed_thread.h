@@ -10,7 +10,7 @@ typedef struct _ManagedThread ManagedThread;
 ManagedThread* managedthread_new(Thread* thread);
 void managedthread_free(ManagedThread* mthread);
 void managedthread_run(ManagedThread* methread, const char* pluginPath, const char* const* argv,
-                       const char* const* envv, const char* workingDir);
+                       const char* const* envv, const char* workingDir, int straceFd);
 SysCallCondition* managedthread_resume(ManagedThread* mthread);
 void managedthread_handleProcessExit(ManagedThread* mthread);
 int managedthread_getReturnCode(ManagedThread* mthread);

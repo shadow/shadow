@@ -98,9 +98,9 @@ void thread_unref(Thread* thread) {
 }
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
-                const char* const* envv, const char* workingDir) {
+                const char* const* envv, const char* workingDir, int straceFd) {
     MAGIC_ASSERT(thread);
-    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir);
+    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir, straceFd);
 }
 
 void thread_resume(Thread* thread) {

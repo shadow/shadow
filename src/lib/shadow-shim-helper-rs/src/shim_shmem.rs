@@ -3,6 +3,8 @@ use libc::{siginfo_t, stack_t};
 use nix::sys::signal::Signal;
 use vasi::VirtualAddressSpaceIndependent;
 
+use crate::option::FfiOption;
+
 use crate::{
     emulated_time::{AtomicEmulatedTime, EmulatedTime},
     rootedcell::{refcell::RootedRefCell, Root},
@@ -130,13 +132,16 @@ pub struct HostShmemProtected {
 pub struct ProcessShmem {
     host_id: HostId,
 
+    pub strace_fd: FfiOption<libc::c_int>,
+
     protected: RootedRefCell<ProcessShmemProtected>,
 }
 
 impl ProcessShmem {
-    pub fn new(host_root: &Root, host_id: HostId) -> Self {
+    pub fn new(host_root: &Root, host_id: HostId, strace_fd: Option<libc::c_int>) -> Self {
         Self {
             host_id,
+            strace_fd: strace_fd.into(),
             protected: RootedRefCell::new(
                 host_root,
                 ProcessShmemProtected {
@@ -542,6 +547,17 @@ pub mod export {
     ) {
         let host_mem = unsafe { host_mem.as_mut().unwrap() };
         host_mem.max_runahead_time = EmulatedTime::from_c_emutime(t).unwrap();
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getProcessStraceFd(
+        process: *const ShimShmemProcess,
+    ) -> libc::c_int {
+        let process_mem = unsafe { process.as_ref().unwrap() };
+        process_mem.strace_fd.unwrap_or(-1)
     }
 
     /// Get the process's pending signal set.
