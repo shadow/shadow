@@ -61,7 +61,7 @@ Thread* thread_new(const Host* host, Process* process, int threadID) {
     thread->sys = syscallhandler_new(host, process, thread);
     thread->mthread = managedthread_new(thread);
 
-    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host));
+    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadID);
 
     return thread;
 }

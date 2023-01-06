@@ -226,14 +226,16 @@ impl ProcessShmemProtected {
 #[repr(C)]
 pub struct ThreadShmem {
     host_id: HostId,
+    tid: libc::pid_t,
 
     protected: RootedRefCell<ThreadShmemProtected>,
 }
 
 impl ThreadShmem {
-    pub fn new(host: &HostShmemProtected) -> Self {
+    pub fn new(host: &HostShmemProtected, tid: libc::pid_t) -> Self {
         Self {
             host_id: host.host_id,
+            tid,
             protected: RootedRefCell::new(
                 &host.root,
                 ThreadShmemProtected {
@@ -680,11 +682,21 @@ pub mod export {
     pub unsafe extern "C" fn shimshmemthread_init(
         thread_mem: *mut ShimShmemThread,
         lock: *const ShimShmemHostLock,
+        tid: libc::pid_t,
     ) {
         let lock = unsafe { lock.as_ref().unwrap() };
-        let t = ThreadShmem::new(lock);
+        let t = ThreadShmem::new(lock, tid);
         assert_shmem_safe!(ThreadShmem, _test_thread_shmem);
         unsafe { thread_mem.write(t) }
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getThreadId(thread: *const ShimShmemThread) -> libc::pid_t {
+        let thread_mem = unsafe { thread.as_ref().unwrap() };
+        thread_mem.tid
     }
 
     /// # Safety
