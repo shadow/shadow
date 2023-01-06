@@ -2,14 +2,16 @@ use super::process::ProcessId;
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
-use crate::utility::syscall;
+use crate::utility::{syscall, HostTreePointer, IsSend};
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::HostId;
 
 /// Wraps the C Thread struct.
 pub struct ThreadRef {
-    cthread: *mut c::Thread,
+    cthread: HostTreePointer<c::Thread>,
 }
+
+impl IsSend for ThreadRef {}
 
 impl ThreadRef {
     /// Have the plugin thread natively execute the given syscall.
@@ -23,16 +25,22 @@ impl ThreadRef {
         let raw_res = unsafe {
             match args.len() {
                 //
-                0 => c::thread_nativeSyscall(self.cthread, n),
-                1 => c::thread_nativeSyscall(self.cthread, n, arg(0)),
-                2 => c::thread_nativeSyscall(self.cthread, n, arg(0), arg(1)),
-                3 => c::thread_nativeSyscall(self.cthread, n, arg(0), arg(1), arg(2)),
-                4 => c::thread_nativeSyscall(self.cthread, n, arg(0), arg(1), arg(2), arg(3)),
-                5 => {
-                    c::thread_nativeSyscall(self.cthread, n, arg(0), arg(1), arg(2), arg(3), arg(4))
-                }
+                0 => c::thread_nativeSyscall(self.cthread(), n),
+                1 => c::thread_nativeSyscall(self.cthread(), n, arg(0)),
+                2 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1)),
+                3 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2)),
+                4 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2), arg(3)),
+                5 => c::thread_nativeSyscall(
+                    self.cthread(),
+                    n,
+                    arg(0),
+                    arg(1),
+                    arg(2),
+                    arg(3),
+                    arg(4),
+                ),
                 6 => c::thread_nativeSyscall(
-                    self.cthread,
+                    self.cthread(),
                     n,
                     arg(0),
                     arg(1),
@@ -49,34 +57,34 @@ impl ThreadRef {
 
     pub fn process_id(&self) -> ProcessId {
         // Safety: self.cthread initialized in CThread::new.
-        ProcessId::from(unsafe { c::thread_getProcessId(self.cthread) })
+        ProcessId::from(unsafe { c::thread_getProcessId(self.cthread()) })
     }
 
     pub fn host_id(&self) -> HostId {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getHostId(self.cthread) }
+        unsafe { c::thread_getHostId(self.cthread()) }
     }
 
     pub fn system_pid(&self) -> Pid {
         // Safety: self.cthread initialized in CThread::new.
-        Pid::from_raw(unsafe { c::thread_getNativePid(self.cthread) })
+        Pid::from_raw(unsafe { c::thread_getNativePid(self.cthread()) })
     }
 
     pub fn system_tid(&self) -> Pid {
         // Safety: self.cthread initialized in CThread::new.
-        Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread) })
+        Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread()) })
     }
 
     pub fn csyscallhandler(&mut self) -> *mut c::SysCallHandler {
-        unsafe { c::thread_getSysCallHandler(self.cthread) }
+        unsafe { c::thread_getSysCallHandler(self.cthread()) }
     }
 
     pub fn id(&self) -> ThreadId {
-        ThreadId(unsafe { c::thread_getID(self.cthread).try_into().unwrap() })
+        ThreadId(unsafe { c::thread_getID(self.cthread()).try_into().unwrap() })
     }
 
     pub fn syscall_condition(&self) -> Option<SysCallConditionRef> {
-        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread) };
+        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread()) };
         if syscall_condition_ptr.is_null() {
             return None;
         }
@@ -85,7 +93,7 @@ impl ThreadRef {
     }
 
     pub fn syscall_condition_mut(&mut self) -> Option<SysCallConditionRefMut> {
-        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread) };
+        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread()) };
         if syscall_condition_ptr.is_null() {
             return None;
         }
@@ -210,11 +218,18 @@ impl ThreadRef {
     pub unsafe fn new(cthread: *mut c::Thread) -> Self {
         assert!(!cthread.is_null());
         unsafe { c::thread_ref(cthread) };
-        Self { cthread }
+        Self {
+            cthread: HostTreePointer::new(cthread),
+        }
     }
 
-    pub fn cthread(&self) -> *mut c::Thread {
-        self.cthread
+    /// # Safety
+    ///
+    /// Returned thread may only be accessed while the current Host is still
+    /// active.
+    pub unsafe fn cthread(&self) -> *mut c::Thread {
+        // SAFETY: Enforced by caller.
+        unsafe { self.cthread.ptr() }
     }
 }
 
@@ -222,7 +237,7 @@ impl Drop for ThreadRef {
     fn drop(&mut self) {
         // Safety: self.cthread initialized in CThread::new.
         unsafe {
-            c::thread_unref(self.cthread);
+            c::thread_unref(self.cthread());
         }
     }
 }
