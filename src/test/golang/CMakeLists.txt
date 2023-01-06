@@ -92,5 +92,7 @@ add_shadow_tests(
     # Trace level logging logs quite a bit in the "busy" loop here,
     # causing timeouts in debug builds.
     LOGLEVEL debug
+    ARGS
+      --strace-logging-mode off
     PROPERTIES
       LABELS golang)
