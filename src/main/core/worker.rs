@@ -231,6 +231,15 @@ impl Worker {
         Worker::with(|w| w.clock.borrow().barrier).flatten()
     }
 
+    /// Maximum time that the current event may run ahead to.
+    pub fn max_event_runahead_time(host: &Host) -> EmulatedTime {
+        let mut max = Worker::round_end_time().unwrap();
+        if let Some(next_event_time) = host.next_event_time() {
+            max = std::cmp::min(max, next_event_time);
+        }
+        max
+    }
+
     pub fn set_current_time(t: EmulatedTime) {
         Worker::with(|w| w.clock.borrow_mut().now.replace(t)).unwrap();
     }
@@ -755,13 +764,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_maxEventRunaheadTime(host: *const Host) -> CEmulatedTime {
         let host = unsafe { host.as_ref() }.unwrap();
-
-        let mut max = Worker::round_end_time().unwrap();
-
-        if let Some(next_event_time) = host.next_event_time() {
-            max = std::cmp::min(max, next_event_time);
-        }
-
-        EmulatedTime::to_c_emutime(Some(max))
+        EmulatedTime::to_c_emutime(Some(Worker::max_event_runahead_time(host)))
     }
 }

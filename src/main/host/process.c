@@ -77,14 +77,6 @@ const ShimShmemProcess* process_getSharedMem(Process* proc) {
     return _process_getSharedMem(proc->rustProcess);
 }
 
-// FIXME: still needed? Time is now updated more granularly in the Thread code
-// when xferring control to/from shim.
-static void _process_setSharedTime(Process* proc) {
-    const Host* host = _host(proc);
-    shimshmem_setMaxRunaheadTime(host_getShimShmemLock(host), worker_maxEventRunaheadTime(host));
-    shimshmem_setEmulatedTime(host_getSharedMem(host), worker_getCurrentEmulatedTime());
-}
-
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
     return _process_getName(proc->rustProcess);
@@ -406,7 +398,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
         envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
     }
 
-    _process_setSharedTime(proc);
+    _process_setSharedTime();
     /* exec the process */
     thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
                (const char* const*)envv, process_getWorkingDir(proc), process_getStraceFd(proc));
@@ -511,7 +503,7 @@ void process_continue(Process* proc, Thread* thread) {
     _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
-    _process_setSharedTime(proc);
+    _process_setSharedTime();
 
     shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
     thread_resume(thread);

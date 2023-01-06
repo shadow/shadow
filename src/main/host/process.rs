@@ -750,6 +750,7 @@ mod export {
     use std::ffi::{c_char, c_int};
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
+    use std::sync::atomic::Ordering;
 
     use libc::size_t;
     use log::{trace, warn};
@@ -1714,6 +1715,20 @@ mod export {
                 proc.threads.borrow_mut().remove(&tid);
             }
             unsafe { cshadow::process_check(proc.cprocess()) };
+        })
+        .unwrap();
+    }
+
+    // FIXME: still needed? Time is now updated more granularly in the Thread code
+    // when xferring control to/from shim.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_setSharedTime() {
+        Worker::with_active_host(|host| {
+            let mut host_shmem = host.shim_shmem_lock_borrow_mut().unwrap();
+            host_shmem.max_runahead_time = Worker::max_event_runahead_time(host);
+            host.shim_shmem()
+                .sim_time
+                .store(Worker::current_time().unwrap(), Ordering::Relaxed);
         })
         .unwrap();
     }

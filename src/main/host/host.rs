@@ -717,6 +717,15 @@ impl Host {
         };
     }
 
+    /// The unprotected part of the Host's shared memory.
+    ///
+    /// Do not try to take the lock of [`HostShmem::protected`] directly.
+    /// Instead use [`Host::lock_shmem`], [`Host::shim_shmem_lock_borrow`], and
+    /// [`Host::shim_shmem_lock_borrow_mut`].
+    pub fn shim_shmem(&self) -> &HostShmem {
+        unsafe { &*self.shim_shmem.get() }
+    }
+
     /// Returns `true` if the host has a process that contains the specified thread.
     pub fn has_thread(&self, virtual_tid: ThreadId) -> bool {
         for process in self.processes.borrow().values() {
