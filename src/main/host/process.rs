@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::PathBuf;
 
-use log::{debug, trace};
+use log::{debug, info, trace};
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
@@ -216,27 +216,29 @@ impl Process {
 
     pub fn schedule(&self, host: &Host) {
         let id = self.id();
-        let schedule_start = match self.stop_time {
-            Some(t) => self.start_time < t,
-            None => true,
+        match self.stop_time {
+            Some(t) if self.start_time >= t => {
+                info!(
+                    "Not scheduling process with start:{:?} after stop:{:?}",
+                    self.start_time, t
+                );
+                return;
+            }
+            _ => (),
         };
-        if schedule_start {
-            let task = TaskRef::new(move |host| {
-                let process = host.process_borrow(id).unwrap();
-                process.borrow(host.root()).start(host);
-            });
-            host.schedule_task_at_emulated_time(task, self.start_time);
-        }
+        let task = TaskRef::new(move |host| {
+            let process = host.process_borrow(id).unwrap();
+            process.borrow(host.root()).start(host);
+        });
+        host.schedule_task_at_emulated_time(task, self.start_time);
 
         if let Some(stop_time) = self.stop_time {
-            if stop_time > self.start_time {
-                let task = TaskRef::new(move |host| {
-                    let process = host.process_borrow(id).unwrap();
-                    let cprocess = unsafe { process.borrow(host.root()).cprocess() };
-                    unsafe { cshadow::process_stop(cprocess) };
-                });
-                host.schedule_task_at_emulated_time(task, stop_time);
-            }
+            let task = TaskRef::new(move |host| {
+                let process = host.process_borrow(id).unwrap();
+                let cprocess = unsafe { process.borrow(host.root()).cprocess() };
+                unsafe { cshadow::process_stop(cprocess) };
+            });
+            host.schedule_task_at_emulated_time(task, stop_time);
         }
     }
 
