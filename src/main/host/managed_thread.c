@@ -111,9 +111,15 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
     return envp;
 }
 
-static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file, char* const argv[],
-                                      char* const envp[], const char* workingDir) {
+static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
+                                      const char* const* argv_in, const char* const* envp_in,
+                                      const char* workingDir) {
     utility_debugAssert(file != NULL);
+
+    // execve technically takes arrays of pointers to *mutable* char.
+    // conservatively dup here.
+    gchar** argv = g_strdupv((gchar**)argv_in);
+    gchar** envp = g_strdupv((gchar**)envp_in);
 
     // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
     // "leaking" into a concurrently forked child.
@@ -168,6 +174,9 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file, c
 
     childpidwatcher_registerPid(worker_getChildPidWatcher(), pid, pipefd[0]);
 
+    g_strfreev(argv);
+    g_strfreev(envp);
+
     debug("started process %s with PID %d", file, pid);
     return pid;
 }
@@ -182,12 +191,12 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
     ipcData_markPluginExited(ipc);
 }
 
-void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, char** envv,
-                       const char* workingDir) {
+void managedthread_run(ManagedThread* mthread, const char* pluginPath, const char* const* argv,
+                       const char* const* envv, const char* workingDir) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     /* set the env for the child */
-    gchar** myenvv = g_strdupv(envv);
+    gchar** myenvv = g_strdupv((gchar**)envv);
 
     mthread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_debugAssert(mthread->ipc_blk.p);
@@ -210,13 +219,14 @@ void managedthread_run(ManagedThread* mthread, char* pluginPath, char** argv, ch
         myenvv, "SHADOW_TSC_HZ", host_getTsc(thread_getHost(mthread->base))->cyclesPerSecond);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
-    gchar* argStr = utility_strvToNewStr(argv);
+    gchar* argStr = utility_strvToNewStr((gchar**)argv);
     info("forking new mthread with environment '%s', arguments '%s', and working directory '%s'",
          envStr, argStr, workingDir);
     g_free(envStr);
     g_free(argStr);
 
-    mthread->nativePid = _managedthread_fork_exec(mthread, pluginPath, argv, myenvv, workingDir);
+    mthread->nativePid =
+        _managedthread_fork_exec(mthread, pluginPath, argv, (const char* const*)myenvv, workingDir);
     // In Linux, the PID is equal to the TID of its first thread.
     mthread->nativeTid = mthread->nativePid;
     childpidwatcher_watch(
@@ -261,7 +271,12 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
-    process_flushPtrs(thread_getProcess(mthread->base));
+    {
+        int res = process_flushPtrs(thread_getProcess(mthread->base));
+        if (res) {
+            panic("Couldn't flush cached memory reference: %s", g_strerror(-res));
+        }
+    }
 
     while (true) {
         switch (mthread->currentEvent.event_id) {
@@ -311,7 +326,13 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 }
 
                 // Flush any writes the syscallhandler made.
-                process_flushPtrs(thread_getProcess(mthread->base));
+                {
+                    int res = process_flushPtrs(thread_getProcess(mthread->base));
+                    if (res) {
+                        panic(
+                            "Couldn't flush syscallhandler memory reference: %s", g_strerror(-res));
+                    }
+                }
 
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {

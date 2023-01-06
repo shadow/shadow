@@ -69,9 +69,15 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         uint32_t ip = address_toNetworkIP(address);
 
         // Release the readable pointer so that we can get a writable pointer.
-        process_flushPtrs(sys->process);
+        int res = process_flushPtrs(sys->process);
+        if (res != 0) {
+            return syscallreturn_makeDoneErrno(res);
+        }
 
         uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
+        if (addr == NULL) {
+            return syscallreturn_makeDoneErrno(EFAULT);
+        }
         *addr = ip;
 
         return syscallreturn_makeDoneI64(0);

@@ -837,6 +837,7 @@ mod export {
     }
 
     /// Write-back any previously returned writable memory, and free the writer.
+    /// Returns 0 on success or a negative errno on failure.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeMutRefWithFlush(
         mref: *mut ProcessMemoryRefMut<'_, u8>,

@@ -40,9 +40,7 @@ typedef struct _Process Process;
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
-                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
+Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
                      bool pause_for_debugging);
 
 // For use by the Rust Process.
@@ -51,7 +49,6 @@ const RustProcess* process_getRustProcess(Process* proc);
 
 void process_free(Process* proc);
 
-void process_schedule(Process* proc, const Host* host);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 void process_detachPlugin(gpointer procptr, gpointer nothing);
@@ -160,8 +157,11 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Flushes and invalidates all previously returned readable/writable plugin
 // pointers, as if returning control to the plugin. This can be useful in
-// conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc);
+// conjunction with `thread_nativeSyscall` operations that touch memory, or
+// to gracefully handle failed writes.
+//
+// Returns 0 on success or a positive errno on failure.
+int process_flushPtrs(Process* proc) __attribute__((warn_unused_result));
 
 // Frees all readable/writable plugin pointers. Unlike process_flushPtrs, any
 // previously returned writable pointer is *not* written back. Useful
@@ -179,7 +179,7 @@ bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char*
 void process_parseArgStrFree(char** argv, char* error);
 
 // Process state kept in memory shared with the managed process's shim.
-ShimShmemProcess* process_getSharedMem(Process* proc);
+const ShimShmemProcess* process_getSharedMem(Process* proc);
 
 // Send the signal described in `siginfo` to `process`. `currentRunningThread`
 // should be set if there is one (e.g. if this is being called from a syscall
@@ -194,5 +194,8 @@ void process_setDumpable(Process* process, int dumpable);
 // Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
 // due to opaque fields and macro magic in its C definition.
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
+
+// To be called from Rust Process.
+void process_start(Process* process, const gchar* const* envv, const gchar* const* argv);
 
 #endif /* SHD_PROCESS_H_ */

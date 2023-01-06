@@ -70,10 +70,14 @@ pub struct HostParameters {
     pub max_unapplied_cpu_latency: SimulationTime,
     pub unblocked_syscall_latency: SimulationTime,
     pub unblocked_vdso_latency: SimulationTime,
+    pub use_legacy_working_dir: bool,
+    pub use_shim_syscall_handler: bool,
+    pub strace_logging_mode: StraceFmtMode,
 }
 
 use super::cpu::Cpu;
 use super::process::ProcessId;
+use super::syscall::formatter::StraceFmtMode;
 
 /// Immutable information about the Host.
 #[derive(Debug, Clone)]
@@ -130,7 +134,7 @@ pub struct Host {
     //
     // TODO: Remove `data_dir_path_cstring` once we can remove `host_getDataPath`. (Or maybe don't
     // store it at all)
-    _data_dir_path: PathBuf,
+    data_dir_path: PathBuf,
     data_dir_path_cstring: CString,
 
     // virtual process and event id counter
@@ -207,7 +211,7 @@ impl Host {
             params.cpu_threshold,
             params.cpu_precision,
         ));
-        let data_dir_path = Self::data_dir_path(&params.hostname, host_root_path);
+        let data_dir_path = Self::make_data_dir_path(&params.hostname, host_root_path);
         let data_dir_path_cstring = utility::pathbuf_to_nul_term_cstring(data_dir_path.clone());
 
         let host_shmem = HostShmem::new(
@@ -267,7 +271,7 @@ impl Host {
             shim_shmem_lock: RefCell::new(None),
             cpu,
             net_ns: RefCell::new(Some(net_ns)),
-            _data_dir_path: data_dir_path,
+            data_dir_path,
             data_dir_path_cstring,
             process_id_counter,
             event_id_counter,
@@ -314,13 +318,17 @@ impl Host {
         &self.root
     }
 
-    fn data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
+    fn make_data_dir_path(hostname: &CStr, host_root_path: &Path) -> PathBuf {
         let hostname: OsString = { OsString::from_vec(hostname.to_bytes().to_vec()) };
 
         let mut data_dir_path = PathBuf::new();
         data_dir_path.push(host_root_path);
         data_dir_path.push(&hostname);
         data_dir_path
+    }
+
+    pub fn data_dir_path(&self) -> &Path {
+        &self.data_dir_path
     }
 
     fn pcap_options(params: &HostParameters, data_dir_path: &Path) -> Option<PcapOptions> {
@@ -346,7 +354,7 @@ impl Host {
         plugin_name: &CStr,
         plugin_path: &CStr,
         mut envv: Vec<CString>,
-        argv: &[CString],
+        argv: Vec<CString>,
         pause_for_debugging: bool,
     ) {
         {
@@ -360,36 +368,24 @@ impl Host {
 
         let process_id = self.get_new_process_id();
 
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
         let process = unsafe {
-            cshadow::process_new(
+            Process::new(
                 self,
-                process_id.into(),
-                SimulationTime::to_c_simtime(Some(start_time)),
-                SimulationTime::to_c_simtime(stop_time),
-                self.params.hostname.as_ptr(),
-                plugin_name.as_ptr(),
-                plugin_path.as_ptr(),
-                envv_ptrs.as_ptr(),
-                argv_ptrs.as_ptr(),
+                process_id,
+                start_time,
+                stop_time,
+                plugin_name,
+                plugin_path,
+                envv,
+                argv,
                 pause_for_debugging,
+                self.params.use_legacy_working_dir,
+                self.params.use_shim_syscall_handler,
+                self.params.strace_logging_mode,
             )
         };
-        let process = unsafe { Process::new_from_c(self.root(), process) };
 
-        unsafe { cshadow::process_schedule(process.borrow(self.root()).cprocess(), self) };
+        process.borrow(self.root()).schedule(self);
 
         self.processes.borrow_mut().insert(process_id, process);
     }
@@ -400,6 +396,14 @@ impl Host {
         id: ProcessId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + '_> {
         Ref::filter_map(self.processes.borrow(), |processes| processes.get(&id)).ok()
+    }
+
+    pub fn cpu_borrow(&self) -> impl Deref<Target = Cpu> + '_ {
+        self.cpu.borrow()
+    }
+
+    pub fn cpu_borrow_mut(&self) -> impl Deref<Target = Cpu> + DerefMut + '_ {
+        self.cpu.borrow_mut()
     }
 
     /// Information about the Host. Made available as an Arc for cheap cloning
@@ -739,9 +743,39 @@ impl Host {
         assert!(prev.is_none());
     }
 
+    /// Panics if there is still an outstanding reference returned by
+    /// `shim_shmem_lock_borrow` or `shim_shmem_lock_borrow_mut`.
     pub fn unlock_shmem(&self) {
         let prev = self.shim_shmem_lock.borrow_mut().take();
         assert!(prev.is_some());
+    }
+
+    pub fn shim_shmem_lock_borrow(&self) -> Option<impl Deref<Target = HostShmemProtected> + '_> {
+        Ref::filter_map(self.shim_shmem_lock.borrow(), |l| {
+            l.as_ref().map(|l| {
+                // SAFETY: Returned object holds a checked borrow of the lock;
+                // trying to release the lock before the returned object is
+                // dropped will result in a panic.
+                let guard = unsafe { &*l.get() };
+                guard.deref()
+            })
+        })
+        .ok()
+    }
+
+    pub fn shim_shmem_lock_borrow_mut(
+        &self,
+    ) -> Option<impl Deref<Target = HostShmemProtected> + DerefMut + '_> {
+        RefMut::filter_map(self.shim_shmem_lock.borrow_mut(), |l| {
+            l.as_ref().map(|l| {
+                // SAFETY: Returned object holds a checked borrow of the lock;
+                // trying to release the lock before the returned object is
+                // dropped will result in a panic.
+                let guard = unsafe { &mut *l.get() };
+                guard.deref_mut()
+            })
+        })
+        .ok()
     }
 
     /// Timestamp Counter emulation for this Host. It ticks at the same rate as

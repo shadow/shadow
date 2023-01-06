@@ -488,7 +488,10 @@ enabled on the command line (enabling in the configuration file is a no-op).
 Default: false  
 Type: Bool
 
-Don't adjust the working directories of the virtual processes.
+When set, use the legacy Shadow 1.x behavior of not changing the working
+directory of managed processes; i.e. let them inherit Shadow's working directory
+instead of changing it to a host-specific working directory in Shadow's data
+directory.
 
 #### `experimental.use_memory_manager`
 

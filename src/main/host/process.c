@@ -57,98 +57,14 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-// We normally attempt to serve hot-path syscalls on the shim-side to avoid a
-// more expensive inter-process syscall. This option disables the optimization.
-// This is defined here in Shadow because it breaks the shim.
-static bool _use_shim_syscall_handler = true;
-ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
-
-// Shadow 1.x did not adjust the plugins working directories, but Shadow now runs each plugin with
-// the working directory of the host data path. Using the legacy working directory is useful when
-// running the same experiment in multiple versions of Shadow for performacne comparison purposes.
-static bool _use_legacy_working_dir = false;
-ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
-
-static StraceFmtMode _strace_logging_mode = STRACE_FMT_MODE_OFF;
-ADD_CONFIG_HANDLER(config_getStraceLoggingMode, _strace_logging_mode)
-
-static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type);
 static void _process_check(Process* proc);
 
 struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
 
-    HostId hostId;
-
-    /* unique id of the program that this process should run */
-    pid_t processID;
-    GString* processName;
-
-    /* Shared memory allocation for shared state with shim. */
-    ShMemBlock shimSharedMemBlock;
-
-    /* the shadow plugin executable */
-    struct {
-        /* the name and path to the executable that we will exec */
-        GString* exeName;
-        GString* exePath;
-
-        /* TRUE from when we've called into plug-in code until the call completes.
-         * Note that the plug-in may get back into shadow code during execution, by
-         * calling a function that we intercept. */
-        gboolean isExecuting;
-    } plugin;
-
-#ifdef USE_PERF_TIMERS
-    /* timer that tracks the amount of CPU time we spend on plugin execution and processing */
-    GTimer* cpuDelayTimer;
-    gdouble totalRunTime;
-#endif
-
-    /* process boot and shutdown variables */
-    CEmulatedTime startTime;
-    CEmulatedTime stopTime;
-
-    /* absolute path to the process's working directory */
-    char* workingDir;
-
-    /* vector of argument strings passed to exec */
-    gchar** argv;
-    /* vector of environment variables passed to exec */
-    gchar** envv;
-
-    gint returnCode;
-    gboolean didLogReturnCode;
-    gboolean killedByShadow;
-
     // int thread_id -> Thread*.
     GHashTable* threads;
-
-    /* File descriptors to handle plugin out and err streams. */
-    RegularFile* stdoutFile;
-    RegularFile* stderrFile;
-
-    StraceFmtMode straceLoggingMode;
-    int straceFd;
-
-    /* When true, threads are no longer runnable and should just be cleaned up. */
-    bool isExiting;
-
-    /* Native pid of the process */
-    pid_t nativePid;
-
-    // Pending MemoryReaders and MemoryWriters
-    ProcessMemoryRefMut_u8* memoryMutRef;
-    GArray* memoryRefs;
-
-    /* "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
-     * and PR_GET_DUMPABLE.
-     */
-    int dumpable;
-
-    /* Pause shadow after launching this process, to give the user time to attach gdb */
-    bool pause_for_debugging;
 
     MAGIC_DECLARE;
 };
@@ -157,19 +73,18 @@ static void _unref_thread_cb(gpointer data);
 
 static const Host* _host(Process* proc) {
     const Host* host = worker_getCurrentHost();
-    utility_debugAssert(host_getID(host) == proc->hostId);
+    utility_debugAssert(host_getID(host) == process_getHostId(proc));
     return host;
 }
 
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
-    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
+    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(process_getProcessID(proc)));
 }
 
-ShimShmemProcess* process_getSharedMem(Process* proc) {
+const ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->shimSharedMemBlock.p);
-    return proc->shimSharedMemBlock.p;
+    return _process_getSharedMem(proc->rustProcess);
 }
 
 // FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -182,39 +97,37 @@ static void _process_setSharedTime(Process* proc) {
 
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->processName->str);
-    return proc->processName->str;
+    return _process_getName(proc->rustProcess);
 }
 
 StraceFmtMode process_straceLoggingMode(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->straceLoggingMode;
+    return _process_straceLoggingMode(proc->rustProcess);
 }
 
 int process_getStraceFd(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->straceFd;
+    return _process_straceFd(proc->rustProcess);
 }
 
 const gchar* process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_debugAssert(proc->plugin.exeName->str);
-    return proc->plugin.exeName->str;
+    return _process_getPluginName(proc->rustProcess);
 }
 
 const char* process_getWorkingDir(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->workingDir;
+    return _process_getWorkingDir(proc->rustProcess);
 }
 
 pid_t process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->processID;
+    return _process_getProcessID(proc->rustProcess);
 }
 
 pid_t process_getNativePid(const Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->nativePid;
+    return _process_getNativePid(proc->rustProcess);
 }
 
 static void _process_reapThread(Process* process, Thread* thread) {
@@ -225,7 +138,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
     // that address. This mechanism is typically used in `pthread_join` etc.
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
+    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !_process_isExiting(process->rustProcess)) {
         // Verify thread is really dead. This *should* no longer be needed, but doesn't
         // hurt to defensively do anyway, since waking the futex before the thread has
         // actually exited can (and has) led to difficult-to-track-down bugs.
@@ -327,89 +240,82 @@ static void _process_terminate(Process* proc) {
     if (!process_isRunning(proc)) {
         trace("Already dead");
         // We should have already cleaned up.
-        utility_debugAssert(proc->didLogReturnCode);
+        utility_debugAssert(_process_didLogReturnCode(proc->rustProcess));
         return;
     }
     trace("Terminating");
-    proc->killedByShadow = true;
+    _process_setWasKilledByShadow(proc->rustProcess);
 
-    if (kill(proc->nativePid, SIGKILL)) {
-        warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
+    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
+    if (kill(nativePid, SIGKILL)) {
+        warning("kill(pid=%d) error %d: %s", nativePid, errno, g_strerror(errno));
     }
     process_markAsExiting(proc);
     _process_handleProcessExit(proc);
 }
 
-#ifdef USE_PERF_TIMERS
-static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
-    uint64_t delayNanos = elapsedTimeSec * 1000000000ull;
-    const Host* host = _host(proc);
-    host_addDelayNanos(host, delayNanos);
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        tracker_addProcessingTimeNanos(tracker, delayNanos);
-    }
-    proc->totalRunTime += elapsedTimeSec;
-}
-#endif
-
 static void _process_getAndLogReturnCode(Process* proc) {
-    if (proc->didLogReturnCode) {
+    if (_process_didLogReturnCode(proc->rustProcess)) {
         return;
     }
 
     if (!process_hasStarted(proc)) {
         error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
               process_getName(proc),
-              emutime_sub_emutime(proc->startTime, EMUTIME_SIMULATION_START));
+              emutime_sub_emutime(
+                  _process_getStartTime(proc->rustProcess), EMUTIME_SIMULATION_START));
         return;
     }
 
     // Return an error if we can't get real exit code.
-    proc->returnCode = EXIT_FAILURE;
+    int returnCode = EXIT_FAILURE;
 
     int wstatus = 0;
-    int rv = waitpid(proc->nativePid, &wstatus, __WALL);
+    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
+    int rv = waitpid(nativePid, &wstatus, __WALL);
     if (rv < 0) {
         // Getting here is a bug, but since the process is exiting anyway
         // not serious enough to merit `error`ing out.
         warning("waitpid: %s", g_strerror(errno));
-    } else if (rv != proc->nativePid) {
-        warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
+    } else if (rv != nativePid) {
+        warning("waitpid returned %d instead of the requested %d", rv, nativePid);
     } else {
         if (WIFEXITED(wstatus)) {
-            proc->returnCode = WEXITSTATUS(wstatus);
+            returnCode = WEXITSTATUS(wstatus);
         } else if (WIFSIGNALED(wstatus)) {
-            proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
+            returnCode = return_code_for_signal(WTERMSIG(wstatus));
         } else {
             warning("Couldn't get exit status");
         }
     }
 
+    _process_setReturnCode(proc->rustProcess, returnCode);
+
     GString* mainResultString = g_string_new(NULL);
     g_string_printf(mainResultString, "process '%s'", process_getName(proc));
-    if (proc->killedByShadow) {
+    if (_process_wasKilledByShadow(proc->rustProcess)) {
         g_string_append_printf(mainResultString, " killed by Shadow");
     } else {
-        g_string_append_printf(mainResultString, " exited with code %d", proc->returnCode);
-        if (proc->returnCode == 0) {
+        g_string_append_printf(mainResultString, " exited with code %d", returnCode);
+        if (returnCode == 0) {
             g_string_append_printf(mainResultString, " (success)");
         } else {
             g_string_append_printf(mainResultString, " (error)");
         }
     }
 
-    gchar* fileName = _process_outputFileName(proc, _host(proc), "exitcode");
+    char fileName[4000];
+    _process_outputFileName(
+        proc->rustProcess, _host(proc), "exitcode", &fileName[0], sizeof(fileName));
     FILE* exitcodeFile = fopen(fileName, "we");
-    g_free(fileName);
 
     if (exitcodeFile != NULL) {
-        if (proc->killedByShadow) {
+        if (_process_wasKilledByShadow(proc->rustProcess)) {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
             // Write out an empty exitcode file.
         } else {
-            fprintf(exitcodeFile, "%d", proc->returnCode);
+            fprintf(exitcodeFile, "%d", returnCode);
         }
         fclose(exitcodeFile);
     } else {
@@ -419,7 +325,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
     // if there was no error or was intentionally killed
     // TODO: once we've implemented clean shutdown via SIGTERM,
     //       treat death by SIGKILL as a plugin error
-    if (proc->returnCode == 0 || proc->killedByShadow) {
+    if (returnCode == 0 || _process_wasKilledByShadow(proc->rustProcess)) {
         info("%s", mainResultString->str);
     } else {
         warning("%s", mainResultString->str);
@@ -427,8 +333,6 @@ static void _process_getAndLogReturnCode(Process* proc) {
     }
 
     g_string_free(mainResultString, TRUE);
-
-    proc->didLogReturnCode = TRUE;
 }
 
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
@@ -436,14 +340,15 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
 
     Thread* thread = NULL;
 
+    pid_t pid = process_getProcessID(proc);
     if (virtualPID > 0 && virtualTID > 0) {
         // Both PID and TID must match
-        if (proc->processID == virtualPID) {
+        if (pid == virtualPID) {
             thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
         }
     } else if (virtualPID > 0) {
         // Get the TID of the main thread if the PID matches
-        if (proc->processID == virtualPID) {
+        if (pid == virtualPID) {
             thread = _process_threadLeader(proc);
         }
     } else if (virtualTID > 0) {
@@ -468,8 +373,8 @@ static void _process_check(Process* proc) {
     info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
-    info(
-        "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
+    info("total runtime for process '%s' was %f seconds", process_getName(proc),
+         _process_getTotalRunTime(proc->rustProcess));
 #endif
 
     utility_alwaysAssert(proc->rustProcess);
@@ -491,73 +396,14 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc);
 }
 
-static gchar* _process_outputFileName(Process* proc, const Host* host, const char* type) {
-    return g_strdup_printf("%s/%s.%s", host_getDataPath(host), proc->processName->str, type);
-}
-
-static RegularFile* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName,
-                                                 int accessMode) {
-    MAGIC_ASSERT(proc);
-    utility_debugAssert(fileName != NULL);
-
-    RegularFile* stdfile = regularfile_new();
-    Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)stdfile, /* flags= */ 0);
-    Descriptor* replacedDesc = _process_descriptorTableSet(proc->rustProcess, fd, desc);
-
-    // assume the fd was not previously in use
-    utility_debugAssert(replacedDesc == NULL);
-
-    char* cwd = getcwd(NULL, 0);
-    if (!cwd) {
-        utility_panic(
-            "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
-    }
-
-    int errcode = regularfile_open(stdfile, fileName, accessMode | O_CREAT | O_TRUNC,
-                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
-    free(cwd);
-
-    if (errcode < 0) {
-        utility_panic("Opening %s: %s", fileName, strerror(-errcode));
-    }
-
-    trace("Successfully opened fd %d at %s", fd, fileName);
-
-    return stdfile;
-}
-
-static void _process_start(Process* proc) {
+void process_start(Process* proc, const char* const* argv, const char* const* envv_in) {
     MAGIC_ASSERT(proc);
 
-    /* dont do anything if we are already running */
-    if(process_isRunning(proc)) {
-        return;
-    }
-
-    // Set up stdin
-    _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null", O_RDONLY);
-
-    // Set up stdout
-    gchar* stdoutFileName = _process_outputFileName(proc, _host(proc), "stdout");
-    proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName, O_WRONLY);
-    legacyfile_ref((LegacyFile*)proc->stdoutFile);
-    g_free(stdoutFileName);
-
-    // Set up stderr
-    gchar* stderrFileName = _process_outputFileName(proc, _host(proc), "stderr");
-    proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName, O_WRONLY);
-    legacyfile_ref((LegacyFile*)proc->stderrFile);
-    g_free(stderrFileName);
-
-    if (proc->straceLoggingMode != STRACE_FMT_MODE_OFF) {
-        gchar* straceFileName = _process_outputFileName(proc, _host(proc), "strace");
-        proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        g_free(straceFileName);
-    }
+    /* we shouldn't already be running */
+    utility_alwaysAssert(!process_isRunning(proc));
 
     // tid of first thread of a process is equal to the pid.
-    int tid = proc->processID;
+    int tid = process_getProcessID(proc);
     Thread* mainThread = thread_new(_host(proc), proc, tid);
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
@@ -570,8 +416,10 @@ static void _process_start(Process* proc) {
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
+
+    gchar** envv = g_strdupv((gchar**)envv_in);
 
     /* Add shared mem block of first thread to env */
     {
@@ -582,19 +430,20 @@ static void _process_start(Process* proc) {
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
+        envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
     }
 
-    proc->plugin.isExecuting = TRUE;
     _process_setSharedTime(proc);
     /* exec the process */
-    thread_run(mainThread, proc->plugin.exePath->str, proc->argv, proc->envv, proc->workingDir);
-    proc->nativePid = thread_getNativePid(mainThread);
-    _process_createMemoryManager(proc->rustProcess, proc->nativePid);
+    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
+               (const char* const*)envv, process_getWorkingDir(proc));
+    g_strfreev(envv);
+    const pid_t nativePid = thread_getNativePid(mainThread);
+    _process_setNativePid(proc->rustProcess, nativePid);
+    _process_createMemoryManager(proc->rustProcess, nativePid);
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' started", process_getName(proc));
@@ -603,7 +452,7 @@ static void _process_start(Process* proc) {
     worker_setActiveProcess(NULL);
     worker_setActiveThread(NULL);
 
-    if (proc->pause_for_debugging) {
+    if (_process_shouldPauseForDebugging(proc->rustProcess)) {
         // will block until logger output has been flushed
         // there is a race condition where other threads may log between the fprintf() and raise()
         // below, but it should be rare
@@ -618,7 +467,7 @@ static void _process_start(Process* proc) {
                 "this task and then typing \"fg\".\n"
                 "** (If you wish to kill Shadow, type \"kill %%%%\" instead.)\n"
                 "** If running Shadow under GDB, resume Shadow by typing \"signal SIGCONT\".\n",
-                process_getName(proc), proc->nativePid);
+                process_getName(proc), nativePid);
 
         raise(SIGTSTP);
     }
@@ -665,13 +514,12 @@ Thread* process_getThread(Process* proc, pid_t virtualTID) {
 
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    trace("Process %d marked as exiting", proc->processID);
-    proc->isExiting = true;
+    _process_markAsExiting(proc->rustProcess);
 }
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    trace("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
+    trace("Continuing thread %d in process %d", thread_getID(thread), process_getProcessID(proc));
 
     /* if we are not running, no need to notify anyone */
     if(!process_isRunning(proc)) {
@@ -686,25 +534,22 @@ void process_continue(Process* proc, Thread* thread) {
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
     _process_setSharedTime(proc);
 
     shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
-    proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
-    proc->plugin.isExecuting = FALSE;
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 #else
     debug("process '%s' done continuing", process_getName(proc));
 #endif
 
-    if (proc->isExiting) {
+    if (_process_isExiting(proc->rustProcess)) {
         // If the whole process is already exiting, skip to cleaning up the
         // whole process exit; normal thread cleanup would likely fail.
         _process_handleProcessExit(proc);
@@ -725,61 +570,21 @@ void process_stop(Process* proc) {
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
-    g_timer_start(proc->cpuDelayTimer);
+    _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
-    proc->plugin.isExecuting = TRUE;
     _process_terminate(proc);
-    proc->plugin.isExecuting = FALSE;
 
 #ifdef USE_PERF_TIMERS
-    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
-    _process_handleTimerResult(proc, elapsed);
-#endif
-
-    worker_setActiveProcess(NULL);
-
-#ifdef USE_PERF_TIMERS
+    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
     info("process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' stopped", process_getName(proc));
 #endif
 
+    worker_setActiveProcess(NULL);
+
     _process_check(proc);
-}
-
-static void _process_runStartTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
-    pid_t pid = GPOINTER_TO_INT(pid_ptr);
-    Process* proc = host_getProcess(host, pid);
-    utility_alwaysAssert(proc);
-    _process_start(proc);
-}
-
-static void _process_runStopTask(const Host* host, gpointer pid_ptr, gpointer nothing) {
-    pid_t pid = GPOINTER_TO_INT(pid_ptr);
-    Process* proc = host_getProcess(host, pid);
-    utility_alwaysAssert(proc);
-    process_stop(proc);
-}
-
-void process_schedule(Process* proc, const Host* host) {
-    MAGIC_ASSERT(proc);
-
-    if (proc->stopTime == EMUTIME_INVALID || proc->startTime < proc->stopTime) {
-        TaskRef* startProcessTask =
-            taskref_new_bound(proc->hostId, _process_runStartTask,
-                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
-        host_scheduleTaskAtEmulatedTime(host, startProcessTask, proc->startTime);
-        taskref_drop(startProcessTask);
-    }
-
-    if (proc->stopTime != EMUTIME_INVALID && proc->stopTime > proc->startTime) {
-        TaskRef* stopProcessTask =
-            taskref_new_bound(proc->hostId, _process_runStopTask,
-                              GINT_TO_POINTER(process_getProcessID(proc)), NULL, NULL, NULL);
-        host_scheduleTaskAtEmulatedTime(host, stopProcessTask, proc->stopTime);
-        taskref_drop(stopProcessTask);
-    }
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
@@ -788,12 +593,12 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
 
 gboolean process_hasStarted(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->nativePid > 0;
+    return _process_hasStarted(proc->rustProcess);
 }
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return !proc->isExiting && g_hash_table_size(proc->threads) > 0;
+    return !_process_isExiting(proc->rustProcess) && g_hash_table_size(proc->threads) > 0;
 }
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
@@ -806,96 +611,15 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
     };
 }
 
-Process* process_new(const Host* host, guint processID, CSimulationTime startTime,
-                     CSimulationTime stopTime, const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* const* envv, const gchar* const* argv,
+Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t processID,
                      bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
-    proc->hostId = host_getID(host);
-
-    proc->processID = processID;
-
-    /* plugin name and path are required so we know what to execute */
-    utility_debugAssert(pluginName);
-    utility_debugAssert(pluginPath);
-    proc->plugin.exeName = g_string_new(pluginName);
-    proc->plugin.exePath = g_string_new(pluginPath);
-
-    proc->processName = g_string_new(NULL);
-    g_string_printf(proc->processName, "%s.%s.%u",
-            hostName,
-            proc->plugin.exeName ? proc->plugin.exeName->str : "NULL",
-            proc->processID);
-
-#ifdef USE_PERF_TIMERS
-    proc->cpuDelayTimer = g_timer_new();
-#endif
-
-    utility_debugAssert(stopTime == 0 || stopTime > startTime);
-    proc->startTime = emutime_add_simtime(EMUTIME_SIMULATION_START, startTime);
-    proc->stopTime = emutime_add_simtime(EMUTIME_SIMULATION_START, stopTime);
-
-    if (_use_legacy_working_dir) {
-        /* use Shadow's working directory */
-        proc->workingDir = getcwd(NULL, 0);
-    } else {
-        /* use the host's data directory */
-        proc->workingDir = realpath(host_getDataPath(host), NULL);
-    }
-
-    if (proc->workingDir == NULL) {
-        utility_panic(
-            "Could not allocate memory for the process' working directory, or directory did not "
-            "exist");
-    }
-
-    proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
-    shimshmemprocess_init(proc->shimSharedMemBlock.p, host_getShimShmemLock(host));
-
-    gchar** envv_dup = g_strdupv((gchar**)envv);
-
-    {
-        ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);
-
-        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
-        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
-
-        /* append to the env */
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
-    }
-
-    /* add log file to env */
-    {
-        gchar* logFileName = _process_outputFileName(proc, host, "shimlog");
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_LOG_FILE", logFileName, TRUE);
-        g_free(logFileName);
-    }
-
-    if (!_use_shim_syscall_handler) {
-        envv_dup = g_environ_setenv(envv_dup, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
-    }
-
-    /* save args and env */
-    proc->argv = g_strdupv((gchar**)argv);
-    proc->envv = envv_dup;
-
     proc->threads =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
-    proc->isExiting = false;
-
-    proc->straceLoggingMode = _strace_logging_mode;
-    proc->straceFd = -1;
-
-    proc->memoryMutRef = NULL;
-    proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
-
-    proc->pause_for_debugging = pause_for_debugging;
-
-    proc->dumpable = SUID_DUMP_USER;
+    proc->rustProcess = rustProcess;
 
     worker_count_allocation(Process);
 
@@ -917,49 +641,18 @@ const RustProcess* process_getRustProcess(Process* proc) {
 void process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    process_freePtrsWithoutFlushing(proc);
-    g_array_free(proc->memoryRefs, true);
+    // FIXME: call to _process_terminate removed.
+    // We can't call it here, since the Rust Process inside the RustProcess (RootededRefCell<Process>)
+    // has been extracted, invalidating proc->rustProcess.
+    //
+    // We *shouldn't* need to call _process_terminate here, since Host::free_all_applications
+    // already explicitly stops all processes before freeing them, but once the relevant code is
+    // all in Rust we should ensure the process is terminated in our Drop implementation.
 
-    _process_terminate(proc);
     if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
     }
-    if(proc->plugin.exePath) {
-        g_string_free(proc->plugin.exePath, TRUE);
-    }
-    if(proc->plugin.exeName) {
-        g_string_free(proc->plugin.exeName, TRUE);
-    }
-    if(proc->processName) {
-        g_string_free(proc->processName, TRUE);
-    }
-    if (proc->workingDir) {
-        free(proc->workingDir);
-    }
-
-    if(proc->argv) {
-        g_strfreev(proc->argv);
-    }
-    if(proc->envv) {
-        g_strfreev(proc->envv);
-    }
-
-#ifdef USE_PERF_TIMERS
-    g_timer_destroy(proc->cpuDelayTimer);
-#endif
-
-    if (proc->stderrFile) {
-        legacyfile_unref((LegacyFile*)proc->stderrFile);
-    }
-    if (proc->stdoutFile) {
-        legacyfile_unref((LegacyFile*)proc->stdoutFile);
-    }
-    if (proc->straceFd >= 0) {
-        close(proc->straceFd);
-    }
-
-    shmemallocator_globalFree(&proc->shimSharedMemBlock);
 
     worker_count_deallocation(Process);
 
@@ -969,7 +662,7 @@ void process_free(Process* proc) {
 
 HostId process_getHostId(const Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->hostId;
+    return _process_getHostId(proc->rustProcess);
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {
@@ -1008,76 +701,27 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
     return _process_readPtr(proc->rustProcess, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
     return _process_writePtr(proc->rustProcess, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
-    ProcessMemoryRef_u8* ref = _process_getReadablePtr(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    g_array_append_val(proc->memoryRefs, ref);
-    return memorymanagerref_ptr(ref);
+    return _process_getReadablePtr(proc->rustProcess, plugin_src, n);
 }
 
 int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, const char** out_str,
                               size_t* out_strlen) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
-    ProcessMemoryRef_u8* ref = _process_getReadablePtrPrefix(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return -EFAULT;
-    }
-
-    size_t nbytes = memorymanagerref_sizeof(ref);
-    const char* str = memorymanagerref_ptr(ref);
-    size_t strlen = strnlen(str, nbytes);
-    if (strlen == nbytes) {
-        // No NULL byte.
-        memorymanager_freeRef(ref);
-        return -ENAMETOOLONG;
-    }
-
-    utility_debugAssert(out_str);
-    *out_str = str;
-    if (out_strlen) {
-        *out_strlen = strlen;
-    }
-
-    g_array_append_val(proc->memoryRefs, ref);
-
-    return 0;
+    return _process_getReadableString(proc->rustProcess, plugin_src, n, out_str, out_strlen);
 }
 
 ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-
     return _process_readString(proc->rustProcess, src, str, n);
 }
 
@@ -1087,18 +731,7 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
-    ProcessMemoryRefMut_u8* ref = process_getWritablePtrRef(proc, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    proc->memoryMutRef = ref;
-    return memorymanagermut_ptr(ref);
+    return _process_getWriteablePtr(proc->rustProcess, plugin_src, n);
 }
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -1107,60 +740,20 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_debugAssert(!proc->memoryMutRef);
-    utility_debugAssert(proc->memoryRefs->len == 0);
-
-    ProcessMemoryRefMut_u8* ref = _process_getMutablePtr(proc->rustProcess, plugin_src, n);
-    if (!ref) {
-        return NULL;
-    }
-
-    proc->memoryMutRef = ref;
-    return memorymanagermut_ptr(ref);
-}
-
-static void _process_freeReaders(Process* proc) {
-    // Free any readers
-    if (proc->memoryRefs->len > 0) {
-        for (int i = 0; i < proc->memoryRefs->len; ++i) {
-            ProcessMemoryRef_u8* ref = g_array_index(proc->memoryRefs, ProcessMemoryRef_u8*, i);
-            memorymanager_freeRef(ref);
-        }
-        proc->memoryRefs = g_array_set_size(proc->memoryRefs, 0);
-    }
+    return _process_getMutablePtr(proc->rustProcess, plugin_src, n);
 }
 
 // Flushes and invalidates all previously returned readable/writeable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc) {
+int process_flushPtrs(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    _process_freeReaders(proc);
-
-    // Flush and free any writers
-    if (proc->memoryMutRef) {
-        int rv = memorymanager_freeMutRefWithFlush(proc->memoryMutRef);
-        if (rv) {
-            panic("Couldn't flush mutable reference");
-        }
-        proc->memoryMutRef = NULL;
-    }
+    return _process_flushPtrs(proc->rustProcess);
 }
 
 void process_freePtrsWithoutFlushing(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    _process_freeReaders(proc);
-
-    // Flush and free any writers
-    if (proc->memoryMutRef) {
-        trace("Discarding plugin ptr without writing back.");
-        memorymanager_freeMutRefWithoutFlush(proc->memoryMutRef);
-        proc->memoryMutRef = NULL;
-    }
+    return _process_freePtrsWithoutFlushing(proc->rustProcess);
 }
 
 // ******************************************************
@@ -1262,10 +855,9 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
 }
 
 int process_getDumpable(Process* process) {
-    return process->dumpable;
+    return _process_getDumpable(process->rustProcess);
 }
 
 void process_setDumpable(Process* process, int dumpable) {
-    utility_alwaysAssert(dumpable == SUID_DUMP_DISABLE || dumpable == SUID_DUMP_USER);
-    process->dumpable = dumpable;
+    _process_setDumpable(process->rustProcess, dumpable);
 }

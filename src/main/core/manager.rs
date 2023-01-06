@@ -592,6 +592,9 @@ impl<'a> Manager<'a> {
                 max_unapplied_cpu_latency: self.config.max_unapplied_cpu_latency(),
                 unblocked_syscall_latency: self.config.unblocked_syscall_latency(),
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
+                use_legacy_working_dir: self.config.use_legacy_working_dir(),
+                use_shim_syscall_handler: self.config.use_shim_syscall_handler(),
+                strace_logging_mode: self.config.strace_logging_mode(),
             };
 
             Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) })
@@ -629,7 +632,7 @@ impl<'a> Manager<'a> {
                 &plugin_name,
                 &plugin_path,
                 envv,
-                &argv,
+                argv,
                 pause_for_debugging,
             );
 
