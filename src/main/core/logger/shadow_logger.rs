@@ -2,9 +2,9 @@ use crate::core::worker::Worker;
 use crate::host::host::HostInfo;
 use crate::utility::time::TimeParts;
 use crossbeam::queue::ArrayQueue;
-use log::{Level, Log, Metadata, Record, SetLoggerError};
+use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use logger as c_log;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
@@ -28,8 +28,14 @@ const MIN_FLUSH_FREQUENCY: Duration = Duration::from_secs(10);
 static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(ShadowLogger::new);
 
 /// Initialize the Shadow logger.
-pub fn init() -> Result<(), SetLoggerError> {
+pub fn init(max_log_level: LevelFilter) -> Result<(), SetLoggerError> {
+    SHADOW_LOGGER.set_max_level(max_log_level);
+
     log::set_logger(&*SHADOW_LOGGER)?;
+
+    // Shadow's logger has its own logic for deciding the max level (see `ShadowLogger::enabled`),
+    // so the log crate should give us all log messages and we can decide whether to show it or not.
+    log::set_max_level(log::LevelFilter::Trace);
 
     // Start the thread that will receive log records and flush them to output.
     std::thread::Builder::new()
@@ -82,6 +88,9 @@ pub struct ShadowLogger {
     // When false, sends a (still-asynchronous) flush command to the logger
     // thread every time a record is pushed into `records`.
     buffering_enabled: RwLock<bool>,
+
+    // The maximum log level, unless overridden by a host-specific log level.
+    max_log_level: OnceCell<LevelFilter>,
 }
 
 thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = RefCell::new(None));
@@ -125,6 +134,7 @@ impl ShadowLogger {
             command_sender: Mutex::new(sender),
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
+            max_log_level: OnceCell::new(),
         }
     }
 
@@ -254,6 +264,20 @@ impl ShadowLogger {
         *writer = buffering_enabled;
     }
 
+    /// If the maximum log level has not yet been set, returns `LevelFilter::Trace`.
+    pub fn max_level(&self) -> LevelFilter {
+        self.max_log_level
+            .get()
+            .copied()
+            .unwrap_or(LevelFilter::Trace)
+    }
+
+    /// Set the default maximum log level, but this can be overridden per-host. Is only intended to
+    /// be called from `init()`. Will panic if called more than once.
+    fn set_max_level(&self, level: LevelFilter) {
+        self.max_log_level.set(level).unwrap()
+    }
+
     // Send a flush command to the logger thread.
     fn flush_impl(&self, notify_done: Option<Sender<()>>) {
         self.send_command(LoggerCommand::Flush(notify_done))
@@ -301,7 +325,7 @@ impl Log for ShadowLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
         let filter = match Worker::with_active_host(|host| host.info().log_level) {
             Some(Some(level)) => level,
-            _ => log::max_level(),
+            _ => self.max_level(),
         };
         metadata.level() <= filter
     }

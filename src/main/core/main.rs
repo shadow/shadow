@@ -99,18 +99,17 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
         worker::enable_object_counters();
     }
 
+    // get the log level
+    let log_level = shadow_config.general.log_level.unwrap();
+    let log_level: log::Level = log_level.into();
+
     // start up the logging subsystem to handle all future messages
-    shadow_logger::init().unwrap();
+    shadow_logger::init(log_level.to_level_filter()).unwrap();
     // register the C logger
     unsafe { logger::logger_setDefault(c::rustlogger_new()) };
 
     // disable log buffering during startup so that we see every message immediately in the terminal
     shadow_logger::set_buffering_enabled(false);
-
-    // set the log level
-    let log_level = shadow_config.general.log_level.unwrap();
-    let log_level: log::Level = log_level.into();
-    log::set_max_level(log_level.to_level_filter());
 
     // check if some log levels have been compiled out
     if log_level > log::STATIC_MAX_LEVEL {
@@ -179,7 +178,7 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     let controller = Controller::new(sim_config, &shadow_config);
 
     // enable log buffering if not at trace level
-    let buffer_log = log::max_level() < log::LevelFilter::Trace;
+    let buffer_log = !log::log_enabled!(log::Level::Trace);
     shadow_logger::set_buffering_enabled(buffer_log);
     if buffer_log {
         log::info!("Log message buffering is enabled for efficiency");
