@@ -34,7 +34,9 @@ jobs:
           Shadow's dependencies may also need to be updated.
 
           \`\`\`bash
-          cargo upgrade --incompatible
+          # "cargo upgrade" won't update the lock file for all
+          # dependencies, so "cargo update" is also needed
+          cd src && cargo upgrade --incompatible && cargo update
           \`\`\`
 
           *This issue is automatically generated every 4 months by the workflow "${{ github.workflow }}".*
