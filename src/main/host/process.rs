@@ -3,7 +3,7 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
 
 use log::{debug, info, trace};
@@ -70,6 +70,12 @@ impl TryFrom<ProcessId> for libc::pid_t {
     }
 }
 
+#[derive(Debug)]
+struct StraceLogging {
+    file: RefCell<std::fs::File>,
+    options: FmtOptions,
+}
+
 /// Used for C interop.
 pub type RustProcess = RootedRefCell<Process>;
 
@@ -101,8 +107,7 @@ pub struct Process {
     start_time: EmulatedTime,
     stop_time: Option<EmulatedTime>,
 
-    strace_logging_mode: StraceFmtMode,
-    strace_file: Option<std::fs::File>,
+    strace_logging: Option<StraceLogging>,
 
     // Pause shadow after launching this process, to give the user time to attach gdb
     pause_for_debugging: bool,
@@ -177,7 +182,7 @@ impl Process {
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
         use_shim_syscall_handler: bool,
-        strace_logging_mode: StraceFmtMode,
+        strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
 
@@ -196,20 +201,22 @@ impl Process {
         ))
         .unwrap();
 
-        let strace_file = if strace_logging_mode == StraceFmtMode::Off {
-            None
-        } else {
+        let strace_logging = strace_logging_options.map(|options| {
             let oflag = { OFlag::O_CREAT | OFlag::O_TRUNC | OFlag::O_WRONLY | OFlag::O_CLOEXEC };
             let mode = { Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH };
             let filename = Self::static_output_file_name(name.to_str().unwrap(), host, "strace");
             let fd = nix::fcntl::open(&filename, oflag, mode).unwrap();
-            Some(unsafe { std::fs::File::from_raw_fd(fd) })
-        };
+
+            StraceLogging {
+                file: RefCell::new(unsafe { std::fs::File::from_raw_fd(fd) }),
+                options,
+            }
+        });
 
         let shim_shared_mem = ProcessShmem::new(
             &host.shim_shmem_lock_borrow().unwrap().root,
             host.id(),
-            strace_file.as_ref().map(|x| x.as_raw_fd()),
+            strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
         );
         let shim_shared_mem_block =
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
@@ -272,8 +279,7 @@ impl Process {
                     name,
                     plugin_name,
                     plugin_path,
-                    strace_logging_mode,
-                    strace_file,
+                    strace_logging,
                     pause_for_debugging,
                     dumpable: Cell::new(cshadow::SUID_DUMP_USER),
                     is_exiting: Cell::new(false),
@@ -464,21 +470,17 @@ impl Process {
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        unsafe { cshadow::process_straceLoggingMode(self.cprocess.ptr()) }.into()
+        self.strace_logging.as_ref().map(|x| x.options)
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        let fd = unsafe { cshadow::process_getStraceFd(self.cprocess.ptr()) };
-
-        if fd < 0 {
+        let Some(ref strace_logging) = self.strace_logging else {
             return None;
-        }
+        };
 
-        let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
-        let rv = f(&mut file);
-        file.into_raw_fd();
-        Some(rv)
+        let mut file = strace_logging.file.borrow_mut();
+        Some(f(&mut file))
     }
 
     #[track_caller]
@@ -1364,14 +1366,16 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn _process_straceLoggingMode(proc: *const RustProcess) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).strace_logging_mode).unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).strace_logging_options())
+            .unwrap()
+            .into()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn _process_straceFd(proc: *const RustProcess) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| match &proc.borrow(host.root()).strace_file {
-            Some(f) => f.as_raw_fd(),
+        Worker::with_active_host(|host| match &proc.borrow(host.root()).strace_logging {
+            Some(x) => x.file.borrow().as_raw_fd(),
             None => -1,
         })
         .unwrap()

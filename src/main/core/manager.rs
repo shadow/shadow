@@ -594,7 +594,7 @@ impl<'a> Manager<'a> {
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
                 use_legacy_working_dir: self.config.use_legacy_working_dir(),
                 use_shim_syscall_handler: self.config.use_shim_syscall_handler(),
-                strace_logging_mode: self.config.strace_logging_mode(),
+                strace_logging_options: self.config.strace_logging_mode(),
             };
 
             Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) })
