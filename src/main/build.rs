@@ -104,6 +104,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/descriptor/compat_socket.h")
         .header("host/descriptor/descriptor.h")
         .header("host/descriptor/regular_file.h")
+        .header("host/futex.h")
         .header("host/process.h")
         .header("host/status.h")
         .header("host/status_listener.h")
@@ -145,6 +146,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // used by shadow's main function
         .allowlist_function("main_.*")
         .allowlist_function("tracker_.*")
+        .allowlist_function("futex_.*")
         .allowlist_function("futextable_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")

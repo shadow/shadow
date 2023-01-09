@@ -113,84 +113,8 @@ pid_t process_getNativePid(const Process* proc) {
 }
 
 void process_reapThread(Process* process, Thread* thread) {
-    utility_debugAssert(!thread_isRunning(thread));
-
-    // If the `clear_child_tid` attribute on the thread is set, and there are
-    // any other threads left alive in the process, perform a futex wake on
-    // that address. This mechanism is typically used in `pthread_join` etc.
-    // See `set_tid_address(2)`.
-    PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val && _process_numThreads(process->rustProcess) > 1 && !_process_isExiting(process->rustProcess)) {
-        // Verify thread is really dead. This *should* no longer be needed, but doesn't
-        // hurt to defensively do anyway, since waking the futex before the thread has
-        // actually exited can (and has) led to difficult-to-track-down bugs.
-        while (1) {
-            pid_t pid = thread_getNativePid(thread);
-            pid_t tid = thread_getNativeTid(thread);
-            int rv = (int)syscall(SYS_tgkill, pid, tid, 0);
-            if (rv == -1 && errno == ESRCH) {
-                trace("Thread is done exiting, proceeding with cleanup");
-                break;
-            } else if (rv != 0) {
-                error("Unexpected tgkill rv:%d errno:%s", rv, g_strerror(errno));
-                break;
-            } else if (pid == tid) {
-                trace("%d.%d can still receive signals", pid, tid);
-
-                // Thread leader could be in a zombie state waiting for the other threads to exit.
-                gchar* filename = g_strdup_printf("/proc/%d/stat", pid);
-                gchar* contents = NULL;
-                gboolean rv = g_file_get_contents(filename, &contents, NULL, NULL);
-                g_free(filename);
-                if (!rv) {
-                    trace("tgl %d is fully dead", pid);
-                    break;
-                }
-                bool is_zombie = strstr(contents, ") Z") != NULL;
-                g_free(contents);
-                if (is_zombie) {
-                    trace("tgl %d is a zombie", pid);
-                    break;
-                }
-                // Still alive and in a non-zombie state; continue
-            }
-            debug("%d.%d still running; waiting for it to exit", pid, tid);
-            sched_yield();
-            // Check again
-        }
-
-        pid_t* clear_child_tid =
-            process_getWriteablePtr(process, clear_child_tid_pvp, sizeof(pid_t*));
-        if (!clear_child_tid) {
-            // We *might* end up getting here (or failing even earlier) if we end up having to use
-            // thread_getWriteablePtr (i.e. because the address isn't shared in the
-            // MemoryManager), since the native thread (and maybe the whole
-            // process) is no longer alive. If so, the most straightforward
-            // fix might be to extend the MemoryManager to include the region
-            // containing the tid pointer in this case.
-            //
-            // Alternatively we could try to use a still-living thread (if any)
-            // to do the memory write, and just skip if there are no more
-            // living threads in the process. Probably better to avoid that
-            // complexity if we can, though.
-            utility_panic("Couldn't clear child tid; See code comments.");
-            abort();
-        }
-
-        *clear_child_tid = 0;
-
-        // *don't* flush here. The write may not succeed if the current thread
-        // is dead. Leave it pending for the next thread in the process to
-        // flush.
-
-        FutexTable* ftable = host_getFutexTable(_host(process));
-        utility_debugAssert(ftable);
-        Futex* futex =
-            futextable_get(ftable, process_getPhysicalAddress(process, clear_child_tid_pvp));
-        if (futex) {
-            futex_wake(futex, 1);
-        }
-    }
+    MAGIC_ASSERT(process);
+    return _process_reapThread(process->rustProcess, thread);
 }
 
 static void _process_terminate(Process* proc) {

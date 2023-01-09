@@ -7,7 +7,7 @@ use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
 
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
@@ -20,7 +20,8 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::work::task::TaskRef;
-use crate::cshadow;
+use crate::core::worker::Worker;
+use crate::cshadow::{self, PluginPhysicalPtr, PluginVirtualPtr};
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
@@ -592,6 +593,88 @@ impl Process {
             val: high_part | low_part,
         }
     }
+
+    fn reap_thread(&self, host: &Host, thread: &mut ThreadRef) {
+        // If the `clear_child_tid` attribute on the thread is set, and there are
+        // any other threads left alive in the process, perform a futex wake on
+        // that address. This mechanism is typically used in `pthread_join` etc.
+        // See `set_tid_address(2)`.
+        let clear_child_tid_pvp = unsafe { cshadow::thread_getTidAddress(thread.cthread()) };
+        if clear_child_tid_pvp.val != 0 && self.threads.borrow().len() > 1 && !self.is_exiting.get()
+        {
+            // Wait until the thread is really dead. It might not be dead yet if we
+            // marked the thread dead after seeing the `exit` syscall - the managed
+            // process might not have finished executing the native syscall yet.
+            // TODO: Move this into the `exit` syscall handling and/or use the native
+            // tidaddress mechanism to be notified when a thread has actually terminated.
+            let pid = unsafe { cshadow::thread_getNativePid(thread.cthread()) };
+            let tid = unsafe { cshadow::thread_getNativeTid(thread.cthread()) };
+            loop {
+                match tgkill(pid, tid, 0) {
+                    Err(Errno::ESRCH) => {
+                        trace!("Thread is done exiting; proceeding with cleanup");
+                        break;
+                    }
+                    Err(e) => {
+                        error!("Unexpected tgkill error: {:?}", e);
+                        break;
+                    }
+                    Ok(()) if pid == tid => {
+                        // Thread leader could be in a zombie state waiting for
+                        // the other threads to exit.
+                        let filename = format!("/proc/{pid}/stat");
+                        let stat = match std::fs::read_to_string(filename) {
+                            Err(e) => {
+                                assert!(e.kind() == std::io::ErrorKind::NotFound);
+                                trace!("tgl {pid} is fully dead");
+                                break;
+                            }
+                            Ok(s) => s,
+                        };
+                        if stat.contains(") Z") {
+                            trace!("tgl {pid} is a zombie");
+                            break;
+                        }
+                        // Still alive and in a non-zombie state; continue
+                    }
+                    Ok(()) => {
+                        // Thread is still alive; continue.
+                    }
+                };
+                debug!("{pid}.{tid} still running; waiting for it to exit");
+                std::thread::yield_now();
+                // Check again
+            }
+
+            // Find a still-living thread to execute the memory-write.
+            let threads = self.threads.borrow();
+            let writer_thread = threads
+                .values()
+                .find(|t| unsafe { cshadow::thread_isRunning(t.cthread()) })
+                .unwrap();
+            // MemoryCopier uses the active thread's tid to do the write; we need to set
+            // that to the still-live thread we're using to do the write.
+            Worker::clear_active_thread();
+            Worker::set_active_thread(writer_thread);
+            let typed_clear_child_tid_pvp =
+                TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
+            self.memory_borrow_mut()
+                .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
+                .unwrap();
+            // Restore active thread.
+            Worker::clear_active_thread();
+            Worker::set_active_thread(thread);
+
+            // Wake the corresponding futex.
+            let mut futexes = host.futextable_borrow_mut();
+            let futex = unsafe {
+                cshadow::futextable_get(&mut *futexes, self.physical_address(clear_child_tid_pvp))
+            };
+            if !futex.is_null() {
+                unsafe { cshadow::futex_wake(futex, 1) };
+            }
+        }
+    }
 }
 
 impl Drop for Process {
@@ -785,6 +868,13 @@ impl UnsafeBorrowMut {
 // This is admittedly hand-wavy and making some assumptions about the implementation of
 // RefCell, but this whole type is temporary scaffolding to support legacy C code.
 unsafe impl Send for UnsafeBorrowMut {}
+
+fn tgkill(pid: libc::pid_t, tid: libc::pid_t, signo: i32) -> nix::Result<()> {
+    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
+    Errno::result(res).map(|i: i64| {
+        assert_eq!(i, 0);
+    })
+}
 
 mod export {
     use std::ffi::{c_char, c_int};
@@ -1784,6 +1874,20 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.physical_address(vptr)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_reapThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let mut thread = unsafe { ThreadRef::new(thread) };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.reap_thread(host, &mut thread)
         })
         .unwrap()
     }
