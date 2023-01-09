@@ -500,20 +500,6 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmemprocess_init(
-        process_mem: *mut ShimShmemProcess,
-        lock: *const ShimShmemHostLock,
-    ) {
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let m = ProcessShmem::new(&lock.root, lock.host_id);
-        assert_shmem_safe!(ProcessShmem, _test_process_shmem);
-        unsafe { process_mem.write(m) }
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getEmulatedTime(
         host_mem: *const ShimShmemHost,
     ) -> CEmulatedTime {
