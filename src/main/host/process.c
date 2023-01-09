@@ -117,29 +117,6 @@ void process_reapThread(Process* process, Thread* thread) {
     return _process_reapThread(process->rustProcess, thread);
 }
 
-static void _process_terminate(Process* proc) {
-    if (!process_hasStarted(proc)) {
-        trace("Never started");
-        return;
-    }
-
-    if (!process_isRunning(proc)) {
-        trace("Already dead");
-        // We should have already cleaned up.
-        utility_debugAssert(_process_didLogReturnCode(proc->rustProcess));
-        return;
-    }
-    trace("Terminating");
-    _process_setWasKilledByShadow(proc->rustProcess);
-
-    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
-    if (kill(nativePid, SIGKILL)) {
-        warning("kill(pid=%d) error %d: %s", nativePid, errno, g_strerror(errno));
-    }
-    process_markAsExiting(proc);
-    _process_handleProcessExit(proc->rustProcess);
-}
-
 static void _process_getAndLogReturnCode(Process* proc) {
     if (_process_didLogReturnCode(proc->rustProcess)) {
         return;
@@ -463,7 +440,7 @@ void process_stop(Process* proc) {
     _process_startCpuDelayTimer(proc->rustProcess);
 #endif
 
-    _process_terminate(proc);
+    _process_terminate(proc->rustProcess);
 
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);

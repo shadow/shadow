@@ -7,9 +7,10 @@ use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
+use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -674,6 +675,56 @@ impl Process {
                 unsafe { cshadow::futex_wake(futex, 1) };
             }
         }
+    }
+
+    fn has_started(&self) -> bool {
+        self.native_pid.get().is_some()
+    }
+
+    pub fn is_running(&self) -> bool {
+        !self.is_exiting.get() && self.threads.borrow().len() > 0
+    }
+
+    fn mark_as_exiting(&self) {
+        self.is_exiting.set(true);
+        trace!("Process {:?} marked as exiting", self.id());
+    }
+
+    fn handle_process_exit(&self) {
+        loop {
+            let (tid, cthread) = {
+                let threads = self.threads.borrow();
+                let Some((tid, thread)) = threads.iter().next() else {
+                    break;
+                };
+                (*tid, unsafe { thread.cthread() })
+            };
+            unsafe { cshadow::thread_handleProcessExit(cthread) };
+            unsafe { cshadow::process_reapThread(self.cprocess(), cthread) };
+            self.threads.borrow_mut().remove(&tid);
+        }
+        unsafe { cshadow::process_check(self.cprocess()) };
+    }
+
+    fn terminate(&self) {
+        let Some(native_pid) = self.native_pid() else {
+            trace!("Never started");
+            return;
+        };
+
+        if !self.is_running() {
+            trace!("Already dead");
+            assert!(self.return_code.get().is_some());
+        }
+
+        trace!("Terminating");
+        self.killed_by_shadow.set(true);
+        if let Err(err) = nix::sys::signal::kill(native_pid, Signal::SIGKILL) {
+            warn!("kill: {:?}", err);
+        }
+
+        self.mark_as_exiting();
+        self.handle_process_exit();
     }
 }
 
@@ -1539,8 +1590,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.is_exiting.set(true);
-            trace!("Process {:?} marked as exiting", proc.id());
+            proc.mark_as_exiting()
         })
         .unwrap();
     }
@@ -1665,8 +1715,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn _process_hasStarted(proc: *const RustProcess) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid.get().is_some())
-            .unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).has_started()).unwrap()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin
@@ -1770,7 +1819,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            !proc.is_exiting.get() && proc.threads.borrow().len() > 0
+            proc.is_running()
         })
         .unwrap()
     }
@@ -1832,19 +1881,7 @@ mod export {
         trace!("Handling process exit");
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            loop {
-                let (tid, cthread) = {
-                    let threads = proc.threads.borrow();
-                    let Some((tid, thread)) = threads.iter().next() else {
-                        break;
-                    };
-                    (*tid, unsafe { thread.cthread() })
-                };
-                unsafe { cshadow::thread_handleProcessExit(cthread) };
-                unsafe { cshadow::process_reapThread(proc.cprocess(), cthread) };
-                proc.threads.borrow_mut().remove(&tid);
-            }
-            unsafe { cshadow::process_check(proc.cprocess()) };
+            proc.handle_process_exit()
         })
         .unwrap();
     }
@@ -1888,6 +1925,16 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.reap_thread(host, &mut thread)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_terminate(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.terminate()
         })
         .unwrap()
     }
