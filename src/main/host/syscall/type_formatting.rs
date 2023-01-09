@@ -205,8 +205,7 @@ impl TryFromSyscallReg for nix::sys::mman::MRemapFlags {
 simple_display_impl!(i8, i16, i32, i64, isize);
 simple_display_impl!(u8, u16, u32, u64, usize);
 
-// skip *const i8 since we have a custom string format impl below
-deref_pointer_impl!(i16, i32, i64, isize);
+deref_pointer_impl!(i8, i16, i32, i64, isize);
 deref_pointer_impl!(u8, u16, u32, u64, usize);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
@@ -274,7 +273,10 @@ fn fmt_string(
     }
 }
 
-impl SyscallDisplay for SyscallVal<'_, *const i8> {
+/// Displays a nul-terminated string syscall argument.
+pub struct SyscallStringArg {}
+
+impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
     fn fmt(
         &self,
         f: &mut std::fmt::Formatter<'_>,
