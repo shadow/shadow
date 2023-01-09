@@ -622,37 +622,8 @@ HostId process_getHostId(const Process* proc) {
 }
 
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {
-    // We currently don't keep a true system-wide virtual <-> physical address
-    // mapping. Instead we simply assume that no shadow processes map the same
-    // underlying physical memory, and that therefore (pid, virtual address)
-    // uniquely defines a physical address.
-    //
-    // If we ever want to support futexes in memory shared between processes,
-    // we'll need to change this.  The most foolproof way to do so is probably
-    // to change PluginPhysicalPtr to be a bigger struct that identifies where
-    // the mapped region came from (e.g. what file), and the offset into that
-    // region. Such "fat" physical pointers might make memory management a
-    // little more cumbersome though, e.g. when using them as keys in the futex
-    // table.
-    //
-    // Alternatively we could hash the region+offset to a 64-bit value, but
-    // then we'd need to deal with potential collisions. On average we'd expect
-    // a collision after 2**32 physical addresses; i.e. they *probably*
-    // wouldn't happen in practice for realistic simulations.
-
-    // Linux uses the bottom 48-bits for user-space virtual addresses, giving
-    // us 16 bits for the pid.
-    const int pid_bits = 16;
-
-    guint pid = process_getProcessID(proc);
-    const int pid_shift = 64 - pid_bits;
-    uint64_t high = (uint64_t)pid << pid_shift;
-    utility_debugAssert(high >> pid_shift == pid);
-
-    uint64_t low = vPtr.val;
-    utility_debugAssert(low >> pid_shift == 0);
-
-    return (PluginPhysicalPtr){.val = low | high};
+    MAGIC_ASSERT(proc);
+    return _process_getPhysicalAddress(proc->rustProcess, vPtr);
 }
 
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {

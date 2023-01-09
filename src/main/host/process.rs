@@ -552,6 +552,46 @@ impl Process {
             borrow.noflush();
         }
     }
+
+    pub fn physical_address(&self, vptr: cshadow::PluginVirtualPtr) -> cshadow::PluginPhysicalPtr {
+        // We currently don't keep a true system-wide virtual <-> physical address
+        // mapping. Instead we simply assume that no shadow processes map the same
+        // underlying physical memory, and that therefore (pid, virtual address)
+        // uniquely defines a physical address.
+        //
+        // If we ever want to support futexes in memory shared between processes,
+        // we'll need to change this.  The most foolproof way to do so is probably
+        // to change PluginPhysicalPtr to be a bigger struct that identifies where
+        // the mapped region came from (e.g. what file), and the offset into that
+        // region. Such "fat" physical pointers might make memory management a
+        // little more cumbersome though, e.g. when using them as keys in the futex
+        // table.
+        //
+        // Alternatively we could hash the region+offset to a 64-bit value, but
+        // then we'd need to deal with potential collisions. On average we'd expect
+        // a collision after 2**32 physical addresses; i.e. they *probably*
+        // wouldn't happen in practice for realistic simulations.
+
+        // Linux uses the bottom 48-bits for user-space virtual addresses, giving
+        // us 16 bits for the pid.
+        const PADDR_BITS: i32 = 64;
+        const VADDR_BITS: i32 = 48;
+        const PID_BITS: i32 = 16;
+        assert_eq!(PADDR_BITS, PID_BITS + VADDR_BITS);
+
+        let high_part: u64 = u64::from(u32::from(self.id())) << VADDR_BITS;
+        assert_eq!(
+            ProcessId::try_from((high_part >> VADDR_BITS) as u32),
+            Ok(self.id())
+        );
+
+        let low_part: u64 = vptr.val;
+        assert_eq!(low_part >> VADDR_BITS, 0);
+
+        cshadow::PluginPhysicalPtr {
+            val: high_part | low_part,
+        }
+    }
 }
 
 impl Drop for Process {
@@ -1731,5 +1771,20 @@ mod export {
                 .store(Worker::current_time().unwrap(), Ordering::Relaxed);
         })
         .unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getPhysicalAddress(
+        proc: *const RustProcess,
+        vptr: cshadow::PluginVirtualPtr,
+    ) -> cshadow::PluginPhysicalPtr {
+        let proc = unsafe { proc.as_ref().unwrap() };
+
+        trace!("Handling process exit");
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.physical_address(vptr)
+        })
+        .unwrap()
     }
 }
