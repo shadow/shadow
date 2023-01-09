@@ -225,6 +225,55 @@ simple_debug_impl!(nix::sys::mman::ProtFlags);
 simple_debug_impl!(nix::sys::mman::MapFlags);
 simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
+fn fmt_string(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: PluginPtr,
+    options: FmtOptions,
+    mem: &MemoryManager,
+) -> std::fmt::Result {
+    const DISPLAY_LEN: usize = 40;
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    // read up to one extra character to check if it's a null byte
+    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
+        Ok(x) => x,
+        // the pointer didn't reference any valid memory
+        Err(_) => return write!(f, "{ptr:p}"),
+    };
+
+    // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
+    // characters
+    let mut non_graphic_remaining = DISPLAY_LEN / 3;
+
+    // mem_ref will reference up to DISPLAY_LEN+1 bytes
+    let mut s: Vec<NonZeroU8> = mem_ref
+        .iter()
+        // get bytes until a null byte
+        .map_while(|x| NonZeroU8::new(*x))
+        // stop after a certain number of non-graphic characters
+        .map_while(|x| {
+            if !x.get().is_ascii_graphic() {
+                non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
+            }
+            (non_graphic_remaining > 0).then_some(x)
+        })
+        .collect();
+
+    let len = s.len();
+    s.truncate(DISPLAY_LEN);
+    let s: std::ffi::CString = s.into();
+
+    #[allow(clippy::absurd_extreme_comparisons)]
+    if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
+        write!(f, "{s:?}...")
+    } else {
+        write!(f, "{s:?}")
+    }
+}
+
 impl SyscallDisplay for SyscallVal<'_, *const i8> {
     fn fmt(
         &self,
@@ -232,47 +281,7 @@ impl SyscallDisplay for SyscallVal<'_, *const i8> {
         options: FmtOptions,
         mem: &MemoryManager,
     ) -> std::fmt::Result {
-        const DISPLAY_LEN: usize = 40;
-
-        if options == FmtOptions::Deterministic {
-            return write!(f, "<pointer>");
-        }
-
-        // read up to one extra character to check if it's a null byte
-        let ptr = PluginPtr::from(self.reg);
-        let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
-            Ok(x) => x,
-            // the pointer didn't reference any valid memory
-            Err(_) => return write!(f, "{ptr:p}"),
-        };
-
-        // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
-        // characters
-        let mut non_graphic_remaining = DISPLAY_LEN / 3;
-
-        // mem_ref will reference up to DISPLAY_LEN+1 bytes
-        let mut s: Vec<NonZeroU8> = mem_ref
-            .iter()
-            // get bytes until a null byte
-            .map_while(|x| NonZeroU8::new(*x))
-            // stop after a certain number of non-graphic characters
-            .map_while(|x| {
-                if !x.get().is_ascii_graphic() {
-                    non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
-                }
-                (non_graphic_remaining > 0).then_some(x)
-            })
-            .collect();
-
-        let len = s.len();
-        s.truncate(DISPLAY_LEN);
-        let s: std::ffi::CString = s.into();
-
-        #[allow(clippy::absurd_extreme_comparisons)]
-        if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
-            write!(f, "{s:?}...")
-        } else {
-            write!(f, "{s:?}")
-        }
+        let ptr = self.reg.into();
+        fmt_string(f, ptr, options, mem)
     }
 }
