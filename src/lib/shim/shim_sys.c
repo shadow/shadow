@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <time.h>
@@ -57,8 +59,12 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
 
+    char* syscallName = "<unknown>";
+
     switch (syscall_num) {
         case SYS_clock_gettime: {
+            syscallName = "clock_gettime";
+
             CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
@@ -86,6 +92,8 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_time: {
+            syscallName = "time";
+
             CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
@@ -107,6 +115,8 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_gettimeofday: {
+            syscallName = "gettimeofday";
+
             CEmulatedTime emulated_time = _shim_sys_get_time();
             if (emulated_time == 0) {
                 // Not initialized yet.
@@ -129,6 +139,8 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_sched_yield: {
+            syscallName = "sched_yield";
+
             // Do nothing. We already yield and move time forward after some
             // number of unblocked syscalls.
             *rv = 0;
@@ -140,6 +152,39 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             // the syscall was not handled
             return false;
         }
+    }
+
+    int straceFd = shimshmem_getProcessStraceFd(shim_processSharedMem());
+
+    if (straceFd >= 0) {
+        // TODO: format the time
+        uint64_t emulated_time_ms = shim_sys_get_simtime_nanos();
+        pid_t tid = shimshmem_getThreadId(shim_threadSharedMem());
+
+        bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+
+        char buf[100] = {0};
+        int len = snprintf(buf, sizeof(buf), "%018ld [tid %d] %s(...) = %ld\n", emulated_time_ms,
+                           tid, syscallName, *rv);
+        len = MIN(len, sizeof(buf));
+
+        int written = 0;
+        while (1) {
+            int write_rv = write(straceFd, buf + written, len - written);
+            if (write_rv < 0) {
+                if (errno == -EINTR || errno == -EAGAIN) {
+                    continue;
+                }
+                warning("Unable to write to strace log");
+                break;
+            }
+            written += write_rv;
+            if (written == len) {
+                break;
+            }
+        }
+
+        shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {

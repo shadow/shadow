@@ -436,7 +436,7 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     _process_setSharedTime(proc);
     /* exec the process */
     thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
-               (const char* const*)envv, process_getWorkingDir(proc));
+               (const char* const*)envv, process_getWorkingDir(proc), process_getStraceFd(proc));
     g_strfreev(envv);
     const pid_t nativePid = thread_getNativePid(mainThread);
     _process_setNativePid(proc->rustProcess, nativePid);

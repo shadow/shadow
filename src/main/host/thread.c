@@ -61,7 +61,7 @@ Thread* thread_new(const Host* host, Process* process, int threadID) {
     thread->sys = syscallhandler_new(host, process, thread);
     thread->mthread = managedthread_new(thread);
 
-    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host));
+    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadID);
 
     return thread;
 }
@@ -98,9 +98,9 @@ void thread_unref(Thread* thread) {
 }
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
-                const char* const* envv, const char* workingDir) {
+                const char* const* envv, const char* workingDir, int straceFd) {
     MAGIC_ASSERT(thread);
-    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir);
+    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir, straceFd);
 }
 
 void thread_resume(Thread* thread) {

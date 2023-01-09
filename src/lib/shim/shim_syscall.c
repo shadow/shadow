@@ -1,6 +1,7 @@
 #include <alloca.h>
 #include <assert.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
 
@@ -181,6 +182,42 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 rv.as_i64 = shim_native_syscall(
                     syscall_event->event_data.syscall.syscall_args.number, regs[0].as_u64,
                     regs[1].as_u64, regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+
+                int straceFd = shimshmem_getProcessStraceFd(shim_processSharedMem());
+
+                // shadow would have alrady logged the syscall and arguments but wouldn't have
+                // logged the return value, so we can log it here
+                if (straceFd >= 0) {
+                    // TODO: format the time
+                    uint64_t emulated_time_ms = shim_sys_get_simtime_nanos();
+                    pid_t tid = shimshmem_getThreadId(shim_threadSharedMem());
+
+                    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+
+                    char buf[100] = {0};
+                    int len = snprintf(buf, sizeof(buf), "%018ld [tid %d] ^^^ = %ld\n",
+                                       emulated_time_ms, tid, rv.as_i64);
+                    len = MIN(len, sizeof(buf));
+
+                    int written = 0;
+                    while (1) {
+                        int write_rv = write(straceFd, buf + written, len - written);
+                        if (write_rv < 0) {
+                            if (errno == -EINTR || errno == -EAGAIN) {
+                                continue;
+                            }
+                            warning("Unable to write to strace log");
+                            break;
+                        }
+                        written += write_rv;
+                        if (written == len) {
+                            break;
+                        }
+                    }
+
+                    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+                }
+
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL: {

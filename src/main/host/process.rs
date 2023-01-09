@@ -2,7 +2,7 @@ use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
-use std::os::fd::RawFd;
+use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::PathBuf;
 
@@ -196,8 +196,21 @@ impl Process {
         ))
         .unwrap();
 
-        let shim_shared_mem =
-            ProcessShmem::new(&host.shim_shmem_lock_borrow().unwrap().root, host.id());
+        let strace_file = if strace_logging_mode == StraceFmtMode::Off {
+            None
+        } else {
+            let oflag = { OFlag::O_CREAT | OFlag::O_TRUNC | OFlag::O_WRONLY | OFlag::O_CLOEXEC };
+            let mode = { Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH };
+            let filename = Self::static_output_file_name(name.to_str().unwrap(), host, "strace");
+            let fd = nix::fcntl::open(&filename, oflag, mode).unwrap();
+            Some(unsafe { std::fs::File::from_raw_fd(fd) })
+        };
+
+        let shim_shared_mem = ProcessShmem::new(
+            &host.shim_shmem_lock_borrow().unwrap().root,
+            host.id(),
+            strace_file.as_ref().map(|x| x.as_raw_fd()),
+        );
         let shim_shared_mem_block =
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
 
@@ -227,16 +240,6 @@ impl Process {
         if !use_shim_syscall_handler {
             envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
         }
-
-        let strace_file = if strace_logging_mode == StraceFmtMode::Off {
-            None
-        } else {
-            let oflag = { OFlag::O_CREAT | OFlag::O_TRUNC | OFlag::O_WRONLY | OFlag::O_CLOEXEC };
-            let mode = { Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH };
-            let filename = Self::static_output_file_name(name.to_str().unwrap(), host, "strace");
-            let fd = nix::fcntl::open(&filename, oflag, mode).unwrap();
-            Some(unsafe { std::fs::File::from_raw_fd(fd) })
-        };
 
         #[cfg(feature = "perf_timers")]
         let cpu_delay_timer = {

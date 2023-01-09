@@ -414,8 +414,6 @@ The logs will be stored at
 
 Limitations:
 
-- Syscalls handled within Shadow's preloaded "shim" library will not be logged
-  (for example `SYS_gettimeofday`).
 - Syscalls run natively will not log the syscall arguments or return value (for
   example `SYS_getcwd`).
 - Syscalls processed within Shadow's C code will not log the syscall arguments.

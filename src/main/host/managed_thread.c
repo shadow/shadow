@@ -113,7 +113,7 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
 
 static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
                                       const char* const* argv_in, const char* const* envp_in,
-                                      const char* workingDir) {
+                                      const char* workingDir, int straceFd) {
     utility_debugAssert(file != NULL);
 
     // execve technically takes arrays of pointers to *mutable* char.
@@ -146,6 +146,11 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
 
             // *Don't* close the write end of the pipe on exec.
             if (fcntl(pipefd[1], F_SETFD, 0)) {
+                die_after_vfork();
+            }
+
+            // clear the FD_CLOEXEC flag for the strace fd so that it's available in the shim
+            if (straceFd >= 0 && fcntl(straceFd, F_SETFD, 0)) {
                 die_after_vfork();
             }
 
@@ -192,7 +197,7 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
 }
 
 void managedthread_run(ManagedThread* mthread, const char* pluginPath, const char* const* argv,
-                       const char* const* envv, const char* workingDir) {
+                       const char* const* envv, const char* workingDir, int straceFd) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     /* set the env for the child */
@@ -225,8 +230,8 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
     g_free(envStr);
     g_free(argStr);
 
-    mthread->nativePid =
-        _managedthread_fork_exec(mthread, pluginPath, argv, (const char* const*)myenvv, workingDir);
+    mthread->nativePid = _managedthread_fork_exec(
+        mthread, pluginPath, argv, (const char* const*)myenvv, workingDir, straceFd);
     // In Linux, the PID is equal to the TID of its first thread.
     mthread->nativeTid = mthread->nativePid;
     childpidwatcher_watch(
