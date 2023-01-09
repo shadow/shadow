@@ -34,6 +34,16 @@ impl From<StraceFmtMode> for Option<FmtOptions> {
     }
 }
 
+impl From<Option<FmtOptions>> for StraceFmtMode {
+    fn from(x: Option<FmtOptions>) -> Self {
+        match x {
+            None => StraceFmtMode::Off,
+            Some(FmtOptions::Standard) => StraceFmtMode::Standard,
+            Some(FmtOptions::Deterministic) => StraceFmtMode::Deterministic,
+        }
+    }
+}
+
 pub trait SyscallDisplay {
     fn fmt(
         &self,

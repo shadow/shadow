@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::units::{self, Unit};
 use crate::cshadow as c;
-use crate::host::syscall::formatter::StraceFmtMode;
+use crate::host::syscall::formatter::FmtOptions;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use logger as c_log;
@@ -159,11 +159,11 @@ impl ConfigOptions {
         self.experimental.use_shim_syscall_handler.unwrap()
     }
 
-    pub fn strace_logging_mode(&self) -> StraceFmtMode {
+    pub fn strace_logging_mode(&self) -> Option<FmtOptions> {
         match self.experimental.strace_logging_mode.as_ref().unwrap() {
-            StraceLoggingMode::Standard => StraceFmtMode::Standard,
-            StraceLoggingMode::Deterministic => StraceFmtMode::Deterministic,
-            StraceLoggingMode::Off => StraceFmtMode::Off,
+            StraceLoggingMode::Standard => Some(FmtOptions::Standard),
+            StraceLoggingMode::Deterministic => Some(FmtOptions::Deterministic),
+            StraceLoggingMode::Off => None,
         }
     }
 }
@@ -1358,12 +1358,5 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.use_legacy_working_dir()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getStraceLoggingMode(config: *const ConfigOptions) -> StraceFmtMode {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.strace_logging_mode()
     }
 }
