@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SysCallReg, SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -57,15 +57,22 @@ pub trait SyscallDisplay {
 /// converts types when being formatted.
 pub struct SyscallVal<'a, T> {
     pub reg: SysCallReg,
+    pub args: [SysCallReg; 6],
     options: FmtOptions,
     mem: &'a MemoryManager,
     _phantom: PhantomData<T>,
 }
 
 impl<'a, T> SyscallVal<'a, T> {
-    pub fn new(reg: SysCallReg, options: FmtOptions, mem: &'a MemoryManager) -> Self {
+    pub fn new(
+        reg: SysCallReg,
+        args: [SysCallReg; 6],
+        options: FmtOptions,
+        mem: &'a MemoryManager,
+    ) -> Self {
         Self {
             reg,
+            args,
             options,
             mem,
             _phantom: PhantomData::default(),
@@ -116,14 +123,14 @@ where
     SyscallVal<'a, E>: Display,
     SyscallVal<'a, F>: Display,
 {
-    pub fn new(args: &SysCallArgs, options: FmtOptions, mem: &'a MemoryManager) -> Self {
+    pub fn new(args: [SysCallReg; 6], options: FmtOptions, mem: &'a MemoryManager) -> Self {
         Self {
-            a: SyscallVal::new(args.get(0), options, mem),
-            b: SyscallVal::new(args.get(1), options, mem),
-            c: SyscallVal::new(args.get(2), options, mem),
-            d: SyscallVal::new(args.get(3), options, mem),
-            e: SyscallVal::new(args.get(4), options, mem),
-            f: SyscallVal::new(args.get(5), options, mem),
+            a: SyscallVal::new(args[0], args, options, mem),
+            b: SyscallVal::new(args[1], args, options, mem),
+            c: SyscallVal::new(args[2], args, options, mem),
+            d: SyscallVal::new(args[3], args, options, mem),
+            e: SyscallVal::new(args[4], args, options, mem),
+            f: SyscallVal::new(args[5], args, options, mem),
         }
     }
 }
@@ -182,6 +189,7 @@ where
     RV: std::fmt::Debug,
 {
     rv: &'a SyscallResult,
+    args: [SysCallReg; 6],
     options: FmtOptions,
     mem: &'a MemoryManager,
     _phantom: PhantomData<RV>,
@@ -192,12 +200,18 @@ where
     SyscallVal<'a, RV>: Display,
     RV: std::fmt::Debug,
 {
-    pub fn new(rv: &'a SyscallResult, options: FmtOptions, mem: &'a MemoryManager) -> Option<Self> {
+    pub fn new(
+        rv: &'a SyscallResult,
+        args: [SysCallReg; 6],
+        options: FmtOptions,
+        mem: &'a MemoryManager,
+    ) -> Option<Self> {
         match &rv {
             SyscallResult::Ok(_)
             | SyscallResult::Err(SyscallError::Failed(_))
             | SyscallResult::Err(SyscallError::Native) => Some(Self {
                 rv,
+                args,
                 options,
                 mem,
                 _phantom: PhantomData::default(),
@@ -216,7 +230,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.rv {
             SyscallResult::Ok(x) => {
-                let rv = SyscallVal::<'_, RV>::new(*x, self.options, self.mem);
+                let rv = SyscallVal::<'_, RV>::new(*x, self.args, self.options, self.mem);
                 write!(f, "{rv}")
             }
             SyscallResult::Err(SyscallError::Failed(failed)) => {
@@ -224,7 +238,7 @@ where
                 let rv = SysCallReg {
                     as_i64: -(errno as i64),
                 };
-                let rv = SyscallVal::<'_, RV>::new(rv, self.options, self.mem);
+                let rv = SyscallVal::<'_, RV>::new(rv, self.args, self.options, self.mem);
                 write!(f, "{rv} ({errno})")
             }
             SyscallResult::Err(SyscallError::Native) => {
@@ -264,15 +278,16 @@ mod export {
         logging_mode: StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,
-        args: *const libc::c_char,
+        args_str: *const libc::c_char,
+        args: &[c::SysCallReg; 6],
         result: c::SysCallReturn,
     ) -> c::SysCallReturn {
         assert!(!proc.is_null());
         assert!(!name.is_null());
-        assert!(!args.is_null());
+        assert!(!args_str.is_null());
 
         let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-        let args = unsafe { CStr::from_ptr(args) }.to_str().unwrap();
+        let args_str = unsafe { CStr::from_ptr(args_str) }.to_str().unwrap();
         let result = SyscallResult::from(result);
 
         let logging_mode = logging_mode.into();
@@ -287,14 +302,14 @@ mod export {
 
             // we don't know the type, so just show it as an int
             let memory = proc.memory_borrow();
-            let rv = SyscallResultFmt::<libc::c_long>::new(&result, logging_mode, &memory);
+            let rv = SyscallResultFmt::<libc::c_long>::new(&result, *args, logging_mode, &memory);
 
             if let Some(ref rv) = rv {
                 proc.with_strace_file(|file| {
                     let time = Worker::current_time();
 
                     if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
-                        write_syscall(file, &time, tid, name, args, rv).unwrap();
+                        write_syscall(file, &time, tid, name, args_str, rv).unwrap();
                     } else {
                         log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
                     }
@@ -311,6 +326,7 @@ mod export {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::host::syscall_types::SysCallArgs;
     use std::process::Command;
 
     #[test]
@@ -329,7 +345,7 @@ mod test {
         let mem = unsafe { MemoryManager::new(pid) };
 
         // make sure that we can construct a `SyscallArgsFmt` with no generic types
-        let _syscall_args = <SyscallArgsFmt>::new(&args, FmtOptions::Standard, &mem);
+        let _syscall_args = <SyscallArgsFmt>::new(args.args, FmtOptions::Standard, &mem);
 
         proc.kill().unwrap();
         proc.wait().unwrap();

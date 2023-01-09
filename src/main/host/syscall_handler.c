@@ -239,8 +239,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         scr = syscallhandler_##s(sys, args);                                                       \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
+            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
+                              "...", &args->args, scr);                                            \
         }                                                                                          \
         break
 #define NATIVE(s)                                                                                  \
@@ -248,8 +248,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         trace("native syscall %ld " #s, args->number);                                             \
         scr = syscallreturn_makeNative();                                                          \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
+            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
+                              "...", &args->args, scr);                                            \
         }                                                                                          \
         break
 #define UNSUPPORTED(s)                                                                             \
@@ -257,8 +257,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
         scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                sys->process, straceLoggingMode, thread_getID(sys->thread), #s, "...", scr);       \
+            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
+                              "...", &args->args, scr);                                            \
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
@@ -561,7 +561,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                     char arg_str[20] = {0};
                     snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
                     scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread),
-                                      "syscall", arg_str, scr);
+                                      "syscall", arg_str, &args->args, scr);
                 }
 
                 break;
