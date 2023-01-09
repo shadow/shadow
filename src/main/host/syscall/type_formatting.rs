@@ -224,6 +224,51 @@ simple_debug_impl!(nix::sys::mman::ProtFlags);
 simple_debug_impl!(nix::sys::mman::MapFlags);
 simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
+fn fmt_buffer(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: PluginPtr,
+    len: usize,
+    options: FmtOptions,
+    mem: &MemoryManager,
+) -> std::fmt::Result {
+    const DISPLAY_LEN: usize = 40;
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, len)) {
+        Ok(x) => x,
+        // the pointer didn't reference any valid memory
+        Err(_) => return write!(f, "{ptr:p}"),
+    };
+
+    let mut s = String::with_capacity(DISPLAY_LEN);
+
+    // the number of plugin mem bytes used; num_bytes <= s.len()
+    let mut num_plugin_bytes = 0;
+
+    for c in mem_ref.iter() {
+        let escaped = std::ascii::escape_default(*c);
+
+        if s.len() + escaped.len() > DISPLAY_LEN {
+            break;
+        }
+
+        for b in escaped {
+            s.push(b.into())
+        }
+
+        num_plugin_bytes += 1;
+    }
+
+    if len > num_plugin_bytes {
+        write!(f, "\"{s}\"...")
+    } else {
+        write!(f, "\"{s}\"")
+    }
+}
+
 fn fmt_string(
     f: &mut std::fmt::Formatter<'_>,
     ptr: PluginPtr,
@@ -270,6 +315,22 @@ fn fmt_string(
         write!(f, "{s:?}...")
     } else {
         write!(f, "{s:?}")
+    }
+}
+
+/// Displays a byte buffer with a specified length.
+pub struct SyscallBufferArg<const LEN_INDEX: usize> {}
+
+impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallBufferArg<LEN_INDEX>> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        let ptr = self.reg.into();
+        let len: libc::size_t = self.args[LEN_INDEX].into();
+        fmt_buffer(f, ptr, len, options, mem)
     }
 }
 
