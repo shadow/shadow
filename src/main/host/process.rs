@@ -21,7 +21,7 @@ use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
-use crate::cshadow::{self, PluginPhysicalPtr, PluginVirtualPtr};
+use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
