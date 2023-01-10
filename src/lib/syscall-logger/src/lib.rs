@@ -114,7 +114,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
             let syscall_args = {
                 let memory = ctx.process.memory_borrow();
-                let syscall_args = <SyscallArgsFmt::<#(#arg_types)*>>::new(args, strace_fmt_options, &*memory);
+                let syscall_args = <SyscallArgsFmt::<#(#arg_types)*>>::new(args.args, strace_fmt_options, &*memory);
                 // need to convert to a string so that we read the plugin's memory before we potentially
                 // modify it during the syscall
                 format!("{}", syscall_args)
@@ -133,7 +133,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
             // format the result (returns None if the syscall didn't complete)
             let memory = ctx.process.memory_borrow();
-            let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, strace_fmt_options, &*memory);
+            let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, args.args, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {
                 ctx.process.with_strace_file(|file| {

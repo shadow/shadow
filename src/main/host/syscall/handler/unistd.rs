@@ -8,6 +8,7 @@ use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::type_formatting::SyscallBufferArg;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
@@ -273,8 +274,8 @@ impl SyscallHandler {
         result
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_char,
-                  /* count */ libc::size_t)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
+                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
     pub fn write(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
@@ -313,8 +314,9 @@ impl SyscallHandler {
         self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_char,
-                  /* count */ libc::size_t, /* offset */ libc::off_t)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
+                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
+                  /* offset */ libc::off_t)]
     pub fn pwrite64(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));

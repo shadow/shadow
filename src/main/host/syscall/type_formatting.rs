@@ -205,8 +205,7 @@ impl TryFromSyscallReg for nix::sys::mman::MRemapFlags {
 simple_display_impl!(i8, i16, i32, i64, isize);
 simple_display_impl!(u8, u16, u32, u64, usize);
 
-// skip *const i8 since we have a custom string format impl below
-deref_pointer_impl!(i16, i32, i64, isize);
+deref_pointer_impl!(i8, i16, i32, i64, isize);
 deref_pointer_impl!(u8, u16, u32, u64, usize);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
@@ -225,54 +224,127 @@ simple_debug_impl!(nix::sys::mman::ProtFlags);
 simple_debug_impl!(nix::sys::mman::MapFlags);
 simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
-impl SyscallDisplay for SyscallVal<'_, *const i8> {
+fn fmt_buffer(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: PluginPtr,
+    len: usize,
+    options: FmtOptions,
+    mem: &MemoryManager,
+) -> std::fmt::Result {
+    const DISPLAY_LEN: usize = 40;
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, len)) {
+        Ok(x) => x,
+        // the pointer didn't reference any valid memory
+        Err(_) => return write!(f, "{ptr:p}"),
+    };
+
+    let mut s = String::with_capacity(DISPLAY_LEN);
+
+    // the number of plugin mem bytes used; num_bytes <= s.len()
+    let mut num_plugin_bytes = 0;
+
+    for c in mem_ref.iter() {
+        let escaped = std::ascii::escape_default(*c);
+
+        if s.len() + escaped.len() > DISPLAY_LEN {
+            break;
+        }
+
+        for b in escaped {
+            s.push(b.into())
+        }
+
+        num_plugin_bytes += 1;
+    }
+
+    if len > num_plugin_bytes {
+        write!(f, "\"{s}\"...")
+    } else {
+        write!(f, "\"{s}\"")
+    }
+}
+
+fn fmt_string(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: PluginPtr,
+    options: FmtOptions,
+    mem: &MemoryManager,
+) -> std::fmt::Result {
+    const DISPLAY_LEN: usize = 40;
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    // read up to one extra character to check if it's a null byte
+    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
+        Ok(x) => x,
+        // the pointer didn't reference any valid memory
+        Err(_) => return write!(f, "{ptr:p}"),
+    };
+
+    // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
+    // characters
+    let mut non_graphic_remaining = DISPLAY_LEN / 3;
+
+    // mem_ref will reference up to DISPLAY_LEN+1 bytes
+    let mut s: Vec<NonZeroU8> = mem_ref
+        .iter()
+        // get bytes until a null byte
+        .map_while(|x| NonZeroU8::new(*x))
+        // stop after a certain number of non-graphic characters
+        .map_while(|x| {
+            if !x.get().is_ascii_graphic() {
+                non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
+            }
+            (non_graphic_remaining > 0).then_some(x)
+        })
+        .collect();
+
+    let len = s.len();
+    s.truncate(DISPLAY_LEN);
+    let s: std::ffi::CString = s.into();
+
+    #[allow(clippy::absurd_extreme_comparisons)]
+    if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
+        write!(f, "{s:?}...")
+    } else {
+        write!(f, "{s:?}")
+    }
+}
+
+/// Displays a byte buffer with a specified length.
+pub struct SyscallBufferArg<const LEN_INDEX: usize> {}
+
+impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallBufferArg<LEN_INDEX>> {
     fn fmt(
         &self,
         f: &mut std::fmt::Formatter<'_>,
         options: FmtOptions,
         mem: &MemoryManager,
     ) -> std::fmt::Result {
-        const DISPLAY_LEN: usize = 40;
+        let ptr = self.reg.into();
+        let len: libc::size_t = self.args[LEN_INDEX].into();
+        fmt_buffer(f, ptr, len, options, mem)
+    }
+}
 
-        if options == FmtOptions::Deterministic {
-            return write!(f, "<pointer>");
-        }
+/// Displays a nul-terminated string syscall argument.
+pub struct SyscallStringArg {}
 
-        // read up to one extra character to check if it's a null byte
-        let ptr = PluginPtr::from(self.reg);
-        let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
-            Ok(x) => x,
-            // the pointer didn't reference any valid memory
-            Err(_) => return write!(f, "{ptr:p}"),
-        };
-
-        // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
-        // characters
-        let mut non_graphic_remaining = DISPLAY_LEN / 3;
-
-        // mem_ref will reference up to DISPLAY_LEN+1 bytes
-        let mut s: Vec<NonZeroU8> = mem_ref
-            .iter()
-            // get bytes until a null byte
-            .map_while(|x| NonZeroU8::new(*x))
-            // stop after a certain number of non-graphic characters
-            .map_while(|x| {
-                if !x.get().is_ascii_graphic() {
-                    non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
-                }
-                (non_graphic_remaining > 0).then_some(x)
-            })
-            .collect();
-
-        let len = s.len();
-        s.truncate(DISPLAY_LEN);
-        let s: std::ffi::CString = s.into();
-
-        #[allow(clippy::absurd_extreme_comparisons)]
-        if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
-            write!(f, "{s:?}...")
-        } else {
-            write!(f, "{s:?}")
-        }
+impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        let ptr = self.reg.into();
+        fmt_string(f, ptr, options, mem)
     }
 }

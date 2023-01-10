@@ -11,6 +11,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::type_formatting::SyscallBufferArg;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
@@ -141,9 +142,10 @@ impl SyscallHandler {
         Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
-                  /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
-                  /* dest_addr */ *const libc::sockaddr, /* addrlen */ libc::socklen_t)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int,
+                  /* buf */ SyscallBufferArg</* len */ 2>, /* len */ libc::size_t,
+                  /* flags */ nix::sys::socket::MsgFlags, /* dest_addr */ *const libc::sockaddr,
+                  /* addrlen */ libc::socklen_t)]
     pub fn sendto(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let buf_ptr: PluginPtr = args.get(1).into();
