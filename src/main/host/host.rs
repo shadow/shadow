@@ -1124,25 +1124,6 @@ mod export {
         &mut *hostrc.futextable_borrow_mut()
     }
 
-    /// converts a virtual (shadow) tid into the native tid
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getNativeTID(
-        host: *const Host,
-        virtual_pid: libc::pid_t,
-        virtual_tid: libc::pid_t,
-    ) -> libc::pid_t {
-        let host = unsafe { host.as_ref().unwrap() };
-        for process in host.processes.borrow().values() {
-            let process = unsafe { process.borrow(host.root()).cprocess() };
-            let native_tid =
-                unsafe { cshadow::process_findNativeTID(process, virtual_pid, virtual_tid) };
-            if native_tid > 0 {
-                return native_tid;
-            }
-        }
-        0
-    }
-
     /// Returns the specified process, or NULL if it doesn't exist.
     #[no_mangle]
     pub unsafe extern "C" fn host_getProcess(

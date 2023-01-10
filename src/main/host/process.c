@@ -117,34 +117,6 @@ void process_reapThread(Process* process, Thread* thread) {
     return _process_reapThread(process->rustProcess, thread);
 }
 
-pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
-    MAGIC_ASSERT(proc);
-
-    Thread* thread = NULL;
-
-    pid_t pid = process_getProcessID(proc);
-    if (virtualPID > 0 && virtualTID > 0) {
-        // Both PID and TID must match
-        if (pid == virtualPID) {
-            thread = _process_getThread(proc->rustProcess, virtualTID);
-        }
-    } else if (virtualPID > 0) {
-        // Get the TID of the main thread if the PID matches
-        if (pid == virtualPID) {
-            thread = _process_threadLeader(proc->rustProcess);
-        }
-    } else if (virtualTID > 0) {
-        // Get the TID of any thread that matches, ignoring PID
-        thread = _process_getThread(proc->rustProcess, virtualTID);
-    }
-
-    if (thread != NULL) {
-        return thread_getNativeTid(thread);
-    } else {
-        return 0; // not found
-    }
-}
-
 void process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
