@@ -377,6 +377,8 @@ impl Process {
     }
 
     fn start(&self, host: &Host) {
+        assert!(!self.is_running());
+
         self.open_stdio_file_helper(
             libc::STDIN_FILENO as u32,
             "/dev/null".into(),
@@ -404,7 +406,25 @@ impl Process {
             // the last element of envv must be NULL
             .chain(std::iter::once(std::ptr::null()))
             .collect();
-        unsafe { cshadow::process_start(self.cprocess(), argv_ptrs.as_ptr(), envv_ptrs.as_ptr()) };
+
+        // tid of first thread of a process is equal to the pid.
+        let tid = ThreadId::from(self.id());
+        let main_thread =
+            unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
+        let main_thread_ref = unsafe { ThreadRef::new(main_thread) };
+        // ThreadRef increments the reference count; we don't need the original
+        // reference anymore.
+        unsafe { cshadow::thread_unref(main_thread) };
+        self.threads.borrow_mut().insert(tid, main_thread_ref);
+
+        unsafe {
+            cshadow::process_start(
+                self.cprocess(),
+                main_thread,
+                argv_ptrs.as_ptr(),
+                envv_ptrs.as_ptr(),
+            )
+        };
     }
 
     fn open_stdio_file_helper(

@@ -131,20 +131,9 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc->rustProcess);
 }
 
-void process_start(Process* proc, const char* const* argv, const char* const* envv_in) {
+void process_start(Process* proc, Thread* mainThread, const char* const* argv,
+                   const char* const* envv_in) {
     MAGIC_ASSERT(proc);
-
-    /* we shouldn't already be running */
-    utility_alwaysAssert(!process_isRunning(proc));
-
-    // tid of first thread of a process is equal to the pid.
-    int tid = process_getProcessID(proc);
-    Thread* mainThread = thread_new(_host(proc), proc, tid);
-
-    _process_insertThread(proc->rustProcess, mainThread);
-
-    // The rust process now owns `mainThread`; drop our own reference.
-    thread_unref(mainThread);
 
     info("starting process '%s'", process_getName(proc));
 
