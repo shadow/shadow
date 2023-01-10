@@ -738,23 +738,21 @@ impl Process {
             return;
         };
 
-        // TODO: do we still need __WALL here?
         use nix::sys::wait::WaitStatus;
-        let return_code =
-            match nix::sys::wait::waitpid(native_pid, Some(nix::sys::wait::WaitPidFlag::__WALL)) {
-                Ok(WaitStatus::Exited(_pid, code)) => code,
-                Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => unsafe {
-                    cshadow::return_code_for_signal(signal as i32)
-                },
-                Ok(status) => {
-                    warn!("Unexpected status: {status:?}");
-                    libc::EXIT_FAILURE
-                }
-                Err(e) => {
-                    warn!("waitpid: {e:?}");
-                    libc::EXIT_FAILURE
-                }
-            };
+        let return_code = match nix::sys::wait::waitpid(native_pid, None) {
+            Ok(WaitStatus::Exited(_pid, code)) => code,
+            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => unsafe {
+                cshadow::return_code_for_signal(signal as i32)
+            },
+            Ok(status) => {
+                warn!("Unexpected status: {status:?}");
+                libc::EXIT_FAILURE
+            }
+            Err(e) => {
+                warn!("waitpid: {e:?}");
+                libc::EXIT_FAILURE
+            }
+        };
         self.return_code.set(Some(return_code));
 
         let exitcode_path = self.output_file_name(host, "exitcode");
