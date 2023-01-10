@@ -726,6 +726,75 @@ impl Process {
         self.mark_as_exiting();
         self.handle_process_exit();
     }
+
+    fn get_and_log_return_code(&self, host: &Host) {
+        if self.return_code.get().is_some() {
+            return;
+        }
+
+        let Some(native_pid) = self.native_pid() else {
+            error!("Process {name} with a start time of {start_time:?} did not start",
+            name=self.name(), start_time=(self.start_time - EmulatedTime::SIMULATION_START));
+            return;
+        };
+
+        // TODO: do we still need __WALL here?
+        use nix::sys::wait::WaitStatus;
+        let return_code =
+            match nix::sys::wait::waitpid(native_pid, Some(nix::sys::wait::WaitPidFlag::__WALL)) {
+                Ok(WaitStatus::Exited(_pid, code)) => code,
+                Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => unsafe {
+                    cshadow::return_code_for_signal(signal as i32)
+                },
+                Ok(status) => {
+                    warn!("Unexpected status: {status:?}");
+                    libc::EXIT_FAILURE
+                }
+                Err(e) => {
+                    warn!("waitpid: {e:?}");
+                    libc::EXIT_FAILURE
+                }
+            };
+        self.return_code.set(Some(return_code));
+
+        let exitcode_path = self.output_file_name(host, "exitcode");
+        let exitcode_contents = if self.killed_by_shadow.get() {
+            // Process never died during the simulation; shadow chose to kill it;
+            // typically because the simulation end time was reached.
+            // Write out an empty exitcode file.
+            String::new()
+        } else {
+            format!("{return_code}")
+        };
+        if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
+            warn!("Couldn't write exitcode file: {e:?}");
+        }
+
+        let main_result_string = {
+            let mut s = format!("process '{name}'", name = self.name());
+            if self.killed_by_shadow.get() {
+                write!(s, " killed by Shadow").unwrap();
+            } else {
+                write!(s, " exited with code {return_code}").unwrap();
+                if return_code == 0 {
+                    write!(s, " (success)").unwrap();
+                } else {
+                    write!(s, " (error)").unwrap();
+                }
+            }
+            s
+        };
+
+        // if there was no error or was intentionally killed
+        // TODO: once we've implemented clean shutdown via SIGTERM,
+        //       consider treating death by SIGKILL as a plugin error
+        if return_code == 0 || self.killed_by_shadow.get() {
+            info!("{}", main_result_string);
+        } else {
+            warn!("{}", main_result_string);
+            Worker::increment_plugin_error_count();
+        }
+    }
 }
 
 impl Drop for Process {
@@ -1935,6 +2004,16 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.terminate()
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getAndLogReturnCode(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.get_and_log_return_code(host)
         })
         .unwrap()
     }

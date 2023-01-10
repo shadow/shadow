@@ -452,6 +452,10 @@ impl Worker {
     pub fn add_to_global_sim_stats() {
         Worker::with(|w| SIM_STATS.add_from_local_stats(&w.sim_stats)).unwrap()
     }
+
+    pub fn increment_plugin_error_count() {
+        Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
 }
 
 #[derive(Debug)]
@@ -640,11 +644,6 @@ mod export {
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
         Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_incrementPluginErrors() {
-        Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
     }
 
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.

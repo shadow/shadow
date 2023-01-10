@@ -117,87 +117,6 @@ void process_reapThread(Process* process, Thread* thread) {
     return _process_reapThread(process->rustProcess, thread);
 }
 
-static void _process_getAndLogReturnCode(Process* proc) {
-    if (_process_didLogReturnCode(proc->rustProcess)) {
-        return;
-    }
-
-    if (!process_hasStarted(proc)) {
-        error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
-              process_getName(proc),
-              emutime_sub_emutime(
-                  _process_getStartTime(proc->rustProcess), EMUTIME_SIMULATION_START));
-        return;
-    }
-
-    // Return an error if we can't get real exit code.
-    int returnCode = EXIT_FAILURE;
-
-    int wstatus = 0;
-    const pid_t nativePid = _process_getNativePid(proc->rustProcess);
-    int rv = waitpid(nativePid, &wstatus, __WALL);
-    if (rv < 0) {
-        // Getting here is a bug, but since the process is exiting anyway
-        // not serious enough to merit `error`ing out.
-        warning("waitpid: %s", g_strerror(errno));
-    } else if (rv != nativePid) {
-        warning("waitpid returned %d instead of the requested %d", rv, nativePid);
-    } else {
-        if (WIFEXITED(wstatus)) {
-            returnCode = WEXITSTATUS(wstatus);
-        } else if (WIFSIGNALED(wstatus)) {
-            returnCode = return_code_for_signal(WTERMSIG(wstatus));
-        } else {
-            warning("Couldn't get exit status");
-        }
-    }
-
-    _process_setReturnCode(proc->rustProcess, returnCode);
-
-    GString* mainResultString = g_string_new(NULL);
-    g_string_printf(mainResultString, "process '%s'", process_getName(proc));
-    if (_process_wasKilledByShadow(proc->rustProcess)) {
-        g_string_append_printf(mainResultString, " killed by Shadow");
-    } else {
-        g_string_append_printf(mainResultString, " exited with code %d", returnCode);
-        if (returnCode == 0) {
-            g_string_append_printf(mainResultString, " (success)");
-        } else {
-            g_string_append_printf(mainResultString, " (error)");
-        }
-    }
-
-    char fileName[4000];
-    _process_outputFileName(
-        proc->rustProcess, _host(proc), "exitcode", &fileName[0], sizeof(fileName));
-    FILE* exitcodeFile = fopen(fileName, "we");
-
-    if (exitcodeFile != NULL) {
-        if (_process_wasKilledByShadow(proc->rustProcess)) {
-            // Process never died during the simulation; shadow chose to kill it;
-            // typically because the simulation end time was reached.
-            // Write out an empty exitcode file.
-        } else {
-            fprintf(exitcodeFile, "%d", returnCode);
-        }
-        fclose(exitcodeFile);
-    } else {
-        warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
-    }
-
-    // if there was no error or was intentionally killed
-    // TODO: once we've implemented clean shutdown via SIGTERM,
-    //       treat death by SIGKILL as a plugin error
-    if (returnCode == 0 || _process_wasKilledByShadow(proc->rustProcess)) {
-        info("%s", mainResultString->str);
-    } else {
-        warning("%s", mainResultString->str);
-        worker_incrementPluginErrors();
-    }
-
-    g_string_free(mainResultString, TRUE);
-}
-
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
     MAGIC_ASSERT(proc);
 
@@ -234,7 +153,7 @@ void process_check(Process* proc) {
     }
 
     info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
-    _process_getAndLogReturnCode(proc);
+    _process_getAndLogReturnCode(proc->rustProcess);
 #ifdef USE_PERF_TIMERS
     info("total runtime for process '%s' was %f seconds", process_getName(proc),
          _process_getTotalRunTime(proc->rustProcess));
