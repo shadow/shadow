@@ -57,6 +57,8 @@ const char* process_getWorkingDir(Process* proc);
 
 // Adds a new thread to the process and schedules it to run.
 // Intended for use by `clone`.
+//
+// Takes ownership of `thread`.
 void process_addThread(Process* proc, Thread* thread);
 
 Thread* process_getThread(Process* proc, pid_t virtualTID);
@@ -197,5 +199,7 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 
 // To be called from Rust Process.
 void process_start(Process* process, const gchar* const* envv, const gchar* const* argv);
+void process_reapThread(Process* process, Thread* thread);
+void process_check(Process* process);
 
 #endif /* SHD_PROCESS_H_ */

@@ -57,14 +57,9 @@
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
-static void _process_check(Process* proc);
-
 struct _Process {
     /* Pointer to the RustProcess that owns this Process */
     const RustProcess* rustProcess;
-
-    // int thread_id -> Thread*.
-    GHashTable* threads;
 
     MAGIC_DECLARE;
 };
@@ -75,11 +70,6 @@ static const Host* _host(Process* proc) {
     const Host* host = worker_getCurrentHost();
     utility_debugAssert(host_getID(host) == process_getHostId(proc));
     return host;
-}
-
-static Thread* _process_threadLeader(Process* proc) {
-    // "main" thread is the one where pid==tid.
-    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(process_getProcessID(proc)));
 }
 
 const ShimShmemProcess* process_getSharedMem(Process* proc) {
@@ -130,7 +120,7 @@ pid_t process_getNativePid(const Process* proc) {
     return _process_getNativePid(proc->rustProcess);
 }
 
-static void _process_reapThread(Process* process, Thread* thread) {
+void process_reapThread(Process* process, Thread* thread) {
     utility_debugAssert(!thread_isRunning(thread));
 
     // If the `clear_child_tid` attribute on the thread is set, and there are
@@ -138,7 +128,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
     // that address. This mechanism is typically used in `pthread_join` etc.
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !_process_isExiting(process->rustProcess)) {
+    if (clear_child_tid_pvp.val && _process_numThreads(process->rustProcess) > 1 && !_process_isExiting(process->rustProcess)) {
         // Verify thread is really dead. This *should* no longer be needed, but doesn't
         // hurt to defensively do anyway, since waking the futex before the thread has
         // actually exited can (and has) led to difficult-to-track-down bugs.
@@ -211,26 +201,6 @@ static void _process_reapThread(Process* process, Thread* thread) {
     }
 }
 
-static void _process_handleProcessExit(Process* proc) {
-    trace("handleProcessExit");
-    utility_debugAssert(!process_isRunning(proc));
-
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, proc->threads);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-        Thread* thread = value;
-        thread_handleProcessExit(thread);
-        utility_debugAssert(!thread_isRunning(thread));
-        _process_reapThread(proc, thread);
-
-        // Must be last, since it unrefs the thread.
-        g_hash_table_iter_remove(&iter);
-    }
-
-    _process_check(proc);
-}
-
 static void _process_terminate(Process* proc) {
     if (!process_hasStarted(proc)) {
         trace("Never started");
@@ -251,7 +221,7 @@ static void _process_terminate(Process* proc) {
         warning("kill(pid=%d) error %d: %s", nativePid, errno, g_strerror(errno));
     }
     process_markAsExiting(proc);
-    _process_handleProcessExit(proc);
+    _process_handleProcessExit(proc->rustProcess);
 }
 
 static void _process_getAndLogReturnCode(Process* proc) {
@@ -344,16 +314,16 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
     if (virtualPID > 0 && virtualTID > 0) {
         // Both PID and TID must match
         if (pid == virtualPID) {
-            thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+            thread = _process_getThread(proc->rustProcess, virtualTID);
         }
     } else if (virtualPID > 0) {
         // Get the TID of the main thread if the PID matches
         if (pid == virtualPID) {
-            thread = _process_threadLeader(proc);
+            thread = _process_threadLeader(proc->rustProcess);
         }
     } else if (virtualTID > 0) {
         // Get the TID of any thread that matches, ignoring PID
-        thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+        thread = _process_getThread(proc->rustProcess, virtualTID);
     }
 
     if (thread != NULL) {
@@ -363,7 +333,7 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
     }
 }
 
-static void _process_check(Process* proc) {
+void process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
     if (process_isRunning(proc) || !process_hasStarted(proc)) {
@@ -391,9 +361,9 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     int returnCode = thread_getReturnCode(thread);
     debug("thread %d in process '%s' exited with code %d", thread_getID(thread),
           process_getName(proc), returnCode);
-    _process_reapThread(proc, thread);
-    g_hash_table_remove(proc->threads, GUINT_TO_POINTER(thread_getID(thread)));
-    _process_check(proc);
+    process_reapThread(proc, thread);
+    _process_removeThread(proc->rustProcess, thread_getID(thread));
+    process_check(proc);
 }
 
 void process_start(Process* proc, const char* const* argv, const char* const* envv_in) {
@@ -406,7 +376,10 @@ void process_start(Process* proc, const char* const* argv, const char* const* en
     int tid = process_getProcessID(proc);
     Thread* mainThread = thread_new(_host(proc), proc, tid);
 
-    g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
+    _process_insertThread(proc->rustProcess, mainThread);
+
+    // The rust process now owns `mainThread`; drop our own reference.
+    thread_unref(mainThread);
 
     info("starting process '%s'", process_getName(proc));
 
@@ -496,10 +469,11 @@ static void _unref_thread_cb(gpointer data) {
 
 void process_addThread(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    g_hash_table_insert(proc->threads, GUINT_TO_POINTER(thread_getID(thread)), thread);
+    _process_insertThread(proc->rustProcess, thread);
 
-    // Schedule thread to start.
-    thread_ref(thread);
+    // Schedule thread to start. We're giving the caller's reference to thread
+    // to the TaskRef here, which is why we don't increment its ref count to
+    // create the TaskRef, but do decrement it on cleanup.
     const Host* host = _host(proc);
     TaskRef* task = taskref_new_bound(host_getID(host), _start_thread_task,
                                       GINT_TO_POINTER(process_getProcessID(proc)), thread, NULL,
@@ -509,7 +483,7 @@ void process_addThread(Process* proc, Thread* thread) {
 }
 
 Thread* process_getThread(Process* proc, pid_t virtualTID) {
-    return g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+    return _process_getThread(proc->rustProcess, virtualTID);
 }
 
 void process_markAsExiting(Process* proc) {
@@ -552,7 +526,7 @@ void process_continue(Process* proc, Thread* thread) {
     if (_process_isExiting(proc->rustProcess)) {
         // If the whole process is already exiting, skip to cleaning up the
         // whole process exit; normal thread cleanup would likely fail.
-        _process_handleProcessExit(proc);
+        _process_handleProcessExit(proc->rustProcess);
     } else {
         _process_check_thread(proc, thread);
     }
@@ -584,7 +558,7 @@ void process_stop(Process* proc) {
 
     worker_setActiveProcess(NULL);
 
-    _process_check(proc);
+    process_check(proc);
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
@@ -598,10 +572,8 @@ gboolean process_hasStarted(Process* proc) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return !_process_isExiting(proc->rustProcess) && g_hash_table_size(proc->threads) > 0;
+    return _process_isRunning(proc->rustProcess);
 }
-
-static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
     *siginfo = (siginfo_t){
@@ -615,9 +587,6 @@ Process* process_new(const RustProcess* rustProcess, const Host* host, pid_t pro
                      bool pause_for_debugging) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
-
-    proc->threads =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
     proc->rustProcess = rustProcess;
 
@@ -648,11 +617,6 @@ void process_free(Process* proc) {
     // We *shouldn't* need to call _process_terminate here, since Host::free_all_applications
     // already explicitly stops all processes before freeing them, but once the relevant code is
     // all in Rust we should ensure the process is terminated in our Drop implementation.
-
-    if (proc->threads) {
-        g_hash_table_destroy(proc->threads);
-        proc->threads = NULL;
-    }
 
     worker_count_deallocation(Process);
 
@@ -783,27 +747,6 @@ void process_parseArgStrFree(char** argv, char* error) {
     }
 }
 
-static void _process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, process->threads);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-        Thread* thread = value;
-
-        // Find a thread without the signal blocked, if any, and wake it up.
-        shd_kernel_sigset_t blocked_signals =
-            shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
-        if (!shd_sigismember(&blocked_signals, signo)) {
-            SysCallCondition* cond = thread_getSysCallCondition(thread);
-            if (!cond) {
-                continue;
-            }
-            syscallcondition_wakeupForSignal(cond, hostLock, signo);
-            break;
-        }
-    }
-}
-
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
     MAGIC_ASSERT(process);
     utility_debugAssert(siginfo->si_signo >= 0);
@@ -851,7 +794,7 @@ void process_signal(Process* process, Thread* currentRunningThread, const siginf
         }
     }
 
-    _process_interruptWithSignal(process, host_getShimShmemLock(host), siginfo->si_signo);
+    _process_interruptWithSignal(process->rustProcess, host_getShimShmemLock(host), siginfo->si_signo);
 }
 
 int process_getDumpable(Process* process) {

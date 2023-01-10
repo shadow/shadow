@@ -225,10 +225,10 @@ impl ProcessShmemProtected {
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ThreadShmem {
-    host_id: HostId,
+    pub host_id: HostId,
     tid: libc::pid_t,
 
-    protected: RootedRefCell<ThreadShmemProtected>,
+    pub protected: RootedRefCell<ThreadShmemProtected>,
 }
 
 impl ThreadShmem {
