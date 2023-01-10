@@ -117,25 +117,6 @@ void process_reapThread(Process* process, Thread* thread) {
     return _process_reapThread(process->rustProcess, thread);
 }
 
-void process_check(Process* proc) {
-    MAGIC_ASSERT(proc);
-
-    if (process_isRunning(proc) || !process_hasStarted(proc)) {
-        return;
-    }
-
-    info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
-    _process_getAndLogReturnCode(proc->rustProcess);
-#ifdef USE_PERF_TIMERS
-    info("total runtime for process '%s' was %f seconds", process_getName(proc),
-         _process_getTotalRunTime(proc->rustProcess));
-#endif
-
-    utility_alwaysAssert(proc->rustProcess);
-    _process_descriptorTableShutdownHelper(proc->rustProcess);
-    _process_descriptorTableRemoveAndCloseAll(proc->rustProcess);
-}
-
 static void _process_check_thread(Process* proc, Thread* thread) {
     if (thread_isRunning(thread)) {
         debug("thread %d in process '%s' still running, but blocked", thread_getID(thread),
@@ -147,7 +128,7 @@ static void _process_check_thread(Process* proc, Thread* thread) {
           process_getName(proc), returnCode);
     process_reapThread(proc, thread);
     _process_removeThread(proc->rustProcess, thread_getID(thread));
-    process_check(proc);
+    _process_check(proc->rustProcess);
 }
 
 void process_start(Process* proc, const char* const* argv, const char* const* envv_in) {
@@ -342,7 +323,7 @@ void process_stop(Process* proc) {
 
     worker_setActiveProcess(NULL);
 
-    process_check(proc);
+    _process_check(proc->rustProcess);
 }
 
 void process_detachPlugin(gpointer procptr, gpointer nothing) {

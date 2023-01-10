@@ -25,6 +25,7 @@ use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
 
 use super::descriptor::descriptor_table::DescriptorTable;
@@ -690,7 +691,7 @@ impl Process {
         trace!("Process {:?} marked as exiting", self.id());
     }
 
-    fn handle_process_exit(&self) {
+    fn handle_process_exit(&self, host: &Host) {
         loop {
             let (tid, cthread) = {
                 let threads = self.threads.borrow();
@@ -703,10 +704,10 @@ impl Process {
             unsafe { cshadow::process_reapThread(self.cprocess(), cthread) };
             self.threads.borrow_mut().remove(&tid);
         }
-        unsafe { cshadow::process_check(self.cprocess()) };
+        self.check(host);
     }
 
-    fn terminate(&self) {
+    fn terminate(&self, host: &Host) {
         let Some(native_pid) = self.native_pid() else {
             trace!("Never started");
             return;
@@ -724,7 +725,7 @@ impl Process {
         }
 
         self.mark_as_exiting();
-        self.handle_process_exit();
+        self.handle_process_exit(host);
     }
 
     fn get_and_log_return_code(&self, host: &Host) {
@@ -792,6 +793,34 @@ impl Process {
             warn!("{}", main_result_string);
             Worker::increment_plugin_error_count();
         }
+    }
+
+    fn check(&self, host: &Host) {
+        if self.is_running() || !self.has_started() {
+            return;
+        }
+
+        info!(
+            "process '{}' has completed or is otherwise no longer running",
+            self.name()
+        );
+        self.get_and_log_return_code(host);
+
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "total runtime for process '{}' was {:?}",
+            self.name(),
+            self.total_run_time.get()
+        );
+
+        let mut descriptor_table = self.descriptor_table_borrow_mut();
+        descriptor_table.shutdown_helper();
+        let descriptors = descriptor_table.remove_all();
+        CallbackQueue::queue_and_run(|cb_queue| {
+            for desc in descriptors {
+                desc.close(host, cb_queue);
+            }
+        });
     }
 }
 
@@ -1948,7 +1977,7 @@ mod export {
         trace!("Handling process exit");
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.handle_process_exit()
+            proc.handle_process_exit(host)
         })
         .unwrap();
     }
@@ -2001,7 +2030,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.terminate()
+            proc.terminate(host)
         })
         .unwrap()
     }
@@ -2012,6 +2041,16 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.get_and_log_return_code(host)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_check(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.check(host)
         })
         .unwrap()
     }

@@ -192,6 +192,5 @@ void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 // To be called from Rust Process.
 void process_start(Process* process, const gchar* const* envv, const gchar* const* argv);
 void process_reapThread(Process* process, Thread* thread);
-void process_check(Process* process);
 
 #endif /* SHD_PROCESS_H_ */
