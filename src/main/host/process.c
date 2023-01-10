@@ -326,10 +326,6 @@ void process_stop(Process* proc) {
     _process_check(proc->rustProcess);
 }
 
-void process_detachPlugin(gpointer procptr, gpointer nothing) {
-    // TODO: Remove
-}
-
 gboolean process_hasStarted(Process* proc) {
     MAGIC_ASSERT(proc);
     return _process_hasStarted(proc->rustProcess);

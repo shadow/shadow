@@ -51,7 +51,6 @@ void process_free(Process* proc);
 
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
-void process_detachPlugin(gpointer procptr, gpointer nothing);
 
 const char* process_getWorkingDir(Process* proc);
 
