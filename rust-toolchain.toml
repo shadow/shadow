@@ -1,8 +1,5 @@
 # This file overrides rustup's default toolchain, but can itself be overridden
 # locally if desired.
 # https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file
-#
-# This is the version that will be used in CI when building
-# shadow, running lints, etc.
 [toolchain]
-channel = "1.66.0"
+channel = "1.66.1"
