@@ -125,52 +125,6 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     _process_check(proc->rustProcess);
 }
 
-void process_start(Process* proc, Thread* mainThread, const char* const* argv,
-                   const char* const* envv) {
-    MAGIC_ASSERT(proc);
-
-    _process_setSharedTime();
-    /* exec the process */
-    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv, envv,
-               process_getWorkingDir(proc), process_getStraceFd(proc));
-    const pid_t nativePid = thread_getNativePid(mainThread);
-    _process_setNativePid(proc->rustProcess, nativePid);
-    _process_createMemoryManager(proc->rustProcess, nativePid);
-
-#ifdef USE_PERF_TIMERS
-    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
-    info("process '%s' started in %f seconds", process_getName(proc), elapsed);
-#else
-    info("process '%s' started", process_getName(proc));
-#endif
-
-    worker_setActiveProcess(NULL);
-    worker_setActiveThread(NULL);
-
-    if (_process_shouldPauseForDebugging(proc->rustProcess)) {
-        // will block until logger output has been flushed
-        // there is a race condition where other threads may log between the fprintf() and raise()
-        // below, but it should be rare
-        logger_flush(logger_getDefault());
-
-        // print with hopefully a single syscall to avoid splitting these messages (fprintf should
-        // not buffer stderr output)
-        fprintf(stderr,
-                "** Pausing with SIGTSTP to enable debugger attachment to managed process '%s' "
-                "(pid %d)\n"
-                "** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background "
-                "this task and then typing \"fg\".\n"
-                "** (If you wish to kill Shadow, type \"kill %%%%\" instead.)\n"
-                "** If running Shadow under GDB, resume Shadow by typing \"signal SIGCONT\".\n",
-                process_getName(proc), nativePid);
-
-        raise(SIGTSTP);
-    }
-
-    /* call main and run until blocked */
-    process_continue(proc, mainThread);
-}
-
 static void _start_thread_task(const Host* host, gpointer callbackObject,
                                gpointer callbackArgument) {
     pid_t pid = GPOINTER_TO_INT(callbackObject);

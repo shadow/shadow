@@ -1,11 +1,13 @@
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::fmt::Write;
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use log::{debug, error, info, trace, warn};
 use nix::errno::Errno;
@@ -359,6 +361,35 @@ impl Process {
         self.host_id
     }
 
+    /// Starts the CPU delay timer.
+    /// Panics if the timer is already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn start_cpu_delay_timer(&self) {
+        self.cpu_delay_timer.borrow_mut().start()
+    }
+
+    /// Stop the timer and return the most recent (not cumulative) duration.
+    /// Panics if the timer was not already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
+        let mut timer = self.cpu_delay_timer.borrow_mut();
+        timer.stop();
+        let total_elapsed = timer.elapsed();
+        let prev_total = self.total_run_time.replace(total_elapsed);
+        let delta = total_elapsed - prev_total;
+
+        if let Some(mut tracker) = host.tracker_borrow_mut() {
+            unsafe {
+                cshadow::tracker_addProcessingTimeNanos(
+                    &mut *tracker,
+                    delta.as_nanos().try_into().unwrap(),
+                )
+            };
+            host.cpu_borrow_mut().add_delay(delta);
+        }
+        delta
+    }
+
     pub fn schedule(&self, host: &Host) {
         let id = self.id();
         match self.stop_time {
@@ -425,7 +456,9 @@ impl Process {
         Worker::set_active_thread(&main_thread);
 
         #[cfg(feature = "perf_timers")]
-        self.cpu_delay_timer.borrow_mut().start();
+        self.start_cpu_delay_timer();
+
+        Process::set_shared_time(host);
 
         let argv_ptrs: Vec<*const i8> = self
             .argv
@@ -443,24 +476,73 @@ impl Process {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
-        let cthread = unsafe { main_thread.cthread() };
+        unsafe {
+            cshadow::thread_run(
+                main_thread.cthread(),
+                self.plugin_path.as_ptr(),
+                argv_ptrs.as_ptr(),
+                envv_ptrs.as_ptr(),
+                self.working_dir.as_ptr(),
+                match &self.strace_logging {
+                    Some(x) => x.file.borrow().as_raw_fd(),
+                    None => -1,
+                },
+            )
+        };
 
-        // `process_start` actually starts running the thread and may make
+        let native_pid =
+            Pid::from_raw(unsafe { cshadow::thread_getNativePid(main_thread.cthread()) });
+        self.native_pid.set(Some(native_pid));
+        *self.memory_manager.borrow_mut() = Some(unsafe { MemoryManager::new(native_pid) });
+
+        #[cfg(feature = "perf_timers")]
+        {
+            let elapsed = self.stop_cpu_delay_timer(host);
+            info!("process '{}' started in {:?}", self.name(), elapsed);
+        }
+        #[cfg(not(feature = "perf_timers"))]
+        info!("process '{}' started", self.name());
+
+        Worker::clear_active_thread();
+        Worker::clear_active_process();
+
+        if self.pause_for_debugging {
+            // will block until logger output has been flushed
+            // there is a race condition where other threads may log between the
+            // `eprintln` and `raise` below, but it should be rare
+            log::logger().flush();
+
+            // Use a single `eprintln` to ensure we hold the lock for the whole message.
+            // Defensively pre-construct a single string so that `eprintln` is
+            // more likely to use a single `write` call, to minimize the chance
+            // of more lines being written to stdout in the meantime, and in
+            // case of C code writing to `STDERR` directly without taking Rust's
+            // lock.
+            let msg = format!(
+                "\
+              \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
+              \n** '{name}' (pid {native_pid}).\
+              \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
+              \n** this task, and then typing \"fg\".\
+              \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
+                name = self.name(),
+                native_pid = i32::from(native_pid)
+            );
+            eprintln!("{}", msg);
+
+            nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
+        }
+
+        // `process_continue` actually starts running the thread and may make
         // syscalls, which may need to get a mutable reference to the thread, so
-        // we need to drop the borrow here. Once `process_start` and the thread
+        // we need to drop the borrow here. Once `process_continue` and the thread
         // code is in Rust, we can pass the borrow through instead of dropping
         // it.
+        let cthread = unsafe { main_thread.cthread() };
         drop(main_thread);
         main_thread_ref.safely_drop(host.root());
 
-        unsafe {
-            cshadow::process_start(
-                self.cprocess(),
-                cthread,
-                argv_ptrs.as_ptr(),
-                envv_ptrs.as_ptr(),
-            )
-        };
+        unsafe { cshadow::process_continue(self.cprocess(), cthread) };
     }
 
     fn open_stdio_file_helper(
@@ -889,6 +971,16 @@ impl Process {
             }
         });
     }
+
+    /// FIXME: still needed? Time is now updated more granularly in the Thread code
+    /// when xferring control to/from shim.
+    fn set_shared_time(host: &Host) {
+        let mut host_shmem = host.shim_shmem_lock_borrow_mut().unwrap();
+        host_shmem.max_runahead_time = Worker::max_event_runahead_time(host);
+        host.shim_shmem()
+            .sim_time
+            .store(Worker::current_time().unwrap(), Ordering::Relaxed);
+    }
 }
 
 impl Drop for Process {
@@ -1094,7 +1186,6 @@ mod export {
     use std::ffi::{c_char, c_int};
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
-    use std::sync::atomic::Ordering;
 
     use libc::size_t;
     use log::{trace, warn};
@@ -1813,39 +1904,16 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn _process_startCpuDelayTimer(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root())
-                .cpu_delay_timer
-                .borrow_mut()
-                .start()
-        })
-        .unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).start_cpu_delay_timer()).unwrap()
     }
 
     #[cfg(feature = "perf_timers")]
     #[no_mangle]
     pub unsafe extern "C" fn _process_stopCpuDelayTimer(proc: *const RustProcess) -> f64 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let delta = Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let mut timer = proc.cpu_delay_timer.borrow_mut();
-            timer.stop();
-            let total_elapsed = timer.elapsed();
-            let prev_total = proc.total_run_time.replace(total_elapsed);
-            let delta = total_elapsed - prev_total;
-
-            if let Some(mut tracker) = host.tracker_borrow_mut() {
-                unsafe {
-                    cshadow::tracker_addProcessingTimeNanos(
-                        &mut *tracker,
-                        delta.as_nanos().try_into().unwrap(),
-                    )
-                };
-                host.cpu_borrow_mut().add_delay(delta);
-            }
-            delta
-        })
-        .unwrap();
+        let delta =
+            Worker::with_active_host(|host| proc.borrow(host.root()).stop_cpu_delay_timer(host))
+                .unwrap();
         delta.as_nanos() as f64
     }
 
@@ -2044,14 +2112,7 @@ mod export {
     // when xferring control to/from shim.
     #[no_mangle]
     pub unsafe extern "C" fn _process_setSharedTime() {
-        Worker::with_active_host(|host| {
-            let mut host_shmem = host.shim_shmem_lock_borrow_mut().unwrap();
-            host_shmem.max_runahead_time = Worker::max_event_runahead_time(host);
-            host.shim_shmem()
-                .sim_time
-                .store(Worker::current_time().unwrap(), Ordering::Relaxed);
-        })
-        .unwrap();
+        Worker::with_active_host(Process::set_shared_time).unwrap();
     }
 
     #[no_mangle]

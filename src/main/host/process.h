@@ -188,9 +188,4 @@ void process_setDumpable(Process* process, int dumpable);
 // due to opaque fields and macro magic in its C definition.
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
 
-// To be called from Rust Process.
-void process_start(Process* process, Thread* mainThread, const gchar* const* envv,
-                   const gchar* const* argv);
-void process_reapThread(Process* process, Thread* thread);
-
 #endif /* SHD_PROCESS_H_ */
