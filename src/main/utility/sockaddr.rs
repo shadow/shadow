@@ -201,6 +201,31 @@ impl std::fmt::Debug for SockaddrStorage {
     }
 }
 
+impl std::fmt::Display for SockaddrStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let as_inet = self.as_inet();
+        let as_inet6 = self.as_inet6();
+        let as_unix = self.as_unix();
+
+        let as_inet = as_inet.map(|x| x as &dyn std::fmt::Display);
+        let as_inet6 = as_inet6.map(|x| x as &dyn std::fmt::Display);
+        let as_unix = as_unix.as_ref().map(|x| x as &dyn std::fmt::Display);
+
+        // find a representation that is not None
+        let options = [as_inet, as_inet6, as_unix];
+        let addr = options.into_iter().find_map(std::convert::identity);
+
+        if let Some(ref addr) = addr {
+            write!(f, "{addr}")
+        } else {
+            f.debug_struct("SockaddrStorage")
+                .field("len", &self.len)
+                .field("family", &self.family())
+                .finish_non_exhaustive()
+        }
+    }
+}
+
 impl<T> From<SockaddrUnix<T>> for SockaddrStorage
 where
     T: Borrow<libc::sockaddr_un>,
@@ -416,6 +441,32 @@ where
             .field("sun_family", &self.addr.borrow().sun_family)
             .field("sun_path", &self.sun_path())
             .finish()
+    }
+}
+
+impl<T> std::fmt::Display for SockaddrUnix<T>
+where
+    T: Borrow<libc::sockaddr_un>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(path) = self.as_path() {
+            f.debug_struct("sockaddr_un").field("path", &path).finish()
+        } else if let Some(name) = self.as_abstract() {
+            let name: Vec<u8> = name
+                .iter()
+                .flat_map(|x| std::ascii::escape_default(*x))
+                .collect();
+            let name = String::from_utf8(name).unwrap();
+            f.debug_struct("sockaddr_un")
+                .field("abstract", &name)
+                .finish()
+        } else if self.is_unnamed() {
+            write!(f, "sockaddr_un {{ unnamed }}")
+        } else {
+            f.debug_struct("sockaddr_un")
+                .field("sun_path", &self.sun_path())
+                .finish()
+        }
     }
 }
 

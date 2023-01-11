@@ -1,6 +1,7 @@
 use std::num::NonZeroU8;
 
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::handler::read_sockaddr;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, TypedPluginPtr};
 
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
@@ -346,5 +347,29 @@ impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
     ) -> std::fmt::Result {
         let ptr = self.reg.into();
         fmt_string(f, ptr, options, mem)
+    }
+}
+
+pub struct SyscallSockAddrArg<const LEN_INDEX: usize> {}
+
+impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrArg<LEN_INDEX>> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        if options == FmtOptions::Deterministic {
+            return write!(f, "<pointer>");
+        }
+
+        let ptr = self.reg.into();
+        let len = self.args[LEN_INDEX].into();
+
+        let Ok(Some(addr)) = read_sockaddr(mem, ptr, len) else {
+            return write!(f, "{ptr:p}");
+        };
+
+        write!(f, "{addr}")
     }
 }
