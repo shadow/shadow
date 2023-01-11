@@ -64,8 +64,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-static void _unref_thread_cb(gpointer data);
-
 static const Host* _host(Process* proc) {
     const Host* host = worker_getCurrentHost();
     utility_debugAssert(host_getID(host) == process_getHostId(proc));
@@ -112,37 +110,9 @@ pid_t process_getNativePid(const Process* proc) {
     return _process_getNativePid(proc->rustProcess);
 }
 
-static void _start_thread_task(const Host* host, gpointer callbackObject,
-                               gpointer callbackArgument) {
-    pid_t pid = GPOINTER_TO_INT(callbackObject);
-    Process* process = host_getProcess(host, pid);
-    if (!process) {
-        debug("Process %d no longer exists", pid);
-        return;
-    }
-
-    Thread* thread = callbackArgument;
-    process_continue(process, thread);
-}
-
-static void _unref_thread_cb(gpointer data) {
-    Thread* thread = data;
-    thread_unref(thread);
-}
-
 void process_addThread(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    _process_insertThread(proc->rustProcess, thread);
-
-    // Schedule thread to start. We're giving the caller's reference to thread
-    // to the TaskRef here, which is why we don't increment its ref count to
-    // create the TaskRef, but do decrement it on cleanup.
-    const Host* host = _host(proc);
-    TaskRef* task = taskref_new_bound(host_getID(host), _start_thread_task,
-                                      GINT_TO_POINTER(process_getProcessID(proc)), thread, NULL,
-                                      _unref_thread_cb);
-    host_scheduleTaskWithDelay(host, task, 0);
-    taskref_drop(task);
+    _process_addThread(proc->rustProcess, thread);
 }
 
 Thread* process_getThread(Process* proc, pid_t virtualTID) {

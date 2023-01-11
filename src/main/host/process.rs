@@ -49,6 +49,12 @@ use std::time::Duration;
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
 
+impl std::fmt::Display for ProcessId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl TryFrom<u32> for ProcessId {
     type Error = TryFromIntError;
 
@@ -995,6 +1001,40 @@ impl Process {
         }
         self.reap_thread(host, tid);
         self.check(host);
+    }
+
+    /// Adds a new thread to the process and schedules it to run.
+    /// Intended for use by `clone`.
+    pub fn add_thread(&self, host: &Host, thread: ThreadRef) {
+        let pid = self.id();
+        let tid = thread.id();
+        let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
+        self.threads.borrow_mut().insert(tid, thread);
+
+        // Schedule thread to start. We're giving the caller's reference to thread
+        // to the TaskRef here, which is why we don't increment its ref count to
+        // create the TaskRef, but do decrement it on cleanup.
+        let task = TaskRef::new(move |host| {
+            let (cprocess, cthread) = {
+                let Some(process) = host.process_borrow(pid) else {
+                    // This might happen if a thread calls `clone` and then `exit_group`
+                    debug!("Process {:?} no longer exists. Can't start its thread {}.", pid, tid);
+                    return;
+                };
+                let process = process.borrow(host.root());
+                let threads = process.threads.borrow();
+                let Some(thread) = threads.get(&tid) else {
+                    // Maybe possible e.g. if a thread is targeted with `tgkill` before it
+                    // gets a chance to start.
+                    debug!("Thread {} no longer exists. Can't start it.", tid);
+                    return;
+                };
+                let thread = thread.borrow(host.root());
+                unsafe { (process.cprocess(), thread.cthread()) }
+            };
+            unsafe { cshadow::process_continue(cprocess, cthread) };
+        });
+        host.schedule_task_with_delay(task, SimulationTime::ZERO);
     }
 
     /// FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -2208,6 +2248,26 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.check_thread(host, thread.id())
+        })
+        .unwrap()
+    }
+
+    /// Adds a new thread to the process and schedules it to run.
+    /// Intended for use by `clone`.
+    ///
+    /// Takes ownership of `thread`.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_addThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { ThreadRef::new(thread) };
+        // Since we're taking ownership, remove the caller's reference to the thread.
+        unsafe { cshadow::thread_unref(thread.cthread()) };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.add_thread(host, thread)
         })
         .unwrap()
     }
