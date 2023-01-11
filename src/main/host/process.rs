@@ -402,6 +402,31 @@ impl Process {
         let name = self.output_file_name(host, "stderr");
         self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
 
+        // tid of first thread of a process is equal to the pid.
+        let tid = ThreadId::from(self.id());
+        let main_thread =
+            unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
+        let main_thread_ref = RootedRc::new(
+            host.root(),
+            RootedRefCell::new(host.root(), unsafe { ThreadRef::new(main_thread) }),
+        );
+        // ThreadRef increments the reference count; we don't need the original
+        // reference anymore.
+        unsafe { cshadow::thread_unref(main_thread) };
+
+        // Insert a *clone* of the reference, since we continue to use ours below.
+        self.threads
+            .borrow_mut()
+            .insert(tid, main_thread_ref.clone(host.root()));
+
+        info!("starting process '{}'", self.name());
+        let main_thread = main_thread_ref.borrow(host.root());
+        Worker::set_active_process(self);
+        Worker::set_active_thread(&main_thread);
+
+        #[cfg(feature = "perf_timers")]
+        self.cpu_delay_timer.borrow_mut().start();
+
         let argv_ptrs: Vec<*const i8> = self
             .argv
             .iter()
@@ -418,23 +443,20 @@ impl Process {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
-        // tid of first thread of a process is equal to the pid.
-        let tid = ThreadId::from(self.id());
-        let main_thread =
-            unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
-        let main_thread_ref = RootedRc::new(
-            host.root(),
-            RootedRefCell::new(host.root(), unsafe { ThreadRef::new(main_thread) }),
-        );
-        // ThreadRef increments the reference count; we don't need the original
-        // reference anymore.
-        unsafe { cshadow::thread_unref(main_thread) };
-        self.threads.borrow_mut().insert(tid, main_thread_ref);
+        let cthread = unsafe { main_thread.cthread() };
+
+        // `process_start` actually starts running the thread and may make
+        // syscalls, which may need to get a mutable reference to the thread, so
+        // we need to drop the borrow here. Once `process_start` and the thread
+        // code is in Rust, we can pass the borrow through instead of dropping
+        // it.
+        drop(main_thread);
+        main_thread_ref.safely_drop(host.root());
 
         unsafe {
             cshadow::process_start(
                 self.cprocess(),
-                main_thread,
+                cthread,
                 argv_ptrs.as_ptr(),
                 envv_ptrs.as_ptr(),
             )

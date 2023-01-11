@@ -129,17 +129,6 @@ void process_start(Process* proc, Thread* mainThread, const char* const* argv,
                    const char* const* envv_in) {
     MAGIC_ASSERT(proc);
 
-    info("starting process '%s'", process_getName(proc));
-
-    /* now we will execute in the pth/plugin context, so we need to load the state */
-    worker_setActiveProcess(proc);
-    worker_setActiveThread(mainThread);
-
-#ifdef USE_PERF_TIMERS
-    /* time how long we execute the program */
-    _process_startCpuDelayTimer(proc->rustProcess);
-#endif
-
     gchar** envv = g_strdupv((gchar**)envv_in);
 
     /* Add shared mem block of first thread to env */
