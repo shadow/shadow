@@ -9,7 +9,7 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
     pub fn ioctl(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
+        let fd: libc::c_int = args.get(0).try_into()?;
         let request: libc::c_ulong = args.get(1).into();
         let arg_ptr: PluginPtr = args.get(2).into(); // type depends on request
 

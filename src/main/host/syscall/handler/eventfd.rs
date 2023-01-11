@@ -18,7 +18,7 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]
     pub fn eventfd(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let init_val: libc::c_uint = args.get(0).into();
+        let init_val: libc::c_uint = args.get(0).try_into()?;
 
         self.eventfd_helper(ctx, init_val, 0)
     }
@@ -26,8 +26,8 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint,
                   /* flags */ nix::sys::eventfd::EfdFlags)]
     pub fn eventfd2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let init_val: libc::c_uint = args.get(0).into();
-        let flags: libc::c_int = args.get(1).into();
+        let init_val: libc::c_uint = args.get(0).try_into()?;
+        let flags: libc::c_int = args.get(1).try_into()?;
 
         self.eventfd_helper(ctx, init_val, flags)
     }

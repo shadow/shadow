@@ -89,57 +89,9 @@ impl PartialEq for SysCallReg {
 
 impl Eq for SysCallReg {}
 
-impl From<u64> for SysCallReg {
-    fn from(v: u64) -> Self {
-        Self { as_u64: v }
-    }
-}
-
 impl From<SysCallReg> for u64 {
     fn from(v: SysCallReg) -> u64 {
         unsafe { v.as_u64 }
-    }
-}
-
-impl From<u32> for SysCallReg {
-    fn from(v: u32) -> Self {
-        Self { as_u64: v as u64 }
-    }
-}
-
-impl From<SysCallReg> for u32 {
-    fn from(v: SysCallReg) -> u32 {
-        (unsafe { v.as_u64 }) as u32
-    }
-}
-
-impl From<usize> for SysCallReg {
-    fn from(v: usize) -> Self {
-        Self { as_u64: v as u64 }
-    }
-}
-
-impl From<SysCallReg> for usize {
-    fn from(v: SysCallReg) -> usize {
-        unsafe { v.as_u64 as usize }
-    }
-}
-
-impl From<isize> for SysCallReg {
-    fn from(v: isize) -> Self {
-        Self { as_i64: v as i64 }
-    }
-}
-
-impl From<SysCallReg> for isize {
-    fn from(v: SysCallReg) -> isize {
-        unsafe { v.as_i64 as isize }
-    }
-}
-
-impl From<i64> for SysCallReg {
-    fn from(v: i64) -> Self {
-        Self { as_i64: v }
     }
 }
 
@@ -149,47 +101,96 @@ impl From<SysCallReg> for i64 {
     }
 }
 
-impl From<i32> for SysCallReg {
-    fn from(v: i32) -> Self {
+macro_rules! try_from_syscallreg {
+    ($to_type:ty, $using_field:ident) => {
+        impl TryFrom<SysCallReg> for $to_type {
+            //type Error = <Self as TryFrom<u64>>::Error;
+            type Error = nix::errno::Errno;
+
+            fn try_from(v: SysCallReg) -> Result<Self, Self::Error> {
+                let val = unsafe { v.$using_field };
+
+                // check that we're not losing data during the conversion
+                let mut val_copy = val;
+                // overwrite the used bits with zeroes, then make sure the remaining bits are also
+                // zeroes
+                unsafe { std::ptr::write(&mut val_copy as *mut _ as *mut $to_type, 0) };
+                if val_copy != 0 {
+                    return Err(Self::Error::EINVAL);
+                }
+
+                Ok(val as $to_type)
+            }
+        }
+    };
+}
+
+try_from_syscallreg!(usize, as_u64);
+try_from_syscallreg!(u32, as_u64);
+try_from_syscallreg!(u16, as_u64);
+try_from_syscallreg!(u8, as_u64);
+try_from_syscallreg!(isize, as_i64);
+try_from_syscallreg!(i32, as_i64);
+try_from_syscallreg!(i16, as_i64);
+try_from_syscallreg!(i8, as_i64);
+
+impl From<usize> for SysCallReg {
+    fn from(v: usize) -> Self {
+        Self { as_u64: v as u64 }
+    }
+}
+
+impl From<u64> for SysCallReg {
+    fn from(v: u64) -> Self {
+        Self { as_u64: v }
+    }
+}
+
+impl From<u32> for SysCallReg {
+    fn from(v: u32) -> Self {
+        Self { as_u64: v.into() }
+    }
+}
+
+impl From<u16> for SysCallReg {
+    fn from(v: u16) -> Self {
+        Self { as_u64: v.into() }
+    }
+}
+
+impl From<u8> for SysCallReg {
+    fn from(v: u8) -> Self {
+        Self { as_u64: v.into() }
+    }
+}
+
+impl From<i64> for SysCallReg {
+    fn from(v: i64) -> Self {
+        Self { as_i64: v }
+    }
+}
+
+impl From<isize> for SysCallReg {
+    fn from(v: isize) -> Self {
         Self { as_i64: v as i64 }
     }
 }
 
-impl From<SysCallReg> for i32 {
-    fn from(v: SysCallReg) -> i32 {
-        (unsafe { v.as_i64 }) as i32
+impl From<i32> for SysCallReg {
+    fn from(v: i32) -> Self {
+        Self { as_i64: v.into() }
     }
 }
 
-impl TryFrom<SysCallReg> for u8 {
-    type Error = <u8 as TryFrom<u64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<u8, Self::Error> {
-        (unsafe { v.as_u64 }).try_into()
+impl From<i16> for SysCallReg {
+    fn from(v: i16) -> Self {
+        Self { as_i64: v.into() }
     }
 }
 
-impl TryFrom<SysCallReg> for u16 {
-    type Error = <u16 as TryFrom<u64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<u16, Self::Error> {
-        (unsafe { v.as_u64 }).try_into()
-    }
-}
-
-impl TryFrom<SysCallReg> for i8 {
-    type Error = <i8 as TryFrom<i64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<i8, Self::Error> {
-        (unsafe { v.as_i64 }).try_into()
-    }
-}
-
-impl TryFrom<SysCallReg> for i16 {
-    type Error = <i16 as TryFrom<i64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<i16, Self::Error> {
-        (unsafe { v.as_i64 }).try_into()
+impl From<i8> for SysCallReg {
+    fn from(v: i8) -> Self {
+        Self { as_i64: v.into() }
     }
 }
 

@@ -13,8 +13,8 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
     pub fn fcntl(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: RawFd = args.args[0].into();
-        let cmd: i32 = args.args[1].into();
+        let fd: RawFd = args.get(0).try_into()?;
+        let cmd: i32 = args.get(1).try_into()?;
 
         // NOTE: this function should *not* run the C syscall handler if the cmd modifies the
         // descriptor
@@ -71,7 +71,8 @@ impl SyscallHandler {
                     }
                 };
 
-                let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+                let mut status =
+                    OFlag::from_bits(i32::try_from(args.get(2))?).ok_or(Errno::EINVAL)?;
                 // remove access mode flags
                 status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR | OFlag::O_PATH);
                 // remove file creation flags
@@ -132,21 +133,21 @@ impl SyscallHandler {
             }
             libc::F_SETFD => {
                 let flags =
-                    DescriptorFlags::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+                    DescriptorFlags::from_bits(i32::try_from(args.get(2))?).ok_or(Errno::EINVAL)?;
                 desc.set_flags(flags);
                 SysCallReg::from(0)
             }
             libc::F_DUPFD => {
-                let min_fd: i32 = args.args[2].into();
-                let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+                let min_fd: i32 = args.get(2).try_into()?;
+                let min_fd: u32 = min_fd.try_into().or(Err(nix::errno::Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::empty());
                 let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_DUPFD_CLOEXEC => {
-                let min_fd: i32 = args.args[2].into();
-                let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+                let min_fd: i32 = args.get(2).try_into()?;
+                let min_fd: u32 = min_fd.try_into().or(Err(nix::errno::Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
                 let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);

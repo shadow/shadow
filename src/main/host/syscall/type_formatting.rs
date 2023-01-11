@@ -155,49 +155,49 @@ macro_rules! deref_array_impl {
 
 impl TryFromSyscallReg for nix::fcntl::OFlag {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::eventfd::EfdFlags {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::socket::AddressFamily {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_i32(reg.into())
+        Self::from_i32(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::socket::MsgFlags {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::stat::Mode {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::mman::ProtFlags {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::mman::MapFlags {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
 impl TryFromSyscallReg for nix::sys::mman::MRemapFlags {
     fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
+        Self::from_bits(reg.try_into().ok()?)
     }
 }
 
@@ -330,7 +330,9 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallBufferArg<
         mem: &MemoryManager,
     ) -> std::fmt::Result {
         let ptr = self.reg.into();
-        let len: libc::size_t = self.args[LEN_INDEX].into();
+        let Ok(len) = self.args[LEN_INDEX].try_into() else {
+            return write!(f, "{ptr:p}");
+        };
         fmt_buffer(f, ptr, len, options, mem)
     }
 }
@@ -364,7 +366,9 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrAr
         }
 
         let ptr = self.reg.into();
-        let len = self.args[LEN_INDEX].into();
+        let Ok(len) = self.args[LEN_INDEX].try_into() else {
+            return write!(f, "{ptr:p}");
+        };
 
         let Ok(Some(addr)) = read_sockaddr(mem, ptr, len) else {
             return write!(f, "{ptr:p}");

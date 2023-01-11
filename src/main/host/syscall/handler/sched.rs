@@ -28,12 +28,11 @@ unsafe impl Pod for rseq {}
 impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
     pub fn sched_getaffinity(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let pid_t =
-            libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
-        let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
-        let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
+        let pid_t: libc::pid_t = args.get(0).try_into().or(Err(Errno::ESRCH))?;
+        let cpusetsize: libc::size_t = args.get(1).try_into()?;
+        let mask_ptr = TypedPluginPtr::new::<u8>(args.get(2).into(), cpusetsize);
 
-        let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
+        let pid = ProcessId::try_from(pid_t).or(Err(Errno::ESRCH))?;
         if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
@@ -58,12 +57,11 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
     pub fn sched_setaffinity(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let pid_t =
-            libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
-        let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
-        let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
+        let pid_t: libc::pid_t = args.get(0).try_into().or(Err(Errno::ESRCH))?;
+        let cpusetsize: libc::size_t = args.get(1).try_into()?;
+        let mask_ptr = TypedPluginPtr::new::<u8>(args.get(2).into(), cpusetsize);
 
-        let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
+        let pid = ProcessId::try_from(pid_t).or(Err(Errno::ESRCH))?;
         if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
             return Err(Errno::ESRCH.into());
         };
@@ -94,8 +92,8 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */u32, /* flags */i32, /* sig */u32)]
     pub fn rseq(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let rseq_ptr = TypedPluginPtr::new::<rseq>(unsafe { args.get(0).as_ptr }.into(), 1);
-        let rseq_len = usize::try_from(unsafe { args.get(1).as_u64 }).unwrap();
+        let rseq_ptr = TypedPluginPtr::new::<rseq>(args.get(0).into(), 1);
+        let rseq_len = usize::try_from(args.get(1)).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
             // rather than the calling code.
@@ -106,8 +104,8 @@ impl SyscallHandler {
             );
             return Err(Errno::EINVAL.into());
         }
-        let flags = i32::try_from(unsafe { args.get(2).as_i64 }).map_err(|_| Errno::EINVAL)?;
-        let sig = u32::try_from(unsafe { args.get(3).as_u64 }).map_err(|_| Errno::EINVAL)?;
+        let flags = i32::try_from(args.get(2))?;
+        let sig = u32::try_from(args.get(3))?;
         self.rseq_impl(ctx, rseq_ptr, flags, sig)
     }
 

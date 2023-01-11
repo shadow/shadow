@@ -13,7 +13,7 @@ impl SyscallHandler {
                   /* flags */ libc::c_uint)]
     pub fn getrandom(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let buf_ptr: PluginPtr = args.get(0).into(); // char*
-        let count: libc::size_t = args.get(1).into();
+        let count: libc::size_t = args.get(1).try_into()?;
 
         // We ignore the flags arg, because we use the same random source for both
         // random and urandom, and it never blocks anyway.

@@ -179,7 +179,7 @@ impl ThreadRef {
                 SysCallReg::from(mode),
             ],
         );
-        Ok(i32::from(res?))
+        Ok(i32::try_from(res?).unwrap())
     }
 
     /// Natively execute close(2) on the given thread.

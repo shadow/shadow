@@ -26,11 +26,11 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
     pub fn close(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
+        let fd: libc::c_int = args.get(0).try_into()?;
 
         trace!("Trying to close fd {}", fd);
 
-        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let fd: u32 = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
         // released, so we should always deregister the descriptor even if there's an error while
@@ -52,7 +52,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
     pub fn dup(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
+        let fd: libc::c_int = args.get(0).try_into()?;
 
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.process.descriptor_table_borrow_mut();
@@ -68,8 +68,8 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int)]
     pub fn dup2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let old_fd = libc::c_int::from(args.get(0));
-        let new_fd = libc::c_int::from(args.get(1));
+        let old_fd: libc::c_int = args.get(0).try_into()?;
+        let new_fd: libc::c_int = args.get(1).try_into()?;
 
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.process.descriptor_table_borrow_mut();
@@ -81,7 +81,7 @@ impl SyscallHandler {
             return Ok(new_fd.into());
         }
 
-        let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let new_fd: u32 = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
@@ -101,9 +101,9 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
                   /* flags */ nix::fcntl::OFlag)]
     pub fn dup3(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let old_fd = libc::c_int::from(args.get(0));
-        let new_fd = libc::c_int::from(args.get(1));
-        let flags = libc::c_int::from(args.get(2));
+        let old_fd: libc::c_int = args.get(0).try_into()?;
+        let new_fd: libc::c_int = args.get(1).try_into()?;
+        let flags: libc::c_int = args.get(2).try_into()?;
 
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.process.descriptor_table_borrow_mut();
@@ -114,7 +114,7 @@ impl SyscallHandler {
             return Err(nix::errno::Errno::EINVAL.into());
         }
 
-        let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let new_fd: u32 = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // dup3 only supports the O_CLOEXEC flag
         let flags = match flags {
@@ -141,9 +141,9 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t)]
     pub fn read(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
-        let buf_ptr = PluginPtr::from(args.get(1));
-        let buf_size = libc::size_t::from(args.get(2));
+        let fd: libc::c_int = args.get(0).try_into()?;
+        let buf_ptr: PluginPtr = args.get(1).into();
+        let buf_size: libc::size_t = args.get(2).try_into()?;
         let offset = 0;
 
         // if we were previously blocked, get the active file from the last syscall handler
@@ -181,10 +181,10 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t, /* offset */ libc::off_t)]
     pub fn pread64(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
-        let buf_ptr = PluginPtr::from(args.get(1));
-        let buf_size = libc::size_t::from(args.get(2));
-        let offset = libc::off_t::from(args.get(3));
+        let fd: libc::c_int = args.get(0).try_into()?;
+        let buf_ptr: PluginPtr = args.get(1).into();
+        let buf_size: libc::size_t = args.get(2).try_into()?;
+        let offset: libc::off_t = args.get(3).into();
 
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -277,9 +277,9 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
     pub fn write(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
-        let buf_ptr = PluginPtr::from(args.get(1));
-        let buf_size = libc::size_t::from(args.get(2));
+        let fd: libc::c_int = args.get(0).try_into()?;
+        let buf_ptr: PluginPtr = args.get(1).into();
+        let buf_size: libc::size_t = args.get(2).try_into()?;
         let offset = 0;
 
         // if we were previously blocked, get the active file from the last syscall handler
@@ -318,10 +318,10 @@ impl SyscallHandler {
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
                   /* offset */ libc::off_t)]
     pub fn pwrite64(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd = libc::c_int::from(args.get(0));
-        let buf_ptr = PluginPtr::from(args.get(1));
-        let buf_size = libc::size_t::from(args.get(2));
-        let offset = libc::off_t::from(args.get(3));
+        let fd: libc::c_int = args.get(0).try_into()?;
+        let buf_ptr: PluginPtr = args.get(1).into();
+        let buf_size: libc::size_t = args.get(2).try_into()?;
+        let offset: libc::off_t = args.get(3).into();
 
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -405,7 +405,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
     pub fn pipe(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd_ptr: PluginPtr = args.args[0].into();
+        let fd_ptr: PluginPtr = args.get(0).into();
 
         self.pipe_helper(ctx, fd_ptr, 0)
     }
@@ -413,8 +413,8 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
                   /* flags */ nix::fcntl::OFlag)]
     pub fn pipe2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd_ptr: PluginPtr = args.args[0].into();
-        let flags = unsafe { args.args[1].as_u64 } as libc::c_int;
+        let fd_ptr: PluginPtr = args.get(0).into();
+        let flags: libc::c_int = args.get(1).try_into()?;
 
         self.pipe_helper(ctx, fd_ptr, flags)
     }
