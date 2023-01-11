@@ -1259,7 +1259,6 @@ mod export {
     use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemProcess};
 
     use crate::core::worker::Worker;
-    use crate::cshadow::CEmulatedTime;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
@@ -1795,26 +1794,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_getStartTime(proc: *const RustProcess) -> CEmulatedTime {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let start_time = proc.borrow(host.root()).start_time;
-            EmulatedTime::to_c_emutime(Some(start_time))
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getStopTime(proc: *const RustProcess) -> CEmulatedTime {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let stop_time = proc.borrow(host.root()).stop_time;
-            EmulatedTime::to_c_emutime(stop_time)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_getHostId(proc: *const RustProcess) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
@@ -1830,33 +1809,6 @@ mod export {
     pub unsafe extern "C" fn _process_getPluginName(proc: *const RustProcess) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).plugin_name.as_ptr()).unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getPluginPath(proc: *const RustProcess) -> *const c_char {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).plugin_path.as_ptr()).unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_outputFileName(
-        proc: *const RustProcess,
-        host: *const Host,
-        typ: *const c_char,
-        dst: *mut c_char,
-        dst_len: usize,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-        let typ = unsafe { CStr::from_ptr(typ).to_str().unwrap() };
-        let name = proc.borrow(host.root()).output_file_name(host, typ);
-        let name = pathbuf_to_nul_term_cstring(name);
-        // XXX: Is this UB? Maybe the bytes at dst are never "undefined" from
-        // Rust's perspective since any initialization or lack thereof is
-        // invisible through FFI?
-        let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, dst_len) };
-        let name = name.as_bytes_with_nul();
-        dst[..name.len()].copy_from_slice(name);
     }
 
     /// Safety:
@@ -1915,12 +1867,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_shouldPauseForDebugging(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).pause_for_debugging).unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_getDumpable(proc: *const RustProcess) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.get()).unwrap()
@@ -1931,38 +1877,6 @@ mod export {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val)).unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_setReturnCode(proc: *const RustProcess, val: i32) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let prev = proc.borrow(host.root()).return_code.replace(Some(val));
-            assert_eq!(prev, None);
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_didLogReturnCode(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).return_code.get().is_some())
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_setWasKilledByShadow(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root()).killed_by_shadow.set(true);
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_wasKilledByShadow(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).killed_by_shadow.get()).unwrap()
     }
 
     #[cfg(feature = "perf_timers")]
@@ -1982,30 +1896,11 @@ mod export {
         delta.as_nanos() as f64
     }
 
-    #[cfg(feature = "perf_timers")]
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getTotalRunTime(proc: *const RustProcess) -> f64 {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).total_run_time.get().as_nanos())
-            .unwrap() as f64
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn _process_getNativePid(proc: *const RustProcess) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().unwrap().as_raw())
             .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_setNativePid(proc: *const RustProcess, pid: libc::pid_t) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root())
-                .native_pid
-                .set(Some(Pid::from_raw(pid)))
-        })
-        .unwrap()
     }
 
     #[no_mangle]
@@ -2049,23 +1944,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_threadLeader(
-        proc: *const RustProcess,
-    ) -> *mut cshadow::Thread {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let tid = ThreadId::from(proc.id());
-            let threads = proc.threads.borrow();
-            match threads.get(&tid) {
-                Some(t) => unsafe { t.borrow(host.root()).cthread() },
-                None => std::ptr::null_mut(),
-            }
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_getThread(
         proc: *const RustProcess,
         tid: libc::pid_t,
@@ -2106,17 +1984,6 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.is_running()
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_numThreads(proc: *const RustProcess) -> usize {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let threads = proc.threads.borrow();
-            threads.len()
         })
         .unwrap()
     }
@@ -2195,35 +2062,11 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_reapThread(
-        proc: *const RustProcess,
-        thread: *mut cshadow::Thread,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { ThreadRef::new(thread) };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.reap_thread(host, thread.id())
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_terminate(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.terminate(host)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getAndLogReturnCode(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.get_and_log_return_code(host)
         })
         .unwrap()
     }
