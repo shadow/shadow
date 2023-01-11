@@ -36,13 +36,6 @@ pub fn c_to_rust_log_level(level: logger::LogLevel) -> Option<log::Level> {
     }
 }
 
-/// Set the max (noisiest) logging level to `level`.
-#[no_mangle]
-pub extern "C" fn rustlogger_setLevel(level: logger::LogLevel) {
-    let level = c_to_rust_log_level(level).unwrap();
-    log::set_max_level(level.to_level_filter());
-}
-
 /// Whether logging is currently enabled for `level`.
 #[no_mangle]
 pub extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {

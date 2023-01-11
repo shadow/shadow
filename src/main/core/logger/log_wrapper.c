@@ -12,7 +12,7 @@ static void _flush(Logger* logger) { rustlogger_flush(); }
 
 static bool _isEnabled(Logger* logger, LogLevel level) { return rustlogger_isEnabled(level); }
 
-static void _setLevel(Logger* logger, LogLevel level) { rustlogger_setLevel(level); }
+static void _setLevel(Logger* logger, LogLevel level) { warning("Setting the log level is not supported"); }
 
 Logger* rustlogger_new() {
     Logger* logger = malloc(sizeof(*logger));
