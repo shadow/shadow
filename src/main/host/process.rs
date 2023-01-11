@@ -517,6 +517,13 @@ impl Process {
         self.itimer_real.borrow_mut()
     }
 
+    pub fn thread_borrow(
+        &self,
+        virtual_tid: ThreadId,
+    ) -> Option<impl Deref<Target = ThreadRef> + '_> {
+        Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
+    }
+
     /// This cleans up memory references left over from legacy C code; usually
     /// a syscall handler.
     ///
@@ -1591,11 +1598,9 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
-            let threads = proc.threads.borrow();
-            match threads.get(&tid) {
-                Some(t) => unsafe { t.cthread() },
-                None => std::ptr::null_mut(),
-            }
+            proc.thread_borrow(tid)
+                .map(|x| unsafe { x.cthread() })
+                .unwrap_or(std::ptr::null_mut())
         })
         .unwrap()
     }

@@ -7,6 +7,7 @@ use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::{NetworkInterface, PcapOptions};
 use crate::host::process::Process;
+use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::router::Router;
 use crate::utility::{self, SyncSendPointer};
@@ -716,6 +717,18 @@ impl Host {
         };
     }
 
+    /// Returns `true` if the host has a process that contains the specified thread.
+    pub fn has_thread(&self, virtual_tid: ThreadId) -> bool {
+        for process in self.processes.borrow().values() {
+            let process = process.borrow(self.root());
+            if process.thread_borrow(virtual_tid).is_some() {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Locks the Host's shared memory, caching the lock internally.
     ///
     /// Dropping the Host before calling [`Host::unlock_shmem`] will panic.
@@ -1129,12 +1142,9 @@ mod export {
     ) -> *mut cshadow::Process {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
-        let processes = host.processes.borrow();
-        let Some(process) = processes.get(&virtual_pid) else {
-            return std::ptr::null_mut();
-        };
-        let res = unsafe { process.borrow(host.root()).cprocess() };
-        res
+        host.process_borrow(virtual_pid)
+            .map(|x| unsafe { x.borrow(host.root()).cprocess() })
+            .unwrap_or(std::ptr::null_mut())
     }
 
     /// Returns the specified thread, or NULL if it doesn't exist.
