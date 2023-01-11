@@ -98,9 +98,27 @@ void thread_unref(Thread* thread) {
 }
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
-                const char* const* envv, const char* workingDir, int straceFd) {
+                const char* const* envv_in, const char* workingDir, int straceFd) {
     MAGIC_ASSERT(thread);
-    managedthread_run(thread->mthread, pluginPath, argv, envv, workingDir, straceFd);
+
+    gchar** envv = g_strdupv((gchar**)envv_in);
+
+    // Add shared mem block
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(thread_getShMBlock(thread));
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
+    }
+
+    managedthread_run(
+        thread->mthread, pluginPath, argv, (const char* const*)envv, workingDir, straceFd);
+
+    g_strfreev(envv);
 }
 
 void thread_resume(Thread* thread) {

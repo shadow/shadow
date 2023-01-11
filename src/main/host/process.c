@@ -126,28 +126,13 @@ static void _process_check_thread(Process* proc, Thread* thread) {
 }
 
 void process_start(Process* proc, Thread* mainThread, const char* const* argv,
-                   const char* const* envv_in) {
+                   const char* const* envv) {
     MAGIC_ASSERT(proc);
-
-    gchar** envv = g_strdupv((gchar**)envv_in);
-
-    /* Add shared mem block of first thread to env */
-    {
-        ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(thread_getShMBlock(mainThread));
-
-        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
-        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
-
-        /* append to the env */
-        envv = g_environ_setenv(envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
-    }
 
     _process_setSharedTime();
     /* exec the process */
-    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv,
-               (const char* const*)envv, process_getWorkingDir(proc), process_getStraceFd(proc));
-    g_strfreev(envv);
+    thread_run(mainThread, _process_getPluginPath(proc->rustProcess), argv, envv,
+               process_getWorkingDir(proc), process_getStraceFd(proc));
     const pid_t nativePid = thread_getNativePid(mainThread);
     _process_setNativePid(proc->rustProcess, nativePid);
     _process_createMemoryManager(proc->rustProcess, nativePid);
