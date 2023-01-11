@@ -112,19 +112,6 @@ pid_t process_getNativePid(const Process* proc) {
     return _process_getNativePid(proc->rustProcess);
 }
 
-static void _process_check_thread(Process* proc, Thread* thread) {
-    if (thread_isRunning(thread)) {
-        debug("thread %d in process '%s' still running, but blocked", thread_getID(thread),
-              process_getName(proc));
-        return;
-    }
-    int returnCode = thread_getReturnCode(thread);
-    debug("thread %d in process '%s' exited with code %d", thread_getID(thread),
-          process_getName(proc), returnCode);
-    _process_reapThread(proc->rustProcess, thread);
-    _process_check(proc->rustProcess);
-}
-
 static void _start_thread_task(const Host* host, gpointer callbackObject,
                                gpointer callbackArgument) {
     pid_t pid = GPOINTER_TO_INT(callbackObject);
@@ -204,7 +191,7 @@ void process_continue(Process* proc, Thread* thread) {
         // whole process exit; normal thread cleanup would likely fail.
         _process_handleProcessExit(proc->rustProcess);
     } else {
-        _process_check_thread(proc, thread);
+        _process_checkThread(proc->rustProcess, thread);
     }
 
     worker_setActiveProcess(NULL);

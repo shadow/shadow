@@ -972,6 +972,31 @@ impl Process {
         });
     }
 
+    fn check_thread(&self, host: &Host, tid: ThreadId) {
+        {
+            let threads = self.threads.borrow();
+            let threadrc = threads.get(&tid).unwrap();
+            let thread = threadrc.borrow(host.root());
+            if unsafe { cshadow::thread_isRunning(thread.cthread()) } {
+                debug!(
+                    "thread {} in process '{}' still running, but blocked",
+                    thread.id(),
+                    self.name()
+                );
+                return;
+            }
+            let return_code = unsafe { cshadow::thread_getReturnCode(thread.cthread()) };
+            debug!(
+                "thread {} in process '{}' exited with code {}",
+                thread.id(),
+                self.name(),
+                return_code
+            );
+        }
+        self.reap_thread(host, tid);
+        self.check(host);
+    }
+
     /// FIXME: still needed? Time is now updated more granularly in the Thread code
     /// when xferring control to/from shim.
     fn set_shared_time(host: &Host) {
@@ -2169,6 +2194,20 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.check(host)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_checkThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { ThreadRef::new(thread) };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.check_thread(host, thread.id())
         })
         .unwrap()
     }
