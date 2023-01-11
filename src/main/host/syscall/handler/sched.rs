@@ -1,7 +1,7 @@
 use crate::host::context::ThreadContext;
-use crate::host::process::ProcessId;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SyscallResult, TypedPluginPtr};
+use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
 
 use log::warn;
@@ -28,15 +28,14 @@ unsafe impl Pod for rseq {}
 impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
     pub fn sched_getaffinity(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let pid_t =
-            libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
+        let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
         let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
-        let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
+        let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
+        if !ctx.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
-        };
+        }
 
         // Shadow doesn't have users, so no need to check for permissions
 
@@ -58,13 +57,12 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
     pub fn sched_setaffinity(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let pid_t =
-            libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
+        let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
         let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
-        let pid = ProcessId::try_from(pid_t).map_err(|_| Errno::ESRCH)?;
-        if ctx.host.process_borrow(pid).is_none() && pid_t != 0 {
+        let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
+        if !ctx.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
         };
 
