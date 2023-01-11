@@ -526,7 +526,7 @@ impl Host {
     pub fn get_new_process_id(&self) -> ProcessId {
         let res = self.process_id_counter.get();
         self.process_id_counter.set(res + 1);
-        res.into()
+        res.try_into().unwrap()
     }
 
     pub fn get_new_packet_id(&self) -> u64 {

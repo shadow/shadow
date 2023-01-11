@@ -44,9 +44,14 @@ use std::time::Duration;
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
 
-impl From<u32> for ProcessId {
-    fn from(val: u32) -> Self {
-        ProcessId(val)
+impl TryFrom<u32> for ProcessId {
+    type Error = TryFromIntError;
+
+    fn try_from(val: u32) -> Result<Self, Self::Error> {
+        // we don't actually want the value as a `pid_t`, we just want to make sure it can be
+        // converted successfully
+        let _ = libc::pid_t::try_from(val)?;
+        Ok(ProcessId(val))
     }
 }
 
@@ -64,11 +69,9 @@ impl From<ProcessId> for u32 {
     }
 }
 
-impl TryFrom<ProcessId> for libc::pid_t {
-    type Error = TryFromIntError;
-
-    fn try_from(value: ProcessId) -> Result<Self, Self::Error> {
-        value.0.try_into()
+impl From<ProcessId> for libc::pid_t {
+    fn from(val: ProcessId) -> Self {
+        val.0.try_into().unwrap()
     }
 }
 
