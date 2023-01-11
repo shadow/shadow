@@ -8,7 +8,7 @@ use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{read_sockaddr, write_sockaddr, SyscallHandler};
-use crate::host::syscall::type_formatting::SyscallBufferArg;
+use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
@@ -102,8 +102,8 @@ impl SyscallHandler {
         Ok(fd.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ libc::socklen_t)]
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
+                  /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
     pub fn bind(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
@@ -141,7 +141,8 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* len */ 2>, /* len */ libc::size_t,
-                  /* flags */ nix::sys::socket::MsgFlags, /* dest_addr */ *const libc::sockaddr,
+                  /* flags */ nix::sys::socket::MsgFlags,
+                  /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
                   /* addrlen */ libc::socklen_t)]
     pub fn sendto(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
@@ -653,8 +654,8 @@ impl SyscallHandler {
         Ok(new_fd.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ libc::socklen_t)]
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
+                  /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
     pub fn connect(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
