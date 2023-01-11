@@ -141,7 +141,18 @@ pub struct Process {
     desc_table: RefCell<DescriptorTable>,
     itimer_real: RefCell<Timer>,
 
-    threads: RefCell<BTreeMap<ThreadId, ThreadRef>>,
+    // The `RootedRc` lets us hold a reference to a thread without holding a
+    // reference to the thread list. e.g. this lets us implement the `clone`
+    // syscall, which adds a thread to the list while we have a reference to the
+    // parent thread.
+    //
+    // `ThreadRef` currently has mutable methods, so we need to be able to get a
+    // mutable reference to it, so we use `RootedRefCell`. We could end up
+    // dropping this if we change `ThreadRef` to use internal mutability
+    // everywhere as we do with Process and Host. I suspect we'll actually want
+    // to move in the other direction once we have less C code though and reduce
+    // the amount of interior mutability.
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<RootedRefCell<ThreadRef>>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -411,7 +422,10 @@ impl Process {
         let tid = ThreadId::from(self.id());
         let main_thread =
             unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
-        let main_thread_ref = unsafe { ThreadRef::new(main_thread) };
+        let main_thread_ref = RootedRc::new(
+            host.root(),
+            RootedRefCell::new(host.root(), unsafe { ThreadRef::new(main_thread) }),
+        );
         // ThreadRef increments the reference count; we don't need the original
         // reference anymore.
         unsafe { cshadow::thread_unref(main_thread) };
@@ -543,7 +557,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = ThreadRef> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<ThreadRef>>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -616,23 +630,27 @@ impl Process {
         }
     }
 
-    fn reap_thread(&self, host: &Host, thread: &mut ThreadRef) {
+    /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
+    fn reap_thread(&self, host: &Host, tid: ThreadId) {
+        let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
+        let thread = threadrc.borrow(host.root());
+
         // If the `clear_child_tid` attribute on the thread is set, and there are
         // any other threads left alive in the process, perform a futex wake on
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
         let clear_child_tid_pvp = unsafe { cshadow::thread_getTidAddress(thread.cthread()) };
-        if clear_child_tid_pvp.val != 0 && self.threads.borrow().len() > 1 && !self.is_exiting.get()
+        if clear_child_tid_pvp.val != 0 && self.threads.borrow().len() > 0 && !self.is_exiting.get()
         {
             // Wait until the thread is really dead. It might not be dead yet if we
             // marked the thread dead after seeing the `exit` syscall - the managed
             // process might not have finished executing the native syscall yet.
             // TODO: Move this into the `exit` syscall handling and/or use the native
             // tidaddress mechanism to be notified when a thread has actually terminated.
-            let pid = unsafe { cshadow::thread_getNativePid(thread.cthread()) };
-            let tid = unsafe { cshadow::thread_getNativeTid(thread.cthread()) };
+            let native_pid = unsafe { cshadow::thread_getNativePid(thread.cthread()) };
+            let native_tid = unsafe { cshadow::thread_getNativeTid(thread.cthread()) };
             loop {
-                match tgkill(pid, tid, 0) {
+                match tgkill(native_pid, native_tid, 0) {
                     Err(Errno::ESRCH) => {
                         trace!("Thread is done exiting; proceeding with cleanup");
                         break;
@@ -641,20 +659,20 @@ impl Process {
                         error!("Unexpected tgkill error: {:?}", e);
                         break;
                     }
-                    Ok(()) if pid == tid => {
+                    Ok(()) if native_pid == native_tid => {
                         // Thread leader could be in a zombie state waiting for
                         // the other threads to exit.
-                        let filename = format!("/proc/{pid}/stat");
+                        let filename = format!("/proc/{native_pid}/stat");
                         let stat = match std::fs::read_to_string(filename) {
                             Err(e) => {
                                 assert!(e.kind() == std::io::ErrorKind::NotFound);
-                                trace!("tgl {pid} is fully dead");
+                                trace!("tgl {native_pid} is fully dead");
                                 break;
                             }
                             Ok(s) => s,
                         };
                         if stat.contains(") Z") {
-                            trace!("tgl {pid} is a zombie");
+                            trace!("tgl {native_pid} is a zombie");
                             break;
                         }
                         // Still alive and in a non-zombie state; continue
@@ -663,7 +681,7 @@ impl Process {
                         // Thread is still alive; continue.
                     }
                 };
-                debug!("{pid}.{tid} still running; waiting for it to exit");
+                debug!("{native_pid}.{native_tid} still running; waiting for it to exit");
                 std::thread::yield_now();
                 // Check again
             }
@@ -672,12 +690,12 @@ impl Process {
             let threads = self.threads.borrow();
             let writer_thread = threads
                 .values()
-                .find(|t| unsafe { cshadow::thread_isRunning(t.cthread()) })
+                .find(|t| unsafe { cshadow::thread_isRunning(t.borrow(host.root()).cthread()) })
                 .unwrap();
             // MemoryCopier uses the active thread's tid to do the write; we need to set
             // that to the still-live thread we're using to do the write.
             Worker::clear_active_thread();
-            Worker::set_active_thread(writer_thread);
+            Worker::set_active_thread(&writer_thread.borrow(host.root()));
             let typed_clear_child_tid_pvp =
                 TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
             self.memory_borrow_mut()
@@ -685,7 +703,7 @@ impl Process {
                 .unwrap();
             // Restore active thread.
             Worker::clear_active_thread();
-            Worker::set_active_thread(thread);
+            Worker::set_active_thread(&thread);
 
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
@@ -696,6 +714,11 @@ impl Process {
                 unsafe { cshadow::futex_wake(futex, 1) };
             }
         }
+
+        // Compiler forces us to drop this before we can consume `threadrc`.
+        drop(thread);
+
+        threadrc.safely_drop(host.root());
     }
 
     fn has_started(&self) -> bool {
@@ -713,16 +736,18 @@ impl Process {
 
     fn handle_process_exit(&self, host: &Host) {
         loop {
-            let (tid, cthread) = {
+            let (tid, thread) = {
                 let threads = self.threads.borrow();
                 let Some((tid, thread)) = threads.iter().next() else {
                     break;
                 };
-                (*tid, unsafe { thread.cthread() })
+                // Conservatively leaving in the thread list, and cloning
+                // the reference so that we don't hold a borrow over the list.
+                (*tid, thread.clone(host.root()))
             };
-            unsafe { cshadow::thread_handleProcessExit(cthread) };
-            unsafe { cshadow::process_reapThread(self.cprocess(), cthread) };
-            self.threads.borrow_mut().remove(&tid);
+            unsafe { cshadow::thread_handleProcessExit(thread.borrow(host.root()).cthread()) };
+            self.reap_thread(host, tid);
+            thread.safely_drop(host.root());
         }
         self.check(host);
     }
@@ -1878,7 +1903,7 @@ mod export {
             let tid = ThreadId::from(proc.id());
             let threads = proc.threads.borrow();
             match threads.get(&tid) {
-                Some(t) => unsafe { t.cthread() },
+                Some(t) => unsafe { t.borrow(host.root()).cthread() },
                 None => std::ptr::null_mut(),
             }
         })
@@ -1895,19 +1920,8 @@ mod export {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
             proc.thread_borrow(tid)
-                .map(|x| unsafe { x.cthread() })
+                .map(|x| unsafe { x.borrow(host.root()).cthread() })
                 .unwrap_or(std::ptr::null_mut())
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_removeThread(proc: *const RustProcess, tid: libc::pid_t) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let tid = ThreadId::try_from(tid).unwrap();
-            proc.threads.borrow_mut().remove(&tid);
         })
         .unwrap()
     }
@@ -1925,6 +1939,7 @@ mod export {
             let proc = proc.borrow(host.root());
             let thread = unsafe { ThreadRef::new(thread) };
             let tid = thread.id();
+            let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
             proc.threads.borrow_mut().insert(tid, thread);
         })
         .unwrap()
@@ -1963,8 +1978,9 @@ mod export {
             let proc = proc.borrow(host.root());
             let signal = Signal::try_from(signo).unwrap();
             let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-            let mut threads = proc.threads.borrow_mut();
-            for thread in threads.values_mut() {
+            let threads = proc.threads.borrow();
+            for thread in threads.values() {
+                let mut thread = thread.borrow_mut(host.root());
                 {
                     let thread_shmem = thread.shmem();
                     let thread_shmem_protected =
@@ -2023,7 +2039,6 @@ mod export {
     ) -> cshadow::PluginPhysicalPtr {
         let proc = unsafe { proc.as_ref().unwrap() };
 
-        trace!("Handling process exit");
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.physical_address(vptr)
@@ -2037,10 +2052,10 @@ mod export {
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let mut thread = unsafe { ThreadRef::new(thread) };
+        let thread = unsafe { ThreadRef::new(thread) };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.reap_thread(host, &mut thread)
+            proc.reap_thread(host, thread.id())
         })
         .unwrap()
     }

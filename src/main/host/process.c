@@ -112,11 +112,6 @@ pid_t process_getNativePid(const Process* proc) {
     return _process_getNativePid(proc->rustProcess);
 }
 
-void process_reapThread(Process* process, Thread* thread) {
-    MAGIC_ASSERT(process);
-    return _process_reapThread(process->rustProcess, thread);
-}
-
 static void _process_check_thread(Process* proc, Thread* thread) {
     if (thread_isRunning(thread)) {
         debug("thread %d in process '%s' still running, but blocked", thread_getID(thread),
@@ -126,8 +121,7 @@ static void _process_check_thread(Process* proc, Thread* thread) {
     int returnCode = thread_getReturnCode(thread);
     debug("thread %d in process '%s' exited with code %d", thread_getID(thread),
           process_getName(proc), returnCode);
-    process_reapThread(proc, thread);
-    _process_removeThread(proc->rustProcess, thread_getID(thread));
+    _process_reapThread(proc->rustProcess, thread);
     _process_check(proc->rustProcess);
 }
 
