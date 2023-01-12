@@ -64,12 +64,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-static const Host* _host(Process* proc) {
-    const Host* host = worker_getCurrentHost();
-    utility_debugAssert(host_getID(host) == process_getHostId(proc));
-    return host;
-}
-
 const ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
     return _process_getSharedMem(proc->rustProcess);
@@ -289,52 +283,7 @@ void process_parseArgStrFree(char** argv, char* error) {
 
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
     MAGIC_ASSERT(process);
-    utility_debugAssert(siginfo->si_signo >= 0);
-    utility_debugAssert(siginfo->si_signo <= SHD_SIGRT_MAX);
-    utility_debugAssert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
-
-    if (siginfo->si_signo == 0) {
-        return;
-    }
-
-    const Host* host = _host(process);
-
-    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
-        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo);
-    if (action.u.ksa_handler == SIG_IGN ||
-        (action.u.ksa_handler == SIG_DFL &&
-         shd_defaultAction(siginfo->si_signo) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
-        // Don't deliver an ignored signal.
-        return;
-    }
-
-    shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
-        host_getShimShmemLock(host), process_getSharedMem(process));
-
-    if (shd_sigismember(&pending_signals, siginfo->si_signo)) {
-        // Signal is already pending. From signal(7):In the case where a standard signal is already
-        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
-        // overwritten on arrival of subsequent instances of the same signal.
-        return;
-    }
-
-    shd_sigaddset(&pending_signals, siginfo->si_signo);
-    shimshmem_setProcessPendingSignals(
-        host_getShimShmemLock(host), process_getSharedMem(process), pending_signals);
-    shimshmem_setProcessSiginfo(
-        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo, siginfo);
-
-    if (currentRunningThread != NULL && thread_getProcess(currentRunningThread) == process) {
-        shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
-            host_getShimShmemLock(host), thread_sharedMem(currentRunningThread));
-        if (!shd_sigismember(&blocked_signals, siginfo->si_signo)) {
-            // Target process is this process, and current thread hasn't blocked
-            // the signal.  It will be delivered to this thread when it resumes.
-            return;
-        }
-    }
-
-    _process_interruptWithSignal(process->rustProcess, host_getShimShmemLock(host), siginfo->si_signo);
+    _process_signal(process->rustProcess, currentRunningThread, siginfo);
 }
 
 int process_getDumpable(Process* process) {

@@ -12,6 +12,7 @@ use std::sync::atomic::Ordering;
 use log::{debug, error, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
+use nix::sys::signal as nixsignal;
 use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
@@ -19,6 +20,7 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
+use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -183,12 +185,12 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     };
     let process = process.borrow(host.root());
     let timer = process.itimer_real.borrow();
-    let mut siginfo: cshadow::siginfo_t = unsafe { std::mem::zeroed() };
+    let mut siginfo: libc::siginfo_t = unsafe { std::mem::zeroed() };
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
     unsafe { cshadow::process_initSiginfoForAlarm(&mut siginfo, expiration_count) };
-    unsafe { cshadow::process_signal(process.cprocess(), std::ptr::null_mut(), &siginfo) };
+    process.signal(host, None, &siginfo);
 }
 
 impl Process {
@@ -634,6 +636,97 @@ impl Process {
         Worker::clear_active_process();
 
         self.check(host);
+    }
+
+    /// Send the signal described in `siginfo` to `process`. `current_thread`
+    /// should be set if there is one (e.g. if this is being called from a syscall
+    /// handler), and `None` otherwise (e.g. when called from a timer expiration event).
+    ///
+    /// An event will be scheduled to deliver the signal unless `current_thread`
+    /// is set, and belongs to the process `self`, and doesn't have the signal
+    /// blocked.  In that the signal will be processed synchronously when
+    /// returning from the current syscall.
+    pub fn signal(
+        &self,
+        host: &Host,
+        current_thread: Option<&ThreadRef>,
+        siginfo: &libc::siginfo_t,
+    ) {
+        if siginfo.si_signo == 0 {
+            return;
+        }
+        let signal = Signal::try_from(siginfo.si_signo).unwrap();
+
+        {
+            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+            let mut process_shmem_protected = self
+                .shim_shared_mem_block
+                .protected
+                .borrow_mut(&host_shmem.root);
+            // SAFETY: We don't try to call any of the function pointers.
+            let action = unsafe { process_shmem_protected.signal_action(signal) };
+            let handler = action.handler();
+            if handler == nixsignal::SigHandler::SigIgn
+                || (handler == nixsignal::SigHandler::SigDfl
+                    && defaultaction(signal) == ShdKernelDefaultAction::IGN)
+            {
+                return;
+            }
+
+            if process_shmem_protected.pending_signals.has(signal) {
+                // Signal is already pending. From signal(7):In the case where a
+                // standard signal is already pending, the siginfo_t structure (see
+                // sigaction(2)) associated with that signal is not overwritten on
+                // arrival of subsequent instances of the same signal.
+                return;
+            }
+            process_shmem_protected.pending_signals.add(signal);
+            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo);
+        }
+
+        if let Some(thread) = current_thread {
+            if thread.process_id() == self.id() {
+                let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+                let threadmem = unsafe { &*cshadow::thread_sharedMem(thread.cthread()) };
+                let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
+                if !threadprotmem.blocked_signals.has(signal) {
+                    // Target process is this process, and current thread hasn't blocked
+                    // the signal.  It will be delivered to this thread when it resumes.
+                    return;
+                }
+            }
+        }
+
+        self.interrupt_with_signal(host, signal);
+    }
+
+    fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
+        let mut host_shmem_protected = host.shim_shmem_lock_borrow_mut().unwrap();
+        let threads = self.threads.borrow();
+        for thread in threads.values() {
+            let mut thread = thread.borrow_mut(host.root());
+            {
+                let thread_shmem = thread.shmem();
+                let thread_shmem_protected = thread_shmem
+                    .protected
+                    .borrow_mut(&host_shmem_protected.root);
+                let blocked_signals = thread_shmem_protected.blocked_signals;
+                if blocked_signals.has(signal) {
+                    continue;
+                }
+            }
+            let Some(mut cond) = thread.syscall_condition_mut() else {
+                // Defensively handle this gracefully, but it probably shouldn't happen.
+                // The only thread in the process not blocked on a syscall should be
+                // the current-running thread (if any), but the caller should have
+                // delivered the signal synchronously instead of using this function
+                // in that case.
+                warn!("thread {:?} has no syscall_condition. How?", thread.id());
+                continue;
+            };
+            cond.wakeup_for_signal(&mut host_shmem_protected, signal);
+            break;
+        }
     }
 
     fn open_stdio_file_helper(
@@ -1341,10 +1434,9 @@ mod export {
     use std::os::raw::c_void;
 
     use libc::size_t;
-    use log::{trace, warn};
-    use nix::sys::signal::Signal;
+    use log::trace;
     use shadow_shim_helper_rs::notnull::*;
-    use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemProcess};
+    use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
 
     use crate::core::worker::Worker;
     use crate::host::descriptor::socket::inet::InetSocket;
@@ -2077,46 +2169,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_interruptWithSignal(
-        proc: *const RustProcess,
-        host_lock: *mut ShimShmemHostLock,
-        signo: i32,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let host_lock = unsafe { host_lock.as_mut().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let signal = Signal::try_from(signo).unwrap();
-            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-            let threads = proc.threads.borrow();
-            for thread in threads.values() {
-                let mut thread = thread.borrow_mut(host.root());
-                {
-                    let thread_shmem = thread.shmem();
-                    let thread_shmem_protected =
-                        thread_shmem.protected.borrow_mut(&host_shmem.root);
-                    let blocked_signals = thread_shmem_protected.blocked_signals;
-                    if blocked_signals.has(signal) {
-                        continue;
-                    }
-                }
-                let Some(mut cond) = thread.syscall_condition_mut() else {
-                    // Defensively handle this gracefully, but it probably shouldn't happen.
-                    // The only thread in the process not blocked on a syscall should be
-                    // the current-running thread (if any), but the caller should have
-                    // delivered the signal synchronously instead of using this function
-                    // in that case.
-                    warn!("thread {:?} has no syscall_condition. How?", thread.id());
-                    continue;
-                };
-                cond.wakeup_for_signal(host_lock, signal);
-                break;
-            }
-        })
-        .unwrap();
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_handleProcessExit(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
 
@@ -2221,5 +2273,25 @@ mod export {
     pub unsafe extern "C" fn _process_stop(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).stop(host)).unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_signal(
+        proc: *const RustProcess,
+        current_running_thread: *mut cshadow::Thread,
+        siginfo: *const libc::siginfo_t,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = if current_running_thread.is_null() {
+            None
+        } else {
+            Some(unsafe { ThreadRef::new(current_running_thread) })
+        };
+        let siginfo = unsafe { siginfo.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            proc.borrow(host.root())
+                .signal(host, thread.as_ref(), siginfo)
+        })
+        .unwrap()
     }
 }
