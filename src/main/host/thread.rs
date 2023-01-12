@@ -58,7 +58,7 @@ impl ThreadRef {
 
     pub fn process_id(&self) -> ProcessId {
         // Safety: self.cthread initialized in CThread::new.
-        ProcessId::from(unsafe { c::thread_getProcessId(self.cthread()) })
+        ProcessId::try_from(unsafe { c::thread_getProcessId(self.cthread()) }).unwrap()
     }
 
     pub fn host_id(&self) -> HostId {
@@ -263,6 +263,12 @@ impl From<ProcessId> for ThreadId {
     fn from(value: ProcessId) -> Self {
         // A process ID is also a valid thread ID
         ThreadId(value.into())
+    }
+}
+
+impl From<ThreadId> for libc::pid_t {
+    fn from(val: ThreadId) -> Self {
+        val.0.try_into().unwrap()
     }
 }
 

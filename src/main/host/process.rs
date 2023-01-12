@@ -44,9 +44,14 @@ use std::time::Duration;
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
 
-impl From<u32> for ProcessId {
-    fn from(val: u32) -> Self {
-        ProcessId(val)
+impl TryFrom<u32> for ProcessId {
+    type Error = TryFromIntError;
+
+    fn try_from(val: u32) -> Result<Self, Self::Error> {
+        // we don't actually want the value as a `pid_t`, we just want to make sure it can be
+        // converted successfully
+        let _ = libc::pid_t::try_from(val)?;
+        Ok(ProcessId(val))
     }
 }
 
@@ -64,11 +69,9 @@ impl From<ProcessId> for u32 {
     }
 }
 
-impl TryFrom<ProcessId> for libc::pid_t {
-    type Error = TryFromIntError;
-
-    fn try_from(value: ProcessId) -> Result<Self, Self::Error> {
-        value.0.try_into()
+impl From<ProcessId> for libc::pid_t {
+    fn from(val: ProcessId) -> Self {
+        val.0.try_into().unwrap()
     }
 }
 
@@ -512,6 +515,13 @@ impl Process {
     #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
         self.itimer_real.borrow_mut()
+    }
+
+    pub fn thread_borrow(
+        &self,
+        virtual_tid: ThreadId,
+    ) -> Option<impl Deref<Target = ThreadRef> + '_> {
+        Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -1588,11 +1598,9 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
-            let threads = proc.threads.borrow();
-            match threads.get(&tid) {
-                Some(t) => unsafe { t.cthread() },
-                None => std::ptr::null_mut(),
-            }
+            proc.thread_borrow(tid)
+                .map(|x| unsafe { x.cthread() })
+                .unwrap_or(std::ptr::null_mut())
         })
         .unwrap()
     }
