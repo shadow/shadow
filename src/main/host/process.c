@@ -131,28 +131,7 @@ void process_continue(Process* proc, Thread* thread) {
 
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    info("terminating process '%s'", process_getName(proc));
-
-    worker_setActiveProcess(proc);
-
-#ifdef USE_PERF_TIMERS
-    /* time how long we execute the program */
-    _process_startCpuDelayTimer(proc->rustProcess);
-#endif
-
-    _process_terminate(proc->rustProcess);
-
-#ifdef USE_PERF_TIMERS
-    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
-    info("process '%s' stopped in %f seconds", process_getName(proc), elapsed);
-#else
-    info("process '%s' stopped", process_getName(proc));
-#endif
-
-    worker_setActiveProcess(NULL);
-
-    _process_check(proc->rustProcess);
+    _process_stop(proc->rustProcess);
 }
 
 gboolean process_hasStarted(Process* proc) {

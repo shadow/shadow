@@ -417,8 +417,8 @@ impl Process {
         if let Some(stop_time) = self.stop_time {
             let task = TaskRef::new(move |host| {
                 let process = host.process_borrow(id).unwrap();
-                let cprocess = unsafe { process.borrow(host.root()).cprocess() };
-                unsafe { cshadow::process_stop(cprocess) };
+                let process = process.borrow(host.root());
+                process.stop(host);
             });
             host.schedule_task_at_emulated_time(task, stop_time);
         }
@@ -611,6 +611,29 @@ impl Process {
 
         Worker::clear_active_thread();
         Worker::clear_active_process();
+    }
+
+    pub fn stop(&self, host: &Host) {
+        info!("terminating process {}", self.name());
+
+        Worker::set_active_process(self);
+
+        #[cfg(feature = "perf_timers")]
+        self.start_cpu_delay_timer();
+
+        self.terminate(host);
+
+        #[cfg(feature = "perf_timers")]
+        {
+            let delay = self.stop_cpu_delay_timer(host);
+            info!("process '{}' stopped in {:?}", self.name(), delay);
+        }
+        #[cfg(not(feature = "perf_timers"))]
+        info!("process '{}' stopped", self.name());
+
+        Worker::clear_active_process();
+
+        self.check(host);
     }
 
     fn open_stdio_file_helper(
@@ -2192,5 +2215,11 @@ mod export {
             proc.resume(host, tid)
         })
         .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_stop(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| proc.borrow(host.root()).stop(host)).unwrap()
     }
 }
