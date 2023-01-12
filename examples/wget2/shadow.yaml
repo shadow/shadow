@@ -1,0 +1,21 @@
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args: -m http.server 80
+      start_time: 0s
+  client:
+    network_node_id: 0
+    quantity: 3
+    processes:
+    - path: wget2
+      args: --no-tcp-fastopen server
+      start_time: 2s
