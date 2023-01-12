@@ -126,46 +126,7 @@ void process_markAsExiting(Process* proc) {
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    trace("Continuing thread %d in process %d", thread_getID(thread), process_getProcessID(proc));
-
-    /* if we are not running, no need to notify anyone */
-    if(!process_isRunning(proc)) {
-        return;
-    }
-
-    debug(
-        "switching to thread controller to continue executing process '%s'", process_getName(proc));
-
-    worker_setActiveProcess(proc);
-    worker_setActiveThread(thread);
-
-#ifdef USE_PERF_TIMERS
-    /* time how long we execute the program */
-    _process_startCpuDelayTimer(proc->rustProcess);
-#endif
-
-    _process_setSharedTime();
-
-    shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
-    thread_resume(thread);
-
-#ifdef USE_PERF_TIMERS
-    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
-    info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
-#else
-    debug("process '%s' done continuing", process_getName(proc));
-#endif
-
-    if (_process_isExiting(proc->rustProcess)) {
-        // If the whole process is already exiting, skip to cleaning up the
-        // whole process exit; normal thread cleanup would likely fail.
-        _process_handleProcessExit(proc->rustProcess);
-    } else {
-        _process_checkThread(proc->rustProcess, thread);
-    }
-
-    worker_setActiveProcess(NULL);
-    worker_setActiveThread(NULL);
+    _process_continue(proc->rustProcess, thread);
 }
 
 void process_stop(Process* proc) {

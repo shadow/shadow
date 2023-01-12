@@ -551,6 +551,68 @@ impl Process {
         unsafe { cshadow::process_continue(self.cprocess(), cthread) };
     }
 
+    pub fn resume(&self, host: &Host, tid: ThreadId) {
+        trace!("Continuing thread {} in process {}", tid, self.id());
+
+        if !self.is_running() {
+            return;
+        }
+
+        let threads = self.threads.borrow();
+        let Some(threadrc) = threads.get(&tid) else {
+            debug!("Thread {} no longer exists", tid);
+            return;
+        };
+
+        let thread = threadrc.borrow(host.root());
+
+        Worker::set_active_process(self);
+        Worker::set_active_thread(&thread);
+
+        #[cfg(feature = "perf_timers")]
+        self.start_cpu_delay_timer();
+
+        Process::set_shared_time(host);
+
+        // Discard any unapplied latency.
+        // We currently only want this mechanism to force a yield if the thread itself
+        // never yields; we don't want unapplied latency to accumulate and force a yield
+        // under normal circumstances.
+        host.shim_shmem_lock_borrow_mut()
+            .unwrap()
+            .unapplied_cpu_latency = SimulationTime::ZERO;
+
+        // `thread_continue` will need to borrow and potentially mutate the thread, and
+        // possibly the thread list (e.g. in a clone syscall). We currently need to drop
+        // our borrows so that those will succeed.
+        //
+        // When thread_resume is converted to Rust, we'll *clone* `threadrc` so that we
+        // can drop the borrow of the thread list, and pass a borrowed mutable reference
+        // to `thread` so that it doesn't need to be re-borrowed.
+        let cthread = unsafe { thread.cthread() };
+        drop(thread);
+        drop(threads);
+
+        unsafe { cshadow::thread_resume(cthread) };
+
+        #[cfg(feature = "perf_timers")]
+        {
+            let delay = self.stop_cpu_delay_timer(host);
+            info!("process '{}' ran for {:?}", self.name(), delay);
+        }
+        #[cfg(not(feature = "perf_timers"))]
+        info!("process '{}' done continuing", self.name());
+
+        if self.is_exiting.get() {
+            self.handle_process_exit(host);
+        } else {
+            self.check_thread(host, tid);
+        }
+
+        Worker::clear_active_thread();
+        Worker::clear_active_process();
+    }
+
     fn open_stdio_file_helper(
         &self,
         fd: u32,
@@ -2114,6 +2176,20 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.add_thread(host, thread)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_continue(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let tid = ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap();
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.resume(host, tid)
         })
         .unwrap()
     }
