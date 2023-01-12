@@ -1429,7 +1429,7 @@ fn tgkill(pid: libc::pid_t, tid: libc::pid_t, signo: i32) -> nix::Result<()> {
 }
 
 mod export {
-    use std::ffi::{c_char, c_int};
+    use std::ffi::c_char;
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
 
@@ -1444,7 +1444,6 @@ mod export {
     use crate::host::descriptor::File;
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
     use crate::host::thread::ThreadRef;
-    use crate::utility::callback_queue::CallbackQueue;
 
     use super::*;
 
@@ -1708,81 +1707,6 @@ mod export {
             cstr.to_bytes().len().try_into().unwrap()
         })
         .unwrap()
-    }
-
-    /// Temporary; meant to be called from process.c.
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_descriptorTableShutdownHelper(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            proc.borrow(h.root())
-                .descriptor_table_borrow_mut()
-                .shutdown_helper();
-        })
-        .unwrap();
-    }
-
-    /// Close all descriptors. The `host` option is a legacy option for legacy files.
-    /// Temporary; meant to be called from process.c.
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_descriptorTableRemoveAndCloseAll(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let descriptors = proc
-                .borrow(host.root())
-                .descriptor_table_borrow_mut()
-                .remove_all();
-            CallbackQueue::queue_and_run(|cb_queue| {
-                for desc in descriptors {
-                    desc.close(host, cb_queue);
-                }
-            });
-        })
-        .unwrap();
-    }
-
-    /// Temporary; meant to be called from process.c.
-    ///
-    /// Store the given descriptor at the given index. Any previous descriptor that was
-    /// stored there will be returned. This consumes a ref to the given descriptor as in
-    /// add(), and any returned descriptor must be freed manually.
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_descriptorTableSet(
-        proc: *const RustProcess,
-        index: c_int,
-        desc: *mut Descriptor,
-    ) -> *mut Descriptor {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let descriptor = Descriptor::from_raw(desc);
-
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut table = proc.descriptor_table_borrow_mut();
-            match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
-                Some(d) => Descriptor::into_raw(Box::new(d)),
-                None => std::ptr::null_mut(),
-            }
-        })
-        .unwrap()
-    }
-
-    /// Temporary; meant to be called from process.c.
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_createMemoryManager(
-        proc: *const RustProcess,
-        native_pid: libc::pid_t,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let mman = unsafe { MemoryManager::new(nix::unistd::Pid::from_raw(native_pid)) };
-        Worker::with_active_host(move |h| {
-            let prev = proc
-                .borrow(h.root())
-                .memory_manager
-                .borrow_mut()
-                .replace(mman);
-            assert!(prev.is_none());
-        })
-        .unwrap();
     }
 
     /// Reads up to `n` bytes into `str`.
@@ -2059,23 +1983,6 @@ mod export {
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val)).unwrap()
     }
 
-    #[cfg(feature = "perf_timers")]
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_startCpuDelayTimer(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).start_cpu_delay_timer()).unwrap()
-    }
-
-    #[cfg(feature = "perf_timers")]
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_stopCpuDelayTimer(proc: *const RustProcess) -> f64 {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let delta =
-            Worker::with_active_host(|host| proc.borrow(host.root()).stop_cpu_delay_timer(host))
-                .unwrap();
-        delta.as_nanos() as f64
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn _process_getNativePid(proc: *const RustProcess) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2168,18 +2075,6 @@ mod export {
         .unwrap()
     }
 
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_handleProcessExit(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-
-        trace!("Handling process exit");
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.handle_process_exit(host)
-        })
-        .unwrap();
-    }
-
     // FIXME: still needed? Time is now updated more granularly in the Thread code
     // when xferring control to/from shim.
     #[no_mangle]
@@ -2207,30 +2102,6 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.terminate(host)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_check(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.check(host)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_checkThread(
-        proc: *const RustProcess,
-        thread: *mut cshadow::Thread,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { ThreadRef::new(thread) };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.check_thread(host, thread.id())
         })
         .unwrap()
     }
