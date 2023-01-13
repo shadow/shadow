@@ -796,14 +796,17 @@ impl Process {
                 // Check again
             }
 
-            // Find a still-living thread to execute the memory-write.
+            // Use a different thread to do the write. The current thread won't work
+            // now that it's exited.
             let threads = self.threads.borrow();
-            let writer_thread = threads
-                .values()
-                .find(|t| unsafe { cshadow::thread_isRunning(t.borrow(host.root()).cthread()) })
-                .unwrap();
+            let writer_thread = threads.values().next().unwrap();
+            // There shouldn't be any non-running threads in the table.
+            assert!(unsafe {
+                cshadow::thread_isRunning(writer_thread.borrow(host.root()).cthread())
+            });
             // MemoryCopier uses the active thread's tid to do the write; we need to set
             // that to the still-live thread we're using to do the write.
+            // TODO: change API to accept an explicit thread or tid.
             Worker::clear_active_thread();
             Worker::set_active_thread(&writer_thread.borrow(host.root()));
             let typed_clear_child_tid_pvp =
