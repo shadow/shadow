@@ -2,6 +2,7 @@
 
 - [libopenblas](#libopenblas)
 - [cURL](#curl)
+- [Wget2](#wget2)
 - [Nginx](#nginx)
 - [iPerf 2](#iperf-2)
 - [iPerf 3](#iperf-3)
@@ -63,6 +64,22 @@ will cause Shadow to deadlock. `model_unblocked_syscall_latency` works around
 this (see [busy-loops](limitations.md#busy-loops)). Newer versions of cURL, such as the
 version provided in Ubuntu 20.04, don't have this issue. See issue
 [#1794](https://github.com/shadow/shadow/issues/1794) for details.
+
+## Wget2
+
+### Example
+
+```yaml
+{{#include ../examples/wget2/shadow.yaml}}
+```
+
+```bash
+{{#include ../examples/wget2/run.sh:body}}
+```
+
+### Notes
+
+1. Shadow doesn't support `TCP_FASTOPEN` so you must run Wget2 using the `--no-tcp-fastopen` option.
 
 ## Nginx
 
