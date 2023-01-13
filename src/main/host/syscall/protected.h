@@ -34,7 +34,7 @@ struct _SysCallHandler {
     /* We store pointers to the host, process, and thread that the syscall
      * handler is associated with. We typically need to makes calls into
      * these modules in order to handle syscalls. */
-    Process* process;
+    const Process* process;
     Thread* thread;
 
     // For syscalls implemented in rust. Will eventually replace the C handler.

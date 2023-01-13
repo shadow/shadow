@@ -1126,7 +1126,7 @@ mod export {
     pub unsafe extern "C" fn host_getProcess(
         host: *const Host,
         virtual_pid: libc::pid_t,
-    ) -> *mut cshadow::Process {
+    ) -> *const cshadow::Process {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
         host.process_borrow(virtual_pid)

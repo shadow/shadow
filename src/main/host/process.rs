@@ -333,18 +333,14 @@ impl Process {
     /// # Safety
     ///
     /// The returned pointer must not outlive the caller's reference to `self`,
-    /// or be accessed by threads other than the caller's. It must also not
-    /// be turned into a mutable reference.
-    ///
-    /// TODO: return a const pointer instead. This is a transitory state since
-    /// C code expects a mutable pointer.
-    pub unsafe fn cprocess(&self, host: &Host) -> *mut cshadow::Process {
+    /// or be accessed by threads other than the caller's.
+    pub unsafe fn cprocess(&self, host: &Host) -> *const cshadow::Process {
         let Some(rc) = self.weak_rc.as_ref().unwrap().upgrade(host.root()) else {
             warn!("Couldn't get outer Arc");
             return std::ptr::null_mut()
         };
         let process: &RustProcess = &rc;
-        let rv = process as *const _ as *mut _;
+        let rv = process as *const _;
         rc.safely_drop(host.root());
         rv
     }
