@@ -95,7 +95,7 @@ struct StraceLogging {
 }
 
 /// Used for C interop.
-pub type RustProcess = RootedRefCell<Process>;
+pub type ProcessRefCell = RootedRefCell<Process>;
 
 pub struct Process {
     // Occasionally we need to get to the enclosing RootedRc. Mostly for C compatibility.
@@ -334,12 +334,12 @@ impl Process {
     ///
     /// The returned pointer must not outlive the caller's reference to `self`,
     /// or be accessed by threads other than the caller's.
-    pub unsafe fn cprocess(&self, host: &Host) -> *const cshadow::Process {
+    pub unsafe fn cprocess(&self, host: &Host) -> *const ProcessRefCell {
         let Some(rc) = self.weak_rc.as_ref().unwrap().upgrade(host.root()) else {
             warn!("Couldn't get outer Arc");
             return std::ptr::null_mut()
         };
-        let process: &RustProcess = &rc;
+        let process: &ProcessRefCell = &rc;
         let rv = process as *const _;
         rc.safely_drop(host.root());
         rv
@@ -1433,7 +1433,7 @@ mod export {
     /// after.
     #[no_mangle]
     pub extern "C" fn process_registerDescriptor(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         desc: *mut Descriptor,
     ) -> libc::c_int {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1451,7 +1451,7 @@ mod export {
     /// Get a temporary reference to a descriptor.
     #[no_mangle]
     pub extern "C" fn process_getRegisteredDescriptor(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         handle: libc::c_int,
     ) -> *const Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1476,7 +1476,7 @@ mod export {
     /// Get a temporary mutable reference to a descriptor.
     #[no_mangle]
     pub extern "C" fn process_getRegisteredDescriptorMut(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         handle: libc::c_int,
     ) -> *mut Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1505,7 +1505,7 @@ mod export {
     /// Get a temporary reference to a legacy file.
     #[no_mangle]
     pub unsafe extern "C" fn process_getRegisteredLegacyFile(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         handle: libc::c_int,
     ) -> *mut cshadow::LegacyFile {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1540,7 +1540,7 @@ mod export {
     /// the specified range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
     pub extern "C" fn process_readPtr(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         dst: *mut c_void,
         src: cshadow::PluginPtr,
         n: usize,
@@ -1569,7 +1569,7 @@ mod export {
     /// the specified range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         dst: cshadow::PluginPtr,
         src: *const c_void,
         n: usize,
@@ -1599,7 +1599,7 @@ mod export {
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         plugin_src: cshadow::PluginPtr,
         n: usize,
     ) -> *const c_void {
@@ -1623,7 +1623,7 @@ mod export {
     /// unspecified contents may be written back into process memory.
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         plugin_src: cshadow::PluginPtr,
         n: usize,
     ) -> *mut c_void {
@@ -1645,7 +1645,7 @@ mod export {
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         plugin_src: cshadow::PluginPtr,
         n: usize,
     ) -> *mut c_void {
@@ -1668,7 +1668,7 @@ mod export {
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
     pub unsafe extern "C" fn process_readString(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         strbuf: *mut libc::c_char,
         ptr: cshadow::PluginPtr,
         maxlen: libc::size_t,
@@ -1699,7 +1699,7 @@ mod export {
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         plugin_src: cshadow::PluginPtr,
         n: usize,
         out_str: *mut *const c_char,
@@ -1727,7 +1727,7 @@ mod export {
     /// Fully handles the `mmap` syscall
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMmap(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
         addr: cshadow::PluginPtr,
         len: usize,
@@ -1759,7 +1759,7 @@ mod export {
     /// Fully handles the `munmap` syscall
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMunmap(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
         addr: cshadow::PluginPtr,
         len: usize,
@@ -1778,7 +1778,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMremap(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
         old_addr: cshadow::PluginPtr,
         old_size: usize,
@@ -1807,7 +1807,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMprotect(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
         addr: cshadow::PluginPtr,
         size: usize,
@@ -1828,7 +1828,7 @@ mod export {
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
     #[no_mangle]
     pub unsafe extern "C" fn process_handleBrk(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
         plugin_src: cshadow::PluginPtr,
     ) -> cshadow::SysCallReturn {
@@ -1848,7 +1848,7 @@ mod export {
     /// be running and ready to make native syscalls.
     #[no_mangle]
     pub unsafe extern "C" fn process_initMapperIfNeeded(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1864,7 +1864,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_resetMemoryManager(proc: *const RustProcess) {
+    pub unsafe extern "C" fn process_resetMemoryManager(proc: *const ProcessRefCell) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             drop(proc.borrow(h.root()).memory_manager.borrow_mut().take());
@@ -1874,25 +1874,25 @@ mod export {
 
     /// Returns the processID that was assigned to us in process_new
     #[no_mangle]
-    pub unsafe extern "C" fn process_getProcessID(proc: *const RustProcess) -> libc::pid_t {
+    pub unsafe extern "C" fn process_getProcessID(proc: *const ProcessRefCell) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| proc.borrow(h.root()).id().try_into().unwrap()).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getHostId(proc: *const RustProcess) -> HostId {
+    pub unsafe extern "C" fn process_getHostId(proc: *const ProcessRefCell) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getName(proc: *const RustProcess) -> *const c_char {
+    pub unsafe extern "C" fn process_getName(proc: *const ProcessRefCell) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).name.as_ptr()).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getPluginName(proc: *const RustProcess) -> *const c_char {
+    pub unsafe extern "C" fn process_getPluginName(proc: *const ProcessRefCell) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).plugin_name.as_ptr()).unwrap()
     }
@@ -1903,7 +1903,7 @@ mod export {
     /// Host::unlock_shmem.
     #[no_mangle]
     pub unsafe extern "C" fn process_getSharedMem(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
     ) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
@@ -1913,13 +1913,15 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getWorkingDir(proc: *const RustProcess) -> *const c_char {
+    pub unsafe extern "C" fn process_getWorkingDir(proc: *const ProcessRefCell) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).working_dir.as_ptr()).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_straceLoggingMode(proc: *const RustProcess) -> StraceFmtMode {
+    pub unsafe extern "C" fn process_straceLoggingMode(
+        proc: *const ProcessRefCell,
+    ) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).strace_logging_options())
             .unwrap()
@@ -1927,7 +1929,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_straceFd(proc: *const RustProcess) -> RawFd {
+    pub unsafe extern "C" fn process_straceFd(proc: *const ProcessRefCell) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| match &proc.borrow(host.root()).strace_logging {
             Some(x) => x.file.borrow().as_raw_fd(),
@@ -1937,7 +1939,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_isExiting(proc: *const RustProcess) -> bool {
+    pub unsafe extern "C" fn process_isExiting(proc: *const ProcessRefCell) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).is_exiting.get()).unwrap()
     }
@@ -1948,7 +1950,7 @@ mod export {
     /// thread tasks while we're in the middle of trying to execute them, which can
     /// be difficult to recover from cleanly.
     #[no_mangle]
-    pub unsafe extern "C" fn process_markAsExiting(proc: *const RustProcess) {
+    pub unsafe extern "C" fn process_markAsExiting(proc: *const ProcessRefCell) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
@@ -1960,7 +1962,7 @@ mod export {
     /// Get process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getDumpable(proc: *const RustProcess) -> u32 {
+    pub unsafe extern "C" fn process_getDumpable(proc: *const ProcessRefCell) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.get()).unwrap()
     }
@@ -1968,21 +1970,21 @@ mod export {
     /// Set process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_setDumpable(proc: *const RustProcess, val: u32) {
+    pub unsafe extern "C" fn process_setDumpable(proc: *const ProcessRefCell, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val)).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getNativePid(proc: *const RustProcess) -> libc::pid_t {
+    pub unsafe extern "C" fn process_getNativePid(proc: *const ProcessRefCell) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().unwrap().as_raw())
             .unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_hasStarted(proc: *const RustProcess) -> bool {
+    pub unsafe extern "C" fn process_hasStarted(proc: *const ProcessRefCell) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).has_started()).unwrap()
     }
@@ -1994,7 +1996,7 @@ mod export {
     ///
     /// Returns 0 on success or a negative errno on failure.
     #[no_mangle]
-    pub unsafe extern "C" fn process_flushPtrs(proc: *const RustProcess) -> i32 {
+    pub unsafe extern "C" fn process_flushPtrs(proc: *const ProcessRefCell) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
@@ -2012,7 +2014,7 @@ mod export {
     /// and we end up not wanting to write anything after all (in particular, don't
     /// write back whatever garbage data was in the uninialized bueffer).
     #[no_mangle]
-    pub unsafe extern "C" fn process_freePtrsWithoutFlushing(proc: *const RustProcess) {
+    pub unsafe extern "C" fn process_freePtrsWithoutFlushing(proc: *const ProcessRefCell) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
@@ -2023,7 +2025,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getThread(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         tid: libc::pid_t,
     ) -> *mut cshadow::Thread {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2042,7 +2044,7 @@ mod export {
     /// count).
     #[no_mangle]
     pub unsafe extern "C" fn process_insertThread(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2057,7 +2059,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_isRunning(proc: *const RustProcess) -> bool {
+    pub unsafe extern "C" fn process_isRunning(proc: *const ProcessRefCell) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
@@ -2075,7 +2077,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         vptr: cshadow::PluginVirtualPtr,
     ) -> cshadow::PluginPhysicalPtr {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2088,7 +2090,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_terminate(proc: *const RustProcess) {
+    pub unsafe extern "C" fn process_terminate(proc: *const ProcessRefCell) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
@@ -2103,7 +2105,7 @@ mod export {
     /// Takes ownership of `thread`.
     #[no_mangle]
     pub unsafe extern "C" fn process_addThread(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2119,7 +2121,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_continue(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2132,7 +2134,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_stop(proc: *const RustProcess) {
+    pub unsafe extern "C" fn process_stop(proc: *const ProcessRefCell) {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).stop(host)).unwrap()
     }
@@ -2142,7 +2144,7 @@ mod export {
     /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
     #[no_mangle]
     pub unsafe extern "C" fn process_signal(
-        proc: *const RustProcess,
+        proc: *const ProcessRefCell,
         current_running_thread: *mut cshadow::Thread,
         siginfo: *const libc::siginfo_t,
     ) {

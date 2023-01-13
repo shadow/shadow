@@ -270,11 +270,12 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
+    use crate::host::process::ProcessRefCell;
     use std::ffi::CStr;
 
     #[no_mangle]
     pub extern "C" fn log_syscall(
-        proc: *const c::Process,
+        proc: *const ProcessRefCell,
         logging_mode: StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,

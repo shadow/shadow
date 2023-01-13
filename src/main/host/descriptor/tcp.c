@@ -331,7 +331,7 @@ static void _tcpserver_updateBacklog(TCPServer* server, gint _backlog) {
     server->pendingMax = backlog;
 }
 
-static TCPServer* _tcpserver_new(gint backlog, const Process* processForChildren) {
+static TCPServer* _tcpserver_new(gint backlog, const ProcessRefCell* processForChildren) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
 
@@ -1632,7 +1632,7 @@ static gint _tcp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t
     return -EINPROGRESS;
 }
 
-void tcp_enterServerMode(TCP* tcp, const Host* host, const Process* process, gint backlog) {
+void tcp_enterServerMode(TCP* tcp, const Host* host, const ProcessRefCell* process, gint backlog) {
     MAGIC_ASSERT(tcp);
 
     /* we are a server ready to listen, build our server state */
@@ -2022,7 +2022,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                  * whichever process eventually calls accept() on the parent socket, but this is
                  * difficult to fix and isn't an issue until we support fork().
                  * See: https://github.com/shadow/shadow/issues/1780 */
-                const Process* registerInProcess =
+                const ProcessRefCell* registerInProcess =
                     host_getProcess(host, tcp->server->processForChildren);
                 if (!registerInProcess) {
                     debug("Listening process no longer exists");

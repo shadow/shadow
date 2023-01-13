@@ -217,7 +217,7 @@ static void _syscallcondition_unrefcb(void* cond_ptr) {
 }
 
 #ifdef DEBUG
-static void _syscallcondition_logListeningState(SysCallCondition* cond, const Process* proc,
+static void _syscallcondition_logListeningState(SysCallCondition* cond, const ProcessRefCell* proc,
                                                 const char* listenVerb) {
     GString* string = g_string_new(NULL);
 
@@ -326,7 +326,7 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
     // (which it will be, if we decide to actually run the process below).
     cond->wakeupScheduled = false;
 
-    const Process* proc = host_getProcess(host, cond->proc);
+    const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     if (!proc) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, proc, "ignored (process no longer exists)");
@@ -397,7 +397,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
 
 #ifdef DEBUG
     const Host* host = thread_getHost(cond->thread);
-    const Process* proc = host_getProcess(host, cond->proc);
+    const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     _syscallcondition_logListeningState(cond, proc, "status changed while");
 #endif
 
@@ -409,15 +409,15 @@ static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, 
     MAGIC_ASSERT(cond);
 
 #ifdef DEBUG
-    const Process* proc = host_getProcess(host, cond->proc);
+    const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     _syscallcondition_logListeningState(cond, proc, "timeout expired while");
 #endif
 
     _syscallcondition_scheduleWakeupTask(cond);
 }
 
-void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, const Process* proc,
-                                   Thread* thread) {
+void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host,
+                                   const ProcessRefCell* proc, Thread* thread) {
     MAGIC_ASSERT(cond);
     utility_debugAssert(proc);
     utility_debugAssert(thread);
@@ -512,7 +512,7 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock*
 
 #ifdef DEBUG
     const Host* host = thread_getHost(cond->thread);
-    const Process* proc = host_getProcess(host, cond->proc);
+    const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     _syscallcondition_logListeningState(cond, proc, "signaled while");
 #endif
 

@@ -49,7 +49,7 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread* thread_new(const Host* host, const Process* process, int threadID) {
+Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID) {
     Thread* thread = g_new(Thread, 1);
     *thread = (Thread){.referenceCount = 1,
                        .hostId = host_getID(host),
@@ -192,8 +192,8 @@ SysCallHandler* thread_getSysCallHandler(Thread* thread) {
     return thread->sys;
 }
 
-const Process* thread_getProcess(Thread* thread) {
-    const Process* p = host_getProcess(thread_getHost(thread), thread->processId);
+const ProcessRefCell* thread_getProcess(Thread* thread) {
+    const ProcessRefCell* p = host_getProcess(thread_getHost(thread), thread->processId);
     utility_alwaysAssert(p);
     return p;
 }
