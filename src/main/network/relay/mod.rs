@@ -154,6 +154,11 @@ impl Relay {
         let weak_self = Arc::downgrade(self);
         let task = TaskRef::new(move |host| Self::run_forward_task(&weak_self, host));
         host.schedule_task_with_delay(task, delay);
+        log::trace!(
+            "Relay src={} scheduled event to start forwarding packets after {:?}",
+            self.internal.borrow().src_dev_address,
+            delay
+        );
     }
 
     /// The initial entry point for the forwarding event executed by the scheduler.
