@@ -810,7 +810,11 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
 static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    if(!priorityqueue_find(tcp->unorderedInput, packet)) {
+    // Don't store old packets whose data we already gave to the plugin.
+    PacketTCPHeader* hdr = packet_getTCPHeader(packet);
+    bool already_received = hdr->sequence < tcp->receive.next;
+
+    if (!already_received && !priorityqueue_find(tcp->unorderedInput, packet)) {
         /* TCP wants in-order data */
         priorityqueue_push(tcp->unorderedInput, packet);
         packet_ref(packet);
@@ -1325,7 +1329,14 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         PacketTCPHeader* header = packet_getTCPHeader(packet);
 
         _rswlog(tcp, "I just received packet %d\n", header->sequence);
-        if(header->sequence == tcp->receive.next) {
+        if (header->sequence < tcp->receive.next) {
+            // This is a (probably retransmitted) copy of a packet we already stored
+            // and delivered to the plugin.
+            trace("Removing packet %u with duplicate data", header->sequence);
+            priorityqueue_pop(tcp->unorderedInput);
+            tcp->unorderedInputLength -= packet_getPayloadSize(packet);
+            packet_unref(packet);
+        } else if (header->sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
             gboolean fitInBuffer = legacysocket_addToInputBuffer(&(tcp->super), host, packet);
 
@@ -1333,8 +1344,8 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
                 tcp->receive.lastSequence = header->sequence;
                 priorityqueue_pop(tcp->unorderedInput);
-                packet_unref(packet);
                 tcp->unorderedInputLength -= packet_getPayloadSize(packet);
+                packet_unref(packet);
                 (tcp->receive.next)++;
                 continue;
             }
