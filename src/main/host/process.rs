@@ -551,6 +551,7 @@ impl Process {
         }
     }
 
+    /// Resume execution of `tid` (if it exists).
     pub fn resume(&self, host: &Host, tid: ThreadId) {
         trace!("Continuing thread {} in process {}", tid, self.id());
 
@@ -1194,24 +1195,13 @@ impl Process {
         // to the TaskRef here, which is why we don't increment its ref count to
         // create the TaskRef, but do decrement it on cleanup.
         let task = TaskRef::new(move |host| {
-            let (cprocess, cthread) = {
-                let Some(process) = host.process_borrow(pid) else {
-                    // This might happen if a thread calls `clone` and then `exit_group`
-                    debug!("Process {:?} no longer exists. Can't start its thread {}.", pid, tid);
-                    return;
-                };
-                let process = process.borrow(host.root());
-                let threads = process.threads.borrow();
-                let Some(thread) = threads.get(&tid) else {
-                    // Maybe possible e.g. if a thread is targeted with `tgkill` before it
-                    // gets a chance to start.
-                    debug!("Thread {} no longer exists. Can't start it.", tid);
-                    return;
-                };
-                let thread = thread.borrow(host.root());
-                unsafe { (process.cprocess(), thread.cthread()) }
+            let Some(process) = host.process_borrow(pid) else {
+                // This might happen if a thread calls `clone` and then `exit_group`
+                debug!("Process {:?} no longer exists. Can't start its thread {}.", pid, tid);
+                return;
             };
-            unsafe { cshadow::process_continue(cprocess, cthread) };
+            let process = process.borrow(host.root());
+            process.resume(host, tid);
         });
         host.schedule_task_with_delay(task, SimulationTime::ZERO);
     }
