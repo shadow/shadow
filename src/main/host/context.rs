@@ -102,11 +102,7 @@ impl<'a> ThreadContextObjs<'a> {
     /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe {
-            cshadow::process_getRustProcess(sys.process)
-                .as_ref()
-                .unwrap()
-        };
+        let process = unsafe { sys.process.as_ref().unwrap() };
         let thread = unsafe { ThreadRef::new(sys.thread) };
         Self {
             host,
