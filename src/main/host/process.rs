@@ -412,7 +412,9 @@ impl Process {
         };
         let task = TaskRef::new(move |host| {
             let process = host.process_borrow(id).unwrap();
-            process.borrow(host.root()).start(host);
+            let process = process.borrow(host.root());
+            process.create_and_exec_thread_group_leader(host);
+            process.resume(host, process.thread_group_leader_id());
         });
         host.schedule_task_at_emulated_time(task, self.start_time);
 
@@ -426,7 +428,14 @@ impl Process {
         }
     }
 
-    fn start(&self, host: &Host) {
+    fn thread_group_leader_id(&self) -> ThreadId {
+        // tid of the thread group leader is equal to the pid.
+        ThreadId::from(self.id())
+    }
+
+    // Creates the thread group leader. After return, the thread group leader
+    // will be in `self.threads` and is ready to be run with `self.resume`.
+    fn create_and_exec_thread_group_leader(&self, host: &Host) {
         assert!(!self.is_running());
 
         self.open_stdio_file_helper(
@@ -441,25 +450,25 @@ impl Process {
         let name = self.output_file_name(host, "stderr");
         self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
 
-        // tid of first thread of a process is equal to the pid.
-        let tid = ThreadId::from(self.id());
-        let main_thread =
-            unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
-        let main_thread_ref = RootedRc::new(
-            host.root(),
-            RootedRefCell::new(host.root(), unsafe { ThreadRef::new(main_thread) }),
-        );
-        // ThreadRef increments the reference count; we don't need the original
-        // reference anymore.
-        unsafe { cshadow::thread_unref(main_thread) };
+        // Create the main thread and add it to our thread list.
+        let tid = self.thread_group_leader_id();
+        {
+            let thread =
+                unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
+            let thread_ref = RootedRc::new(
+                host.root(),
+                RootedRefCell::new(host.root(), unsafe { ThreadRef::new(thread) }),
+            );
+            // ThreadRef increments the reference count; we don't need the original
+            // reference anymore.
+            unsafe { cshadow::thread_unref(thread) };
+            self.threads.borrow_mut().insert(tid, thread_ref);
+        };
 
-        // Insert a *clone* of the reference, since we continue to use ours below.
-        self.threads
-            .borrow_mut()
-            .insert(tid, main_thread_ref.clone(host.root()));
+        let main_thread = self.thread_borrow(tid).unwrap();
+        let main_thread = main_thread.borrow(host.root());
 
         info!("starting process '{}'", self.name());
-        let main_thread = main_thread_ref.borrow(host.root());
         Worker::set_active_process(self);
         Worker::set_active_thread(&main_thread);
 
@@ -540,17 +549,6 @@ impl Process {
 
             nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
         }
-
-        // `process_continue` actually starts running the thread and may make
-        // syscalls, which may need to get a mutable reference to the thread, so
-        // we need to drop the borrow here. Once `process_continue` and the thread
-        // code is in Rust, we can pass the borrow through instead of dropping
-        // it.
-        let cthread = unsafe { main_thread.cthread() };
-        drop(main_thread);
-        main_thread_ref.safely_drop(host.root());
-
-        unsafe { cshadow::process_continue(self.cprocess(), cthread) };
     }
 
     pub fn resume(&self, host: &Host, tid: ThreadId) {
