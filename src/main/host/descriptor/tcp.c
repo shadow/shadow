@@ -2324,6 +2324,7 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* user can no longer access socket */
+        /* FIXME: a file should not be closed if there are still file handles (fds) to it */
         legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_CLOSED, TRUE);
         legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_ACTIVE, FALSE);
     }
