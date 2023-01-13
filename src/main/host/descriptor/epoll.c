@@ -489,6 +489,23 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
 
     switch (operation) {
         case EPOLL_CTL_ADD: {
+            /* Check if we're trying to add a file that's already been closed.
+             * Typically a file that is referenced in the descriptor table
+             * should never be a closed file, but Shadow's TCP sockets do close
+             * themselves even if there are still file handles (see
+             * `_tcp_endOfFileSignalled`), so we need to check this. */
+            Status status;
+            if (watchType == EWT_LEGACY_FILE) {
+                status = legacyfile_getStatus(watchObject.as_legacy_file);
+            } else if (watchType == EWT_GENERIC_FILE) {
+                status = file_getStatus(watchObject.as_file);
+            }
+            if (status & STATUS_FILE_CLOSED) {
+                warning("Attempted to add a closed file to epoll %p", epoll);
+                rv = -EBADF;
+                break;
+            }
+
             /* EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor
              * fd is already registered with this epoll instance. */
             if(watch) {

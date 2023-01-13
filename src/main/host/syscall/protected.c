@@ -49,6 +49,12 @@ int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType ex
         Status status = legacyfile_getStatus(descriptor);
 
         if (status & STATUS_FILE_CLOSED) {
+            // A file that is referenced in the descriptor table should never
+            // be a closed file. File handles (fds) are handles to open files,
+            // so if we have a file handle to a closed file, then there's an
+            // error somewhere in Shadow. Shadow's TCP sockets do close
+            // themselves even if there are still file handles (see
+            // `_tcp_endOfFileSignalled`), so we can't make this a panic.
             warning("descriptor %p is closed", descriptor);
             return -EBADF;
         }

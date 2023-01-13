@@ -106,12 +106,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     LegacyFile* legacyDescriptor = descriptor_asLegacyFile(descriptor);
 
     // Make sure the child is not closed only if it's a legacy file
-    // FIXME: for now we allow child fds to be closed on EPOLL_CTL_DEL operations,
-    // because libevent frequently closes before issuing the EPOLL_CTL_DEL op.
-    // Once #1101 is fixed, and we correctly clean up closed watch fds, then we can
-    // error out here on EPOLL_CTL_DEL ops too.
-    // See: https://github.com/shadow/shadow/issues/1101
-    if (legacyDescriptor != NULL && op != EPOLL_CTL_DEL) {
+    if (legacyDescriptor != NULL) {
         errorCode = _syscallhandler_validateLegacyFile(legacyDescriptor, DT_NONE);
 
         if (errorCode) {
