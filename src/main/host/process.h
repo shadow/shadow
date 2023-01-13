@@ -51,7 +51,6 @@ void process_free(Process* proc);
 
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
-void process_detachPlugin(gpointer procptr, gpointer nothing);
 
 const char* process_getWorkingDir(Process* proc);
 
@@ -93,14 +92,6 @@ pid_t process_getProcessID(Process* proc);
 
 /* Returns the native pid of the process */
 pid_t process_getNativePid(const Process* proc);
-
-/* Returns the native tid of the thread with the given virtual PID and TID.
- * Although the process knows its own virtualPID already, giving it as a param
- * here allows us to control which of the PIF and TID get matched:
- * - If virtualPID is 0, then we only check for matching TIDs.
- * - If virtualTID is 0, then we return the TID of the main thread if the virutal PIDs match.
- * - If we don't find a matching thread, return 0. */
-pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
 
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
@@ -196,10 +187,5 @@ void process_setDumpable(Process* process, int dumpable);
 // Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
 // due to opaque fields and macro magic in its C definition.
 void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
-
-// To be called from Rust Process.
-void process_start(Process* process, const gchar* const* envv, const gchar* const* argv);
-void process_reapThread(Process* process, Thread* thread);
-void process_check(Process* process);
 
 #endif /* SHD_PROCESS_H_ */

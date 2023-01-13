@@ -717,6 +717,15 @@ impl Host {
         };
     }
 
+    /// The unprotected part of the Host's shared memory.
+    ///
+    /// Do not try to take the lock of [`HostShmem::protected`] directly.
+    /// Instead use [`Host::lock_shmem`], [`Host::shim_shmem_lock_borrow`], and
+    /// [`Host::shim_shmem_lock_borrow_mut`].
+    pub fn shim_shmem(&self) -> &HostShmem {
+        unsafe { &*self.shim_shmem.get() }
+    }
+
     /// Returns `true` if the host has a process that contains the specified thread.
     pub fn has_thread(&self, virtual_tid: ThreadId) -> bool {
         for process in self.processes.borrow().values() {
@@ -1113,25 +1122,6 @@ mod export {
     pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         &mut *hostrc.futextable_borrow_mut()
-    }
-
-    /// converts a virtual (shadow) tid into the native tid
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getNativeTID(
-        host: *const Host,
-        virtual_pid: libc::pid_t,
-        virtual_tid: libc::pid_t,
-    ) -> libc::pid_t {
-        let host = unsafe { host.as_ref().unwrap() };
-        for process in host.processes.borrow().values() {
-            let process = unsafe { process.borrow(host.root()).cprocess() };
-            let native_tid =
-                unsafe { cshadow::process_findNativeTID(process, virtual_pid, virtual_tid) };
-            if native_tid > 0 {
-                return native_tid;
-            }
-        }
-        0
     }
 
     /// Returns the specified process, or NULL if it doesn't exist.

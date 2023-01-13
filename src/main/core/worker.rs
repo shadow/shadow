@@ -231,6 +231,15 @@ impl Worker {
         Worker::with(|w| w.clock.borrow().barrier).flatten()
     }
 
+    /// Maximum time that the current event may run ahead to.
+    pub fn max_event_runahead_time(host: &Host) -> EmulatedTime {
+        let mut max = Worker::round_end_time().unwrap();
+        if let Some(next_event_time) = host.next_event_time() {
+            max = std::cmp::min(max, next_event_time);
+        }
+        max
+    }
+
     pub fn set_current_time(t: EmulatedTime) {
         Worker::with(|w| w.clock.borrow_mut().now.replace(t)).unwrap();
     }
@@ -443,6 +452,10 @@ impl Worker {
     pub fn add_to_global_sim_stats() {
         Worker::with(|w| SIM_STATS.add_from_local_stats(&w.sim_stats)).unwrap()
     }
+
+    pub fn increment_plugin_error_count() {
+        Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
 }
 
 #[derive(Debug)]
@@ -633,11 +646,6 @@ mod export {
         Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
     }
 
-    #[no_mangle]
-    pub extern "C" fn worker_incrementPluginErrors() {
-        Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
-    }
-
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
     #[no_mangle]
     pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
@@ -755,13 +763,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_maxEventRunaheadTime(host: *const Host) -> CEmulatedTime {
         let host = unsafe { host.as_ref() }.unwrap();
-
-        let mut max = Worker::round_end_time().unwrap();
-
-        if let Some(next_event_time) = host.next_event_time() {
-            max = std::cmp::min(max, next_event_time);
-        }
-
-        EmulatedTime::to_c_emutime(Some(max))
+        EmulatedTime::to_c_emutime(Some(Worker::max_event_runahead_time(host)))
     }
 }

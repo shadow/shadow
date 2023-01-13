@@ -1,15 +1,18 @@
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::fmt::Write;
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
-use log::{debug, info, trace};
+use log::{debug, error, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
+use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -20,9 +23,11 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{pathbuf_to_nul_term_cstring, SyncSendPointer};
 
 use super::descriptor::descriptor_table::DescriptorTable;
@@ -43,6 +48,12 @@ use std::time::Duration;
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
+
+impl std::fmt::Display for ProcessId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl TryFrom<u32> for ProcessId {
     type Error = TryFromIntError;
@@ -138,7 +149,18 @@ pub struct Process {
     desc_table: RefCell<DescriptorTable>,
     itimer_real: RefCell<Timer>,
 
-    threads: RefCell<BTreeMap<ThreadId, ThreadRef>>,
+    // The `RootedRc` lets us hold a reference to a thread without holding a
+    // reference to the thread list. e.g. this lets us implement the `clone`
+    // syscall, which adds a thread to the list while we have a reference to the
+    // parent thread.
+    //
+    // `ThreadRef` currently has mutable methods, so we need to be able to get a
+    // mutable reference to it, so we use `RootedRefCell`. We could end up
+    // dropping this if we change `ThreadRef` to use internal mutability
+    // everywhere as we do with Process and Host. I suspect we'll actually want
+    // to move in the other direction once we have less C code though and reduce
+    // the amount of interior mutability.
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<RootedRefCell<ThreadRef>>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -345,6 +367,35 @@ impl Process {
         self.host_id
     }
 
+    /// Starts the CPU delay timer.
+    /// Panics if the timer is already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn start_cpu_delay_timer(&self) {
+        self.cpu_delay_timer.borrow_mut().start()
+    }
+
+    /// Stop the timer and return the most recent (not cumulative) duration.
+    /// Panics if the timer was not already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
+        let mut timer = self.cpu_delay_timer.borrow_mut();
+        timer.stop();
+        let total_elapsed = timer.elapsed();
+        let prev_total = self.total_run_time.replace(total_elapsed);
+        let delta = total_elapsed - prev_total;
+
+        if let Some(mut tracker) = host.tracker_borrow_mut() {
+            unsafe {
+                cshadow::tracker_addProcessingTimeNanos(
+                    &mut *tracker,
+                    delta.as_nanos().try_into().unwrap(),
+                )
+            };
+            host.cpu_borrow_mut().add_delay(delta);
+        }
+        delta
+    }
+
     pub fn schedule(&self, host: &Host) {
         let id = self.id();
         match self.stop_time {
@@ -374,6 +425,8 @@ impl Process {
     }
 
     fn start(&self, host: &Host) {
+        assert!(!self.is_running());
+
         self.open_stdio_file_helper(
             libc::STDIN_FILENO as u32,
             "/dev/null".into(),
@@ -385,6 +438,33 @@ impl Process {
 
         let name = self.output_file_name(host, "stderr");
         self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
+
+        // tid of first thread of a process is equal to the pid.
+        let tid = ThreadId::from(self.id());
+        let main_thread =
+            unsafe { cshadow::thread_new(host, self.cprocess(), tid.try_into().unwrap()) };
+        let main_thread_ref = RootedRc::new(
+            host.root(),
+            RootedRefCell::new(host.root(), unsafe { ThreadRef::new(main_thread) }),
+        );
+        // ThreadRef increments the reference count; we don't need the original
+        // reference anymore.
+        unsafe { cshadow::thread_unref(main_thread) };
+
+        // Insert a *clone* of the reference, since we continue to use ours below.
+        self.threads
+            .borrow_mut()
+            .insert(tid, main_thread_ref.clone(host.root()));
+
+        info!("starting process '{}'", self.name());
+        let main_thread = main_thread_ref.borrow(host.root());
+        Worker::set_active_process(self);
+        Worker::set_active_thread(&main_thread);
+
+        #[cfg(feature = "perf_timers")]
+        self.start_cpu_delay_timer();
+
+        Process::set_shared_time(host);
 
         let argv_ptrs: Vec<*const i8> = self
             .argv
@@ -401,7 +481,74 @@ impl Process {
             // the last element of envv must be NULL
             .chain(std::iter::once(std::ptr::null()))
             .collect();
-        unsafe { cshadow::process_start(self.cprocess(), argv_ptrs.as_ptr(), envv_ptrs.as_ptr()) };
+
+        unsafe {
+            cshadow::thread_run(
+                main_thread.cthread(),
+                self.plugin_path.as_ptr(),
+                argv_ptrs.as_ptr(),
+                envv_ptrs.as_ptr(),
+                self.working_dir.as_ptr(),
+                match &self.strace_logging {
+                    Some(x) => x.file.borrow().as_raw_fd(),
+                    None => -1,
+                },
+            )
+        };
+
+        let native_pid =
+            Pid::from_raw(unsafe { cshadow::thread_getNativePid(main_thread.cthread()) });
+        self.native_pid.set(Some(native_pid));
+        *self.memory_manager.borrow_mut() = Some(unsafe { MemoryManager::new(native_pid) });
+
+        #[cfg(feature = "perf_timers")]
+        {
+            let elapsed = self.stop_cpu_delay_timer(host);
+            info!("process '{}' started in {:?}", self.name(), elapsed);
+        }
+        #[cfg(not(feature = "perf_timers"))]
+        info!("process '{}' started", self.name());
+
+        Worker::clear_active_thread();
+        Worker::clear_active_process();
+
+        if self.pause_for_debugging {
+            // will block until logger output has been flushed
+            // there is a race condition where other threads may log between the
+            // `eprintln` and `raise` below, but it should be rare
+            log::logger().flush();
+
+            // Use a single `eprintln` to ensure we hold the lock for the whole message.
+            // Defensively pre-construct a single string so that `eprintln` is
+            // more likely to use a single `write` call, to minimize the chance
+            // of more lines being written to stdout in the meantime, and in
+            // case of C code writing to `STDERR` directly without taking Rust's
+            // lock.
+            let msg = format!(
+                "\
+              \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
+              \n** '{name}' (pid {native_pid}).\
+              \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
+              \n** this task, and then typing \"fg\".\
+              \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
+                name = self.name(),
+                native_pid = i32::from(native_pid)
+            );
+            eprintln!("{}", msg);
+
+            nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
+        }
+
+        // `process_continue` actually starts running the thread and may make
+        // syscalls, which may need to get a mutable reference to the thread, so
+        // we need to drop the borrow here. Once `process_continue` and the thread
+        // code is in Rust, we can pass the borrow through instead of dropping
+        // it.
+        let cthread = unsafe { main_thread.cthread() };
+        drop(main_thread);
+        main_thread_ref.safely_drop(host.root());
+
+        unsafe { cshadow::process_continue(self.cprocess(), cthread) };
     }
 
     fn open_stdio_file_helper(
@@ -520,7 +667,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = ThreadRef> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<ThreadRef>>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -551,6 +698,356 @@ impl Process {
         if let Some(borrow) = unsafe_borrow_mut {
             borrow.noflush();
         }
+    }
+
+    pub fn physical_address(&self, vptr: cshadow::PluginVirtualPtr) -> cshadow::PluginPhysicalPtr {
+        // We currently don't keep a true system-wide virtual <-> physical address
+        // mapping. Instead we simply assume that no shadow processes map the same
+        // underlying physical memory, and that therefore (pid, virtual address)
+        // uniquely defines a physical address.
+        //
+        // If we ever want to support futexes in memory shared between processes,
+        // we'll need to change this.  The most foolproof way to do so is probably
+        // to change PluginPhysicalPtr to be a bigger struct that identifies where
+        // the mapped region came from (e.g. what file), and the offset into that
+        // region. Such "fat" physical pointers might make memory management a
+        // little more cumbersome though, e.g. when using them as keys in the futex
+        // table.
+        //
+        // Alternatively we could hash the region+offset to a 64-bit value, but
+        // then we'd need to deal with potential collisions. On average we'd expect
+        // a collision after 2**32 physical addresses; i.e. they *probably*
+        // wouldn't happen in practice for realistic simulations.
+
+        // Linux uses the bottom 48-bits for user-space virtual addresses, giving
+        // us 16 bits for the pid.
+        const PADDR_BITS: i32 = 64;
+        const VADDR_BITS: i32 = 48;
+        const PID_BITS: i32 = 16;
+        assert_eq!(PADDR_BITS, PID_BITS + VADDR_BITS);
+
+        let high_part: u64 = u64::from(u32::from(self.id())) << VADDR_BITS;
+        assert_eq!(
+            ProcessId::try_from((high_part >> VADDR_BITS) as u32),
+            Ok(self.id())
+        );
+
+        let low_part: u64 = vptr.val;
+        assert_eq!(low_part >> VADDR_BITS, 0);
+
+        cshadow::PluginPhysicalPtr {
+            val: high_part | low_part,
+        }
+    }
+
+    /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
+    fn reap_thread(&self, host: &Host, tid: ThreadId) {
+        let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
+        let thread = threadrc.borrow(host.root());
+
+        // If the `clear_child_tid` attribute on the thread is set, and there are
+        // any other threads left alive in the process, perform a futex wake on
+        // that address. This mechanism is typically used in `pthread_join` etc.
+        // See `set_tid_address(2)`.
+        let clear_child_tid_pvp = unsafe { cshadow::thread_getTidAddress(thread.cthread()) };
+        if clear_child_tid_pvp.val != 0 && self.threads.borrow().len() > 0 && !self.is_exiting.get()
+        {
+            // Wait until the thread is really dead. It might not be dead yet if we
+            // marked the thread dead after seeing the `exit` syscall - the managed
+            // process might not have finished executing the native syscall yet.
+            // TODO: Move this into the `exit` syscall handling and/or use the native
+            // tidaddress mechanism to be notified when a thread has actually terminated.
+            let native_pid = unsafe { cshadow::thread_getNativePid(thread.cthread()) };
+            let native_tid = unsafe { cshadow::thread_getNativeTid(thread.cthread()) };
+            loop {
+                match tgkill(native_pid, native_tid, 0) {
+                    Err(Errno::ESRCH) => {
+                        trace!("Thread is done exiting; proceeding with cleanup");
+                        break;
+                    }
+                    Err(e) => {
+                        error!("Unexpected tgkill error: {:?}", e);
+                        break;
+                    }
+                    Ok(()) if native_pid == native_tid => {
+                        // Thread leader could be in a zombie state waiting for
+                        // the other threads to exit.
+                        let filename = format!("/proc/{native_pid}/stat");
+                        let stat = match std::fs::read_to_string(filename) {
+                            Err(e) => {
+                                assert!(e.kind() == std::io::ErrorKind::NotFound);
+                                trace!("tgl {native_pid} is fully dead");
+                                break;
+                            }
+                            Ok(s) => s,
+                        };
+                        if stat.contains(") Z") {
+                            trace!("tgl {native_pid} is a zombie");
+                            break;
+                        }
+                        // Still alive and in a non-zombie state; continue
+                    }
+                    Ok(()) => {
+                        // Thread is still alive; continue.
+                    }
+                };
+                debug!("{native_pid}.{native_tid} still running; waiting for it to exit");
+                std::thread::yield_now();
+                // Check again
+            }
+
+            // Use a different thread to do the write. The current thread won't work
+            // now that it's exited.
+            let threads = self.threads.borrow();
+            let writer_thread = threads.values().next().unwrap();
+            // There shouldn't be any non-running threads in the table.
+            assert!(unsafe {
+                cshadow::thread_isRunning(writer_thread.borrow(host.root()).cthread())
+            });
+            // MemoryCopier uses the active thread's tid to do the write; we need to set
+            // that to the still-live thread we're using to do the write.
+            // TODO: change API to accept an explicit thread or tid.
+            Worker::clear_active_thread();
+            Worker::set_active_thread(&writer_thread.borrow(host.root()));
+            let typed_clear_child_tid_pvp =
+                TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
+            self.memory_borrow_mut()
+                .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
+                .unwrap();
+            // Restore active thread.
+            Worker::clear_active_thread();
+            Worker::set_active_thread(&thread);
+
+            // Wake the corresponding futex.
+            let mut futexes = host.futextable_borrow_mut();
+            let futex = unsafe {
+                cshadow::futextable_get(&mut *futexes, self.physical_address(clear_child_tid_pvp))
+            };
+            if !futex.is_null() {
+                unsafe { cshadow::futex_wake(futex, 1) };
+            }
+        }
+
+        // Compiler forces us to drop this before we can consume `threadrc`.
+        drop(thread);
+
+        threadrc.safely_drop(host.root());
+    }
+
+    fn has_started(&self) -> bool {
+        self.native_pid.get().is_some()
+    }
+
+    pub fn is_running(&self) -> bool {
+        !self.is_exiting.get() && self.threads.borrow().len() > 0
+    }
+
+    fn mark_as_exiting(&self) {
+        self.is_exiting.set(true);
+        trace!("Process {:?} marked as exiting", self.id());
+    }
+
+    fn handle_process_exit(&self, host: &Host) {
+        loop {
+            let (tid, thread) = {
+                let threads = self.threads.borrow();
+                let Some((tid, thread)) = threads.iter().next() else {
+                    break;
+                };
+                // Conservatively leaving in the thread list, and cloning
+                // the reference so that we don't hold a borrow over the list.
+                (*tid, thread.clone(host.root()))
+            };
+            unsafe { cshadow::thread_handleProcessExit(thread.borrow(host.root()).cthread()) };
+            self.reap_thread(host, tid);
+            thread.safely_drop(host.root());
+        }
+        self.check(host);
+    }
+
+    fn terminate(&self, host: &Host) {
+        let Some(native_pid) = self.native_pid() else {
+            trace!("Never started");
+            return;
+        };
+
+        if !self.is_running() {
+            trace!("Already dead");
+            assert!(self.return_code.get().is_some());
+        }
+
+        trace!("Terminating");
+        self.killed_by_shadow.set(true);
+        if let Err(err) = nix::sys::signal::kill(native_pid, Signal::SIGKILL) {
+            warn!("kill: {:?}", err);
+        }
+
+        self.mark_as_exiting();
+        self.handle_process_exit(host);
+    }
+
+    fn get_and_log_return_code(&self, host: &Host) {
+        if self.return_code.get().is_some() {
+            return;
+        }
+
+        let Some(native_pid) = self.native_pid() else {
+            error!("Process {name} with a start time of {start_time:?} did not start",
+            name=self.name(), start_time=(self.start_time - EmulatedTime::SIMULATION_START));
+            return;
+        };
+
+        use nix::sys::wait::WaitStatus;
+        let return_code = match nix::sys::wait::waitpid(native_pid, None) {
+            Ok(WaitStatus::Exited(_pid, code)) => code,
+            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => unsafe {
+                cshadow::return_code_for_signal(signal as i32)
+            },
+            Ok(status) => {
+                warn!("Unexpected status: {status:?}");
+                libc::EXIT_FAILURE
+            }
+            Err(e) => {
+                warn!("waitpid: {e:?}");
+                libc::EXIT_FAILURE
+            }
+        };
+        self.return_code.set(Some(return_code));
+
+        let exitcode_path = self.output_file_name(host, "exitcode");
+        let exitcode_contents = if self.killed_by_shadow.get() {
+            // Process never died during the simulation; shadow chose to kill it;
+            // typically because the simulation end time was reached.
+            // Write out an empty exitcode file.
+            String::new()
+        } else {
+            format!("{return_code}")
+        };
+        if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
+            warn!("Couldn't write exitcode file: {e:?}");
+        }
+
+        let main_result_string = {
+            let mut s = format!("process '{name}'", name = self.name());
+            if self.killed_by_shadow.get() {
+                write!(s, " killed by Shadow").unwrap();
+            } else {
+                write!(s, " exited with code {return_code}").unwrap();
+                if return_code == 0 {
+                    write!(s, " (success)").unwrap();
+                } else {
+                    write!(s, " (error)").unwrap();
+                }
+            }
+            s
+        };
+
+        // if there was no error or was intentionally killed
+        // TODO: once we've implemented clean shutdown via SIGTERM,
+        //       consider treating death by SIGKILL as a plugin error
+        if return_code == 0 || self.killed_by_shadow.get() {
+            info!("{}", main_result_string);
+        } else {
+            warn!("{}", main_result_string);
+            Worker::increment_plugin_error_count();
+        }
+    }
+
+    fn check(&self, host: &Host) {
+        if self.is_running() || !self.has_started() {
+            return;
+        }
+
+        info!(
+            "process '{}' has completed or is otherwise no longer running",
+            self.name()
+        );
+        self.get_and_log_return_code(host);
+
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "total runtime for process '{}' was {:?}",
+            self.name(),
+            self.total_run_time.get()
+        );
+
+        let mut descriptor_table = self.descriptor_table_borrow_mut();
+        descriptor_table.shutdown_helper();
+        let descriptors = descriptor_table.remove_all();
+        CallbackQueue::queue_and_run(|cb_queue| {
+            for desc in descriptors {
+                desc.close(host, cb_queue);
+            }
+        });
+    }
+
+    fn check_thread(&self, host: &Host, tid: ThreadId) {
+        {
+            let threads = self.threads.borrow();
+            let threadrc = threads.get(&tid).unwrap();
+            let thread = threadrc.borrow(host.root());
+            if unsafe { cshadow::thread_isRunning(thread.cthread()) } {
+                debug!(
+                    "thread {} in process '{}' still running, but blocked",
+                    thread.id(),
+                    self.name()
+                );
+                return;
+            }
+            let return_code = unsafe { cshadow::thread_getReturnCode(thread.cthread()) };
+            debug!(
+                "thread {} in process '{}' exited with code {}",
+                thread.id(),
+                self.name(),
+                return_code
+            );
+        }
+        self.reap_thread(host, tid);
+        self.check(host);
+    }
+
+    /// Adds a new thread to the process and schedules it to run.
+    /// Intended for use by `clone`.
+    pub fn add_thread(&self, host: &Host, thread: ThreadRef) {
+        let pid = self.id();
+        let tid = thread.id();
+        let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
+        self.threads.borrow_mut().insert(tid, thread);
+
+        // Schedule thread to start. We're giving the caller's reference to thread
+        // to the TaskRef here, which is why we don't increment its ref count to
+        // create the TaskRef, but do decrement it on cleanup.
+        let task = TaskRef::new(move |host| {
+            let (cprocess, cthread) = {
+                let Some(process) = host.process_borrow(pid) else {
+                    // This might happen if a thread calls `clone` and then `exit_group`
+                    debug!("Process {:?} no longer exists. Can't start its thread {}.", pid, tid);
+                    return;
+                };
+                let process = process.borrow(host.root());
+                let threads = process.threads.borrow();
+                let Some(thread) = threads.get(&tid) else {
+                    // Maybe possible e.g. if a thread is targeted with `tgkill` before it
+                    // gets a chance to start.
+                    debug!("Thread {} no longer exists. Can't start it.", tid);
+                    return;
+                };
+                let thread = thread.borrow(host.root());
+                unsafe { (process.cprocess(), thread.cthread()) }
+            };
+            unsafe { cshadow::process_continue(cprocess, cthread) };
+        });
+        host.schedule_task_with_delay(task, SimulationTime::ZERO);
+    }
+
+    /// FIXME: still needed? Time is now updated more granularly in the Thread code
+    /// when xferring control to/from shim.
+    fn set_shared_time(host: &Host) {
+        let mut host_shmem = host.shim_shmem_lock_borrow_mut().unwrap();
+        host_shmem.max_runahead_time = Worker::max_event_runahead_time(host);
+        host.shim_shmem()
+            .sim_time
+            .store(Worker::current_time().unwrap(), Ordering::Relaxed);
     }
 }
 
@@ -746,6 +1243,13 @@ impl UnsafeBorrowMut {
 // RefCell, but this whole type is temporary scaffolding to support legacy C code.
 unsafe impl Send for UnsafeBorrowMut {}
 
+fn tgkill(pid: libc::pid_t, tid: libc::pid_t, signo: i32) -> nix::Result<()> {
+    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
+    Errno::result(res).map(|i: i64| {
+        assert_eq!(i, 0);
+    })
+}
+
 mod export {
     use std::ffi::{c_char, c_int};
     use std::os::fd::AsRawFd;
@@ -758,7 +1262,6 @@ mod export {
     use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemProcess};
 
     use crate::core::worker::Worker;
-    use crate::cshadow::CEmulatedTime;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
@@ -1294,26 +1797,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_getStartTime(proc: *const RustProcess) -> CEmulatedTime {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let start_time = proc.borrow(host.root()).start_time;
-            EmulatedTime::to_c_emutime(Some(start_time))
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getStopTime(proc: *const RustProcess) -> CEmulatedTime {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let stop_time = proc.borrow(host.root()).stop_time;
-            EmulatedTime::to_c_emutime(stop_time)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_getHostId(proc: *const RustProcess) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
@@ -1329,33 +1812,6 @@ mod export {
     pub unsafe extern "C" fn _process_getPluginName(proc: *const RustProcess) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).plugin_name.as_ptr()).unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getPluginPath(proc: *const RustProcess) -> *const c_char {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).plugin_path.as_ptr()).unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_outputFileName(
-        proc: *const RustProcess,
-        host: *const Host,
-        typ: *const c_char,
-        dst: *mut c_char,
-        dst_len: usize,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let host = unsafe { host.as_ref().unwrap() };
-        let typ = unsafe { CStr::from_ptr(typ).to_str().unwrap() };
-        let name = proc.borrow(host.root()).output_file_name(host, typ);
-        let name = pathbuf_to_nul_term_cstring(name);
-        // XXX: Is this UB? Maybe the bytes at dst are never "undefined" from
-        // Rust's perspective since any initialization or lack thereof is
-        // invisible through FFI?
-        let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, dst_len) };
-        let name = name.as_bytes_with_nul();
-        dst[..name.len()].copy_from_slice(name);
     }
 
     /// Safety:
@@ -1408,16 +1864,9 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.is_exiting.set(true);
-            trace!("Process {:?} marked as exiting", proc.id());
+            proc.mark_as_exiting()
         })
         .unwrap();
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_shouldPauseForDebugging(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).pause_for_debugging).unwrap()
     }
 
     #[no_mangle]
@@ -1433,84 +1882,21 @@ mod export {
         Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val)).unwrap()
     }
 
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_setReturnCode(proc: *const RustProcess, val: i32) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let prev = proc.borrow(host.root()).return_code.replace(Some(val));
-            assert_eq!(prev, None);
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_didLogReturnCode(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).return_code.get().is_some())
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_setWasKilledByShadow(proc: *const RustProcess) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root()).killed_by_shadow.set(true);
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_wasKilledByShadow(proc: *const RustProcess) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).killed_by_shadow.get()).unwrap()
-    }
-
     #[cfg(feature = "perf_timers")]
     #[no_mangle]
     pub unsafe extern "C" fn _process_startCpuDelayTimer(proc: *const RustProcess) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root())
-                .cpu_delay_timer
-                .borrow_mut()
-                .start()
-        })
-        .unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).start_cpu_delay_timer()).unwrap()
     }
 
     #[cfg(feature = "perf_timers")]
     #[no_mangle]
     pub unsafe extern "C" fn _process_stopCpuDelayTimer(proc: *const RustProcess) -> f64 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let delta = Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let mut timer = proc.cpu_delay_timer.borrow_mut();
-            timer.stop();
-            let total_elapsed = timer.elapsed();
-            let prev_total = proc.total_run_time.replace(total_elapsed);
-            let delta = total_elapsed - prev_total;
-
-            if let Some(mut tracker) = host.tracker_borrow_mut() {
-                unsafe {
-                    cshadow::tracker_addProcessingTimeNanos(
-                        &mut *tracker,
-                        delta.as_nanos().try_into().unwrap(),
-                    )
-                };
-                host.cpu_borrow_mut().add_delay(delta);
-            }
-            delta
-        })
-        .unwrap();
+        let delta =
+            Worker::with_active_host(|host| proc.borrow(host.root()).stop_cpu_delay_timer(host))
+                .unwrap();
         delta.as_nanos() as f64
-    }
-
-    #[cfg(feature = "perf_timers")]
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_getTotalRunTime(proc: *const RustProcess) -> f64 {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).total_run_time.get().as_nanos())
-            .unwrap() as f64
     }
 
     #[no_mangle]
@@ -1521,21 +1907,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_setNativePid(proc: *const RustProcess, pid: libc::pid_t) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root())
-                .native_pid
-                .set(Some(Pid::from_raw(pid)))
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_hasStarted(proc: *const RustProcess) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid.get().is_some())
-            .unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).has_started()).unwrap()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin
@@ -1573,23 +1947,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _process_threadLeader(
-        proc: *const RustProcess,
-    ) -> *mut cshadow::Thread {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let tid = ThreadId::from(proc.id());
-            let threads = proc.threads.borrow();
-            match threads.get(&tid) {
-                Some(t) => unsafe { t.cthread() },
-                None => std::ptr::null_mut(),
-            }
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn _process_getThread(
         proc: *const RustProcess,
         tid: libc::pid_t,
@@ -1599,19 +1956,8 @@ mod export {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
             proc.thread_borrow(tid)
-                .map(|x| unsafe { x.cthread() })
+                .map(|x| unsafe { x.borrow(host.root()).cthread() })
                 .unwrap_or(std::ptr::null_mut())
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_removeThread(proc: *const RustProcess, tid: libc::pid_t) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let tid = ThreadId::try_from(tid).unwrap();
-            proc.threads.borrow_mut().remove(&tid);
         })
         .unwrap()
     }
@@ -1629,6 +1975,7 @@ mod export {
             let proc = proc.borrow(host.root());
             let thread = unsafe { ThreadRef::new(thread) };
             let tid = thread.id();
+            let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
             proc.threads.borrow_mut().insert(tid, thread);
         })
         .unwrap()
@@ -1639,18 +1986,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            !proc.is_exiting.get() && proc.threads.borrow().len() > 0
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn _process_numThreads(proc: *const RustProcess) -> usize {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let threads = proc.threads.borrow();
-            threads.len()
+            proc.is_running()
         })
         .unwrap()
     }
@@ -1667,8 +2003,9 @@ mod export {
             let proc = proc.borrow(host.root());
             let signal = Signal::try_from(signo).unwrap();
             let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-            let mut threads = proc.threads.borrow_mut();
-            for thread in threads.values_mut() {
+            let threads = proc.threads.borrow();
+            for thread in threads.values() {
+                let mut thread = thread.borrow_mut(host.root());
                 {
                     let thread_shmem = thread.shmem();
                     let thread_shmem_protected =
@@ -1701,20 +2038,83 @@ mod export {
         trace!("Handling process exit");
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            loop {
-                let (tid, cthread) = {
-                    let threads = proc.threads.borrow();
-                    let Some((tid, thread)) = threads.iter().next() else {
-                        break;
-                    };
-                    (*tid, unsafe { thread.cthread() })
-                };
-                unsafe { cshadow::thread_handleProcessExit(cthread) };
-                unsafe { cshadow::process_reapThread(proc.cprocess(), cthread) };
-                proc.threads.borrow_mut().remove(&tid);
-            }
-            unsafe { cshadow::process_check(proc.cprocess()) };
+            proc.handle_process_exit(host)
         })
         .unwrap();
+    }
+
+    // FIXME: still needed? Time is now updated more granularly in the Thread code
+    // when xferring control to/from shim.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_setSharedTime() {
+        Worker::with_active_host(Process::set_shared_time).unwrap();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_getPhysicalAddress(
+        proc: *const RustProcess,
+        vptr: cshadow::PluginVirtualPtr,
+    ) -> cshadow::PluginPhysicalPtr {
+        let proc = unsafe { proc.as_ref().unwrap() };
+
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.physical_address(vptr)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_terminate(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.terminate(host)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_check(proc: *const RustProcess) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.check(host)
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_checkThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { ThreadRef::new(thread) };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.check_thread(host, thread.id())
+        })
+        .unwrap()
+    }
+
+    /// Adds a new thread to the process and schedules it to run.
+    /// Intended for use by `clone`.
+    ///
+    /// Takes ownership of `thread`.
+    #[no_mangle]
+    pub unsafe extern "C" fn _process_addThread(
+        proc: *const RustProcess,
+        thread: *mut cshadow::Thread,
+    ) {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { ThreadRef::new(thread) };
+        // Since we're taking ownership, remove the caller's reference to the thread.
+        unsafe { cshadow::thread_unref(thread.cthread()) };
+        Worker::with_active_host(|host| {
+            let proc = proc.borrow(host.root());
+            proc.add_thread(host, thread)
+        })
+        .unwrap()
     }
 }
