@@ -134,7 +134,7 @@ pub struct ProcessShmem {
 
     pub strace_fd: FfiOption<libc::c_int>,
 
-    protected: RootedRefCell<ProcessShmemProtected>,
+    pub protected: RootedRefCell<ProcessShmemProtected>,
 }
 
 impl ProcessShmem {

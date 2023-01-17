@@ -64,12 +64,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-static const Host* _host(Process* proc) {
-    const Host* host = worker_getCurrentHost();
-    utility_debugAssert(host_getID(host) == process_getHostId(proc));
-    return host;
-}
-
 const ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
     return _process_getSharedMem(proc->rustProcess);
@@ -126,72 +120,12 @@ void process_markAsExiting(Process* proc) {
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    trace("Continuing thread %d in process %d", thread_getID(thread), process_getProcessID(proc));
-
-    /* if we are not running, no need to notify anyone */
-    if(!process_isRunning(proc)) {
-        return;
-    }
-
-    debug(
-        "switching to thread controller to continue executing process '%s'", process_getName(proc));
-
-    worker_setActiveProcess(proc);
-    worker_setActiveThread(thread);
-
-#ifdef USE_PERF_TIMERS
-    /* time how long we execute the program */
-    _process_startCpuDelayTimer(proc->rustProcess);
-#endif
-
-    _process_setSharedTime();
-
-    shimshmem_resetUnappliedCpuLatency(host_getShimShmemLock(_host(proc)));
-    thread_resume(thread);
-
-#ifdef USE_PERF_TIMERS
-    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
-    info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
-#else
-    debug("process '%s' done continuing", process_getName(proc));
-#endif
-
-    if (_process_isExiting(proc->rustProcess)) {
-        // If the whole process is already exiting, skip to cleaning up the
-        // whole process exit; normal thread cleanup would likely fail.
-        _process_handleProcessExit(proc->rustProcess);
-    } else {
-        _process_checkThread(proc->rustProcess, thread);
-    }
-
-    worker_setActiveProcess(NULL);
-    worker_setActiveThread(NULL);
+    _process_continue(proc->rustProcess, thread);
 }
 
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
-
-    info("terminating process '%s'", process_getName(proc));
-
-    worker_setActiveProcess(proc);
-
-#ifdef USE_PERF_TIMERS
-    /* time how long we execute the program */
-    _process_startCpuDelayTimer(proc->rustProcess);
-#endif
-
-    _process_terminate(proc->rustProcess);
-
-#ifdef USE_PERF_TIMERS
-    gdouble elapsed = _process_stopCpuDelayTimer(proc->rustProcess);
-    info("process '%s' stopped in %f seconds", process_getName(proc), elapsed);
-#else
-    info("process '%s' stopped", process_getName(proc));
-#endif
-
-    worker_setActiveProcess(NULL);
-
-    _process_check(proc->rustProcess);
+    _process_stop(proc->rustProcess);
 }
 
 gboolean process_hasStarted(Process* proc) {
@@ -349,52 +283,7 @@ void process_parseArgStrFree(char** argv, char* error) {
 
 void process_signal(Process* process, Thread* currentRunningThread, const siginfo_t* siginfo) {
     MAGIC_ASSERT(process);
-    utility_debugAssert(siginfo->si_signo >= 0);
-    utility_debugAssert(siginfo->si_signo <= SHD_SIGRT_MAX);
-    utility_debugAssert(siginfo->si_signo <= SHD_STANDARD_SIGNAL_MAX_NO);
-
-    if (siginfo->si_signo == 0) {
-        return;
-    }
-
-    const Host* host = _host(process);
-
-    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
-        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo);
-    if (action.u.ksa_handler == SIG_IGN ||
-        (action.u.ksa_handler == SIG_DFL &&
-         shd_defaultAction(siginfo->si_signo) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
-        // Don't deliver an ignored signal.
-        return;
-    }
-
-    shd_kernel_sigset_t pending_signals = shimshmem_getProcessPendingSignals(
-        host_getShimShmemLock(host), process_getSharedMem(process));
-
-    if (shd_sigismember(&pending_signals, siginfo->si_signo)) {
-        // Signal is already pending. From signal(7):In the case where a standard signal is already
-        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
-        // overwritten on arrival of subsequent instances of the same signal.
-        return;
-    }
-
-    shd_sigaddset(&pending_signals, siginfo->si_signo);
-    shimshmem_setProcessPendingSignals(
-        host_getShimShmemLock(host), process_getSharedMem(process), pending_signals);
-    shimshmem_setProcessSiginfo(
-        host_getShimShmemLock(host), process_getSharedMem(process), siginfo->si_signo, siginfo);
-
-    if (currentRunningThread != NULL && thread_getProcess(currentRunningThread) == process) {
-        shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
-            host_getShimShmemLock(host), thread_sharedMem(currentRunningThread));
-        if (!shd_sigismember(&blocked_signals, siginfo->si_signo)) {
-            // Target process is this process, and current thread hasn't blocked
-            // the signal.  It will be delivered to this thread when it resumes.
-            return;
-        }
-    }
-
-    _process_interruptWithSignal(process->rustProcess, host_getShimShmemLock(host), siginfo->si_signo);
+    _process_signal(process->rustProcess, currentRunningThread, siginfo);
 }
 
 int process_getDumpable(Process* process) {

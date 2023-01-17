@@ -1,4 +1,4 @@
-use nix::sys::signal::Signal;
+use nix::sys::signal::{self, Signal};
 use vasi::VirtualAddressSpaceIndependent;
 
 pub const SHD_STANDARD_SIGNAL_MAX_NO: i32 = 31;
@@ -201,6 +201,23 @@ pub struct shd_kernel_sigaction {
     ksa_mask: shd_kernel_sigset_t,
 }
 
+impl shd_kernel_sigaction {
+    pub fn handler(&self) -> signal::SigHandler {
+        let handler_int: usize = unsafe { self.u.ksa_handler }
+            .map(|f| f as usize)
+            .unwrap_or(0);
+        if handler_int == libc::SIG_IGN {
+            signal::SigHandler::SigIgn
+        } else if handler_int == libc::SIG_DFL {
+            signal::SigHandler::SigDfl
+        } else if self.ksa_flags & libc::SA_SIGINFO != 0 {
+            signal::SigHandler::SigAction(unsafe { self.u.ksa_sigaction.unwrap() })
+        } else {
+            signal::SigHandler::Handler(unsafe { self.u.ksa_handler.unwrap() })
+        }
+    }
+}
+
 impl Default for shd_kernel_sigaction {
     fn default() -> Self {
         Self {
@@ -213,6 +230,7 @@ impl Default for shd_kernel_sigaction {
 }
 
 // Corresponds to default actions documented in signal(7).
+#[derive(Eq, PartialEq)]
 #[repr(C)]
 pub enum ShdKernelDefaultAction {
     TERM,
