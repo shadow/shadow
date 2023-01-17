@@ -11,6 +11,7 @@
 #include <sys/syscall.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"

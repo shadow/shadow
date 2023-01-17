@@ -6,6 +6,7 @@
 #include "main/host/syscall/socket.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <netinet/in.h>
 #include <stdbool.h>

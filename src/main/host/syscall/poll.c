@@ -10,6 +10,7 @@
 #include <stdbool.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/epoll.h"
