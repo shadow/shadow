@@ -271,6 +271,7 @@ fn fmt_buffer(
 fn fmt_string(
     f: &mut std::fmt::Formatter<'_>,
     ptr: PluginPtr,
+    len: Option<usize>,
     options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
@@ -280,12 +281,17 @@ fn fmt_string(
         return write!(f, "<pointer>");
     }
 
-    // read up to one extra character to check if it's a NUL byte
-    //
-    // each byte may take 1 byte to display (ex: 0x41 -> "A") or up to 4 bytes to display (ex: 0x00
-    // -> "\x00"), so a buffer of size `DISPLAY_LEN + 1` should always be enough space to print a
-    // string of length `DISPLAY_LEN`
-    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
+    // the pointer may point to a buffer of unknown length, so we may have to choose our own size
+    let len = len.unwrap_or(
+        // read up to one extra character to check if it's a NUL byte
+        //
+        // each byte may take 1 byte to display (ex: 0x41 -> "A") or up to 4 bytes to display (ex:
+        // 0x00 -> "\x00"), so a buffer of size `DISPLAY_LEN + 1` should always be enough space to
+        // print a string of length `DISPLAY_LEN`
+        DISPLAY_LEN + 1,
+    );
+
+    let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
@@ -348,7 +354,7 @@ impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
         mem: &MemoryManager,
     ) -> std::fmt::Result {
         let ptr = self.reg.into();
-        fmt_string(f, ptr, options, mem)
+        fmt_string(f, ptr, None, options, mem)
     }
 }
 
