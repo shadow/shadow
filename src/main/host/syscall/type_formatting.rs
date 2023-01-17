@@ -1,5 +1,3 @@
-use std::num::NonZeroU8;
-
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::read_sockaddr;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, TypedPluginPtr};
@@ -282,40 +280,44 @@ fn fmt_string(
         return write!(f, "<pointer>");
     }
 
-    // read up to one extra character to check if it's a null byte
+    // read up to one extra character to check if it's a NUL byte
+    //
+    // each byte may take 1 byte to display (ex: 0x41 -> "A") or up to 4 bytes to display (ex: 0x00
+    // -> "\x00"), so a buffer of size `DISPLAY_LEN + 1` should always be enough space to print a
+    // string of length `DISPLAY_LEN`
     let mem_ref = match mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(ptr, DISPLAY_LEN + 1)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
     };
 
-    // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
-    // characters
-    let mut non_graphic_remaining = DISPLAY_LEN / 3;
+    let mut s = String::with_capacity(DISPLAY_LEN);
 
-    // mem_ref will reference up to DISPLAY_LEN+1 bytes
-    let mut s: Vec<NonZeroU8> = mem_ref
-        .iter()
-        // get bytes until a null byte
-        .map_while(|x| NonZeroU8::new(*x))
-        // stop after a certain number of non-graphic characters
-        .map_while(|x| {
-            if !x.get().is_ascii_graphic() {
-                non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
-            }
-            (non_graphic_remaining > 0).then_some(x)
-        })
-        .collect();
+    // the number of plugin mem bytes used; num_bytes <= s.len()
+    let mut found_nul = false;
 
-    let len = s.len();
-    s.truncate(DISPLAY_LEN);
-    let s: std::ffi::CString = s.into();
+    for c in mem_ref.iter() {
+        // if it's a NUL byte, it's the end of the string
+        if *c == 0 {
+            found_nul = true;
+            break;
+        }
 
-    #[allow(clippy::absurd_extreme_comparisons)]
-    if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
-        write!(f, "{s:?}...")
+        let escaped = std::ascii::escape_default(*c);
+
+        if s.len() + escaped.len() > DISPLAY_LEN {
+            break;
+        }
+
+        for b in escaped {
+            s.push(b.into())
+        }
+    }
+
+    if found_nul {
+        write!(f, "\"{s}\"")
     } else {
-        write!(f, "{s:?}")
+        write!(f, "\"{s}\"...")
     }
 }
 
