@@ -602,7 +602,7 @@ impl Process {
             info!("process '{}' ran for {:?}", self.name(), delay);
         }
         #[cfg(not(feature = "perf_timers"))]
-        info!("process '{}' done continuing", self.name());
+        debug!("process '{}' done continuing", self.name());
 
         if self.is_exiting.get() {
             self.handle_process_exit(host);
