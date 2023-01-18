@@ -50,7 +50,9 @@ impl InetSocket {
 
     pub fn canonical_handle(&self) -> usize {
         match self {
-            Self::Tcp(f) => Arc::as_ptr(f) as usize,
+            // usually we'd use `Arc::as_ptr()`, but we want to use the handle for the C `TCP`
+            // object for consistency with the handle for the `LegacySocket`
+            Self::Tcp(f) => f.borrow().canonical_handle(),
         }
     }
 
@@ -361,6 +363,15 @@ mod export {
     pub extern "C" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
         let socket = unsafe { socket.as_ref() }.unwrap();
         Box::into_raw(Box::new(socket.clone()))
+    }
+
+    /// Returns a handle uniquely identifying the socket. There can be many `InetSocket`s that point
+    /// to a single socket object (an `InetSocket` is just an enum that contains an `Arc` of the
+    /// socket object), so the address of an `InetSocket` *does not* uniquely identify a socket.
+    #[no_mangle]
+    pub extern "C" fn inetsocket_getCanonicalHandle(socket: *const InetSocket) -> usize {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        socket.canonical_handle()
     }
 
     #[no_mangle]

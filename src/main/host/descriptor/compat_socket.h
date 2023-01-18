@@ -37,6 +37,9 @@ CompatSocket compatsocket_fromInetSocket(const InetSocket* socket);
 CompatSocket compatsocket_refAs(const CompatSocket* socket);
 void compatsocket_unref(const CompatSocket* socket);
 
+/* handle to the socket object */
+uintptr_t compatsocket_getCanonicalHandle(const CompatSocket* socket);
+
 /* converting between a CompatSocket and a tagged pointer */
 uintptr_t compatsocket_toTagged(const CompatSocket* socket);
 CompatSocket compatsocket_fromTagged(uintptr_t ptr);

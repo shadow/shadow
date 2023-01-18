@@ -1364,10 +1364,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
     gsize inSize = legacysocket_getInputBufferSize(&(tcp->super));
     gsize outSize = legacysocket_getOutputBufferSize(&(tcp->super));
     if (tracker != NULL) {
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
         tracker_updateSocketInputBuffer(
-            tracker, socket, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
+            tracker, &compatSocket, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
         tracker_updateSocketOutputBuffer(
-            tracker, socket, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
+            tracker, &compatSocket, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
     }
 
     /* should we send a fin after clearing the output buffer */
@@ -1711,8 +1712,8 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
 
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
-        tracker_updateSocketPeer(
-            tracker, &tcpChild->child->parent->super, *ip, ntohs(tcpChild->super.peerPort));
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(&tcpChild->child->parent->super);
+        tracker_updateSocketPeer(tracker, &compatSocket, *ip, ntohs(tcpChild->super.peerPort));
     }
 
     return 0;

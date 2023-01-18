@@ -67,6 +67,16 @@ void compatsocket_unref(const CompatSocket* socket) {
     compatsockettypes_assertValid(socket->type);
 }
 
+uintptr_t compatsocket_getCanonicalHandle(const CompatSocket* socket) {
+    switch (socket->type) {
+        case CST_LEGACY_SOCKET: return (uintptr_t)(void*)socket->object.as_legacy_socket;
+        case CST_INET_SOCKET: return inetsocket_getCanonicalHandle(socket->object.as_inet_socket);
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
+    }
+
+    utility_panic("Invalid CompatSocket type");
+}
+
 uintptr_t compatsocket_toTagged(const CompatSocket* socket) {
     CompatSocketTypes type = socket->type;
     CompatSocketObject object = socket->object;

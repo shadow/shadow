@@ -81,7 +81,8 @@ static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
 
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
-        tracker_removeSocket(tracker, socket);
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
+        tracker_removeSocket(tracker, &compatSocket);
     }
 
     socket->vtable->close((LegacyFile*)socket, host);
@@ -124,8 +125,9 @@ void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTab
 
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
-        tracker_addSocket(
-            tracker, socket, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
+        tracker_addSocket(tracker, &compatSocket, socket->protocol, socket->inputBufferSize,
+                          socket->outputBufferSize);
     }
 }
 
@@ -149,7 +151,8 @@ gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_
 
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
-        tracker_updateSocketPeer(tracker, socket, ip, ntohs(port));
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
+        tracker_updateSocketPeer(tracker, &compatSocket, ip, ntohs(port));
     }
 
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
@@ -355,8 +358,9 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, P
     /* update the tracker input buffer stats */
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
         tracker_updateSocketInputBuffer(
-            tracker, socket, socket->inputBufferLength, socket->inputBufferSize);
+            tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
     }
 
     /* we just added a packet, so we are readable */
@@ -385,8 +389,9 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* hos
         /* update the tracker input buffer stats */
         Tracker* tracker = host_getTracker(host);
         if (tracker != NULL) {
+            CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
             tracker_updateSocketInputBuffer(
-                tracker, socket, socket->inputBufferLength, socket->inputBufferSize);
+                tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
         }
 
         /* we are not readable if we are now empty */
@@ -434,8 +439,9 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, 
     /* update the tracker input buffer stats */
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL) {
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
         tracker_updateSocketOutputBuffer(
-            tracker, socket, socket->outputBufferLength, socket->outputBufferSize);
+            tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
     }
 
     /* we just added a packet, we are no longer writable if full */
@@ -471,8 +477,9 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* ho
         /* update the tracker input buffer stats */
         Tracker* tracker = host_getTracker(host);
         if (tracker != NULL) {
+            CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
             tracker_updateSocketOutputBuffer(
-                tracker, socket, socket->outputBufferLength, socket->outputBufferSize);
+                tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
         }
 
         /* we are writable if we now have space */
