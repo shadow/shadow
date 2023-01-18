@@ -332,12 +332,11 @@ impl Process {
 
     /// # Safety
     ///
-    /// The returned pointer must not outlive the caller's reference to `self`,
-    /// or be accessed by threads other than the caller's.
+    /// The returned pointer is invalidated when all clones of the original
+    /// `RootedRc` returned from `Self::new` are destroyed.
     pub unsafe fn cprocess(&self, host: &Host) -> *const ProcessRefCell {
         let Some(rc) = self.weak_rc.as_ref().unwrap().upgrade(host.root()) else {
-            warn!("Couldn't get outer Arc");
-            return std::ptr::null_mut()
+            panic!("Couldn't get outer Arc");
         };
         let process: &ProcessRefCell = &rc;
         let rv = process as *const _;
