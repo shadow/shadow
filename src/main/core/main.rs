@@ -120,6 +120,24 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
         );
     }
 
+    // warn if running with root privileges
+    if nix::unistd::getuid().is_root() {
+        // a real-world example is opentracker, which will attempt to drop privileges if it detects
+        // that the effective user is root, but this fails in shadow and opentracker exits with an
+        // error
+        log::warn!(
+            "Shadow is running as root. Shadow does not emulate Linux permissions, and some
+            applications may behave differently when running as root. It is recommended to run
+            Shadow as a non-root user."
+        );
+    } else if nix::unistd::geteuid().is_root() {
+        log::warn!(
+            "Shadow is running with root privileges. Shadow does not emulate Linux permissions,
+            and some applications may behave differently when running with root privileges. It
+            is recommended to run Shadow as a non-root user."
+        );
+    }
+
     // before we run the simulation, clean up any orphaned shared memory
     if let Err(e) = shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH) {
         log::warn!("Unable to clean up shared memory files: {:?}", e);
