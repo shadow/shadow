@@ -11,6 +11,7 @@
 #include <sys/syscall.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
@@ -33,7 +34,8 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys, Process* process, int sig) {
+static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
+                                                   const ProcessRefCell* process, int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
@@ -70,7 +72,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         return syscallreturn_makeDoneI64(0);
     }
 
-    Process* process = thread_getProcess(thread);
+    const ProcessRefCell* process = thread_getProcess(thread);
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), process_getSharedMem(process), sig);
     if (action.u.ksa_handler == SIG_IGN ||
@@ -167,7 +169,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
         pid = -pid;
     }
 
-    Process* process = host_getProcess(_syscallhandler_getHost(sys), pid);
+    const ProcessRefCell* process = host_getProcess(_syscallhandler_getHost(sys), pid);
     if (process == NULL) {
         debug("Process %d not found", pid);
         return syscallreturn_makeDoneErrno(ESRCH);
@@ -190,7 +192,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
         return syscallreturn_makeDoneErrno(ESRCH);
     }
 
-    Process* process = thread_getProcess(thread);
+    const ProcessRefCell* process = thread_getProcess(thread);
 
     if (process_getProcessID(process) != tgid) {
         return syscallreturn_makeDoneErrno(ESRCH);

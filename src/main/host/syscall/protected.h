@@ -31,10 +31,13 @@ typedef enum {
 struct _SysCallHandler {
     HostId hostId;
 
-    /* We store pointers to the host, process, and thread that the syscall
+    /* We store pointers to the process and thread that the syscall
      * handler is associated with. We typically need to makes calls into
-     * these modules in order to handle syscalls. */
-    Process* process;
+     * these modules in order to handle syscalls.
+     *
+     * The SysCallHandler must not outlive these.
+     */
+    const ProcessRefCell* process;
     Thread* thread;
 
     // For syscalls implemented in rust. Will eventually replace the C handler.

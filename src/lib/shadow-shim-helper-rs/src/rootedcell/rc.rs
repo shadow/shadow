@@ -421,6 +421,47 @@ mod test_rooted_rc_weak {
         strong.safely_drop(&root);
     }
 
+    // Validate that circular references are cleaned up correctly.
+    #[test]
+    fn circular_reference() {
+        std::thread_local! {
+            static THREAD_ROOT: Root = Root::new();
+        }
+
+        struct MyStruct {
+            // Circular reference
+            weak_self: Cell<Option<RootedRcWeak<Self>>>,
+        }
+        impl MyStruct {
+            fn new() -> RootedRc<Self> {
+                THREAD_ROOT.with(|root| {
+                    let rv = RootedRc::new(
+                        root,
+                        MyStruct {
+                            weak_self: Cell::new(None),
+                        },
+                    );
+                    let weak = RootedRc::downgrade(&rv, root);
+                    rv.weak_self.set(Some(weak));
+                    rv
+                })
+            }
+        }
+        impl Drop for MyStruct {
+            fn drop(&mut self) {
+                let weak = self.weak_self.replace(None).unwrap();
+                THREAD_ROOT.with(|root| {
+                    weak.safely_drop(root);
+                });
+            }
+        }
+
+        let val = MyStruct::new();
+        THREAD_ROOT.with(|root| {
+            val.safely_drop(root);
+        })
+    }
+
     #[test]
     #[cfg(not(debug_assertions))]
     fn drop_without_lock_doesnt_leak_value() {

@@ -61,7 +61,8 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys) {
     return host;
 }
 
-SysCallHandler* syscallhandler_new(const Host* host, Process* process, Thread* thread) {
+SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* process,
+                                   Thread* thread) {
     utility_debugAssert(host);
     utility_debugAssert(process);
     utility_debugAssert(thread);

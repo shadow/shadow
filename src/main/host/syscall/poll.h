@@ -6,6 +6,8 @@
 #ifndef SRC_MAIN_HOST_SYSCALL_POLL_H_
 #define SRC_MAIN_HOST_SYSCALL_POLL_H_
 
+#include <poll.h>
+
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(poll);

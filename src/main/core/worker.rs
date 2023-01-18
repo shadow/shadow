@@ -602,7 +602,6 @@ mod export {
     use super::*;
 
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
-    use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     #[no_mangle]
@@ -688,27 +687,6 @@ mod export {
         let syscall_counts = unsafe { syscall_counts.as_ref() }.unwrap();
 
         Worker::add_syscall_counts(syscall_counts);
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_setActiveProcess(process: *mut cshadow::Process) {
-        if process.is_null() {
-            Worker::clear_active_process();
-        } else {
-            let process = unsafe { cshadow::process_getRustProcess(process).as_ref().unwrap() };
-            Worker::with_active_host(|h| Worker::set_active_process(&process.borrow(h.root())))
-                .unwrap();
-        }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_setActiveThread(thread: *mut cshadow::Thread) {
-        if thread.is_null() {
-            Worker::clear_active_thread();
-        } else {
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-            Worker::set_active_thread(&thread);
-        }
     }
 
     #[no_mangle]

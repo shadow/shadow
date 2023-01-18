@@ -12,6 +12,7 @@
 #include <sys/time.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/futex.h"
 #include "main/host/futex_table.h"
 #include "main/host/syscall/protected.h"

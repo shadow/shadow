@@ -6,10 +6,12 @@
 #include "main/host/syscall/ioctl.h"
 
 #include <errno.h>
+#include <linux/sockios.h>
 #include <stdbool.h>
 #include <sys/ioctl.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/descriptor/socket.h"

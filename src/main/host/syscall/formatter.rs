@@ -270,11 +270,12 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
+    use crate::host::process::ProcessRefCell;
     use std::ffi::CStr;
 
     #[no_mangle]
     pub extern "C" fn log_syscall(
-        proc: *mut c::Process,
+        proc: *const ProcessRefCell,
         logging_mode: StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,
@@ -297,7 +298,7 @@ mod export {
         };
 
         Worker::with_active_host(|host| {
-            let proc = unsafe { c::process_getRustProcess(proc).as_ref().unwrap() };
+            let proc = unsafe { proc.as_ref().unwrap() };
             let proc = proc.borrow(host.root());
 
             // we don't know the type, so just show it as an int

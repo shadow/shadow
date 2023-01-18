@@ -10,6 +10,7 @@
 #include <sys/select.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/process.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"

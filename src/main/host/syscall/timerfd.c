@@ -6,6 +6,7 @@
 #include "main/host/syscall/timerfd.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stddef.h>
 #include <sys/timerfd.h>
 

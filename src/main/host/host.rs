@@ -369,22 +369,20 @@ impl Host {
 
         let process_id = self.get_new_process_id();
 
-        let process = unsafe {
-            Process::new(
-                self,
-                process_id,
-                start_time,
-                stop_time,
-                plugin_name,
-                plugin_path,
-                envv,
-                argv,
-                pause_for_debugging,
-                self.params.use_legacy_working_dir,
-                self.params.use_shim_syscall_handler,
-                self.params.strace_logging_options,
-            )
-        };
+        let process = Process::new(
+            self,
+            process_id,
+            start_time,
+            stop_time,
+            plugin_name,
+            plugin_path,
+            envv,
+            argv,
+            pause_for_debugging,
+            self.params.use_legacy_working_dir,
+            self.params.use_shim_syscall_handler,
+            self.params.strace_logging_options,
+        );
 
         process.borrow(self.root()).schedule(self);
 
@@ -642,8 +640,7 @@ impl Host {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, process) in processes.into_iter() {
-            let cprocess = unsafe { process.borrow(self.root()).cprocess() };
-            unsafe { cshadow::process_stop(cprocess) };
+            process.borrow(self.root()).stop(self);
             process.safely_drop(self.root());
         }
         trace!("done freeing application for host '{}'", self.name());
@@ -838,6 +835,7 @@ mod export {
 
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
+        host::process::ProcessRefCell,
         network::router::Router,
     };
 
@@ -1129,11 +1127,11 @@ mod export {
     pub unsafe extern "C" fn host_getProcess(
         host: *const Host,
         virtual_pid: libc::pid_t,
-    ) -> *mut cshadow::Process {
+    ) -> *const ProcessRefCell {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
         host.process_borrow(virtual_pid)
-            .map(|x| unsafe { x.borrow(host.root()).cprocess() })
+            .map(|x| unsafe { x.borrow(host.root()).cprocess(host) })
             .unwrap_or(std::ptr::null_mut())
     }
 
@@ -1146,12 +1144,12 @@ mod export {
         virtual_tid: libc::pid_t,
     ) -> *mut cshadow::Thread {
         let host = unsafe { host.as_ref().unwrap() };
+        let tid = ThreadId::try_from(virtual_tid).unwrap();
         for process in host.processes.borrow().values() {
-            let process = unsafe { process.borrow(host.root()).cprocess() };
-            let thread = unsafe { cshadow::process_getThread(process, virtual_tid) };
-            if !thread.is_null() {
-                return thread;
-            }
+            let process = process.borrow(host.root());
+            if let Some(thread) = process.thread_borrow(tid) {
+                return unsafe { thread.borrow(host.root()).cthread() };
+            };
         }
         std::ptr::null_mut()
     }

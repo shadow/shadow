@@ -19,7 +19,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
-        c.add_opaque_types(&["RustProcess"]);
+        c.add_opaque_types(&["ProcessRefCell"]);
         c
     };
 
@@ -236,8 +236,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::descriptor::OpenFile;")
         .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
         .raw_line("use crate::host::host::Host;")
-        .raw_line("use crate::host::process::RustProcess;")
-        .raw_line("use crate::host::syscall::formatter::StraceFmtMode;")
+        .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use logger::Logger;")
