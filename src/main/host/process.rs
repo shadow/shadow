@@ -2049,25 +2049,6 @@ mod export {
         .unwrap()
     }
 
-    /// Inserts the thread into the process's thread list. Caller retains
-    /// ownership to its reference to `thread` (i.e. this function increments the reference
-    /// count).
-    #[no_mangle]
-    pub unsafe extern "C" fn process_insertThread(
-        proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            let thread = unsafe { ThreadRef::new(thread) };
-            let tid = thread.id();
-            let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
-            proc.threads.borrow_mut().insert(tid, thread);
-        })
-        .unwrap()
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn process_isRunning(proc: *const ProcessRefCell) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
