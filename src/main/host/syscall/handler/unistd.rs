@@ -1,5 +1,4 @@
 use crate::cshadow as c;
-use crate::host::context::ThreadContext;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::socket::inet::InetSocket;
@@ -7,7 +6,7 @@ use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
-use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallBufferArg;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
@@ -25,7 +24,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-    pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn close(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
 
         trace!("Trying to close fd {}", fd);
@@ -36,6 +35,7 @@ impl SyscallHandler {
         // released, so we should always deregister the descriptor even if there's an error while
         // closing
         let desc = ctx
+            .objs
             .process
             .descriptor_table_borrow_mut()
             .deregister_descriptor(fd)
@@ -44,18 +44,18 @@ impl SyscallHandler {
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.host, cb_queue))
+            CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.objs.host, cb_queue))
                 .unwrap_or(Ok(()))
                 .map(|()| 0.into())
         })
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
-    pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         // duplicate the descriptor
@@ -69,12 +69,12 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int)]
-    pub fn dup2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup2(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let old_fd = libc::c_int::from(args.get(0));
         let new_fd = libc::c_int::from(args.get(1));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
@@ -93,7 +93,7 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.host, cb_queue));
+            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.objs.host, cb_queue));
         }
 
         // return the new fd
@@ -102,13 +102,13 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
                   /* flags */ nix::fcntl::OFlag)]
-    pub fn dup3(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup3(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let old_fd = libc::c_int::from(args.get(0));
         let new_fd = libc::c_int::from(args.get(1));
         let flags = libc::c_int::from(args.get(2));
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
@@ -133,7 +133,7 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.host, cb_queue));
+            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.objs.host, cb_queue));
         }
 
         // return the new fd
@@ -142,7 +142,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t)]
-    pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn read(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -151,6 +151,7 @@ impl SyscallHandler {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -161,20 +162,20 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_read, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_read, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_read, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_read, ctx);
         }
 
         Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
@@ -182,7 +183,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t, /* offset */ libc::off_t)]
-    pub fn pread64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pread64(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -191,6 +192,7 @@ impl SyscallHandler {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -201,27 +203,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pread64, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
         }
 
         Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn read_helper(
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         _fd: libc::c_int,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
@@ -253,7 +255,7 @@ impl SyscallHandler {
             // call the file's read(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().read(
-                    ctx.process.memory_borrow_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                    ctx.objs.process.memory_borrow_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
                 )
@@ -277,7 +279,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
-    pub fn write(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn write(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -286,6 +288,7 @@ impl SyscallHandler {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -296,20 +299,20 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_write, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_write, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_write, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_write, ctx);
         }
 
         Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
@@ -318,7 +321,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
                   /* offset */ libc::off_t)]
-    pub fn pwrite64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pwrite64(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -327,6 +330,7 @@ impl SyscallHandler {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -337,27 +341,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
         }
 
         Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn write_helper(
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         _fd: libc::c_int,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
@@ -381,7 +385,7 @@ impl SyscallHandler {
             // call the file's write(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
                 generic_file.borrow_mut().write(
-                    ctx.process.memory_borrow().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                    ctx.objs.process.memory_borrow().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
                 )
@@ -404,7 +408,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pipe(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd_ptr: PluginPtr = args.args[0].into();
 
         Self::pipe_helper(ctx, fd_ptr, 0)
@@ -412,14 +416,14 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
                   /* flags */ nix::fcntl::OFlag)]
-    pub fn pipe2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pipe2(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd_ptr: PluginPtr = args.args[0].into();
         let flags = unsafe { args.args[1].as_u64 } as libc::c_int;
 
         Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
-    fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
+    fn pipe_helper(ctx: &mut SyscallContext, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
             return Err(nix::errno::Errno::EFAULT.into());
@@ -478,7 +482,7 @@ impl SyscallHandler {
         writer_desc.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.process.descriptor_table_borrow_mut();
+        let mut dt = ctx.objs.process.descriptor_table_borrow_mut();
         // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
         // ever need to worry about this in practice
         let read_fd = dt.register_descriptor(reader_desc).unwrap();
@@ -490,6 +494,7 @@ impl SyscallHandler {
             i32::try_from(write_fd).unwrap(),
         ];
         let write_res = ctx
+            .objs
             .process
             .memory_borrow_mut()
             .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
@@ -502,10 +507,10 @@ impl SyscallHandler {
                     // ignore any errors when closing
                     dt.deregister_descriptor(read_fd)
                         .unwrap()
-                        .close(ctx.host, cb_queue);
+                        .close(ctx.objs.host, cb_queue);
                     dt.deregister_descriptor(write_fd)
                         .unwrap()
-                        .close(ctx.host, cb_queue);
+                        .close(ctx.objs.host, cb_queue);
                 });
                 Err(e.into())
             }

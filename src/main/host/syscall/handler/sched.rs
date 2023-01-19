@@ -1,5 +1,4 @@
-use crate::host::context::ThreadContext;
-use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{SysCallArgs, SyscallResult, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
@@ -27,13 +26,13 @@ unsafe impl Pod for rseq {}
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
-    pub fn sched_getaffinity(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn sched_getaffinity(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
         let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
-        if !ctx.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
+        if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
         }
 
@@ -43,7 +42,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let mut mem = ctx.process.memory_borrow_mut();
+        let mut mem = ctx.objs.process.memory_borrow_mut();
         let mut mask = mem.memory_ref_mut(mask_ptr)?;
 
         // this assumes little endian
@@ -56,13 +55,13 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
-    pub fn sched_setaffinity(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn sched_setaffinity(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
         let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
         let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
-        if !ctx.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
+        if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
         };
 
@@ -72,7 +71,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let mem = ctx.process.memory_borrow_mut();
+        let mem = ctx.objs.process.memory_borrow_mut();
         let mask = mem.memory_ref(mask_ptr)?;
 
         // this assumes little endian
@@ -84,14 +83,14 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ i32)]
-    pub fn sched_yield(_ctx: &mut ThreadContext, _args: &SysCallArgs) -> SyscallResult {
+    pub fn sched_yield(_ctx: &mut SyscallContext, _args: &SysCallArgs) -> SyscallResult {
         // Do nothing. We already yield and reschedule after some number of
         // unblocked syscalls.
         Ok(0.into())
     }
 
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */u32, /* flags */i32, /* sig */u32)]
-    pub fn rseq(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn rseq(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let rseq_ptr = TypedPluginPtr::new::<rseq>(unsafe { args.get(0).as_ptr }.into(), 1);
         let rseq_len = usize::try_from(unsafe { args.get(1).as_u64 }).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
@@ -110,7 +109,7 @@ impl SyscallHandler {
     }
 
     fn rseq_impl(
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         rseq_ptr: TypedPluginPtr<rseq>,
         flags: i32,
         _sig: u32,
@@ -127,7 +126,7 @@ impl SyscallHandler {
             //   state.
             return Ok(0.into());
         }
-        let mut mem = ctx.process.memory_borrow_mut();
+        let mut mem = ctx.objs.process.memory_borrow_mut();
         let mut rseq = mem.memory_ref_mut(rseq_ptr)?;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.

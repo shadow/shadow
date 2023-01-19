@@ -1,7 +1,6 @@
 use crate::cshadow;
-use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
-use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
 
 use log::warn;
@@ -13,7 +12,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
-    pub fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn fcntl(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd: RawFd = args.args[0].into();
         let cmd: i32 = args.args[1].into();
 
@@ -21,12 +20,11 @@ impl SyscallHandler {
         // descriptor
 
         // helper function to run the C syscall handler
-        let legacy_syscall_fn = |ctx: &mut ThreadContext, args: &SysCallArgs| {
-            Self::legacy_syscall(cshadow::syscallhandler_fcntl, ctx, args)
-        };
+        let legacy_syscall_fn =
+            |ctx: &mut SyscallContext| Self::legacy_syscall(cshadow::syscallhandler_fcntl, ctx);
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
         Ok(match cmd {
@@ -43,7 +41,7 @@ impl SyscallHandler {
                     CompatFile::Legacy(_) => {
                         warn!("Using fcntl({}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258", cmd);
                         drop(desc_table);
-                        return legacy_syscall_fn(ctx, args);
+                        return legacy_syscall_fn(ctx);
                     }
                 };
             }
@@ -53,7 +51,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return legacy_syscall_fn(ctx, args);
+                        return legacy_syscall_fn(ctx);
                     }
                 };
 
@@ -68,7 +66,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return legacy_syscall_fn(ctx, args);
+                        return legacy_syscall_fn(ctx);
                     }
                 };
 
@@ -162,7 +160,7 @@ impl SyscallHandler {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
-                        return legacy_syscall_fn(ctx, args);
+                        return legacy_syscall_fn(ctx);
                     }
                 };
 

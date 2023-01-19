@@ -37,51 +37,53 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
-    pub fn syscall(&self, ctx: SyscallContext) -> SyscallResult {
+    pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+        let args = ctx.args.clone();
+
         match ctx.args.number {
-            libc::SYS_accept => Self::accept(ctx.objs, ctx.args),
-            libc::SYS_accept4 => Self::accept4(ctx.objs, ctx.args),
-            libc::SYS_bind => Self::bind(ctx.objs, ctx.args),
-            libc::SYS_brk => Self::brk(ctx.objs, ctx.args),
-            libc::SYS_close => Self::close(ctx.objs, ctx.args),
-            libc::SYS_connect => Self::connect(ctx.objs, ctx.args),
-            libc::SYS_dup => Self::dup(ctx.objs, ctx.args),
-            libc::SYS_dup2 => Self::dup2(ctx.objs, ctx.args),
-            libc::SYS_dup3 => Self::dup3(ctx.objs, ctx.args),
-            libc::SYS_eventfd => Self::eventfd(ctx.objs, ctx.args),
-            libc::SYS_eventfd2 => Self::eventfd2(ctx.objs, ctx.args),
-            libc::SYS_fcntl => Self::fcntl(ctx.objs, ctx.args),
-            libc::SYS_getitimer => Self::getitimer(ctx.objs, ctx.args),
-            libc::SYS_getpeername => Self::getpeername(ctx.objs, ctx.args),
-            libc::SYS_getrandom => Self::getrandom(ctx.objs, ctx.args),
-            libc::SYS_getsockname => Self::getsockname(ctx.objs, ctx.args),
-            libc::SYS_getsockopt => Self::getsockopt(ctx.objs, ctx.args),
-            libc::SYS_ioctl => Self::ioctl(ctx.objs, ctx.args),
-            libc::SYS_listen => Self::listen(ctx.objs, ctx.args),
-            libc::SYS_mmap => Self::mmap(ctx.objs, ctx.args),
-            libc::SYS_mprotect => Self::mprotect(ctx.objs, ctx.args),
-            libc::SYS_mremap => Self::mremap(ctx.objs, ctx.args),
-            libc::SYS_munmap => Self::munmap(ctx.objs, ctx.args),
-            libc::SYS_open => Self::open(ctx.objs, ctx.args),
-            libc::SYS_openat => Self::openat(ctx.objs, ctx.args),
-            libc::SYS_pipe => Self::pipe(ctx.objs, ctx.args),
-            libc::SYS_pipe2 => Self::pipe2(ctx.objs, ctx.args),
-            libc::SYS_pread64 => Self::pread64(ctx.objs, ctx.args),
-            libc::SYS_pwrite64 => Self::pwrite64(ctx.objs, ctx.args),
-            libc::SYS_rseq => Self::rseq(ctx.objs, ctx.args),
-            libc::SYS_read => Self::read(ctx.objs, ctx.args),
-            libc::SYS_recvfrom => Self::recvfrom(ctx.objs, ctx.args),
-            libc::SYS_sched_getaffinity => Self::sched_getaffinity(ctx.objs, ctx.args),
-            libc::SYS_sched_setaffinity => Self::sched_setaffinity(ctx.objs, ctx.args),
-            libc::SYS_sched_yield => Self::sched_yield(ctx.objs, ctx.args),
-            libc::SYS_sendto => Self::sendto(ctx.objs, ctx.args),
-            libc::SYS_setitimer => Self::setitimer(ctx.objs, ctx.args),
-            libc::SYS_setsockopt => Self::setsockopt(ctx.objs, ctx.args),
-            libc::SYS_shutdown => Self::shutdown(ctx.objs, ctx.args),
-            libc::SYS_socket => Self::socket(ctx.objs, ctx.args),
-            libc::SYS_socketpair => Self::socketpair(ctx.objs, ctx.args),
-            libc::SYS_sysinfo => Self::sysinfo(ctx.objs, ctx.args),
-            libc::SYS_write => Self::write(ctx.objs, ctx.args),
+            libc::SYS_accept => Self::accept(&mut ctx, &args),
+            libc::SYS_accept4 => Self::accept4(&mut ctx, &args),
+            libc::SYS_bind => Self::bind(&mut ctx, &args),
+            libc::SYS_brk => Self::brk(&mut ctx, &args),
+            libc::SYS_close => Self::close(&mut ctx, &args),
+            libc::SYS_connect => Self::connect(&mut ctx, &args),
+            libc::SYS_dup => Self::dup(&mut ctx, &args),
+            libc::SYS_dup2 => Self::dup2(&mut ctx, &args),
+            libc::SYS_dup3 => Self::dup3(&mut ctx, &args),
+            libc::SYS_eventfd => Self::eventfd(&mut ctx, &args),
+            libc::SYS_eventfd2 => Self::eventfd2(&mut ctx, &args),
+            libc::SYS_fcntl => Self::fcntl(&mut ctx, &args),
+            libc::SYS_getitimer => Self::getitimer(&mut ctx, &args),
+            libc::SYS_getpeername => Self::getpeername(&mut ctx, &args),
+            libc::SYS_getrandom => Self::getrandom(&mut ctx, &args),
+            libc::SYS_getsockname => Self::getsockname(&mut ctx, &args),
+            libc::SYS_getsockopt => Self::getsockopt(&mut ctx, &args),
+            libc::SYS_ioctl => Self::ioctl(&mut ctx, &args),
+            libc::SYS_listen => Self::listen(&mut ctx, &args),
+            libc::SYS_mmap => Self::mmap(&mut ctx, &args),
+            libc::SYS_mprotect => Self::mprotect(&mut ctx, &args),
+            libc::SYS_mremap => Self::mremap(&mut ctx, &args),
+            libc::SYS_munmap => Self::munmap(&mut ctx, &args),
+            libc::SYS_open => Self::open(&mut ctx, &args),
+            libc::SYS_openat => Self::openat(&mut ctx, &args),
+            libc::SYS_pipe => Self::pipe(&mut ctx, &args),
+            libc::SYS_pipe2 => Self::pipe2(&mut ctx, &args),
+            libc::SYS_pread64 => Self::pread64(&mut ctx, &args),
+            libc::SYS_pwrite64 => Self::pwrite64(&mut ctx, &args),
+            libc::SYS_rseq => Self::rseq(&mut ctx, &args),
+            libc::SYS_read => Self::read(&mut ctx, &args),
+            libc::SYS_recvfrom => Self::recvfrom(&mut ctx, &args),
+            libc::SYS_sched_getaffinity => Self::sched_getaffinity(&mut ctx, &args),
+            libc::SYS_sched_setaffinity => Self::sched_setaffinity(&mut ctx, &args),
+            libc::SYS_sched_yield => Self::sched_yield(&mut ctx, &args),
+            libc::SYS_sendto => Self::sendto(&mut ctx, &args),
+            libc::SYS_setitimer => Self::setitimer(&mut ctx, &args),
+            libc::SYS_setsockopt => Self::setsockopt(&mut ctx, &args),
+            libc::SYS_shutdown => Self::shutdown(&mut ctx, &args),
+            libc::SYS_socket => Self::socket(&mut ctx, &args),
+            libc::SYS_socketpair => Self::socketpair(&mut ctx, &args),
+            libc::SYS_sysinfo => Self::sysinfo(&mut ctx, &args),
+            libc::SYS_write => Self::write(&mut ctx, &args),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
@@ -123,12 +125,8 @@ impl SyscallHandler {
     }
 
     /// Run a legacy C syscall handler.
-    fn legacy_syscall(
-        syscall: LegacySyscallFn,
-        ctx: &mut ThreadContext,
-        args: &SysCallArgs,
-    ) -> SyscallResult {
-        unsafe { syscall(ctx.thread.csyscallhandler(), args as *const _) }.into()
+    fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
+        unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into()
     }
 }
 

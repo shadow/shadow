@@ -1,14 +1,13 @@
 use crate::cshadow as c;
-use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
-use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 
 use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
-    pub fn ioctl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn ioctl(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let request: libc::c_ulong = args.get(1).into();
         let arg_ptr: PluginPtr = args.get(2).into(); // type depends on request
@@ -17,7 +16,7 @@ impl SyscallHandler {
 
         // get the descriptor, or return early if it doesn't exist
         let file = {
-            let mut desc_table = ctx.process.descriptor_table_borrow_mut();
+            let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
             let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
             // add the CLOEXEC flag
@@ -45,7 +44,7 @@ impl SyscallHandler {
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_ioctl, ctx, args);
+                    return Self::legacy_syscall(c::syscallhandler_ioctl, ctx);
                 }
             };
 
@@ -57,7 +56,11 @@ impl SyscallHandler {
         // all file types that shadow implements should support non-blocking operation
         if request == libc::FIONBIO {
             let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
-            let arg = ctx.process.memory_borrow_mut().read_vals::<_, 1>(arg_ptr)?[0];
+            let arg = ctx
+                .objs
+                .process
+                .memory_borrow_mut()
+                .read_vals::<_, 1>(arg_ptr)?[0];
 
             let mut status = file.get_status();
             status.set(FileStatus::NONBLOCK, arg != 0);
@@ -67,6 +70,6 @@ impl SyscallHandler {
         }
 
         // handle file-specific ioctls
-        file.ioctl(request, arg_ptr, &mut ctx.process.memory_borrow_mut())
+        file.ioctl(request, arg_ptr, &mut ctx.objs.process.memory_borrow_mut())
     }
 }

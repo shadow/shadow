@@ -1,6 +1,5 @@
 use crate::core::worker::Worker;
-use crate::host::context::ThreadContext;
-use crate::host::syscall::handler::SyscallHandler;
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 use crate::utility::pod;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -9,7 +8,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
-    pub fn sysinfo(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn sysinfo(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
         // Pointer to the plugin memory where we write the result.
         let info_ptr = TypedPluginPtr::new::<libc::sysinfo>(PluginPtr::from(args.get(0)), 1);
 
@@ -42,7 +41,8 @@ impl SyscallHandler {
         info.mem_unit = 1024 * 1024 * 1024; // GiB
 
         // Write the result to plugin memory.
-        ctx.process
+        ctx.objs
+            .process
             .memory_borrow_mut()
             .copy_to_ptr(info_ptr, &[info])?;
         Ok(0.into())

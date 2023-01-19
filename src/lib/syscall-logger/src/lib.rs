@@ -13,31 +13,32 @@ use quote::ToTokens;
 ///
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
-/// # use shadow_rs::host::context::ThreadContext;
+/// # use shadow_rs::host::syscall::handler::SyscallContext;
 /// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
 ///     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {}
+///     pub fn close(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {}
 /// }
 /// ```
 ///
 /// will become,
 ///
 /// ```compile_fail
-/// # use shadow_rs::host::context::ThreadContext;
+/// # use syscall_logger::log_syscall;
+/// # use shadow_rs::host::syscall::handler::SyscallContext;
 /// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
-///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///     pub fn close(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
 ///         // ...
 ///         let rv = close_original(ctx, args);
 ///         // ...
 ///         rv
 ///     }
-///     fn close_original(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///     fn close_original(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
 ///     }
 /// }
 /// ```
@@ -99,10 +100,10 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let syscall_wrapper = quote::quote! {
         pub fn #syscall_name(
-            ctx: &mut crate::host::context::ThreadContext,
+            ctx: &mut crate::host::syscall::handler::SyscallContext,
             args: &crate::host::syscall_types::SysCallArgs,
         ) -> crate::host::syscall_types::SyscallResult {
-            let Some(strace_fmt_options) = ctx.process.strace_logging_options() else {
+            let Some(strace_fmt_options) = ctx.objs.process.strace_logging_options() else {
                 // exit early if strace logging is not enabled
                 return Self::#syscall_name_original(ctx, args);
             };
@@ -112,7 +113,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             use crate::host::syscall::formatter::{SyscallArgsFmt, SyscallResultFmt, write_syscall};
 
             let syscall_args = {
-                let memory = ctx.process.memory_borrow();
+                let memory = ctx.objs.process.memory_borrow();
                 let syscall_args = <SyscallArgsFmt::<#(#arg_types)*>>::new(args.args, strace_fmt_options, &*memory);
                 // need to convert to a string so that we read the plugin's memory before we potentially
                 // modify it during the syscall
@@ -125,21 +126,21 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             // In case the syscall borrowed memory references without flushing them,
             // we need to flush them here.
             if rv.is_ok() {
-                ctx.process.free_unsafe_borrows_flush().unwrap();
+                ctx.objs.process.free_unsafe_borrows_flush().unwrap();
             } else {
-                ctx.process.free_unsafe_borrows_noflush();
+                ctx.objs.process.free_unsafe_borrows_noflush();
             }
 
             // format the result (returns None if the syscall didn't complete)
-            let memory = ctx.process.memory_borrow();
+            let memory = ctx.objs.process.memory_borrow();
             let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, args.args, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {
-                ctx.process.with_strace_file(|file| {
+                ctx.objs.process.with_strace_file(|file| {
                     write_syscall(
                         file,
                         &Worker::current_time().unwrap(),
-                        ctx.thread.id(),
+                        ctx.objs.thread.id(),
                         #syscall_name_str,
                         &syscall_args,
                         syscall_rv,
