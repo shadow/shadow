@@ -37,56 +37,56 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
-    pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        match args.number {
-            libc::SYS_accept => Self::accept(ctx, args),
-            libc::SYS_accept4 => Self::accept4(ctx, args),
-            libc::SYS_bind => Self::bind(ctx, args),
-            libc::SYS_brk => Self::brk(ctx, args),
-            libc::SYS_close => Self::close(ctx, args),
-            libc::SYS_connect => Self::connect(ctx, args),
-            libc::SYS_dup => Self::dup(ctx, args),
-            libc::SYS_dup2 => Self::dup2(ctx, args),
-            libc::SYS_dup3 => Self::dup3(ctx, args),
-            libc::SYS_eventfd => Self::eventfd(ctx, args),
-            libc::SYS_eventfd2 => Self::eventfd2(ctx, args),
-            libc::SYS_fcntl => Self::fcntl(ctx, args),
-            libc::SYS_getitimer => Self::getitimer(ctx, args),
-            libc::SYS_getpeername => Self::getpeername(ctx, args),
-            libc::SYS_getrandom => Self::getrandom(ctx, args),
-            libc::SYS_getsockname => Self::getsockname(ctx, args),
-            libc::SYS_getsockopt => Self::getsockopt(ctx, args),
-            libc::SYS_ioctl => Self::ioctl(ctx, args),
-            libc::SYS_listen => Self::listen(ctx, args),
-            libc::SYS_mmap => Self::mmap(ctx, args),
-            libc::SYS_mprotect => Self::mprotect(ctx, args),
-            libc::SYS_mremap => Self::mremap(ctx, args),
-            libc::SYS_munmap => Self::munmap(ctx, args),
-            libc::SYS_open => Self::open(ctx, args),
-            libc::SYS_openat => Self::openat(ctx, args),
-            libc::SYS_pipe => Self::pipe(ctx, args),
-            libc::SYS_pipe2 => Self::pipe2(ctx, args),
-            libc::SYS_pread64 => Self::pread64(ctx, args),
-            libc::SYS_pwrite64 => Self::pwrite64(ctx, args),
-            libc::SYS_rseq => Self::rseq(ctx, args),
-            libc::SYS_read => Self::read(ctx, args),
-            libc::SYS_recvfrom => Self::recvfrom(ctx, args),
-            libc::SYS_sched_getaffinity => Self::sched_getaffinity(ctx, args),
-            libc::SYS_sched_setaffinity => Self::sched_setaffinity(ctx, args),
-            libc::SYS_sched_yield => Self::sched_yield(ctx, args),
-            libc::SYS_sendto => Self::sendto(ctx, args),
-            libc::SYS_setitimer => Self::setitimer(ctx, args),
-            libc::SYS_setsockopt => Self::setsockopt(ctx, args),
-            libc::SYS_shutdown => Self::shutdown(ctx, args),
-            libc::SYS_socket => Self::socket(ctx, args),
-            libc::SYS_socketpair => Self::socketpair(ctx, args),
-            libc::SYS_sysinfo => Self::sysinfo(ctx, args),
-            libc::SYS_write => Self::write(ctx, args),
+    pub fn syscall(&self, ctx: SyscallContext) -> SyscallResult {
+        match ctx.args.number {
+            libc::SYS_accept => Self::accept(ctx.objs, ctx.args),
+            libc::SYS_accept4 => Self::accept4(ctx.objs, ctx.args),
+            libc::SYS_bind => Self::bind(ctx.objs, ctx.args),
+            libc::SYS_brk => Self::brk(ctx.objs, ctx.args),
+            libc::SYS_close => Self::close(ctx.objs, ctx.args),
+            libc::SYS_connect => Self::connect(ctx.objs, ctx.args),
+            libc::SYS_dup => Self::dup(ctx.objs, ctx.args),
+            libc::SYS_dup2 => Self::dup2(ctx.objs, ctx.args),
+            libc::SYS_dup3 => Self::dup3(ctx.objs, ctx.args),
+            libc::SYS_eventfd => Self::eventfd(ctx.objs, ctx.args),
+            libc::SYS_eventfd2 => Self::eventfd2(ctx.objs, ctx.args),
+            libc::SYS_fcntl => Self::fcntl(ctx.objs, ctx.args),
+            libc::SYS_getitimer => Self::getitimer(ctx.objs, ctx.args),
+            libc::SYS_getpeername => Self::getpeername(ctx.objs, ctx.args),
+            libc::SYS_getrandom => Self::getrandom(ctx.objs, ctx.args),
+            libc::SYS_getsockname => Self::getsockname(ctx.objs, ctx.args),
+            libc::SYS_getsockopt => Self::getsockopt(ctx.objs, ctx.args),
+            libc::SYS_ioctl => Self::ioctl(ctx.objs, ctx.args),
+            libc::SYS_listen => Self::listen(ctx.objs, ctx.args),
+            libc::SYS_mmap => Self::mmap(ctx.objs, ctx.args),
+            libc::SYS_mprotect => Self::mprotect(ctx.objs, ctx.args),
+            libc::SYS_mremap => Self::mremap(ctx.objs, ctx.args),
+            libc::SYS_munmap => Self::munmap(ctx.objs, ctx.args),
+            libc::SYS_open => Self::open(ctx.objs, ctx.args),
+            libc::SYS_openat => Self::openat(ctx.objs, ctx.args),
+            libc::SYS_pipe => Self::pipe(ctx.objs, ctx.args),
+            libc::SYS_pipe2 => Self::pipe2(ctx.objs, ctx.args),
+            libc::SYS_pread64 => Self::pread64(ctx.objs, ctx.args),
+            libc::SYS_pwrite64 => Self::pwrite64(ctx.objs, ctx.args),
+            libc::SYS_rseq => Self::rseq(ctx.objs, ctx.args),
+            libc::SYS_read => Self::read(ctx.objs, ctx.args),
+            libc::SYS_recvfrom => Self::recvfrom(ctx.objs, ctx.args),
+            libc::SYS_sched_getaffinity => Self::sched_getaffinity(ctx.objs, ctx.args),
+            libc::SYS_sched_setaffinity => Self::sched_setaffinity(ctx.objs, ctx.args),
+            libc::SYS_sched_yield => Self::sched_yield(ctx.objs, ctx.args),
+            libc::SYS_sendto => Self::sendto(ctx.objs, ctx.args),
+            libc::SYS_setitimer => Self::setitimer(ctx.objs, ctx.args),
+            libc::SYS_setsockopt => Self::setsockopt(ctx.objs, ctx.args),
+            libc::SYS_shutdown => Self::shutdown(ctx.objs, ctx.args),
+            libc::SYS_socket => Self::socket(ctx.objs, ctx.args),
+            libc::SYS_socketpair => Self::socketpair(ctx.objs, ctx.args),
+            libc::SYS_sysinfo => Self::sysinfo(ctx.objs, ctx.args),
+            libc::SYS_write => Self::write(ctx.objs, ctx.args),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
                 // warning
-                log::warn!("Rust syscall {} is not mapped", args.number);
+                log::warn!("Rust syscall {} is not mapped", ctx.args.number);
                 Err(Errno::ENOSYS.into())
             }
         }
@@ -214,6 +214,11 @@ pub fn read_sockaddr(
     Ok(Some(addr))
 }
 
+pub struct SyscallContext<'a, 'b> {
+    pub objs: &'a mut ThreadContext<'b>,
+    pub args: &'a SysCallArgs,
+}
+
 mod export {
     use shadow_shim_helper_rs::notnull::*;
 
@@ -245,7 +250,13 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
+            objs.with_ctx(|ctx| {
+                let ctx = SyscallContext {
+                    objs: ctx,
+                    args: unsafe { args.as_ref().unwrap() },
+                };
+                sys.syscall(ctx).into()
+            })
         })
         .unwrap()
     }
