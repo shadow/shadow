@@ -355,7 +355,7 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
 #endif
 
         /* Wake up the thread. */
-        process_continue(proc, cond->thread);
+        process_continue(proc, thread_getID(cond->thread));
     } else {
         // Spurious wakeup. Just return without running the process. The
         // condition's listeners should still be installed, and now that we've
