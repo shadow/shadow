@@ -125,7 +125,9 @@ static void _socketstats_free(SocketStats* ss) {
     }
 }
 
-static guintptr _tracker_socketHandle(LegacySocket* sock) { return (guintptr)sock; }
+static guintptr _tracker_socketHandle(const CompatSocket* sock) {
+    return compatsocket_getCanonicalHandle(sock);
+}
 
 Tracker* tracker_new(const Host* host, CSimulationTime interval, LogLevel loglevel,
                      LogInfoFlags loginfo) {
@@ -215,7 +217,7 @@ static void _tracker_updateCounters(Counters* c, gsize header, gsize payload,
     }
 }
 
-void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket) {
+void tracker_addInputBytes(Tracker* tracker, Packet* packet, const CompatSocket* socket) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
 
@@ -248,7 +250,7 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socke
     }
 }
 
-void tracker_addOutputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket) {
+void tracker_addOutputBytes(Tracker* tracker, Packet* packet, const CompatSocket* socket) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
 
@@ -309,7 +311,7 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
     }
 }
 
-void tracker_addSocket(Tracker* tracker, LegacySocket* socket, ProtocolType type,
+void tracker_addSocket(Tracker* tracker, const CompatSocket* socket, ProtocolType type,
                        gsize inputBufferSize, gsize outputBufferSize) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
@@ -320,7 +322,7 @@ void tracker_addSocket(Tracker* tracker, LegacySocket* socket, ProtocolType type
     }
 }
 
-void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t peerIP,
+void tracker_updateSocketPeer(Tracker* tracker, const CompatSocket* socket, in_addr_t peerIP,
                               in_port_t peerPort) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
@@ -353,7 +355,7 @@ void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t 
     }
 }
 
-void tracker_updateSocketInputBuffer(Tracker* tracker, LegacySocket* socket,
+void tracker_updateSocketInputBuffer(Tracker* tracker, const CompatSocket* socket,
                                      gsize inputBufferLength, gsize inputBufferSize) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
@@ -367,7 +369,7 @@ void tracker_updateSocketInputBuffer(Tracker* tracker, LegacySocket* socket,
     }
 }
 
-void tracker_updateSocketOutputBuffer(Tracker* tracker, LegacySocket* socket,
+void tracker_updateSocketOutputBuffer(Tracker* tracker, const CompatSocket* socket,
                                       gsize outputBufferLength, gsize outputBufferSize) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
@@ -381,7 +383,7 @@ void tracker_updateSocketOutputBuffer(Tracker* tracker, LegacySocket* socket,
     }
 }
 
-void tracker_removeSocket(Tracker* tracker, LegacySocket* socket) {
+void tracker_removeSocket(Tracker* tracker, const CompatSocket* socket) {
     MAGIC_ASSERT(tracker);
     guintptr handle = _tracker_socketHandle(socket);
 

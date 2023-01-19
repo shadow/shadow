@@ -58,6 +58,12 @@ impl TcpSocket {
         Arc::new(AtomicRefCell::new(socket))
     }
 
+    /// Get a canonical handle for this socket. We use the address of the `TCP` object so that the
+    /// rust socket and legacy socket have the same handle.
+    pub fn canonical_handle(&self) -> usize {
+        self.as_legacy_tcp() as usize
+    }
+
     /// Get the [`c::TCP`] pointer.
     pub fn as_legacy_tcp(&self) -> *mut c::TCP {
         unsafe { self.socket.ptr() }

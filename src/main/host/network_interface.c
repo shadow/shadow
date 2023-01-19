@@ -285,24 +285,10 @@ static void _networkinterface_process_packet_in(const Host* host, NetworkInterfa
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
 
-    LegacySocket* legacySocket = NULL;
-    switch (socket.type) {
-        case CST_LEGACY_SOCKET:
-            legacySocket = socket.object.as_legacy_socket;
-            break;
-        case CST_INET_SOCKET:
-            // TODO: handle rust sockets in the tracker
-            legacySocket = NULL;
-            break;
-        case CST_NONE:
-            legacySocket = NULL;
-            break;
-    }
-
     /* count our bandwidth usage by interface, and by socket if possible */
     Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL && legacySocket != NULL) {
-        tracker_addInputBytes(tracker, packet, legacySocket);
+    if (tracker != NULL && socket.type != CST_NONE) {
+        tracker_addInputBytes(tracker, packet, &socket);
     }
 }
 
@@ -373,7 +359,7 @@ void networkinterface_receivePackets(NetworkInterface* interface, const Host* ho
 
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, const Host* host,
-                                                  LegacySocket** socketOut) {
+                                                  CompatSocket* socketOut) {
     Packet* packet = NULL;
 
     while (!packet && !rrsocketqueue_isEmpty(&interface->rrQueue)) {
@@ -387,18 +373,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
         packet = compatsocket_pullOutPacket(&socket, host);
 
-        switch (socket.type) {
-            case CST_LEGACY_SOCKET:
-                *socketOut = socket.object.as_legacy_socket;
-                break;
-            case CST_INET_SOCKET:
-                // TODO: handle rust sockets in the tracker
-                *socketOut = NULL;
-                break;
-            case CST_NONE:
-                *socketOut = NULL;
-                break;
-        }
+        *socketOut = socket;
 
         if (packet) {
             compatsocket_updatePacketHeader(&socket, host, packet);
@@ -418,7 +393,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
 /* first-in-first-out queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface,
-                                                       const Host* host, LegacySocket** socketOut) {
+                                                       const Host* host, CompatSocket* socketOut) {
     /* use packet priority field to select based on application ordering.
      * this is really a simplification of prioritizing on timestamps. */
     Packet* packet = NULL;
@@ -434,18 +409,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         packet = compatsocket_pullOutPacket(&socket, host);
 
-        switch (socket.type) {
-            case CST_LEGACY_SOCKET:
-                *socketOut = socket.object.as_legacy_socket;
-                break;
-            case CST_INET_SOCKET:
-                // TODO: handle rust sockets in the tracker
-                *socketOut = NULL;
-                break;
-            case CST_NONE:
-                *socketOut = NULL;
-                break;
-        }
+        *socketOut = socket;
 
         if (packet) {
             compatsocket_updatePacketHeader(&socket, host, packet);
@@ -464,7 +428,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 }
 
 static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, const Host* host,
-                                                     LegacySocket** socketOut) {
+                                                     CompatSocket* socketOut) {
     MAGIC_ASSERT(interface);
     switch (interface->qdisc) {
         case Q_DISC_MODE_ROUND_ROBIN: {
@@ -543,8 +507,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, const Hos
         }
 
         // Now actually pop and send the packet.
-        LegacySocket* legacySocket = NULL;
-        Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &legacySocket);
+        CompatSocket socket = {0};
+        Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &socket);
         // We already peeked it, so it better be here when we pop it.
         utility_debugAssert(packet);
 
@@ -573,8 +537,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, const Hos
         }
 
         Tracker* tracker = host_getTracker(src);
-        if (tracker != NULL && legacySocket != NULL) {
-            tracker_addOutputBytes(tracker, packet, legacySocket);
+        if (tracker != NULL && socket.type != CST_NONE) {
+            tracker_addOutputBytes(tracker, packet, &socket);
         }
 
         /* sending side is done with its ref */

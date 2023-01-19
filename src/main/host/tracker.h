@@ -22,15 +22,15 @@ void tracker_free(Tracker* tracker);
 
 void tracker_addProcessingTimeNanos(Tracker* tracker, CSimulationTime processingTime);
 void tracker_addVirtualProcessingDelay(Tracker* tracker, CSimulationTime delay);
-void tracker_addInputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);
-void tracker_addOutputBytes(Tracker* tracker, Packet* packet, LegacySocket* socket);
+void tracker_addInputBytes(Tracker* tracker, Packet* packet, const CompatSocket* socket);
+void tracker_addOutputBytes(Tracker* tracker, Packet* packet, const CompatSocket* socket);
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location);
-void tracker_addSocket(Tracker* tracker, LegacySocket* socket, ProtocolType type, gsize inputBufferSize, gsize outputBufferSize);
-void tracker_updateSocketPeer(Tracker* tracker, LegacySocket* socket, in_addr_t peerIP, in_port_t peerPort);
-void tracker_updateSocketInputBuffer(Tracker* tracker, LegacySocket* socket, gsize inputBufferLength, gsize inputBufferSize);
-void tracker_updateSocketOutputBuffer(Tracker* tracker, LegacySocket* socket, gsize outputBufferLength, gsize outputBufferSize);
-void tracker_removeSocket(Tracker* tracker, LegacySocket* socket);
+void tracker_addSocket(Tracker* tracker, const CompatSocket* socket, ProtocolType type, gsize inputBufferSize, gsize outputBufferSize);
+void tracker_updateSocketPeer(Tracker* tracker, const CompatSocket* socket, in_addr_t peerIP, in_port_t peerPort);
+void tracker_updateSocketInputBuffer(Tracker* tracker, const CompatSocket* socket, gsize inputBufferLength, gsize inputBufferSize);
+void tracker_updateSocketOutputBuffer(Tracker* tracker, const CompatSocket* socket, gsize outputBufferLength, gsize outputBufferSize);
+void tracker_removeSocket(Tracker* tracker, const CompatSocket* socket);
 void tracker_heartbeat(Tracker* tracker, const Host* host);
 static inline void tracker_heartbeatTask(const Host* host, gpointer tracker, gpointer userData) {
     tracker_heartbeat(tracker, host);
