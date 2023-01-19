@@ -25,7 +25,7 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
                   /* type */ libc::c_int, /* protocol */ libc::c_int)]
-    pub fn socket(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let domain = libc::c_int::from(args.get(0));
         let socket_type = libc::c_int::from(args.get(1));
         let protocol = libc::c_int::from(args.get(2));
@@ -105,7 +105,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
-    pub fn bind(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn bind(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len: libc::socklen_t = args.get(2).into();
@@ -145,7 +145,7 @@ impl SyscallHandler {
                   /* flags */ nix::sys::socket::MsgFlags,
                   /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
                   /* addrlen */ libc::socklen_t)]
-    pub fn sendto(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn sendto(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let buf_ptr: PluginPtr = args.get(1).into();
         let buf_len: libc::size_t = args.get(2).into();
@@ -182,11 +182,10 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_sendto, ctx, args);
         }
 
-        self.sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
+        Self::sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
     }
 
     pub fn sendto_helper(
-        &self,
         ctx: &mut ThreadContext,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
@@ -259,7 +258,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
                   /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
-    pub fn recvfrom(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn recvfrom(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let buf_ptr: PluginPtr = args.get(1).into();
         let buf_len: libc::size_t = args.get(2).into();
@@ -296,11 +295,10 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx, args);
         }
 
-        self.recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
+        Self::recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
     }
 
     pub fn recvfrom_helper(
-        &self,
         ctx: &mut ThreadContext,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
@@ -375,7 +373,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn getsockname(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn getsockname(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len_ptr: TypedPluginPtr<libc::socklen_t> =
@@ -421,7 +419,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn getpeername(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn getpeername(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len_ptr: TypedPluginPtr<libc::socklen_t> =
@@ -466,7 +464,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
-    pub fn listen(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn listen(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let backlog: libc::c_int = args.get(1).into();
 
@@ -500,7 +498,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn accept(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn accept(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len_ptr: PluginPtr = args.get(2).into();
@@ -534,12 +532,12 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_accept, ctx, args);
         }
 
-        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
+        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t, /* flags */ libc::c_int)]
-    pub fn accept4(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn accept4(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len_ptr: PluginPtr = args.get(2).into();
@@ -574,11 +572,10 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_accept4, ctx, args);
         }
 
-        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
+        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
     }
 
     fn accept_helper(
-        &self,
         ctx: &mut ThreadContext,
         open_file: OpenFile,
         addr_ptr: PluginPtr,
@@ -658,7 +655,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
-    pub fn connect(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn connect(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
         let addr_ptr: PluginPtr = args.get(1).into();
         let addr_len: libc::socklen_t = args.get(2).into();
@@ -714,7 +711,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
-    pub fn shutdown(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn shutdown(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
@@ -751,7 +748,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
                   /* type */ libc::c_int, /* protocol */ libc::c_int, /* sv */ [libc::c_int; 2])]
-    pub fn socketpair(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn socketpair(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let domain: libc::c_int = args.get(0).into();
         let socket_type: libc::c_int = args.get(1).into();
         let protocol: libc::c_int = args.get(2).into();
@@ -851,7 +848,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
                   /* optname */ libc::c_int, /* optval */ *const libc::c_void,
                   /* optlen */ *const libc::socklen_t)]
-    pub fn getsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn getsockopt(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist
@@ -888,7 +885,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
                   /* optname */ libc::c_int, /* optval */ *const libc::c_void,
                   /* optlen */ libc::socklen_t)]
-    pub fn setsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn setsockopt(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: libc::c_int = args.get(0).into();
 
         // get the descriptor, or return early if it doesn't exist

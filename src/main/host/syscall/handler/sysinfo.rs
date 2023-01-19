@@ -9,7 +9,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
-    pub fn sysinfo(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn sysinfo(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         // Pointer to the plugin memory where we write the result.
         let info_ptr = TypedPluginPtr::new::<libc::sysinfo>(PluginPtr::from(args.get(0)), 1);
 

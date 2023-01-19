@@ -24,7 +24,7 @@ fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /*curr_value*/ *const libc::c_void)]
-    pub fn getitimer(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn getitimer(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let which = libc::c_int::from(args.get(0));
         let curr_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(1).into(), 1);
 
@@ -42,7 +42,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /* new_value */ *const libc::c_void, /* old_value */ *const libc::c_void)]
-    pub fn setitimer(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn setitimer(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let which = libc::c_int::from(args.get(0));
         let new_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(1).into(), 1);
         let old_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(2).into(), 1);

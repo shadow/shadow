@@ -13,7 +13,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
-    pub fn fcntl(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd: RawFd = args.args[0].into();
         let cmd: i32 = args.args[1].into();
 

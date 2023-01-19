@@ -25,7 +25,7 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-    pub fn close(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
 
         trace!("Trying to close fd {}", fd);
@@ -51,7 +51,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
-    pub fn dup(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
 
         // get the descriptor, or return early if it doesn't exist
@@ -69,7 +69,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int)]
-    pub fn dup2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let old_fd = libc::c_int::from(args.get(0));
         let new_fd = libc::c_int::from(args.get(1));
 
@@ -102,7 +102,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
                   /* flags */ nix::fcntl::OFlag)]
-    pub fn dup3(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn dup3(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let old_fd = libc::c_int::from(args.get(0));
         let new_fd = libc::c_int::from(args.get(1));
         let flags = libc::c_int::from(args.get(2));
@@ -142,7 +142,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t)]
-    pub fn read(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -177,12 +177,12 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_read, ctx, args);
         }
 
-        self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* count */ libc::size_t, /* offset */ libc::off_t)]
-    pub fn pread64(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pread64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -217,11 +217,10 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pread64, ctx, args);
         }
 
-        self.read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn read_helper(
-        &self,
         ctx: &mut ThreadContext,
         _fd: libc::c_int,
         open_file: OpenFile,
@@ -237,7 +236,7 @@ impl SyscallHandler {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return self.recvfrom_helper(
+            return Self::recvfrom_helper(
                 ctx,
                 open_file,
                 buf_ptr,
@@ -278,7 +277,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
-    pub fn write(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn write(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -313,13 +312,13 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_write, ctx, args);
         }
 
-        self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
                   /* offset */ libc::off_t)]
-    pub fn pwrite64(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pwrite64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd = libc::c_int::from(args.get(0));
         let buf_ptr = PluginPtr::from(args.get(1));
         let buf_size = libc::size_t::from(args.get(2));
@@ -354,11 +353,10 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx, args);
         }
 
-        self.write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
     }
 
     fn write_helper(
-        &self,
         ctx: &mut ThreadContext,
         _fd: libc::c_int,
         open_file: OpenFile,
@@ -374,7 +372,7 @@ impl SyscallHandler {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return self.sendto_helper(ctx, open_file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
+            return Self::sendto_helper(ctx, open_file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
         }
 
         let file_status = generic_file.borrow().get_status();
@@ -406,22 +404,22 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pipe(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd_ptr: PluginPtr = args.args[0].into();
 
-        self.pipe_helper(ctx, fd_ptr, 0)
+        Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
                   /* flags */ nix::fcntl::OFlag)]
-    pub fn pipe2(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn pipe2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         let fd_ptr: PluginPtr = args.args[0].into();
         let flags = unsafe { args.args[1].as_u64 } as libc::c_int;
 
-        self.pipe_helper(ctx, fd_ptr, flags)
+        Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
-    fn pipe_helper(&self, ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
+    fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
             return Err(nix::errno::Errno::EFAULT.into());

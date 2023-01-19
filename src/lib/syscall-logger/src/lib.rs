@@ -99,13 +99,12 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let syscall_wrapper = quote::quote! {
         pub fn #syscall_name(
-            &self,
             ctx: &mut crate::host::context::ThreadContext,
             args: &crate::host::syscall_types::SysCallArgs,
         ) -> crate::host::syscall_types::SyscallResult {
             let Some(strace_fmt_options) = ctx.process.strace_logging_options() else {
                 // exit early if strace logging is not enabled
-                return self.#syscall_name_original(ctx, args);
+                return Self::#syscall_name_original(ctx, args);
             };
 
             // make sure to include the full path to all used types
@@ -121,7 +120,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             };
 
             // make the syscall
-            let rv = self.#syscall_name_original(ctx, args);
+            let rv = Self::#syscall_name_original(ctx, args);
 
             // In case the syscall borrowed memory references without flushing them,
             // we need to flush them here.
