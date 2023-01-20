@@ -370,6 +370,11 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, P
     if(socket->inputBufferLength > 0) {
         legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, TRUE);
     }
+    /* the size of input buffer changes, so we flip the flag */
+    if (length > 0) {
+        gboolean parity = (legacyfile_getStatus((LegacyFile*)socket) & STATUS_FILE_INPUT_BUFFER_PARITY) != 0;
+        legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_INPUT_BUFFER_PARITY, !parity);
+    }
 
     return TRUE;
 }
@@ -399,6 +404,11 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* hos
         /* we are not readable if we are now empty */
         if(socket->inputBufferLength <= 0) {
             legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, FALSE);
+        }
+        /* the size of input buffer changes, so we flip the flag */
+        if (length > 0) {
+            gboolean parity = (legacyfile_getStatus((LegacyFile*)socket) & STATUS_FILE_INPUT_BUFFER_PARITY) != 0;
+            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_INPUT_BUFFER_PARITY, !parity);
         }
     }
 

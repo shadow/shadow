@@ -41,18 +41,21 @@ enum _EpollWatchFlags {
     EWF_WRITECHANGED = 1 << 6,
     /* the underlying shadow descriptor is closed */
     EWF_CLOSED = 1 << 7,
+    /* the underlying shadow descriptor's input buffer parity, i.e. flipped when
+     * the size of the input buffer changes */
+    EWF_INPUT_BUFFER_PARITY = 1 << 8,
     /* true if this watch is currently valid and in the watches table. this allows
      * support of lazy deletion of watches that are in the reportable queue when
      * we want to delete them, to avoid the O(n) removal time of the queue. */
-    EWF_WATCHING = 1 << 8,
+    EWF_WATCHING = 1 << 9,
     /* set if edge-triggered events are enabled on the underlying shadow descriptor */
-    EWF_EDGETRIGGER = 1 << 9,
-    EWF_EDGETRIGGER_REPORTED = 1 << 10,
+    EWF_EDGETRIGGER = 1 << 10,
+    EWF_EDGETRIGGER_REPORTED = 1 << 11,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
-    EWF_ONESHOT = 1 << 11,
+    EWF_ONESHOT = 1 << 12,
     /* used to track that ONESHOT mode is used, an event was already reported, and the
      * socket has not been modified since. This prevents duplicate reporting in ONESHOT mode. */
-    EWF_ONESHOT_REPORTED = 1 << 12,
+    EWF_ONESHOT_REPORTED = 1 << 13,
 };
 
 typedef enum _EpollWatchTypes EpollWatchTypes;
@@ -365,6 +368,7 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     watch->flags |= (status & STATUS_FILE_READABLE) ? EWF_READABLE : EWF_NONE;
     watch->flags |= (status & STATUS_FILE_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
     watch->flags |= (status & STATUS_FILE_CLOSED) ? EWF_CLOSED : EWF_NONE;
+    watch->flags |= (status & STATUS_FILE_INPUT_BUFFER_PARITY) ? EWF_INPUT_BUFFER_PARITY : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLIN) ? EWF_WAITINGREAD : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLOUT) ? EWF_WAITINGWRITE : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLET) ? EWF_EDGETRIGGER : EWF_NONE;
@@ -375,6 +379,9 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
 
     /* update changed status for edgetrigger mode */
     if((oldFlags & EWF_READABLE) != (watch->flags & EWF_READABLE)) {
+        watch->flags |= EWF_READCHANGED;
+    }
+    if((oldFlags & EWF_INPUT_BUFFER_PARITY) != (watch->flags & EWF_INPUT_BUFFER_PARITY)) {
         watch->flags |= EWF_READCHANGED;
     }
     if((oldFlags & EWF_WRITEABLE) != (watch->flags & EWF_WRITEABLE)) {
@@ -501,7 +508,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
              */
             statuslistener_setMonitorStatus(watch->listener,
                                             STATUS_FILE_ACTIVE | STATUS_FILE_CLOSED |
-                                                STATUS_FILE_READABLE | STATUS_FILE_WRITABLE,
+                                                STATUS_FILE_READABLE | STATUS_FILE_WRITABLE |
+                                                STATUS_FILE_INPUT_BUFFER_PARITY,
                                             SLF_ALWAYS);
             if (watch->watchType == EWT_LEGACY_FILE) {
                 legacyfile_addListener(watch->watchObject.as_legacy_file, watch->listener);
