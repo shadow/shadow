@@ -294,7 +294,10 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 _managedthread_continuePlugin(mthread, &mthread->currentEvent);
                 break;
             }
-                // the plugin stopped running
+            case SHD_SHIM_EVENT_PROCESS_DEATH: {
+                // The native threads are all dead or zombies. Nothing to do but
+                // clean up.
+                process_markAsExiting(thread_getProcess(mthread->base));
                 _managedthread_cleanup(mthread);
 
                 // it will not be sending us any more events
@@ -464,6 +467,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     _managedthread_waitForNextEvent(mthread, &res);
     if (res.event_id == SHD_SHIM_EVENT_PROCESS_DEATH) {
         trace("Plugin exited while executing native syscall %ld", n);
+        process_markAsExiting(thread_getProcess(mthread->base));
         _managedthread_cleanup(mthread);
 
         // We have to return *something* here. Probably doesn't matter much what.
