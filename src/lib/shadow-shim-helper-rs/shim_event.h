@@ -12,7 +12,10 @@ typedef enum {
     // Next val: 13
     SHD_SHIM_EVENT_NULL = 0,
     SHD_SHIM_EVENT_START = 1,
-    SHD_SHIM_EVENT_STOP = 2,
+    // The whole process has died.
+    // We inject this event to trigger cleanup after we've detected that the
+    // native process has died.
+    SHD_SHIM_EVENT_PROCESS_DEATH = 2,
     SHD_SHIM_EVENT_SYSCALL = 3,
     SHD_SHIM_EVENT_SYSCALL_COMPLETE = 4,
     SHD_SHIM_EVENT_SYSCALL_DO_NATIVE = 8,
