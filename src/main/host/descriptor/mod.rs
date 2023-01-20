@@ -109,6 +109,9 @@ bitflags::bitflags! {
         const WRITABLE = c::_Status_STATUS_FILE_WRITABLE;
         /// User already called close.
         const CLOSED = c::_Status_STATUS_FILE_CLOSED;
+        /// Flipped when the size of the input buffer changes
+        // TODO: Currently this one is only implemented in sockets and eventfd.
+        const INPUT_BUFFER_PARITY = c::_Status_STATUS_FILE_INPUT_BUFFER_PARITY;
         /// A wakeup operation occurred on a futex.
         const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
         /// A listening socket is allowing connections. Only applicable to connection-oriented unix
