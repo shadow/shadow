@@ -294,7 +294,6 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 _managedthread_continuePlugin(mthread, &mthread->currentEvent);
                 break;
             }
-            case SHD_SHIM_EVENT_STOP: {
                 // the plugin stopped running
                 _managedthread_cleanup(mthread);
 
@@ -463,7 +462,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
 
     ShimEvent res;
     _managedthread_waitForNextEvent(mthread, &res);
-    if (res.event_id == SHD_SHIM_EVENT_STOP) {
+    if (res.event_id == SHD_SHIM_EVENT_PROCESS_DEATH) {
         trace("Plugin exited while executing native syscall %ld", n);
         _managedthread_cleanup(mthread);
 
