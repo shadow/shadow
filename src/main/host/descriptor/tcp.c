@@ -165,6 +165,8 @@ struct _TCP {
         guint32 highestSequence;
         /* total number of packets sent */
         guint32 packetsSent;
+        /* are delayed acks (and quick acks) enabled? */
+        bool isDelayedACKsEnabled;
         /* total number of quick acknowledgments sent */
         guint32 numQuickACKsSent;
         gboolean delayedACKIsScheduled;
@@ -285,6 +287,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peer
 
     /* the child is bound to the parent server's address, because all packets
      * coming from the child should appear to be coming from the server itself */
+    // TODO: if the parent is bound to all interfaces, should the child be bound to a specific
+    // interface?
     in_addr_t parentAddress;
     in_port_t parentPort;
     legacysocket_getSocketName(&(parent->super), &parentAddress, &parentPort);
@@ -1620,6 +1624,13 @@ static gint _tcp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t
         return errorCode;
     }
 
+    /* if the packets will be routed locally, disable delayed ACKs */
+    in_addr_t boundAddr = 0;
+    legacysocket_getSocketName(socket, &boundAddr, NULL);
+    if (ip == INADDR_LOOPBACK || ip == boundAddr) {
+        tcp->send.isDelayedACKsEnabled = false;
+    }
+
     /* send 1st part of 3-way handshake, state->syn_sent */
     _tcp_sendControlPacket(tcp, host, PTCP_SYN);
 
@@ -2051,6 +2062,26 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                 multiplexed->receive.start = header->sequence;
                 multiplexed->receive.next = multiplexed->receive.start + 1;
 
+                in_addr_t childAddress = 0;
+                legacysocket_getSocketName(&(multiplexed->super), &childAddress, NULL);
+                if (childAddress == 0) {
+                    /* this can happen if the server was bound to INADDR_ANY, but the child socket
+                     * should be bound to some specific IP */
+                    if (header->sourceIP == htonl(INADDR_LOOPBACK)) {
+                        /* peer is a localhost socket */
+                        childAddress = htonl(INADDR_LOOPBACK);
+                    } else {
+                        /* peer is not a localhost socket, but the packets may still be routed
+                         * locally */
+                        childAddress = host_getDefaultIP(host);
+                    }
+                }
+
+                /* if the packets will be routed locally, disable delayed ACKs */
+                if (header->sourceIP == INADDR_LOOPBACK || header->sourceIP == childAddress) {
+                    multiplexed->send.isDelayedACKsEnabled = false;
+                }
+
                 trace("%s <-> %s: server multiplexed child socket %s <-> %s",
                         tcp->super.boundString, tcp->super.peerString,
                         multiplexed->super.boundString, multiplexed->super.peerString);
@@ -2278,32 +2309,38 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
             trace("sending ACK control packet now");
             _tcp_sendControlPacket(tcp, host, responseFlags);
         } else {
-            trace("waiting for delayed ACK control packet");
-            if(tcp->send.delayedACKIsScheduled == FALSE) {
-                /* we need to send an ACK, lets schedule a task so we don't send an ACK
-                 * for all packets that are received during this same simtime receiving round. */
-                TaskRef* sendACKTask = taskref_new_bound(
-                    host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, legacyfile_unref, NULL);
-                /* taks holds a ref to tcp */
-                legacyfile_ref(tcp);
+            // responseFlags == PTCP_ACK
+            if (!tcp->send.isDelayedACKsEnabled) {
+                /* delayed ACKs aren't enabled, so send the ACK now */
+                _tcp_sendControlPacket(tcp, host, responseFlags);
+            } else {
+                trace("waiting for delayed ACK control packet");
+                if(tcp->send.delayedACKIsScheduled == FALSE) {
+                    /* we need to send an ACK, lets schedule a task so we don't send an ACK
+                     * for all packets that are received during this same simtime receiving round. */
+                    TaskRef* sendACKTask = taskref_new_bound(
+                        host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, legacyfile_unref, NULL);
+                    /* taks holds a ref to tcp */
+                    legacyfile_ref(tcp);
 
-                /* figure out what we should use as delay */
-                CSimulationTime delay = 0;
-                /* "quick acknowledgments" happen at the beginning of a connection */
-                if(tcp->send.numQuickACKsSent < 1000) {
-                    /* we want the other side to get the ACKs sooner so we don't throttle its sending rate */
-                    delay = 1*SIMTIME_ONE_MILLISECOND;
-                    tcp->send.numQuickACKsSent++;
-                } else {
-                    delay = 5*SIMTIME_ONE_MILLISECOND;
+                    /* figure out what we should use as delay */
+                    CSimulationTime delay = 0;
+                    /* "quick acknowledgments" happen at the beginning of a connection */
+                    if(tcp->send.numQuickACKsSent < 1000) {
+                        /* we want the other side to get the ACKs sooner so we don't throttle its sending rate */
+                        delay = 1*SIMTIME_ONE_MILLISECOND;
+                        tcp->send.numQuickACKsSent++;
+                    } else {
+                        delay = 5*SIMTIME_ONE_MILLISECOND;
+                    }
+
+                    host_scheduleTaskWithDelay(host, sendACKTask, delay);
+                    taskref_drop(sendACKTask);
+
+                    tcp->send.delayedACKIsScheduled = TRUE;
                 }
-
-                host_scheduleTaskWithDelay(host, sendACKTask, delay);
-                taskref_drop(sendACKTask);
-
-                tcp->send.delayedACKIsScheduled = TRUE;
+                tcp->send.delayedACKCounter++;
             }
-            tcp->send.delayedACKCounter++;
         }
     }
 
@@ -2759,6 +2796,9 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     tcp->receive.lastAcknowledgment = initialSequenceNumber;
 
     tcp->autotune.isEnabled = TRUE;
+
+    /* delayed ACKs should generally be enabled, but we can disable them later if using localhost */
+    tcp->send.isDelayedACKsEnabled = true;
 
     tcp->throttledOutput =
             priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
