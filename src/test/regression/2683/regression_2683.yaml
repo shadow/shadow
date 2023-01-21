@@ -1,0 +1,18 @@
+general:
+  stop_time: 5
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  loopback:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args: -u ../../../test.py 127.0.0.1
+  internet:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args: -u ../../../test.py internet
