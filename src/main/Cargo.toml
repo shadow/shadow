@@ -55,7 +55,7 @@ tempfile = "3.3"
 # `c_variadic` is stabilized, or if we decide to enable it anyway.
 # https://github.com/rust-lang/rust/issues/44930
 vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
-which = "4.3.0"
+which = "4.4.0"
 
 [features]
 perf_timers = []
