@@ -96,6 +96,16 @@ run_one () {
         # Now install any CC/BUILDTYPE-specific dependencies.
         ENV CC="$CC" BUILDTYPE="$BUILDTYPE"
         COPY ci/container_scripts/install_extra_deps.sh /root/install_extra_deps.sh
+        # Set the default rust toolchain to be installed by the script.
+        #
+        # Copying just this config file before we copy the whole shadow source
+        # allows us to reuse this image layer when iterating locally,
+        # saving us from necessarily reinstalling the rust toolchain.
+        #
+        # In an incremental build with an updated rust-toolchain.toml, the
+        # specified rust version will still correctly be installed and used
+        # at run-time.
+        COPY rust-toolchain.toml /
         RUN /root/install_extra_deps.sh
         ENV PATH /root/.cargo/bin:\$PATH
 
