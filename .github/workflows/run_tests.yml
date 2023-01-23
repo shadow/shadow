@@ -39,6 +39,8 @@ jobs:
           - 'fedora:34'
           - 'fedora:35'
           - 'fedora:36'
+          # EOL Dec 15 2023 https://endoflife.date/fedora
+          - 'fedora:37'
           # EOL May 2024 https://www.centos.org/centos-stream/
           - 'quay.io/centos/centos:stream8'
         cc: ['gcc']
