@@ -740,7 +740,9 @@ impl Process {
         let desc = unsafe {
             Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
         };
-        let prev = self.descriptor_table_borrow_mut().set(fd, desc);
+        let prev = self
+            .descriptor_table_borrow_mut()
+            .register_descriptor_with_fd(desc, fd);
         assert!(prev.is_none());
         trace!(
             "Successfully opened fd {} at {}",

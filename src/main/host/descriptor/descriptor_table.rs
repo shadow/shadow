@@ -93,7 +93,7 @@ impl DescriptorTable {
 
     /// Insert a descriptor at `index`. If a descriptor is already present at
     /// that index, it is unregistered from that index and returned.
-    pub fn set(&mut self, index: u32, descriptor: Descriptor) -> Option<Descriptor> {
+    fn set(&mut self, index: u32, descriptor: Descriptor) -> Option<Descriptor> {
         // We ensure the index is no longer in `self.available_indices`. We *don't* ensure
         // `self.next_index` is > `index`, since that'd require adding the indices in between to
         // `self.available_indices`. It uses less memory and is no more expensive to iterate when
