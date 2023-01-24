@@ -3,6 +3,7 @@ use crate::host::context::ThreadContext;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
+
 use log::warn;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -138,18 +139,22 @@ impl SyscallHandler {
             }
             libc::F_DUPFD => {
                 let min_fd: i32 = args.args[2].into();
-                let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+                let min_fd = min_fd.try_into().or(Err(Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::empty());
-                let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);
+                let new_fd = desc_table
+                    .register_descriptor_with_min_fd(new_desc, min_fd)
+                    .or(Err(Errno::EINVAL))?;
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_DUPFD_CLOEXEC => {
                 let min_fd: i32 = args.args[2].into();
-                let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+                let min_fd = min_fd.try_into().or(Err(Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
-                let new_fd = desc_table.register_descriptor_with_min_fd(new_desc, min_fd);
+                let new_fd = desc_table
+                    .register_descriptor_with_min_fd(new_desc, min_fd)
+                    .or(Err(Errno::EINVAL))?;
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_GETPIPE_SZ => {

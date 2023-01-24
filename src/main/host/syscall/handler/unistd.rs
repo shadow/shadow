@@ -30,7 +30,7 @@ impl SyscallHandler {
 
         trace!("Trying to close fd {}", fd);
 
-        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
         // released, so we should always deregister the descriptor even if there's an error while
@@ -60,7 +60,9 @@ impl SyscallHandler {
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
-        let new_fd = desc_table.register_descriptor(new_desc);
+        let new_fd = desc_table
+            .register_descriptor(new_desc)
+            .or(Err(Errno::ENFILE))?;
 
         // return the new fd
         Ok(libc::c_int::try_from(new_fd).unwrap().into())
@@ -81,7 +83,7 @@ impl SyscallHandler {
             return Ok(new_fd.into());
         }
 
-        let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let new_fd = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
@@ -95,7 +97,7 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(libc::c_int::try_from(new_fd).unwrap().into())
+        Ok(libc::c_int::from(new_fd).into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
@@ -114,7 +116,7 @@ impl SyscallHandler {
             return Err(nix::errno::Errno::EINVAL.into());
         }
 
-        let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let new_fd = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         // dup3 only supports the O_CLOEXEC flag
         let flags = match flags {
@@ -479,8 +481,10 @@ impl SyscallHandler {
 
         // register the file descriptors
         let mut dt = ctx.process.descriptor_table_borrow_mut();
-        let read_fd = dt.register_descriptor(reader_desc);
-        let write_fd = dt.register_descriptor(writer_desc);
+        // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
+        // ever need to worry about this in practice
+        let read_fd = dt.register_descriptor(reader_desc).unwrap();
+        let write_fd = dt.register_descriptor(writer_desc).unwrap();
 
         // try to write them to the caller
         let fds = [

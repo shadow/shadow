@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
-use crate::host::descriptor::descriptor_table::DescriptorTable;
+use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
@@ -96,10 +96,10 @@ impl SyscallHandler {
     /// EBADF.
     fn get_descriptor(
         descriptor_table: &DescriptorTable,
-        fd: impl TryInto<u32>,
+        fd: impl TryInto<DescriptorHandle>,
     ) -> Result<&Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
-        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         match descriptor_table.get(fd) {
             Some(desc) => Ok(desc),
@@ -111,10 +111,10 @@ impl SyscallHandler {
     /// EBADF.
     fn get_descriptor_mut(
         descriptor_table: &mut DescriptorTable,
-        fd: impl TryInto<u32>,
+        fd: impl TryInto<DescriptorHandle>,
     ) -> Result<&mut Descriptor, nix::errno::Errno> {
         // check that fd is within bounds
-        let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
         match descriptor_table.get_mut(fd) {
             Some(desc) => Ok(desc),

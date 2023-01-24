@@ -95,11 +95,12 @@ impl SyscallHandler {
         let fd = ctx
             .process
             .descriptor_table_borrow_mut()
-            .register_descriptor(desc);
+            .register_descriptor(desc)
+            .or(Err(Errno::ENFILE))?;
 
         log::trace!("Created socket fd {}", fd);
 
-        Ok(fd.into())
+        Ok(fd.val().into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
@@ -649,9 +650,10 @@ impl SyscallHandler {
         let new_fd = ctx
             .process
             .descriptor_table_borrow_mut()
-            .register_descriptor(new_desc);
+            .register_descriptor(new_desc)
+            .or(Err(Errno::ENFILE))?;
 
-        Ok(new_fd.into())
+        Ok(new_fd.val().into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
@@ -816,11 +818,13 @@ impl SyscallHandler {
 
         // register the file descriptors
         let mut dt = ctx.process.descriptor_table_borrow_mut();
-        let fd_1 = dt.register_descriptor(desc_1);
-        let fd_2 = dt.register_descriptor(desc_2);
+        // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
+        // ever need to worry about this in practice
+        let fd_1 = dt.register_descriptor(desc_1).unwrap();
+        let fd_2 = dt.register_descriptor(desc_2).unwrap();
 
         // try to write them to the caller
-        let fds = [i32::try_from(fd_1).unwrap(), i32::try_from(fd_2).unwrap()];
+        let fds = [i32::from(fd_1), i32::from(fd_2)];
         let write_res = ctx
             .process
             .memory_borrow_mut()

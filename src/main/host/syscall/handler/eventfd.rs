@@ -78,10 +78,11 @@ impl SyscallHandler {
         let fd = ctx
             .process
             .descriptor_table_borrow_mut()
-            .register_descriptor(desc);
+            .register_descriptor(desc)
+            .or(Err(Errno::ENFILE))?;
 
         log::trace!("eventfd() returning fd {}", fd);
 
-        Ok(fd.into())
+        Ok(fd.val().into())
     }
 }
