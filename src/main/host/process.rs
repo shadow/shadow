@@ -1529,7 +1529,7 @@ mod export {
         };
 
         Worker::with_active_host(|h| match proc.borrow(h.root()).descriptor_table_borrow().get(handle).map(|x| x.file()) {
-            Some(CompatFile::Legacy(file)) => unsafe { file.ptr() },
+            Some(CompatFile::Legacy(file)) => file.ptr(),
             Some(CompatFile::New(file)) => {
                 // we have a special case for the legacy C TCP objects
                 if let File::Socket(Socket::Inet(InetSocket::Tcp(tcp))) = file.inner_file() {
