@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::ffi::CString;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::NonZeroU8;
@@ -7,7 +8,6 @@ use atomic_refcell::AtomicRefCell;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::support::configuration::QDiscMode;
-use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::{NetworkInterface, PcapOptions};
@@ -31,6 +31,9 @@ pub struct NetworkNamespace {
     // TODO: use a Rust address type
     pub default_address: SyncSendPointer<cshadow::Address>,
     pub default_ip: Ipv4Addr,
+
+    // used for debugging to make sure we've cleaned up before being dropped
+    has_run_cleanup: Cell<bool>,
 }
 
 impl NetworkNamespace {
@@ -81,6 +84,7 @@ impl NetworkNamespace {
             internet,
             default_address: unsafe { SyncSendPointer::new(public_addr) },
             default_ip: public_ip,
+            has_run_cleanup: Cell::new(false),
         }
     }
 
@@ -110,6 +114,21 @@ impl NetworkNamespace {
         };
 
         (interface, addr)
+    }
+
+    /// Clean up the network namespace. This should be called while `Worker` has the active host
+    /// set. The `dns` object should be the same object that was originally provided to
+    /// [`Self::new`].
+    pub fn cleanup(&self, dns: &cshadow::DNS) {
+        assert!(!self.has_run_cleanup.get());
+
+        let dns = dns as *const cshadow::DNS;
+        // deregistering localhost is a no-op, so we skip it
+        unsafe {
+            cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr());
+        }
+
+        self.has_run_cleanup.set(true);
     }
 
     /// Returns `None` if there is no such interface.
@@ -247,13 +266,11 @@ impl NetworkNamespace {
 
 impl std::ops::Drop for NetworkNamespace {
     fn drop(&mut self) {
-        // deregistering localhost is a no-op, so we skip it
-        Worker::with_dns(|dns| unsafe {
-            let dns = dns as *const cshadow::DNS;
-            cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr())
-        });
-
         unsafe { cshadow::address_unref(self.default_address.ptr()) };
+
+        if !self.has_run_cleanup.get() && !std::thread::panicking() {
+            debug_panic!("Dropped the network namespace before it has been cleaned up");
+        }
     }
 }
 

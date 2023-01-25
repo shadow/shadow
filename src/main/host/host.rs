@@ -612,10 +612,14 @@ impl Host {
         }
     }
 
+    /// Shut down the host. This should be called while `Worker` has the active host set.
     pub fn shutdown(&self) {
         self.continue_execution_timer();
 
         debug!("shutting down host {}", self.name());
+
+        // the network namespace object needs to be cleaned up before it's dropped
+        Worker::with_dns(|dns| self.net_ns.borrow().as_ref().unwrap().cleanup(dns));
 
         // Need to drop the interfaces early because they trigger worker accesses
         // that will not be valid at the normal drop time. The interfaces will
