@@ -1,17 +1,18 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
 
 use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
-    pub fn ioctl(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let request: libc::c_ulong = args.get(1).into();
-        let arg_ptr: PluginPtr = args.get(2).into(); // type depends on request
-
+    pub fn ioctl(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        request: libc::c_ulong,
+        arg_ptr: PluginPtr,
+    ) -> SyscallResult {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 
         // get the descriptor, or return early if it doesn't exist

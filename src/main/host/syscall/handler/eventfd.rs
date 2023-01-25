@@ -3,7 +3,6 @@ use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SysCallArgs;
 use crate::host::syscall_types::SyscallResult;
 
 use std::sync::Arc;
@@ -16,18 +15,17 @@ use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]
-    pub fn eventfd(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let init_val: libc::c_uint = args.get(0).into();
-
+    pub fn eventfd(ctx: &mut SyscallContext, init_val: libc::c_uint) -> SyscallResult {
         Self::eventfd_helper(ctx, init_val, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint,
                   /* flags */ nix::sys::eventfd::EfdFlags)]
-    pub fn eventfd2(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let init_val: libc::c_uint = args.get(0).into();
-        let flags: libc::c_int = args.get(1).into();
-
+    pub fn eventfd2(
+        ctx: &mut SyscallContext,
+        init_val: libc::c_uint,
+        flags: libc::c_int,
+    ) -> SyscallResult {
         Self::eventfd_helper(ctx, init_val, flags)
     }
 

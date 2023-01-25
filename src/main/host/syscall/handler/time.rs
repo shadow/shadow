@@ -1,7 +1,6 @@
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallResult;
-use crate::host::syscall_types::{SysCallArgs, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
 use crate::host::timer::Timer;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
@@ -23,9 +22,12 @@ fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /*curr_value*/ *const libc::c_void)]
-    pub fn getitimer(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let which = libc::c_int::from(args.get(0));
-        let curr_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(1).into(), 1);
+    pub fn getitimer(
+        ctx: &mut SyscallContext,
+        which: libc::c_int,
+        curr_value_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let curr_value_ptr = TypedPluginPtr::new::<libc::itimerval>(curr_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
@@ -42,10 +44,14 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /* new_value */ *const libc::c_void, /* old_value */ *const libc::c_void)]
-    pub fn setitimer(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let which = libc::c_int::from(args.get(0));
-        let new_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(1).into(), 1);
-        let old_value_ptr = TypedPluginPtr::new::<libc::itimerval>(args.get(2).into(), 1);
+    pub fn setitimer(
+        ctx: &mut SyscallContext,
+        which: libc::c_int,
+        new_value_ptr: PluginPtr,
+        old_value_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let new_value_ptr = TypedPluginPtr::new::<libc::itimerval>(new_value_ptr, 1);
+        let old_value_ptr = TypedPluginPtr::new::<libc::itimerval>(old_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);

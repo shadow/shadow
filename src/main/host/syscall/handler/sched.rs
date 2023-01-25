@@ -1,5 +1,5 @@
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SysCallArgs, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
 
@@ -26,10 +26,13 @@ unsafe impl Pod for rseq {}
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
-    pub fn sched_getaffinity(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
-        let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
-        let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
+    pub fn sched_getaffinity(
+        ctx: &mut SyscallContext,
+        tid: libc::pid_t,
+        cpusetsize: libc::size_t,
+        mask_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -55,10 +58,13 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
-    pub fn sched_setaffinity(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let tid = libc::pid_t::try_from(unsafe { args.get(0).as_i64 }).map_err(|_| Errno::ESRCH)?;
-        let cpusetsize = libc::size_t::try_from(unsafe { args.get(1).as_u64 }).unwrap();
-        let mask_ptr = TypedPluginPtr::new::<u8>(unsafe { args.get(2).as_ptr }.into(), cpusetsize);
+    pub fn sched_setaffinity(
+        ctx: &mut SyscallContext,
+        tid: libc::pid_t,
+        cpusetsize: libc::size_t,
+        mask_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -83,16 +89,22 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ i32)]
-    pub fn sched_yield(_ctx: &mut SyscallContext, _args: &SysCallArgs) -> SyscallResult {
+    pub fn sched_yield(_ctx: &mut SyscallContext) -> SyscallResult {
         // Do nothing. We already yield and reschedule after some number of
         // unblocked syscalls.
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */u32, /* flags */i32, /* sig */u32)]
-    pub fn rseq(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let rseq_ptr = TypedPluginPtr::new::<rseq>(unsafe { args.get(0).as_ptr }.into(), 1);
-        let rseq_len = usize::try_from(unsafe { args.get(1).as_u64 }).unwrap();
+    #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
+    pub fn rseq(
+        ctx: &mut SyscallContext,
+        rseq_ptr: PluginPtr,
+        rseq_len: u32,
+        flags: libc::c_int,
+        sig: u32,
+    ) -> SyscallResult {
+        let rseq_ptr = TypedPluginPtr::new::<rseq>(rseq_ptr, 1);
+        let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
             // rather than the calling code.
@@ -103,8 +115,6 @@ impl SyscallHandler {
             );
             return Err(Errno::EINVAL.into());
         }
-        let flags = i32::try_from(unsafe { args.get(2).as_i64 }).map_err(|_| Errno::EINVAL)?;
-        let sig = u32::try_from(unsafe { args.get(3).as_u64 }).map_err(|_| Errno::EINVAL)?;
         Self::rseq_impl(ctx, rseq_ptr, flags, sig)
     }
 

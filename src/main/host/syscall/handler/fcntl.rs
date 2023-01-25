@@ -1,21 +1,22 @@
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallResult};
+use crate::host::syscall_types::{SysCallReg, SyscallResult};
 
 use log::warn;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-use std::os::unix::prelude::RawFd;
 
 use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
-    pub fn fcntl(ctx: &mut SyscallContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: RawFd = args.args[0].into();
-        let cmd: i32 = args.args[1].into();
-
+    pub fn fcntl(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        cmd: libc::c_int,
+        arg: libc::c_ulong,
+    ) -> SyscallResult {
         // NOTE: this function should *not* run the C syscall handler if the cmd modifies the
         // descriptor
 
@@ -70,7 +71,8 @@ impl SyscallHandler {
                     }
                 };
 
-                let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+                let status = i32::try_from(arg).or(Err(Errno::EINVAL))?;
+                let mut status = OFlag::from_bits(status).ok_or(Errno::EINVAL)?;
                 // remove access mode flags
                 status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR | OFlag::O_PATH);
                 // remove file creation flags
@@ -130,14 +132,13 @@ impl SyscallHandler {
                 SysCallReg::from(flags)
             }
             libc::F_SETFD => {
-                let flags =
-                    DescriptorFlags::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+                let flags = i32::try_from(arg).or(Err(Errno::EINVAL))?;
+                let flags = DescriptorFlags::from_bits(flags).ok_or(Errno::EINVAL)?;
                 desc.set_flags(flags);
                 SysCallReg::from(0)
             }
             libc::F_DUPFD => {
-                let min_fd: i32 = args.args[2].into();
-                let min_fd = min_fd.try_into().or(Err(Errno::EINVAL))?;
+                let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::empty());
                 let new_fd = desc_table
@@ -146,8 +147,7 @@ impl SyscallHandler {
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
             libc::F_DUPFD_CLOEXEC => {
-                let min_fd: i32 = args.args[2].into();
-                let min_fd = min_fd.try_into().or(Err(Errno::EINVAL))?;
+                let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
                 let new_fd = desc_table
