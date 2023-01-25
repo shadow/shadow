@@ -754,10 +754,7 @@ impl LegacyFileCounter {
         }
     }
 
-    /// # Safety
-    ///
-    /// TODO
-    pub unsafe fn ptr(&self) -> *mut c::LegacyFile {
+    pub fn ptr(&self) -> *mut c::LegacyFile {
         unsafe { self.file.ptr() }
     }
 
@@ -871,7 +868,7 @@ mod export {
         let descriptor = unsafe { &*descriptor };
 
         if let CompatFile::Legacy(d) = descriptor.file() {
-            unsafe { d.ptr() }
+            d.ptr()
         } else {
             std::ptr::null_mut()
         }
