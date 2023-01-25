@@ -49,7 +49,7 @@ minor from 0 to 2, then to bump the release from 'pre' to the invisible
 
 or use the serialize option to specify the intended format of the next version:
 
-    bumpversion minor --serialize '{major}.{minor}.{patch}'
+    bumpversion minor --serialize '{major}.{minor}.{patch}' --commit --tag
 
 Now check that things worked and get the new version number:
 
