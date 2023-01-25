@@ -1,13 +1,14 @@
+use std::cell::{Cell, RefCell};
 use std::ffi::CString;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::NonZeroU8;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::support::configuration::QDiscMode;
-use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network_interface::{NetworkInterface, PcapOptions};
@@ -25,12 +26,15 @@ pub struct NetworkNamespace {
     // map abstract socket addresses to unix sockets
     pub unix: Arc<AtomicRefCell<AbstractUnixNamespace>>,
 
-    pub localhost: NetworkInterface,
-    pub internet: NetworkInterface,
+    pub localhost: RefCell<NetworkInterface>,
+    pub internet: RefCell<NetworkInterface>,
 
     // TODO: use a Rust address type
     pub default_address: SyncSendPointer<cshadow::Address>,
     pub default_ip: Ipv4Addr,
+
+    // used for debugging to make sure we've cleaned up before being dropped
+    has_run_cleanup: Cell<bool>,
 }
 
 impl NetworkNamespace {
@@ -77,10 +81,11 @@ impl NetworkNamespace {
 
         Self {
             unix: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
-            localhost,
-            internet,
+            localhost: RefCell::new(localhost),
+            internet: RefCell::new(internet),
             default_address: unsafe { SyncSendPointer::new(public_addr) },
             default_ip: public_ip,
+            has_run_cleanup: Cell::new(false),
         }
     }
 
@@ -112,23 +117,46 @@ impl NetworkNamespace {
         (interface, addr)
     }
 
+    /// Clean up the network namespace. This should be called while `Worker` has the active host
+    /// set. The `dns` object should be the same object that was originally provided to
+    /// [`Self::new`].
+    pub fn cleanup(&self, dns: &cshadow::DNS) {
+        assert!(!self.has_run_cleanup.get());
+
+        let dns = dns as *const cshadow::DNS;
+        // deregistering localhost is a no-op, so we skip it
+        unsafe {
+            cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr());
+        }
+
+        self.has_run_cleanup.set(true);
+    }
+
     /// Returns `None` if there is no such interface.
-    pub fn interface(&self, addr: Ipv4Addr) -> Option<&NetworkInterface> {
+    #[track_caller]
+    pub fn interface_borrow(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
         if addr.is_loopback() {
-            Some(&self.localhost)
+            Some(self.localhost.borrow())
         } else if addr == self.default_ip {
-            Some(&self.internet)
+            Some(self.internet.borrow())
         } else {
             None
         }
     }
 
     /// Returns `None` if there is no such interface.
-    pub fn interface_mut(&mut self, addr: Ipv4Addr) -> Option<&mut NetworkInterface> {
+    #[track_caller]
+    pub fn interface_borrow_mut(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
         if addr.is_loopback() {
-            Some(&mut self.localhost)
+            Some(self.localhost.borrow_mut())
         } else if addr == self.default_ip {
-            Some(&mut self.internet)
+            Some(self.internet.borrow_mut())
         } else {
             None
         }
@@ -142,11 +170,17 @@ impl NetworkNamespace {
     ) -> bool {
         if src.ip().is_unspecified() {
             // Check that all interfaces are available.
-            !self.localhost.is_associated(protocol_type, src.port(), dst)
-                && !self.internet.is_associated(protocol_type, src.port(), dst)
+            !self
+                .localhost
+                .borrow()
+                .is_associated(protocol_type, src.port(), dst)
+                && !self
+                    .internet
+                    .borrow()
+                    .is_associated(protocol_type, src.port(), dst)
         } else {
             // The interface is not available if it does not exist.
-            match self.interface(*src.ip()) {
+            match self.interface_borrow(*src.ip()) {
                 Some(i) => !i.is_associated(protocol_type, src.port(), dst),
                 None => false,
             }
@@ -212,12 +246,14 @@ impl NetworkNamespace {
         if bind_addr.ip().is_unspecified() {
             // need to associate all interfaces
             self.localhost
+                .borrow()
                 .associate(socket, protocol, bind_addr.port(), peer_addr);
             self.internet
+                .borrow()
                 .associate(socket, protocol, bind_addr.port(), peer_addr);
         } else {
             // TODO: return error if interface does not exist
-            if let Some(iface) = self.interface(*bind_addr.ip()) {
+            if let Some(iface) = self.interface_borrow(*bind_addr.ip()) {
                 iface.associate(socket, protocol, bind_addr.port(), peer_addr);
             }
         }
@@ -232,13 +268,15 @@ impl NetworkNamespace {
         if bind_addr.ip().is_unspecified() {
             // need to disassociate all interfaces
             self.localhost
+                .borrow()
                 .disassociate(protocol, bind_addr.port(), peer_addr);
 
             self.internet
+                .borrow()
                 .disassociate(protocol, bind_addr.port(), peer_addr);
         } else {
             // TODO: return error if interface does not exist
-            if let Some(iface) = self.interface(*bind_addr.ip()) {
+            if let Some(iface) = self.interface_borrow(*bind_addr.ip()) {
                 iface.disassociate(protocol, bind_addr.port(), peer_addr);
             }
         }
@@ -247,13 +285,11 @@ impl NetworkNamespace {
 
 impl std::ops::Drop for NetworkNamespace {
     fn drop(&mut self) {
-        // deregistering localhost is a no-op, so we skip it
-        Worker::with_dns(|dns| unsafe {
-            let dns = dns as *const cshadow::DNS;
-            cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr())
-        });
-
         unsafe { cshadow::address_unref(self.default_address.ptr()) };
+
+        if !self.has_run_cleanup.get() && !std::thread::panicking() {
+            debug_panic!("Dropped the network namespace before it has been cleaned up");
+        }
     }
 }
 

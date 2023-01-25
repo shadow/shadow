@@ -127,8 +127,7 @@ pub struct Host {
 
     cpu: RefCell<Cpu>,
 
-    // TODO: rearrange our shutdown process so we don't need an `Option` type here
-    net_ns: RefCell<Option<NetworkNamespace>>,
+    net_ns: NetworkNamespace,
 
     // Store as a CString so that we can return a borrowed pointer to C code
     // instead of having to allocate a new string.
@@ -271,7 +270,7 @@ impl Host {
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
             cpu,
-            net_ns: RefCell::new(Some(net_ns)),
+            net_ns,
             data_dir_path,
             data_dir_path_cstring,
             process_id_counter,
@@ -429,7 +428,7 @@ impl Host {
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
-        let addr = self.net_ns.borrow().as_ref().unwrap().default_address.ptr();
+        let addr = self.net_ns.default_address.ptr();
         let addr = unsafe { cshadow::address_toNetworkIP(addr) };
         u32::from_be(addr).into()
     }
@@ -437,7 +436,7 @@ impl Host {
     pub fn abstract_unix_namespace(
         &self,
     ) -> impl Deref<Target = Arc<AtomicRefCell<AbstractUnixNamespace>>> + '_ {
-        Ref::map(self.net_ns.borrow(), |x| &x.as_ref().unwrap().unix)
+        &self.net_ns.unix
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
@@ -452,7 +451,7 @@ impl Host {
 
     #[track_caller]
     pub fn network_namespace_borrow(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
-        Ref::map(self.net_ns.borrow(), |x| x.as_ref().unwrap())
+        &self.net_ns
     }
 
     #[track_caller]
@@ -490,25 +489,21 @@ impl Host {
     /// Returns `None` if there is no such interface.
     ///
     /// Panics if we have shut down.
-    #[track_caller]
     pub fn interface_borrow_mut(
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
-        let borrow = self.net_ns.borrow_mut();
-        RefMut::filter_map(borrow, |x| x.as_mut().unwrap().interface_mut(addr)).ok()
+        self.net_ns.interface_borrow_mut(addr)
     }
 
     /// Returns `None` if there is no such interface.
     ///
     /// Panics if we have shut down.
-    #[track_caller]
     pub fn interface_borrow(
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
-        let borrow = self.net_ns.borrow();
-        Ref::filter_map(borrow, |x| x.as_ref().unwrap().interface(addr)).ok()
+        self.net_ns.interface_borrow(addr)
     }
 
     #[track_caller]
@@ -582,16 +577,12 @@ impl Host {
         let bw_down = self.bw_down_kiBps();
         let bw_up = self.bw_up_kiBps();
         self.net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
             .localhost
+            .borrow()
             .start_refilling_token_buckets(bw_down, bw_up);
         self.net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
             .internet
+            .borrow()
             .start_refilling_token_buckets(bw_down, bw_up);
 
         // must be done after the default IP exists so tracker_heartbeat works
@@ -612,18 +603,14 @@ impl Host {
         }
     }
 
+    /// Shut down the host. This should be called while `Worker` has the active host set.
     pub fn shutdown(&self) {
         self.continue_execution_timer();
 
         debug!("shutting down host {}", self.name());
 
-        // Need to drop the interfaces early because they trigger worker accesses
-        // that will not be valid at the normal drop time. The interfaces will
-        // become None after this and should not be unwrapped anymore.
-        // TODO: clean this up when removing the interface's C internals.
-        {
-            self.net_ns.replace(None);
-        }
+        // the network namespace object needs to be cleaned up before it's dropped
+        Worker::with_dns(|dns| self.net_ns.cleanup(dns));
 
         assert!(self.processes.borrow().is_empty());
 
@@ -703,13 +690,7 @@ impl Host {
         //   `self.net_ns.borrow().as_ref().unwrap().internet.receive_packets(self);`
         // but that causes a double-borrow loop. See `host_socketWantsToSend()`.
         unsafe {
-            let netif_ptr = self
-                .net_ns
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .internet
-                .borrow_inner();
+            let netif_ptr = self.net_ns.internet.borrow().borrow_inner();
             cshadow::networkinterface_receivePackets(netif_ptr, self)
         };
     }
@@ -897,13 +878,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn host_getDefaultAddress(hostrc: *const Host) -> *mut cshadow::Address {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc
-            .net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .default_address
-            .ptr()
+        hostrc.net_ns.default_address.ptr()
     }
 
     #[no_mangle]
@@ -1015,9 +990,6 @@ mod export {
         );
         hostrc
             .net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
             .is_interface_available(protocol_type, src, dst)
     }
 
@@ -1045,9 +1017,6 @@ mod export {
         unsafe {
             hostrc
                 .net_ns
-                .borrow()
-                .as_ref()
-                .unwrap()
                 .associate_interface(socket, protocol, bind_addr, peer_addr)
         };
     }
@@ -1074,9 +1043,6 @@ mod export {
         // associate the interfaces corresponding to bind_addr with socket
         hostrc
             .net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
             .disassociate_interface(protocol, bind_addr, peer_addr);
     }
 
@@ -1098,9 +1064,6 @@ mod export {
 
         hostrc
             .net_ns
-            .borrow()
-            .as_ref()
-            .unwrap()
             .get_random_free_port(
                 protocol_type,
                 interface_ip,
