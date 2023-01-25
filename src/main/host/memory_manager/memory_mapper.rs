@@ -220,15 +220,10 @@ fn get_heap(
     let heap_mapping = {
         let mut it = regions
             .iter()
-            .fuse()
-            .skip_while(|m| m.1.original_path != Some(proc_maps::MappingPath::Heap));
+            .filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap));
         let heap_mapping = it.next();
         // There should only be one heap region.
-        debug_assert!(
-            it.filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap))
-                .count()
-                == 0
-        );
+        assert_eq!(it.fuse().next(), None);
         heap_mapping
     };
     if heap_mapping.is_none() {
