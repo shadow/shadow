@@ -114,6 +114,17 @@ impl<T> HostTreePointer<T> {
         assert_eq!(self.host_id, host.info().id);
         self.ptr
     }
+
+    /// Get the pointer without checking the active host.
+    ///
+    /// # Safety
+    ///
+    /// Pointer must only be dereferenced while the configures Host is still
+    /// active, in addition to the normal safety requirements for dereferencing
+    /// a pointer.
+    pub unsafe fn ptr_unchecked(&self) -> *mut T {
+        self.ptr
+    }
 }
 
 /// A trait we can use as a compile-time check to make sure that an object is Send.

@@ -138,7 +138,8 @@ impl NetworkInterface {
 
 impl Drop for NetworkInterface {
     fn drop(&mut self) {
-        unsafe { c::networkinterface_free(self.c_ptr.ptr()) };
+        // don't check the active host since we're in the middle of dropping the host
+        unsafe { c::networkinterface_free(self.c_ptr.ptr_unchecked()) };
     }
 }
 

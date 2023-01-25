@@ -300,7 +300,7 @@ fn associate_socket(
 ) -> Result<SocketAddrV4, SyscallError> {
     log::trace!("Trying to associate socket with addresses (local={local_addr}, peer={peer_addr})");
 
-    if !local_addr.ip().is_unspecified() && net_ns.interface(*local_addr.ip()).is_none() {
+    if !local_addr.ip().is_unspecified() && net_ns.interface_borrow(*local_addr.ip()).is_none() {
         log::debug!(
             "No network interface exists for the provided local address {}",
             local_addr.ip(),

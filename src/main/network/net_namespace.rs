@@ -1,7 +1,8 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::CString;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::NonZeroU8;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -25,8 +26,8 @@ pub struct NetworkNamespace {
     // map abstract socket addresses to unix sockets
     pub unix: Arc<AtomicRefCell<AbstractUnixNamespace>>,
 
-    pub localhost: NetworkInterface,
-    pub internet: NetworkInterface,
+    pub localhost: RefCell<NetworkInterface>,
+    pub internet: RefCell<NetworkInterface>,
 
     // TODO: use a Rust address type
     pub default_address: SyncSendPointer<cshadow::Address>,
@@ -80,8 +81,8 @@ impl NetworkNamespace {
 
         Self {
             unix: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
-            localhost,
-            internet,
+            localhost: RefCell::new(localhost),
+            internet: RefCell::new(internet),
             default_address: unsafe { SyncSendPointer::new(public_addr) },
             default_ip: public_ip,
             has_run_cleanup: Cell::new(false),
@@ -132,22 +133,30 @@ impl NetworkNamespace {
     }
 
     /// Returns `None` if there is no such interface.
-    pub fn interface(&self, addr: Ipv4Addr) -> Option<&NetworkInterface> {
+    #[track_caller]
+    pub fn interface_borrow(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
         if addr.is_loopback() {
-            Some(&self.localhost)
+            Some(self.localhost.borrow())
         } else if addr == self.default_ip {
-            Some(&self.internet)
+            Some(self.internet.borrow())
         } else {
             None
         }
     }
 
     /// Returns `None` if there is no such interface.
-    pub fn interface_mut(&mut self, addr: Ipv4Addr) -> Option<&mut NetworkInterface> {
+    #[track_caller]
+    pub fn interface_borrow_mut(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
         if addr.is_loopback() {
-            Some(&mut self.localhost)
+            Some(self.localhost.borrow_mut())
         } else if addr == self.default_ip {
-            Some(&mut self.internet)
+            Some(self.internet.borrow_mut())
         } else {
             None
         }
@@ -161,11 +170,17 @@ impl NetworkNamespace {
     ) -> bool {
         if src.ip().is_unspecified() {
             // Check that all interfaces are available.
-            !self.localhost.is_associated(protocol_type, src.port(), dst)
-                && !self.internet.is_associated(protocol_type, src.port(), dst)
+            !self
+                .localhost
+                .borrow()
+                .is_associated(protocol_type, src.port(), dst)
+                && !self
+                    .internet
+                    .borrow()
+                    .is_associated(protocol_type, src.port(), dst)
         } else {
             // The interface is not available if it does not exist.
-            match self.interface(*src.ip()) {
+            match self.interface_borrow(*src.ip()) {
                 Some(i) => !i.is_associated(protocol_type, src.port(), dst),
                 None => false,
             }
@@ -231,12 +246,14 @@ impl NetworkNamespace {
         if bind_addr.ip().is_unspecified() {
             // need to associate all interfaces
             self.localhost
+                .borrow()
                 .associate(socket, protocol, bind_addr.port(), peer_addr);
             self.internet
+                .borrow()
                 .associate(socket, protocol, bind_addr.port(), peer_addr);
         } else {
             // TODO: return error if interface does not exist
-            if let Some(iface) = self.interface(*bind_addr.ip()) {
+            if let Some(iface) = self.interface_borrow(*bind_addr.ip()) {
                 iface.associate(socket, protocol, bind_addr.port(), peer_addr);
             }
         }
@@ -251,13 +268,15 @@ impl NetworkNamespace {
         if bind_addr.ip().is_unspecified() {
             // need to disassociate all interfaces
             self.localhost
+                .borrow()
                 .disassociate(protocol, bind_addr.port(), peer_addr);
 
             self.internet
+                .borrow()
                 .disassociate(protocol, bind_addr.port(), peer_addr);
         } else {
             // TODO: return error if interface does not exist
-            if let Some(iface) = self.interface(*bind_addr.ip()) {
+            if let Some(iface) = self.interface_borrow(*bind_addr.ip()) {
                 iface.disassociate(protocol, bind_addr.port(), peer_addr);
             }
         }
