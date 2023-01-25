@@ -3,6 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::fcntl::OFlag;
 
+use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
@@ -736,12 +737,10 @@ impl Drop for CountedLegacyFileRef {
 
 /// Used to track how many descriptors are open for a `LegacyFile`. When the `close()` method is
 /// called, the legacy file's `legacyfile_close()` will only be called if this is the last
-/// descriptor for that legacy file. This is similar to an `OpenFile` object, but does not close the
-/// file when dropped since we don't have a pointer to the host. If this counter is dropped before
-/// closing the legacy file, the legacy file will not be closed properly.
+/// descriptor for that legacy file. This is similar to an `OpenFile` object.
 #[derive(Clone, Debug)]
 pub struct LegacyFileCounter {
-    file: CountedLegacyFileRef,
+    file: Option<CountedLegacyFileRef>,
     /// A count of how many open descriptors there are with reference to this legacy file.
     open_count: Arc<()>,
 }
@@ -749,23 +748,36 @@ pub struct LegacyFileCounter {
 impl LegacyFileCounter {
     pub fn new(file: CountedLegacyFileRef) -> Self {
         Self {
-            file,
+            file: Some(file),
             open_count: Arc::new(()),
         }
     }
 
     pub fn ptr(&self) -> *mut c::LegacyFile {
-        unsafe { self.file.ptr() }
+        unsafe { self.file.as_ref().unwrap().ptr() }
+    }
+
+    /// Should drop `self` immediately after calling this.
+    fn close_helper(&mut self, host: &Host) {
+        // this isn't subject to race conditions since we should never access descriptors
+        // from multiple threads at the same time
+        if Arc::<()>::strong_count(&self.open_count) == 1 {
+            if let Some(file) = self.file.take() {
+                unsafe { c::legacyfile_close(file.ptr(), host) }
+            }
+        }
     }
 
     /// Close the descriptor, and if this is the last descriptor pointing to its legacy file, close
     /// the legacy file as well.
-    pub fn close(self, host: &Host) {
-        // this isn't subject to race conditions since we should never access descriptors
-        // from multiple threads at the same time
-        if Arc::<()>::strong_count(&self.open_count) == 1 {
-            unsafe { c::legacyfile_close(self.ptr(), host) }
-        }
+    pub fn close(mut self, host: &Host) {
+        self.close_helper(host);
+    }
+}
+
+impl std::ops::Drop for LegacyFileCounter {
+    fn drop(&mut self) {
+        worker::Worker::with_active_host(|host| self.close_helper(host)).unwrap();
     }
 }
 
