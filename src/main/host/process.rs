@@ -32,7 +32,7 @@ use crate::host::syscall::formatter::FmtOptions;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::pathbuf_to_nul_term_cstring;
 
-use super::descriptor::descriptor_table::DescriptorTable;
+use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
@@ -422,16 +422,24 @@ impl Process {
         assert!(!self.is_running());
 
         self.open_stdio_file_helper(
-            libc::STDIN_FILENO as u32,
+            libc::STDIN_FILENO.try_into().unwrap(),
             "/dev/null".into(),
             OFlag::O_RDONLY,
         );
 
         let name = self.output_file_name(host, "stdout");
-        self.open_stdio_file_helper(libc::STDOUT_FILENO as u32, name, OFlag::O_WRONLY);
+        self.open_stdio_file_helper(
+            libc::STDOUT_FILENO.try_into().unwrap(),
+            name,
+            OFlag::O_WRONLY,
+        );
 
         let name = self.output_file_name(host, "stderr");
-        self.open_stdio_file_helper(libc::STDERR_FILENO as u32, name, OFlag::O_WRONLY);
+        self.open_stdio_file_helper(
+            libc::STDERR_FILENO.try_into().unwrap(),
+            name,
+            OFlag::O_WRONLY,
+        );
 
         // Create the main thread and add it to our thread list.
         let tid = self.thread_group_leader_id();
@@ -713,7 +721,7 @@ impl Process {
 
     fn open_stdio_file_helper(
         &self,
-        fd: u32,
+        fd: DescriptorHandle,
         path: PathBuf,
         access_mode: OFlag,
     ) -> *mut cshadow::RegularFile {
@@ -740,7 +748,9 @@ impl Process {
         let desc = unsafe {
             Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
         };
-        let prev = self.descriptor_table_borrow_mut().set(fd, desc);
+        let prev = self
+            .descriptor_table_borrow_mut()
+            .register_descriptor_with_fd(desc, fd);
         assert!(prev.is_none());
         trace!(
             "Successfully opened fd {} at {}",
@@ -1442,9 +1452,10 @@ mod export {
             proc.borrow(h.root())
                 .descriptor_table_borrow_mut()
                 .register_descriptor(*desc)
+                .unwrap()
         })
         .unwrap();
-        fd.try_into().unwrap()
+        fd.into()
     }
 
     /// Get a temporary reference to a descriptor.
@@ -1455,7 +1466,7 @@ mod export {
     ) -> *const Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
 
-        let handle: u32 = match handle.try_into() {
+        let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
                 log::debug!("Attempted to get a descriptor with handle {}", handle);
@@ -1480,7 +1491,7 @@ mod export {
     ) -> *mut Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
 
-        let handle: u32 = match handle.try_into() {
+        let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
                 log::debug!("Attempted to get a descriptor with handle {}", handle);
@@ -1509,7 +1520,7 @@ mod export {
     ) -> *mut cshadow::LegacyFile {
         let proc = unsafe { proc.as_ref().unwrap() };
 
-        let handle: u32 = match handle.try_into() {
+        let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
                 log::debug!("Attempted to get a descriptor with handle {}", handle);
