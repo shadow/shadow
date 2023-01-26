@@ -2130,12 +2130,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_continue(
-        proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
-    ) {
+    pub unsafe extern "C" fn process_continue(proc: *const ProcessRefCell, thread_id: libc::pid_t) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let tid = ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap();
+        let tid = ThreadId::try_from(thread_id).unwrap();
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.resume(host, tid)
