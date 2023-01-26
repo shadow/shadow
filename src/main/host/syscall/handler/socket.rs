@@ -1,5 +1,4 @@
 use crate::cshadow as c;
-use crate::host::context::ThreadContext;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
@@ -7,11 +6,13 @@ use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
-use crate::host::syscall::handler::{read_sockaddr, write_sockaddr, SyscallHandler};
+use crate::host::syscall::handler::{
+    read_sockaddr, write_sockaddr, SyscallContext, SyscallHandler,
+};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, SysCallArgs, TypedPluginPtr};
+use crate::host::syscall_types::{Blocked, PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -25,11 +26,12 @@ use syscall_logger::log_syscall;
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
                   /* type */ libc::c_int, /* protocol */ libc::c_int)]
-    pub fn socket(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let domain = libc::c_int::from(args.get(0));
-        let socket_type = libc::c_int::from(args.get(1));
-        let protocol = libc::c_int::from(args.get(2));
-
+    pub fn socket(
+        ctx: &mut SyscallContext,
+        domain: libc::c_int,
+        socket_type: libc::c_int,
+        protocol: libc::c_int,
+    ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
@@ -37,7 +39,7 @@ impl SyscallHandler {
         // if it's not a unix socket or tcp socket, use the C syscall handler instead
         if domain != libc::AF_UNIX && (domain != libc::AF_INET || socket_type != libc::SOCK_STREAM)
         {
-            return Self::legacy_syscall(c::syscallhandler_socket, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_socket, ctx);
         }
 
         let mut file_flags = FileStatus::empty();
@@ -73,7 +75,7 @@ impl SyscallHandler {
                 Socket::Unix(UnixSocket::new(
                     file_flags,
                     socket_type,
-                    &ctx.host.abstract_unix_namespace(),
+                    &ctx.objs.host.abstract_unix_namespace(),
                 ))
             }
             libc::AF_INET => match socket_type {
@@ -82,7 +84,7 @@ impl SyscallHandler {
                         warn!("Unsupported inet stream socket protocol {protocol}");
                         return Err(Errno::EPROTONOSUPPORT.into());
                     }
-                    Socket::Inet(InetSocket::Tcp(TcpSocket::new(file_flags, ctx.host)))
+                    Socket::Inet(InetSocket::Tcp(TcpSocket::new(file_flags, ctx.objs.host)))
                 }
                 _ => panic!("Should have called the C syscall handler"),
             },
@@ -93,6 +95,7 @@ impl SyscallHandler {
         desc.set_flags(descriptor_flags);
 
         let fd = ctx
+            .objs
             .process
             .descriptor_table_borrow_mut()
             .register_descriptor(desc)
@@ -105,14 +108,15 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
-    pub fn bind(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len: libc::socklen_t = args.get(2).into();
-
+    pub fn bind(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len: libc::socklen_t,
+    ) -> SyscallResult {
         let file = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -120,7 +124,7 @@ impl SyscallHandler {
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_bind, ctx, args);
+                    return Self::legacy_syscall(c::syscallhandler_bind, ctx);
                 }
             };
 
@@ -131,12 +135,12 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
         log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
 
-        let mut rng = ctx.host.random_mut();
-        let net_ns = ctx.host.network_namespace_borrow();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
         Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
@@ -145,17 +149,19 @@ impl SyscallHandler {
                   /* flags */ nix::sys::socket::MsgFlags,
                   /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
                   /* addrlen */ libc::socklen_t)]
-    pub fn sendto(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let buf_ptr: PluginPtr = args.get(1).into();
-        let buf_len: libc::size_t = args.get(2).into();
-        let flags: libc::c_int = args.get(3).into();
-        let addr_ptr: PluginPtr = args.get(4).into();
-        let addr_len: libc::socklen_t = args.get(5).into();
-
+    pub fn sendto(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        buf_ptr: PluginPtr,
+        buf_len: libc::size_t,
+        flags: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len: libc::socklen_t,
+    ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -166,28 +172,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_sendto, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_sendto, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_sendto, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_sendto, ctx);
         }
 
-        self.sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
+        Self::sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
     }
 
     pub fn sendto_helper(
-        &self,
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
@@ -220,7 +225,7 @@ impl SyscallHandler {
             return Err(Errno::EOPNOTSUPP.into());
         }
 
-        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?;
+        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
         debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -229,7 +234,8 @@ impl SyscallHandler {
         // call the socket's sendto(), and run any resulting events
         let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().sendto(
-                ctx.process
+                ctx.objs
+                    .process
                     .memory_borrow()
                     .reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
                 addr,
@@ -259,17 +265,19 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
                   /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
-    pub fn recvfrom(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let buf_ptr: PluginPtr = args.get(1).into();
-        let buf_len: libc::size_t = args.get(2).into();
-        let flags: libc::c_int = args.get(3).into();
-        let addr_ptr: PluginPtr = args.get(4).into();
-        let addr_len_ptr: PluginPtr = args.get(5).into();
-
+    pub fn recvfrom(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        buf_ptr: PluginPtr,
+        buf_len: libc::size_t,
+        flags: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+    ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -280,28 +288,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx);
         }
 
-        self.recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
+        Self::recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
     }
 
     pub fn recvfrom_helper(
-        &self,
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
@@ -336,7 +343,8 @@ impl SyscallHandler {
         // call the socket's recvfrom(), and run any resulting events
         let result = CallbackQueue::queue_and_run(|cb_queue| {
             socket.borrow_mut().recvfrom(
-                ctx.process
+                ctx.objs
+                    .process
                     .memory_borrow_mut()
                     .writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
                 cb_queue,
@@ -363,7 +371,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             write_sockaddr(
-                &mut ctx.process.memory_borrow_mut(),
+                &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -375,15 +383,17 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn getsockname(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len_ptr: TypedPluginPtr<libc::socklen_t> =
-            TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
+    pub fn getsockname(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -391,7 +401,7 @@ impl SyscallHandler {
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_getsockname, ctx, args);
+                    return Self::legacy_syscall(c::syscallhandler_getsockname, ctx);
                 }
             };
 
@@ -410,7 +420,7 @@ impl SyscallHandler {
 
         debug!("Returning socket address of {:?}", addr_to_write);
         write_sockaddr(
-            &mut ctx.process.memory_borrow_mut(),
+            &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -421,15 +431,17 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn getpeername(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len_ptr: TypedPluginPtr<libc::socklen_t> =
-            TypedPluginPtr::new::<libc::socklen_t>(args.get(2).into(), 1);
+    pub fn getpeername(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+    ) -> SyscallResult {
+        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let file = match desc.file() {
@@ -437,7 +449,7 @@ impl SyscallHandler {
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_getpeername, ctx, args);
+                    return Self::legacy_syscall(c::syscallhandler_getpeername, ctx);
                 }
             };
 
@@ -456,7 +468,7 @@ impl SyscallHandler {
 
         debug!("Returning peer address of {:?}", addr_to_write);
         write_sockaddr(
-            &mut ctx.process.memory_borrow_mut(),
+            &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
             addr_len_ptr,
@@ -466,12 +478,13 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
-    pub fn listen(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let backlog: libc::c_int = args.get(1).into();
-
+    pub fn listen(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        backlog: libc::c_int,
+    ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -479,13 +492,13 @@ impl SyscallHandler {
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_listen, ctx, args);
+                return Self::legacy_syscall(c::syscallhandler_listen, ctx);
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
             drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_listen, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_listen, ctx);
         }
 
         let File::Socket(socket) = file.inner_file() else {
@@ -500,14 +513,16 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
-    pub fn accept(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len_ptr: PluginPtr = args.get(2).into();
-
+    pub fn accept(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+    ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -518,36 +533,38 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_accept, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_accept, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_accept, ctx);
         }
 
-        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
+        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t, /* flags */ libc::c_int)]
-    pub fn accept4(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len_ptr: PluginPtr = args.get(2).into();
-        let flags: libc::c_int = args.get(3).into();
-
+    pub fn accept4(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+        flags: libc::c_int,
+    ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -558,28 +575,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_accept4, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept4, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
         }
 
-        self.accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
+        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
     }
 
     fn accept_helper(
-        &self,
-        ctx: &mut ThreadContext,
+        ctx: &mut SyscallContext,
         open_file: OpenFile,
         addr_ptr: PluginPtr,
         addr_len_ptr: PluginPtr,
@@ -625,7 +641,7 @@ impl SyscallHandler {
 
         if !addr_ptr.is_null() {
             if let Err(e) = write_sockaddr(
-                &mut ctx.process.memory_borrow_mut(),
+                &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
@@ -648,6 +664,7 @@ impl SyscallHandler {
         }
 
         let new_fd = ctx
+            .objs
             .process
             .descriptor_table_borrow_mut()
             .register_descriptor(new_desc)
@@ -658,14 +675,16 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
-    pub fn connect(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-        let addr_ptr: PluginPtr = args.get(1).into();
-        let addr_len: libc::socklen_t = args.get(2).into();
-
+    pub fn connect(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len: libc::socklen_t,
+    ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
+            .objs
             .thread
             .syscall_condition()
             // if this was for a C descriptor, then there won't be an active file object
@@ -676,27 +695,27 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_connect, ctx, args);
+                        return Self::legacy_syscall(c::syscallhandler_connect, ctx);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_connect, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_connect, ctx);
         }
 
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(&ctx.process.memory_borrow(), addr_ptr, addr_len)?
+        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
             .ok_or(Errno::EINVAL)?;
 
         let mut rv =
@@ -714,11 +733,9 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
-    pub fn shutdown(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-
+    pub fn shutdown(ctx: &mut SyscallContext, fd: libc::c_int, _how: libc::c_int) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -726,13 +743,13 @@ impl SyscallHandler {
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_shutdown, ctx, args);
+                return Self::legacy_syscall(c::syscallhandler_shutdown, ctx);
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
             drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_shutdown, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_shutdown, ctx);
         }
 
         let File::Socket(socket) = file.inner_file() else {
@@ -751,12 +768,13 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
                   /* type */ libc::c_int, /* protocol */ libc::c_int, /* sv */ [libc::c_int; 2])]
-    pub fn socketpair(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let domain: libc::c_int = args.get(0).into();
-        let socket_type: libc::c_int = args.get(1).into();
-        let protocol: libc::c_int = args.get(2).into();
-        let fd_ptr: PluginPtr = args.get(3).into();
-
+    pub fn socketpair(
+        ctx: &mut SyscallContext,
+        domain: libc::c_int,
+        socket_type: libc::c_int,
+        protocol: libc::c_int,
+        fd_ptr: PluginPtr,
+    ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
@@ -799,7 +817,7 @@ impl SyscallHandler {
             UnixSocket::pair(
                 file_flags,
                 socket_type,
-                &ctx.host.abstract_unix_namespace(),
+                &ctx.objs.host.abstract_unix_namespace(),
                 cb_queue,
             )
         });
@@ -817,7 +835,7 @@ impl SyscallHandler {
         desc_2.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.process.descriptor_table_borrow_mut();
+        let mut dt = ctx.objs.process.descriptor_table_borrow_mut();
         // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
         // ever need to worry about this in practice
         let fd_1 = dt.register_descriptor(desc_1).unwrap();
@@ -826,6 +844,7 @@ impl SyscallHandler {
         // try to write them to the caller
         let fds = [i32::from(fd_1), i32::from(fd_2)];
         let write_res = ctx
+            .objs
             .process
             .memory_borrow_mut()
             .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
@@ -838,10 +857,10 @@ impl SyscallHandler {
                     // ignore any errors when closing
                     dt.deregister_descriptor(fd_1)
                         .unwrap()
-                        .close(ctx.host, cb_queue);
+                        .close(ctx.objs.host, cb_queue);
                     dt.deregister_descriptor(fd_2)
                         .unwrap()
-                        .close(ctx.host, cb_queue);
+                        .close(ctx.objs.host, cb_queue);
                 });
                 Err(e.into())
             }
@@ -851,11 +870,16 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
                   /* optname */ libc::c_int, /* optval */ *const libc::c_void,
                   /* optlen */ *const libc::socklen_t)]
-    pub fn getsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-
+    pub fn getsockopt(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        _level: libc::c_int,
+        _optname: libc::c_int,
+        _optval: PluginPtr,
+        _optlen: PluginPtr,
+    ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -863,13 +887,13 @@ impl SyscallHandler {
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx, args);
+                return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx);
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
             drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx);
         }
 
         let File::Socket(socket) = file.inner_file() else {
@@ -888,11 +912,16 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
                   /* optname */ libc::c_int, /* optval */ *const libc::c_void,
                   /* optlen */ libc::socklen_t)]
-    pub fn setsockopt(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let fd: libc::c_int = args.get(0).into();
-
+    pub fn setsockopt(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        _level: libc::c_int,
+        _optname: libc::c_int,
+        _optval: PluginPtr,
+        _optlen: libc::socklen_t,
+    ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let file = match desc.file() {
@@ -900,13 +929,13 @@ impl SyscallHandler {
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx, args);
+                return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx);
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
             drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx, args);
+            return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx);
         }
 
         let File::Socket(socket) = file.inner_file() else {

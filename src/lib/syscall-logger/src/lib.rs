@@ -13,31 +13,32 @@ use quote::ToTokens;
 ///
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
-/// # use shadow_rs::host::context::ThreadContext;
+/// # use shadow_rs::host::syscall::handler::SyscallContext;
 /// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
 ///     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {}
+///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {}
 /// }
 /// ```
 ///
 /// will become,
 ///
 /// ```compile_fail
-/// # use shadow_rs::host::context::ThreadContext;
+/// # use syscall_logger::log_syscall;
+/// # use shadow_rs::host::syscall::handler::SyscallContext;
 /// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
-///     pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
 ///         // ...
-///         let rv = close_original(ctx, args);
+///         let rv = close_original(ctx, fd);
 ///         // ...
 ///         rv
 ///     }
-///     fn close_original(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+///     fn close_original(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
 ///     }
 /// }
 /// ```
@@ -45,10 +46,17 @@ use quote::ToTokens;
 pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut input: syn::Item = syn::parse(input).unwrap();
 
+    // name of the syscall
     let syscall_name;
+    // name of the syscall with "_original" appended
     let syscall_name_original;
+    // the syscall argument names (ex: ["ctx", "fd", "val"])
+    let syscall_args: Vec<_>;
+    // the syscall arguments as a token stream (ex: "ctx: SyscallContext, fd: u32. val: i32")
+    let syscall_args_and_types;
+    // the name of the first argument, which should be of type `SyscallContext`
+    let context_arg_name;
 
-    // modify the original function
     {
         let mut input_fn = match &mut input {
             syn::Item::Fn(input_fn) => input_fn,
@@ -66,6 +74,26 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
         // make the function non-public
         input_fn.vis = syn::Visibility::Inherited;
+
+        // get the function arguments
+        syscall_args_and_types = input_fn.sig.inputs.clone();
+
+        // get the names of the function arguments
+        syscall_args = input_fn.sig.inputs.iter().map(|arg| {
+            let syn::FnArg::Typed(arg) = arg else {
+                panic!("Expected a typed arg. Does the function take `self`?");
+            };
+
+            // rust functions can be complicated (for example struct destructured args), but syscall
+            // arguments will be simple
+            let syn::Pat::Ident(ident) = &*arg.pat else {
+                panic!("Function arguments must be identities (ex: `name: Type`), not {:?}", arg.pat);
+            };
+
+            ident.clone()
+        }).collect();
+
+        context_arg_name = syscall_args[0].clone();
     }
 
     let mut rv_type = vec![];
@@ -99,13 +127,11 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let syscall_wrapper = quote::quote! {
         pub fn #syscall_name(
-            &self,
-            ctx: &mut crate::host::context::ThreadContext,
-            args: &crate::host::syscall_types::SysCallArgs,
+            #syscall_args_and_types
         ) -> crate::host::syscall_types::SyscallResult {
-            let Some(strace_fmt_options) = ctx.process.strace_logging_options() else {
+            let Some(strace_fmt_options) = #context_arg_name.objs.process.strace_logging_options() else {
                 // exit early if strace logging is not enabled
-                return self.#syscall_name_original(ctx, args);
+                return Self::#syscall_name_original(#(#syscall_args),*);
             };
 
             // make sure to include the full path to all used types
@@ -113,34 +139,34 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             use crate::host::syscall::formatter::{SyscallArgsFmt, SyscallResultFmt, write_syscall};
 
             let syscall_args = {
-                let memory = ctx.process.memory_borrow();
-                let syscall_args = <SyscallArgsFmt::<#(#arg_types)*>>::new(args.args, strace_fmt_options, &*memory);
+                let memory = #context_arg_name.objs.process.memory_borrow();
+                let syscall_args = <SyscallArgsFmt::<#(#arg_types)*>>::new(#context_arg_name.args.args, strace_fmt_options, &*memory);
                 // need to convert to a string so that we read the plugin's memory before we potentially
                 // modify it during the syscall
                 format!("{}", syscall_args)
             };
 
             // make the syscall
-            let rv = self.#syscall_name_original(ctx, args);
+            let rv = Self::#syscall_name_original(#(#syscall_args),*);
 
             // In case the syscall borrowed memory references without flushing them,
             // we need to flush them here.
             if rv.is_ok() {
-                ctx.process.free_unsafe_borrows_flush().unwrap();
+                #context_arg_name.objs.process.free_unsafe_borrows_flush().unwrap();
             } else {
-                ctx.process.free_unsafe_borrows_noflush();
+                #context_arg_name.objs.process.free_unsafe_borrows_noflush();
             }
 
             // format the result (returns None if the syscall didn't complete)
-            let memory = ctx.process.memory_borrow();
-            let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, args.args, strace_fmt_options, &*memory);
+            let memory = #context_arg_name.objs.process.memory_borrow();
+            let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, #context_arg_name.args.args, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {
-                ctx.process.with_strace_file(|file| {
+                #context_arg_name.objs.process.with_strace_file(|file| {
                     write_syscall(
                         file,
                         &Worker::current_time().unwrap(),
-                        ctx.thread.id(),
+                        #context_arg_name.objs.thread.id(),
                         #syscall_name_str,
                         &syscall_args,
                         syscall_rv,

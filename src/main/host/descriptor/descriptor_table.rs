@@ -253,6 +253,16 @@ impl TryFrom<u32> for DescriptorHandle {
     }
 }
 
+impl TryFrom<u64> for DescriptorHandle {
+    // use the same error type as the conversion from u32
+    type Error = <DescriptorHandle as TryFrom<u32>>::Error;
+    fn try_from(x: u64) -> Result<Self, Self::Error> {
+        u32::try_from(x)
+            .or(Err(DescriptorHandleError()))?
+            .try_into()
+    }
+}
+
 impl TryFrom<i32> for DescriptorHandle {
     type Error = DescriptorHandleError;
     fn try_from(x: i32) -> Result<Self, Self::Error> {
@@ -260,6 +270,16 @@ impl TryFrom<i32> for DescriptorHandle {
             .ok()
             .and_then(DescriptorHandle::new)
             .ok_or(DescriptorHandleError())
+    }
+}
+
+impl TryFrom<i64> for DescriptorHandle {
+    // use the same error type as the conversion from i32
+    type Error = <DescriptorHandle as TryFrom<i32>>::Error;
+    fn try_from(x: i64) -> Result<Self, Self::Error> {
+        i32::try_from(x)
+            .or(Err(DescriptorHandleError()))?
+            .try_into()
     }
 }
 

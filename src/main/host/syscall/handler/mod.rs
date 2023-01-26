@@ -6,7 +6,7 @@ use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTabl
 use crate::host::descriptor::Descriptor;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
-    PluginPtr, SysCallArgs, SyscallError, SyscallResult, TypedPluginPtr,
+    PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
 };
 use crate::utility::sockaddr::SockaddrStorage;
 
@@ -37,56 +37,60 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
-    pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        match args.number {
-            libc::SYS_accept => self.accept(ctx, args),
-            libc::SYS_accept4 => self.accept4(ctx, args),
-            libc::SYS_bind => self.bind(ctx, args),
-            libc::SYS_brk => self.brk(ctx, args),
-            libc::SYS_close => self.close(ctx, args),
-            libc::SYS_connect => self.connect(ctx, args),
-            libc::SYS_dup => self.dup(ctx, args),
-            libc::SYS_dup2 => self.dup2(ctx, args),
-            libc::SYS_dup3 => self.dup3(ctx, args),
-            libc::SYS_eventfd => self.eventfd(ctx, args),
-            libc::SYS_eventfd2 => self.eventfd2(ctx, args),
-            libc::SYS_fcntl => self.fcntl(ctx, args),
-            libc::SYS_getitimer => self.getitimer(ctx, args),
-            libc::SYS_getpeername => self.getpeername(ctx, args),
-            libc::SYS_getrandom => self.getrandom(ctx, args),
-            libc::SYS_getsockname => self.getsockname(ctx, args),
-            libc::SYS_getsockopt => self.getsockopt(ctx, args),
-            libc::SYS_ioctl => self.ioctl(ctx, args),
-            libc::SYS_listen => self.listen(ctx, args),
-            libc::SYS_mmap => self.mmap(ctx, args),
-            libc::SYS_mprotect => self.mprotect(ctx, args),
-            libc::SYS_mremap => self.mremap(ctx, args),
-            libc::SYS_munmap => self.munmap(ctx, args),
-            libc::SYS_open => self.open(ctx, args),
-            libc::SYS_openat => self.openat(ctx, args),
-            libc::SYS_pipe => self.pipe(ctx, args),
-            libc::SYS_pipe2 => self.pipe2(ctx, args),
-            libc::SYS_pread64 => self.pread64(ctx, args),
-            libc::SYS_pwrite64 => self.pwrite64(ctx, args),
-            libc::SYS_rseq => self.rseq(ctx, args),
-            libc::SYS_read => self.read(ctx, args),
-            libc::SYS_recvfrom => self.recvfrom(ctx, args),
-            libc::SYS_sched_getaffinity => self.sched_getaffinity(ctx, args),
-            libc::SYS_sched_setaffinity => self.sched_setaffinity(ctx, args),
-            libc::SYS_sched_yield => self.sched_yield(ctx, args),
-            libc::SYS_sendto => self.sendto(ctx, args),
-            libc::SYS_setitimer => self.setitimer(ctx, args),
-            libc::SYS_setsockopt => self.setsockopt(ctx, args),
-            libc::SYS_shutdown => self.shutdown(ctx, args),
-            libc::SYS_socket => self.socket(ctx, args),
-            libc::SYS_socketpair => self.socketpair(ctx, args),
-            libc::SYS_sysinfo => self.sysinfo(ctx, args),
-            libc::SYS_write => self.write(ctx, args),
+    pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+        match ctx.args.number {
+            libc::SYS_accept => SyscallHandlerFn::call(Self::accept, &mut ctx),
+            libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
+            libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
+            libc::SYS_brk => SyscallHandlerFn::call(Self::brk, &mut ctx),
+            libc::SYS_close => SyscallHandlerFn::call(Self::close, &mut ctx),
+            libc::SYS_connect => SyscallHandlerFn::call(Self::connect, &mut ctx),
+            libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),
+            libc::SYS_dup2 => SyscallHandlerFn::call(Self::dup2, &mut ctx),
+            libc::SYS_dup3 => SyscallHandlerFn::call(Self::dup3, &mut ctx),
+            libc::SYS_eventfd => SyscallHandlerFn::call(Self::eventfd, &mut ctx),
+            libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
+            libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
+            libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
+            libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
+            libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
+            libc::SYS_getsockname => SyscallHandlerFn::call(Self::getsockname, &mut ctx),
+            libc::SYS_getsockopt => SyscallHandlerFn::call(Self::getsockopt, &mut ctx),
+            libc::SYS_ioctl => SyscallHandlerFn::call(Self::ioctl, &mut ctx),
+            libc::SYS_listen => SyscallHandlerFn::call(Self::listen, &mut ctx),
+            libc::SYS_mmap => SyscallHandlerFn::call(Self::mmap, &mut ctx),
+            libc::SYS_mprotect => SyscallHandlerFn::call(Self::mprotect, &mut ctx),
+            libc::SYS_mremap => SyscallHandlerFn::call(Self::mremap, &mut ctx),
+            libc::SYS_munmap => SyscallHandlerFn::call(Self::munmap, &mut ctx),
+            libc::SYS_open => SyscallHandlerFn::call(Self::open, &mut ctx),
+            libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
+            libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
+            libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
+            libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
+            libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
+            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
+            libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
+            libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
+            libc::SYS_sched_getaffinity => {
+                SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
+            }
+            libc::SYS_sched_setaffinity => {
+                SyscallHandlerFn::call(Self::sched_setaffinity, &mut ctx)
+            }
+            libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
+            libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
+            libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
+            libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
+            libc::SYS_shutdown => SyscallHandlerFn::call(Self::shutdown, &mut ctx),
+            libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
+            libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
+            libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
+            libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
                 // warning
-                log::warn!("Rust syscall {} is not mapped", args.number);
+                log::warn!("Rust syscall {} is not mapped", ctx.args.number);
                 Err(Errno::ENOSYS.into())
             }
         }
@@ -123,12 +127,8 @@ impl SyscallHandler {
     }
 
     /// Run a legacy C syscall handler.
-    fn legacy_syscall(
-        syscall: LegacySyscallFn,
-        ctx: &mut ThreadContext,
-        args: &SysCallArgs,
-    ) -> SyscallResult {
-        unsafe { syscall(ctx.thread.csyscallhandler(), args as *const _) }.into()
+    fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
+        unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into()
     }
 }
 
@@ -214,6 +214,125 @@ pub fn read_sockaddr(
     Ok(Some(addr))
 }
 
+pub struct SyscallContext<'a, 'b> {
+    pub objs: &'a mut ThreadContext<'b>,
+    pub args: &'a SysCallArgs,
+}
+
+pub trait SyscallHandlerFn<T> {
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult;
+}
+
+impl<F> SyscallHandlerFn<()> for F
+where
+    F: Fn(&mut SyscallContext) -> SyscallResult,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        self(ctx)
+    }
+}
+
+impl<F, T> SyscallHandlerFn<(T,)> for F
+where
+    F: Fn(&mut SyscallContext, T) -> SyscallResult,
+    T: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(ctx, ctx.args.get(0).into())
+    }
+}
+
+impl<F, T1, T2> SyscallHandlerFn<(T1, T2)> for F
+where
+    F: Fn(&mut SyscallContext, T1, T2) -> SyscallResult,
+    T1: From<SysCallReg>,
+    T2: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(ctx, ctx.args.get(0).into(), ctx.args.get(1).into())
+    }
+}
+
+impl<F, T1, T2, T3> SyscallHandlerFn<(T1, T2, T3)> for F
+where
+    F: Fn(&mut SyscallContext, T1, T2, T3) -> SyscallResult,
+    T1: From<SysCallReg>,
+    T2: From<SysCallReg>,
+    T3: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(
+            ctx,
+            ctx.args.get(0).into(),
+            ctx.args.get(1).into(),
+            ctx.args.get(2).into(),
+        )
+    }
+}
+
+impl<F, T1, T2, T3, T4> SyscallHandlerFn<(T1, T2, T3, T4)> for F
+where
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4) -> SyscallResult,
+    T1: From<SysCallReg>,
+    T2: From<SysCallReg>,
+    T3: From<SysCallReg>,
+    T4: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(
+            ctx,
+            ctx.args.get(0).into(),
+            ctx.args.get(1).into(),
+            ctx.args.get(2).into(),
+            ctx.args.get(3).into(),
+        )
+    }
+}
+
+impl<F, T1, T2, T3, T4, T5> SyscallHandlerFn<(T1, T2, T3, T4, T5)> for F
+where
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5) -> SyscallResult,
+    T1: From<SysCallReg>,
+    T2: From<SysCallReg>,
+    T3: From<SysCallReg>,
+    T4: From<SysCallReg>,
+    T5: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(
+            ctx,
+            ctx.args.get(0).into(),
+            ctx.args.get(1).into(),
+            ctx.args.get(2).into(),
+            ctx.args.get(3).into(),
+            ctx.args.get(4).into(),
+        )
+    }
+}
+
+impl<F, T1, T2, T3, T4, T5, T6> SyscallHandlerFn<(T1, T2, T3, T4, T5, T6)> for F
+where
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5, T6) -> SyscallResult,
+    T1: From<SysCallReg>,
+    T2: From<SysCallReg>,
+    T3: From<SysCallReg>,
+    T4: From<SysCallReg>,
+    T5: From<SysCallReg>,
+    T6: From<SysCallReg>,
+{
+    fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
+        (self)(
+            ctx,
+            ctx.args.get(0).into(),
+            ctx.args.get(1).into(),
+            ctx.args.get(2).into(),
+            ctx.args.get(3).into(),
+            ctx.args.get(4).into(),
+            ctx.args.get(5).into(),
+        )
+    }
+}
+
 mod export {
     use shadow_shim_helper_rs::notnull::*;
 
@@ -245,7 +364,13 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
+            objs.with_ctx(|ctx| {
+                let ctx = SyscallContext {
+                    objs: ctx,
+                    args: unsafe { args.as_ref().unwrap() },
+                };
+                sys.syscall(ctx).into()
+            })
         })
         .unwrap()
     }
