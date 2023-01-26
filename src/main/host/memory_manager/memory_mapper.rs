@@ -24,7 +24,7 @@ const HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 const STACK_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 
 // Represents a region of plugin memory.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Region {
     // Where the region is mapped into shadow's address space, or NULL if it isn't.
     shadow_base: *mut c_void,
@@ -220,15 +220,10 @@ fn get_heap(
     let heap_mapping = {
         let mut it = regions
             .iter()
-            .fuse()
-            .skip_while(|m| m.1.original_path != Some(proc_maps::MappingPath::Heap));
+            .filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap));
         let heap_mapping = it.next();
         // There should only be one heap region.
-        debug_assert!(
-            it.filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap))
-                .count()
-                == 0
-        );
+        assert_eq!(it.fuse().next(), None);
         heap_mapping
     };
     if heap_mapping.is_none() {
@@ -335,6 +330,40 @@ impl Drop for MemoryMapper {
     }
 }
 
+/// Collapses adjacent regions with identical properties into a single region.
+/// Panics if any regions have already been mapped into shadow.
+///
+/// This is primarily to work around some kernel version 6.1.6 reporting
+/// multiple adjacent heap regions. See
+/// https://github.com/shadow/shadow/issues/2692
+fn coalesce_regions(regions: IntervalMap<Region>) -> IntervalMap<Region> {
+    let mut out = IntervalMap::new();
+    let mut agg_interval_region: Option<(Interval, Region)> = None;
+    for (interval, region) in regions.iter() {
+        // We don't handle already-mapped regions
+        assert!(region.shadow_base.is_null());
+        agg_interval_region = Some(
+            if let Some((agg_interval, agg_region)) = agg_interval_region.take() {
+                if interval.start == agg_interval.end && region == &agg_region {
+                    // can be coalesced. do so.
+                    (agg_interval.start..interval.end, agg_region)
+                } else {
+                    // Can't be coalesced; flush the current aggregate to `out`.
+                    out.insert(agg_interval, agg_region);
+                    (interval, region.clone())
+                }
+            } else {
+                (interval, region.clone())
+            },
+        );
+    }
+    // Flush last region
+    if let Some((current_interval, current_region)) = agg_interval_region.take() {
+        out.insert(current_interval, current_region);
+    }
+    out
+}
+
 impl MemoryMapper {
     pub fn new(memory_manager: &mut MemoryManager, thread: &mut ThreadRef) -> MemoryMapper {
         let shm_path = format!(
@@ -384,7 +413,8 @@ impl MemoryMapper {
             shm_plugin_fd,
             len: 0,
         };
-        let mut regions = get_regions(memory_manager.pid);
+        let regions = get_regions(memory_manager.pid);
+        let mut regions = coalesce_regions(regions);
         let heap = get_heap(&mut shm_file, thread, memory_manager, &mut regions);
         map_stack(memory_manager, thread, &mut shm_file, &mut regions);
 
