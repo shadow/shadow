@@ -21,7 +21,6 @@ typedef struct _Thread Thread;
 #include "main/host/syscall_types.h"
 
 Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID);
-void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,

@@ -75,11 +75,6 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
     }
 }
 
-void thread_ref(Thread* thread) {
-    MAGIC_ASSERT(thread);
-    (thread->referenceCount)++;
-}
-
 void thread_unref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)--;
