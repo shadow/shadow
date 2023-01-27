@@ -694,7 +694,7 @@ impl Process {
         let mut host_shmem_protected = host.shim_shmem_lock_borrow_mut().unwrap();
         let threads = self.threads.borrow();
         for thread in threads.values() {
-            let mut thread = thread.borrow_mut(host.root());
+            let thread = thread.borrow_mut(host.root());
             {
                 let thread_shmem = thread.shmem();
                 let thread_shmem_protected = thread_shmem
