@@ -34,6 +34,7 @@
 
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
+use super::thread::ThreadId;
 use super::{host::Host, process::Process, thread::ThreadRef};
 use crate::cshadow;
 
@@ -93,7 +94,7 @@ impl<'a> ThreadContext<'a> {
 pub struct ThreadContextObjs<'a> {
     host: &'a Host,
     process: &'a RootedRefCell<Process>,
-    thread: ThreadRef,
+    tid: ThreadId,
 }
 
 impl<'a> ThreadContextObjs<'a> {
@@ -103,12 +104,8 @@ impl<'a> ThreadContextObjs<'a> {
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
         let process = unsafe { sys.process.as_ref().unwrap() };
-        let thread = unsafe { ThreadRef::new(sys.thread) };
-        Self {
-            host,
-            process,
-            thread,
-        }
+        let tid = ThreadId::try_from(unsafe { cshadow::thread_getID(sys.thread) }).unwrap();
+        Self { host, process, tid }
     }
 
     /// # Safety
@@ -125,7 +122,8 @@ impl<'a> ThreadContextObjs<'a> {
         F: FnOnce(&mut ThreadContext) -> R,
     {
         let process = self.process.borrow(self.host.root());
-        let mut ctx = ThreadContext::new(self.host, &process, &self.thread);
+        let thread = process.thread_borrow(self.tid).unwrap();
+        let mut ctx = ThreadContext::new(self.host, &process, &thread);
         f(&mut ctx)
     }
 }
