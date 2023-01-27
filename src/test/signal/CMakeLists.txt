@@ -9,3 +9,12 @@ add_shadow_tests(BASENAME signal)
 ## More complete signal functionality.
 add_linux_tests(BASENAME signals-extra COMMAND sh -c "../../target/debug/test_signals --libc-passing")
 add_shadow_tests(BASENAME signals-extra)
+
+## Basic cross-process signal tests.
+add_shadow_tests(
+    BASENAME signals-multiprocess
+    # `sleep` should die with signal SIGINT (2), giving exitcode 128+2=130
+    POST_CMD "test `cat hosts/*/*.sleep.*.exitcode` -eq 130"
+    # Shadow should return failure
+    EXPECT_ERROR TRUE
+    CHECK_RETVAL FALSE)
