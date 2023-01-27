@@ -164,7 +164,7 @@ pub struct Process {
     // everywhere as we do with Process and Host. I suspect we'll actually want
     // to move in the other direction once we have less C code though and reduce
     // the amount of interior mutability.
-    threads: RefCell<BTreeMap<ThreadId, RootedRc<RootedRefCell<ThreadRef>>>>,
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -446,10 +446,7 @@ impl Process {
         {
             let thread =
                 unsafe { cshadow::thread_new(host, self.cprocess(host), tid.try_into().unwrap()) };
-            let thread_ref = RootedRc::new(
-                host.root(),
-                RootedRefCell::new(host.root(), unsafe { ThreadRef::new(thread) }),
-            );
+            let thread_ref = RootedRc::new(host.root(), unsafe { ThreadRef::new(thread) });
             // ThreadRef increments the reference count; we don't need the original
             // reference anymore.
             unsafe { cshadow::thread_unref(thread) };
@@ -457,7 +454,6 @@ impl Process {
         };
 
         let main_thread = self.thread_borrow(tid).unwrap();
-        let main_thread = main_thread.borrow(host.root());
 
         info!("starting process '{}'", self.name());
         Worker::set_active_process(self);
@@ -551,15 +547,13 @@ impl Process {
         }
 
         let threads = self.threads.borrow();
-        let Some(threadrc) = threads.get(&tid) else {
+        let Some(thread) = threads.get(&tid) else {
             debug!("Thread {} no longer exists", tid);
             return;
         };
 
-        let thread = threadrc.borrow(host.root());
-
         Worker::set_active_process(self);
-        Worker::set_active_thread(&thread);
+        Worker::set_active_thread(thread);
 
         #[cfg(feature = "perf_timers")]
         self.start_cpu_delay_timer();
@@ -694,7 +688,6 @@ impl Process {
         let mut host_shmem_protected = host.shim_shmem_lock_borrow_mut().unwrap();
         let threads = self.threads.borrow();
         for thread in threads.values() {
-            let thread = thread.borrow_mut(host.root());
             {
                 let thread_shmem = thread.shmem();
                 let thread_shmem_protected = thread_shmem
@@ -837,7 +830,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<ThreadRef>>> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<ThreadRef>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -912,8 +905,7 @@ impl Process {
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
     fn reap_thread(&self, host: &Host, tid: ThreadId) {
-        let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
-        let thread = threadrc.borrow(host.root());
+        let thread = self.threads.borrow_mut().remove(&tid).unwrap();
 
         // If the `clear_child_tid` attribute on the thread is set, and there are
         // any other threads left alive in the process, perform a futex wake on
@@ -971,14 +963,12 @@ impl Process {
             let threads = self.threads.borrow();
             let writer_thread = threads.values().next().unwrap();
             // There shouldn't be any non-running threads in the table.
-            assert!(unsafe {
-                cshadow::thread_isRunning(writer_thread.borrow(host.root()).cthread())
-            });
+            assert!(unsafe { cshadow::thread_isRunning(writer_thread.cthread()) });
             // MemoryCopier uses the active thread's tid to do the write; we need to set
             // that to the still-live thread we're using to do the write.
             // TODO: change API to accept an explicit thread or tid.
             Worker::clear_active_thread();
-            Worker::set_active_thread(&writer_thread.borrow(host.root()));
+            Worker::set_active_thread(writer_thread);
             let typed_clear_child_tid_pvp =
                 TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
             self.memory_borrow_mut()
@@ -998,10 +988,7 @@ impl Process {
             }
         }
 
-        // Compiler forces us to drop this before we can consume `threadrc`.
-        drop(thread);
-
-        threadrc.safely_drop(host.root());
+        thread.safely_drop(host.root());
     }
 
     fn has_started(&self) -> bool {
@@ -1033,7 +1020,7 @@ impl Process {
                 // the reference so that we don't hold a borrow over the list.
                 (*tid, thread.clone(host.root()))
             };
-            unsafe { cshadow::thread_handleProcessExit(thread.borrow(host.root()).cthread()) };
+            unsafe { cshadow::thread_handleProcessExit(thread.cthread()) };
             self.reap_thread(host, tid);
             thread.safely_drop(host.root());
         }
@@ -1159,8 +1146,7 @@ impl Process {
     fn check_thread(&self, host: &Host, tid: ThreadId) {
         {
             let threads = self.threads.borrow();
-            let threadrc = threads.get(&tid).unwrap();
-            let thread = threadrc.borrow(host.root());
+            let thread = threads.get(&tid).unwrap();
             if unsafe { cshadow::thread_isRunning(thread.cthread()) } {
                 debug!(
                     "thread {} in process '{}' still running, but blocked",
@@ -1186,7 +1172,7 @@ impl Process {
     pub fn add_thread(&self, host: &Host, thread: ThreadRef) {
         let pid = self.id();
         let tid = thread.id();
-        let thread = RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread));
+        let thread = RootedRc::new(host.root(), thread);
         self.threads.borrow_mut().insert(tid, thread);
 
         // Schedule thread to start. We're giving the caller's reference to thread
@@ -2043,7 +2029,7 @@ mod export {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
             proc.thread_borrow(tid)
-                .map(|x| unsafe { x.borrow(host.root()).cthread() })
+                .map(|x| unsafe { x.cthread() })
                 .unwrap_or(std::ptr::null_mut())
         })
         .unwrap()

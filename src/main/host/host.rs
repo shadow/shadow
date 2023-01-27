@@ -1111,7 +1111,7 @@ mod export {
         for process in host.processes.borrow().values() {
             let process = process.borrow(host.root());
             if let Some(thread) = process.thread_borrow(tid) {
-                return unsafe { thread.borrow(host.root()).cthread() };
+                return unsafe { thread.cthread() };
             };
         }
         std::ptr::null_mut()
