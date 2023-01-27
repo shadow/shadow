@@ -566,7 +566,7 @@ impl MemoryManager {
 
     /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
     /// running thread.
-    pub fn init_mapper(&mut self, thread: &mut ThreadRef) {
+    pub fn init_mapper(&mut self, thread: &ThreadRef) {
         assert!(self.memory_mapper.is_none());
         self.memory_mapper = Some(MemoryMapper::new(self, thread));
     }
@@ -585,7 +585,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, thread: &mut ThreadRef, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &ThreadRef, ptr: PluginPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
@@ -594,7 +594,7 @@ impl MemoryManager {
 
     pub fn do_mmap(
         &mut self,
-        thread: &mut ThreadRef,
+        thread: &ThreadRef,
         addr: PluginPtr,
         length: usize,
         prot: i32,
@@ -617,7 +617,7 @@ impl MemoryManager {
 
     pub fn handle_munmap(
         &mut self,
-        thread: &mut ThreadRef,
+        thread: &ThreadRef,
         addr: PluginPtr,
         length: usize,
     ) -> SyscallResult {
@@ -633,12 +633,7 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(
-        &mut self,
-        thread: &mut ThreadRef,
-        addr: PluginPtr,
-        length: usize,
-    ) -> nix::Result<()> {
+    fn do_munmap(&mut self, thread: &ThreadRef, addr: PluginPtr, length: usize) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
@@ -648,7 +643,7 @@ impl MemoryManager {
 
     pub fn handle_mremap(
         &mut self,
-        thread: &mut ThreadRef,
+        thread: &ThreadRef,
         old_address: PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -665,7 +660,7 @@ impl MemoryManager {
 
     pub fn handle_mprotect(
         &mut self,
-        thread: &mut ThreadRef,
+        thread: &ThreadRef,
         addr: PluginPtr,
         size: usize,
         prot: i32,

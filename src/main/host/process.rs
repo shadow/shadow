@@ -576,7 +576,6 @@ impl Process {
         // can drop the borrow of the thread list, and pass a borrowed mutable reference
         // to `thread` so that it doesn't need to be re-borrowed.
         let cthread = unsafe { thread.cthread() };
-        drop(thread);
         drop(threads);
 
         unsafe { cshadow::thread_resume(cthread) };
@@ -1736,17 +1735,9 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
-                .do_mmap(
-                    &mut thread,
-                    PluginPtr::from(addr),
-                    len,
-                    prot,
-                    flags,
-                    fd,
-                    offset,
-                )
+                .do_mmap(&thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
                 .into()
         })
         .unwrap()
@@ -1764,9 +1755,9 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
-                .handle_munmap(&mut thread, PluginPtr::from(addr), len)
+                .handle_munmap(&thread, PluginPtr::from(addr), len)
                 .into()
         })
         .unwrap()
@@ -1786,10 +1777,10 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
                 .handle_mremap(
-                    &mut thread,
+                    &thread,
                     PluginPtr::from(old_addr),
                     old_size,
                     new_size,
@@ -1813,9 +1804,9 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
-                .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
+                .handle_mprotect(&thread, PluginPtr::from(addr), size, prot)
                 .into()
         })
         .unwrap()
@@ -1832,9 +1823,9 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
             memory_manager
-                .handle_brk(&mut thread, PluginPtr::from(plugin_src))
+                .handle_brk(&thread, PluginPtr::from(plugin_src))
                 .into()
         })
         .unwrap()
@@ -1852,8 +1843,8 @@ mod export {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                let mut thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
-                memory_manager.init_mapper(&mut thread)
+                let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+                memory_manager.init_mapper(&thread)
             }
         })
         .unwrap()
