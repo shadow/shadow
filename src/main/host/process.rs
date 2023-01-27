@@ -983,7 +983,7 @@ impl Process {
 
         let cthread = unsafe { thread.cthread() };
         thread.safely_drop(host.root());
-        unsafe { cshadow::thread_unref(cthread)};
+        unsafe { cshadow::thread_free(cthread) };
     }
 
     fn has_started(&self) -> bool {
