@@ -37,7 +37,7 @@ use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::TypedPluginPtr;
-use super::thread::{ThreadId, ThreadRef};
+use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
@@ -157,7 +157,7 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
-    threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<Thread>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -439,7 +439,7 @@ impl Process {
         {
             let thread =
                 unsafe { cshadow::thread_new(host, self.cprocess(host), tid.try_into().unwrap()) };
-            let thread_ref = RootedRc::new(host.root(), unsafe { ThreadRef::new(thread) });
+            let thread_ref = RootedRc::new(host.root(), unsafe { Thread::new(thread) });
             self.threads.borrow_mut().insert(tid, thread_ref);
         };
 
@@ -619,12 +619,7 @@ impl Process {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(
-        &self,
-        host: &Host,
-        current_thread: Option<&ThreadRef>,
-        siginfo: &libc::siginfo_t,
-    ) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
         if siginfo.si_signo == 0 {
             return;
         }
@@ -817,7 +812,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = RootedRc<ThreadRef>> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<Thread>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -1156,7 +1151,7 @@ impl Process {
 
     /// Adds a new thread to the process and schedules it to run.
     /// Intended for use by `clone`.
-    pub fn add_thread(&self, host: &Host, thread: ThreadRef) {
+    pub fn add_thread(&self, host: &Host, thread: Thread) {
         let pid = self.id();
         let tid = thread.id();
         let thread = RootedRc::new(host.root(), thread);
@@ -1407,7 +1402,7 @@ mod export {
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
-    use crate::host::thread::ThreadRef;
+    use crate::host::thread::Thread;
 
     use super::*;
 
@@ -2089,7 +2084,7 @@ mod export {
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { ThreadRef::new(thread) };
+        let thread = unsafe { Thread::new(thread) };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.add_thread(host, thread)
@@ -2143,7 +2138,7 @@ mod export {
                         .unwrap();
                 p.thread_borrow(tid).unwrap()
             });
-            let current_thread: Option<&ThreadRef> = match &current_threadrc {
+            let current_thread: Option<&Thread> = match &current_threadrc {
                 Some(t) => Some(t),
                 None => None,
             };

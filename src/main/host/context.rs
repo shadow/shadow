@@ -35,7 +35,7 @@
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
 use super::thread::ThreadId;
-use super::{host::Host, process::Process, thread::ThreadRef};
+use super::{host::Host, process::Process, thread::Thread};
 use crate::cshadow;
 
 /// Represent the "current" Host.
@@ -67,7 +67,7 @@ impl<'a> ProcessContext<'a> {
         Self { host, process }
     }
 
-    pub fn with_thread(&'a mut self, thread: &'a ThreadRef) -> ThreadContext<'a> {
+    pub fn with_thread(&'a mut self, thread: &'a Thread) -> ThreadContext<'a> {
         ThreadContext::new(self.host, self.process, thread)
     }
 }
@@ -76,11 +76,11 @@ impl<'a> ProcessContext<'a> {
 pub struct ThreadContext<'a> {
     pub host: &'a Host,
     pub process: &'a Process,
-    pub thread: &'a ThreadRef,
+    pub thread: &'a Thread,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a Host, process: &'a Process, thread: &'a ThreadRef) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process, thread: &'a Thread) -> Self {
         Self {
             host,
             process,

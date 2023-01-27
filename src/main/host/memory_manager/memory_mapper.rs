@@ -1,6 +1,6 @@
 use crate::host::memory_manager::{page_size, MemoryManager};
 use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
-use crate::host::thread::ThreadRef;
+use crate::host::thread::Thread;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
@@ -166,7 +166,7 @@ impl ShmFile {
     }
 
     /// Map the given range of the file into the plugin's address space.
-    fn mmap_into_plugin(&self, thread: &ThreadRef, interval: &Interval, prot: i32) {
+    fn mmap_into_plugin(&self, thread: &Thread, interval: &Interval, prot: i32) {
         thread
             .native_mmap(
                 PluginPtr::from(interval.start),
@@ -212,7 +212,7 @@ fn get_regions(pid: Pid) -> IntervalMap<Region> {
 /// Find the heap range, and map it if non-empty.
 fn get_heap(
     shm_file: &mut ShmFile,
-    thread: &ThreadRef,
+    thread: &Thread,
     memory_manager: &MemoryManager,
     regions: &mut IntervalMap<Region>,
 ) -> Interval {
@@ -252,7 +252,7 @@ fn get_heap(
 /// stack size.
 fn map_stack(
     memory_manager: &mut MemoryManager,
-    thread: &ThreadRef,
+    thread: &Thread,
     shm_file: &mut ShmFile,
     regions: &mut IntervalMap<Region>,
 ) {
@@ -365,7 +365,7 @@ fn coalesce_regions(regions: IntervalMap<Region>) -> IntervalMap<Region> {
 }
 
 impl MemoryMapper {
-    pub fn new(memory_manager: &mut MemoryManager, thread: &ThreadRef) -> MemoryMapper {
+    pub fn new(memory_manager: &mut MemoryManager, thread: &Thread) -> MemoryMapper {
         let shm_path = format!(
             "/dev/shm/shadow_memory_manager_{}_{:?}_{}",
             process::id(),
@@ -528,7 +528,7 @@ impl MemoryMapper {
     /// mappings are remapped.
     pub fn handle_mmap_result(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         ptr: TypedPluginPtr<u8>,
         prot: i32,
         flags: i32,
@@ -616,7 +616,7 @@ impl MemoryMapper {
     /// if applicable.
     pub fn handle_mremap(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         old_address: PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -742,7 +742,7 @@ impl MemoryMapper {
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, thread: &ThreadRef, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &Thread, ptr: PluginPtr) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -862,7 +862,7 @@ impl MemoryMapper {
     /// memory in a way that the plugin itself can't.
     pub fn handle_mprotect(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         addr: PluginPtr,
         size: usize,
         prot: i32,

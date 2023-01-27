@@ -17,7 +17,7 @@
 
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
-use crate::host::thread::ThreadRef;
+use crate::host::thread::Thread;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
 use log::*;
@@ -566,7 +566,7 @@ impl MemoryManager {
 
     /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
     /// running thread.
-    pub fn init_mapper(&mut self, thread: &ThreadRef) {
+    pub fn init_mapper(&mut self, thread: &Thread) {
         assert!(self.memory_mapper.is_none());
         self.memory_mapper = Some(MemoryMapper::new(self, thread));
     }
@@ -585,7 +585,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, thread: &ThreadRef, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &Thread, ptr: PluginPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
@@ -594,7 +594,7 @@ impl MemoryManager {
 
     pub fn do_mmap(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         addr: PluginPtr,
         length: usize,
         prot: i32,
@@ -617,7 +617,7 @@ impl MemoryManager {
 
     pub fn handle_munmap(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         addr: PluginPtr,
         length: usize,
     ) -> SyscallResult {
@@ -633,7 +633,7 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(&mut self, thread: &ThreadRef, addr: PluginPtr, length: usize) -> nix::Result<()> {
+    fn do_munmap(&mut self, thread: &Thread, addr: PluginPtr, length: usize) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
@@ -643,7 +643,7 @@ impl MemoryManager {
 
     pub fn handle_mremap(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         old_address: PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -660,7 +660,7 @@ impl MemoryManager {
 
     pub fn handle_mprotect(
         &mut self,
-        thread: &ThreadRef,
+        thread: &Thread,
         addr: PluginPtr,
         size: usize,
         prot: i32,

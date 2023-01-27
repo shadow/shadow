@@ -13,7 +13,7 @@ use crate::core::work::task::TaskRef;
 use crate::cshadow;
 use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
-use crate::host::thread::{ThreadId, ThreadRef};
+use crate::host::thread::{Thread, ThreadId};
 use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::network::packet::Packet;
 use crate::utility::childpid_watcher::ChildPidWatcher;
@@ -174,7 +174,7 @@ impl Worker {
     }
 
     /// Set the currently-active Thread.
-    pub fn set_active_thread(thread: &ThreadRef) {
+    pub fn set_active_thread(thread: &Thread) {
         debug_assert_eq!(
             thread.host_id(),
             Worker::with_active_host(|h| h.info().id).unwrap()

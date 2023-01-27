@@ -9,13 +9,13 @@ use shadow_shim_helper_rs::HostId;
 
 /// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
 /// which this object owns, and frees on Drop.
-pub struct ThreadRef {
+pub struct Thread {
     cthread: HostTreePointer<c::Thread>,
 }
 
-impl IsSend for ThreadRef {}
+impl IsSend for Thread {}
 
-impl ThreadRef {
+impl Thread {
     /// Have the plugin thread natively execute the given syscall.
     pub fn native_syscall(&self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
         // We considered using an iterator here rather than having to pass an index everywhere
@@ -242,7 +242,7 @@ impl ThreadRef {
     }
 }
 
-impl Drop for ThreadRef {
+impl Drop for Thread {
     fn drop(&mut self) {
         unsafe { c::thread_free(self.cthread.ptr()) }
     }
