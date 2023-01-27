@@ -66,7 +66,7 @@ impl<'a> ProcessContext<'a> {
         Self { host, process }
     }
 
-    pub fn with_thread(&'a mut self, thread: &'a mut ThreadRef) -> ThreadContext<'a> {
+    pub fn with_thread(&'a mut self, thread: &'a ThreadRef) -> ThreadContext<'a> {
         ThreadContext::new(self.host, self.process, thread)
     }
 }
@@ -75,11 +75,11 @@ impl<'a> ProcessContext<'a> {
 pub struct ThreadContext<'a> {
     pub host: &'a Host,
     pub process: &'a Process,
-    pub thread: &'a mut ThreadRef,
+    pub thread: &'a ThreadRef,
 }
 
 impl<'a> ThreadContext<'a> {
-    pub fn new(host: &'a Host, process: &'a Process, thread: &'a mut ThreadRef) -> Self {
+    pub fn new(host: &'a Host, process: &'a Process, thread: &'a ThreadRef) -> Self {
         Self {
             host,
             process,
@@ -125,7 +125,7 @@ impl<'a> ThreadContextObjs<'a> {
         F: FnOnce(&mut ThreadContext) -> R,
     {
         let process = self.process.borrow(self.host.root());
-        let mut ctx = ThreadContext::new(self.host, &process, &mut self.thread);
+        let mut ctx = ThreadContext::new(self.host, &process, &self.thread);
         f(&mut ctx)
     }
 }
