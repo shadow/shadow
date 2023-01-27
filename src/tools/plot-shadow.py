@@ -53,7 +53,7 @@ try: pylab.rcParams.update({'legend.ncol':1.0})
 except: pass
 
 LINE_COLORS = ['k', 'r', 'b', 'g', 'c', 'm', 'y']
-LINE_STYLES = ['-', '--', ':', '-.']
+LINE_STYLES = ['-', '--', '-.', ':']
 
 # since there are 7 colors and 4 styles (no common factor), there will be 28
 # distinct color/style combinations before it repeats
