@@ -114,6 +114,12 @@ impl NetworkInterface {
     pub fn add_data_source(&self, socket_ptr: *const c::CompatSocket) {
         unsafe { c::networkinterface_wantsSend(self.c_ptr.ptr(), socket_ptr) };
     }
+
+    /// Disassociate all bound sockets and remove sockets from the sending queue. This should be
+    /// called as part of the host's cleanup procedure.
+    pub fn remove_all_sockets(&self) {
+        unsafe { c::networkinterface_removeAllSockets(self.c_ptr.ptr()) };
+    }
 }
 
 impl Drop for NetworkInterface {

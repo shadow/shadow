@@ -38,4 +38,7 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
 Packet* networkinterface_pop(NetworkInterface* interface);
 void networkinterface_push(NetworkInterface* interface, Packet* packet);
 
+/* Disassociate all bound sockets and remove sockets from the sending queue. */
+void networkinterface_removeAllSockets(NetworkInterface* interface);
+
 #endif /* SHD_NETWORK_INTERFACE_H_ */
