@@ -7,8 +7,8 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
 
-/// Accessor for a C Thread struct. Stores a pointer to the C Thread, but
-/// does not manipulate its ref count.
+/// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
+/// which this object owns, and frees on Drop.
 pub struct ThreadRef {
     cthread: HostTreePointer<c::Thread>,
 }
@@ -215,6 +215,8 @@ impl ThreadRef {
         Ok(())
     }
 
+    /// Takes ownership of `cthread`.
+    ///
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     /// * The returned object must not outlive `cthread`
@@ -237,6 +239,12 @@ impl ThreadRef {
     /// Shared memory for this thread.
     pub fn shmem(&self) -> &ThreadShmem {
         unsafe { c::thread_sharedMem(self.cthread()).as_ref().unwrap() }
+    }
+}
+
+impl Drop for ThreadRef {
+    fn drop(&mut self) {
+        unsafe { c::thread_free(self.cthread.ptr()) }
     }
 }
 

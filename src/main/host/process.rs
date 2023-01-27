@@ -157,12 +157,6 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
-    //
-    // This list is the canonical owner of the underlying c Thread objects.  We
-    // should call `cshadow::thread_free` when removing a `ThreadRef` from this
-    // list. This is a bit fragile, but `ThreadRef` will be changed to be the
-    // canonical owner of the C Thread, at which point we don't have to manually
-    // manage it here.
     threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
@@ -981,9 +975,7 @@ impl Process {
             }
         }
 
-        let cthread = unsafe { thread.cthread() };
         thread.safely_drop(host.root());
-        unsafe { cshadow::thread_free(cthread) };
     }
 
     fn has_started(&self) -> bool {
