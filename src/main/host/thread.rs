@@ -16,7 +16,7 @@ impl IsSend for ThreadRef {}
 
 impl ThreadRef {
     /// Have the plugin thread natively execute the given syscall.
-    pub fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
+    pub fn native_syscall(&self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
         // We considered using an iterator here rather than having to pass an index everywhere
         // below; we avoided it because argument evaluation order is currently a bit of a murky
         // issue, even though it'll *probably* always be left-to-right.
@@ -76,7 +76,7 @@ impl ThreadRef {
         Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread()) })
     }
 
-    pub fn csyscallhandler(&mut self) -> *mut c::SysCallHandler {
+    pub fn csyscallhandler(&self) -> *mut c::SysCallHandler {
         unsafe { c::thread_getSysCallHandler(self.cthread()) }
     }
 
@@ -93,7 +93,7 @@ impl ThreadRef {
         Some(unsafe { SysCallConditionRef::borrow_from_c(syscall_condition_ptr) })
     }
 
-    pub fn syscall_condition_mut(&mut self) -> Option<SysCallConditionRefMut> {
+    pub fn syscall_condition_mut(&self) -> Option<SysCallConditionRefMut> {
         let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread()) };
         if syscall_condition_ptr.is_null() {
             return None;
@@ -103,14 +103,14 @@ impl ThreadRef {
     }
 
     /// Natively execute munmap(2) on the given thread.
-    pub fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
+    pub fn native_munmap(&self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
         self.native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?;
         Ok(())
     }
 
     /// Natively execute mmap(2) on the given thread.
     pub fn native_mmap(
-        &mut self,
+        &self,
         addr: PluginPtr,
         len: usize,
         prot: i32,
@@ -135,7 +135,7 @@ impl ThreadRef {
 
     /// Natively execute mremap(2) on the given thread.
     pub fn native_mremap(
-        &mut self,
+        &self,
         old_addr: PluginPtr,
         old_len: usize,
         new_len: usize,
@@ -157,7 +157,7 @@ impl ThreadRef {
     }
 
     /// Natively execute mmap(2) on the given thread.
-    pub fn native_mprotect(&mut self, addr: PluginPtr, len: usize, prot: i32) -> nix::Result<()> {
+    pub fn native_mprotect(&self, addr: PluginPtr, len: usize, prot: i32) -> nix::Result<()> {
         self.native_syscall(
             libc::SYS_mprotect,
             &[
@@ -170,7 +170,7 @@ impl ThreadRef {
     }
 
     /// Natively execute open(2) on the given thread.
-    pub fn native_open(&mut self, pathname: PluginPtr, flags: i32, mode: i32) -> nix::Result<i32> {
+    pub fn native_open(&self, pathname: PluginPtr, flags: i32, mode: i32) -> nix::Result<i32> {
         let res = self.native_syscall(
             libc::SYS_open,
             &[
@@ -183,20 +183,20 @@ impl ThreadRef {
     }
 
     /// Natively execute close(2) on the given thread.
-    pub fn native_close(&mut self, fd: i32) -> nix::Result<()> {
+    pub fn native_close(&self, fd: i32) -> nix::Result<()> {
         self.native_syscall(libc::SYS_close, &[SysCallReg::from(fd)])?;
         Ok(())
     }
 
     /// Natively execute brk(2) on the given thread.
-    pub fn native_brk(&mut self, addr: PluginPtr) -> nix::Result<PluginPtr> {
+    pub fn native_brk(&self, addr: PluginPtr) -> nix::Result<PluginPtr> {
         let res = self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(PluginPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    pub fn malloc_plugin_ptr(&mut self, size: usize) -> nix::Result<PluginPtr> {
+    pub fn malloc_plugin_ptr(&self, size: usize) -> nix::Result<PluginPtr> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             PluginPtr::from(0usize),
@@ -209,7 +209,7 @@ impl ThreadRef {
     }
 
     /// Frees a pointer previously returned by `malloc_plugin_ptr`
-    pub fn free_plugin_ptr(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
+    pub fn free_plugin_ptr(&self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
         self.native_munmap(ptr, size)?;
         Ok(())
     }
