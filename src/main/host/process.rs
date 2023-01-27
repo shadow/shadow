@@ -157,13 +157,6 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
-    //
-    // `ThreadRef` currently has mutable methods, so we need to be able to get a
-    // mutable reference to it, so we use `RootedRefCell`. We could end up
-    // dropping this if we change `ThreadRef` to use internal mutability
-    // everywhere as we do with Process and Host. I suspect we'll actually want
-    // to move in the other direction once we have less C code though and reduce
-    // the amount of interior mutability.
     threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
