@@ -7,7 +7,8 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
 
-/// Wraps the C Thread struct.
+/// Accessor for a C Thread struct. Stores a pointer to the C Thread, but
+/// does not manipulate its ref count.
 pub struct ThreadRef {
     cthread: HostTreePointer<c::Thread>,
 }
@@ -216,9 +217,9 @@ impl ThreadRef {
 
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
+    /// * The returned object must not outlive `cthread`
     pub unsafe fn new(cthread: *mut c::Thread) -> Self {
         assert!(!cthread.is_null());
-        unsafe { c::thread_ref(cthread) };
         Self {
             cthread: HostTreePointer::new(cthread),
         }
@@ -236,15 +237,6 @@ impl ThreadRef {
     /// Shared memory for this thread.
     pub fn shmem(&self) -> &ThreadShmem {
         unsafe { c::thread_sharedMem(self.cthread()).as_ref().unwrap() }
-    }
-}
-
-impl Drop for ThreadRef {
-    fn drop(&mut self) {
-        // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            c::thread_unref(self.cthread());
-        }
     }
 }
 

@@ -157,6 +157,12 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
+    //
+    // This list is the canonical owner of the underlying c Thread objects.  We
+    // should call `cshadow::thread_free` when removing a `ThreadRef` from this
+    // list. This is a bit fragile, but `ThreadRef` will be changed to be the
+    // canonical owner of the C Thread, at which point we don't have to manually
+    // manage it here.
     threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
@@ -440,9 +446,6 @@ impl Process {
             let thread =
                 unsafe { cshadow::thread_new(host, self.cprocess(host), tid.try_into().unwrap()) };
             let thread_ref = RootedRc::new(host.root(), unsafe { ThreadRef::new(thread) });
-            // ThreadRef increments the reference count; we don't need the original
-            // reference anymore.
-            unsafe { cshadow::thread_unref(thread) };
             self.threads.borrow_mut().insert(tid, thread_ref);
         };
 
@@ -978,7 +981,9 @@ impl Process {
             }
         }
 
+        let cthread = unsafe { thread.cthread() };
         thread.safely_drop(host.root());
+        unsafe { cshadow::thread_unref(cthread)};
     }
 
     fn has_started(&self) -> bool {
@@ -2069,8 +2074,6 @@ mod export {
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { ThreadRef::new(thread) };
-        // Since we're taking ownership, remove the caller's reference to the thread.
-        unsafe { cshadow::thread_unref(thread.cthread()) };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.add_thread(host, thread)
