@@ -128,8 +128,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
         // the thread runs.
         return syscallreturn_makeDoneI64(0);
     }
-    syscallcondition_wakeupForSignal(
-        cond, host_getShimShmemLock(_syscallhandler_getHost(sys)), sig);
+    syscallcondition_wakeupForSignal(cond, _syscallhandler_getHost(sys), sig);
 
     return syscallreturn_makeDoneI64(0);
 }

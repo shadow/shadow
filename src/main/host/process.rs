@@ -677,14 +677,12 @@ impl Process {
     }
 
     fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
-        let mut host_shmem_protected = host.shim_shmem_lock_borrow_mut().unwrap();
         let threads = self.threads.borrow();
         for thread in threads.values() {
             {
                 let thread_shmem = thread.shmem();
-                let thread_shmem_protected = thread_shmem
-                    .protected
-                    .borrow_mut(&host_shmem_protected.root);
+                let host_lock = host.shim_shmem_lock_borrow().unwrap();
+                let thread_shmem_protected = thread_shmem.protected.borrow(&host_lock.root);
                 let blocked_signals = thread_shmem_protected.blocked_signals;
                 if blocked_signals.has(signal) {
                     continue;
@@ -699,7 +697,7 @@ impl Process {
                 warn!("thread {:?} has no syscall_condition. How?", thread.id());
                 continue;
             };
-            cond.wakeup_for_signal(&mut host_shmem_protected, signal);
+            cond.wakeup_for_signal(host, signal);
             break;
         }
     }

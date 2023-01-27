@@ -30,10 +30,12 @@ struct _SysCallCondition {
     OpenFile* activeFile;
     // Non-null if we are listening for status updates on a trigger object
     StatusListener* triggerListener;
+    // The host
+    HostId hostId;
     // The process waiting for the condition
     pid_t proc;
     // The thread waiting for the condition
-    Thread* thread;
+    pid_t threadId;
     // Whether a wakeup event has already been scheduled.
     // Used to avoid scheduling multiple events when multiple triggers fire.
     bool wakeupScheduled;
@@ -143,20 +145,10 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     }
 }
 
-static void _syscallcondition_cleanupProc(SysCallCondition* cond) {
-    MAGIC_ASSERT(cond);
-
-    if (cond->thread) {
-        thread_unref(cond->thread);
-        cond->thread = NULL;
-    }
-}
-
 static void _syscallcondition_free(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
 
     _syscallcondition_cleanupListeners(cond);
-    _syscallcondition_cleanupProc(cond);
 
     if (cond->timeout) {
         timer_disarm(cond->timeout);
@@ -221,8 +213,8 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond, const Pr
                                                 const char* listenVerb) {
     GString* string = g_string_new(NULL);
 
-    g_string_append_printf(string, "Process %s thread %p %s listening for ",
-                           proc ? process_getName(proc) : "NULL", cond->thread, listenVerb);
+    g_string_append_printf(string, "Process %s thread %d %s listening for ",
+                           proc ? process_getName(proc) : "NULL", cond->threadId, listenVerb);
 
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
@@ -300,7 +292,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host) {
+static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host, Thread* thread) {
     if (cond->timeoutExpiration != EMUTIME_INVALID &&
         cond->timeoutExpiration >= worker_getCurrentEmulatedTime()) {
         // Timed out.
@@ -310,7 +302,7 @@ static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host
         // Primary condition is satisfied.
         return true;
     }
-    bool signalPending = thread_unblockedSignalPending(cond->thread, host_getShimShmemLock(host));
+    bool signalPending = thread_unblockedSignalPending(thread, host_getShimShmemLock(host));
     if (signalPending) {
         return true;
     }
@@ -334,28 +326,27 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
         return;
     }
 
+    Thread* thread = process_getThread(proc, cond->threadId);
+    if (!thread) {
 #ifdef DEBUG
-    _syscallcondition_logListeningState(cond, proc, "wakeup while");
-#endif
-
-    if (!cond->thread) {
-        utility_debugAssert(!cond->thread);
-        utility_debugAssert(!cond->triggerListener);
-#ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "ignored (already cleaned up)");
+        _syscallcondition_logListeningState(cond, proc, "ignored (thread no longer exists)");
 #endif
         return;
     }
 
+#ifdef DEBUG
+    _syscallcondition_logListeningState(cond, proc, "wakeup while");
+#endif
+
     // Always deliver the wakeup if the timeout expired.
     // Otherwise, only deliver the wakeup if the desc status is still valid.
-    if (_syscallcondition_satisfied(cond, host)) {
+    if (_syscallcondition_satisfied(cond, host, thread)) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, proc, "stopped");
 #endif
 
         /* Wake up the thread. */
-        process_continue(proc, thread_getID(cond->thread));
+        process_continue(proc, cond->threadId);
     } else {
         // Spurious wakeup. Just return without running the process. The
         // condition's listeners should still be installed, and now that we've
@@ -366,7 +357,7 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
     }
 }
 
-static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
+static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, const Host* host) {
     MAGIC_ASSERT(cond);
 
     if (cond->wakeupScheduled) {
@@ -379,11 +370,9 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    TaskRef* wakeupTask =
-        taskref_new_bound(thread_getHostId(cond->thread), _syscallcondition_trigger, cond, NULL,
-                          _syscallcondition_unrefcb, NULL);
-    host_scheduleTaskWithDelay(
-        thread_getHost(cond->thread), wakeupTask, 0); // Call without moving time forward
+    TaskRef* wakeupTask = taskref_new_bound(
+        cond->hostId, _syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
+    host_scheduleTaskWithDelay(host, wakeupTask, 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
     taskref_drop(wakeupTask);
@@ -395,13 +384,14 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     SysCallCondition* cond = obj;
     MAGIC_ASSERT(cond);
 
+    const Host* host = worker_getCurrentHost();
+
 #ifdef DEBUG
-    const Host* host = thread_getHost(cond->thread);
     const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     _syscallcondition_logListeningState(cond, proc, "status changed while");
 #endif
 
-    _syscallcondition_scheduleWakeupTask(cond);
+    _syscallcondition_scheduleWakeupTask(cond, host);
 }
 
 static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, void* arg) {
@@ -413,27 +403,27 @@ static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, 
     _syscallcondition_logListeningState(cond, proc, "timeout expired while");
 #endif
 
-    _syscallcondition_scheduleWakeupTask(cond);
+    _syscallcondition_scheduleWakeupTask(cond, host);
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host,
                                    const ProcessRefCell* proc, Thread* thread) {
     MAGIC_ASSERT(cond);
+    utility_debugAssert(host);
     utility_debugAssert(proc);
     utility_debugAssert(thread);
 
     /* Update the reference counts. */
     syscallcondition_cancel(cond);
+    cond->hostId = host_getID(host);
     cond->proc = process_getProcessID(proc);
-    cond->thread = thread;
-    thread_ref(thread);
+    cond->threadId = thread_getID(thread);
 
     if (cond->timeoutExpiration != EMUTIME_INVALID) {
         if (!cond->timeout) {
             syscallcondition_ref(cond);
-            TaskRef* task = taskref_new_bound(thread_getHostId(cond->thread),
-                                              _syscallcondition_notifyTimeoutExpired, cond, NULL,
-                                              _syscallcondition_unrefcb, NULL);
+            TaskRef* task = taskref_new_bound(cond->hostId, _syscallcondition_notifyTimeoutExpired,
+                                              cond, NULL, _syscallcondition_unrefcb, NULL);
             cond->timeout = timer_new(task);
             taskref_drop(task);
         }
@@ -496,27 +486,26 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host,
 void syscallcondition_cancel(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
     _syscallcondition_cleanupListeners(cond);
-    _syscallcondition_cleanupProc(cond);
 }
 
-bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock* hostLock,
-                                      int signo) {
+bool syscallcondition_wakeupForSignal(SysCallCondition* cond, const Host* host, int signo) {
     MAGIC_ASSERT(cond);
 
+    ShimShmemHostLock* hostLock = host_getShimShmemLock(host);
+    Thread* thread = host_getThread(host, cond->threadId);
     shd_kernel_sigset_t blockedSignals =
-        shimshmem_getBlockedSignals(hostLock, thread_sharedMem(cond->thread));
+        shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
     if (shd_sigismember(&blockedSignals, signo)) {
         // Signal is blocked. Don't schedule.
         return false;
     }
 
 #ifdef DEBUG
-    const Host* host = thread_getHost(cond->thread);
     const ProcessRefCell* proc = host_getProcess(host, cond->proc);
     _syscallcondition_logListeningState(cond, proc, "signaled while");
 #endif
 
-    _syscallcondition_scheduleWakeupTask(cond);
+    _syscallcondition_scheduleWakeupTask(cond, host);
     return true;
 }
 

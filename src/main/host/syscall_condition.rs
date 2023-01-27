@@ -1,11 +1,12 @@
 use nix::sys::signal::Signal;
-use shadow_shim_helper_rs::shim_shmem::HostShmemProtected;
 
 use crate::cshadow;
 use crate::host::descriptor::OpenFile;
 use crate::host::syscall::Trigger;
 
 use std::marker::PhantomData;
+
+use super::host::Host;
 
 /// An immutable reference to a syscall condition.
 #[derive(Debug, PartialEq, Eq)]
@@ -68,17 +69,9 @@ impl<'a> SysCallConditionRefMut<'a> {
         unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr, file_ptr) };
     }
 
-    pub fn wakeup_for_signal(
-        &mut self,
-        host_lock: &mut HostShmemProtected,
-        signal: Signal,
-    ) -> bool {
+    pub fn wakeup_for_signal(&mut self, host: &Host, signal: Signal) -> bool {
         unsafe {
-            cshadow::syscallcondition_wakeupForSignal(
-                self.condition.c_ptr,
-                host_lock,
-                signal as i32,
-            )
+            cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal as i32)
         }
     }
 }
