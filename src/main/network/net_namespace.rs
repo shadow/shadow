@@ -55,7 +55,6 @@ impl NetworkNamespace {
                     host_id,
                     hostname: hostname.clone(),
                     ip: Ipv4Addr::LOCALHOST,
-                    uses_router: false,
                     pcap: pcap.clone(),
                     qdisc,
                 },
@@ -71,7 +70,6 @@ impl NetworkNamespace {
                     host_id,
                     hostname,
                     ip: public_ip,
-                    uses_router: true,
                     pcap,
                     qdisc,
                 },
@@ -105,13 +103,7 @@ impl NetworkNamespace {
         assert!(!addr.is_null());
 
         let interface = unsafe {
-            NetworkInterface::new(
-                options.host_id,
-                addr,
-                options.pcap.clone(),
-                options.qdisc,
-                options.uses_router,
-            )
+            NetworkInterface::new(options.host_id, addr, options.pcap.clone(), options.qdisc)
         };
 
         (interface, addr)
@@ -297,7 +289,6 @@ struct InterfaceOptions {
     pub host_id: HostId,
     pub hostname: Vec<NonZeroU8>,
     pub ip: Ipv4Addr,
-    pub uses_router: bool,
     pub pcap: Option<PcapOptions>,
     pub qdisc: QDiscMode,
 }

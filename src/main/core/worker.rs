@@ -361,15 +361,9 @@ impl Worker {
 
         let packet_task = TaskRef::new(move |host| {
             let packet = packet.take().expect("Packet task ran twice");
-
-            let became_nonempty = {
-                let mut router = host.upstream_router_borrow_mut();
-                router.push(packet)
-            };
-
-            if became_nonempty {
-                host.packets_are_available_to_receive();
-            }
+            host.upstream_router_borrow_mut()
+                .route_incoming_packet(packet);
+            host.notify_router_has_packets();
         });
 
         let mut packet_event = Event::new(packet_task, deliver_time, src_host, dst_host_id);
@@ -455,6 +449,13 @@ impl Worker {
 
     pub fn increment_plugin_error_count() {
         Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
+    }
+
+    /// Shadow allows configuration of a "bootstrapping" interval, during which
+    /// hosts' network activity does not consume bandwidth. Returns `true` if we
+    /// are still within this preliminary interval, or `false` otherwise.
+    pub fn is_bootstrapping() -> bool {
+        Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
 }
 
@@ -651,13 +652,6 @@ mod export {
         Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
-    // TODO: move to Router::_route_outgoing_packet
-    #[no_mangle]
-    pub extern "C" fn worker_sendPacket(src_host: *const Host, packet: *mut cshadow::Packet) {
-        let src_host = unsafe { src_host.as_ref() }.unwrap();
-        unsafe { Worker::send_packet(src_host, packet) };
-    }
-
     /// Implementation for counting allocated objects. Do not use this function directly.
     /// Use worker_count_allocation instead from the call site.
     #[no_mangle]
@@ -702,11 +696,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
         EmulatedTime::to_c_emutime(Worker::current_time())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
 
     #[no_mangle]

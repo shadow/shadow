@@ -1,16 +1,24 @@
-use std::net::SocketAddrV4;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::PathBuf;
 
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow as c;
-use crate::host::host::Host;
+use crate::network::packet::Packet;
+use crate::network::PacketDevice;
 use crate::utility::{self, HostTreePointer};
 use shadow_shim_helper_rs::HostId;
+
+#[derive(Debug, Clone)]
+pub struct PcapOptions {
+    pub path: PathBuf,
+    pub capture_size_bytes: u32,
+}
 
 /// Represents a network device that can send and receive packets. All accesses
 /// to the internal C implementation should be done through this module.
 pub struct NetworkInterface {
     c_ptr: HostTreePointer<c::NetworkInterface>,
+    addr: Ipv4Addr,
 }
 
 impl NetworkInterface {
@@ -27,7 +35,6 @@ impl NetworkInterface {
         addr: *mut c::Address,
         pcap_options: Option<PcapOptions>,
         qdisc: QDiscMode,
-        uses_router: bool,
     ) -> NetworkInterface {
         let maybe_pcap_dir = pcap_options
             .as_ref()
@@ -41,12 +48,17 @@ impl NetworkInterface {
             .map(|x| x.capture_size_bytes)
             .unwrap_or(0);
 
-        let c_ptr = unsafe {
-            c::networkinterface_new(addr, pcap_dir_cptr, pcap_capture_size, qdisc, uses_router)
+        let c_ptr =
+            unsafe { c::networkinterface_new(addr, pcap_dir_cptr, pcap_capture_size, qdisc) };
+
+        let ipv4_addr: Ipv4Addr = {
+            let addr = unsafe { c::address_toNetworkIP(addr) };
+            u32::from_be(addr).into()
         };
 
         NetworkInterface {
             c_ptr: HostTreePointer::new_for_host(host_id, c_ptr),
+            addr: ipv4_addr,
         }
     }
 
@@ -99,40 +111,8 @@ impl NetworkInterface {
         }) != 0
     }
 
-    pub fn start_refilling_token_buckets(&self, bw_down_kibps: u64, bw_up_kibps: u64) {
-        unsafe {
-            c::networkinterface_startRefillingTokenBuckets(
-                self.c_ptr.ptr(),
-                bw_down_kibps,
-                bw_up_kibps,
-            )
-        };
-    }
-
-    pub fn wants_send(&self, socket_ptr: &c::CompatSocket, host: &Host) {
-        unsafe {
-            c::networkinterface_wantsSend(
-                self.c_ptr.ptr(),
-                host as *const Host,
-                socket_ptr as *const c::CompatSocket,
-            )
-        };
-    }
-
-    pub fn receive_packets(&self, host: &Host) {
-        unsafe { c::networkinterface_receivePackets(self.c_ptr.ptr(), host as *const Host) };
-    }
-
-    /// Returns a pointer to our internal C network interface object so that
-    /// network interface functions can be called outside of the rust API.
-    ///
-    /// # Safety
-    ///
-    /// The returned pointer is only valid until the reference to this
-    /// `NetworkInterface` object is dropped.
-    // TODO: Remove this function to remove unsafe access to internals.
-    pub unsafe fn borrow_inner(&self) -> *mut c::NetworkInterface {
-        unsafe { self.c_ptr.ptr() }
+    pub fn add_data_source(&self, socket_ptr: *const c::CompatSocket) {
+        unsafe { c::networkinterface_wantsSend(self.c_ptr.ptr(), socket_ptr) };
     }
 }
 
@@ -143,8 +123,22 @@ impl Drop for NetworkInterface {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PcapOptions {
-    pub path: PathBuf,
-    pub capture_size_bytes: u32,
+impl PacketDevice for NetworkInterface {
+    fn get_address(&self) -> Ipv4Addr {
+        self.addr
+    }
+
+    fn pop(&self) -> Option<Packet> {
+        let packet_ptr = unsafe { c::networkinterface_pop(self.c_ptr.ptr()) };
+        match packet_ptr.is_null() {
+            true => None,
+            false => Some(Packet::from_raw(packet_ptr)),
+        }
+    }
+
+    fn push(&self, packet: Packet) {
+        let packet_ptr = packet.into_inner();
+        unsafe { c::networkinterface_push(self.c_ptr.ptr(), packet_ptr) };
+        unsafe { c::packet_unref(packet_ptr) };
+    }
 }

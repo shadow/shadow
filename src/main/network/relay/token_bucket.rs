@@ -114,59 +114,6 @@ impl TokenBucket {
     }
 }
 
-mod export {
-    use super::*;
-
-    #[no_mangle]
-    pub extern "C" fn tokenbucket_new(
-        capacity: u64,
-        refill_increment: u64,
-        refill_interval_nanos: u64,
-    ) -> *mut TokenBucket {
-        Box::into_raw(Box::new(
-            TokenBucket::new(
-                capacity,
-                refill_increment,
-                SimulationTime::from_nanos(refill_interval_nanos),
-            )
-            .unwrap(),
-        ))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn tokenbucket_free(tokenbucket_ptr: *mut TokenBucket) {
-        if tokenbucket_ptr.is_null() {
-            return;
-        }
-        unsafe { Box::from_raw(tokenbucket_ptr) };
-    }
-
-    #[no_mangle]
-    pub extern "C" fn tokenbucket_consume(
-        tokenbucket_ptr: *mut TokenBucket,
-        count: u64,
-        remaining_tokens: *mut u64,
-        nanos_until_refill: *mut u64,
-    ) -> bool {
-        let tokenbucket = unsafe { tokenbucket_ptr.as_mut() }.unwrap();
-        let remaining_tokens = unsafe { remaining_tokens.as_mut() }.unwrap();
-        let nanos_until_refill = unsafe { nanos_until_refill.as_mut() }.unwrap();
-
-        match tokenbucket.comforming_remove(count) {
-            Ok(remaining) => {
-                *remaining_tokens = remaining;
-                *nanos_until_refill = 0;
-                true
-            }
-            Err(next_refill_duration) => {
-                *remaining_tokens = 0;
-                *nanos_until_refill = next_refill_duration.as_nanos().try_into().unwrap();
-                false
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

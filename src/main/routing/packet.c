@@ -583,6 +583,8 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
         case PDS_RCV_SOCKET_BUFFERED: return "RCV_SOCKET_BUFFERED";
         case PDS_RCV_SOCKET_DELIVERED: return "RCV_SOCKET_DELIVERED";
         case PDS_DESTROYED: return "PDS_DESTROYED";
+        case PDS_RELAY_CACHED: return "RELAY_CACHED";
+        case PDS_RELAY_FORWARDED: return "RELAY_FORWARDED";
         default: return "UKNOWN";
     }
 }

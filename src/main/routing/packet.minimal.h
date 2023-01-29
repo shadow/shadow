@@ -32,6 +32,8 @@ enum _PacketDeliveryStatusFlags {
     PDS_RCV_SOCKET_BUFFERED = 1 << 18,
     PDS_RCV_SOCKET_DELIVERED = 1 << 19,
     PDS_DESTROYED = 1 << 20,
+    PDS_RELAY_CACHED = 1 << 21,
+    PDS_RELAY_FORWARDED = 1 << 22,
 };
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
