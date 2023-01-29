@@ -11,7 +11,6 @@ use crate::network::relay::token_bucket::TokenBucket;
 use crate::network::Packet;
 use crate::utility::ObjectCounter;
 use atomic_refcell::AtomicRefCell;
-use crossbeam::atomic::AtomicCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 mod token_bucket;
@@ -259,22 +258,15 @@ impl Relay {
 
             // Forward the packet to the destination device now.
             packet.add_status(PacketStatus::RelayForwarded);
-            // FIXME: For now we emulate the old C forwarding code, which
-            // scheduled a 1 nanosecond callback to deliver local packets. We
-            // should delete this entire block once we better understand how
-            // removing it affects the simulation.
             if is_local {
-                let packet = Arc::new(AtomicCell::new(Some(packet)));
-                let task = TaskRef::new(move |host| {
-                    let packet = packet.take().expect("Packet task ran twice");
-                    let dst = host.get_packet_device(packet.dst_address());
-                    dst.push(packet);
-                });
-                host.schedule_task_with_delay(task, SimulationTime::from_nanos(1));
-                continue;
+                // The source and destination are the same. Avoid a double
+                // mutable borrow of the packet device.
+                src.push(packet);
+            } else {
+                // The source and destination are different.
+                let dst = host.get_packet_device(packet.dst_address());
+                dst.push(packet);
             }
-            let dst = host.get_packet_device(packet.dst_address());
-            dst.push(packet);
         }
     }
 }
