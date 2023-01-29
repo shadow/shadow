@@ -121,14 +121,9 @@ impl Relay {
         #[allow(dead_code)]
         match state {
             RelayState::Idle => {
-                // FIXME: For now we emulate the old C forwarding code, which
-                // immediately forwarded one packet at a time as soon as one is
-                // available. We should delete the forward_now call and swap to
-                // forward_later intead, which lets packets accumulate and
-                // unwinds the stack to forward them, once we better understand
-                // its effect on performance.
-                self.forward_now(host);
-                // self.forward_later(SimulationTime::ZERO, host);
+                // Allow packets to accumulate and unwind the stack to forward
+                // them.
+                self.forward_later(SimulationTime::ZERO, host);
             }
             RelayState::Pending => {
                 log::trace!("Relay forward task already scheduled; skipping forward request.");
