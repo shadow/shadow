@@ -232,7 +232,20 @@ impl Relay {
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
                     if let Err(blocking_dur) = tb.comforming_remove(packet.size() as u64) {
-                        // Too few tokens, cache the packet until we can forward it later.
+                        // Too few tokens, need to block.
+                        log::trace!(
+                            "Relay src={} dst={} exceeded rate limit, need {} more tokens \
+                            for packet of size {}, blocking for {:?}",
+                            src.get_address(),
+                            packet.dst_address(),
+                            packet
+                                .size()
+                                .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
+                            packet.size(),
+                            blocking_dur
+                        );
+
+                        // Cache the packet until we can forward it later.
                         packet.add_status(PacketStatus::RelayCached);
                         assert!(internal.next_packet.is_none());
                         internal.next_packet = Some(packet);
