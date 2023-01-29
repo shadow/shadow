@@ -219,13 +219,10 @@ impl Relay {
                 return None;
             };
 
-            // Get the destination device to which this packet should be forwarded.
-            let dst = host.get_packet_device(packet.dst_address());
-
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == dst.get_address();
+            let is_local = src.get_address() == packet.dst_address();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -263,6 +260,7 @@ impl Relay {
                 host.schedule_task_with_delay(task, SimulationTime::from_nanos(1));
                 continue;
             }
+            let dst = host.get_packet_device(packet.dst_address());
             dst.push(packet);
         }
     }
