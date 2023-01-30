@@ -140,7 +140,7 @@ jobs:
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
-          key: tgen-build-key-${{ env.CONTAINER }}-7a5cf4554f813cc996637d942f169aeb745e37ff
+          key: tgen-build-key-${{ env.CONTAINER }}-fa98ebdcd309e1e5a3d9596e58dda05efd99c5e7
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -148,7 +148,7 @@ jobs:
           path: tgen
           repository: shadow/tgen
           # When updating, change cache key in "Restore cache" step above
-          ref: 7a5cf4554f813cc996637d942f169aeb745e37ff
+          ref: fa98ebdcd309e1e5a3d9596e58dda05efd99c5e7
           persist-credentials: false
       - name: Install dependencies
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
@@ -445,7 +445,7 @@ jobs:
       - name: Install shadow runtime dependencies
         run: apt-get install -y libglib2.0-0
 
-      - name: Install example dependencies 
+      - name: Install example dependencies
         run: |
           cd shadow
           # dependencies for examples
