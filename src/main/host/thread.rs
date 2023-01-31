@@ -7,14 +7,15 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
 
-/// Wraps the C Thread struct.
-pub struct ThreadRef {
+/// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
+/// which this object owns, and frees on Drop.
+pub struct Thread {
     cthread: HostTreePointer<c::Thread>,
 }
 
-impl IsSend for ThreadRef {}
+impl IsSend for Thread {}
 
-impl ThreadRef {
+impl Thread {
     /// Have the plugin thread natively execute the given syscall.
     pub fn native_syscall(&self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
         // We considered using an iterator here rather than having to pass an index everywhere
@@ -214,11 +215,13 @@ impl ThreadRef {
         Ok(())
     }
 
+    /// Takes ownership of `cthread`.
+    ///
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
+    /// * The returned object must not outlive `cthread`
     pub unsafe fn new(cthread: *mut c::Thread) -> Self {
         assert!(!cthread.is_null());
-        unsafe { c::thread_ref(cthread) };
         Self {
             cthread: HostTreePointer::new(cthread),
         }
@@ -239,12 +242,9 @@ impl ThreadRef {
     }
 }
 
-impl Drop for ThreadRef {
+impl Drop for Thread {
     fn drop(&mut self) {
-        // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            c::thread_unref(self.cthread());
-        }
+        unsafe { c::thread_free(self.cthread.ptr()) }
     }
 }
 

@@ -37,7 +37,7 @@ use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::TypedPluginPtr;
-use super::thread::{ThreadId, ThreadRef};
+use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 
 use shadow_shim_helper_rs::HostId;
@@ -157,14 +157,7 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
-    //
-    // `ThreadRef` currently has mutable methods, so we need to be able to get a
-    // mutable reference to it, so we use `RootedRefCell`. We could end up
-    // dropping this if we change `ThreadRef` to use internal mutability
-    // everywhere as we do with Process and Host. I suspect we'll actually want
-    // to move in the other direction once we have less C code though and reduce
-    // the amount of interior mutability.
-    threads: RefCell<BTreeMap<ThreadId, RootedRc<ThreadRef>>>,
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<Thread>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -446,10 +439,7 @@ impl Process {
         {
             let thread =
                 unsafe { cshadow::thread_new(host, self.cprocess(host), tid.try_into().unwrap()) };
-            let thread_ref = RootedRc::new(host.root(), unsafe { ThreadRef::new(thread) });
-            // ThreadRef increments the reference count; we don't need the original
-            // reference anymore.
-            unsafe { cshadow::thread_unref(thread) };
+            let thread_ref = RootedRc::new(host.root(), unsafe { Thread::new(thread) });
             self.threads.borrow_mut().insert(tid, thread_ref);
         };
 
@@ -629,12 +619,7 @@ impl Process {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(
-        &self,
-        host: &Host,
-        current_thread: Option<&ThreadRef>,
-        siginfo: &libc::siginfo_t,
-    ) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
         if siginfo.si_signo == 0 {
             return;
         }
@@ -684,14 +669,12 @@ impl Process {
     }
 
     fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
-        let mut host_shmem_protected = host.shim_shmem_lock_borrow_mut().unwrap();
         let threads = self.threads.borrow();
         for thread in threads.values() {
             {
                 let thread_shmem = thread.shmem();
-                let thread_shmem_protected = thread_shmem
-                    .protected
-                    .borrow_mut(&host_shmem_protected.root);
+                let host_lock = host.shim_shmem_lock_borrow().unwrap();
+                let thread_shmem_protected = thread_shmem.protected.borrow(&host_lock.root);
                 let blocked_signals = thread_shmem_protected.blocked_signals;
                 if blocked_signals.has(signal) {
                     continue;
@@ -706,7 +689,7 @@ impl Process {
                 warn!("thread {:?} has no syscall_condition. How?", thread.id());
                 continue;
             };
-            cond.wakeup_for_signal(&mut host_shmem_protected, signal);
+            cond.wakeup_for_signal(host, signal);
             break;
         }
     }
@@ -829,7 +812,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = RootedRc<ThreadRef>> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<Thread>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -1168,7 +1151,7 @@ impl Process {
 
     /// Adds a new thread to the process and schedules it to run.
     /// Intended for use by `clone`.
-    pub fn add_thread(&self, host: &Host, thread: ThreadRef) {
+    pub fn add_thread(&self, host: &Host, thread: Thread) {
         let pid = self.id();
         let tid = thread.id();
         let thread = RootedRc::new(host.root(), thread);
@@ -1419,7 +1402,7 @@ mod export {
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
-    use crate::host::thread::ThreadRef;
+    use crate::host::thread::Thread;
 
     use super::*;
 
@@ -1735,7 +1718,11 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = proc
+                .thread_borrow(
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                )
+                .unwrap();
             memory_manager
                 .do_mmap(&thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
                 .into()
@@ -1755,7 +1742,11 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = proc
+                .thread_borrow(
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                )
+                .unwrap();
             memory_manager
                 .handle_munmap(&thread, PluginPtr::from(addr), len)
                 .into()
@@ -1777,7 +1768,11 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = proc
+                .thread_borrow(
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                )
+                .unwrap();
             memory_manager
                 .handle_mremap(
                     &thread,
@@ -1804,7 +1799,11 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = proc
+                .thread_borrow(
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                )
+                .unwrap();
             memory_manager
                 .handle_mprotect(&thread, PluginPtr::from(addr), size, prot)
                 .into()
@@ -1823,7 +1822,11 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+            let thread = proc
+                .thread_borrow(
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                )
+                .unwrap();
             memory_manager
                 .handle_brk(&thread, PluginPtr::from(plugin_src))
                 .into()
@@ -1843,7 +1846,11 @@ mod export {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                let thread = unsafe { ThreadRef::new(notnull_mut_debug(thread)) };
+                let thread = proc
+                    .thread_borrow(
+                        ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
+                    )
+                    .unwrap();
                 memory_manager.init_mapper(&thread)
             }
         })
@@ -2077,9 +2084,7 @@ mod export {
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { ThreadRef::new(thread) };
-        // Since we're taking ownership, remove the caller's reference to the thread.
-        unsafe { cshadow::thread_unref(thread.cthread()) };
+        let thread = unsafe { Thread::new(thread) };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             proc.add_thread(host, thread)
@@ -2114,15 +2119,30 @@ mod export {
         siginfo: *const libc::siginfo_t,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = if current_running_thread.is_null() {
-            None
-        } else {
-            Some(unsafe { ThreadRef::new(current_running_thread) })
-        };
         let siginfo = unsafe { siginfo.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            proc.borrow(host.root())
-                .signal(host, thread.as_ref(), siginfo)
+            let target_proc = proc.borrow(host.root());
+            let current_procrc = if current_running_thread.is_null() {
+                None
+            } else {
+                let pid = ProcessId::try_from(unsafe {
+                    cshadow::thread_getProcessId(current_running_thread)
+                })
+                .unwrap();
+                Some(host.process_borrow(pid).unwrap())
+            };
+            let current_proc = current_procrc.as_ref().map(|p| p.borrow(host.root()));
+            let current_threadrc = current_proc.as_ref().map(|p| {
+                let tid =
+                    ThreadId::try_from(unsafe { cshadow::thread_getID(current_running_thread) })
+                        .unwrap();
+                p.thread_borrow(tid).unwrap()
+            });
+            let current_thread: Option<&Thread> = match &current_threadrc {
+                Some(t) => Some(t),
+                None => None,
+            };
+            target_proc.signal(host, current_thread, siginfo)
         })
         .unwrap()
     }

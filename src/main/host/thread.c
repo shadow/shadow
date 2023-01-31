@@ -34,7 +34,6 @@ struct _Thread {
     // If non-null, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
     PluginPtr tidAddress;
-    int referenceCount;
 
     SysCallHandler* sys;
 
@@ -51,8 +50,7 @@ struct _Thread {
 
 Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID) {
     Thread* thread = g_new(Thread, 1);
-    *thread = (Thread){.referenceCount = 1,
-                       .hostId = host_getID(host),
+    *thread = (Thread){.hostId = host_getID(host),
                        .processId = process_getProcessID(process),
                        .tid = threadID,
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
@@ -75,26 +73,17 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
     }
 }
 
-void thread_ref(Thread* thread) {
+void thread_free(Thread* thread) {
     MAGIC_ASSERT(thread);
-    (thread->referenceCount)++;
-}
-
-void thread_unref(Thread* thread) {
-    MAGIC_ASSERT(thread);
-    (thread->referenceCount)--;
-    utility_debugAssert(thread->referenceCount >= 0);
-    if(thread->referenceCount == 0) {
-        _thread_cleanupSysCallCondition(thread);
-        managedthread_free(thread->mthread);
-        if (thread->sys) {
-            syscallhandler_unref(thread->sys);
-            thread->sys = NULL;
-        }
-        shmemallocator_globalFree(&thread->shimSharedMemBlock);
-        MAGIC_CLEAR(thread);
-        g_free(thread);
+    _thread_cleanupSysCallCondition(thread);
+    managedthread_free(thread->mthread);
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
     }
+    shmemallocator_globalFree(&thread->shimSharedMemBlock);
+    MAGIC_CLEAR(thread);
+    g_free(thread);
 }
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
@@ -228,7 +217,7 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
     int rv = managedthread_clone(
         (*child)->mthread, thread->mthread, flags, child_stack, ptid, ctid, newtls);
     if (rv < 0) {
-        thread_unref(*child);
+        thread_free(*child);
         *child = NULL;
     }
     return rv;

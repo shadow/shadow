@@ -1,0 +1,17 @@
+# Test sending a signal between processes.
+# In CMakeLists.txt we validate that `sleep` is killed by the signal.
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  mytesthost:
+    network_node_id: 0
+    processes:
+    - path: sleep
+      args: '10'
+      start_time: 1
+    - path: kill 
+      args: -SIGINT '1000'
+      start_time: 2

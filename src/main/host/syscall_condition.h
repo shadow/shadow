@@ -84,7 +84,6 @@ OpenFile* syscallcondition_getActiveFile(SysCallCondition* cond);
  *
  * Returns whether a wakeup was scheduled.
  */
-bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock* hostLock,
-                                      int signo);
+bool syscallcondition_wakeupForSignal(SysCallCondition* cond, const Host* host, int signo);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_CONDITION_H_ */
