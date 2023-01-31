@@ -121,14 +121,9 @@ impl Relay {
         #[allow(dead_code)]
         match state {
             RelayState::Idle => {
-                // FIXME: For now we emulate the old C forwarding code, which
-                // immediately forwarded one packet at a time as soon as one is
-                // available. We should delete the forward_now call and swap to
-                // forward_later intead, which lets packets accumulate and
-                // unwinds the stack to forward them, once we better understand
-                // its effect on performance.
-                self.forward_now(host);
-                // self.forward_later(SimulationTime::ZERO, host);
+                // Allow packets to accumulate and unwind the stack to forward
+                // them.
+                self.forward_later(SimulationTime::ZERO, host);
             }
             RelayState::Pending => {
                 log::trace!("Relay forward task already scheduled; skipping forward request.");
@@ -219,13 +214,10 @@ impl Relay {
                 return None;
             };
 
-            // Get the destination device to which this packet should be forwarded.
-            let dst = host.get_packet_device(packet.dst_address());
-
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == dst.get_address();
+            let is_local = src.get_address() == packet.dst_address();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -235,7 +227,20 @@ impl Relay {
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
                     if let Err(blocking_dur) = tb.comforming_remove(packet.size() as u64) {
-                        // Too few tokens, cache the packet until we can forward it later.
+                        // Too few tokens, need to block.
+                        log::trace!(
+                            "Relay src={} dst={} exceeded rate limit, need {} more tokens \
+                            for packet of size {}, blocking for {:?}",
+                            src.get_address(),
+                            packet.dst_address(),
+                            packet
+                                .size()
+                                .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
+                            packet.size(),
+                            blocking_dur
+                        );
+
+                        // Cache the packet until we can forward it later.
                         packet.add_status(PacketStatus::RelayCached);
                         assert!(internal.next_packet.is_none());
                         internal.next_packet = Some(packet);
@@ -263,6 +268,7 @@ impl Relay {
                 host.schedule_task_with_delay(task, SimulationTime::from_nanos(1));
                 continue;
             }
+            let dst = host.get_packet_device(packet.dst_address());
             dst.push(packet);
         }
     }
