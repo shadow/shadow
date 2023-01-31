@@ -174,10 +174,6 @@ macro(add_shadow_tests)
 endmacro()
 ## === end test helper macros ===
 
-## add the test directories
-# FIXME uncomment these as we get them working in Phantom.
-# FIXME add_subdirectory(preload)
-
 add_subdirectory(bindc)
 add_subdirectory(clone)
 add_subdirectory(compressed-graph)
