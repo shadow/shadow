@@ -40,6 +40,12 @@ impl TokenBucket {
         last_refill: EmulatedTime,
     ) -> Option<TokenBucket> {
         if capacity > 0 && refill_increment > 0 && !refill_interval.is_zero() {
+            log::trace!(
+                "Initializing token bucket with capacity {}, will refill {} tokens every {:?}",
+                capacity,
+                refill_increment,
+                refill_interval
+            );
             Some(TokenBucket {
                 capacity,
                 balance: capacity,
@@ -52,10 +58,12 @@ impl TokenBucket {
         }
     }
 
-    /// Remove `decrement` tokens from the bucket if and only if the bucket contains at
-    /// least `decrement` tokens. Returns the updated token balance on success, and the
-    /// duration until the next token refill on error. Passing a 0 `decrement` always
-    /// succeeds.
+    /// Remove `decrement` tokens from the bucket if and only if the bucket
+    /// contains at least `decrement` tokens. Returns the updated token balance
+    /// on success, or the duration until the next refill event after which we
+    /// would have enough tokens to allow the decrement to conform on error
+    /// (returned durations always align with this `TokenBucket`'s discrete
+    /// refill interval boundaries). Passing a 0 `decrement` always succeeds.
     pub fn comforming_remove(&mut self, decrement: u64) -> Result<u64, SimulationTime> {
         let now = Worker::current_time().unwrap();
         self.conforming_remove_inner(decrement, &now)
@@ -72,8 +80,42 @@ impl TokenBucket {
         self.balance = self
             .balance
             .checked_sub(decrement)
-            .ok_or(next_refill_span)?;
+            .ok_or_else(|| self.compute_conforming_duration(decrement, next_refill_span))?;
         Ok(self.balance)
+    }
+
+    /// Computes the duration required to refill enough tokens such that our
+    /// balance can be decremented by the given `decrement`. Returned durations
+    /// always align with this `TokenBucket`'s discrete refill interval
+    /// boundaries, as configured by its refill interval. `next_refill_span` is
+    /// the duration until the next refill, which may be less than a full refill
+    /// interval.
+    fn compute_conforming_duration(
+        &self,
+        decrement: u64,
+        next_refill_span: SimulationTime,
+    ) -> SimulationTime {
+        let required_token_increment = decrement.saturating_sub(self.balance);
+
+        let num_required_refills = {
+            // Same as `required_token_increment.div_ceil(self.refill_increment);`
+            let num_refills = required_token_increment / self.refill_increment;
+            let remainder = required_token_increment % self.refill_increment;
+            if remainder > 0 {
+                num_refills + 1
+            } else {
+                num_refills
+            }
+        };
+
+        match num_required_refills {
+            0 => SimulationTime::ZERO,
+            1 => next_refill_span,
+            _ => next_refill_span.saturating_add(
+                self.refill_interval
+                    .saturating_mul(num_required_refills.checked_sub(1).unwrap()),
+            ),
+        }
     }
 
     /// Simulates a fixed refill schedule following the bucket's configured
@@ -206,11 +248,29 @@ mod tests {
     fn test_remove_error() {
         let now = mock_time_millis(1000);
         let mut tb =
-            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(123), now).unwrap();
+            TokenBucket::new_inner(100, 10, SimulationTime::from_millis(125), now).unwrap();
+
+        // Clear the bucket
+        let result = tb.conforming_remove_inner(100, &now);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
 
         // This many tokens are not available
-        let result = tb.conforming_remove_inner(1000, &now);
+        let result = tb.conforming_remove_inner(50, &now);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), SimulationTime::from_millis(123));
+
+        // Refilling 10 tokens every 125 millis will require 5 refills
+        let dur_until_conforming = SimulationTime::from_millis(125 * 5);
+        assert_eq!(result.unwrap_err(), dur_until_conforming);
+
+        // Moving time forward is still an error
+        let inc = 10;
+        let now = mock_time_millis(1000 + inc);
+        let result = tb.conforming_remove_inner(50, &now);
+        assert!(result.is_err());
+
+        // We still need 5 refills, but we are 10 millis closer until it conforms
+        let dur_until_conforming = SimulationTime::from_millis(125 * 5 - inc);
+        assert_eq!(result.unwrap_err(), dur_until_conforming);
     }
 }
