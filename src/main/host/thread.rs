@@ -4,8 +4,12 @@ use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, HostTreePointer, IsSend};
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
+
+/// Used for C interop.
+pub type ThreadRc = RootedRc<Thread>;
 
 /// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
 /// which this object owns, and frees on Drop.

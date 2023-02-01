@@ -19,7 +19,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
-        c.add_opaque_types(&["ProcessRefCell"]);
+        c.add_opaque_types(&["ProcessRefCell", "ThreadRc"]);
         c
     };
 
@@ -217,6 +217,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("Descriptor")
         .blocklist_type("HostId")
         .blocklist_type("TaskRef")
+        .blocklist_type("ThreadRc")
         .allowlist_type("WorkerC")
         .opaque_type("WorkerC")
         .allowlist_type("WorkerPool")
@@ -238,6 +239,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
+        .raw_line("use crate::host::thread::ThreadRc;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use logger::Logger;")
         .raw_line("use shadow_shim_helper_rs::HostId;")
