@@ -24,9 +24,6 @@
 #include "main/utility/syscall.h"
 
 struct _Thread {
-    // For safe down-casting. Set and checked by child class.
-    int type_id;
-
     int tid;
 
     HostId hostId;
