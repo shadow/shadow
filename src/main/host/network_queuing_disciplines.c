@@ -13,6 +13,14 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 
+// returns 0 if the sockets' canonical handles are equal, otherwise returns 1
+static gint _compareTaggedSocket(gconstpointer a, gconstpointer b) {
+    CompatSocket sa = compatsocket_fromTagged((uintptr_t)a);
+    CompatSocket sb = compatsocket_fromTagged((uintptr_t)b);
+
+    return compatsocket_getCanonicalHandle(&sa) != compatsocket_getCanonicalHandle(&sb);
+}
+
 void rrsocketqueue_init(RrSocketQueue* self) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue == NULL);
@@ -70,7 +78,8 @@ void rrsocketqueue_push(RrSocketQueue* self, const CompatSocket* socket) {
 bool rrsocketqueue_find(RrSocketQueue* self, const CompatSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    return g_queue_find(self->queue, (void*)compatsocket_toTagged(socket));
+    return g_queue_find_custom(
+        self->queue, (void*)compatsocket_toTagged(socket), _compareTaggedSocket);
 }
 
 static gint _compareSocket(const CompatSocket* sa, const CompatSocket* sb) {
@@ -155,5 +164,6 @@ void fifosocketqueue_push(FifoSocketQueue* self, const CompatSocket* socket) {
 bool fifosocketqueue_find(FifoSocketQueue* self, const CompatSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    return priorityqueue_find(self->queue, (void*)compatsocket_toTagged(socket));
+    return priorityqueue_find_custom(
+        self->queue, (void*)compatsocket_toTagged(socket), _compareTaggedSocket);
 }
