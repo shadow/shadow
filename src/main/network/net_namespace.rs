@@ -121,6 +121,11 @@ impl NetworkNamespace {
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr());
         }
 
+        // we need to unref all sockets and free them before we drop the host, otherwise they'll try
+        // to access the global host and panic since there is no host
+        self.localhost.borrow().remove_all_sockets();
+        self.internet.borrow().remove_all_sockets();
+
         self.has_run_cleanup.set(true);
     }
 

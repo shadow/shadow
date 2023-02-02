@@ -360,6 +360,18 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
     }
 }
 
+void networkinterface_removeAllSockets(NetworkInterface* interface) {
+    /* we want to unref all sockets, but also want to keep the network interface in a valid state */
+
+    rrsocketqueue_destroy(&interface->rrQueue, compatsocket_unref);
+    fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_unref);
+
+    rrsocketqueue_init(&interface->rrQueue);
+    fifosocketqueue_init(&interface->fifoQueue);
+
+    g_hash_table_remove_all(interface->boundSockets);
+}
+
 NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);

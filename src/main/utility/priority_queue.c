@@ -153,6 +153,39 @@ gpointer priorityqueue_find(PriorityQueue *q, gpointer data) {
     return (entry == NULL) ? NULL : *entry;
 }
 
+// helper struct to pass additional data from `priorityqueue_find_custom` to
+// `_priorityqueue_find_helper`
+typedef struct FindData {
+    gpointer userData;
+    GCompareFunc compareFunc;
+} FindData;
+
+// runs the compare function against the hash table's key and the user-supplied data
+static gboolean _priorityqueue_find_helper(gpointer key, gpointer value, gpointer user_data) {
+    FindData* findData = (FindData*)user_data;
+    return findData->compareFunc(key, findData->userData) == 0;
+}
+
+gpointer priorityqueue_find_custom(PriorityQueue* q, gpointer data, GCompareFunc compareFunc) {
+    utility_debugAssert(q);
+
+    // try looking it up by key first
+    gpointer lookup = priorityqueue_find(q, data);
+    // `data` exists in the queue, so no need to run `compareFunc`
+    if (lookup != NULL) {
+        return lookup;
+    }
+
+    // search through the hash table's keys, applying `compareFunc` to each key and the
+    // user-supplied data, and looking for a match
+    FindData findData = {
+        .userData = data,
+        .compareFunc = compareFunc,
+    };
+    gpointer* entry = g_hash_table_find(q->map, _priorityqueue_find_helper, &findData);
+    return (entry == NULL) ? NULL : *entry;
+}
+
 gpointer priorityqueue_pop(PriorityQueue *q) {
     utility_debugAssert(q);
     if (q->size > 0) {
