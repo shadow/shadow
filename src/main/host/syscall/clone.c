@@ -35,11 +35,12 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Don't propagate flags to the real syscall that we'll handle ourselves.
     unsigned long filtered_flags =
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
-    Thread* child = NULL;
+    ThreadRc* child = NULL;
     {
         int res =
             thread_clone(sys->thread, filtered_flags, child_stack, ptid, ctid, newtls, &child);
         if (res < 0) {
+            utility_alwaysAssert(child == NULL);
             return syscallreturn_makeDoneI64(res);
         }
     }
@@ -71,12 +72,17 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         warning("Unhandled clone flags 0x%lx", unhandled_flags);
     }
 
+    pid_t child_tid = thread_getID(child);
+
     // Adds thread to the parent process and schedules it to run. Notably we
     // *don't* want to start running it now, since we're still running the
     // calling thread.
     process_addThread(sys->process, child);
 
-    return syscallreturn_makeDoneI64(thread_getID(child));
+    // Drops *our reference* to the thread.
+    threadrc_drop(child);
+
+    return syscallreturn_makeDoneI64(child_tid);
 }
 
 SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {

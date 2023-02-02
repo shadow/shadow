@@ -62,7 +62,7 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys) {
 }
 
 SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* process,
-                                   Thread* thread) {
+                                   const ThreadRc* thread) {
     utility_debugAssert(host);
     utility_debugAssert(process);
     utility_debugAssert(thread);
@@ -72,7 +72,7 @@ SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* proce
     *sys = (SysCallHandler){
         .hostId = host_getID(host),
         .process = process,
-        .thread = thread,
+        .thread = threadrc_clone(thread),
         .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
         .referenceCount = 1,
@@ -130,6 +130,10 @@ static void _syscallhandler_free(SysCallHandler* sys) {
         g_timer_destroy(sys->perfTimer);
     }
 #endif
+
+    if (sys->thread) {
+        threadrc_drop(sys->thread);
+    }
 
     MAGIC_CLEAR(sys);
     free(sys);

@@ -105,7 +105,7 @@ static void _udp_dropPacket(LegacySocket* socket, const Host* host, Packet* pack
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-static gssize _udp_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+static gssize _udp_sendUserData(LegacySocket* socket, ThreadRc* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
@@ -172,7 +172,7 @@ static gssize _udp_sendUserData(LegacySocket* socket, Thread* thread, PluginVirt
 }
 
 /* Address and port must be in network byte order. */
-static gssize _udp_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+static gssize _udp_receiveUserData(LegacySocket* socket, ThreadRc* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);

@@ -292,7 +292,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host, Thread* thread) {
+static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host, ThreadRc* thread) {
     if (cond->timeoutExpiration != EMUTIME_INVALID &&
         cond->timeoutExpiration >= worker_getCurrentEmulatedTime()) {
         // Timed out.
@@ -326,7 +326,7 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
         return;
     }
 
-    Thread* thread = process_getThread(proc, cond->threadId);
+    ThreadRc* thread = process_getThread(proc, cond->threadId);
     if (!thread) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, proc, "ignored (thread no longer exists)");
@@ -407,7 +407,7 @@ static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, 
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host,
-                                   const ProcessRefCell* proc, Thread* thread) {
+                                   const ProcessRefCell* proc, ThreadRc* thread) {
     MAGIC_ASSERT(cond);
     utility_debugAssert(host);
     utility_debugAssert(proc);
@@ -492,7 +492,7 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, const Host* host, 
     MAGIC_ASSERT(cond);
 
     ShimShmemHostLock* hostLock = host_getShimShmemLock(host);
-    Thread* thread = host_getThread(host, cond->threadId);
+    ThreadRc* thread = host_getThread(host, cond->threadId);
     shd_kernel_sigset_t blockedSignals =
         shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
     if (shd_sigismember(&blockedSignals, signo)) {

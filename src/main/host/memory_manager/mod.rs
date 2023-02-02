@@ -744,6 +744,7 @@ where
 mod export {
     use shadow_shim_helper_rs::notnull::*;
 
+    use crate::host::thread::ThreadRc;
     use crate::{core::worker::Worker, host::context::ThreadContextObjs};
 
     use super::*;
@@ -766,7 +767,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_new(
-        thread: *mut c::Thread,
+        thread: *const ThreadRc,
         len: usize,
     ) -> *mut AllocdMem<u8> {
         Worker::with_active_host(|host| {
@@ -779,7 +780,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_free(
-        thread: *mut c::Thread,
+        thread: *const ThreadRc,
         allocd_mem: *mut AllocdMem<u8>,
     ) {
         Worker::with_active_host(|host| {

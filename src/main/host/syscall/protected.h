@@ -38,7 +38,7 @@ struct _SysCallHandler {
      * The SysCallHandler must not outlive these.
      */
     const ProcessRefCell* process;
-    Thread* thread;
+    ThreadRc* thread;
 
     // For syscalls implemented in rust. Will eventually replace the C handler.
     SyscallHandler* syscall_handler_rs;

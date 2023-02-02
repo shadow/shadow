@@ -1,4 +1,4 @@
-use super::process::ProcessId;
+use super::process::{ProcessId, Process};
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
@@ -14,7 +14,7 @@ pub type ThreadRc = RootedRc<Thread>;
 /// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
 /// which this object owns, and frees on Drop.
 pub struct Thread {
-    cthread: HostTreePointer<c::Thread>,
+    cthread: RootedRefCell<HostTreePointer<c::Thread>>,
 }
 
 impl IsSend for Thread {}
@@ -31,12 +31,12 @@ impl Thread {
         let raw_res = unsafe {
             match args.len() {
                 //
-                0 => c::thread_nativeSyscall(self.cthread(), n),
-                1 => c::thread_nativeSyscall(self.cthread(), n, arg(0)),
-                2 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1)),
-                3 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2)),
-                4 => c::thread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2), arg(3)),
-                5 => c::thread_nativeSyscall(
+                0 => c::cthread_nativeSyscall(self.cthread(), n),
+                1 => c::cthread_nativeSyscall(self.cthread(), n, arg(0)),
+                2 => c::cthread_nativeSyscall(self.cthread(), n, arg(0), arg(1)),
+                3 => c::cthread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2)),
+                4 => c::cthread_nativeSyscall(self.cthread(), n, arg(0), arg(1), arg(2), arg(3)),
+                5 => c::cthread_nativeSyscall(
                     self.cthread(),
                     n,
                     arg(0),
@@ -45,7 +45,7 @@ impl Thread {
                     arg(3),
                     arg(4),
                 ),
-                6 => c::thread_nativeSyscall(
+                6 => c::cthread_nativeSyscall(
                     self.cthread(),
                     n,
                     arg(0),
@@ -63,34 +63,34 @@ impl Thread {
 
     pub fn process_id(&self) -> ProcessId {
         // Safety: self.cthread initialized in CThread::new.
-        ProcessId::try_from(unsafe { c::thread_getProcessId(self.cthread()) }).unwrap()
+        ProcessId::try_from(unsafe { c::cthread_getProcessId(self.cthread()) }).unwrap()
     }
 
     pub fn host_id(&self) -> HostId {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getHostId(self.cthread()) }
+        unsafe { c::cthread_getHostId(self.cthread()) }
     }
 
     pub fn system_pid(&self) -> Pid {
         // Safety: self.cthread initialized in CThread::new.
-        Pid::from_raw(unsafe { c::thread_getNativePid(self.cthread()) })
+        Pid::from_raw(unsafe { c::cthread_getNativePid(self.cthread()) })
     }
 
     pub fn system_tid(&self) -> Pid {
         // Safety: self.cthread initialized in CThread::new.
-        Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread()) })
+        Pid::from_raw(unsafe { c::cthread_getNativeTid(self.cthread()) })
     }
 
     pub fn csyscallhandler(&self) -> *mut c::SysCallHandler {
-        unsafe { c::thread_getSysCallHandler(self.cthread()) }
+        unsafe { c::cthread_getSysCallHandler(self.cthread()) }
     }
 
     pub fn id(&self) -> ThreadId {
-        ThreadId(unsafe { c::thread_getID(self.cthread()).try_into().unwrap() })
+        ThreadId(unsafe { c::cthread_getID(self.cthread()).try_into().unwrap() })
     }
 
     pub fn syscall_condition(&self) -> Option<SysCallConditionRef> {
-        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread()) };
+        let syscall_condition_ptr = unsafe { c::cthread_getSysCallCondition(self.cthread()) };
         if syscall_condition_ptr.is_null() {
             return None;
         }
@@ -99,7 +99,7 @@ impl Thread {
     }
 
     pub fn syscall_condition_mut(&self) -> Option<SysCallConditionRefMut> {
-        let syscall_condition_ptr = unsafe { c::thread_getSysCallCondition(self.cthread()) };
+        let syscall_condition_ptr = unsafe { c::cthread_getSysCallCondition(self.cthread()) };
         if syscall_condition_ptr.is_null() {
             return None;
         }
@@ -224,7 +224,9 @@ impl Thread {
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     /// * The returned object must not outlive `cthread`
-    pub unsafe fn new(cthread: *mut c::Thread) -> Self {
+    pub unsafe fn new(host: &Host, process: &Process, tid: ThreadId) -> RootedRc<Self> {
+        
+
         assert!(!cthread.is_null());
         Self {
             cthread: HostTreePointer::new(cthread),
@@ -248,7 +250,7 @@ impl Thread {
 
 impl Drop for Thread {
     fn drop(&mut self) {
-        unsafe { c::thread_free(self.cthread.ptr()) }
+        unsafe { c::cthread_free(self.cthread.ptr()) }
     }
 }
 
@@ -280,4 +282,254 @@ impl std::fmt::Display for ThreadId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+mod export {
+    use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemThread};
+
+    use crate::host::host::Host;
+    use crate::host::process::ProcessRefCell;
+
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn threadrc_new(
+        host: *const Host,
+        proc: *const ProcessRefCell,
+        threadId: libc::pid_t,
+    ) -> *mut ThreadRc {
+        todo!()
+    }
+
+    /// This drops the ref-counted wrapper, not the thread itself.
+    #[no_mangle]
+    pub unsafe extern "C" fn threadrc_drop(
+        thread: *mut ThreadRc
+    ) {
+        todo!()
+    }
+
+    /// This clones the ref-counted wrapper, not the thread itself.
+    #[no_mangle]
+    pub unsafe extern "C" fn threadrc_clone(
+        thread: *const ThreadRc
+    ) -> *mut ThreadRc {
+        todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_run(
+        thread: *const ThreadRc,
+        plugin_path: *const libc::c_char,
+        argv: * const * const libc::c_char,
+        envv: * const * const libc::c_char,
+        working_dir: * const libc::c_char,
+        strace_fd: i32)  {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_resume(
+        thread: *const ThreadRc)  {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_handleProcessExit(
+        thread: *const ThreadRc)  {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getReturnCode(
+        thread: *const ThreadRc)  {
+            todo!()
+    }
+
+    /// Make the requested syscall from within the plugin. For now, does *not* flush
+    /// or invalidate pointers, but we may need to revisit this to support some
+    /// use-cases.
+    ///
+    /// Arguments are treated opaquely. e.g. no pointer-marshalling is done.
+    ///
+    /// The return value is the value returned by the syscall *instruction*.
+    /// You can map to a corresponding errno value with syscall_rawReturnValueToErrno.
+    // XXX: rust doesn't support declaring a function with varargs (...), but this
+    // declaration is ABI compatible with a caller who sees this function declared
+    // with arguments `ThreadRc* thread, long n, ...`. We manually generate that declartion
+    // in our bindings.
+    #[no_mangle]
+    unsafe extern "C" fn thread_nativeSyscall(
+        thread: *const ThreadRc,
+        n: libc::c_long,
+        arg1: libc::c_long,
+        arg2: libc::c_long,
+        arg3: libc::c_long,
+        arg4: libc::c_long,
+        arg5: libc::c_long,
+        arg6: libc::c_long
+    ) -> libc::c_long {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_isRunning(
+        thread: *const ThreadRc)  {
+            todo!()
+    }
+    
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getProcessId(
+        thread: *const ThreadRc) -> libc::pid_t {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getHostId(
+        thread: *const ThreadRc) -> HostId {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getNativePid(
+        thread: *const ThreadRc) -> libc::pid_t {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getNativeTid(
+        thread: *const ThreadRc) -> libc::pid_t {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getID(
+        thread: *const ThreadRc) -> libc::pid_t {
+            todo!()
+    }
+
+    /// Create a new child thread as for `clone(2)`. Returns 0 on success, or a
+    /// negative errno on failure.  On success, `child` will be set to a newly
+    /// allocated and initialized child Thread. Caller is responsible for adding the
+    /// Thread to the process and arranging for it to run (typically by calling
+    /// process_addThread).
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_clone(
+        thread: *const ThreadRc,
+        flags: libc::c_ulong,
+        child_stack: c::PluginVirtualPtr,
+        ptid: c::PluginVirtualPtr,
+        ctid: c::PluginVirtualPtr,
+        newtls: libc::c_ulong,
+        child: *mut *mut ThreadRc
+    ) -> i32 {
+            todo!()
+    }
+
+    /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
+    /// will perform a futex-wake operation on the given address on termination.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_setTidAddress(
+        thread: *const ThreadRc,
+        addr: c::PluginVirtualPtr
+    ) {
+            todo!()
+    }
+
+    /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getTidAddress(
+        thread: *const ThreadRc,
+    ) -> c::PluginVirtualPtr {
+            todo!()
+    }
+
+    /// Returns whether the given thread is its thread group (aka process) leader.
+    /// Typically this is true for the first thread created in a process.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_isLeader(
+        thread: *const ThreadRc,
+    ) -> bool {
+            todo!()
+    }
+
+    /// Returns the block used for IPC, or NULL if no such block is is used.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getIPCBlock(
+        thread: *const ThreadRc,
+    ) -> *mut c::ShMemBlock{
+            todo!()
+    }
+
+    /// Returns the block used for shared state, or NULL if no such block is is used.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getShMBlock(
+        thread: *const ThreadRc,
+    ) -> *mut c::ShMemBlock{
+            todo!()
+    }
+
+    /// Returns a typed pointer to memory shared with the shim (which is backed by
+    /// the block returned by thread_getShMBlock).
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_sharedMem(
+        thread: *const ThreadRc,
+    ) -> *mut ShimShmemThread {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getProcess(
+        thread: *const ThreadRc,
+    ) -> *const ProcessRefCell{
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getHost(
+        thread: *const ThreadRc,
+    ) -> *const Host {
+            todo!()
+    }
+
+    /// Get the syscallhandler for this thread.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getSysCallHandler(
+        thread: *const ThreadRc,
+    ) -> *mut c::SysCallHandler {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getSysCallCondition(
+        thread: *const ThreadRc,
+    ) -> *mut c::SysCallCondition{
+            todo!()
+    }
+    
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_clearSysCallCondition(
+        thread: *const ThreadRc,
+    ) {
+            todo!()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getSignalSet (
+        thread: *const ThreadRc,
+    ) -> *mut libc::sigset_t {
+            todo!()
+    }
+
+    /// Returns true iff there is an unblocked, unignored signal pending for this
+    /// thread (or its process).
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_unblockedSignalPending (
+        thread: *const ThreadRc,
+        host_lock: *const ShimShmemHostLock
+    ) -> bool {
+            todo!()
+    }
+
+
 }

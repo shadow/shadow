@@ -1151,10 +1151,9 @@ impl Process {
 
     /// Adds a new thread to the process and schedules it to run.
     /// Intended for use by `clone`.
-    pub fn add_thread(&self, host: &Host, thread: Thread) {
+    pub fn add_thread(&self, host: &Host, thread: RootedRc<Thread>) {
         let pid = self.id();
         let tid = thread.id();
-        let thread = RootedRc::new(host.root(), thread);
         self.threads.borrow_mut().insert(tid, thread);
 
         // Schedule thread to start. We're giving the caller's reference to thread
@@ -1402,7 +1401,7 @@ mod export {
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
     use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
-    use crate::host::thread::Thread;
+    use crate::host::thread::{Thread, ThreadRc};
 
     use super::*;
 
@@ -1706,7 +1705,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
         addr: cshadow::PluginPtr,
         len: usize,
         prot: i32,
@@ -1715,14 +1714,10 @@ mod export {
         offset: i64,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
             memory_manager
                 .do_mmap(&thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
                 .into()
@@ -1734,19 +1729,15 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
         addr: cshadow::PluginPtr,
         len: usize,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
             memory_manager
                 .handle_munmap(&thread, PluginPtr::from(addr), len)
                 .into()
@@ -1757,7 +1748,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
         old_addr: cshadow::PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -1765,14 +1756,10 @@ mod export {
         new_addr: cshadow::PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
             memory_manager
                 .handle_mremap(
                     &thread,
@@ -1790,20 +1777,16 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
         addr: cshadow::PluginPtr,
         size: usize,
         prot: i32,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
             memory_manager
                 .handle_mprotect(&thread, PluginPtr::from(addr), size, prot)
                 .into()
@@ -1815,18 +1798,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
         plugin_src: cshadow::PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
             memory_manager
                 .handle_brk(&thread, PluginPtr::from(plugin_src))
                 .into()
@@ -1839,18 +1818,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_initMapperIfNeeded(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                let thread = proc
-                    .thread_borrow(
-                        ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                    )
-                    .unwrap();
                 memory_manager.init_mapper(&thread)
             }
         })
@@ -2075,19 +2050,17 @@ mod export {
     }
 
     /// Adds a new thread to the process and schedules it to run.
-    /// Intended for use by `clone`.
-    ///
-    /// Takes ownership of `thread`.
+    /// Intended for use by the `clone` syscall.
     #[no_mangle]
     pub unsafe extern "C" fn process_addThread(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const ThreadRc,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { Thread::new(thread) };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.add_thread(host, thread)
+            proc.add_thread(host, RootedRc::clone(thread, host.root()))
         })
         .unwrap()
     }
@@ -2115,29 +2088,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_signal(
         proc: *const ProcessRefCell,
-        current_running_thread: *mut cshadow::Thread,
+        current_running_thread: *const ThreadRc,
         siginfo: *const libc::siginfo_t,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let current_threadrc = unsafe { current_running_thread.as_ref() };
         let siginfo = unsafe { siginfo.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let target_proc = proc.borrow(host.root());
-            let current_procrc = if current_running_thread.is_null() {
-                None
-            } else {
-                let pid = ProcessId::try_from(unsafe {
-                    cshadow::thread_getProcessId(current_running_thread)
-                })
-                .unwrap();
-                Some(host.process_borrow(pid).unwrap())
-            };
-            let current_proc = current_procrc.as_ref().map(|p| p.borrow(host.root()));
-            let current_threadrc = current_proc.as_ref().map(|p| {
-                let tid =
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(current_running_thread) })
-                        .unwrap();
-                p.thread_borrow(tid).unwrap()
-            });
             let current_thread: Option<&Thread> = match &current_threadrc {
                 Some(t) => Some(t),
                 None => None,

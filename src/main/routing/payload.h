@@ -14,13 +14,13 @@
 
 typedef struct _Payload Payload;
 
-Payload* payload_new(Thread* thread, PluginVirtualPtr data, gsize dataLength);
+Payload* payload_new(ThreadRc* thread, PluginVirtualPtr data, gsize dataLength);
 
 void payload_ref(Payload* payload);
 void payload_unref(Payload* payload);
 
 gsize payload_getLength(Payload* payload);
-gssize payload_getData(Payload* payload, Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
+gssize payload_getData(Payload* payload, ThreadRc* thread, gsize offset, PluginVirtualPtr destBuffer,
                        gsize destBufferLength);
 
 gsize payload_getDataShadow(Payload* payload, gsize offset, void* destBuffer,

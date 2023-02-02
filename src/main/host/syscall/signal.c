@@ -58,7 +58,7 @@ static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(0);
 }
 
-static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* thread, int sig) {
+static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, const ThreadRc* thread, int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
@@ -186,7 +186,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
 
     trace("tgkill called on tgid %i and tid %i with signal %i", tgid, tid, sig);
 
-    Thread* thread = host_getThread(_syscallhandler_getHost(sys), tid);
+    const ThreadRc* thread = host_getThread(_syscallhandler_getHost(sys), tid);
     if (thread == NULL) {
         return syscallreturn_makeDoneErrno(ESRCH);
     }
@@ -207,7 +207,7 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
 
     trace("tkill called on tid %i with signal %i", tid, sig);
 
-    Thread* thread = host_getThread(_syscallhandler_getHost(sys), tid);
+    const ThreadRc* thread = host_getThread(_syscallhandler_getHost(sys), tid);
     if (thread == NULL) {
         return syscallreturn_makeDoneErrno(ESRCH);
     }

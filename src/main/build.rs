@@ -9,6 +9,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         c.export.exclude.extend_from_slice(&[
             "LogLevel".into(),
             "PluginPtr".into(),
+            "SysCallCondition".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
             "Packet".into(),
@@ -53,6 +54,13 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "netinet/in.h".into(),
                 "arpa/inet.h".into(),
             ],
+            after_includes: {
+                let mut v = base_config.after_includes.clone().unwrap();
+                // We have to manually create the vararg declaration.
+                // See crate::main::host::thread::export::thread_nativeSyscall.
+                v.push_str("long thread_nativeSyscall(const ThreadRc* thread, long n, ...);\n");
+                Some(v)
+            },
             export: cbindgen::ExportConfig {
                 // Generate all item types, excluding enum types.
                 //
@@ -136,6 +144,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("_?ShimProcessSharedMem")
         .blocklist_type("ShimShmem.*")
         .allowlist_function("affinity_.*")
+        .allowlist_function("cthread_.*")
         .allowlist_function("thread_.*")
         .allowlist_function("tcp_.*")
         .allowlist_function("legacyfile_.*")

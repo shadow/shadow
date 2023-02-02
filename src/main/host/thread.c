@@ -45,7 +45,7 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID) {
+Thread* cthread_new(const Host* host, const ProcessRefCell* process, const ThreadRc* rustThread, int threadID) {
     Thread* thread = g_new(Thread, 1);
     *thread = (Thread){.hostId = host_getID(host),
                        .processId = process_getProcessID(process),
@@ -53,15 +53,15 @@ Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
 
-    thread->sys = syscallhandler_new(host, process, thread);
-    thread->mthread = managedthread_new(thread);
+    thread->sys = syscallhandler_new(host, process, rustThread);
+    thread->mthread = managedthread_new(rustThread);
 
-    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadID);
+    shimshmemthread_init(cthread_sharedMem(thread), host_getShimShmemLock(host), threadID);
 
     return thread;
 }
 
-static void _thread_cleanupSysCallCondition(Thread* thread) {
+static void _cthread_cleanupSysCallCondition(Thread* thread) {
     MAGIC_ASSERT(thread);
     if (thread->cond) {
         syscallcondition_cancel(thread->cond);
@@ -70,9 +70,9 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
     }
 }
 
-void thread_free(Thread* thread) {
+void cthread_free(Thread* thread) {
     MAGIC_ASSERT(thread);
-    _thread_cleanupSysCallCondition(thread);
+    _cthread_cleanupSysCallCondition(thread);
     managedthread_free(thread->mthread);
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
@@ -83,7 +83,7 @@ void thread_free(Thread* thread) {
     g_free(thread);
 }
 
-void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
+void cthread_run(Thread* thread, const char* pluginPath, const char* const* argv,
                 const char* const* envv_in, const char* workingDir, int straceFd) {
     MAGIC_ASSERT(thread);
 
@@ -92,7 +92,7 @@ void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
     // Add shared mem block
     {
         ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(thread_getShMBlock(thread));
+            shmemallocator_globalBlockSerialize(cthread_getShMBlock(thread));
 
         char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
@@ -107,7 +107,7 @@ void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
     g_strfreev(envv);
 }
 
-void thread_resume(Thread* thread) {
+void cthread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
 
     // Ensure the condition isn't triggered again, but don't clear it yet.
@@ -128,7 +128,7 @@ void thread_resume(Thread* thread) {
     thread->cond = cond;
     if (thread->cond) {
         syscallcondition_waitNonblock(
-            thread->cond, thread_getHost(thread), thread_getProcess(thread), thread);
+            thread->cond, cthread_getHost(thread), cthread_getProcess(thread), thread);
     } else {
         utility_debugAssert(!managedthread_isRunning(thread->mthread));
         if (thread->sys) {
@@ -138,9 +138,9 @@ void thread_resume(Thread* thread) {
     }
 }
 
-void thread_handleProcessExit(Thread* thread) {
+void cthread_handleProcessExit(Thread* thread) {
     MAGIC_ASSERT(thread);
-    _thread_cleanupSysCallCondition(thread);
+    _cthread_cleanupSysCallCondition(thread);
     managedthread_handleProcessExit(thread->mthread);
     /* make sure we cleanup circular refs */
     if (thread->sys) {
@@ -148,49 +148,49 @@ void thread_handleProcessExit(Thread* thread) {
         thread->sys = NULL;
     }
 }
-int thread_getReturnCode(Thread* thread) {
+int cthread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
     return managedthread_getReturnCode(thread->mthread);
 }
 
-bool thread_isRunning(Thread* thread) {
+bool cthread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
     return managedthread_isRunning(thread->mthread);
 }
 
-ShMemBlock* thread_getIPCBlock(Thread* thread) {
+ShMemBlock* cthread_getIPCBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
     return managedthread_getIPCBlock(thread->mthread);
 }
 
-ShMemBlock* thread_getShMBlock(Thread* thread) {
+ShMemBlock* cthread_getShMBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
     return &thread->shimSharedMemBlock;
 }
 
-ShimShmemThread* thread_sharedMem(Thread* thread) {
+ShimShmemThread* cthread_sharedMem(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_debugAssert(thread->shimSharedMemBlock.p);
     return thread->shimSharedMemBlock.p;
 }
 
-SysCallHandler* thread_getSysCallHandler(Thread* thread) {
+SysCallHandler* cthread_getSysCallHandler(Thread* thread) {
     return thread->sys;
 }
 
-const ProcessRefCell* thread_getProcess(Thread* thread) {
-    const ProcessRefCell* p = host_getProcess(thread_getHost(thread), thread->processId);
+const ProcessRefCell* cthread_getProcess(Thread* thread) {
+    const ProcessRefCell* p = host_getProcess(cthread_getHost(thread), thread->processId);
     utility_alwaysAssert(p);
     return p;
 }
 
-const Host* thread_getHost(Thread* thread) {
+const Host* cthread_getHost(Thread* thread) {
     const Host* host = worker_getCurrentHost();
     utility_debugAssert(host_getID(host) == thread->hostId);
     return host;
 }
 
-long thread_nativeSyscall(Thread* thread, long n, ...) {
+long cthread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     va_list(args);
     va_start(args, n);
@@ -199,16 +199,16 @@ long thread_nativeSyscall(Thread* thread, long n, ...) {
     return rv;
 }
 
-int thread_getID(Thread* thread) {
+int cthread_getID(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid;
 }
 
-int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+int cthread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
 
-    const Host* host = thread_getHost(thread);
+    const Host* host = cthread_getHost(thread);
     *child = thread_new(host, host_getProcess(host, thread->processId), host_getNewProcessID(host));
 
     int rv = managedthread_clone(
@@ -220,32 +220,32 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
     return rv;
 }
 
-uint32_t thread_getProcessId(Thread* thread) {
+uint32_t cthread_getProcessId(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->processId;
 }
 
-HostId thread_getHostId(Thread* thread) {
+HostId cthread_getHostId(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->hostId;
 }
 
-pid_t thread_getNativePid(Thread* thread) {
+pid_t cthread_getNativePid(Thread* thread) {
     MAGIC_ASSERT(thread);
     return managedthread_getNativePid(thread->mthread);
 }
 
-pid_t thread_getNativeTid(Thread* thread) {
+pid_t cthread_getNativeTid(Thread* thread) {
     MAGIC_ASSERT(thread);
     return managedthread_getNativeTid(thread->mthread);
 }
 
-SysCallCondition* thread_getSysCallCondition(Thread* thread) {
+SysCallCondition* cthread_getSysCallCondition(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->cond;
 }
 
-void thread_clearSysCallCondition(Thread* thread) {
+void cthread_clearSysCallCondition(Thread* thread) {
     MAGIC_ASSERT(thread);
     if (thread->cond) {
         syscallcondition_unref(thread->cond);
@@ -253,29 +253,29 @@ void thread_clearSysCallCondition(Thread* thread) {
     }
 }
 
-PluginVirtualPtr thread_getTidAddress(Thread* thread) {
+PluginVirtualPtr cthread_getTidAddress(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tidAddress;
 }
 
-void thread_setTidAddress(Thread* thread, PluginPtr addr) {
+void cthread_setTidAddress(Thread* thread, PluginPtr addr) {
     MAGIC_ASSERT(thread);
     thread->tidAddress = addr;
 }
 
-bool thread_isLeader(Thread* thread) {
+bool cthread_isLeader(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid == thread->processId;
 }
 
-bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host_lock) {
+bool cthread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host_lock) {
     shd_kernel_sigset_t blocked_signals =
-        shimshmem_getBlockedSignals(host_lock, thread_sharedMem(thread));
+        shimshmem_getBlockedSignals(host_lock, cthread_sharedMem(thread));
     shd_kernel_sigset_t unblocked_signals = shd_signotset(&blocked_signals);
 
     {
         shd_kernel_sigset_t thread_pending =
-            shimshmem_getThreadPendingSignals(host_lock, thread_sharedMem(thread));
+            shimshmem_getThreadPendingSignals(host_lock, cthread_sharedMem(thread));
         shd_kernel_sigset_t thread_unblocked_pending =
             shd_sigandset(&thread_pending, &unblocked_signals);
         if (!shd_sigisemptyset(&thread_unblocked_pending)) {
@@ -285,7 +285,7 @@ bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host
 
     {
         shd_kernel_sigset_t process_pending = shimshmem_getProcessPendingSignals(
-            host_lock, process_getSharedMem(thread_getProcess(thread)));
+            host_lock, process_getSharedMem(cthread_getProcess(thread)));
         shd_kernel_sigset_t process_unblocked_pending =
             shd_sigandset(&process_pending, &unblocked_signals);
         if (!shd_sigisemptyset(&process_unblocked_pending)) {

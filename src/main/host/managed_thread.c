@@ -23,7 +23,7 @@
 #include "main/host/syscall_condition.h"
 
 struct _ManagedThread {
-    Thread* base;
+    ThreadRc* base;
 
     ShMemBlock ipc_blk;
 
@@ -95,6 +95,10 @@ void managedthread_free(ManagedThread* mthread) {
     if (mthread->ipc_blk.p) {
         // FIXME: This appears to cause errors.
         // shmemallocator_globalFree(&thread->ipc_blk);
+    }
+
+    if (mthread->base) {
+        threadrc_drop(mthread->base);
     }
 
     worker_count_deallocation(ManagedThread);
@@ -477,10 +481,10 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     return res.event_data.syscall_complete.retval.as_i64;
 }
 
-ManagedThread* managedthread_new(Thread* thread) {
+ManagedThread* managedthread_new(const ThreadRc* thread) {
     ManagedThread* mthread = g_new(ManagedThread, 1);
     *mthread = (ManagedThread){
-        .base = thread,
+        .base = threadrc_clone(thread),
         .affinity = AFFINITY_UNINIT,
     };
 
