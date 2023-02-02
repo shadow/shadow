@@ -25,8 +25,7 @@ void legacyfile_init(LegacyFile* descriptor, LegacyFileType type,
     MAGIC_INIT(funcTable);
     descriptor->funcTable = funcTable;
     descriptor->type = type;
-    descriptor->listeners = g_hash_table_new_full(
-        g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
+    descriptor->event_source = eventsource_new();
     descriptor->refCountStrong = 1;
     descriptor->refCountWeak = 0;
 
@@ -37,8 +36,9 @@ void legacyfile_init(LegacyFile* descriptor, LegacyFileType type,
 
 void legacyfile_clear(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
-    if (descriptor->listeners) {
-        g_hash_table_destroy(descriptor->listeners);
+    if (descriptor->event_source) {
+        eventsource_free(descriptor->event_source);
+        descriptor->event_source = NULL;
     }
     MAGIC_CLEAR(descriptor);
 }
@@ -200,45 +200,8 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
     g_free(after);
 #endif
 
-    /* Tell our listeners there was some activity on this descriptor.
-     * We can't use an iterator here, because the listener table may
-     * be modified in the body of the while loop below, in the onStatusChanged
-     * callback. Instead we get a list of the keys and do lookups on those.*/
-    GList* listenerList = g_hash_table_get_keys(descriptor->listeners);
-
-    // Iterate the listeners in deterministic order. It's probably better to
-    // maintain the items in a sorted structure, e.g. a ring, to make it easier
-    // or more efficient to iterate deterministically while also moving the ring
-    // entry pointer so we don't always wake up the same listener first on every
-    // iteration and possibly starve the others.
-    GList* item = NULL;
-    if (listenerList != NULL) {
-        listenerList = g_list_sort(listenerList, status_listener_compare);
-        item = g_list_first(listenerList);
-    }
-
-    /* Iterate the listeners. */
-    while (statusesChanged && item) {
-        StatusListener* listener = item->data;
-
-        /* Call only if the listener is still in the table. */
-        if (g_hash_table_contains(descriptor->listeners, listener)) {
-            /* First try adding to the global callback queue if it exists. */
-            if (!add_to_global_cb_queue(listener, descriptor->status, statusesChanged)) {
-                /* If there was no global callback queue, run the callback immediately. */
-                statuslistener_onStatusChanged(listener, descriptor->status, statusesChanged);
-            }
-        }
-
-        /* The above callback may have changes status again,
-         * so make sure we consider the latest status state. */
-        statusesChanged = descriptor->status ^ oldStatus;
-        item = g_list_next(item);
-    }
-
-    if (listenerList != NULL) {
-        g_list_free(listenerList);
-    }
+    notify_listeners_with_global_cb_queue(
+        descriptor->event_source, descriptor->status, statusesChanged);
 }
 
 void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits) {
@@ -266,15 +229,12 @@ Status legacyfile_getStatus(LegacyFile* descriptor) {
 
 void legacyfile_addListener(LegacyFile* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* We are storing a listener instance, so count the ref. */
-    statuslistener_ref(listener);
-    g_hash_table_insert(descriptor->listeners, listener, listener);
+    eventsource_addLegacyListener(descriptor->event_source, listener);
 }
 
 void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* This will automatically call descriptorlistener_unref on the instance. */
-    g_hash_table_remove(descriptor->listeners, listener);
+    eventsource_removeLegacyListener(descriptor->event_source, listener);
 }
 
 gint legacyfile_getFlags(LegacyFile* descriptor) {

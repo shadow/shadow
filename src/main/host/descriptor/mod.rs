@@ -826,8 +826,11 @@ impl std::fmt::Debug for c::SysCallReturn {
 mod export {
     use super::*;
 
+    use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+
     use crate::host::descriptor::socket::inet::tcp::TcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;
 
     /// The new descriptor takes ownership of the reference to the legacy file and does not
     /// increment its ref count, but will decrement the ref count when this descriptor is
@@ -1071,6 +1074,49 @@ mod export {
         let file = unsafe { &*file };
 
         file.canonical_handle()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn eventsource_new() -> *mut RootedRefCell_StateEventSource {
+        let event_source = worker::Worker::with_active_host(|host| {
+            Box::new(RootedRefCell::new(host.root(), StateEventSource::new()))
+        })
+        .unwrap();
+        Box::into_raw(event_source)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
+        assert!(!event_source.is_null());
+        unsafe { Box::from_raw(event_source) };
+    }
+
+    #[no_mangle]
+    pub extern "C" fn eventsource_addLegacyListener(
+        event_source: *const RootedRefCell_StateEventSource,
+        listener: *mut c::StatusListener,
+    ) {
+        let event_source = unsafe { event_source.as_ref() }.unwrap();
+        worker::Worker::with_active_host(|host| {
+            let mut event_source = event_source.borrow_mut(host.root());
+
+            event_source.add_legacy_listener(HostTreePointer::new(listener));
+        })
+        .unwrap();
+    }
+
+    #[no_mangle]
+    pub extern "C" fn eventsource_removeLegacyListener(
+        event_source: *const RootedRefCell_StateEventSource,
+        listener: *mut c::StatusListener,
+    ) {
+        let event_source = unsafe { event_source.as_ref() }.unwrap();
+        worker::Worker::with_active_host(|host| {
+            let mut event_source = event_source.borrow_mut(host.root());
+
+            event_source.remove_legacy_listener(listener);
+        })
+        .unwrap();
     }
 }
 

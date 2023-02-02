@@ -48,7 +48,7 @@ struct _LegacyFile {
     LegacyFileFunctionTable* funcTable;
     LegacyFileType type;
     Status status;
-    GHashTable* listeners;
+    RootedRefCell_StateEventSource* event_source;
     gint refCountStrong;
     gint refCountWeak;
     gint flags;

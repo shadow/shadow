@@ -1,76 +1,24 @@
 use std::cell::RefCell;
 use std::ops::DerefMut;
 
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+
 use crate::cshadow as c;
+use crate::host::descriptor::StateEventSource;
+use crate::utility::callback_queue::CallbackQueue;
+
+/// An event source stored by a `LegacyFile`.
+#[allow(non_camel_case_types)]
+pub type RootedRefCell_StateEventSource = RootedRefCell<StateEventSource>;
 
 thread_local! {
-    static C_CALLBACK_QUEUE: RefCell<Option<LegacyCallbackQueue>> = RefCell::new(None);
-}
-
-/// Similar to [`CallbackQueue`](crate::utility::callback_queue::CallbackQueue), but with some
-/// tweaks to work with C code.
-struct LegacyCallbackQueue(std::collections::VecDeque<Box<dyn FnOnce()>>);
-
-impl LegacyCallbackQueue {
-    pub fn new() -> Self {
-        Self(std::collections::VecDeque::new())
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn add(&mut self, f: impl FnOnce() + 'static) {
-        self.0.push_back(Box::new(f));
-    }
-
-    /// The `Option` must be `Some`.
-    pub fn run(queue: &RefCell<Option<Self>>) {
-        // loop until there are no more events
-        let mut count = 0;
-
-        loop {
-            // the mutable borrow is short-lived so that new callbacks can be added to the queue
-            // while running `f`
-            let Some(f) = queue.borrow_mut().as_mut().unwrap().0.pop_front() else {
-                break;
-            };
-
-            // run the event and allow it to add new events
-            (f)();
-
-            count += 1;
-            if count == 200 {
-                log::trace!("Possible infinite loop of event callbacks.");
-            } else if count == 10_000 {
-                log::warn!("Very likely an infinite loop of event callbacks.");
-            }
-        }
-    }
-}
-
-impl std::ops::Drop for LegacyCallbackQueue {
-    fn drop(&mut self) {
-        // don't show the following warning message if panicking
-        if std::thread::panicking() {
-            return;
-        }
-
-        if !self.is_empty() {
-            // panic in debug builds since the backtrace will be helpful for debugging
-            debug_panic!("Dropping LegacyEventQueue while it still has events pending.");
-        }
-    }
+    static C_CALLBACK_QUEUE: RefCell<Option<CallbackQueue>> = RefCell::new(None);
 }
 
 /// Helper function to initialize and run a global thread-local callback queue. This is a hack so
 /// that C [`LegacyFile`](crate::cshadow::LegacyFile)s can queue listener callbacks using
-/// `add_to_global_cb_queue`. This is primarily for [`TCP`](crate::cshadow::TCP) objects, and should
-/// not be used with Rust file objects.
+/// `notify_listeners_with_global_cb_queue`. This is primarily for [`TCP`](crate::cshadow::TCP)
+/// objects, and should not be used with Rust file objects.
 ///
 /// Just like
 /// [`CallbackQueue::queue_and_run`](crate::utility::callback_queue::CallbackQueue::queue_and_run),
@@ -87,42 +35,55 @@ pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
         // set the global queue
         assert!(cb_queue
             .borrow_mut()
-            .replace(LegacyCallbackQueue::new())
+            .replace(CallbackQueue::new())
             .is_none());
 
         let rv = f();
 
-        // run and drop the global queue
-        LegacyCallbackQueue::run(cb_queue);
+        // run the queued callbacks
+        loop {
+            // take and replace the global queue since callbacks may try to add new callbacks to the
+            // global queue as we're running old callbacks
+            let mut queue_to_run = cb_queue.borrow_mut().replace(CallbackQueue::new()).unwrap();
+            if queue_to_run.is_empty() {
+                // no new callbacks were added, so we're done
+                break;
+            }
+            queue_to_run.run();
+        }
+
         assert!(cb_queue.borrow_mut().take().is_some());
 
         rv
     })
 }
-
 mod export {
     use super::*;
 
-    /// Returns `true` if successfully added to the queue, or `false` if there was no queue.
+    use crate::core::worker;
+
+    /// Notify listeners using the global callback queue. If the queue hasn't been set using
+    /// [`with_global_cb_queue`], the listeners will be notified here before returning.
     #[no_mangle]
-    pub unsafe extern "C" fn add_to_global_cb_queue(
-        listener: *mut c::StatusListener,
+    pub unsafe extern "C" fn notify_listeners_with_global_cb_queue(
+        event_source: *const RootedRefCell_StateEventSource,
         status: c::Status,
         changed: c::Status,
-    ) -> bool {
-        C_CALLBACK_QUEUE.with(|cb_queue| {
-            let mut cb_queue = cb_queue.borrow_mut();
+    ) {
+        let event_source = unsafe { event_source.as_ref() }.unwrap();
 
-            if let Some(cb_queue) = cb_queue.deref_mut() {
-                unsafe { c::statuslistener_ref(listener) };
-                cb_queue.add(move || {
-                    unsafe { c::statuslistener_onStatusChanged(listener, status, changed) };
-                    unsafe { c::statuslistener_unref(listener) };
-                });
-                true
-            } else {
-                false
-            }
-        })
+        with_global_cb_queue(|| {
+            C_CALLBACK_QUEUE.with(|cb_queue| {
+                let mut cb_queue = cb_queue.borrow_mut();
+                // must not be `None` since it will be set to `Some` by `with_global_cb_queue`
+                let cb_queue = cb_queue.deref_mut().as_mut().unwrap();
+
+                worker::Worker::with_active_host(|host| {
+                    let mut event_source = event_source.borrow_mut(host.root());
+                    event_source.notify_listeners(status.into(), changed.into(), cb_queue)
+                })
+                .unwrap();
+            });
+        });
     }
 }
