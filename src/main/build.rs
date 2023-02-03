@@ -324,7 +324,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "routing/packet.c",
         "routing/address.c",
         "routing/dns.c",
-        "utility/count_down_latch.c",
         "utility/priority_queue.c",
         "utility/rpath.c",
         "utility/tagged_ptr.c",
