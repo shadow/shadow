@@ -40,7 +40,6 @@
     - [Extra Tests](extra_tests.md)
     - [Continuous integration tests](ci.md)
     - [Maintainer playbook](maintainer_playbook.md)
-    - [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
 
 # The Shadow Project
 
