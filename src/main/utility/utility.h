@@ -90,13 +90,8 @@
 #endif
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port);
-guint utility_int16Hash(gconstpointer value);
-gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2);
-gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData);
 gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
                                    gpointer userData);
-gchar* utility_getHomePath(const gchar* path);
-guint utility_getRawCPUFrequency(const gchar* freqFilename);
 gboolean utility_isRandomPath(const gchar* path);
 
 gchar* utility_strvToNewStr(gchar** strv);
@@ -104,10 +99,6 @@ gchar* utility_strvToNewStr(gchar** strv);
 __attribute__((__format__(__printf__, 4, 5)))
 _Noreturn void utility_handleError(const gchar* file, gint line, const gchar* funtcion,
                                    const gchar* message, ...);
-
-/* Converts millis milliseconds to a timespec with the corresponding number
- * of seconds and nanoseconds. */
-struct timespec utility_timespecFromMillis(int64_t millis);
 
 /* If a process exited by a signal, use this return code. */
 int return_code_for_signal(int signal);
