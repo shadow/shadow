@@ -1,7 +1,5 @@
 # The Shadow Simulator
 
-[![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests_incremental.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests_incremental.yml?query=branch:main+event:push)
-
 ## Quickstart
 
 After installing the [dependencies](https://shadow.github.io/docs/guide/install_dependencies.html): build, test, and install Shadow into `~/.local`:
