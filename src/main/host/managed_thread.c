@@ -113,7 +113,7 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
 
 static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
                                       const char* const* argv_in, const char* const* envp_in,
-                                      const char* workingDir, int straceFd) {
+                                      const char* workingDir, int straceFd, int shimlogFd) {
     utility_debugAssert(file != NULL);
 
     // execve technically takes arrays of pointers to *mutable* char.
@@ -151,6 +151,15 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
 
             // clear the FD_CLOEXEC flag for the strace fd so that it's available in the shim
             if (straceFd >= 0 && fcntl(straceFd, F_SETFD, 0)) {
+                die_after_vfork();
+            }
+
+            // set stdout/stderr as the shim log, and clear the FD_CLOEXEC flag so that it's
+            // available in the shim
+            if (dup2(shimlogFd, STDOUT_FILENO) < 0) {
+                die_after_vfork();
+            }
+            if (dup2(shimlogFd, STDERR_FILENO) < 0) {
                 die_after_vfork();
             }
 
@@ -197,7 +206,8 @@ static void _markPluginExited(pid_t pid, void* voidIPC) {
 }
 
 void managedthread_run(ManagedThread* mthread, const char* pluginPath, const char* const* argv,
-                       const char* const* envv, const char* workingDir, int straceFd) {
+                       const char* const* envv, const char* workingDir, int straceFd,
+                       const char* logPath) {
     _managedthread_syncAffinityWithWorker(mthread);
 
     /* set the env for the child */
@@ -230,8 +240,16 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
     g_free(envStr);
     g_free(argStr);
 
+    int shimlogFd = open(
+        logPath, O_WRONLY | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | S_IWOTH);
+    utility_alwaysAssert(shimlogFd >= 0);
+
     mthread->nativePid = _managedthread_fork_exec(
-        mthread, pluginPath, argv, (const char* const*)myenvv, workingDir, straceFd);
+        mthread, pluginPath, argv, (const char* const*)myenvv, workingDir, straceFd, shimlogFd);
+
+    // should be opened in the shim, so no need for it anymore
+    close(shimlogFd);
+
     // In Linux, the PID is equal to the TID of its first thread.
     mthread->nativeTid = mthread->nativePid;
     childpidwatcher_watch(

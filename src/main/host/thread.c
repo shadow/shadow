@@ -87,7 +87,8 @@ void thread_free(Thread* thread) {
 }
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
-                const char* const* envv_in, const char* workingDir, int straceFd) {
+                const char* const* envv_in, const char* workingDir, int straceFd,
+                const char* logPath) {
     MAGIC_ASSERT(thread);
 
     gchar** envv = g_strdupv((gchar**)envv_in);
@@ -105,7 +106,7 @@ void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
     }
 
     managedthread_run(
-        thread->mthread, pluginPath, argv, (const char* const*)envv, workingDir, straceFd);
+        thread->mthread, pluginPath, argv, (const char* const*)envv, workingDir, straceFd, logPath);
 
     g_strfreev(envv);
 }
