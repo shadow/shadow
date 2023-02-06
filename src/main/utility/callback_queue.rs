@@ -145,7 +145,7 @@ impl<T: Clone + Copy + 'static> Default for EventSource<T> {
     }
 }
 
-type Listener<T> = Arc<Box<dyn Fn(T, &mut CallbackQueue) + Send + Sync>>;
+type Listener<T> = Arc<dyn Fn(T, &mut CallbackQueue) + Send + Sync>;
 
 struct EventSourceInner<T> {
     listeners: std::vec::Vec<(HandleId, Listener<T>)>,
@@ -180,8 +180,7 @@ impl<T> EventSourceInner<T> {
     ) -> Handle<T> {
         let handle_id = self.get_unused_id();
 
-        self.listeners
-            .push((handle_id, Arc::new(Box::new(notify_fn))));
+        self.listeners.push((handle_id, Arc::new(notify_fn)));
 
         Handle::new(handle_id, inner)
     }
