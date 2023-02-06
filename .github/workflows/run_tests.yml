@@ -42,7 +42,7 @@ jobs:
           # EOL May 2024 https://www.centos.org/centos-stream/
           - 'quay.io/centos/centos:stream8'
         cc: ['gcc']
-        buildtype: ['debug', 'release']
+        buildtype: ['release']
         include:
           # Run some tests on the newest-available base vm, and hence
           # newest-available kernel. https://github.com/actions/virtual-environments
@@ -50,10 +50,6 @@ jobs:
             container: 'ubuntu:22.04'
             cc: 'gcc'
             buildtype: 'release'
-          - vm: 'ubuntu-22.04'
-            container: 'ubuntu:22.04'
-            cc: 'gcc'
-            buildtype: 'debug'
 
           # Run some tests on the newest-available clang.  Testing clang on
           # *every* platform is a bit overkill, but testing on at least one
@@ -65,7 +61,13 @@ jobs:
             container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'release'
-          - vm: 'ubuntu-22.04'
+
+          # Test a debug build for each compiler.
+          - vm: 'ubuntu-20.04'
+            container: 'ubuntu:22.04'
+            cc: 'gcc'
+            buildtype: 'debug'
+          - vm: 'ubuntu-20.04'
             container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'debug'
