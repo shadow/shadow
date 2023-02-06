@@ -26,63 +26,11 @@ guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
     return hash_value;
 }
 
-guint utility_int16Hash(gconstpointer value) {
-    utility_debugAssert(value);
-    /* make sure upper bits are zero */
-    gint key = 0;
-    key = (gint) *((gint16*)value);
-    return g_int_hash(&key);
-}
-
-gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
-    utility_debugAssert(value1 && value2);
-    /* make sure upper bits are zero */
-    gint key1 = 0, key2 = 0;
-    key1 = (gint) *((gint16*)value1);
-    key2 = (gint) *((gint16*)value2);
-    return g_int_equal(&key1, &key2);
-}
-
-gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData) {
-    utility_debugAssert(value1 && value2);
-    /* return neg if first before second, pos if second before first, 0 if equal */
-    return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
-}
-
 gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
                                    gpointer userData) {
     utility_debugAssert(value1 && value2);
     /* return neg if first before second, pos if second before first, 0 if equal */
     return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
-}
-
-gchar* utility_getHomePath(const gchar* path) {
-    GString* sbuffer = g_string_new("");
-    if(g_ascii_strncasecmp(path, "~", 1) == 0) {
-        /* replace ~ with home directory */
-        const gchar* home = g_get_home_dir();
-        g_string_append_printf(sbuffer, "%s%s", home, path+1);
-    } else {
-        g_string_append_printf(sbuffer, "%s", path);
-    }
-    return g_string_free(sbuffer, FALSE);
-}
-
-guint utility_getRawCPUFrequency(const gchar* freqFilename) {
-    /* get the raw speed of the experiment machine */
-    guint rawFrequencyKHz = 0;
-    gchar* contents = NULL;
-    gsize length = 0;
-    GError* error = NULL;
-    if(freqFilename && g_file_get_contents(freqFilename, &contents, &length, &error)) {
-        utility_debugAssert(contents);
-        rawFrequencyKHz = (guint)atoi(contents);
-        g_free(contents);
-    }
-    if(error) {
-        g_error_free(error);
-    }
-    return rawFrequencyKHz;
 }
 
 static GString* _utility_formatError(const gchar* file, gint line, const gchar* function,
@@ -145,13 +93,6 @@ gchar* utility_strvToNewStr(gchar** strv) {
     }
 
     return g_string_free(strBuffer, FALSE);
-}
-
-struct timespec utility_timespecFromMillis(int64_t millis) {
-    return (struct timespec){
-        .tv_sec = millis / 1000,              // ms to sec
-        .tv_nsec = (millis % 1000) * 1000000, // ms to ns
-    };
 }
 
 int return_code_for_signal(int signal) {
