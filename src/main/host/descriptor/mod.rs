@@ -168,13 +168,16 @@ impl Drop for LegacyListener {
 
 /// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
 struct LegacyListenerHelper {
-    handle_map: std::collections::HashMap<usize, Handle<(FileState, FileState)>>,
+    // We expect only a small number of listeners at a time, which means that performance is
+    // generally better and memory usage is lower with a `Vec` than a `HashMap`. The `usize` is the
+    // pointer of the [`c::StatusListener`] that corresponds to this [`Handle`].
+    handles: Vec<(usize, Handle<(FileState, FileState)>)>,
 }
 
 impl LegacyListenerHelper {
     fn new() -> Self {
         Self {
-            handle_map: std::collections::HashMap::new(),
+            handles: Vec::new(),
         }
     }
 
@@ -187,8 +190,9 @@ impl LegacyListenerHelper {
 
         // if it's already listening, don't add a second time
         if self
-            .handle_map
-            .contains_key(&(unsafe { ptr.ptr() } as usize))
+            .handles
+            .iter()
+            .any(|x| x.0 == (unsafe { ptr.ptr() } as usize))
         {
             return;
         }
@@ -201,13 +205,17 @@ impl LegacyListenerHelper {
         });
 
         // use a usize as the key so we don't accidentally deref the pointer
-        self.handle_map
-            .insert(unsafe { ptr.ptr() } as usize, handle);
+        self.handles.push((unsafe { ptr.ptr() } as usize, handle));
     }
 
     fn remove_listener(&mut self, ptr: *mut c::StatusListener) {
         assert!(!ptr.is_null());
-        self.handle_map.remove(&(ptr as usize));
+
+        // find the position and remove it
+        if let Some(x) = self.handles.iter().position(|x| x.0 == (ptr as usize)) {
+            // drop the handle
+            let _ = self.handles.remove(x);
+        }
     }
 }
 
