@@ -47,7 +47,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd, s
 
     /* We only need a file if it's not an anonymous mapping. */
     if (!(flags & MAP_ANONYMOUS)) {
-        LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+        LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
         int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
         if (errcode) {
             debug("Invalid fd %i", fd);
@@ -136,17 +136,18 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     trace("Opening path '%s' in plugin.", mmap_path);
 
     /* Get some memory in the plugin to write the path of the file to open. */
-    AllocdMem_u8 *allocdMem = allocdmem_new(sys->thread, maplen);
+    AllocdMem_u8* allocdMem = allocdmem_new(_syscallhandler_getThread(sys), maplen);
     PluginPtr pluginBufPtr = allocdmem_pluginPtr(allocdMem);
 
     /* Get a writeable pointer that can be flushed to the plugin. */
-    char* pluginBuf = process_getWriteablePtr(sys->process, pluginBufPtr, maplen);
+    char* pluginBuf =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), pluginBufPtr, maplen);
 
     /* Copy the path. */
     snprintf(pluginBuf, maplen, "%s", mmap_path);
 
     /* Flush the buffer to the plugin. */
-    result = process_flushPtrs(sys->process);
+    result = process_flushPtrs(_syscallhandler_getProcess(sys));
     if (result) {
         goto out;
     }
@@ -173,8 +174,8 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     flags &= ~O_NOFOLLOW;
 
     /* Instruct the plugin to open the file at the path we sent. */
-    result = thread_nativeSyscall(
-        sys->thread, SYS_open, pluginBufPtr.val, flags, regularfile_getModeAtOpen(file));
+    result = thread_nativeSyscall(_syscallhandler_getThread(sys), SYS_open, pluginBufPtr.val, flags,
+                                  regularfile_getModeAtOpen(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
         trace("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
@@ -184,7 +185,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
 
 out:
     /* Release the PluginPtr memory. */
-    allocdmem_free(sys->thread, allocdMem);
+    allocdmem_free(_syscallhandler_getThread(sys), allocdMem);
     free(mmap_path);
 
     return result;
@@ -192,7 +193,7 @@ out:
 
 static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     /* Instruct the plugin to close the file at given fd. */
-    int result = thread_nativeSyscall(sys->thread, SYS_close, pluginFD);
+    int result = thread_nativeSyscall(_syscallhandler_getThread(sys), SYS_close, pluginFD);
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
         trace("Failed to close file at fd %i in plugin, error %i: %s.",
@@ -228,10 +229,11 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
 
     // Delegate execution of the mmap itself to the memorymanager.
     SysCallReturn result =
-        process_handleMmap(sys->process, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
+        process_handleMmap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addrPtr,
+                           len, prot, flags, pluginFD, offset);
     if (result.state == SYSCALL_NATIVE) {
         return syscallreturn_makeDoneI64(thread_nativeSyscall(
-            sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
+            _syscallhandler_getThread(sys), SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
     }
 
     trace("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
@@ -255,7 +257,8 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr newBrk = args->args[0].as_ptr;
 
     // Delegate to the memoryManager.
-    return process_handleBrk(sys->process, sys->thread, newBrk);
+    return process_handleBrk(
+        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), newBrk);
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -276,8 +279,8 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
     PluginPtr new_addr = args->args[4].as_ptr;
 
     // Delegate to the memoryManager.
-    return process_handleMremap(
-        sys->process, sys->thread, old_addr, old_size, new_size, flags, new_addr);
+    return process_handleMremap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys),
+                                old_addr, old_size, new_size, flags, new_addr);
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -285,7 +288,8 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
     uint64_t len = args->args[1].as_u64;
 
     // Delegate to the memoryManager.
-    return process_handleMunmap(sys->process, sys->thread, addr, len);
+    return process_handleMunmap(
+        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addr, len);
 }
 
 SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
@@ -294,5 +298,6 @@ SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* ar
     int prot = args->args[2].as_i64;
 
     // Delegate to the memoryManager.
-    return process_handleMprotect(sys->process, sys->thread, addr, len, prot);
+    return process_handleMprotect(
+        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addr, len, prot);
 }

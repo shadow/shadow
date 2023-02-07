@@ -41,7 +41,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, dirfd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), dirfd);
     if (desc && dir_desc_out) {
         *dir_desc_out = (RegularFile*)desc;
     }
@@ -68,7 +68,8 @@ static int _syscallhandler_validateDirAndPathnameHelper(SysCallHandler* sys, int
     }
 
     /* Get the path string from the plugin. */
-    return process_getReadableString(sys->process, pathnamePtr, PATH_MAX, pathname_out, NULL);
+    return process_getReadableString(
+        _syscallhandler_getProcess(sys), pathnamePtr, PATH_MAX, pathname_out, NULL);
 }
 
 static SysCallReturn
@@ -94,7 +95,7 @@ _syscallhandler_renameatHelper(SysCallHandler* sys, int olddirfd,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_renameat2(olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd));
@@ -127,7 +128,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     /* Create and open the file. */
     RegularFile* file_desc = regularfile_new();
     errcode = regularfile_openat(file_desc, dir_desc, pathname, flags & ~O_CLOEXEC, mode,
-                                 process_getWorkingDir(sys->process));
+                                 process_getWorkingDir(_syscallhandler_getProcess(sys)));
 
     if (errcode < 0) {
         /* This will unref/free the RegularFile. */
@@ -138,7 +139,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
 
     utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)file_desc, flags & O_CLOEXEC);
-    int handle = process_registerDescriptor(sys->process, desc);
+    int handle = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
     return syscallreturn_makeDoneI64(handle);
 }
 
@@ -161,18 +162,19 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
      * will still allow us to get a mutable reference to memory below.
      */
     char pathname[PATH_MAX];
-    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
+    errcode = process_readString(_syscallhandler_getProcess(sys), pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    struct stat* buf =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
     if (!buf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_fstatat(dir_desc, pathname, buf, flags, plugin_cwd));
@@ -196,7 +198,7 @@ SysCallReturn syscallhandler_fchownat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_fchownat(dir_desc, pathname, owner, group, flags, plugin_cwd));
@@ -219,7 +221,7 @@ SysCallReturn syscallhandler_fchmodat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_fchmodat(dir_desc, pathname, mode, flags, plugin_cwd));
@@ -242,12 +244,12 @@ SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
     }
 
     const struct timeval* times =
-        process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
+        process_getReadablePtr(_syscallhandler_getProcess(sys), timesPtr, 2 * sizeof(*times));
     if (!times) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(regularfile_futimesat(dir_desc, pathname, times, plugin_cwd));
 }
@@ -270,12 +272,12 @@ SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
     }
 
     const struct timespec* times =
-        process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
+        process_getReadablePtr(_syscallhandler_getProcess(sys), timesPtr, 2 * sizeof(*times));
     if (!times) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_utimensat(dir_desc, pathname, times, flags, plugin_cwd));
@@ -298,7 +300,7 @@ SysCallReturn syscallhandler_faccessat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_faccessat(dir_desc, pathname, mode, flags, plugin_cwd));
@@ -320,7 +322,7 @@ SysCallReturn syscallhandler_mkdirat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(regularfile_mkdirat(dir_desc, pathname, mode, plugin_cwd));
 }
@@ -342,7 +344,7 @@ SysCallReturn syscallhandler_mknodat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_mknodat(dir_desc, pathname, mode, dev, plugin_cwd));
@@ -375,7 +377,7 @@ SysCallReturn syscallhandler_linkat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_linkat(olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd));
@@ -397,7 +399,7 @@ SysCallReturn syscallhandler_unlinkat(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(regularfile_unlinkat(dir_desc, pathname, flags, plugin_cwd));
 }
@@ -420,12 +422,13 @@ SysCallReturn syscallhandler_symlinkat(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     const char* targetpath;
-    errcode = process_getReadableString(sys->process, targetpathPtr, PATH_MAX, &targetpath, NULL);
+    errcode = process_getReadableString(
+        _syscallhandler_getProcess(sys), targetpathPtr, PATH_MAX, &targetpath, NULL);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_symlinkat(dir_desc, linkpath, targetpath, plugin_cwd));
@@ -450,18 +453,18 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
      * will still allow us to get a mutable reference to memory below.
      */
     char pathname[PATH_MAX];
-    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
+    errcode = process_readString(_syscallhandler_getProcess(sys), pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
-    char* buf = process_getWriteablePtr(sys->process, bufPtr, bufSize);
+    char* buf = process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, bufSize);
     if (!buf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd));
@@ -502,18 +505,19 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
      * will still allow us to get a mutable reference to memory below.
      */
     char pathname[PATH_MAX];
-    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
+    errcode = process_readString(_syscallhandler_getProcess(sys), pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
-    struct statx* statxbuf = process_getWriteablePtr(sys->process, statxbufPtr, sizeof(*statxbuf));
+    struct statx* statxbuf =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), statxbufPtr, sizeof(*statxbuf));
     if (!statxbuf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    const char* plugin_cwd = process_getWorkingDir(sys->process);
+    const char* plugin_cwd = process_getWorkingDir(_syscallhandler_getProcess(sys));
 
     return syscallreturn_makeDoneI64(
         regularfile_statx(dir_desc, pathname, flags, mask, statxbuf, plugin_cwd));

@@ -35,7 +35,7 @@ SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr 
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }
@@ -70,13 +70,15 @@ SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr 
         case DT_FILE:
             if (!doPread) {
                 utility_debugAssert(offset == 0);
-                result = regularfile_read((RegularFile*)desc, _syscallhandler_getHost(sys),
-                                          process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                          sizeNeeded);
+                result = regularfile_read(
+                    (RegularFile*)desc, _syscallhandler_getHost(sys),
+                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    sizeNeeded);
             } else {
                 result = regularfile_pread(
                     (RegularFile*)desc, _syscallhandler_getHost(sys),
-                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded, offset);
+                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    sizeNeeded, offset);
             }
             break;
         case DT_TIMER:
@@ -84,9 +86,10 @@ SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr 
                 result = -ESPIPE;
             } else {
                 utility_debugAssert(offset == 0);
-                result = timerfd_read((TimerFd*)desc,
-                                      process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                      sizeNeeded);
+                result = timerfd_read(
+                    (TimerFd*)desc,
+                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    sizeNeeded);
             }
             break;
         case DT_TCPSOCKET:
@@ -126,7 +129,7 @@ SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr
           offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }
@@ -161,12 +164,14 @@ SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr
         case DT_FILE:
             if (!doPwrite) {
                 utility_debugAssert(offset == 0);
-                result = regularfile_write((RegularFile*)desc,
-                                           process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
-                                           sizeNeeded);
+                result = regularfile_write(
+                    (RegularFile*)desc,
+                    process_getReadablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    sizeNeeded);
             } else {
                 result = regularfile_pwrite(
-                    (RegularFile*)desc, process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                    (RegularFile*)desc,
+                    process_getReadablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
                     sizeNeeded, offset);
             }
             break;
@@ -232,14 +237,14 @@ SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
     trace("Exit group with exit code %ld", args->args[0].as_i64);
-    process_markAsExiting(sys->process);
+    process_markAsExiting(_syscallhandler_getProcess(sys));
     return syscallreturn_makeNative();
 }
 
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
-    pid_t pid = process_getProcessID(sys->process);
+    pid_t pid = sys->processId;
     return syscallreturn_makeDoneI64(pid);
 }
 
@@ -251,15 +256,16 @@ SysCallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* arg
 
 SysCallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr tidptr = args->args[0].as_ptr; // int*
-    thread_setTidAddress(sys->thread, tidptr);
-    return syscallreturn_makeDoneI64(thread_getID(sys->thread));
+    thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);
+    return syscallreturn_makeDoneI64(sys->threadId);
 }
 
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     struct utsname* buf = NULL;
 
-    buf = process_getWriteablePtr(sys->process, args->args[0].as_ptr, sizeof(*buf));
+    buf = process_getWriteablePtr(
+        _syscallhandler_getProcess(sys), args->args[0].as_ptr, sizeof(*buf));
     if (!buf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }

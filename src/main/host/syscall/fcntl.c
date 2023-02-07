@@ -60,7 +60,8 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
         case F_OFD_GETLK:
 #endif
         {
-            struct flock* flk = process_getMutablePtr(sys->process, argReg.as_ptr, sizeof(*flk));
+            struct flock* flk =
+                process_getMutablePtr(_syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -68,7 +69,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #if defined(F_GETLK64) && F_GETLK64 != F_GETLK
         case F_GETLK64: {
             struct flock64* flk =
-                process_getMutablePtr(sys->process, sys->thread, argReg.as_ptr, sizeof(*flk));
+                process_getMutablePtr(_syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -83,8 +84,8 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
         case F_OFD_SETLKW:
 #endif
         {
-            const struct flock* flk =
-                process_getReadablePtr(sys->process, argReg.as_ptr, sizeof(*flk));
+            const struct flock* flk = process_getReadablePtr(
+                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -105,15 +106,15 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #endif
 
         case F_GETOWN_EX: {
-            struct f_owner_ex* foe =
-                process_getWriteablePtr(sys->process, argReg.as_ptr, sizeof(*foe));
+            struct f_owner_ex* foe = process_getWriteablePtr(
+                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
             result = regularfile_fcntl(file, command, foe);
             break;
         }
 
         case F_SETOWN_EX: {
-            const struct f_owner_ex* foe =
-                process_getReadablePtr(sys->process, argReg.as_ptr, sizeof(*foe));
+            const struct f_owner_ex* foe = process_getReadablePtr(
+                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
             result = regularfile_fcntl(file, command, (void*)foe);
             break;
         }
@@ -125,7 +126,8 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
         case F_GET_FILE_RW_HINT:
 #endif
         {
-            uint64_t* hint = process_getWriteablePtr(sys->process, argReg.as_ptr, sizeof(*hint));
+            uint64_t* hint = process_getWriteablePtr(
+                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
             result = regularfile_fcntl(file, command, hint);
             break;
         }
@@ -137,8 +139,8 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
         case F_SET_FILE_RW_HINT:
 #endif
         {
-            const uint64_t* hint =
-                process_getReadablePtr(sys->process, argReg.as_ptr, sizeof(*hint));
+            const uint64_t* hint = process_getReadablePtr(
+                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
             result = regularfile_fcntl(file, command, (void*)hint);
             break;
         }
@@ -177,7 +179,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     trace("fcntl called on fd %d for command %lu", fd, command);
 
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);

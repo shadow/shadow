@@ -38,7 +38,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     /* Grab the arg from the syscall register. */
     struct timespec req;
-    int rv = process_readPtr(sys->process, &req, request, sizeof(req));
+    int rv = process_readPtr(_syscallhandler_getProcess(sys), &req, request, sizeof(req));
     if (rv < 0) {
         return syscallreturn_makeDoneErrno(-rv);
     }
@@ -67,7 +67,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     if (!_syscallhandler_didListenTimeoutExpire(sys)) {
         // Should only happen if we were interrupted by a signal.
         utility_debugAssert(thread_unblockedSignalPending(
-            sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys))));
+            _syscallhandler_getThread(sys), host_getShimShmemLock(_syscallhandler_getHost(sys))));
 
         if (remainder.val) {
             CEmulatedTime nextExpireTime = _syscallhandler_getTimeout(sys);
@@ -78,7 +78,8 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
             if (!simtime_to_timespec(remainingTime, &timer_val)) {
                 panic("Couldn't convert %lu", remainingTime);
             }
-            int rv = process_writePtr(sys->process, remainder, &timer_val, sizeof(timer_val));
+            int rv = process_writePtr(
+                _syscallhandler_getProcess(sys), remainder, &timer_val, sizeof(timer_val));
             if (rv != 0) {
                 return syscallreturn_makeDoneErrno(-rv);
             }
@@ -128,8 +129,8 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
         .tv_nsec = now % SIMTIME_ONE_SECOND,
     };
 
-    int res =
-        process_writePtr(sys->process, args->args[1].as_ptr, &res_timespec, sizeof(res_timespec));
+    int res = process_writePtr(
+        _syscallhandler_getProcess(sys), args->args[1].as_ptr, &res_timespec, sizeof(res_timespec));
     if (res) {
         return syscallreturn_makeDoneErrno(-res);
     }
@@ -143,7 +144,8 @@ SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) 
     time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
 
     if (tlocPtr.val) {
-        time_t* tloc = process_getWriteablePtr(sys->process, tlocPtr, sizeof(*tloc));
+        time_t* tloc =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), tlocPtr, sizeof(*tloc));
         if (!tloc) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
@@ -158,7 +160,8 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
 
     if (tvPtr.val) {
         CEmulatedTime now = _syscallhandler_getEmulatedTime();
-        struct timeval* tv = process_getWriteablePtr(sys->process, tvPtr, sizeof(*tv));
+        struct timeval* tv =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), tvPtr, sizeof(*tv));
         tv->tv_sec = now / SIMTIME_ONE_SECOND;
         tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
     }

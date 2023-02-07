@@ -30,7 +30,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, tfd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), tfd);
     if (desc && timer_desc_out) {
         *timer_desc_out = (TimerFd*)desc;
     }
@@ -72,9 +72,9 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     }
 
     /* Create the timer and double check that it's valid. */
-    TimerFd* timer = timerfd_new(thread_getHostId(sys->thread));
+    TimerFd* timer = timerfd_new(sys->hostId);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)timer, descFlags);
-    int tfd = process_registerDescriptor(sys->process, desc);
+    int tfd = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
 
 #ifdef DEBUG
     /* This should always be a valid descriptor. */
@@ -118,7 +118,8 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     struct itimerspec newValue;
-    if (process_readPtr(sys->process, &newValue, newValuePtr, sizeof(newValue)) != 0) {
+    if (process_readPtr(
+            _syscallhandler_getProcess(sys), &newValue, newValuePtr, sizeof(newValue)) != 0) {
         return syscallreturn_makeDoneErrno(EFAULT);
     };
 
@@ -131,7 +132,8 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
 
     /* Old value is allowed to be null. */
     if (oldValuePtr.val) {
-        errcode = process_writePtr(sys->process, oldValuePtr, &oldValue, sizeof(oldValue));
+        errcode = process_writePtr(
+            _syscallhandler_getProcess(sys), oldValuePtr, &oldValue, sizeof(oldValue));
         if (errcode < 0) {
             return syscallreturn_makeDoneErrno(-errcode);
         }
@@ -157,7 +159,8 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     timerfd_getTime(timer, &currValue);
 
     /* Write the timer value */
-    errcode = process_writePtr(sys->process, currValuePtr, &currValue, sizeof(currValue));
+    errcode = process_writePtr(
+        _syscallhandler_getProcess(sys), currValuePtr, &currValue, sizeof(currValue));
     if (errcode != 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }

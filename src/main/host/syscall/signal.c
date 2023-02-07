@@ -49,11 +49,11 @@ static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
         .si_signo = sig,
         .si_errno = 0,
         .si_code = SI_USER,
-        .si_pid = process_getProcessID(sys->process),
+        .si_pid = sys->processId,
         .si_uid = 0,
     };
 
-    process_signal(process, sys->thread, &siginfo);
+    process_signal(process, _syscallhandler_getThread(sys), &siginfo);
 
     return syscallreturn_makeDoneI64(0);
 }
@@ -101,11 +101,11 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* t
                                    .si_signo = sig,
                                    .si_errno = 0,
                                    .si_code = SI_TKILL,
-                                   .si_pid = process_getProcessID(sys->process),
+                                   .si_pid = sys->processId,
                                    .si_uid = 0,
                                });
 
-    if (thread == sys->thread) {
+    if (thread_getID(thread) == sys->threadId) {
         // Target is the current thread. It'll be handled synchronously when the
         // current syscall returns (if it's unblocked).
         return syscallreturn_makeDoneI64(0);
@@ -158,7 +158,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
         // process group of the calling process.
         //
         // Currently every emulated process is in its own process group.
-        pid = process_getProcessID(sys->process);
+        pid = sys->processId;
     } else if (pid < -1) {
         // kill(2): If pid is less than -1, then sig is sent to every process in
         // the process group whose ID is -pid.
@@ -229,10 +229,11 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
     }
 
     if (oldActPtr.val) {
-        struct shd_kernel_sigaction old_action =
-            shimshmem_getSignalAction(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                                      process_getSharedMem(sys->process), signum);
-        int rv = process_writePtr(sys->process, oldActPtr, &old_action, sizeof(old_action));
+        struct shd_kernel_sigaction old_action = shimshmem_getSignalAction(
+            host_getShimShmemLock(_syscallhandler_getHost(sys)),
+            process_getSharedMem(_syscallhandler_getProcess(sys)), signum);
+        int rv = process_writePtr(
+            _syscallhandler_getProcess(sys), oldActPtr, &old_action, sizeof(old_action));
         if (rv != 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -244,12 +245,14 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
         }
 
         struct shd_kernel_sigaction new_action;
-        int rv = process_readPtr(sys->process, &new_action, actPtr, sizeof(new_action));
+        int rv = process_readPtr(
+            _syscallhandler_getProcess(sys), &new_action, actPtr, sizeof(new_action));
         if (rv != 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
         shimshmem_setSignalAction(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                                  process_getSharedMem(sys->process), signum, &new_action);
+                                  process_getSharedMem(_syscallhandler_getProcess(sys)), signum,
+                                  &new_action);
     }
 
     return syscallreturn_makeDoneI64(0);
@@ -270,8 +273,8 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
 
-    stack_t old_ss = shimshmem_getSigAltStack(
-        host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(sys->thread));
+    stack_t old_ss = shimshmem_getSigAltStack(host_getShimShmemLock(_syscallhandler_getHost(sys)),
+                                              thread_sharedMem(_syscallhandler_getThread(sys)));
 
     if (ss_ptr.val) {
         if (old_ss.ss_flags & SS_ONSTACK) {
@@ -281,7 +284,7 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
         }
 
         stack_t new_ss;
-        int rv = process_readPtr(sys->process, &new_ss, ss_ptr, sizeof(new_ss));
+        int rv = process_readPtr(_syscallhandler_getProcess(sys), &new_ss, ss_ptr, sizeof(new_ss));
         if (rv != 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -296,11 +299,12 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
             return syscallreturn_makeDoneErrno(EINVAL);
         }
         shimshmem_setSigAltStack(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                                 thread_sharedMem(sys->thread), new_ss);
+                                 thread_sharedMem(_syscallhandler_getThread(sys)), new_ss);
     }
 
     if (old_ss_ptr.val) {
-        int rv = process_writePtr(sys->process, old_ss_ptr, &old_ss, sizeof(old_ss));
+        int rv =
+            process_writePtr(_syscallhandler_getProcess(sys), old_ss_ptr, &old_ss, sizeof(old_ss));
         if (rv != 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -320,11 +324,13 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    shd_kernel_sigset_t current_set = shimshmem_getBlockedSignals(
-        host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(sys->thread));
+    shd_kernel_sigset_t current_set =
+        shimshmem_getBlockedSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
+                                    thread_sharedMem(_syscallhandler_getThread(sys)));
 
     if (oldSetPtr.val) {
-        int rv = process_writePtr(sys->process, oldSetPtr, &current_set, sizeof(current_set));
+        int rv = process_writePtr(
+            _syscallhandler_getProcess(sys), oldSetPtr, &current_set, sizeof(current_set));
         if (rv < 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -332,7 +338,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
 
     if (setPtr.val) {
         shd_kernel_sigset_t set;
-        int rv = process_readPtr(sys->process, &set, setPtr, sizeof(set));
+        int rv = process_readPtr(_syscallhandler_getProcess(sys), &set, setPtr, sizeof(set));
         if (rv < 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -357,7 +363,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
         }
 
         shimshmem_setBlockedSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                                    thread_sharedMem(sys->thread), current_set);
+                                    thread_sharedMem(_syscallhandler_getThread(sys)), current_set);
     }
 
     return syscallreturn_makeDoneI64(0);

@@ -37,8 +37,8 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
     Thread* child = NULL;
     {
-        int res =
-            thread_clone(sys->thread, filtered_flags, child_stack, ptid, ctid, newtls, &child);
+        int res = thread_clone(_syscallhandler_getThread(sys), filtered_flags, child_stack, ptid,
+                               ctid, newtls, &child);
         if (res < 0) {
             return syscallreturn_makeDoneI64(res);
         }
@@ -48,13 +48,15 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
         handled_flags |= CLONE_PARENT_SETTID;
-        pid_t* ptidp = process_getWriteablePtr(sys->process, ptid, sizeof(*ptidp));
+        pid_t* ptidp =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), ptid, sizeof(*ptidp));
         *ptidp = thread_getID(child);
     }
 
     if (flags & CLONE_CHILD_SETTID) {
         handled_flags |= CLONE_CHILD_SETTID;
-        pid_t* ctidp = process_getWriteablePtr(sys->process, ctid, sizeof(*ctidp));
+        pid_t* ctidp =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), ctid, sizeof(*ctidp));
         *ctidp = thread_getID(child);
     }
 
@@ -74,12 +76,12 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Adds thread to the parent process and schedules it to run. Notably we
     // *don't* want to start running it now, since we're still running the
     // calling thread.
-    process_addThread(sys->process, child);
+    process_addThread(_syscallhandler_getProcess(sys), child);
 
     return syscallreturn_makeDoneI64(thread_getID(child));
 }
 
 SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
-    return syscallreturn_makeDoneI64(thread_getID(sys->thread));
+    return syscallreturn_makeDoneI64(sys->threadId);
 }

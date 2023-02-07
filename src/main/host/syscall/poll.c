@@ -77,7 +77,8 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
         trace("poll checking fd %i", pfd->fd);
 
         /* Get the descriptor. */
-        const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
+        const Descriptor* desc =
+            process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), pfd->fd);
         if (desc) {
             _syscallhandler_getPollEventsHelper(desc, pfd);
         } else {
@@ -102,7 +103,8 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
             continue;
         }
 
-        const Descriptor* desc = process_getRegisteredDescriptor(sys->process, pfd->fd);
+        const Descriptor* desc =
+            process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), pfd->fd);
         utility_debugAssert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
@@ -135,7 +137,8 @@ SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
             trace("No events are ready and poll needs to return now");
             goto done;
         } else if (thread_unblockedSignalPending(
-                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+                       _syscallhandler_getThread(sys),
+                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             trace("Interrupted by a signal.");
             num_ready = -EINTR;
             goto done;
@@ -176,7 +179,7 @@ static SysCallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, Pl
     // Get the pollfd struct in our memory so we can read from and write to it.
     struct pollfd* fds = NULL;
     if (nfds > 0) {
-        fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
+        fds = process_getMutablePtr(_syscallhandler_getProcess(sys), fds_ptr, nfds * sizeof(*fds));
         if (!fds) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
@@ -235,8 +238,8 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
     struct timespec ts_timeout_val;
 
     if (ts_timeout_ptr.val) {
-        if (process_readPtr(
-                sys->process, &ts_timeout_val, ts_timeout_ptr, sizeof(ts_timeout_val)) != 0) {
+        if (process_readPtr(_syscallhandler_getProcess(sys), &ts_timeout_val, ts_timeout_ptr,
+                            sizeof(ts_timeout_val)) != 0) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
 

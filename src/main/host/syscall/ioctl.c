@@ -65,7 +65,8 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
             int lenout = legacysocket_getInputBufferLength((LegacySocket*)udp);
-            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+            int rv =
+                process_writePtr(_syscallhandler_getProcess(sys), argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
                 utility_debugAssert(rv < 0);
@@ -79,7 +80,8 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
             int lenout = legacysocket_getOutputBufferLength((LegacySocket*)udp);
-            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+            int rv =
+                process_writePtr(_syscallhandler_getProcess(sys), argPtr, &lenout, sizeof(int));
 
             if (rv != 0) {
                 utility_debugAssert(rv < 0);
@@ -93,7 +95,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
         case FIONBIO: {
             int val = 0;
-            int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
+            int rv = process_readPtr(_syscallhandler_getProcess(sys), &val, argPtr, sizeof(int));
 
             if (rv != 0) {
                 utility_debugAssert(rv < 0);
@@ -148,7 +150,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     trace("ioctl called on fd %d for request %ld", fd, request);
 
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
