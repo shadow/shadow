@@ -240,6 +240,10 @@ impl Thread {
     pub fn shmem(&self) -> &ThreadShmem {
         unsafe { c::thread_sharedMem(self.cthread()).as_ref().unwrap() }
     }
+
+    pub fn native_tid(&self) -> nix::unistd::Pid {
+        nix::unistd::Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread()) })
+    }
 }
 
 impl Drop for Thread {

@@ -53,12 +53,6 @@ pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(pub u32);
 
-struct ThreadInfo {
-    #[allow(dead_code)]
-    id: ThreadId,
-    native_tid: Pid,
-}
-
 struct Clock {
     now: Option<EmulatedTime>,
     barrier: Option<EmulatedTime>,
@@ -77,7 +71,7 @@ pub struct Worker {
     // ShadowLogger.
     active_host: RefCell<Option<Box<Host>>>,
     active_process: RefCell<Option<RootedRc<RootedRefCell<Process>>>>,
-    active_thread_info: RefCell<Option<ThreadInfo>>,
+    active_thread: RefCell<Option<RootedRc<Thread>>>,
 
     clock: RefCell<Clock>,
 
@@ -100,7 +94,7 @@ impl Worker {
                 shared: AtomicRef::map(WORKER_SHARED.borrow(), |x| x.as_ref().unwrap()),
                 active_host: RefCell::new(None),
                 active_process: RefCell::new(None),
-                active_thread_info: RefCell::new(None),
+                active_thread: RefCell::new(None),
                 clock: RefCell::new(Clock {
                     now: None,
                     barrier: None,
@@ -160,6 +154,21 @@ impl Worker {
         .flatten()
     }
 
+    /// Run `f` with a reference to the current `Thread`, or return `None` if there isn't one.
+    // non-pub because we're migrating code to pass the current Thread around explicitly
+    // in Rust. e.g. see `ThreadContext`.
+    #[must_use]
+    fn with_active_thread<F, R>(f: F) -> Option<R>
+    where
+        F: FnOnce(&Thread) -> R,
+    {
+        Worker::with(|w| {
+            let thread = w.active_thread.borrow();
+            thread.as_ref().map(|t| f(t))
+        })
+        .flatten()
+    }
+
     /// Run `f` with a reference to the global DNS.
     ///
     /// Panics if the Worker or its DNS hasn't yet been initialized.
@@ -207,23 +216,32 @@ impl Worker {
 
     /// Set the currently-active Thread.
     pub fn set_active_thread(thread: &Thread) {
-        debug_assert_eq!(
-            thread.host_id(),
-            Worker::with_active_host(|h| h.info().id).unwrap()
-        );
-        debug_assert_eq!(thread.process_id(), Worker::active_process_id().unwrap());
-        let info = ThreadInfo {
-            id: thread.id(),
-            native_tid: thread.system_tid(),
-        };
-        let old = Worker::with(|w| w.active_thread_info.borrow_mut().replace(info)).unwrap();
-        debug_assert!(old.is_none());
+        Worker::with(|w| {
+            // We don't currently have a direct way to get the enclosing RootedRc from the `thread`,
+            // so we need to fetch it from the current process.
+            // TODO: store a `WeakRootedRc` in the `Thread` so that we can skip this lookup.
+            let threadrc = {
+                let host = w.active_host.borrow();
+                let host = host.as_ref().unwrap();
+                let process = w.active_process.borrow();
+                let process = process.as_ref().unwrap();
+                let process = process.borrow(host.root());
+                let threadrc = process.thread_borrow(thread.id()).unwrap();
+                threadrc.clone(host.root())
+            };
+            let old = w.active_thread.borrow_mut().replace(threadrc);
+            debug_assert!(old.is_none());
+        })
+        .unwrap();
     }
 
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
-        let old = Worker::with(|w| w.active_thread_info.borrow_mut().take());
-        debug_assert!(old.is_some());
+        Worker::with(|w| {
+            let old = w.active_thread.borrow_mut().take().unwrap();
+            old.safely_drop(w.active_host.borrow().as_ref().unwrap().root());
+        })
+        .unwrap()
     }
 
     /// Whether currently running on a live Worker.
@@ -245,11 +263,11 @@ impl Worker {
     }
 
     pub fn active_thread_id() -> Option<ThreadId> {
-        Worker::with(|w| w.active_thread_info.borrow().as_ref().map(|p| p.id)).flatten()
+        Worker::with(|w| w.active_thread.borrow().as_ref().map(|t| t.id())).flatten()
     }
 
     pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
-        Worker::with(|w| w.active_thread_info.borrow().as_ref().map(|t| t.native_tid)).flatten()
+        Worker::with(|w| w.active_thread.borrow().as_ref().map(|t| t.native_tid())).flatten()
     }
 
     pub fn set_round_end_time(t: EmulatedTime) {
@@ -773,15 +791,7 @@ mod export {
     /// invalidated the next time the worker switches threads.
     #[no_mangle]
     pub extern "C" fn worker_getCurrentThread() -> *mut cshadow::Thread {
-        Worker::with_active_host(|h| {
-            let pid = Worker::active_process_id().unwrap();
-            let process = h.process_borrow(pid).unwrap();
-            let process = process.borrow(h.root());
-            let tid = Worker::active_thread_id().unwrap();
-            let thread = process.thread_borrow(tid).unwrap();
-            unsafe { thread.cthread() }
-        })
-        .unwrap()
+        Worker::with_active_thread(|thread| unsafe { thread.cthread() }).unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the

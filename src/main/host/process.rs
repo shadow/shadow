@@ -960,9 +960,15 @@ impl Process {
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
-            // Restore active thread.
-            Worker::clear_active_thread();
-            Worker::set_active_thread(&thread);
+
+            // XXX We currently can't restore the active thread to the one we're
+            // reaping, since it's no longer in the Process's thread table,
+            // which Worker::set_active_thread currently depends on.
+            //
+            // This may lead to some confusing log messages between here and when we bubble back
+            // up the call stack :/.
+            //
+            // (Fixed in next commit)
 
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
