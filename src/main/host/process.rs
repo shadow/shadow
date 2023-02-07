@@ -329,6 +329,10 @@ impl Process {
         rv
     }
 
+    pub fn weak_rc(&self) -> &RootedRcWeak<RootedRefCell<Self>> {
+        self.weak_rc.as_ref().unwrap()
+    }
+
     pub fn id(&self) -> ProcessId {
         self.id
     }
