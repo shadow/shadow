@@ -226,12 +226,13 @@ static void _shim_parent_init_logging() {
         logger_set_global_start_time_micros(logger_start_time);
     }
 
-    // Redirect logger to specified log file.
+    // Redirect logger to stdout (shadow sets stdout and stderr to the shim log).
     {
-        const char* name = getenv("SHADOW_LOG_FILE");
-        FILE* log_file = fopen(name, "w");
+        // the FILE takes ownership of the fd, so give it its own fd
+        int shimlog_fd = dup(STDOUT_FILENO);
+        FILE* log_file = fdopen(shimlog_fd, "w");
         if (log_file == NULL) {
-            panic("fopen: %s", strerror(errno));
+            panic("fdopen: %s", strerror(errno));
         }
         logger_setDefault(shimlogger_new(log_file));
     }

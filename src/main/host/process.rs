@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -258,15 +259,6 @@ impl Process {
             ))
             .unwrap(),
         );
-        envv.push(
-            CString::new(format!(
-                "SHADOW_LOG_FILE={}",
-                Self::static_output_file_name(name.to_str().unwrap(), host, "shimlog")
-                    .to_str()
-                    .unwrap()
-            ))
-            .unwrap(),
-        );
         if !use_shim_syscall_handler {
             envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
         }
@@ -470,6 +462,13 @@ impl Process {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
+        let shimlog_path = CString::new(
+            Self::static_output_file_name(self.name(), host, "shimlog")
+                .as_os_str()
+                .as_bytes(),
+        )
+        .unwrap();
+
         unsafe {
             cshadow::thread_run(
                 main_thread.cthread(),
@@ -481,6 +480,7 @@ impl Process {
                     Some(x) => x.file.borrow().as_raw_fd(),
                     None => -1,
                 },
+                shimlog_path.as_ptr(),
             )
         };
 

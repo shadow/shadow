@@ -24,7 +24,7 @@ Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID
 void thread_free(Thread* thread);
 
 void thread_run(Thread* thread, const char* pluginPath, const char* const* argv,
-                const char* const* envv, const char* workingDir, int straceFd);
+                const char* const* envv, const char* workingDir, int straceFd, const char* logPath);
 void thread_resume(Thread* thread);
 void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);
