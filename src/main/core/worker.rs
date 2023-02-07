@@ -122,10 +122,10 @@ impl Worker {
 
     /// Run `f` with a reference to the current
     /// `RootedRc<RootedRefCell<Process>>`, or return `None` if there isn't one.
-    // non-pub because we're migrating code to pass the current Process around explicitly
-    // in Rust. e.g. see `ProcessContext`.
+    ///
+    /// Prefer to pass Process explicitly where feasible. e.g. see `ProcessContext`.
     #[must_use]
-    fn with_active_process_rc<F, R>(f: F) -> Option<R>
+    pub fn with_active_process_rc<F, R>(f: F) -> Option<R>
     where
         F: FnOnce(&RootedRc<RootedRefCell<Process>>) -> R,
     {
@@ -133,10 +133,10 @@ impl Worker {
     }
 
     /// Run `f` with a reference to the current `Process`, or return `None` if there isn't one.
-    // non-pub because we're migrating code to pass the current Process around explicitly
-    // in Rust. e.g. see `ProcessContext`.
+    ///
+    /// Prefer to pass Process explicitly where feasible. e.g. see `ProcessContext`.
     #[must_use]
-    fn with_active_process<F, R>(f: F) -> Option<R>
+    pub fn with_active_process<F, R>(f: F) -> Option<R>
     where
         F: FnOnce(&Process) -> R,
     {
@@ -155,8 +155,8 @@ impl Worker {
     }
 
     /// Run `f` with a reference to the current `Thread`, or return `None` if there isn't one.
-    // non-pub because we're migrating code to pass the current Thread around explicitly
-    // in Rust. e.g. see `ThreadContext`.
+    ///
+    /// Prefer to pass Thread explicitly where feasible. e.g. see `ThreadContext`.
     #[must_use]
     fn with_active_thread<F, R>(f: F) -> Option<R>
     where

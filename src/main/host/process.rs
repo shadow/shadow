@@ -813,6 +813,21 @@ impl Process {
         self.itimer_real.borrow_mut()
     }
 
+    /// Returns a dynamically borrowed reference to the first live thread.
+    /// This is meant primarily for the MemoryManager.
+    #[track_caller]
+    pub fn first_live_thread_borrow(&self) -> Option<impl Deref<Target = RootedRc<Thread>> + '_> {
+        Ref::filter_map(self.threads.borrow(), |threads| {
+            let thread = threads.values().next().map(|thread| {
+                // There shouldn't be any non-running threads in the table.
+                assert!(unsafe { cshadow::thread_isRunning(thread.cthread()) });
+                thread
+            });
+            thread
+        })
+        .ok()
+    }
+
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
@@ -944,31 +959,11 @@ impl Process {
                 // Check again
             }
 
-            // Use a different thread to do the write. The current thread won't work
-            // now that it's exited.
-            let threads = self.threads.borrow();
-            let writer_thread = threads.values().next().unwrap();
-            // There shouldn't be any non-running threads in the table.
-            assert!(unsafe { cshadow::thread_isRunning(writer_thread.cthread()) });
-            // MemoryCopier uses the active thread's tid to do the write; we need to set
-            // that to the still-live thread we're using to do the write.
-            // TODO: change API to accept an explicit thread or tid.
-            Worker::clear_active_thread();
-            Worker::set_active_thread(writer_thread);
             let typed_clear_child_tid_pvp =
                 TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
-
-            // XXX We currently can't restore the active thread to the one we're
-            // reaping, since it's no longer in the Process's thread table,
-            // which Worker::set_active_thread currently depends on.
-            //
-            // This may lead to some confusing log messages between here and when we bubble back
-            // up the call stack :/.
-            //
-            // (Fixed in next commit)
 
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
