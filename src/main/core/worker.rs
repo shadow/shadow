@@ -219,6 +219,10 @@ impl Worker {
         Worker::with(|w| w.active_process_info.borrow().as_ref().map(|p| p.id)).flatten()
     }
 
+    pub fn active_thread_id() -> Option<ThreadId> {
+        Worker::with(|w| w.active_thread_info.borrow().as_ref().map(|p| p.id)).flatten()
+    }
+
     pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
         Worker::with(|w| w.active_thread_info.borrow().as_ref().map(|t| t.native_tid)).flatten()
     }
@@ -600,6 +604,8 @@ pub fn with_global_sim_stats<T>(f: impl FnOnce(&SharedSimStats) -> T) -> T {
 }
 
 mod export {
+    use crate::host::process::ProcessRefCell;
+
     use super::*;
 
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
@@ -723,6 +729,34 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getCurrentHost() -> *const Host {
         Worker::with_active_host(|h| h as *const _).unwrap()
+    }
+
+    /// Returns a pointer to the current running process. The returned pointer is
+    /// invalidated the next time the worker switches processes.
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentProcess() -> *const ProcessRefCell {
+        Worker::with_active_host(|h| {
+            let pid = Worker::active_process_id().unwrap();
+            let process = h.process_borrow(pid).unwrap();
+            let process: &ProcessRefCell = process;
+            process as *const _
+        })
+        .unwrap()
+    }
+
+    /// Returns a pointer to the current running thread. The returned pointer is
+    /// invalidated the next time the worker switches threads.
+    #[no_mangle]
+    pub extern "C" fn worker_getCurrentThread() -> *mut cshadow::Thread {
+        Worker::with_active_host(|h| {
+            let pid = Worker::active_process_id().unwrap();
+            let process = h.process_borrow(pid).unwrap();
+            let process = process.borrow(h.root());
+            let tid = Worker::active_thread_id().unwrap();
+            let thread = process.thread_borrow(tid).unwrap();
+            unsafe { thread.cthread() }
+        })
+        .unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the
