@@ -168,11 +168,15 @@ impl MemoryCopier {
         // While the documentation for process_vm_readv says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
         // pid after the thread group leader has exited will fail.
-        let tid = Worker::with_active_process(|process| {
-            // Don't access another process's memory.
-            assert_eq!(process.native_pid().unwrap(), self.pid);
-            let thread = process.first_live_thread_borrow().unwrap();
-            thread.native_tid()
+        let tid = Worker::with_active_host(|host| {
+            Worker::with_active_process(|process| {
+                // Don't access another process's memory.
+                assert_eq!(process.native_pid().unwrap(), self.pid);
+                let thread = process.first_live_thread_borrow(host.root()).unwrap();
+                let thread = thread.borrow(host.root());
+                thread.native_tid()
+            })
+            .unwrap()
         })
         .unwrap();
 

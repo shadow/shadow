@@ -123,6 +123,7 @@ impl<'a> ThreadContextObjs<'a> {
         let process = self.host.process_borrow(self.pid).unwrap();
         let process = process.borrow(self.host.root());
         let thread = process.thread_borrow(self.tid).unwrap();
+        let thread = thread.borrow(self.host.root());
         let mut ctx = ThreadContext::new(self.host, &process, &thread);
         f(&mut ctx)
     }

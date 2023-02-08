@@ -20,6 +20,7 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::{RootedRc, RootedRcWeak};
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
 use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -158,7 +159,7 @@ pub struct Process {
     // reference to the thread list. e.g. this lets us implement the `clone`
     // syscall, which adds a thread to the list while we have a reference to the
     // parent thread.
-    threads: RefCell<BTreeMap<ThreadId, RootedRc<Thread>>>,
+    threads: RefCell<BTreeMap<ThreadId, RootedRc<RootedRefCell<Thread>>>>,
 
     // References to `Self::memory_manager` cached on behalf of C code using legacy
     // C memory access APIs.
@@ -432,14 +433,12 @@ impl Process {
 
         // Create the main thread and add it to our thread list.
         let tid = self.thread_group_leader_id();
-        {
-            let thread =
-                unsafe { cshadow::thread_new(host, self.cprocess(host), tid.try_into().unwrap()) };
-            let thread_ref = RootedRc::new(host.root(), unsafe { Thread::new(thread) });
-            self.threads.borrow_mut().insert(tid, thread_ref);
-        };
+        self.threads
+            .borrow_mut()
+            .insert(tid, Thread::new(host, self, tid));
 
         let main_thread = self.thread_borrow(tid).unwrap();
+        let main_thread = main_thread.borrow(host.root());
 
         info!("starting process '{}'", self.name());
         Worker::set_active_process(self);
@@ -540,14 +539,20 @@ impl Process {
             return;
         }
 
-        let threads = self.threads.borrow();
-        let Some(thread) = threads.get(&tid) else {
-            debug!("Thread {} no longer exists", tid);
-            return;
+        let threadrc = {
+            let threads = self.threads.borrow();
+            let Some(thread) = threads.get(&tid) else {
+                debug!("Thread {} no longer exists", tid);
+                return;
+            };
+            // Clone the thread reference, so that we don't hold a dynamically
+            // borrowed reference to the thread list while running the thread.
+            thread.clone(host.root())
         };
+        let thread = threadrc.borrow(host.root());
 
         Worker::set_active_process(self);
-        Worker::set_active_thread(thread);
+        Worker::set_active_thread(&thread);
 
         #[cfg(feature = "perf_timers")]
         self.start_cpu_delay_timer();
@@ -562,16 +567,7 @@ impl Process {
             .unwrap()
             .unapplied_cpu_latency = SimulationTime::ZERO;
 
-        // `thread_continue` will need to borrow and potentially mutate the thread, and
-        // possibly the thread list (e.g. in a clone syscall). We currently need to drop
-        // our borrows so that those will succeed.
-        //
-        // When thread_resume is converted to Rust, we'll *clone* `threadrc` so that we
-        // can drop the borrow of the thread list, and pass a borrowed mutable reference
-        // to `thread` so that it doesn't need to be re-borrowed.
         let cthread = unsafe { thread.cthread() };
-        drop(threads);
-
         unsafe { cshadow::thread_resume(cthread) };
 
         #[cfg(feature = "perf_timers")]
@@ -590,6 +586,8 @@ impl Process {
 
         Worker::clear_active_thread();
         Worker::clear_active_process();
+        drop(thread);
+        threadrc.safely_drop(host.root());
     }
 
     pub fn stop(&self, host: &Host) {
@@ -675,6 +673,7 @@ impl Process {
     fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
         let threads = self.threads.borrow();
         for thread in threads.values() {
+            let thread = thread.borrow(host.root());
             {
                 let thread_shmem = thread.shmem();
                 let host_lock = host.shim_shmem_lock_borrow().unwrap();
@@ -816,11 +815,17 @@ impl Process {
     /// Returns a dynamically borrowed reference to the first live thread.
     /// This is meant primarily for the MemoryManager.
     #[track_caller]
-    pub fn first_live_thread_borrow(&self) -> Option<impl Deref<Target = RootedRc<Thread>> + '_> {
+    pub fn first_live_thread_borrow(
+        &self,
+        host_root: &Root,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| {
             let thread = threads.values().next().map(|thread| {
                 // There shouldn't be any non-running threads in the table.
-                assert!(unsafe { cshadow::thread_isRunning(thread.cthread()) });
+                assert!({
+                    let thread = thread.borrow(host_root);
+                    unsafe { cshadow::thread_isRunning(thread.cthread()) }
+                });
                 thread
             });
             thread
@@ -831,7 +836,7 @@ impl Process {
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
-    ) -> Option<impl Deref<Target = RootedRc<Thread>> + '_> {
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -904,7 +909,8 @@ impl Process {
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
     fn reap_thread(&self, host: &Host, tid: ThreadId) {
-        let thread = self.threads.borrow_mut().remove(&tid).unwrap();
+        let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
+        let thread = threadrc.borrow(host.root());
 
         // If the `clear_child_tid` attribute on the thread is set, and there are
         // any other threads left alive in the process, perform a futex wake on
@@ -979,7 +985,8 @@ impl Process {
             }
         }
 
-        thread.safely_drop(host.root());
+        drop(thread);
+        threadrc.safely_drop(host.root());
     }
 
     fn has_started(&self) -> bool {
@@ -1002,7 +1009,7 @@ impl Process {
 
     fn handle_process_exit(&self, host: &Host) {
         loop {
-            let (tid, thread) = {
+            let (tid, threadrc) = {
                 let threads = self.threads.borrow();
                 let Some((tid, thread)) = threads.iter().next() else {
                     break;
@@ -1011,9 +1018,9 @@ impl Process {
                 // the reference so that we don't hold a borrow over the list.
                 (*tid, thread.clone(host.root()))
             };
-            unsafe { cshadow::thread_handleProcessExit(thread.cthread()) };
+            unsafe { cshadow::thread_handleProcessExit(threadrc.borrow(host.root()).cthread()) };
             self.reap_thread(host, tid);
-            thread.safely_drop(host.root());
+            threadrc.safely_drop(host.root());
         }
         self.check(host);
     }
@@ -1138,6 +1145,7 @@ impl Process {
         {
             let threads = self.threads.borrow();
             let thread = threads.get(&tid).unwrap();
+            let thread = thread.borrow(host.root());
             if unsafe { cshadow::thread_isRunning(thread.cthread()) } {
                 debug!(
                     "thread {} in process '{}' still running, but blocked",
@@ -1160,10 +1168,9 @@ impl Process {
 
     /// Adds a new thread to the process and schedules it to run.
     /// Intended for use by `clone`.
-    pub fn add_thread(&self, host: &Host, thread: Thread) {
+    pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
         let pid = self.id();
-        let tid = thread.id();
-        let thread = RootedRc::new(host.root(), thread);
+        let tid = thread.borrow(host.root()).id();
         self.threads.borrow_mut().insert(tid, thread);
 
         // Schedule thread to start. We're giving the caller's reference to thread
@@ -1732,6 +1739,7 @@ mod export {
                     ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                 )
                 .unwrap();
+            let thread = thread.borrow(h.root());
             memory_manager
                 .do_mmap(&thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
                 .into()
@@ -1756,6 +1764,7 @@ mod export {
                     ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                 )
                 .unwrap();
+            let thread = thread.borrow(h.root());
             memory_manager
                 .handle_munmap(&thread, PluginPtr::from(addr), len)
                 .into()
@@ -1782,6 +1791,7 @@ mod export {
                     ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                 )
                 .unwrap();
+            let thread = thread.borrow(h.root());
             memory_manager
                 .handle_mremap(
                     &thread,
@@ -1813,6 +1823,7 @@ mod export {
                     ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                 )
                 .unwrap();
+            let thread = thread.borrow(h.root());
             memory_manager
                 .handle_mprotect(&thread, PluginPtr::from(addr), size, prot)
                 .into()
@@ -1836,6 +1847,7 @@ mod export {
                     ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                 )
                 .unwrap();
+            let thread = thread.borrow(h.root());
             memory_manager
                 .handle_brk(&thread, PluginPtr::from(plugin_src))
                 .into()
@@ -1860,6 +1872,7 @@ mod export {
                         ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
                     )
                     .unwrap();
+                let thread = thread.borrow(h.root());
                 memory_manager.init_mapper(&thread)
             }
         })
@@ -2035,9 +2048,11 @@ mod export {
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
-            proc.thread_borrow(tid)
-                .map(|x| unsafe { x.cthread() })
-                .unwrap_or(std::ptr::null_mut())
+            let Some(thread) = proc.thread_borrow(tid) else {
+                return std::ptr::null_mut();
+            };
+            let thread = thread.borrow(host.root());
+            unsafe { thread.cthread() }
         })
         .unwrap()
     }
@@ -2093,8 +2108,8 @@ mod export {
         thread: *mut cshadow::Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { Thread::new(thread) };
         Worker::with_active_host(|host| {
+            let thread = unsafe { Thread::new_from_c(host, thread) };
             let proc = proc.borrow(host.root());
             proc.add_thread(host, thread)
         })
@@ -2147,10 +2162,10 @@ mod export {
                         .unwrap();
                 p.thread_borrow(tid).unwrap()
             });
-            let current_thread: Option<&Thread> = match &current_threadrc {
-                Some(t) => Some(t),
-                None => None,
-            };
+            let current_thread = current_threadrc
+                .as_ref()
+                .map(|thread| thread.borrow(host.root()));
+            let current_thread = current_thread.as_deref();
             target_proc.signal(host, current_thread, siginfo)
         })
         .unwrap()

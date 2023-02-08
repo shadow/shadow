@@ -1156,6 +1156,17 @@ mod export {
         for process in host.processes.borrow().values() {
             let process = process.borrow(host.root());
             if let Some(thread) = process.thread_borrow(tid) {
+                // We're returning a pointer to the Thread itself after having
+                // dropped the borrow. In addition to the requirements noted for the calling code,
+                // this could cause soundness issues if we were to ever take mutable borrows of
+                // the RootedRefCell, since it'd be difficult to ensure we didn't have any simultaneous
+                // additional references from dereferencing a C pointer.
+                //
+                // TODO: Add a variant of RootedRefCell that doesn't allow
+                // mutable borrows, use it for Thread, and name that type
+                // explicitly here to ensure a compilation error if the type is
+                // changed again to one that would allow mutable references.
+                let thread = thread.borrow(host.root());
                 return unsafe { thread.cthread() };
             };
         }

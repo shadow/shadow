@@ -1,9 +1,12 @@
-use super::process::ProcessId;
+use super::host::Host;
+use super::process::{Process, ProcessId};
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, HostTreePointer, IsSend};
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::ThreadShmem;
 use shadow_shim_helper_rs::HostId;
 
@@ -220,11 +223,24 @@ impl Thread {
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     /// * The returned object must not outlive `cthread`
-    pub unsafe fn new(cthread: *mut c::Thread) -> Self {
+    pub unsafe fn new_from_c(
+        host: &Host,
+        cthread: *mut c::Thread,
+    ) -> RootedRc<RootedRefCell<Self>> {
         assert!(!cthread.is_null());
-        Self {
+        let thread = Self {
             cthread: HostTreePointer::new(cthread),
-        }
+        };
+        RootedRc::new(host.root(), RootedRefCell::new(host.root(), thread))
+    }
+
+    pub fn new(
+        host: &Host,
+        process: &Process,
+        thread_id: ThreadId,
+    ) -> RootedRc<RootedRefCell<Self>> {
+        let cthread = unsafe { c::thread_new(host, process.cprocess(host), thread_id.into()) };
+        unsafe { Self::new_from_c(host, cthread) }
     }
 
     /// # Safety
