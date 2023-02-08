@@ -425,7 +425,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
             HANDLE_RUST(sched_yield);
-            HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
             HANDLE_C(shadow_hostname_to_addr_ipv4);
             HANDLE_C(shadow_init_memory_manager);

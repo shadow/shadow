@@ -11,7 +11,7 @@
 typedef enum {
     SYS_shadow_min = 1000,
     SYS_shadow_set_ptrace_allow_native_syscalls = 1000,
-    SYS_shadow_get_ipc_blk = 1001,
+    // Deprecated: SYS_shadow_get_ipc_blk = 1001,
     SYS_shadow_get_shm_blk = 1002,
     SYS_shadow_hostname_to_addr_ipv4 = 1003,
     SYS_shadow_init_memory_manager = 1004,

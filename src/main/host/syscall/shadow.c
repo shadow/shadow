@@ -105,13 +105,6 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_shadow_get_ipc_blk(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-    trace("handling shadow_get_ipc_blk syscall");
-    return _syscallhandler_get_shmem_block(
-        sys, args, thread_getIPCBlock(_syscallhandler_getThread(sys)));
-}
-
 SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
