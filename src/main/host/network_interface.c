@@ -206,6 +206,13 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet) {
         _networkinterface_capturePacket(interface, packet);
     }
 
+    /* pushing a packet to the socket may cause the socket to be disassociated and freed and cause
+     * our socket pointer to become dangling while we're using it, so we need to increase its ref
+     * count */
+    if (socket.type != CST_NONE) {
+        socket = compatsocket_refAs(&socket);
+    }
+
     /* if the socket closed, just drop the packet */
     if (socket.type != CST_NONE) {
         compatsocket_pushInPacket(&socket, host, packet);
@@ -217,6 +224,10 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet) {
     Tracker* tracker = host_getTracker(host);
     if (tracker != NULL && socket.type != CST_NONE) {
         tracker_addInputBytes(tracker, packet, &socket);
+    }
+
+    if (socket.type != CST_NONE) {
+        compatsocket_unref(&socket);
     }
 }
 
