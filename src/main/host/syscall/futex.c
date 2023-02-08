@@ -31,7 +31,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     CSimulationTime timeoutSimTime = SIMTIME_INVALID;
     if (timeoutVPtr.val) {
         struct timespec ts = {0};
-        int rv = process_readPtr(sys->process, &ts, timeoutVPtr, sizeof(ts));
+        int rv = process_readPtr(_syscallhandler_getProcess(sys), &ts, timeoutVPtr, sizeof(ts));
         if (rv < 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -45,7 +45,8 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // threads from the same plugin at the same time, we do not use atomic ops.
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
     uint32_t futexVal;
-    int result = process_readPtr(sys->process, &futexVal, futexVPtr, sizeof(futexVal));
+    int result =
+        process_readPtr(_syscallhandler_getProcess(sys), &futexVal, futexVPtr, sizeof(futexVal));
     if (result) {
         warning("Couldn't read futex address %p", (void*)futexVPtr.val);
         return syscallreturn_makeDoneErrno(-result);
@@ -59,7 +60,8 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     }
 
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
-    PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, futexVPtr);
+    PluginPhysicalPtr futexPPtr =
+        process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
 
     // Check if we already have a futex
     FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));
@@ -75,7 +77,8 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
         } else if (thread_unblockedSignalPending(
-                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+                       _syscallhandler_getThread(sys),
+                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             trace("Futex %p has been interrupted by a signal", (void*)futexPPtr.val);
             result = -EINTR;
         } else {
@@ -120,7 +123,8 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
 static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,
                                                      int numWakeups) {
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
-    PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, futexVPtr);
+    PluginPhysicalPtr futexPPtr =
+        process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
 
     // Lookup the futex in the futex table
     FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));

@@ -32,7 +32,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, filefd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), filefd);
     if (desc && file_desc_out) {
         *file_desc_out = (RegularFile*)desc;
     }
@@ -55,15 +55,16 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     const char* pathname;
-    int errcode = process_getReadableString(sys->process, pathnamePtr, PATH_MAX, &pathname, NULL);
+    int errcode = process_getReadableString(
+        _syscallhandler_getProcess(sys), pathnamePtr, PATH_MAX, &pathname, NULL);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Create and open the file. */
     RegularFile* filed = regularfile_new();
-    errcode = regularfile_open(
-        filed, pathname, flags & ~O_CLOEXEC, mode, process_getWorkingDir(sys->process));
+    errcode = regularfile_open(filed, pathname, flags & ~O_CLOEXEC, mode,
+                               process_getWorkingDir(_syscallhandler_getProcess(sys)));
 
     if (errcode < 0) {
         /* This will unref/free the RegularFile. */
@@ -74,7 +75,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)filed, flags & O_CLOEXEC);
-    int handle = process_registerDescriptor(sys->process, desc);
+    int handle = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
     return syscallreturn_makeDoneI64(handle);
 }
 
@@ -119,7 +120,8 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    struct stat* buf =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
     if (!buf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
@@ -140,7 +142,8 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     }
 
     /* Get some memory in which to return the result. */
-    struct statfs* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
+    struct statfs* buf =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
     if (!buf) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
@@ -267,13 +270,16 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
 
     /* Get the name/value strings from the plugin. */
     const char* name;
-    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
+    errcode =
+        process_getReadableString(_syscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const void* value =
-        (valuePtr.val && size > 0) ? process_getReadablePtr(sys->process, valuePtr, size) : NULL;
+        (valuePtr.val && size > 0)
+            ? process_getReadablePtr(_syscallhandler_getProcess(sys), valuePtr, size)
+            : NULL;
 
     return syscallreturn_makeDoneI64(regularfile_fsetxattr(file_desc, name, value, size, flags));
 }
@@ -294,13 +300,15 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
 
     /* Get the name/value strings from the plugin. */
     const char* name;
-    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
+    errcode =
+        process_getReadableString(_syscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    void* value =
-        (valuePtr.val && size > 0) ? process_getWriteablePtr(sys->process, valuePtr, size) : NULL;
+    void* value = (valuePtr.val && size > 0)
+                      ? process_getWriteablePtr(_syscallhandler_getProcess(sys), valuePtr, size)
+                      : NULL;
 
     return syscallreturn_makeDoneI64(regularfile_fgetxattr(file_desc, name, value, size));
 }
@@ -318,8 +326,9 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    void* list =
-        (listPtr.val && size > 0) ? process_getWriteablePtr(sys->process, listPtr, size) : NULL;
+    void* list = (listPtr.val && size > 0)
+                     ? process_getWriteablePtr(_syscallhandler_getProcess(sys), listPtr, size)
+                     : NULL;
 
     return syscallreturn_makeDoneI64(regularfile_flistxattr(file_desc, list, size));
 }
@@ -338,7 +347,8 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
 
     /* Get the name string from the plugin. */
     const char* name;
-    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
+    errcode =
+        process_getReadableString(_syscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -409,7 +419,8 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    struct linux_dirent* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
+    struct linux_dirent* dirp =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), dirpPtr, count);
     if (!dirp) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
@@ -431,7 +442,8 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    struct linux_dirent64* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
+    struct linux_dirent64* dirp =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), dirpPtr, count);
     if (!dirp) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }

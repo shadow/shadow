@@ -36,7 +36,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
 
     Epoll* epolld = epoll_new();
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)epolld, descFlags);
-    int handle = process_registerDescriptor(sys->process, desc);
+    int handle = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
 
     return handle;
 }
@@ -84,7 +84,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyFile* epollDescriptor = process_getRegisteredLegacyFile(sys->process, epfd);
+    LegacyFile* epollDescriptor =
+        process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
     gint errorCode = _syscallhandler_validateLegacyFile(epollDescriptor, DT_EPOLL);
 
     if (errorCode) {
@@ -97,7 +98,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     utility_debugAssert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    const Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, fd);
+    const Descriptor* descriptor =
+        process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), fd);
 
     if (descriptor == NULL) {
         debug("Child %i is not a shadow descriptor", fd);
@@ -118,7 +120,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     const struct epoll_event* event = NULL;
     if (eventPtr.val) {
-        event = process_getReadablePtr(sys->process, eventPtr, sizeof(*event));
+        event = process_getReadablePtr(_syscallhandler_getProcess(sys), eventPtr, sizeof(*event));
     }
 
     trace("Calling epoll_control on epoll %i with child %i", epfd, fd);
@@ -141,7 +143,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, epfd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
     gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_EPOLL);
 
     if (errorCode) {
@@ -171,7 +173,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* Return 0; no events are ready. */
             return syscallreturn_makeDoneI64(0);
         } else if (thread_unblockedSignalPending(
-                       sys->thread, host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+                       _syscallhandler_getThread(sys),
+                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
             return syscallreturn_makeInterrupted(false);
         } else {
             trace("No events are ready on epoll %i and we need to block", epfd);
@@ -197,7 +200,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     /* We have events. Get a pointer where we should write the result. */
     guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
     size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
-    struct epoll_event* events = process_getWriteablePtr(sys->process, eventsPtr, sizeNeeded);
+    struct epoll_event* events =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), eventsPtr, sizeNeeded);
     if (!events) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }

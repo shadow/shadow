@@ -39,14 +39,15 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
 
     const char* name;
     int rv = process_getReadableString(
-        sys->process, name_ptr, name_len + 1 /* NULL byte */, &name, &name_len);
+        _syscallhandler_getProcess(sys), name_ptr, name_len + 1 /* NULL byte */, &name, &name_len);
     if (rv != 0) {
         return syscallreturn_makeDoneErrno(-rv);
     }
 
     if (strcasecmp(name, "localhost") == 0) {
         // Loopback address in network order.
-        uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
+        uint32_t* addr =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), addr_ptr, addr_len);
         *addr = htonl(INADDR_LOOPBACK);
         trace("Returning loopback address for localhost");
         return syscallreturn_makeDoneI64(0);
@@ -69,12 +70,13 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         uint32_t ip = address_toNetworkIP(address);
 
         // Release the readable pointer so that we can get a writable pointer.
-        int res = process_flushPtrs(sys->process);
+        int res = process_flushPtrs(_syscallhandler_getProcess(sys));
         if (res != 0) {
             return syscallreturn_makeDoneErrno(res);
         }
 
-        uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
+        uint32_t* addr =
+            process_getWriteablePtr(_syscallhandler_getProcess(sys), addr_ptr, addr_len);
         if (addr == NULL) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
@@ -96,8 +98,8 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
 
     PluginPtr shm_blk_pptr = args->args[0].as_ptr;
 
-    ShMemBlockSerialized* shm_blk_ptr =
-        process_getWriteablePtr(sys->process, shm_blk_pptr, sizeof(*shm_blk_ptr));
+    ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
+        _syscallhandler_getProcess(sys), shm_blk_pptr, sizeof(*shm_blk_ptr));
     *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
 
     return syscallreturn_makeDoneI64(0);
@@ -106,20 +108,22 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
 SysCallReturn syscallhandler_shadow_get_ipc_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_ipc_blk syscall");
-    return _syscallhandler_get_shmem_block(sys, args, thread_getIPCBlock(sys->thread));
+    return _syscallhandler_get_shmem_block(
+        sys, args, thread_getIPCBlock(_syscallhandler_getThread(sys)));
 }
 
 SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
-    return _syscallhandler_get_shmem_block(sys, args, thread_getShMBlock(sys->thread));
+    return _syscallhandler_get_shmem_block(
+        sys, args, thread_getShMBlock(_syscallhandler_getThread(sys)));
 }
 
 SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     if (_useMM) {
         trace("Initializing memory manager");
-        process_initMapperIfNeeded(sys->process, sys->thread);
+        process_initMapperIfNeeded(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys));
     } else {
         trace("Not initializing memory manager");
     }

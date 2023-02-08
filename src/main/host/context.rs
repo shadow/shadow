@@ -32,8 +32,7 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
-use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-
+use super::process::ProcessId;
 use super::thread::ThreadId;
 use super::{host::Host, process::Process, thread::Thread};
 use crate::cshadow;
@@ -93,7 +92,7 @@ impl<'a> ThreadContext<'a> {
 /// Rust code, we can build them from C pointers.
 pub struct ThreadContextObjs<'a> {
     host: &'a Host,
-    process: &'a RootedRefCell<Process>,
+    pid: ProcessId,
     tid: ThreadId,
 }
 
@@ -103,9 +102,9 @@ impl<'a> ThreadContextObjs<'a> {
     /// Pointer args must be safely dereferenceable.
     pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
         let sys = unsafe { sys.as_mut().unwrap() };
-        let process = unsafe { sys.process.as_ref().unwrap() };
-        let tid = ThreadId::try_from(unsafe { cshadow::thread_getID(sys.thread) }).unwrap();
-        Self { host, process, tid }
+        let pid = ProcessId::try_from(sys.processId).unwrap();
+        let tid = ThreadId::try_from(sys.threadId).unwrap();
+        Self { host, pid, tid }
     }
 
     /// # Safety
@@ -121,7 +120,8 @@ impl<'a> ThreadContextObjs<'a> {
     where
         F: FnOnce(&mut ThreadContext) -> R,
     {
-        let process = self.process.borrow(self.host.root());
+        let process = self.host.process_borrow(self.pid).unwrap();
+        let process = process.borrow(self.host.root());
         let thread = process.thread_borrow(self.tid).unwrap();
         let mut ctx = ThreadContext::new(self.host, &process, &thread);
         f(&mut ctx)

@@ -102,11 +102,12 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             warning("Not allowing unimplemented prctl %d", option);
             return syscallreturn_makeDoneErrno(ENOSYS);
         case PR_GET_TID_ADDRESS: {
-            PluginVirtualPtr tid_addr = thread_getTidAddress(sys->thread);
+            PluginVirtualPtr tid_addr = thread_getTidAddress(_syscallhandler_getThread(sys));
 
             // Make sure we have somewhere to copy the output
             PluginPtr outptr = args->args[1].as_ptr;
-            int res = process_writePtr(sys->process, outptr, &tid_addr.val, sizeof(tid_addr.val));
+            int res = process_writePtr(
+                _syscallhandler_getProcess(sys), outptr, &tid_addr.val, sizeof(tid_addr.val));
             if (res) {
                 return syscallreturn_makeDoneErrno(-res);
             }
@@ -117,12 +118,13 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             switch (arg) {
                 case SUID_DUMP_DISABLE:
                 case SUID_DUMP_USER:
-                    process_setDumpable(sys->process, arg);
+                    process_setDumpable(_syscallhandler_getProcess(sys), arg);
                     return syscallreturn_makeDoneU64(0);
             };
             return syscallreturn_makeDoneErrno(EINVAL);
         }
-        case PR_GET_DUMPABLE: return syscallreturn_makeDoneI64(process_getDumpable(sys->process));
+        case PR_GET_DUMPABLE:
+            return syscallreturn_makeDoneI64(process_getDumpable(_syscallhandler_getProcess(sys)));
     }
 
     warning("Unknown prctl operation %d", option);
@@ -152,7 +154,7 @@ SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
 SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
     // The MemoryManager's state is no longer valid after an exec.
     // Destroy it, to be recreated on the next syscall.
-    process_resetMemoryManager(sys->process);
+    process_resetMemoryManager(_syscallhandler_getProcess(sys));
 
     // Have the plugin execute it natively.
     return syscallreturn_makeNative();

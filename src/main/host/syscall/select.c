@@ -35,15 +35,16 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
     FD_ZERO(&exceptfds);
 
     // Get the fd_set syscall args in our memory.
-    if (readfds_ptr.val && process_readPtr(sys->process, &readfds, readfds_ptr, sizeof(readfds))) {
+    if (readfds_ptr.val &&
+        process_readPtr(_syscallhandler_getProcess(sys), &readfds, readfds_ptr, sizeof(readfds))) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
-    if (writefds_ptr.val &&
-        process_readPtr(sys->process, &writefds, writefds_ptr, sizeof(writefds))) {
+    if (writefds_ptr.val && process_readPtr(_syscallhandler_getProcess(sys), &writefds,
+                                            writefds_ptr, sizeof(writefds))) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
-    if (exceptfds_ptr.val &&
-        process_readPtr(sys->process, &exceptfds, exceptfds_ptr, sizeof(exceptfds))) {
+    if (exceptfds_ptr.val && process_readPtr(_syscallhandler_getProcess(sys), &exceptfds,
+                                             exceptfds_ptr, sizeof(exceptfds))) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
@@ -129,17 +130,18 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
 
     // OK now we know we have success; write back the result fd sets.
     scr = syscallreturn_makeDoneI64(num_set_bits);
-    if (readfds_ptr.val && process_writePtr(sys->process, readfds_ptr, &readfds, sizeof(readfds))) {
+    if (readfds_ptr.val &&
+        process_writePtr(_syscallhandler_getProcess(sys), readfds_ptr, &readfds, sizeof(readfds))) {
         scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
-    if (writefds_ptr.val &&
-        process_writePtr(sys->process, writefds_ptr, &writefds, sizeof(writefds))) {
+    if (writefds_ptr.val && process_writePtr(_syscallhandler_getProcess(sys), writefds_ptr,
+                                             &writefds, sizeof(writefds))) {
         scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
-    if (exceptfds_ptr.val &&
-        process_writePtr(sys->process, exceptfds_ptr, &exceptfds, sizeof(exceptfds))) {
+    if (exceptfds_ptr.val && process_writePtr(_syscallhandler_getProcess(sys), exceptfds_ptr,
+                                              &exceptfds, sizeof(exceptfds))) {
         scr = syscallreturn_makeDoneErrno(EFAULT);
         goto done;
     }
@@ -200,8 +202,8 @@ SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
         // to plugin memory. See syscallhandler_ppoll for reasoning.
         struct timeval tv_timeout_val = {0};
 
-        if (process_readPtr(sys->process, &tv_timeout_val, timeout_ptr, sizeof(tv_timeout_val)) !=
-            0) {
+        if (process_readPtr(_syscallhandler_getProcess(sys), &tv_timeout_val, timeout_ptr,
+                            sizeof(tv_timeout_val)) != 0) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
 
@@ -242,8 +244,8 @@ SysCallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* ar
     struct timespec ts_timeout_val = {0};
 
     if (timeout_ptr.val) {
-        if (process_readPtr(sys->process, &ts_timeout_val, timeout_ptr, sizeof(ts_timeout_val)) !=
-            0) {
+        if (process_readPtr(_syscallhandler_getProcess(sys), &ts_timeout_val, timeout_ptr,
+                            sizeof(ts_timeout_val)) != 0) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
     }

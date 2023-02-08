@@ -56,7 +56,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, sockfd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), sockfd);
     if (desc && sock_desc_out) {
         *sock_desc_out = (LegacySocket*)desc;
     }
@@ -126,7 +126,8 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
 static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* saddr, size_t slen,
                                          PluginPtr addrPtr, PluginPtr addrlenPtr) {
     socklen_t addrlen;
-    if (process_readPtr(sys->process, &addrlen, addrlenPtr, sizeof(addrlen)) != 0) {
+    if (process_readPtr(_syscallhandler_getProcess(sys), &addrlen, addrlenPtr, sizeof(addrlen)) !=
+        0) {
         debug("Couldn't read addrlenPtr %p", (void*)addrlenPtr.val);
         return -EFAULT;
     }
@@ -135,14 +136,15 @@ static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* s
     size_t retSize = MIN(addrlen, slen);
 
     addrlen = slen;
-    if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
+    if (process_writePtr(_syscallhandler_getProcess(sys), addrlenPtr, &addrlen, sizeof(addrlen)) !=
+        0) {
         debug("Couldn't write addrlenPtr %p", (void*)addrlenPtr.val);
         return -EFAULT;
     }
 
     if (retSize > 0) {
         /* Return the results */
-        if (process_writePtr(sys->process, addrPtr, saddr, retSize) != 0) {
+        if (process_writePtr(_syscallhandler_getProcess(sys), addrPtr, saddr, retSize) != 0) {
             debug("Couldn't write addrPtr %p", (void*)addrPtr.val);
             return -EFAULT;
         }
@@ -212,7 +214,8 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     trace("listening socket %i accepted fd %i", sockfd, accepted_fd);
 
     /* Get the descriptor for this new socket and set flags if necessary. */
-    Descriptor* desc = process_getRegisteredDescriptorMut(sys->process, accepted_fd);
+    Descriptor* desc =
+        process_getRegisteredDescriptorMut(_syscallhandler_getProcess(sys), accepted_fd);
     if (flags & SOCK_CLOEXEC) {
         descriptor_setFlags(desc, O_CLOEXEC);
     }
@@ -434,7 +437,8 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
             }
 
             int enable = 0;
-            int errcode = process_readPtr(sys->process, &enable, optvalPtr, sizeof(int));
+            int errcode =
+                process_readPtr(_syscallhandler_getProcess(sys), &enable, optvalPtr, sizeof(int));
             if (errcode != 0) {
                 return errcode;
             }
@@ -458,7 +462,7 @@ static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
             char name[CONG_NAME_MAX];
             optlen = MIN(optlen, CONG_NAME_MAX);
 
-            int errcode = process_readPtr(sys->process, name, optvalPtr, optlen);
+            int errcode = process_readPtr(_syscallhandler_getProcess(sys), name, optvalPtr, optlen);
             if (errcode != 0) {
                 return errcode;
             }
@@ -492,7 +496,8 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
 
     switch (optname) {
         case SO_SNDBUF: {
-            const unsigned int* val = process_getReadablePtr(sys->process, optvalPtr, sizeof(int));
+            const unsigned int* val =
+                process_getReadablePtr(_syscallhandler_getProcess(sys), optvalPtr, sizeof(int));
             if (!val) {
                 return -EFAULT;
             }
@@ -515,7 +520,8 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
             return 0;
         }
         case SO_RCVBUF: {
-            const unsigned int* val = process_getReadablePtr(sys->process, optvalPtr, sizeof(int));
+            const unsigned int* val =
+                process_getReadablePtr(_syscallhandler_getProcess(sys), optvalPtr, sizeof(int));
             size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
 
             // Linux also has limits SOCK_MIN_RCVBUF (slightly greater than 2048) and the sysctl max
@@ -625,8 +631,9 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        retval = legacysocket_receiveUserData(socket_desc, sys->thread, bufPtr, sizeNeeded,
-                                              &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
+        retval = legacysocket_receiveUserData(socket_desc, _syscallhandler_getThread(sys), bufPtr,
+                                              sizeNeeded, &inet_addr.sin_addr.s_addr,
+                                              &inet_addr.sin_port);
 
         trace("recv returned %zd", retval);
     }
@@ -655,7 +662,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         } else {
             /* set the address length as 0 */
             socklen_t addrlen = 0;
-            if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
+            if (process_writePtr(
+                    _syscallhandler_getProcess(sys), addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
                 return syscallreturn_makeDoneErrno(EFAULT);
             }
         }
@@ -705,7 +713,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
     if (destAddrPtr.val) {
         const struct sockaddr* dest_addr =
-            process_getReadablePtr(sys->process, destAddrPtr, addrlen);
+            process_getReadablePtr(_syscallhandler_getProcess(sys), destAddrPtr, addrlen);
         utility_debugAssert(dest_addr);
 
         /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -797,7 +805,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         }
 
         retval = legacysocket_sendUserData(
-            socket_desc, sys->thread, bufPtr, sizeNeeded, dest_ip, dest_port);
+            socket_desc, _syscallhandler_getThread(sys), bufPtr, sizeNeeded, dest_ip, dest_port);
 
         trace("send returned %zd", retval);
     }
@@ -860,7 +868,8 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
+    const struct sockaddr* addr =
+        process_getReadablePtr(_syscallhandler_getProcess(sys), addrPtr, addrlen);
     if (addr == NULL) {
         debug("Invalid bind address pointer");
         return syscallreturn_makeDoneErrno(EFAULT);
@@ -915,7 +924,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
+    const struct sockaddr* addr =
+        process_getReadablePtr(_syscallhandler_getProcess(sys), addrPtr, addrlen);
     if (!addr) {
         debug("Couldn't read addr %p", (void*)addrPtr.val);
         return syscallreturn_makeDoneErrno(EFAULT);
@@ -1123,7 +1133,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     utility_debugAssert(socket_desc);
 
     socklen_t optlen;
-    if (process_readPtr(sys->process, &optlen, optlenPtr, sizeof(optlen)) != 0) {
+    if (process_readPtr(_syscallhandler_getProcess(sys), &optlen, optlenPtr, sizeof(optlen)) != 0) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
@@ -1134,7 +1144,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
 
     /* The optval pointer must be non-null since optlen is non-zero. */
 
-    void* optval = process_getWriteablePtr(sys->process, optvalPtr, optlen);
+    void* optval = process_getWriteablePtr(_syscallhandler_getProcess(sys), optvalPtr, optlen);
     if (!optval) {
         return syscallreturn_makeDoneErrno(EFAULT);
     }
@@ -1163,16 +1173,16 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     }
 
     if (errcode) {
-        process_freePtrsWithoutFlushing(sys->process);
+        process_freePtrsWithoutFlushing(_syscallhandler_getProcess(sys));
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    errcode = process_flushPtrs(sys->process);
+    errcode = process_flushPtrs(_syscallhandler_getProcess(sys));
     if (errcode) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    errcode = process_writePtr(sys->process, optlenPtr, &optlen, sizeof(optlen));
+    errcode = process_writePtr(_syscallhandler_getProcess(sys), optlenPtr, &optlen, sizeof(optlen));
     if (errcode) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -1220,7 +1230,8 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
         }
     }
 
-    tcp_enterServerMode(tcp_desc, _syscallhandler_getHost(sys), sys->process, backlog);
+    tcp_enterServerMode(
+        tcp_desc, _syscallhandler_getHost(sys), _syscallhandler_getProcess(sys), backlog);
     return syscallreturn_makeDoneU64(0);
 }
 
@@ -1374,7 +1385,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     /* Now make sure it will be valid when we operate on it. */
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)sock_desc, descFlags);
-    int sockfd = process_registerDescriptor(sys->process, desc);
+    int sockfd = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {

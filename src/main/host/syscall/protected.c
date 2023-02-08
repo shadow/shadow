@@ -22,7 +22,7 @@
 CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
+    SysCallCondition* cond = thread_getSysCallCondition(_syscallhandler_getThread(sys));
     if (!cond) {
         return EMUTIME_INVALID;
     }

@@ -27,7 +27,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
                                              unsigned long iovlen, off_t offset,
                                              LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(sys->process, fd);
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
     if (!desc) {
         return -EBADF;
     }
@@ -51,7 +51,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
 
     /* Get the vector of pointers. */
     struct iovec* iov = malloc(iovlen * sizeof(*iov));
-    if (process_readPtr(sys->process, iov, iovPtr, iovlen * sizeof(*iov)) != 0) {
+    if (process_readPtr(_syscallhandler_getProcess(sys), iov, iovPtr, iovlen * sizeof(*iov)) != 0) {
         warning("Got unreadable pointer [%p..+%zu]", (void*)iovPtr.val, iovlen * sizeof(*iov));
         free(iov);
         return -EFAULT;
@@ -137,7 +137,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(sys->process);
+                result = process_flushPtrs(_syscallhandler_getProcess(sys));
                 if (result != 0) {
                     break;
                 }
@@ -261,7 +261,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(sys->process);
+                result = process_flushPtrs(_syscallhandler_getProcess(sys));
                 if (result != 0) {
                     break;
                 }

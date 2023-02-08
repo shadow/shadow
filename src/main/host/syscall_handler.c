@@ -61,6 +61,24 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys) {
     return host;
 }
 
+const ProcessRefCell* _syscallhandler_getProcess(const SysCallHandler* sys) {
+    const ProcessRefCell* process = worker_getCurrentProcess();
+    utility_debugAssert(process_getProcessID(process) == sys->processId);
+    return process;
+}
+
+const char* _syscallhandler_getProcessName(const SysCallHandler* sys) {
+    const ProcessRefCell* process = worker_getCurrentProcess();
+    utility_debugAssert(process_getProcessID(process) == sys->processId);
+    return process_getPluginName(process);
+}
+
+Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
+    Thread* thread = worker_getCurrentThread();
+    utility_debugAssert(thread_getID(thread) == sys->threadId);
+    return thread;
+}
+
 SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* process,
                                    Thread* thread) {
     utility_debugAssert(host);
@@ -71,8 +89,8 @@ SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* proce
 
     *sys = (SysCallHandler){
         .hostId = host_getID(host),
-        .process = process,
-        .thread = thread,
+        .processId = process_getProcessID(process),
+        .threadId = thread_getID(thread),
         .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
         .referenceCount = 1,
@@ -107,8 +125,8 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     if (_countSyscalls && sys->syscall_counter) {
         // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        info("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
-             process_getPluginName(sys->process), str);
+        info("Thread %d (%s) syscall counts: %s", sys->threadId,
+             _syscallhandler_getProcessName(sys), str);
         counter_free_string(sys->syscall_counter, str);
 
         // Add up the counts at the worker level
@@ -153,8 +171,7 @@ void syscallhandler_unref(SysCallHandler* sys) {
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
     trace("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
-          process_getPluginName(sys->process),
-          thread_getID(sys->thread), number, name,
+          _syscallhandler_getProcessName(sys), sys->threadId, number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 
     // Count the frequency of each syscall, but only on the initial call.
@@ -192,7 +209,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         }
         trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
               "val=%s(%s)",
-              process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
+              _syscallhandler_getProcessName(sys), sys->threadId, number, name,
               _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "", syscallreturnstate_str(scr->state),
               valstr, errstr);
     }
@@ -216,9 +233,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
           syscall_rawReturnValueToErrno(syscallreturn_done(scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
-        process_freePtrsWithoutFlushing(sys->process);
+        process_freePtrsWithoutFlushing(_syscallhandler_getProcess(sys));
     } else {
-        int res = process_flushPtrs(sys->process);
+        int res = process_flushPtrs(_syscallhandler_getProcess(sys));
         if (res != 0) {
             panic("Flushing syscall ptrs: %s", g_strerror(-res));
         }
@@ -235,8 +252,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         scr = syscallhandler_##s(sys, args);                                                       \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
-                              "...", &args->args, scr);                                            \
+            scr = log_syscall(                                                                     \
+                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
         }                                                                                          \
         break
 #define NATIVE(s)                                                                                  \
@@ -244,8 +261,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         trace("native syscall %ld " #s, args->number);                                             \
         scr = syscallreturn_makeNative();                                                          \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
-                              "...", &args->args, scr);                                            \
+            scr = log_syscall(                                                                     \
+                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
         }                                                                                          \
         break
 #define UNSUPPORTED(s)                                                                             \
@@ -253,8 +270,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
         scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread), #s,      \
-                              "...", &args->args, scr);                                            \
+            scr = log_syscall(process, straceLoggingMode, thread_getID(sys->thread), #s, "...",    \
+                              &args->args, scr);                                                   \
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
@@ -271,8 +288,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    StraceFmtMode straceLoggingMode = process_straceLoggingMode(sys->process);
+    StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
     const Host* host = _syscallhandler_getHost(sys);
+    const ProcessRefCell* process = _syscallhandler_getProcess(sys);
+    Thread* thread = _syscallhandler_getThread(sys);
 
     SysCallReturn scr;
 
@@ -546,7 +565,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             default: {
                 warning("Detected unsupported syscall %ld called from thread %i in process %s on "
                         "host %s",
-                        args->number, thread_getID(sys->thread), process_getName(sys->process),
+                        args->number, sys->threadId, process_getPluginName(process),
                         host_getName(host));
                 error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
                       "unusual behavior",
@@ -556,8 +575,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 if (straceLoggingMode != STRACE_FMT_MODE_OFF) {
                     char arg_str[20] = {0};
                     snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
-                    scr = log_syscall(sys->process, straceLoggingMode, thread_getID(sys->thread),
-                                      "syscall", arg_str, &args->args, scr);
+                    scr = log_syscall(process, straceLoggingMode, sys->threadId, "syscall", arg_str,
+                                      &args->args, scr);
                 }
 
                 break;
@@ -586,7 +605,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // call will return a success  status  (normally,  the  number of bytes
     // transferred)."
     if (scr.state == SYSCALL_BLOCK &&
-        thread_unblockedSignalPending(sys->thread, host_getShimShmemLock(host))) {
+        thread_unblockedSignalPending(thread, host_getShimShmemLock(host))) {
         SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
         syscallcondition_unref(blocked->cond);
         scr = syscallreturn_makeInterrupted(blocked->restartable);
@@ -597,17 +616,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
           syscall_rawReturnValueToErrno(syscallreturn_done(&scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
-        process_freePtrsWithoutFlushing(sys->process);
+        process_freePtrsWithoutFlushing(process);
     } else {
-        int res = process_flushPtrs(sys->process);
+        int res = process_flushPtrs(process);
         if (res != 0) {
             panic("Flushing syscall ptrs: %s", g_strerror(-res));
         }
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(host)) &&
-        process_isRunning(sys->process) &&
-        (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
+        process_isRunning(process) && (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
         CSimulationTime maxUnappliedCpuLatency =
             shimshmem_maxUnappliedCpuLatency(host_getSharedMem(host));
         // Increment unblocked syscall latency, but only for
