@@ -75,46 +75,48 @@ impl std::fmt::Pointer for PluginPtr {
 /// Represents a pointer to a *physical* address in plugin memory.
 #[derive(Copy, Clone, Debug)]
 pub struct PluginPhysicalPtr {
-    ptr: c::PluginPhysicalPtr,
+    ptr: usize,
 }
 
 impl From<PluginPhysicalPtr> for c::PluginPhysicalPtr {
     fn from(v: PluginPhysicalPtr) -> c::PluginPhysicalPtr {
-        v.ptr
+        c::PluginPhysicalPtr {
+            val: v.ptr.try_into().unwrap(),
+        }
     }
 }
 
 impl From<c::PluginPhysicalPtr> for PluginPhysicalPtr {
     fn from(v: c::PluginPhysicalPtr) -> PluginPhysicalPtr {
-        PluginPhysicalPtr { ptr: v }
+        PluginPhysicalPtr {
+            ptr: v.val.try_into().unwrap(),
+        }
     }
 }
 
 impl From<PluginPhysicalPtr> for usize {
     fn from(v: PluginPhysicalPtr) -> usize {
-        v.ptr.val as usize
+        v.ptr
     }
 }
 
 impl From<usize> for PluginPhysicalPtr {
     fn from(v: usize) -> PluginPhysicalPtr {
-        PluginPhysicalPtr {
-            ptr: c::PluginPhysicalPtr { val: v as u64 },
-        }
+        PluginPhysicalPtr { ptr: v }
     }
 }
 
 impl From<u64> for PluginPhysicalPtr {
     fn from(v: u64) -> PluginPhysicalPtr {
         PluginPhysicalPtr {
-            ptr: c::PluginPhysicalPtr { val: v },
+            ptr: v.try_into().unwrap(),
         }
     }
 }
 
 impl From<PluginPhysicalPtr> for u64 {
     fn from(v: PluginPhysicalPtr) -> u64 {
-        v.ptr.val
+        v.ptr.try_into().unwrap()
     }
 }
 
