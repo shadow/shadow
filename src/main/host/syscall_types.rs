@@ -10,7 +10,7 @@ use std::mem::size_of;
 /// Represents a pointer to a virtual address in plugin memory.
 #[derive(Copy, Clone, Debug)]
 pub struct PluginPtr {
-    ptr: c::PluginPtr,
+    ptr: usize,
 }
 
 impl PluginPtr {
@@ -19,53 +19,55 @@ impl PluginPtr {
     }
 
     pub fn is_null(&self) -> bool {
-        self.ptr.val == 0
+        self.ptr == 0
     }
 }
 
 impl From<PluginPtr> for c::PluginPtr {
     fn from(v: PluginPtr) -> c::PluginPtr {
-        v.ptr
+        c::PluginPtr {
+            val: v.ptr.try_into().unwrap(),
+        }
     }
 }
 
 impl From<c::PluginPtr> for PluginPtr {
     fn from(v: c::PluginPtr) -> PluginPtr {
-        PluginPtr { ptr: v }
+        PluginPtr {
+            ptr: v.val.try_into().unwrap(),
+        }
     }
 }
 
 impl From<PluginPtr> for usize {
     fn from(v: PluginPtr) -> usize {
-        v.ptr.val as usize
+        v.ptr
     }
 }
 
 impl From<usize> for PluginPtr {
     fn from(v: usize) -> PluginPtr {
-        PluginPtr {
-            ptr: c::PluginPtr { val: v as u64 },
-        }
+        PluginPtr { ptr: v }
     }
 }
 
 impl From<u64> for PluginPtr {
     fn from(v: u64) -> PluginPtr {
         PluginPtr {
-            ptr: c::PluginPtr { val: v },
+            ptr: v.try_into().unwrap(),
         }
     }
 }
 
 impl From<PluginPtr> for u64 {
     fn from(v: PluginPtr) -> u64 {
-        v.ptr.val
+        v.ptr.try_into().unwrap()
     }
 }
 
 impl std::fmt::Pointer for PluginPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ptr = self.ptr.val as *const libc::c_void;
+        let ptr = self.ptr as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
     }
 }
@@ -248,9 +250,7 @@ impl From<PluginPtr> for SysCallReg {
 
 impl From<SysCallReg> for PluginPtr {
     fn from(v: SysCallReg) -> PluginPtr {
-        PluginPtr {
-            ptr: unsafe { v.as_ptr },
-        }
+        PluginPtr::from(unsafe { v.as_ptr })
     }
 }
 
@@ -396,9 +396,7 @@ impl<T> TypedPluginPtr<T> {
         assert!(included_start <= self.count);
         TypedPluginPtr {
             base: PluginPtr {
-                ptr: c::PluginPtr {
-                    val: (self.base.ptr.val as usize + included_start * size_of::<T>()) as u64,
-                },
+                ptr: (self.base.ptr + included_start * size_of::<T>()),
             },
             count: excluded_end - included_start,
             _phantom: PhantomData,
