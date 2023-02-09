@@ -9,6 +9,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         c.export.exclude.extend_from_slice(&[
             "LogLevel".into(),
             "PluginPtr".into(),
+            "PluginPhysicalPtr".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
             "Packet".into(),

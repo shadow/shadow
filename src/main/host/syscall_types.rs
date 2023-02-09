@@ -7,6 +7,7 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
 
+/// Represents a pointer to a virtual address in plugin memory.
 #[derive(Copy, Clone, Debug)]
 pub struct PluginPtr {
     ptr: c::PluginPtr,
@@ -66,6 +67,52 @@ impl std::fmt::Pointer for PluginPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ptr = self.ptr.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
+    }
+}
+
+/// Represents a pointer to a *physical* address in plugin memory.
+#[derive(Copy, Clone, Debug)]
+pub struct PluginPhysicalPtr {
+    ptr: c::PluginPhysicalPtr,
+}
+
+impl From<PluginPhysicalPtr> for c::PluginPhysicalPtr {
+    fn from(v: PluginPhysicalPtr) -> c::PluginPhysicalPtr {
+        v.ptr
+    }
+}
+
+impl From<c::PluginPhysicalPtr> for PluginPhysicalPtr {
+    fn from(v: c::PluginPhysicalPtr) -> PluginPhysicalPtr {
+        PluginPhysicalPtr { ptr: v }
+    }
+}
+
+impl From<PluginPhysicalPtr> for usize {
+    fn from(v: PluginPhysicalPtr) -> usize {
+        v.ptr.val as usize
+    }
+}
+
+impl From<usize> for PluginPhysicalPtr {
+    fn from(v: usize) -> PluginPhysicalPtr {
+        PluginPhysicalPtr {
+            ptr: c::PluginPhysicalPtr { val: v as u64 },
+        }
+    }
+}
+
+impl From<u64> for PluginPhysicalPtr {
+    fn from(v: u64) -> PluginPhysicalPtr {
+        PluginPhysicalPtr {
+            ptr: c::PluginPhysicalPtr { val: v },
+        }
+    }
+}
+
+impl From<PluginPhysicalPtr> for u64 {
+    fn from(v: PluginPhysicalPtr) -> u64 {
+        v.ptr.val
     }
 }
 
