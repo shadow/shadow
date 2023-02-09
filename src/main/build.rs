@@ -20,6 +20,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "Tsc".into(),
         ]);
         c.add_opaque_types(&["ProcessRefCell"]);
+        c.add_opaque_types(&["RootedRefCell_StateEventSource"]);
         c
     };
 
