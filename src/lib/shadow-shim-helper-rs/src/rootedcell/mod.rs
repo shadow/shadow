@@ -6,6 +6,7 @@ use std::{
 use once_cell::sync::OnceCell;
 use vasi::VirtualAddressSpaceIndependent;
 
+pub mod cell;
 pub mod rc;
 pub mod refcell;
 
