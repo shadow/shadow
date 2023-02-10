@@ -227,6 +227,27 @@ impl Clone for ObjectCounter {
     }
 }
 
+/// A trait to prevent type inference during function calls. Useful when you have a type that wraps
+/// a pointer (like `TypedPluginPtr`) and you don't want Rust to infer the type of pointer during
+/// creation.  Instead, the caller must specify the generic type.
+///
+/// Example:
+///
+/// ```ignore
+/// let x: TypedPluginPtr<u8>;
+///
+/// // normally the `<u8>` wouldn't be required since Rust would infer it from the type of `x`, but
+/// // for this function using [`NoTypeInference`], the `<u8>` is required and must match
+/// x = TypedPluginPtr::new::<u8>(...);
+/// ```
+pub trait NoTypeInference {
+    type This;
+}
+
+impl<T> NoTypeInference for T {
+    type This = T;
+}
+
 pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if the path begins with a "~"
     if let Some(x) = path.strip_prefix('~') {
