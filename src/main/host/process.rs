@@ -37,7 +37,7 @@ use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::TypedPluginPtr;
+use super::syscall_types::{PluginPhysicalPtr, PluginPtr, TypedPluginPtr};
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 
@@ -864,7 +864,7 @@ impl Process {
         }
     }
 
-    pub fn physical_address(&self, vptr: cshadow::PluginVirtualPtr) -> cshadow::PluginPhysicalPtr {
+    pub fn physical_address(&self, vptr: PluginPtr) -> PluginPhysicalPtr {
         // We currently don't keep a true system-wide virtual <-> physical address
         // mapping. Instead we simply assume that no shadow processes map the same
         // underlying physical memory, and that therefore (pid, virtual address)
@@ -896,12 +896,10 @@ impl Process {
             Ok(self.id())
         );
 
-        let low_part: u64 = vptr.val;
+        let low_part = u64::from(vptr);
         assert_eq!(low_part >> VADDR_BITS, 0);
 
-        cshadow::PluginPhysicalPtr {
-            val: high_part | low_part,
-        }
+        PluginPhysicalPtr::from(high_part | low_part)
     }
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
@@ -912,8 +910,11 @@ impl Process {
         // any other threads left alive in the process, perform a futex wake on
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
-        let clear_child_tid_pvp = unsafe { cshadow::thread_getTidAddress(thread.cthread()) };
-        if clear_child_tid_pvp.val != 0 && self.threads.borrow().len() > 0 && !self.is_exiting.get()
+        let clear_child_tid_pvp =
+            PluginPtr::from(unsafe { cshadow::thread_getTidAddress(thread.cthread()) });
+        if !clear_child_tid_pvp.is_null()
+            && self.threads.borrow().len() > 0
+            && !self.is_exiting.get()
         {
             // Wait until the thread is really dead. It might not be dead yet if we
             // marked the thread dead after seeing the `exit` syscall - the managed
@@ -960,7 +961,7 @@ impl Process {
             }
 
             let typed_clear_child_tid_pvp =
-                TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp.into(), 1);
+                TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp, 1);
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
@@ -968,7 +969,10 @@ impl Process {
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
             let futex = unsafe {
-                cshadow::futextable_get(&mut *futexes, self.physical_address(clear_child_tid_pvp))
+                cshadow::futextable_get(
+                    &mut *futexes,
+                    self.physical_address(clear_child_tid_pvp).into(),
+                )
             };
             if !futex.is_null() {
                 unsafe { cshadow::futex_wake(futex, 1) };
@@ -2064,7 +2068,7 @@ mod export {
 
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.physical_address(vptr)
+            proc.physical_address(vptr.into()).into()
         })
         .unwrap()
     }
