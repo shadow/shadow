@@ -20,7 +20,7 @@ use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
-pub struct TcpSocket {
+pub struct LegacyTcpSocket {
     socket: HostTreePointer<c::TCP>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
@@ -28,7 +28,7 @@ pub struct TcpSocket {
     _counter: ObjectCounter,
 }
 
-impl TcpSocket {
+impl LegacyTcpSocket {
     pub fn new(status: FileStatus, host: &Host) -> Arc<AtomicRefCell<Self>> {
         let recv_buf_size = host.params.init_sock_recv_buf_size.try_into().unwrap();
         let send_buf_size = host.params.init_sock_send_buf_size.try_into().unwrap();
@@ -52,7 +52,7 @@ impl TcpSocket {
         let socket = Self {
             socket: HostTreePointer::new(legacy_tcp),
             has_open_file: false,
-            _counter: ObjectCounter::new("TcpSocket"),
+            _counter: ObjectCounter::new("LegacyTcpSocket"),
         };
 
         Arc::new(AtomicRefCell::new(socket))
@@ -247,7 +247,7 @@ impl TcpSocket {
 
         // associate the socket
         let addr = inet::associate_socket(
-            InetSocket::Tcp(Arc::clone(socket)),
+            InetSocket::LegacyTcp(Arc::clone(socket)),
             addr,
             peer_addr,
             net_ns,
@@ -277,10 +277,10 @@ impl TcpSocket {
     where
         W: std::io::Write + std::io::Seek,
     {
-        // we could call TcpSocket::recvfrom() here, but for now we expect that there are no code
-        // paths that would call TcpSocket::read() since the read() syscall handler should have
-        // called TcpSocket::recvfrom() instead
-        panic!("Called TcpSocket::read() on a TCP socket.");
+        // we could call LegacyTcpSocket::recvfrom() here, but for now we expect that there are no
+        // code paths that would call LegacyTcpSocket::read() since the read() syscall handler
+        // should have called LegacyTcpSocket::recvfrom() instead
+        panic!("Called LegacyTcpSocket::read() on a TCP socket.");
     }
 
     pub fn write<R>(
@@ -292,10 +292,10 @@ impl TcpSocket {
     where
         R: std::io::Read + std::io::Seek,
     {
-        // we could call TcpSocket::sendto() here, but for now we expect that there are no code
-        // paths that would call TcpSocket::write() since the write() syscall handler should have
-        // called TcpSocket::sendto() instead
-        panic!("Called TcpSocket::write() on a TCP socket");
+        // we could call LegacyTcpSocket::sendto() here, but for now we expect that there are no
+        // code paths that would call LegacyTcpSocket::write() since the write() syscall handler
+        // should have called LegacyTcpSocket::sendto() instead
+        panic!("Called LegacyTcpSocket::write() on a TCP socket");
     }
 
     pub fn sendto<R>(
@@ -402,7 +402,7 @@ impl TcpSocket {
     pub fn accept(
         &mut self,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<TcpSocket>>, SyscallError> {
+    ) -> Result<Arc<AtomicRefCell<Self>>, SyscallError> {
         todo!()
     }
 
@@ -428,7 +428,7 @@ impl TcpSocket {
     }
 }
 
-impl std::ops::Drop for TcpSocket {
+impl std::ops::Drop for LegacyTcpSocket {
     fn drop(&mut self) {
         unsafe { c::legacyfile_unref(self.socket.ptr() as *mut libc::c_void) };
     }

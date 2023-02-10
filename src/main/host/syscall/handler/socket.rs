@@ -1,5 +1,5 @@
 use crate::cshadow as c;
-use crate::host::descriptor::socket::inet::tcp::TcpSocket;
+use crate::host::descriptor::socket::inet::tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::Socket;
@@ -84,7 +84,10 @@ impl SyscallHandler {
                         warn!("Unsupported inet stream socket protocol {protocol}");
                         return Err(Errno::EPROTONOSUPPORT.into());
                     }
-                    Socket::Inet(InetSocket::Tcp(TcpSocket::new(file_flags, ctx.objs.host)))
+                    Socket::Inet(InetSocket::LegacyTcp(LegacyTcpSocket::new(
+                        file_flags,
+                        ctx.objs.host,
+                    )))
                 }
                 _ => panic!("Should have called the C syscall handler"),
             },
@@ -184,7 +187,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_sendto, ctx);
         }
 
@@ -300,7 +303,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx);
         }
 
@@ -496,7 +499,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             drop(desc_table);
             return Self::legacy_syscall(c::syscallhandler_listen, ctx);
         }
@@ -545,7 +548,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_accept, ctx);
         }
 
@@ -587,7 +590,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
         }
 
@@ -707,7 +710,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_connect, ctx);
         }
 
@@ -747,7 +750,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             drop(desc_table);
             return Self::legacy_syscall(c::syscallhandler_shutdown, ctx);
         }
@@ -891,7 +894,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             drop(desc_table);
             return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx);
         }
@@ -933,7 +936,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             drop(desc_table);
             return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx);
         }

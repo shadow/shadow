@@ -836,7 +836,7 @@ mod export {
 
     use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
-    use crate::host::descriptor::socket::inet::tcp::TcpSocket;
+    use crate::host::descriptor::socket::inet::tcp::LegacyTcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;
 
@@ -868,9 +868,9 @@ mod export {
     ) -> *mut Descriptor {
         assert!(!legacy_tcp.is_null());
 
-        let tcp = unsafe { TcpSocket::new_from_legacy(legacy_tcp) };
+        let tcp = unsafe { LegacyTcpSocket::new_from_legacy(legacy_tcp) };
         let mut descriptor = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(
-            Socket::Inet(InetSocket::Tcp(tcp)),
+            Socket::Inet(InetSocket::LegacyTcp(tcp)),
         ))));
 
         let descriptor_flags = OFlag::from_bits(descriptor_flags).unwrap();
