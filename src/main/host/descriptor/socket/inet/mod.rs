@@ -14,37 +14,37 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
 
-use tcp::TcpSocket;
+use tcp::LegacyTcpSocket;
 
 pub mod tcp;
 
 #[derive(Clone)]
 pub enum InetSocket {
-    Tcp(Arc<AtomicRefCell<TcpSocket>>),
+    LegacyTcp(Arc<AtomicRefCell<LegacyTcpSocket>>),
 }
 
 impl InetSocket {
     pub fn borrow(&self) -> InetSocketRef {
         match self {
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.borrow()),
+            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<InetSocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.try_borrow()?),
+            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> InetSocketRefMut {
         match self {
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.borrow_mut()),
+            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
+            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
         })
     }
 
@@ -52,7 +52,7 @@ impl InetSocket {
         match self {
             // usually we'd use `Arc::as_ptr()`, but we want to use the handle for the C `TCP`
             // object for consistency with the handle for the `LegacySocket`
-            Self::Tcp(f) => f.borrow().canonical_handle(),
+            Self::LegacyTcp(f) => f.borrow().canonical_handle(),
         }
     }
 
@@ -63,7 +63,7 @@ impl InetSocket {
         rng: impl rand::Rng,
     ) -> SyscallResult {
         match self {
-            Self::Tcp(socket) => TcpSocket::bind(socket, addr, net_ns, rng),
+            Self::LegacyTcp(socket) => LegacyTcpSocket::bind(socket, addr, net_ns, rng),
         }
     }
 
@@ -73,7 +73,7 @@ impl InetSocket {
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         match self {
-            Self::Tcp(socket) => TcpSocket::connect(socket, addr, cb_queue),
+            Self::LegacyTcp(socket) => LegacyTcpSocket::connect(socket, addr, cb_queue),
         }
     }
 }
@@ -81,7 +81,7 @@ impl InetSocket {
 impl std::fmt::Debug for InetSocket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tcp(_) => write!(f, "Tcp")?,
+            Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
         }
 
         if let Ok(file) = self.try_borrow() {
@@ -98,28 +98,28 @@ impl std::fmt::Debug for InetSocket {
 }
 
 pub enum InetSocketRef<'a> {
-    Tcp(atomic_refcell::AtomicRef<'a, TcpSocket>),
+    LegacyTcp(atomic_refcell::AtomicRef<'a, LegacyTcpSocket>),
 }
 
 pub enum InetSocketRefMut<'a> {
-    Tcp(atomic_refcell::AtomicRefMut<'a, TcpSocket>),
+    LegacyTcp(atomic_refcell::AtomicRefMut<'a, LegacyTcpSocket>),
 }
 
 // file functions
 impl InetSocketRef<'_> {
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn supports_sa_restart(&self) -> bool
     );
 }
@@ -128,73 +128,73 @@ impl InetSocketRef<'_> {
 impl InetSocketRef<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Tcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::LegacyTcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Tcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::LegacyTcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 }
 
 // inet socket-specific functions
 impl InetSocketRef<'_> {
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn peek_next_out_packet(&self) -> Option<Packet>
     );
-    enum_passthrough!(self, (packet), Tcp;
+    enum_passthrough!(self, (packet), LegacyTcp;
         pub fn update_packet_header(&self, packet: &mut Packet)
     );
 }
 
 // file functions
 impl InetSocketRefMut<'_> {
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (val), Tcp;
+    enum_passthrough!(self, (val), LegacyTcp;
         pub fn set_has_open_file(&mut self, val: bool)
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn supports_sa_restart(&self) -> bool
     );
-    enum_passthrough!(self, (cb_queue), Tcp;
+    enum_passthrough!(self, (cb_queue), LegacyTcp;
         pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
-    enum_passthrough!(self, (status), Tcp;
+    enum_passthrough!(self, (status), LegacyTcp;
         pub fn set_status(&mut self, status: FileStatus)
     );
-    enum_passthrough!(self, (request, arg_ptr, memory_manager), Tcp;
+    enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp;
         pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (ptr), Tcp;
+    enum_passthrough!(self, (ptr), LegacyTcp;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
-    enum_passthrough!(self, (ptr), Tcp;
+    enum_passthrough!(self, (ptr), LegacyTcp;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
 
-    enum_passthrough_generic!(self, (bytes, offset, cb_queue), Tcp;
+    enum_passthrough_generic!(self, (bytes, offset, cb_queue), LegacyTcp;
         pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (source, offset, cb_queue), Tcp;
+    enum_passthrough_generic!(self, (source, offset, cb_queue), LegacyTcp;
         pub fn write<R>(&mut self, source: R, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
@@ -204,55 +204,55 @@ impl InetSocketRefMut<'_> {
 impl InetSocketRefMut<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Tcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::LegacyTcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
-            Self::Tcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::LegacyTcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 
-    enum_passthrough_generic!(self, (source, addr, cb_queue), Tcp;
+    enum_passthrough_generic!(self, (source, addr, cb_queue), LegacyTcp;
         pub fn sendto<R>(&mut self, source: R, addr: Option<SockaddrStorage>, cb_queue: &mut CallbackQueue)
             -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (bytes, cb_queue), Tcp;
+    enum_passthrough_generic!(self, (bytes, cb_queue), LegacyTcp;
         pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
             -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough!(self, (backlog, cb_queue), Tcp;
+    enum_passthrough!(self, (backlog, cb_queue), LegacyTcp;
         pub fn listen(&mut self, backlog: i32, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
 
     pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<InetSocket, SyscallError> {
         match self {
-            Self::Tcp(socket) => socket.accept(cb_queue).map(InetSocket::Tcp),
+            Self::LegacyTcp(socket) => socket.accept(cb_queue).map(InetSocket::LegacyTcp),
         }
     }
 }
 
 // inet socket-specific functions
 impl InetSocketRefMut<'_> {
-    enum_passthrough!(self, (packet, cb_queue), Tcp;
+    enum_passthrough!(self, (packet, cb_queue), LegacyTcp;
         pub fn push_in_packet(&mut self, packet: Packet, cb_queue: &mut CallbackQueue)
     );
-    enum_passthrough!(self, (cb_queue), Tcp;
+    enum_passthrough!(self, (cb_queue), LegacyTcp;
         pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<Packet>
     );
-    enum_passthrough!(self, (), Tcp;
+    enum_passthrough!(self, (), LegacyTcp;
         pub fn peek_next_out_packet(&self) -> Option<Packet>
     );
-    enum_passthrough!(self, (packet), Tcp;
+    enum_passthrough!(self, (packet), LegacyTcp;
         pub fn update_packet_header(&self, packet: &mut Packet)
     );
 }
@@ -260,7 +260,7 @@ impl InetSocketRefMut<'_> {
 impl std::fmt::Debug for InetSocketRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tcp(_) => write!(f, "Tcp")?,
+            Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
         }
 
         write!(
@@ -275,7 +275,7 @@ impl std::fmt::Debug for InetSocketRef<'_> {
 impl std::fmt::Debug for InetSocketRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tcp(_) => write!(f, "Tcp")?,
+            Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
         }
 
         write!(
@@ -309,7 +309,7 @@ fn associate_socket(
     };
 
     let protocol = match socket {
-        InetSocket::Tcp(_) => c::_ProtocolType_PTCP,
+        InetSocket::LegacyTcp(_) => c::_ProtocolType_PTCP,
     };
 
     // get a free ephemeral port if they didn't specify one

@@ -1505,7 +1505,7 @@ mod export {
             Some(CompatFile::Legacy(file)) => file.ptr(),
             Some(CompatFile::New(file)) => {
                 // we have a special case for the legacy C TCP objects
-                if let File::Socket(Socket::Inet(InetSocket::Tcp(tcp))) = file.inner_file() {
+                if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(tcp))) = file.inner_file() {
                     tcp.borrow().as_legacy_file()
                 } else {
                     log::warn!(

@@ -174,7 +174,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_read, ctx);
         }
 
@@ -216,7 +216,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
         }
 
@@ -314,7 +314,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_write, ctx);
         }
 
@@ -357,7 +357,7 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::Tcp(_))) = file.inner_file() {
+        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
             return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
         }
 
