@@ -9,6 +9,7 @@ use crate::host::syscall_types::{
     PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
 };
 use crate::utility::sockaddr::SockaddrStorage;
+use crate::utility::{pod, NoTypeInference};
 
 use nix::errno::Errno;
 
@@ -212,6 +213,30 @@ pub fn read_sockaddr(
     let addr = unsafe { SockaddrStorage::from_bytes(addr_buf).ok_or(Errno::EINVAL)? };
 
     Ok(Some(addr))
+}
+
+/// Writes `val` to `val_ptr`, but will only write a partial value if `val_len` is smaller than the
+/// size of `val`. Returns the number of bytes written.
+///
+/// The generic type must be given explicitly to prevent accidentally writing the wrong type.
+///
+/// ```ignore
+/// let bytes_written = write_partial::<i32, _>(mem, foo(), ptr, len)?;
+/// ```
+pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
+    mem: &mut MemoryManager,
+    val: &T,
+    val_ptr: PluginPtr,
+    val_len: usize,
+) -> Result<usize, SyscallError> {
+    let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
+
+    let val = &pod::as_u8_slice(val)[..val_len];
+    let val_ptr = TypedPluginPtr::new::<MaybeUninit<u8>>(val_ptr, val_len);
+
+    mem.copy_to_ptr(val_ptr, val)?;
+
+    Ok(val_len)
 }
 
 pub struct SyscallContext<'a, 'b> {

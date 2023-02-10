@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
@@ -13,10 +14,12 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::handler::write_partial;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
@@ -404,6 +407,293 @@ impl LegacyTcpSocket {
         _cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<Self>>, SyscallError> {
         todo!()
+    }
+
+    pub fn getsockopt(
+        &self,
+        level: libc::c_int,
+        optname: libc::c_int,
+        optval_ptr: PluginPtr,
+        optlen: libc::socklen_t,
+        memory_manager: &mut MemoryManager,
+    ) -> Result<libc::socklen_t, SyscallError> {
+        match (level, optname) {
+            (libc::SOL_TCP, libc::TCP_INFO) => {
+                let mut info = pod::zeroed();
+                unsafe { c::tcp_getInfo(self.as_legacy_tcp(), &mut info) };
+
+                let bytes_written = write_partial::<crate::cshadow::tcp_info, _>(
+                    memory_manager,
+                    &info,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_TCP, libc::TCP_NODELAY) => {
+                // shadow doesn't support nagle's algorithm, so shadow always behaves as if
+                // TCP_NODELAY is enabled
+                let val = 1;
+
+                let bytes_written = write_partial::<libc::c_int, _>(
+                    memory_manager,
+                    &val,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_TCP, libc::TCP_CONGESTION) => {
+                // the value of TCP_CA_NAME_MAX in linux
+                const CONG_NAME_MAX: usize = 16;
+
+                if optval_ptr.is_null() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let name: *const libc::c_char =
+                    unsafe { c::tcpcong_nameStr(c::tcp_cong(self.as_legacy_tcp())) };
+                assert!(!name.is_null(), "shadow's congestion type has no name");
+                let name = unsafe { CStr::from_ptr(name) };
+                let name = name.to_bytes_with_nul();
+
+                let bytes_to_copy = *[optlen as usize, CONG_NAME_MAX, name.len()]
+                    .iter()
+                    .min()
+                    .unwrap();
+
+                let name = &name[..bytes_to_copy];
+                let optval_ptr = TypedPluginPtr::new::<u8>(optval_ptr, bytes_to_copy);
+
+                memory_manager.copy_to_ptr(optval_ptr, name)?;
+
+                // the len value returned by linux seems to be independent from the actual string length
+                Ok(std::cmp::min(optlen as usize, CONG_NAME_MAX) as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_SNDBUF) => {
+                let sndbuf_size: libc::c_int =
+                    unsafe { c::legacysocket_getOutputBufferSize(self.as_legacy_socket()) }
+                        .try_into()
+                        .unwrap();
+
+                let bytes_written = write_partial::<libc::c_int, _>(
+                    memory_manager,
+                    &sndbuf_size,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_RCVBUF) => {
+                let rcvbuf_size: libc::c_int =
+                    unsafe { c::legacysocket_getInputBufferSize(self.as_legacy_socket()) }
+                        .try_into()
+                        .unwrap();
+
+                let bytes_written = write_partial::<libc::c_int, _>(
+                    memory_manager,
+                    &rcvbuf_size,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_ERROR) => {
+                // return error for failed connect() attempts
+                let conn_err = unsafe { c::tcp_getConnectionError(self.as_legacy_tcp()) };
+
+                let error = if conn_err == -libc::ECONNRESET || conn_err == -libc::ECONNREFUSED {
+                    // result is a positive errcode
+                    -conn_err
+                } else {
+                    0
+                };
+
+                let bytes_written = write_partial::<libc::c_int, _>(
+                    memory_manager,
+                    &error,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_TYPE) => {
+                let protocol = unsafe { c::legacysocket_getProtocol(self.as_legacy_socket()) };
+
+                let sock_type = match protocol {
+                    c::_ProtocolType_PMOCK => {
+                        panic!("mock socket should not appear outside of tests")
+                    }
+                    c::_ProtocolType_PNONE => panic!("socket has no protocol"),
+                    c::_ProtocolType_PLOCAL => panic!("socket is a PLOCAL socket"),
+                    c::_ProtocolType_PTCP => libc::SOCK_STREAM,
+                    c::_ProtocolType_PUDP => libc::SOCK_DGRAM,
+                    _ => unimplemented!(),
+                };
+
+                let bytes_written = write_partial::<libc::c_int, _>(
+                    memory_manager,
+                    &sock_type,
+                    optval_ptr,
+                    optlen as usize,
+                )?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            _ => {
+                log::warn!("getsockopt called with unsupported level {level} and opt {optname}");
+                Err(Errno::ENOPROTOOPT.into())
+            }
+        }
+    }
+
+    pub fn setsockopt(
+        &self,
+        level: libc::c_int,
+        optname: libc::c_int,
+        optval_ptr: PluginPtr,
+        optlen: libc::socklen_t,
+        memory_manager: &MemoryManager,
+    ) -> Result<(), SyscallError> {
+        match (level, optname) {
+            (libc::SOL_TCP, libc::TCP_NODELAY) => {
+                // Shadow doesn't support nagle's algorithm, so Shadow always behaves as if
+                // TCP_NODELAY is enabled. Some programs will fail if `setsockopt(fd, SOL_TCP,
+                // TCP_NODELAY, &1, sizeof(int))` returns an error, so we treat this as a no-op for
+                // compatibility.
+
+                type OptType = libc::c_int;
+
+                if usize::try_from(optlen).unwrap() < std::mem::size_of::<OptType>() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let enable = memory_manager.read_vals::<_, 1>(optval_ptr)?[0];
+
+                if enable != 0 {
+                    // wants to enable TCP_NODELAY
+                    log::debug!("Ignoring TCP_NODELAY");
+                } else {
+                    // wants to disable TCP_NODELAY
+                    log::warn!("Cannot disable TCP_NODELAY since shadow does not implement Nagle's algorithm.");
+                    return Err(Errno::ENOPROTOOPT.into());
+                }
+            }
+            (libc::SOL_TCP, libc::TCP_CONGESTION) => {
+                // the value of TCP_CA_NAME_MAX in linux
+                const CONG_NAME_MAX: usize = 16;
+
+                let mut name = [0u8; CONG_NAME_MAX];
+
+                let optlen = std::cmp::min(optlen as usize, CONG_NAME_MAX);
+                let name = &mut name[..optlen];
+
+                let optval_ptr = TypedPluginPtr::new::<u8>(optval_ptr, optlen);
+                memory_manager.copy_from_ptr(name, optval_ptr)?;
+
+                // truncate the name at the first NUL character if there is one, but don't include
+                // the NUL since in linux the strings don't need a NUL
+                let name = name
+                    .iter()
+                    .position(|x| *x == 0)
+                    .map(|x| &name[..x])
+                    .unwrap_or(name);
+
+                let reno = unsafe { CStr::from_ptr(c::TCP_CONG_RENO_NAME) }.to_bytes();
+
+                if name != reno {
+                    log::warn!("Shadow sockets only support '{reno:?}' for TCP_CONGESTION");
+                    return Err(Errno::ENOENT.into());
+                }
+
+                // shadow doesn't support other congestion types, so do nothing
+            }
+            (libc::SOL_SOCKET, libc::SO_SNDBUF) => {
+                type OptType = libc::c_int;
+
+                if usize::try_from(optlen).unwrap() < std::mem::size_of::<OptType>() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
+                    .try_into()
+                    .or(Err(Errno::EINVAL))?;
+
+                // linux kernel doubles this value upon setting
+                let val = val * 2;
+
+                // Linux also has limits SOCK_MIN_SNDBUF (slightly greater than 4096) and the sysctl
+                // max limit. We choose a reasonable lower limit for Shadow. The minimum limit in
+                // man 7 socket is incorrect.
+                let val = std::cmp::max(val, 4096);
+
+                // This upper limit was added as an arbitrarily high number so that we don't change
+                // Shadow's behaviour, but also prevents an application from setting this to
+                // something unnecessarily large like INT_MAX.
+                let val = std::cmp::min(val, 268435456); // 2^28 = 256 MiB
+
+                unsafe { c::legacysocket_setOutputBufferSize(self.as_legacy_socket(), val) };
+                unsafe { c::tcp_disableSendBufferAutotuning(self.as_legacy_tcp()) };
+            }
+            (libc::SOL_SOCKET, libc::SO_RCVBUF) => {
+                type OptType = libc::c_int;
+
+                if usize::try_from(optlen).unwrap() < std::mem::size_of::<OptType>() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
+                    .try_into()
+                    .or(Err(Errno::EINVAL))?;
+
+                // linux kernel doubles this value upon setting
+                let val = val * 2;
+
+                // Linux also has limits SOCK_MIN_RCVBUF (slightly greater than 2048) and the sysctl
+                // max limit. We choose a reasonable lower limit for Shadow. The minimum limit in
+                // man 7 socket is incorrect.
+                let val = std::cmp::max(val, 2048);
+
+                // This upper limit was added as an arbitrarily high number so that we don't change
+                // Shadow's behaviour, but also prevents an application from setting this to
+                // something unnecessarily large like INT_MAX.
+                let val = std::cmp::min(val, 268435456); // 2^28 = 256 MiB
+
+                unsafe { c::legacysocket_setInputBufferSize(self.as_legacy_socket(), val) };
+                unsafe { c::tcp_disableReceiveBufferAutotuning(self.as_legacy_tcp()) };
+            }
+            (libc::SOL_SOCKET, libc::SO_REUSEADDR) => {
+                // TODO: implement this, tor and tgen use it
+                log::trace!("setsockopt SO_REUSEADDR not yet implemented");
+            }
+            (libc::SOL_SOCKET, libc::SO_REUSEPORT) => {
+                // TODO: implement this, tgen uses it
+                log::trace!("setsockopt SO_REUSEPORT not yet implemented");
+            }
+            (libc::SOL_SOCKET, libc::SO_KEEPALIVE) => {
+                // TODO: implement this, libevent uses it in
+                // evconnlistener_new_bind()
+                log::trace!("setsockopt SO_KEEPALIVE not yet implemented");
+            }
+            (libc::SOL_SOCKET, libc::SO_BROADCAST) => {
+                // TODO: implement this, pkg.go.dev/net uses it
+                log::trace!("setsockopt SO_BROADCAST not yet implemented");
+            }
+            _ => {
+                log::warn!("setsockopt called with unsupported level {level} and opt {optname}");
+                return Err(Errno::ENOPROTOOPT.into());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn add_listener(

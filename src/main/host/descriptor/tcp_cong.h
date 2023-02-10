@@ -31,4 +31,6 @@ typedef struct TCPCong_ {
     void *ca;
 } TCPCong;
 
+const char* tcpcong_nameStr(const TCPCong *cong);
+
 #endif // SHD_TCP_CONG_H_

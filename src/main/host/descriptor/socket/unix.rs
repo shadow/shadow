@@ -236,6 +236,30 @@ impl UnixSocket {
         self.protocol_state.accept(&mut self.common, cb_queue)
     }
 
+    pub fn getsockopt(
+        &self,
+        _level: libc::c_int,
+        _optname: libc::c_int,
+        _optval_ptr: PluginPtr,
+        _optlen: libc::socklen_t,
+        _memory_manager: &mut MemoryManager,
+    ) -> Result<libc::socklen_t, SyscallError> {
+        log::warn!("getsockopt() syscall not yet supported for unix sockets; Returning ENOSYS");
+        Err(Errno::ENOSYS.into())
+    }
+
+    pub fn setsockopt(
+        &self,
+        _level: libc::c_int,
+        _optname: libc::c_int,
+        _optval_ptr: PluginPtr,
+        _optlen: libc::socklen_t,
+        _memory_manager: &MemoryManager,
+    ) -> Result<(), SyscallError> {
+        log::warn!("setsockopt() syscall not yet supported for unix sockets; Returning ENOSYS");
+        Err(Errno::ENOSYS.into())
+    }
+
     pub fn pair(
         status: FileStatus,
         socket_type: UnixSocketType,

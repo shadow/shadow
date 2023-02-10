@@ -152,6 +152,18 @@ impl SocketRef<'_> {
     enum_passthrough!(self, (), Unix, Inet;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
+
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+                          optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
+        -> Result<libc::socklen_t, SyscallError>
+    );
+
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+                          optlen: libc::socklen_t, memory_manager: &MemoryManager)
+        -> Result<(), SyscallError>
+    );
 }
 
 // file functions
@@ -219,6 +231,18 @@ impl SocketRefMut<'_> {
 
     enum_passthrough!(self, (), Unix, Inet;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
+    );
+
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+                          optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
+        -> Result<libc::socklen_t, SyscallError>
+    );
+
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+                          optlen: libc::socklen_t, memory_manager: &MemoryManager)
+        -> Result<(), SyscallError>
     );
 
     enum_passthrough_generic!(self, (source, addr, cb_queue), Unix, Inet;
