@@ -27,6 +27,8 @@ void legacyfile_refWeak(gpointer data);
 void legacyfile_unrefWeak(gpointer data);
 void legacyfile_close(LegacyFile* descriptor, const Host* host);
 
+const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* descriptor);
+
 LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 
 gint legacyfile_getFlags(LegacyFile* descriptor);

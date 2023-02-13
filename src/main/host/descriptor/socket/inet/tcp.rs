@@ -698,11 +698,18 @@ impl LegacyTcpSocket {
 
     pub fn add_listener(
         &mut self,
-        _monitoring: FileState,
-        _filter: StateListenerFilter,
-        _notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> Handle<(FileState, FileState)> {
-        todo!()
+        let event_source = unsafe { c::legacyfile_getEventSource(self.as_legacy_file()) };
+        let event_source = unsafe { event_source.as_ref() }.unwrap();
+
+        Worker::with_active_host(|host| {
+            let mut event_source = event_source.borrow_mut(host.root());
+            event_source.add_listener(monitoring, filter, notify_fn)
+        })
+        .unwrap()
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
