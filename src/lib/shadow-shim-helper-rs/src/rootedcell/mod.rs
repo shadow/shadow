@@ -1,5 +1,7 @@
 use std::{
+    cell::RefCell,
     marker::PhantomData,
+    ops::Deref,
     sync::atomic::{AtomicU32, Ordering},
 };
 
@@ -102,5 +104,71 @@ impl Root {
 impl Default for Root {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub struct RootScope<T> {
+    // This doesn't *really* need to behave as a T, but in intended usage T
+    // shouldn't introduce any constraints. It's just a unique marker type.
+    _phantom: PhantomData<T>,
+}
+
+impl<T> RootScope<T> {
+    thread_local!(static CURRENT: std::cell::RefCell<Option<RefCell<Root>>>  = std::cell::RefCell::new(None));
+
+    pub fn with_current_set_to(root: Root, f: impl FnOnce()) -> Root {
+        Self::CURRENT.with(|current| {
+            let prev = current.replace(Some(RefCell::new(root)));
+            f();
+            // Will panic if there are any live borrows.
+            // Note the `as_mut` to avoid actually moving the inner RefCell before `take`
+            // has done that validation.
+            let root = current.borrow_mut().as_mut().unwrap().take();
+            current.replace(prev);
+            root
+        })
+    }
+
+    pub fn current() -> Option<impl Deref<Target = Root> + 'static> {
+        Self::CURRENT.with(|current| {
+            let outer = current.borrow();
+            if let Some(root) = outer.as_ref() {
+                let ret = root.borrow();
+                // SAFETY:
+                // We only mutate the RefCell that Ref is borrowed from via `RefCell::take`,
+                // which validates at run-time that there are no borrows outstanding.
+                let static_ret: std::cell::Ref<'static, Root> = unsafe { std::mem::transmute(ret) };
+                Some(static_ret)
+            } else {
+                None
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::refcell::RootedRefCell;
+    use super::*;
+
+    struct HostRoot(());
+    type HostRootScope = RootScope<HostRoot>;
+
+    #[test]
+    fn borrow_works() {
+        let root = Root::new();
+        let host_data = RootedRefCell::new(&root, 42i32);
+        let _root = HostRootScope::with_current_set_to(root, || {
+            assert_eq!(*host_data.borrow(&HostRootScope::current().unwrap()), 42);
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    fn escaping_borrow_panics() {
+        let root = Root::new();
+        let _root = HostRootScope::with_current_set_to(root, || {
+            Box::leak(Box::new(HostRootScope::current()));
+        });
     }
 }
