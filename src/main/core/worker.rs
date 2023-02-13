@@ -250,7 +250,7 @@ impl Worker {
     }
 
     /// ID of this thread's Worker, if any.
-    pub fn thread_id() -> Option<WorkerThreadID> {
+    pub fn worker_id() -> Option<WorkerThreadID> {
         Worker::with(|w| w.worker_id)
     }
 
