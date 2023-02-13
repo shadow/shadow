@@ -298,61 +298,6 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_
     return 0;
 }
 
-static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp, int optname, void* optval,
-                                           socklen_t* optlen) {
-    switch (optname) {
-        case TCP_INFO: {
-            struct tcp_info info;
-            tcp_getInfo(tcp, &info);
-
-            int num_bytes = MIN(*optlen, sizeof(info));
-            memcpy(optval, &info, num_bytes);
-            *optlen = num_bytes;
-
-            return 0;
-        }
-        case TCP_NODELAY: {
-            /* Shadow doesn't support nagle's algorithm, so shadow always behaves
-             * as if TCP_NODELAY is enabled.
-             */
-            int val = 1;
-            int num_bytes = MIN(*optlen, sizeof(int));
-            memcpy(optval, &val, num_bytes);
-            *optlen = num_bytes;
-
-            return 0;
-        }
-        case TCP_CONGESTION: {
-            // the value of TCP_CA_NAME_MAX in linux
-            const int CONG_NAME_MAX = 16;
-
-            if (optval == NULL || optlen == NULL) {
-                return -EINVAL;
-            }
-
-            char* dest_str = optval;
-            const char* src_str = tcp_cong(tcp)->hooks->tcp_cong_name_str();
-
-            if (src_str == NULL) {
-                panic("Shadow's congestion type has no name!");
-            }
-
-            // the len value returned by linux seems to be independent from the actual string length
-            *optlen = MIN(*optlen, CONG_NAME_MAX);
-
-            if (*optlen > 0) {
-                strncpy(dest_str, src_str, *optlen);
-            }
-
-            return 0;
-        }
-        default: {
-            warning("getsockopt at level SOL_TCP called with unsupported option %i", optname);
-            return -ENOPROTOOPT;
-        }
-    }
-}
-
 static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket* sock, int optname,
                                               void* optval, socklen_t* optlen) {
     switch (optname) {
@@ -422,70 +367,6 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket*
             return -ENOPROTOOPT;
         }
     }
-}
-
-static int _syscallhandler_setTCPOptHelper(SysCallHandler* sys, TCP* tcp, int optname,
-                                           PluginPtr optvalPtr, socklen_t optlen) {
-    switch (optname) {
-        case TCP_NODELAY: {
-            /* Shadow doesn't support nagle's algorithm, so shadow always behaves as if TCP_NODELAY
-             * is enabled. Some programs will fail if setsockopt(fd, SOL_TCP, TCP_NODELAY, &1,
-             * sizeof(int)) returns an error, so we treat this as a no-op for compatibility.
-             */
-            if (optlen < sizeof(int)) {
-                return -EINVAL;
-            }
-
-            int enable = 0;
-            int errcode =
-                process_readPtr(_syscallhandler_getProcess(sys), &enable, optvalPtr, sizeof(int));
-            if (errcode != 0) {
-                return errcode;
-            }
-
-            if (enable) {
-                // wants to enable TCP_NODELAY
-                debug("Ignoring TCP_NODELAY");
-            } else {
-                // wants to disable TCP_NODELAY
-                warning("Cannot disable TCP_NODELAY since shadow does not implement "
-                        "Nagle's algorithm.");
-                return -ENOPROTOOPT;
-            }
-
-            return 0;
-        }
-        case TCP_CONGESTION: {
-            // the value of TCP_CA_NAME_MAX in linux
-            const int CONG_NAME_MAX = 16;
-
-            char name[CONG_NAME_MAX];
-            optlen = MIN(optlen, CONG_NAME_MAX);
-
-            int errcode = process_readPtr(_syscallhandler_getProcess(sys), name, optvalPtr, optlen);
-            if (errcode != 0) {
-                return errcode;
-            }
-
-            if (optlen < strlen(TCP_CONG_RENO_NAME) ||
-                strncmp(name, TCP_CONG_RENO_NAME, optlen) != 0) {
-                warning("Shadow sockets only support '%s' for TCP_CONGESTION", TCP_CONG_RENO_NAME);
-                return -ENOENT;
-            }
-
-            // shadow doesn't support other congestion types, so do nothing
-            const char* current_name = tcp_cong(tcp)->hooks->tcp_cong_name_str();
-            utility_debugAssert(current_name != NULL &&
-                                strcmp(current_name, TCP_CONG_RENO_NAME) == 0);
-            return 0;
-        }
-        default: {
-            warning("setsockopt on level SOL_TCP called with unsupported option %i", optname);
-            return -ENOPROTOOPT;
-        }
-    }
-
-    return 0;
 }
 
 static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket* sock, int optname,
@@ -1157,9 +1038,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
                 break;
             }
 
-            errcode =
-                _syscallhandler_getTCPOptHelper(sys, (TCP*)socket_desc, optname, optval, &optlen);
-            break;
+            panic("This should have been handled by the rust syscall handler");
         }
         case SOL_SOCKET: {
             errcode =
@@ -1282,9 +1161,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
                 break;
             }
 
-            errcode =
-                _syscallhandler_setTCPOptHelper(sys, (TCP*)socket_desc, optname, optvalPtr, optlen);
-            break;
+            panic("This should have been handled by the rust syscall handler");
         }
         case SOL_SOCKET: {
             errcode = _syscallhandler_setSocketOptHelper(

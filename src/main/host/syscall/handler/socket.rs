@@ -876,10 +876,10 @@ impl SyscallHandler {
     pub fn getsockopt(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        _level: libc::c_int,
-        _optname: libc::c_int,
-        _optval: PluginPtr,
-        _optlen: PluginPtr,
+        level: libc::c_int,
+        optname: libc::c_int,
+        optval_ptr: PluginPtr,
+        optlen_ptr: PluginPtr,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -894,22 +894,34 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx);
-        }
-
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "getsockopt() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        // get the provided optlen
+        let optlen_ptr = TypedPluginPtr::new::<libc::socklen_t>(optlen_ptr, 1);
+        let optlen = mem.read_vals::<_, 1>(optlen_ptr)?[0];
+
+        let mut optlen_new = socket
+            .borrow()
+            .getsockopt(level, optname, optval_ptr, optlen, &mut mem)?;
+
+        if optlen_new > optlen {
+            // this is probably a bug in the socket's getsockopt implementation
+            log::warn!(
+                "Attempting to return an optlen {} that's greater than the provided optlen {}",
+                optlen_new,
+                optlen
+            );
+            optlen_new = optlen;
+        }
+
+        // write the new optlen back to the plugin
+        mem.copy_to_ptr(optlen_ptr, &[optlen_new])?;
+
+        Ok(0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
@@ -918,10 +930,10 @@ impl SyscallHandler {
     pub fn setsockopt(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        _level: libc::c_int,
-        _optname: libc::c_int,
-        _optval: PluginPtr,
-        _optlen: libc::socklen_t,
+        level: libc::c_int,
+        optname: libc::c_int,
+        optval_ptr: PluginPtr,
+        optlen: libc::socklen_t,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -936,22 +948,17 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx);
-        }
-
         let File::Socket(socket) = file.inner_file() else {
             drop(desc_table);
             return Err(Errno::ENOTSOCK.into());
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "setsockopt() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        let mem = ctx.objs.process.memory_borrow();
+
+        socket
+            .borrow_mut()
+            .setsockopt(level, optname, optval_ptr, optlen, &mem)?;
+
+        Ok(0.into())
     }
 }

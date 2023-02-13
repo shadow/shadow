@@ -1,5 +1,7 @@
 use crate::cshadow as c;
 use crate::host::syscall_condition::SysCallCondition;
+use crate::utility::NoTypeInference;
+
 use log::Level::Debug;
 use log::*;
 use nix::errno::Errno;
@@ -271,27 +273,6 @@ impl std::fmt::Debug for c::SysCallReg {
             .field("as_ptr", unsafe { &self.as_ptr })
             .finish()
     }
-}
-
-/// A trait to prevent type inference during function calls. Useful when you have a type that wraps
-/// a pointer (like [`TypedPluginPtr`]) and you don't want Rust to infer the type of pointer during
-/// creation.  Instead, the caller must specify the generic type.
-///
-/// Example:
-///
-/// ```ignore
-/// let x: TypedPluginPtr<u8>;
-///
-/// // normally the `<u8>` wouldn't be required since Rust would infer it from the type of `x`, but
-/// // for this function using [`NoTypeInference`], the `<u8>` is required and must match
-/// x = TypedPluginPtr::new::<u8>(...);
-/// ```
-pub trait NoTypeInference {
-    type This;
-}
-
-impl<T> NoTypeInference for T {
-    type This = T;
 }
 
 /// Wrapper around a PluginPtr that encapsulates its type, size, and current

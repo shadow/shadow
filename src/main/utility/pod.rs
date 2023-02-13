@@ -17,7 +17,7 @@ pub unsafe trait Pod: Copy + 'static {}
 
 /// Convert to a slice of raw bytes.
 ///
-/// Some bytes may be uninialized if T has padding.
+/// Some bytes may be uninitialized if T has padding.
 pub fn to_u8_slice<T>(slice: &[T]) -> &[MaybeUninit<u8>]
 where
     T: Pod,
@@ -29,6 +29,16 @@ where
             slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
         )
     }
+}
+
+/// Cast as a slice of raw bytes.
+///
+/// Some bytes may be uninitialized if T has padding.
+pub fn as_u8_slice<T>(x: &T) -> &[MaybeUninit<u8>]
+where
+    T: Pod,
+{
+    to_u8_slice(std::slice::from_ref(x))
 }
 
 /// Convert to a mut slice of raw bytes.
@@ -50,6 +60,20 @@ where
             slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
         )
     }
+}
+
+/// Cast as a mut slice of raw bytes.
+///
+/// Some bytes may be uninitialized if T has padding.
+///
+/// # Safety
+///
+/// See [`to_u8_slice_mut`].
+pub unsafe fn as_u8_slice_mut<T>(x: &mut T) -> &mut [MaybeUninit<u8>]
+where
+    T: Pod,
+{
+    unsafe { to_u8_slice_mut(std::slice::from_mut(x)) }
 }
 
 /// Create a value of type `T`, with contents initialized to 0s.
@@ -249,3 +273,6 @@ unsafe impl Pod for libc::utimbuf {}
 unsafe impl Pod for libc::utmpx {}
 unsafe impl Pod for libc::utsname {}
 unsafe impl Pod for libc::winsize {}
+
+// shadow re-exports this definition from /usr/include/linux/tcp.h
+unsafe impl Pod for crate::cshadow::tcp_info {}
