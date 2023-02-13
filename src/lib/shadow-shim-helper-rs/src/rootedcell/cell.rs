@@ -1,5 +1,6 @@
-use super::{Root, Tag};
+use super::{Root, RootScope, Tag};
 use std::cell::UnsafeCell;
+use std::marker::PhantomData;
 use vasi::VirtualAddressSpaceIndependent;
 
 /// Analagous to [std::cell::Cell]. In particular like [std::cell::Cell], it
@@ -147,5 +148,131 @@ mod test_rooted_cell {
             .unwrap()
         };
         assert_eq!(cell.get(&root), 3);
+    }
+}
+
+pub struct ScopedRootedCell<ScopeT, T> {
+    val: RootedCell<T>,
+    _phantom: PhantomData<ScopeT>,
+}
+
+impl<ScopeT, T> ScopedRootedCell<ScopeT, T> {
+    /// Create a RootedCell associated with `root`.
+    pub fn new_explicit(root: &Root, val: T) -> Self {
+        Self {
+            val: RootedCell::new(root, val),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Create a RootedCell associated with `root`.
+    pub fn new(val: T) -> Self {
+        let root = RootScope::<ScopeT>::current().unwrap();
+        Self::new_explicit(&root, val)
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.val.get_mut()
+    }
+
+    pub fn set_explicit(&self, root: &Root, val: T) {
+        self.val.set(root, val)
+    }
+
+    pub fn set(&self, val: T) {
+        let root = RootScope::<ScopeT>::current().unwrap();
+        self.set_explicit(&root, val)
+    }
+
+    pub fn replace_explicit(&self, root: &Root, val: T) -> T {
+        self.val.replace(root, val)
+    }
+
+    pub fn replace(&self, val: T) -> T {
+        let root = RootScope::<ScopeT>::current().unwrap();
+        self.replace_explicit(&root, val)
+    }
+
+    pub fn into_inner(self) -> T {
+        self.val.into_inner()
+    }
+}
+
+impl<ScopeT, T: Copy> ScopedRootedCell<ScopeT, T> {
+    pub fn get_explicit(&self, root: &Root) -> T {
+        self.val.get(root)
+    }
+
+    pub fn get(&self) -> T {
+        let root = RootScope::<ScopeT>::current().unwrap();
+        self.get_explicit(&root)
+    }
+}
+
+unsafe impl<T: Send, ScopeT> Send for ScopedRootedCell<T, ScopeT> {}
+unsafe impl<T: Send, ScopeT> Sync for ScopedRootedCell<T, ScopeT> {}
+
+#[cfg(test)]
+mod test_scoped_rooted_cell {
+    use super::*;
+
+    use std::sync::Arc;
+    use std::thread;
+
+    struct HostRoot(());
+    type HostRootScope = RootScope<HostRoot>;
+
+    #[test]
+    fn get() {
+        HostRootScope::with_current_set_to(Root::new(), || {
+            // We need to specify the type of scope on construction.
+            let c = ScopedRootedCell::<HostRoot, _>::new(1);
+            // No need to explicitly reference the root on method calls.
+            assert_eq!(c.get(), 1);
+        });
+    }
+
+    #[test]
+    fn get_mut() {
+        HostRootScope::with_current_set_to(Root::new(), || {
+            let mut c = ScopedRootedCell::<HostRoot, _>::new(1);
+            assert_eq!(*c.get_mut(), 1);
+        });
+    }
+
+    #[test]
+    fn set() {
+        HostRootScope::with_current_set_to(Root::new(), || {
+            let c = ScopedRootedCell::<HostRoot, _>::new(1);
+            c.set(2);
+            assert_eq!(c.get(), 2);
+        });
+    }
+
+    #[test]
+    fn replace() {
+        HostRootScope::with_current_set_to(Root::new(), || {
+            let c = ScopedRootedCell::<HostRoot, _>::new(1);
+            let old = c.replace(2);
+            assert_eq!(old, 1);
+            assert_eq!(c.get(), 2);
+        });
+    }
+
+    #[test]
+    fn share_with_worker_thread() {
+        let root = Root::new();
+        let rc = Arc::new(ScopedRootedCell::<HostRoot, _>::new_explicit(&root, 0));
+        let root = {
+            let rc = { rc.clone() };
+            thread::spawn(move || {
+                HostRootScope::with_current_set_to(root, || {
+                    rc.set(3);
+                })
+            })
+            .join()
+            .unwrap()
+        };
+        assert_eq!(rc.get_explicit(&root), 3);
     }
 }
