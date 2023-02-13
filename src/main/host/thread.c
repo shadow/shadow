@@ -56,10 +56,9 @@ Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadId
                        .processId = processId,
                        .tid = threadId,
                        .mthread = managedthread_new(hostId, processId, threadId),
+                       .sys = syscallhandler_new(hostId, processId, threadId),
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
-
-    thread->sys = syscallhandler_new(host, process, thread);
 
     shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadId);
 
