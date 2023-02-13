@@ -518,12 +518,12 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     return res.event_data.syscall_complete.retval.as_i64;
 }
 
-ManagedThread* managedthread_new(Thread* thread) {
+ManagedThread* managedthread_new(HostId hostId, pid_t processId, pid_t threadId) {
     ManagedThread* mthread = g_new(ManagedThread, 1);
     *mthread = (ManagedThread){
-        .threadId = thread_getID(thread),
-        .processId = thread_getProcessId(thread),
-        .hostId = thread_getHostId(thread),
+        .hostId = hostId,
+        .processId = processId,
+        .threadId = threadId,
         .affinity = AFFINITY_UNINIT,
     };
 

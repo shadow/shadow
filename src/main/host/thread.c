@@ -48,18 +48,20 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadID) {
+Thread* thread_new(const Host* host, const ProcessRefCell* process, int threadId) {
+    pid_t processId = process_getProcessID(process);
+    HostId hostId = host_getID(host);
     Thread* thread = g_new(Thread, 1);
-    *thread = (Thread){.hostId = host_getID(host),
-                       .processId = process_getProcessID(process),
-                       .tid = threadID,
+    *thread = (Thread){.hostId = hostId,
+                       .processId = processId,
+                       .tid = threadId,
+                       .mthread = managedthread_new(hostId, processId, threadId),
                        .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                        MAGIC_INITIALIZER};
 
     thread->sys = syscallhandler_new(host, process, thread);
-    thread->mthread = managedthread_new(thread);
 
-    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadID);
+    shimshmemthread_init(thread_sharedMem(thread), host_getShimShmemLock(host), threadId);
 
     return thread;
 }
