@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     marker::PhantomData,
     ops::Deref,
+    panic::UnwindSafe,
     sync::atomic::{AtomicU32, Ordering},
 };
 
@@ -134,10 +135,15 @@ impl<T> RootScope<T> {
             let outer = current.borrow();
             if let Some(root) = outer.as_ref() {
                 let ret = root.borrow();
+                type ReturnType = std::cell::Ref<'static, Root>;
+                static_assertions::assert_not_impl_all!(ReturnType: UnwindSafe);
                 // SAFETY:
                 // We only mutate the RefCell that Ref is borrowed from via `RefCell::take`,
                 // which validates at run-time that there are no borrows outstanding.
-                let static_ret: std::cell::Ref<'static, Root> = unsafe { std::mem::transmute(ret) };
+                //
+                // We validated above that the type we are using is `!UnwindSafe`, since
+                // otherwise `catch_unwind` could potentially circumvent this check.
+                let static_ret: ReturnType = unsafe { std::mem::transmute(ret) };
                 Some(static_ret)
             } else {
                 None
