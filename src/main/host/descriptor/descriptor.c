@@ -159,6 +159,11 @@ LegacyFileType legacyfile_getType(LegacyFile* descriptor) {
     return descriptor->type;
 }
 
+const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    return descriptor->event_source;
+}
+
 #ifdef DEBUG
 static gchar* _legacyfile_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
