@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
+use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
@@ -263,6 +264,10 @@ impl InetSocketRefMut<'_> {
             Self::LegacyTcp(socket) => socket.accept(cb_queue).map(InetSocket::LegacyTcp),
         }
     }
+
+    enum_passthrough!(self, (how, cb_queue), LegacyTcp;
+        pub fn shutdown(&mut self, how: Shutdown, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
+    );
 }
 
 // inet socket-specific functions

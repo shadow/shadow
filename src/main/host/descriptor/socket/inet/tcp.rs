@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
-use nix::sys::socket::SockaddrIn;
+use nix::sys::socket::{Shutdown, SockaddrIn};
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
@@ -407,6 +407,31 @@ impl LegacyTcpSocket {
         _cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<Self>>, SyscallError> {
         todo!()
+    }
+
+    pub fn shutdown(
+        &mut self,
+        how: Shutdown,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        let how = match how {
+            Shutdown::Read => libc::SHUT_RD,
+            Shutdown::Write => libc::SHUT_WR,
+            Shutdown::Both => libc::SHUT_RDWR,
+        };
+
+        let errcode = Worker::with_active_host(|host| unsafe {
+            c::tcp_shutdown(self.as_legacy_tcp(), host, how)
+        })
+        .unwrap();
+
+        assert!(errcode <= 0);
+
+        if errcode < 0 {
+            return Err(Errno::from_i32(-errcode).into());
+        }
+
+        Ok(())
     }
 
     pub fn getsockopt(
