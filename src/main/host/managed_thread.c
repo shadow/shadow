@@ -23,7 +23,9 @@
 #include "main/host/syscall_condition.h"
 
 struct _ManagedThread {
-    Thread* base;
+    pid_t threadId;
+    pid_t processId;
+    HostId hostId;
 
     ShMemBlock ipc_blk;
 
@@ -54,6 +56,24 @@ typedef struct _ShMemWriteBlock {
     size_t n;
 } ShMemWriteBlock;
 
+static Thread* _mthread_getThread(const ManagedThread* t) {
+    Thread* thread = worker_getCurrentThread();
+    utility_debugAssert(thread_getID(thread) == t->threadId);
+    return thread;
+}
+
+static const ProcessRefCell* _mthread_getProcess(const ManagedThread* t) {
+    const ProcessRefCell* process = worker_getCurrentProcess();
+    utility_debugAssert(process_getProcessID(process) == t->processId);
+    return process;
+}
+
+static const Host* _mthread_getHost(const ManagedThread* t) {
+    const Host* host = worker_getCurrentHost();
+    utility_debugAssert(host_getID(host) == t->hostId);
+    return host;
+}
+
 /*
  * Helper function. Sets the thread's CPU affinity to the worker's affinity.
  */
@@ -68,7 +88,7 @@ static void _managedthread_syncAffinityWithWorker(ManagedThread* mthread) {
 
 static void _managedthread_continuePlugin(ManagedThread* thread, const ShimEvent* event) {
     // We're about to let managed thread execute, so need to release the shared memory lock.
-    const Host* host = thread_getHost(thread->base);
+    const Host* host = _mthread_getHost(thread);
     shimshmem_setMaxRunaheadTime(
         host_getShimShmemLock(host), worker_maxEventRunaheadTime(host));
     shimshmem_setEmulatedTime(
@@ -231,7 +251,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
 
     // Pass the TSC Hz to the shim, so that it can emulate rdtsc.
     myenvv = _add_u64_to_env(
-        myenvv, "SHADOW_TSC_HZ", host_getTsc(thread_getHost(mthread->base))->cyclesPerSecond);
+        myenvv, "SHADOW_TSC_HZ", host_getTsc(_mthread_getHost(mthread))->cyclesPerSecond);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr((gchar**)argv);
@@ -272,12 +292,12 @@ static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimE
     shimevent_recvEventFromPlugin(mthread->ipc_data, e);
     // The managed mthread has yielded control back to us. Reacquire the shared
     // memory lock, which we released in `_managedthread_continuePlugin`.
-    host_lockShimShmemLock(thread_getHost(mthread->base));
+    host_lockShimShmemLock(_mthread_getHost(mthread));
     trace("received shim_event %d", mthread->currentEvent.event_id);
 
     // Update time, which may have been incremented in the shim.
     CEmulatedTime shimTime =
-        shimshmem_getEmulatedTime(host_getSharedMem(thread_getHost(mthread->base)));
+        shimshmem_getEmulatedTime(host_getSharedMem(_mthread_getHost(mthread)));
     if (shimTime != worker_getCurrentEmulatedTime()) {
         trace("Updating time from %ld to %ld (+%ld)", worker_getCurrentEmulatedTime(), shimTime,
               shimTime - worker_getCurrentEmulatedTime());
@@ -291,11 +311,14 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     utility_debugAssert(mthread->isRunning);
     utility_debugAssert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
+    Thread* thread = _mthread_getThread(mthread);
+    const ProcessRefCell* process = _mthread_getProcess(mthread);
+
     _managedthread_syncAffinityWithWorker(mthread);
 
     // Flush any pending writes, e.g. from a previous mthread that exited without flushing.
     {
-        int res = process_flushPtrs(thread_getProcess(mthread->base));
+        int res = process_flushPtrs(_mthread_getProcess(mthread));
         if (res) {
             panic("Couldn't flush cached memory reference: %s", g_strerror(-res));
         }
@@ -315,7 +338,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
             case SHD_SHIM_EVENT_PROCESS_DEATH: {
                 // The native threads are all dead or zombies. Nothing to do but
                 // clean up.
-                process_markAsExiting(thread_getProcess(mthread->base));
+                process_markAsExiting(process);
                 _managedthread_cleanup(mthread);
 
                 // it will not be sending us any more events
@@ -340,11 +363,11 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 }
 
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread_getSysCallHandler(mthread->base),
+                    thread_getSysCallHandler(thread),
                     &mthread->currentEvent.event_data.syscall.syscall_args);
 
                 // remove the mthread's old syscall condition since it's no longer needed
-                thread_clearSysCallCondition(mthread->base);
+                thread_clearSysCallCondition(thread);
 
                 if (!mthread->isRunning) {
                     return NULL;
@@ -352,7 +375,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
 
                 // Flush any writes the syscallhandler made.
                 {
-                    int res = process_flushPtrs(thread_getProcess(mthread->base));
+                    int res = process_flushPtrs(process);
                     if (res) {
                         panic(
                             "Couldn't flush syscallhandler memory reference: %s", g_strerror(-res));
@@ -450,8 +473,8 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     utility_debugAssert(response.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
-    pid_t childNativeTid =
-        thread_nativeSyscall(parent->base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
+    pid_t childNativeTid = thread_nativeSyscall(
+        _mthread_getThread(parent), SYS_clone, flags, child_stack, ptid, ctid, newtls);
     if (childNativeTid < 0) {
         trace("native clone failed %d(%s)", childNativeTid, strerror(-childNativeTid));
         return childNativeTid;
@@ -485,7 +508,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     _managedthread_waitForNextEvent(mthread, &res);
     if (res.event_id == SHD_SHIM_EVENT_PROCESS_DEATH) {
         trace("Plugin exited while executing native syscall %ld", n);
-        process_markAsExiting(thread_getProcess(mthread->base));
+        process_markAsExiting(_mthread_getProcess(mthread));
         _managedthread_cleanup(mthread);
 
         // We have to return *something* here. Probably doesn't matter much what.
@@ -495,10 +518,12 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     return res.event_data.syscall_complete.retval.as_i64;
 }
 
-ManagedThread* managedthread_new(Thread* thread) {
+ManagedThread* managedthread_new(HostId hostId, pid_t processId, pid_t threadId) {
     ManagedThread* mthread = g_new(ManagedThread, 1);
     *mthread = (ManagedThread){
-        .base = thread,
+        .hostId = hostId,
+        .processId = processId,
+        .threadId = threadId,
         .affinity = AFFINITY_UNINIT,
     };
 

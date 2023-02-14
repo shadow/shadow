@@ -79,18 +79,13 @@ Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
     return thread;
 }
 
-SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* process,
-                                   Thread* thread) {
-    utility_debugAssert(host);
-    utility_debugAssert(process);
-    utility_debugAssert(thread);
-
+SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId) {
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
     *sys = (SysCallHandler){
-        .hostId = host_getID(host),
-        .processId = process_getProcessID(process),
-        .threadId = thread_getID(thread),
+        .hostId = hostId,
+        .processId = processId,
+        .threadId = threadId,
         .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
         .referenceCount = 1,

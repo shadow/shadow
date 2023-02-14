@@ -15,7 +15,7 @@ typedef struct _SysCallHandler SysCallHandler;
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-SysCallHandler* syscallhandler_new(const Host* host, const ProcessRefCell* process, Thread* thread);
+SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId);
 void syscallhandler_ref(SysCallHandler* sys);
 void syscallhandler_unref(SysCallHandler* sys);
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
