@@ -1062,6 +1062,9 @@ dependencies = [
 [[package]]
 name = "scoped-tls"
 version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "scoped-tls"
