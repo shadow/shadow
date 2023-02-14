@@ -24,6 +24,7 @@ unsafe impl<T> VirtualAddressSpaceIndependent for RootedCell<T> where
 
 impl<T> RootedCell<T> {
     /// Create a RootedCell associated with `root`.
+    #[inline]
     pub fn new(root: &Root, val: T) -> Self {
         Self {
             tag: root.tag(),
@@ -31,16 +32,19 @@ impl<T> RootedCell<T> {
         }
     }
 
+    #[inline]
     pub fn get_mut(&mut self) -> &mut T {
         // Since we have the only reference to `self`, we don't need to check the root.
         unsafe { &mut *self.val.get() }
     }
 
+    #[inline]
     pub fn set(&self, root: &Root, val: T) {
         // Replace the current value, and just drop the old value.
         drop(self.replace(root, val))
     }
 
+    #[inline]
     pub fn replace(&self, root: &Root, val: T) -> T {
         // Prove that the root is held for this tag.
         assert_eq!(
@@ -52,12 +56,14 @@ impl<T> RootedCell<T> {
         unsafe { self.val.get().replace(val) }
     }
 
+    #[inline]
     pub fn into_inner(self) -> T {
         self.val.into_inner()
     }
 }
 
 impl<T: Copy> RootedCell<T> {
+    #[inline]
     pub fn get(&self, root: &Root) -> T {
         // Prove that the root is held for this tag.
         assert_eq!(

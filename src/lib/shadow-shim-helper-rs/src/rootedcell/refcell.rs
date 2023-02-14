@@ -27,6 +27,7 @@ unsafe impl<T> VirtualAddressSpaceIndependent for RootedRefCell<T> where
 
 impl<T> RootedRefCell<T> {
     /// Create a RootedRefCell associated with `root`.
+    #[inline]
     pub fn new(root: &Root, val: T) -> Self {
         Self {
             tag: root.tag(),
@@ -38,6 +39,7 @@ impl<T> RootedRefCell<T> {
 
     /// Borrow a reference. Panics if `root` is for the wrong [Root], or
     /// if this object is alread mutably borrowed.
+    #[inline]
     pub fn borrow<'a>(&'a self, root: &'a Root) -> RootedRefCellRef<'a, T> {
         // Prove that the root is held for this tag.
         assert_eq!(
@@ -55,6 +57,7 @@ impl<T> RootedRefCell<T> {
 
     /// Borrow a mutable reference. Panics if `root` is for the wrong
     /// [Root], or if this object is already borrowed.
+    #[inline]
     pub fn borrow_mut<'a>(&'a self, root: &'a Root) -> RootedRefCellRefMut<'a, T> {
         // Prove that the root is held for this tag.
         assert_eq!(
@@ -71,6 +74,7 @@ impl<T> RootedRefCell<T> {
         RootedRefCellRefMut { guard: self }
     }
 
+    #[inline]
     pub fn into_inner(self) -> T {
         self.val.into_inner()
     }
@@ -86,12 +90,14 @@ pub struct RootedRefCellRef<'a, T> {
 impl<'a, T> std::ops::Deref for RootedRefCellRef<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         unsafe { self.guard.val.get().as_ref().unwrap() }
     }
 }
 
 impl<'a, T> Drop for RootedRefCellRef<'a, T> {
+    #[inline]
     fn drop(&mut self) {
         self.guard
             .reader_count
@@ -106,18 +112,21 @@ pub struct RootedRefCellRefMut<'a, T> {
 impl<'a, T> std::ops::Deref for RootedRefCellRefMut<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         unsafe { self.guard.val.get().as_ref().unwrap() }
     }
 }
 
 impl<'a, T> std::ops::DerefMut for RootedRefCellRefMut<'a, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.guard.val.get().as_mut().unwrap() }
     }
 }
 
 impl<'a, T> Drop for RootedRefCellRefMut<'a, T> {
+    #[inline]
     fn drop(&mut self) {
         self.guard.writer.set(false);
     }

@@ -124,6 +124,7 @@ impl<T> RootedRcCommon<T> {
 }
 
 impl<T> Drop for RootedRcCommon<T> {
+    #[inline]
     fn drop(&mut self) {
         if self.internal.is_some() {
             log::error!("Dropped without calling `safely_drop`");
@@ -170,6 +171,7 @@ pub struct RootedRc<T> {
 
 impl<T> RootedRc<T> {
     /// Creates a new object associated with `root`.
+    #[inline]
     pub fn new(root: &Root, val: T) -> Self {
         Self {
             common: RootedRcCommon::new(root, val),
@@ -180,6 +182,7 @@ impl<T> RootedRc<T> {
     ///
     /// We use fully qualified syntax here for consistency with Rc and Arc and
     /// to avoid name conflicts with `T`'s methods.
+    #[inline]
     pub fn downgrade(this: &Self, root: &Root) -> RootedRcWeak<T> {
         RootedRcWeak {
             common: this.common.clone(root, RefType::Weak),
@@ -191,6 +194,7 @@ impl<T> RootedRc<T> {
     /// Intentionally named clone to shadow Self::deref()::clone().
     ///
     /// Panics if `root` is not the associated [Root].
+    #[inline]
     pub fn clone(&self, root: &Root) -> Self {
         Self {
             common: self.common.clone(root, RefType::Strong),
@@ -204,6 +208,7 @@ impl<T> RootedRc<T> {
     /// safely cleaned up. In debug builds this will result in a `panic`.
     /// Otherwise the underlying reference count will simply not be decremented,
     /// ultimately resulting in the enclosed value never being dropped.
+    #[inline]
     pub fn safely_drop(self, root: &Root) {
         self.common.safely_drop(root, RefType::Strong);
     }
@@ -212,6 +217,7 @@ impl<T> RootedRc<T> {
 impl<T> std::ops::Deref for RootedRc<T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         // No need to require a reference to `Root` here since we're not
         // touching the counts, only the value itself, which we already required
@@ -345,6 +351,7 @@ pub struct RootedRcWeak<T> {
 }
 
 impl<T> RootedRcWeak<T> {
+    #[inline]
     pub fn upgrade(&self, root: &Root) -> Option<RootedRc<T>> {
         let internal = self.common.borrow_internal(root);
 
@@ -362,12 +369,14 @@ impl<T> RootedRcWeak<T> {
     /// Intentionally named clone to shadow Self::deref()::clone().
     ///
     /// Panics if `root` is not the associated [Root].
+    #[inline]
     pub fn clone(&self, root: &Root) -> Self {
         Self {
             common: self.common.clone(root, RefType::Weak),
         }
     }
 
+    #[inline]
     pub fn safely_drop(self, root: &Root) {
         self.common.safely_drop(root, RefType::Weak)
     }
