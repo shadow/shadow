@@ -6,6 +6,7 @@ members = [
     "lib/shadow-build-common",
     "lib/gml-parser",
     "lib/logger",
+    "lib/scoped-tls",
     "lib/shmem",
     "lib/shadow-shim-helper-rs",
     "lib/syscall-logger",

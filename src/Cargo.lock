@@ -591,7 +591,7 @@ checksum = "ff50ecb28bb86013e935fb6683ab1f6d3a20016f123c76fd4c27470076ac30f5"
 dependencies = [
  "cfg-if",
  "generator",
- "scoped-tls",
+ "scoped-tls 1.0.1",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1058,6 +1058,10 @@ dependencies = [
  "serde_derive_internals",
  "syn",
 ]
+
+[[package]]
+name = "scoped-tls"
+version = "0.1.0"
 
 [[package]]
 name = "scoped-tls"
