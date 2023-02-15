@@ -25,6 +25,7 @@ where
         drop(unsafe { Box::from_raw(val) })
     }
 
+    #[inline]
     fn key(&self) -> libc::pthread_key_t {
         let key = self.pthread_key.get();
         key.unwrap_or_else(|| {
@@ -37,6 +38,7 @@ where
         })
     }
 
+    #[inline]
     fn thread_refcell(&self) -> &'static RefCell<*const T> {
         let key = self.key();
         let ptr = unsafe { libc::pthread_getspecific(key) } as *const RefCell<*const T>;
@@ -57,7 +59,10 @@ where
 
     /// Panics if called recursively, or if `f` returns while there are still references
     /// to `val` via `Self::current`.
-    pub fn with_current_set_to(&self, val: &T, f: impl FnOnce()) {
+    pub fn with_current_set_to<F, R>(&self, val: &T, f: F)
+    where
+        F: FnOnce() -> R,
+    {
         let current = self.thread_refcell();
         // This will panic if there are live borrows.
         let prev = current.replace(val as *const _);
@@ -69,6 +74,7 @@ where
         current.replace(prev);
     }
 
+    #[inline]
     pub fn current(&self) -> Option<impl Deref<Target = T>> {
         let current = self.thread_refcell();
         // SAFETY: While the `RefCell` could get destroyed in the case of a `panic`,
