@@ -67,10 +67,22 @@ impl<T> SyncSendPointer<T> {
 
 /// A pointer to an object that is safe to dereference from any thread,
 /// *if* the Host lock for the specified host is held.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct HostTreePointer<T> {
     host_id: HostId,
     ptr: *mut T,
+}
+
+// We can't `derive` Copy and Clone without unnecessarily requiring
+// T to be Copy and Clone. https://github.com/rust-lang/rust/issues/26925
+impl<T> Copy for HostTreePointer<T> {}
+impl<T> Clone for HostTreePointer<T> {
+    fn clone(&self) -> Self {
+        Self {
+            host_id: self.host_id,
+            ptr: self.ptr,
+        }
+    }
 }
 
 unsafe impl<T> Send for HostTreePointer<T> {}
