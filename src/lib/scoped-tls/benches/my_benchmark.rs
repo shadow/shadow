@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use scoped_tls::ScopedTls;
+use scoped_tls::{ScopedTls, ScopedTlsPthread};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     // benchmark based on https://matklad.github.io/2020/10/03/fast-thread-locals-in-rust.html
@@ -21,16 +21,32 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             THREAD_LOCAL.with(|it| it.get())
         })
     });
-    static SCOPED_TLS: ScopedTls<Cell<u32>> = ScopedTls::new();
+
+    struct MyMarker(());
+    type MyScopedTls = ScopedTls<MyMarker, Cell<u32>>;
     c.bench_function("ScopedTls", |b| {
         b.iter(|| {
             let cell = Cell::new(0);
-            SCOPED_TLS.with_current_set_to(&cell, || {
+            MyScopedTls::with_current_set_to(&cell, || {
                 for step in 0..STEPS {
-                    let it = unsafe { SCOPED_TLS.current().unwrap_unchecked() };
+                    let it = unsafe { MyScopedTls::current().unwrap_unchecked() };
                     it.set(it.get().wrapping_add(black_box(step)))
                 }
-                SCOPED_TLS.current().unwrap().get()
+                MyScopedTls::current().unwrap().get();
+            })
+        })
+    });
+
+    static SCOPED_TLS_PTHREAD: ScopedTlsPthread<Cell<u32>> = ScopedTlsPthread::new();
+    c.bench_function("ScopedTlsPthread", |b| {
+        b.iter(|| {
+            let cell = Cell::new(0);
+            SCOPED_TLS_PTHREAD.with_current_set_to(&cell, || {
+                for step in 0..STEPS {
+                    let it = unsafe { SCOPED_TLS_PTHREAD.current().unwrap_unchecked() };
+                    it.set(it.get().wrapping_add(black_box(step)))
+                }
+                SCOPED_TLS_PTHREAD.current().unwrap().get()
             })
         })
     });
