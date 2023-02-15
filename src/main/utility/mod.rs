@@ -35,8 +35,18 @@ use shadow_shim_helper_rs::HostId;
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct SyncSendPointer<T>(*mut T);
+
+// We can't automatically `derive` Copy and Clone without unnecessarily
+// requiring T to be Copy and Clone.
+// https://github.com/rust-lang/rust/issues/26925
+impl<T> Copy for SyncSendPointer<T> {}
+impl<T> Clone for SyncSendPointer<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
 
 unsafe impl<T> Send for SyncSendPointer<T> {}
 unsafe impl<T> Sync for SyncSendPointer<T> {}
