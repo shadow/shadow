@@ -798,8 +798,8 @@ mod export {
     /// Returns a pointer to the current running thread. The returned pointer is
     /// invalidated the next time the worker switches threads.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentThread() -> *mut cshadow::Thread {
-        Worker::with_active_thread(|thread| unsafe { thread.cthread() }).unwrap()
+    pub extern "C" fn worker_getCurrentThread() -> *const Thread {
+        Worker::with_active_thread(|thread| thread as *const _).unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the

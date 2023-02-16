@@ -11,9 +11,10 @@
 
 typedef struct _SysCallHandler SysCallHandler;
 
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/process.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId);
 void syscallhandler_ref(SysCallHandler* sys);

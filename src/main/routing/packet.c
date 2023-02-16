@@ -119,7 +119,7 @@ Packet* packet_new(const Host* host) {
     return packet;
 }
 
-void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
+void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(thread);
@@ -516,7 +516,7 @@ ProtocolType packet_getProtocol(const Packet* packet) {
     return packet->protocol;
 }
 
-gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
+gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
                           PluginVirtualPtr buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 

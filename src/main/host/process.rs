@@ -29,6 +29,7 @@ use shadow_shmem::allocator::ShMemBlock;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
+use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility::callback_queue::CallbackQueue;
@@ -449,22 +450,6 @@ impl Process {
 
         Process::set_shared_time(host);
 
-        let argv_ptrs: Vec<*const i8> = self
-            .argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
-        let envv_ptrs: Vec<*const i8> = self
-            .envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
         let shimlog_path = CString::new(
             Self::static_output_file_name(self.name(), host, "shimlog")
                 .as_os_str()
@@ -472,23 +457,19 @@ impl Process {
         )
         .unwrap();
 
-        unsafe {
-            cshadow::thread_run(
-                main_thread.cthread(),
-                self.plugin_path.as_ptr(),
-                argv_ptrs.as_ptr(),
-                envv_ptrs.as_ptr(),
-                self.working_dir.as_ptr(),
-                match &self.strace_logging {
-                    Some(x) => x.file.borrow().as_raw_fd(),
-                    None => -1,
-                },
-                shimlog_path.as_ptr(),
-            )
-        };
+        main_thread.run(
+            host,
+            &self.plugin_path,
+            &self.argv,
+            self.envv.clone(),
+            &self.working_dir,
+            self.strace_logging
+                .as_ref()
+                .map(|s| s.file.borrow().as_raw_fd()),
+            &shimlog_path,
+        );
 
-        let native_pid =
-            Pid::from_raw(unsafe { cshadow::thread_getNativePid(main_thread.cthread()) });
+        let native_pid = main_thread.native_pid();
         self.native_pid.set(Some(native_pid));
         *self.memory_manager.borrow_mut() = Some(unsafe { MemoryManager::new(native_pid) });
 
@@ -567,8 +548,10 @@ impl Process {
             .unwrap()
             .unapplied_cpu_latency = SimulationTime::ZERO;
 
-        let cthread = unsafe { thread.cthread() };
-        unsafe { cshadow::thread_resume(cthread) };
+        let ctx = ProcessContext::new(host, self);
+        thread.resume(&ctx);
+        drop(thread);
+        threadrc.safely_drop(host.root());
 
         #[cfg(feature = "perf_timers")]
         {
@@ -586,8 +569,6 @@ impl Process {
 
         Worker::clear_active_thread();
         Worker::clear_active_process();
-        drop(thread);
-        threadrc.safely_drop(host.root());
     }
 
     pub fn stop(&self, host: &Host) {
@@ -657,7 +638,7 @@ impl Process {
         if let Some(thread) = current_thread {
             if thread.process_id() == self.id() {
                 let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-                let threadmem = unsafe { &*cshadow::thread_sharedMem(thread.cthread()) };
+                let threadmem = thread.shmem();
                 let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
                 if !threadprotmem.blocked_signals.has(signal) {
                     // Target process is this process, and current thread hasn't blocked
@@ -817,15 +798,12 @@ impl Process {
     #[track_caller]
     pub fn first_live_thread_borrow(
         &self,
-        host_root: &Root,
+        root: &Root,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
         Ref::filter_map(self.threads.borrow(), |threads| {
             let thread = threads.values().next().map(|thread| {
                 // There shouldn't be any non-running threads in the table.
-                assert!({
-                    let thread = thread.borrow(host_root);
-                    unsafe { cshadow::thread_isRunning(thread.cthread()) }
-                });
+                assert!(thread.borrow(root).is_running());
                 thread
             });
             thread
@@ -916,8 +894,7 @@ impl Process {
         // any other threads left alive in the process, perform a futex wake on
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
-        let clear_child_tid_pvp =
-            PluginPtr::from(unsafe { cshadow::thread_getTidAddress(thread.cthread()) });
+        let clear_child_tid_pvp = thread.get_tid_address();
         if !clear_child_tid_pvp.is_null()
             && self.threads.borrow().len() > 0
             && !self.is_exiting.get()
@@ -927,10 +904,10 @@ impl Process {
             // process might not have finished executing the native syscall yet.
             // TODO: Move this into the `exit` syscall handling and/or use the native
             // tidaddress mechanism to be notified when a thread has actually terminated.
-            let native_pid = unsafe { cshadow::thread_getNativePid(thread.cthread()) };
-            let native_tid = unsafe { cshadow::thread_getNativeTid(thread.cthread()) };
+            let native_pid = thread.native_pid();
+            let native_tid = thread.native_tid();
             loop {
-                match tgkill(native_pid, native_tid, 0) {
+                match tgkill(native_pid, native_tid, None) {
                     Err(Errno::ESRCH) => {
                         trace!("Thread is done exiting; proceeding with cleanup");
                         break;
@@ -1018,7 +995,7 @@ impl Process {
                 // the reference so that we don't hold a borrow over the list.
                 (*tid, thread.clone(host.root()))
             };
-            unsafe { cshadow::thread_handleProcessExit(threadrc.borrow(host.root()).cthread()) };
+            threadrc.borrow(host.root()).handle_process_exit();
             self.reap_thread(host, tid);
             threadrc.safely_drop(host.root());
         }
@@ -1146,7 +1123,7 @@ impl Process {
             let threads = self.threads.borrow();
             let thread = threads.get(&tid).unwrap();
             let thread = thread.borrow(host.root());
-            if unsafe { cshadow::thread_isRunning(thread.cthread()) } {
+            if thread.is_running() {
                 debug!(
                     "thread {} in process '{}' still running, but blocked",
                     thread.id(),
@@ -1154,7 +1131,7 @@ impl Process {
                 );
                 return;
             }
-            let return_code = unsafe { cshadow::thread_getReturnCode(thread.cthread()) };
+            let return_code = thread.return_code();
             debug!(
                 "thread {} in process '{}' exited with code {}",
                 thread.id(),
@@ -1196,6 +1173,11 @@ impl Process {
         host.shim_shmem()
             .sim_time
             .store(Worker::current_time().unwrap(), Ordering::Relaxed);
+    }
+
+    /// Shared memory for this process.
+    pub fn shmem(&self) -> &ProcessShmem {
+        &self.shim_shared_mem_block
     }
 }
 
@@ -1396,7 +1378,13 @@ impl UnsafeBorrowMut {
 // RefCell, but this whole type is temporary scaffolding to support legacy C code.
 unsafe impl Send for UnsafeBorrowMut {}
 
-fn tgkill(pid: libc::pid_t, tid: libc::pid_t, signo: i32) -> nix::Result<()> {
+fn tgkill(pid: Pid, tid: Pid, signo: Option<Signal>) -> nix::Result<()> {
+    let pid = pid.as_raw();
+    let tid = tid.as_raw();
+    let signo = match signo {
+        Some(s) => s as i32,
+        None => 0,
+    };
     let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
     Errno::result(res).map(|i: i64| {
         assert_eq!(i, 0);
@@ -1722,7 +1710,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
         addr: cshadow::PluginPtr,
         len: usize,
         prot: i32,
@@ -1731,17 +1719,12 @@ mod export {
         offset: i64,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
-            let thread = thread.borrow(h.root());
             memory_manager
-                .do_mmap(&thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
+                .do_mmap(thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
                 .into()
         })
         .unwrap()
@@ -1751,22 +1734,17 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
         addr: cshadow::PluginPtr,
         len: usize,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
-            let thread = thread.borrow(h.root());
             memory_manager
-                .handle_munmap(&thread, PluginPtr::from(addr), len)
+                .handle_munmap(thread, PluginPtr::from(addr), len)
                 .into()
         })
         .unwrap()
@@ -1775,7 +1753,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
         old_addr: cshadow::PluginPtr,
         old_size: usize,
         new_size: usize,
@@ -1783,18 +1761,13 @@ mod export {
         new_addr: cshadow::PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
-            let thread = thread.borrow(h.root());
             memory_manager
                 .handle_mremap(
-                    &thread,
+                    thread,
                     PluginPtr::from(old_addr),
                     old_size,
                     new_size,
@@ -1809,23 +1782,18 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
         addr: cshadow::PluginPtr,
         size: usize,
         prot: i32,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
-            let thread = thread.borrow(h.root());
             memory_manager
-                .handle_mprotect(&thread, PluginPtr::from(addr), size, prot)
+                .handle_mprotect(thread, PluginPtr::from(addr), size, prot)
                 .into()
         })
         .unwrap()
@@ -1835,21 +1803,16 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
         plugin_src: cshadow::PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            let thread = proc
-                .thread_borrow(
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                )
-                .unwrap();
-            let thread = thread.borrow(h.root());
             memory_manager
-                .handle_brk(&thread, PluginPtr::from(plugin_src))
+                .handle_brk(thread, PluginPtr::from(plugin_src))
                 .into()
         })
         .unwrap()
@@ -1860,20 +1823,15 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_initMapperIfNeeded(
         proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
+        thread: *const Thread,
     ) {
         let proc = unsafe { proc.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                let thread = proc
-                    .thread_borrow(
-                        ThreadId::try_from(unsafe { cshadow::thread_getID(thread) }).unwrap(),
-                    )
-                    .unwrap();
-                let thread = thread.borrow(h.root());
-                memory_manager.init_mapper(&thread)
+                memory_manager.init_mapper(thread)
             }
         })
         .unwrap()
@@ -2043,16 +2001,16 @@ mod export {
     pub unsafe extern "C" fn process_getThread(
         proc: *const ProcessRefCell,
         tid: libc::pid_t,
-    ) -> *mut cshadow::Thread {
+    ) -> *const Thread {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
             let Some(thread) = proc.thread_borrow(tid) else {
-                return std::ptr::null_mut();
+                return std::ptr::null();
             };
             let thread = thread.borrow(host.root());
-            unsafe { thread.cthread() }
+            &*thread
         })
         .unwrap()
     }
@@ -2098,24 +2056,6 @@ mod export {
         .unwrap()
     }
 
-    /// Adds a new thread to the process and schedules it to run.
-    /// Intended for use by `clone`.
-    ///
-    /// Takes ownership of `thread`.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_addThread(
-        proc: *const ProcessRefCell,
-        thread: *mut cshadow::Thread,
-    ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let thread = unsafe { Thread::new_from_c(host, thread) };
-            let proc = proc.borrow(host.root());
-            proc.add_thread(host, thread)
-        })
-        .unwrap()
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn process_continue(proc: *const ProcessRefCell, thread_id: libc::pid_t) {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -2138,35 +2078,16 @@ mod export {
     /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
     #[no_mangle]
     pub unsafe extern "C" fn process_signal(
-        proc: *const ProcessRefCell,
-        current_running_thread: *mut cshadow::Thread,
+        target_proc: *const ProcessRefCell,
+        current_running_thread: *const Thread,
         siginfo: *const libc::siginfo_t,
     ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let target_proc = unsafe { target_proc.as_ref().unwrap() };
+        let current_running_thread = unsafe { current_running_thread.as_ref() };
         let siginfo = unsafe { siginfo.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let target_proc = proc.borrow(host.root());
-            let current_procrc = if current_running_thread.is_null() {
-                None
-            } else {
-                let pid = ProcessId::try_from(unsafe {
-                    cshadow::thread_getProcessId(current_running_thread)
-                })
-                .unwrap();
-                Some(host.process_borrow(pid).unwrap())
-            };
-            let current_proc = current_procrc.as_ref().map(|p| p.borrow(host.root()));
-            let current_threadrc = current_proc.as_ref().map(|p| {
-                let tid =
-                    ThreadId::try_from(unsafe { cshadow::thread_getID(current_running_thread) })
-                        .unwrap();
-                p.thread_borrow(tid).unwrap()
-            });
-            let current_thread = current_threadrc
-                .as_ref()
-                .map(|thread| thread.borrow(host.root()));
-            let current_thread = current_thread.as_deref();
-            target_proc.signal(host, current_thread, siginfo)
+            let target_proc = target_proc.borrow(host.root());
+            target_proc.signal(host, current_running_thread, siginfo)
         })
         .unwrap()
     }

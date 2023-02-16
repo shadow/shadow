@@ -88,14 +88,14 @@ static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
     socket->vtable->close((LegacyFile*)socket, host);
 }
 
-gssize legacysocket_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
                                  gsize nBytes, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send(socket, thread, buffer, nBytes, ip, port);
 }
 
-gssize legacysocket_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
                                     gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);

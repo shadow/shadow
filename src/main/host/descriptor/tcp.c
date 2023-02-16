@@ -904,7 +904,7 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     return packet;
 }
 
-static Packet* _tcp_createDataPacket(TCP* tcp, Thread* thread, enum ProtocolTCPFlags flags,
+static Packet* _tcp_createDataPacket(TCP* tcp, const Thread* thread, enum ProtocolTCPFlags flags,
                                      PluginVirtualPtr payload, gsize payloadLength) {
     MAGIC_ASSERT(tcp);
 
@@ -2344,7 +2344,7 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_sendUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);
@@ -2414,7 +2414,7 @@ static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer d
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_receiveUserData(LegacySocket* socket, Thread* thread, PluginVirtualPtr buffer,
+static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(tcp);

@@ -766,26 +766,23 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_new(
-        thread: *mut c::Thread,
+        thread: *const Thread,
         len: usize,
     ) -> *mut AllocdMem<u8> {
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let mut objs =
-                unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
+            let mut objs = ThreadContextObjs::from_thread(host, thread);
             objs.with_ctx(|ctx| Box::into_raw(Box::new(AllocdMem::new(ctx, len))))
         })
         .unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_free(
-        thread: *mut c::Thread,
-        allocd_mem: *mut AllocdMem<u8>,
-    ) {
+    pub unsafe extern "C" fn allocdmem_free(thread: *const Thread, allocd_mem: *mut AllocdMem<u8>) {
+        let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
-            let mut objs =
-                unsafe { ThreadContextObjs::from_thread(host, notnull_mut_debug(thread)) };
+            let mut objs = ThreadContextObjs::from_thread(host, thread);
             objs.with_ctx(|ctx| {
                 allocd_mem.free(ctx);
             });

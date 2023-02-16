@@ -10,6 +10,7 @@
 #include <sys/utsname.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
@@ -19,7 +20,6 @@
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
-#include "main/host/thread.h"
 
 #ifndef O_DIRECT
 #define O_DIRECT 040000

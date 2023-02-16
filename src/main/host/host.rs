@@ -861,7 +861,7 @@ mod export {
 
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::process::ProcessRefCell,
+        host::{process::ProcessRefCell, thread::Thread},
         network::router::Router,
     };
 
@@ -1146,11 +1146,16 @@ mod export {
     /// Returns the specified thread, or NULL if it doesn't exist.
     /// If you already have the thread's Process*, `process_getThread` may be more
     /// efficient.
+    ///
+    /// # Safety
+    ///
+    /// The pointer should not be accessed from threads other than the calling thread,
+    /// or after `host` is no longer active on the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn host_getThread(
         host: *const Host,
         virtual_tid: libc::pid_t,
-    ) -> *mut cshadow::Thread {
+    ) -> *const Thread {
         let host = unsafe { host.as_ref().unwrap() };
         let tid = ThreadId::try_from(virtual_tid).unwrap();
         for process in host.processes.borrow().values() {
@@ -1167,7 +1172,7 @@ mod export {
                 // explicitly here to ensure a compilation error if the type is
                 // changed again to one that would allow mutable references.
                 let thread = thread.borrow(host.root());
-                return unsafe { thread.cthread() };
+                return &*thread as *const _;
             };
         }
         std::ptr::null_mut()

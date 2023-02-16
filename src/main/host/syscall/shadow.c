@@ -90,26 +90,14 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
     }
 }
 
-static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const SysCallArgs* args,
-                                                     ShMemBlock* block) {
-    if (!block) {
-        return syscallreturn_makeDoneErrno(ENODEV);
-    }
-
-    PluginPtr shm_blk_pptr = args->args[0].as_ptr;
-
-    ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
-        _syscallhandler_getProcess(sys), shm_blk_pptr, sizeof(*shm_blk_ptr));
-    *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
-
-    return syscallreturn_makeDoneI64(0);
-}
-
 SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
-    return _syscallhandler_get_shmem_block(
-        sys, args, thread_getShMBlock(_syscallhandler_getThread(sys)));
+    PluginPtr shm_blk_pptr = args->args[0].as_ptr;
+    ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
+        _syscallhandler_getProcess(sys), shm_blk_pptr, sizeof(*shm_blk_ptr));
+    thread_getShMBlockSerialized(_syscallhandler_getThread(sys), shm_blk_ptr);
+    return syscallreturn_makeDoneI64(0);
 }
 
 SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, const SysCallArgs* args) {

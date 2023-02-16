@@ -107,13 +107,10 @@ impl<'a> ThreadContextObjs<'a> {
         Self { host, pid, tid }
     }
 
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    pub unsafe fn from_thread(host: &'a Host, thread: *mut cshadow::Thread) -> Self {
-        let sys = unsafe { cshadow::thread_getSysCallHandler(thread) };
-        let sys = unsafe { sys.as_mut().unwrap() };
-        unsafe { Self::from_syscallhandler(host, sys) }
+    pub fn from_thread(host: &'a Host, thread: &'a Thread) -> Self {
+        let pid = thread.process_id();
+        let tid = thread.id();
+        Self { host, pid, tid }
     }
 
     pub fn with_ctx<F, R>(&mut self, f: F) -> R

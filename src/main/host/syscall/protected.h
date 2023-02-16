@@ -16,11 +16,11 @@
 #include <stdbool.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 #include "main/utility/utility.h"
 
 typedef enum {
@@ -97,6 +97,6 @@ int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType ex
 const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 const ProcessRefCell* _syscallhandler_getProcess(const SysCallHandler* sys);
 const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
-Thread* _syscallhandler_getThread(const SysCallHandler* sys);
+const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */
