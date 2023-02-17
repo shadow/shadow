@@ -56,7 +56,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "main/host/descriptor/descriptor_types.h".into(),
                 "main/host/descriptor/tcp.h".into(),
                 "main/host/futex_table.h".into(),
-                "main/host/managed_thread.h".into(),
                 "main/host/network_interface.h".into(),
                 "main/host/protocol.h".into(),
                 "main/host/status_listener.h".into(),
@@ -217,7 +216,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
         .blocklist_function("worker_freeHosts")
-        .blocklist_function("syscallhandler_make_syscall")
         .allowlist_type("ForeignPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")
@@ -231,6 +229,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
         .allowlist_type("PacketDeliveryStatusFlags")
+        .allowlist_var("AFFINITY_UNINIT")
         .allowlist_var("CONFIG_HEADER_SIZE_TCP")
         .allowlist_var("CONFIG_PIPE_BUFFER_SIZE")
         .allowlist_var("CONFIG_MTU")
@@ -373,7 +372,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
         "host/syscall_condition.c",
-        "host/managed_thread.c",
         "host/network_interface.c",
         "host/network_queuing_disciplines.c",
         "host/tracker.c",

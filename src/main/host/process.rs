@@ -1128,10 +1128,9 @@ impl Process {
             }
             let return_code = thread.return_code();
             debug!(
-                "thread {} in process '{}' exited with code {}",
+                "thread {} in process '{}' exited with code {return_code:?}",
                 thread.id(),
                 self.name(),
-                return_code
             );
         }
         self.reap_thread(host, tid);

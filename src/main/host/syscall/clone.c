@@ -35,14 +35,13 @@ SyscallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Don't propagate flags to the real syscall that we'll handle ourselves.
     unsigned long filtered_flags =
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
-    const Thread* child = NULL;
-    {
-        int res = thread_clone(_syscallhandler_getThread(sys), filtered_flags, child_stack, ptid,
-                               ctid, newtls, &child);
-        if (res < 0) {
-            return syscallreturn_makeDoneI64(res);
-        }
+    pid_t child_tid = thread_clone(_syscallhandler_getThread(sys), filtered_flags, child_stack, ptid,
+                            ctid, newtls);
+    if (child_tid < 0) {
+        return syscallreturn_makeDoneI64(child_tid);
     }
+
+    const Thread* child = process_getThread(_syscallhandler_getProcess(sys), child_tid);
     utility_debugAssert(child);
 
     unsigned long handled_flags = required_flags;

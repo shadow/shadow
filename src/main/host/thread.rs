@@ -1,7 +1,8 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 
+use nix::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -12,7 +13,9 @@ use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
 use super::context::ProcessContext;
 use super::host::Host;
+use super::managed_thread::ManagedThread;
 use super::process::{Process, ProcessId};
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, IsSend, SendPointer};
@@ -28,9 +31,11 @@ pub struct Thread {
     tid_address: Cell<ForeignPtr>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
+    // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
+    // Non-trivial because SysCallCondition is currently not `Send`.
     cond: Cell<SendPointer<c::SysCallCondition>>,
     /// The native, managed thread
-    mthread: SendPointer<c::ManagedThread>,
+    mthread: RefCell<ManagedThread>,
 }
 
 impl IsSend for Thread {}
@@ -38,42 +43,17 @@ impl IsSend for Thread {}
 impl Thread {
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall_raw(&self, n: i64, args: &[SysCallReg]) -> libc::c_long {
-        // We considered using an iterator here rather than having to pass an index everywhere
-        // below; we avoided it because argument evaluation order is currently a bit of a murky
-        // issue, even though it'll *probably* always be left-to-right.
-        // https://internals.rust-lang.org/t/rust-expression-order-of-evaluation/2605/16
-        let arg = |i| args[i];
-        let mthread = self.mthread.ptr();
-
-        unsafe {
-            match args.len() {
-                0 => c::managedthread_nativeSyscall(mthread, n),
-                1 => c::managedthread_nativeSyscall(mthread, n, arg(0)),
-                2 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1)),
-                3 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1), arg(2)),
-                4 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1), arg(2), arg(3)),
-                5 => c::managedthread_nativeSyscall(
-                    mthread,
-                    n,
-                    arg(0),
-                    arg(1),
-                    arg(2),
-                    arg(3),
-                    arg(4),
-                ),
-                6 => c::managedthread_nativeSyscall(
-                    mthread,
-                    n,
-                    arg(0),
-                    arg(1),
-                    arg(2),
-                    arg(3),
-                    arg(4),
-                    arg(5),
-                ),
-                x => panic!("Bad number of syscall args {}", x),
-            }
-        }
+        // FIXME: pass Host and Process explicitly.
+        Worker::with_active_host(|host| {
+            Worker::with_active_process(|process| {
+                self.mthread
+                    .borrow_mut()
+                    .native_syscall(host, process, n, args)
+                    .into()
+            })
+            .unwrap()
+        })
+        .unwrap()
     }
 
     /// Have the plugin thread natively execute the given syscall.
@@ -90,13 +70,11 @@ impl Thread {
     }
 
     pub fn native_pid(&self) -> Pid {
-        // Safety: Initialized in Self::new
-        Pid::from_raw(unsafe { c::managedthread_getNativePid(self.mthread.ptr()) })
+        self.mthread.borrow().native_pid()
     }
 
     pub fn native_tid(&self) -> Pid {
-        // Safety: Initialized in Self::new
-        Pid::from_raw(unsafe { c::managedthread_getNativeTid(self.mthread.ptr()) })
+        self.mthread.borrow().native_tid()
     }
 
     pub fn csyscallhandler(&self) -> *mut c::SysCallHandler {
@@ -137,7 +115,7 @@ impl Thread {
         }
     }
 
-    fn cleanup_syscall_condition(&self) {
+    pub fn cleanup_syscall_condition(&self) {
         if let Some(c) = unsafe {
             self.cond
                 .replace(SendPointer::new(std::ptr::null_mut()))
@@ -267,13 +245,7 @@ impl Thread {
         thread_id: ThreadId,
     ) -> RootedRc<RootedRefCell<Self>> {
         let thread = Self {
-            mthread: unsafe {
-                SendPointer::new(c::managedthread_new(
-                    host.id(),
-                    process.id().into(),
-                    thread_id.into(),
-                ))
-            },
+            mthread: RefCell::new(ManagedThread::new(host.id(), process.id(), thread_id)),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
                     host.id(),
@@ -295,6 +267,51 @@ impl Thread {
         RootedRc::new(root, RootedRefCell::new(root, thread))
     }
 
+    pub fn handle_clone_syscall(
+        &self,
+        host: &Host,
+        process: &Process,
+        flags: libc::c_ulong,
+        child_stack: ForeignPtr,
+        ptid: ForeignPtr,
+        ctid: ForeignPtr,
+        newtls: libc::c_ulong,
+    ) -> Result<ThreadId, Errno> {
+        let child_tid = ThreadId::from(host.get_new_process_id());
+        let child_mthread = self.mthread.borrow_mut().handle_clone_syscall(
+            host,
+            process,
+            child_tid,
+            flags,
+            child_stack,
+            ptid,
+            ctid,
+            newtls,
+        );
+        let child = Self {
+            mthread: RefCell::new(child_mthread),
+            syscallhandler: unsafe {
+                SendPointer::new(c::syscallhandler_new(
+                    host.id(),
+                    process.id().into(),
+                    child_tid.into(),
+                ))
+            },
+            cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
+            id: child_tid,
+            host_id: host.id(),
+            process_id: process.id(),
+            tid_address: Cell::new(ForeignPtr::null()),
+            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
+                &host.shim_shmem_lock_borrow().unwrap(),
+                child_tid.into(),
+            )),
+        };
+        let childrc = RootedRc::new(host.root(), RootedRefCell::new(host.root(), child));
+        process.add_thread(host, childrc);
+        Ok(child_tid)
+    }
+
     /// Shared memory for this thread.
     pub fn shmem(&self) -> &ThreadShmem {
         &self.shim_shared_memory
@@ -302,7 +319,7 @@ impl Thread {
 
     pub fn run(
         &self,
-        _host: &Host,
+        host: &Host,
         plugin_path: &CStr,
         argv: &[CString],
         mut envv: Vec<CString>,
@@ -318,31 +335,16 @@ impl Thread {
             .unwrap(),
         );
 
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
-        unsafe {
-            c::managedthread_run(
-                self.mthread.ptr(),
-                plugin_path.as_ptr(),
-                argv_ptrs.as_ptr(),
-                envv_ptrs.as_ptr(),
-                working_dir.as_ptr(),
-                strace_fd.unwrap_or(-1),
-                log_path.as_ptr(),
-            )
-        };
+        self.mthread.borrow_mut().run(
+            host,
+            plugin_path,
+            // FIXME: take a Vec
+            Vec::from(argv),
+            envv,
+            working_dir,
+            strace_fd,
+            log_path,
+        );
     }
 
     pub fn resume(&self, process_ctx: &ProcessContext) {
@@ -352,7 +354,10 @@ impl Thread {
             unsafe { c::syscallcondition_cancel(c) };
         }
 
-        let cond = unsafe { c::managedthread_resume(self.mthread.ptr()) };
+        let cond = self
+            .mthread
+            .borrow_mut()
+            .resume(self, process_ctx.process, process_ctx.host);
 
         // Now we're done with old condition.
         if let Some(c) = unsafe {
@@ -365,6 +370,7 @@ impl Thread {
         }
 
         // Wait on new condition.
+        let cond = cond.map(|c| c.into_inner()).unwrap_or(std::ptr::null_mut());
         self.cond.set(unsafe { SendPointer::new(cond) });
         if let Some(cond) = unsafe { cond.as_mut() } {
             unsafe {
@@ -380,15 +386,15 @@ impl Thread {
 
     pub fn handle_process_exit(&self) {
         self.cleanup_syscall_condition();
-        unsafe { c::managedthread_handleProcessExit(self.mthread.ptr()) };
+        self.mthread.borrow_mut().handle_process_exit();
     }
 
-    pub fn return_code(&self) -> i32 {
-        unsafe { c::managedthread_getReturnCode(self.mthread.ptr()) }
+    pub fn return_code(&self) -> Option<i32> {
+        self.mthread.borrow().return_code()
     }
 
     pub fn is_running(&self) -> bool {
-        unsafe { c::managedthread_isRunning(self.mthread.ptr()) }
+        self.mthread.borrow().is_running()
     }
 
     pub fn get_tid_address(&self) -> ForeignPtr {
@@ -430,7 +436,6 @@ impl Drop for Thread {
             unsafe { c::syscallcondition_cancel(c) };
             unsafe { c::syscallcondition_unref(c) };
         }
-        unsafe { c::managedthread_free(self.mthread.ptr()) };
         unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
     }
 }
@@ -509,10 +514,8 @@ mod export {
         thread.id().into()
     }
 
-    /// Create a new child thread as for `clone(2)`. Returns 0 on success, or a
-    /// negative errno on failure.  On success, `child` will be set to a newly
-    /// allocated and initialized child Thread, which will have already be added
-    /// to the Process.
+    /// Create a new child thread as for `clone(2)`. Returns the new thread id
+    /// on success, or a negative errno on failure.
     #[no_mangle]
     pub unsafe extern "C" fn thread_clone(
         thread: *const Thread,
@@ -521,37 +524,14 @@ mod export {
         ptid: ForeignPtr,
         ctid: ForeignPtr,
         newtls: libc::c_ulong,
-        child: *mut *const Thread,
-    ) -> i32 {
+    ) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
-                let childrc = Thread::new(host, process, host.get_new_process_id().into());
-                let rv = {
-                    let child = childrc.borrow(host.root());
-                    unsafe {
-                        c::managedthread_clone(
-                            child.mthread.ptr(),
-                            thread.mthread.ptr(),
-                            flags,
-                            child_stack,
-                            ptid,
-                            ctid,
-                            newtls,
-                        )
-                    }
-                };
-                if rv != 0 {
-                    childrc.safely_drop(host.root());
-                    return rv;
-                }
-                {
-                    let child_ref = childrc.borrow(host.root());
-                    let child_ref: &Thread = &child_ref;
-                    unsafe { child.replace(child_ref as *const _) };
-                }
-                process.add_thread(host, childrc);
-                rv
+                thread
+                    .handle_clone_syscall(host, process, flags, child_stack, ptid, ctid, newtls)
+                    .map(libc::pid_t::from)
+                    .unwrap_or_else(|e| -(e as i32))
             })
             .unwrap()
         })

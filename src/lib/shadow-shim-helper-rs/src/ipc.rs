@@ -18,7 +18,7 @@ use crate::shim_event::ShimEvent;
 // channels still won't end up on the same cache line. It could be
 // measurement error or randomness, but keeping it for now since it
 // shouldn't hurt anything.
-#[repr(align(128))]
+//FIXME #[repr(align(128))]
 pub struct IPCData {
     shadow_to_plugin: SelfContainedChannel<ShimEvent>,
     plugin_to_shadow: SelfContainedChannel<ShimEvent>,
