@@ -27,7 +27,6 @@ use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
-use shadow_shmem::scmutex::SelfContainedMutexGuard;
 use shadow_tsc::Tsc;
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::collections::BTreeMap;
@@ -38,6 +37,7 @@ use std::ops::{Deref, DerefMut};
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use vasi_sync::scmutex::SelfContainedMutexGuard;
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;

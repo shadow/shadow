@@ -12,4 +12,5 @@ members = [
     "lib/tsc",
     "lib/vasi",
     "lib/vasi-macro",
+    "lib/vasi-sync",
 ]

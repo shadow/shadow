@@ -1,0 +1,19 @@
+[package]
+name = "vasi-sync"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libc = "0.2"
+nix = "0.26.1"
+rkyv = "0.7.39"
+static_assertions = "1.1.0"
+vasi = { path = "../vasi" }
+
+[dev-dependencies]
+rand = "0.8.5"
+
+[target.'cfg(loom)'.dependencies]
+loom = "0.5"
