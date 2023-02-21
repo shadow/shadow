@@ -42,22 +42,6 @@ sudo apt-get install -y \
 
 # rustup: https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# optional python modules
-sudo apt-get install -y \
-    python3-numpy \
-    python3-lxml \
-    python3-matplotlib \
-    python3-networkx \
-    python3-scipy \
-    python3-yaml
-
-# optional tools
-sudo apt-get install -y \
-    dstat \
-    git \
-    htop \
-    tmux
 ```
 
 On older versions of Debian or Ubuntu, the default version of libclang is too
@@ -93,20 +77,4 @@ sudo dnf install -y \
 
 # rustup: https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# optional python modules
-sudo dnf install -y \
-    python3-numpy \
-    python3-lxml \
-    python3-matplotlib \
-    python3-networkx \
-    python3-scipy \
-    python3-yaml
-
-# optional tools
-sudo dnf install -y \
-    dstat \
-    git \
-    htop \
-    tmux
 ```
