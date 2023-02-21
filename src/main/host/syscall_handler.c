@@ -44,7 +44,6 @@
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_numbers.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
 // Not defined in some older libc's.
@@ -73,8 +72,8 @@ const char* _syscallhandler_getProcessName(const SysCallHandler* sys) {
     return process_getPluginName(process);
 }
 
-Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
-    Thread* thread = worker_getCurrentThread();
+const Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
+    const Thread* thread = worker_getCurrentThread();
     utility_debugAssert(thread_getID(thread) == sys->threadId);
     return thread;
 }
@@ -286,7 +285,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
     const Host* host = _syscallhandler_getHost(sys);
     const ProcessRefCell* process = _syscallhandler_getProcess(sys);
-    Thread* thread = _syscallhandler_getThread(sys);
+    const Thread* thread = _syscallhandler_getThread(sys);
 
     SysCallReturn scr;
 
@@ -425,7 +424,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
             HANDLE_RUST(sched_yield);
-            HANDLE_C(shadow_get_ipc_blk);
             HANDLE_C(shadow_get_shm_blk);
             HANDLE_C(shadow_hostname_to_addr_ipv4);
             HANDLE_C(shadow_init_memory_manager);

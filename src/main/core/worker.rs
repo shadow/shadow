@@ -71,7 +71,7 @@ pub struct Worker {
     // ShadowLogger.
     active_host: RefCell<Option<Box<Host>>>,
     active_process: RefCell<Option<RootedRc<RootedRefCell<Process>>>>,
-    active_thread: RefCell<Option<RootedRc<Thread>>>,
+    active_thread: RefCell<Option<RootedRc<RootedRefCell<Thread>>>>,
 
     clock: RefCell<Clock>,
 
@@ -163,8 +163,16 @@ impl Worker {
         F: FnOnce(&Thread) -> R,
     {
         Worker::with(|w| {
+            let host = w.active_host.borrow();
+            let Some(host) = host.as_ref() else {
+                return None;
+            };
             let thread = w.active_thread.borrow();
-            thread.as_ref().map(|t| f(t))
+            let Some(thread) = thread.as_ref() else {
+                return None;
+            };
+            let thread = thread.borrow(host.root());
+            Some(f(&thread))
         })
         .flatten()
     }
@@ -263,11 +271,11 @@ impl Worker {
     }
 
     pub fn active_thread_id() -> Option<ThreadId> {
-        Worker::with(|w| w.active_thread.borrow().as_ref().map(|t| t.id())).flatten()
+        Worker::with_active_thread(|thread| thread.id())
     }
 
     pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
-        Worker::with(|w| w.active_thread.borrow().as_ref().map(|t| t.native_tid())).flatten()
+        Worker::with_active_thread(|thread| thread.native_tid())
     }
 
     pub fn set_round_end_time(t: EmulatedTime) {
@@ -790,8 +798,8 @@ mod export {
     /// Returns a pointer to the current running thread. The returned pointer is
     /// invalidated the next time the worker switches threads.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentThread() -> *mut cshadow::Thread {
-        Worker::with_active_thread(|thread| unsafe { thread.cthread() }).unwrap()
+    pub extern "C" fn worker_getCurrentThread() -> *const Thread {
+        Worker::with_active_thread(|thread| thread as *const _).unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the

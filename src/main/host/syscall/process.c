@@ -12,7 +12,6 @@
 #include "main/bindings/c/bindings.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/thread.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

@@ -861,7 +861,7 @@ mod export {
 
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::process::ProcessRefCell,
+        host::{process::ProcessRefCell, thread::Thread},
         network::router::Router,
     };
 
@@ -1146,17 +1146,33 @@ mod export {
     /// Returns the specified thread, or NULL if it doesn't exist.
     /// If you already have the thread's Process*, `process_getThread` may be more
     /// efficient.
+    ///
+    /// # Safety
+    ///
+    /// The pointer should not be accessed from threads other than the calling thread,
+    /// or after `host` is no longer active on the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn host_getThread(
         host: *const Host,
         virtual_tid: libc::pid_t,
-    ) -> *mut cshadow::Thread {
+    ) -> *const Thread {
         let host = unsafe { host.as_ref().unwrap() };
         let tid = ThreadId::try_from(virtual_tid).unwrap();
         for process in host.processes.borrow().values() {
             let process = process.borrow(host.root());
             if let Some(thread) = process.thread_borrow(tid) {
-                return unsafe { thread.cthread() };
+                // We're returning a pointer to the Thread itself after having
+                // dropped the borrow. In addition to the requirements noted for the calling code,
+                // this could cause soundness issues if we were to ever take mutable borrows of
+                // the RootedRefCell, since it'd be difficult to ensure we didn't have any simultaneous
+                // additional references from dereferencing a C pointer.
+                //
+                // TODO: Add a variant of RootedRefCell that doesn't allow
+                // mutable borrows, use it for Thread, and name that type
+                // explicitly here to ensure a compilation error if the type is
+                // changed again to one that would allow mutable references.
+                let thread = thread.borrow(host.root());
+                return &*thread as *const _;
             };
         }
         std::ptr::null_mut()

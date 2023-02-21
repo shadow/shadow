@@ -12,9 +12,9 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "PluginPhysicalPtr".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
+            "SysCallCondition".into(),
             "Packet".into(),
             "Process".into(),
-            "Thread".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
             "NetworkInterface".into(),
@@ -34,18 +34,19 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             includes: vec![
                 "lib/logger/log_level.h".into(),
                 "lib/shadow-shim-helper-rs/shim_helper.h".into(),
+                "lib/shmem/shmem_allocator.h".into(),
                 "lib/tsc/tsc.h".into(),
                 "main/bindings/c/bindings-opaque.h".into(),
                 "main/core/worker.h".into(),
                 "main/host/descriptor/descriptor_types.h".into(),
                 "main/host/descriptor/tcp.h".into(),
                 "main/host/futex_table.h".into(),
+                "main/host/managed_thread.h".into(),
                 "main/host/network_interface.h".into(),
                 "main/host/protocol.h".into(),
                 "main/host/status_listener.h".into(),
                 "main/host/syscall_handler.h".into(),
                 "main/host/syscall_types.h".into(),
-                "main/host/thread.h".into(),
                 "main/host/tracker_types.h".into(),
                 "main/routing/dns.h".into(),
                 "main/routing/packet.minimal.h".into(),
@@ -55,6 +56,13 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "netinet/in.h".into(),
                 "arpa/inet.h".into(),
             ],
+            after_includes: {
+                let mut v = base_config.after_includes.clone().unwrap();
+                // We have to manually create the vararg declaration.
+                // See crate::main::host::thread::export::thread_nativeSyscall.
+                v.push_str("long thread_nativeSyscall(const Thread* thread, long n, ...);\n");
+                Some(v)
+            },
             export: cbindgen::ExportConfig {
                 // Generate all item types, excluding enum types.
                 //
@@ -121,7 +129,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/unistd.h")
         .header("host/syscall_condition.h")
         .header("host/syscall_types.h")
-        .header("host/thread.h")
         .header("host/tracker.h")
         .header("routing/packet.h")
         .header("utility/rpath.h")
@@ -140,7 +147,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("_?ShimProcessSharedMem")
         .blocklist_type("ShimShmem.*")
         .allowlist_function("affinity_.*")
-        .allowlist_function("thread_.*")
+        .allowlist_function("managedthread_.*")
         .allowlist_function("tcp_.*")
         .allowlist_function("tcpcong_.*")
         .allowlist_function("legacyfile_.*")
@@ -179,9 +186,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
         .blocklist_function("worker_freeHosts")
-        .blocklist_function("syscallhandler_new")
-        .blocklist_function("syscallhandler_ref")
-        .blocklist_function("syscallhandler_unref")
         .blocklist_function("syscallhandler_make_syscall")
         .allowlist_function("return_code_for_signal")
         .allowlist_type("PluginPtr")
@@ -244,6 +248,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
+        .raw_line("use crate::host::thread::Thread;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
@@ -322,7 +327,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/timerfd.c",
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
-        "host/thread.c",
         "host/syscall_condition.c",
         "host/managed_thread.c",
         "host/network_interface.c",

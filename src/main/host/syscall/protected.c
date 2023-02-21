@@ -17,7 +17,6 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/syscall_condition.h"
-#include "main/host/thread.h"
 
 CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);

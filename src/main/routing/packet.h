@@ -12,10 +12,10 @@
 
 #include "main/routing/packet.minimal.h"
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/core/support/definitions.h"
 #include "main/host/protocol.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
 struct _PacketTCPHeader {
@@ -42,7 +42,7 @@ struct _PacketTCPHeader {
 const gchar* protocol_toString(ProtocolType type);
 
 Packet* packet_new(const Host* host);
-void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
+void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength);
 Packet* packet_copy(Packet* packet);
 
@@ -91,7 +91,7 @@ in_port_t packet_getSourcePort(const Packet* packet);
 
 ProtocolType packet_getProtocol(const Packet* packet);
 
-gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
+gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
                           PluginVirtualPtr buffer, gsize bufferLength);
 guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                gsize bufferLength);

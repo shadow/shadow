@@ -9,11 +9,11 @@
 #include <stddef.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/worker.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_condition.h"
-#include "main/host/thread.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

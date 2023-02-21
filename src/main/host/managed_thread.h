@@ -1,9 +1,10 @@
 #ifndef SRC_MAIN_HOST_SHD_MANAGED_THREAD_H
 #define SRC_MAIN_HOST_SHD_MANAGED_THREAD_H
 
+#include "lib/shmem/shmem_allocator.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 
 typedef struct _ManagedThread ManagedThread;
 
@@ -17,7 +18,7 @@ void managedthread_handleProcessExit(ManagedThread* mthread);
 int managedthread_getReturnCode(ManagedThread* mthread);
 bool managedthread_isRunning(ManagedThread* mthread);
 ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread);
-long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args);
+long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...);
 // Execute a clone syscall in `parent`, and initialize `child` to manage the new
 // native thread.  Returns 0 on success or a negative errno on failure.
 int managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned long flags,

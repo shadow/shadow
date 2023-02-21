@@ -6,12 +6,12 @@
 #ifndef SRC_MAIN_HOST_SYSCALL_CONDITION_H_
 #define SRC_MAIN_HOST_SYSCALL_CONDITION_H_
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/futex.h"
 #include "main/host/process.h"
 #include "main/host/status.h"
 #include "main/host/syscall_types.h"
-#include "main/host/thread.h"
 
 /* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;
@@ -68,7 +68,7 @@ void syscallcondition_unref(SysCallCondition* cond);
  * this call, the condition object will begin listening on the status of
  * the timeout and descriptor given in new(). */
 void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host,
-                                   const ProcessRefCell* proc, Thread* thread);
+                                   const ProcessRefCell* proc, const Thread* thread);
 
 /* Deactivate the condition by deregistering any open listeners and
  * clearing any references to the process an thread given in wait(). */

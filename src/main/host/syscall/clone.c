@@ -9,9 +9,9 @@
 #include <stdlib.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/worker.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/thread.h"
 #include "main/utility/utility.h"
 
 SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
@@ -35,7 +35,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Don't propagate flags to the real syscall that we'll handle ourselves.
     unsigned long filtered_flags =
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
-    Thread* child = NULL;
+    const Thread* child = NULL;
     {
         int res = thread_clone(_syscallhandler_getThread(sys), filtered_flags, child_stack, ptid,
                                ctid, newtls, &child);
@@ -72,11 +72,6 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     if (unhandled_flags) {
         warning("Unhandled clone flags 0x%lx", unhandled_flags);
     }
-
-    // Adds thread to the parent process and schedules it to run. Notably we
-    // *don't* want to start running it now, since we're still running the
-    // calling thread.
-    process_addThread(_syscallhandler_getProcess(sys), child);
 
     return syscallreturn_makeDoneI64(thread_getID(child));
 }

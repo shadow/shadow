@@ -557,7 +557,7 @@ impl MemoryMapper {
             // sense to eventually move the mechanics of opening the child fd into here (in which
             // case we'll already have it) than to pipe the string through this API.
             Some(MappingPath::Path(
-                std::fs::read_link(format!("/proc/{}/fd/{}", thread.system_pid(), fd))
+                std::fs::read_link(format!("/proc/{}/fd/{}", thread.native_pid(), fd))
                     .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
             ))
         };

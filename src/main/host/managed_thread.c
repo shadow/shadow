@@ -56,8 +56,8 @@ typedef struct _ShMemWriteBlock {
     size_t n;
 } ShMemWriteBlock;
 
-static Thread* _mthread_getThread(const ManagedThread* t) {
-    Thread* thread = worker_getCurrentThread();
+static const Thread* _mthread_getThread(const ManagedThread* t) {
+    const Thread* thread = worker_getCurrentThread();
     utility_debugAssert(thread_getID(thread) == t->threadId);
     return thread;
 }
@@ -311,7 +311,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     utility_debugAssert(mthread->isRunning);
     utility_debugAssert(mthread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
-    Thread* thread = _mthread_getThread(mthread);
+    const Thread* thread = _mthread_getThread(mthread);
     const ProcessRefCell* process = _mthread_getProcess(mthread);
 
     _managedthread_syncAffinityWithWorker(mthread);
@@ -490,7 +490,7 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     return 0;
 }
 
-long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
+long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...) {
     ShimEvent req = {
         .event_id = SHD_SHIM_EVENT_SYSCALL,
         .event_data.syscall.syscall_args.number = n,
@@ -499,9 +499,13 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, va_list args) {
     // ABI supports at most 6 arguments, and processing more arguments here than
     // were actually passed doesn't hurt anything. e.g. this is what libc's
     // syscall(2) function does as well.
+    va_list(args);
+    va_start(args, n);
     for (int i = 0; i < 6; ++i) {
         req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
     }
+    va_end(args);
+
     _managedthread_continuePlugin(mthread, &req);
 
     ShimEvent res;

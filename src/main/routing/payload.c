@@ -22,7 +22,7 @@ struct _Payload {
     MAGIC_DECLARE;
 };
 
-Payload* payload_new(Thread* thread, PluginVirtualPtr data, gsize dataLength) {
+Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLength) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
 
@@ -96,7 +96,7 @@ gsize payload_getLength(Payload* payload) {
     return length;
 }
 
-gssize payload_getData(Payload* payload, Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
+gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
                        gsize destBufferLength) {
     MAGIC_ASSERT(payload);
 
