@@ -1,215 +1,14 @@
+use crate::sync;
 use rkyv::{Archive, Serialize};
 use std::{marker::PhantomData, ops::Deref, pin::Pin};
 use vasi::VirtualAddressSpaceIndependent;
 
-// When running under the loom model checker, use its sync primitives.
-// See https://docs.rs/loom/latest/loom/
-mod sync {
-    // Use std sync primitives, or loom equivalents
-    #[cfg(loom)]
-    pub use loom::{
-        sync::atomic,
-        sync::atomic::{AtomicI32, AtomicU32, Ordering},
-        sync::Arc,
-    };
-    #[cfg(not(loom))]
-    pub use std::{
-        sync::atomic,
-        sync::atomic::{AtomicI32, AtomicU32, Ordering},
-        sync::Arc,
-    };
-
-    // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
-    // processes, or into different virtual addresses in the same process, etc.
-    #[cfg(loom)]
-    use loom::sync::{Condvar, Mutex};
-    #[cfg(loom)]
-    use std::collections::HashMap;
-    #[cfg(loom)]
-    loom::lazy_static! {
-        pub static ref FUTEXES: Mutex<HashMap<usize, Arc<Condvar>>> = Mutex::new(HashMap::new());
-    }
-
-    #[cfg(not(loom))]
-    // We use pub(super) here and below because these function signatures use
-    // types private to `super`.
-    pub(super) unsafe fn futex_wait(
-        futex_word: &super::AtomicFutexWord,
-        val: super::FutexWord,
-    ) -> nix::Result<i64> {
-        nix::errno::Errno::result(unsafe {
-            libc::syscall(
-                libc::SYS_futex,
-                futex_word.as_u32_ptr(),
-                libc::FUTEX_WAIT,
-                u32::from(val),
-                std::ptr::null() as *const libc::timespec,
-                std::ptr::null_mut() as *mut u32,
-                0u32,
-            )
-        })
-    }
-    #[cfg(loom)]
-    pub(super) unsafe fn futex_wait(
-        futex_word: &super::AtomicFutexWord,
-        val: super::FutexWord,
-    ) -> nix::Result<i64> {
-        // From futex(2):
-        //   This load, the comparison with the expected value, and starting to
-        //   sleep are performed atomically and totally ordered with
-        //   respect to other futex operations on the same futex word.
-        //
-        // We hold a lock on our FUTEXES to represent this.
-        // TODO: If we want to run loom tests with multiple interacting locks,
-        // we should have per-futex mutexes here, and not hold a lock over the
-        // whole list the whole time.
-        let mut hashmap = FUTEXES.lock().unwrap();
-        let futex_word_val = futex_word.load(Ordering::Relaxed);
-        if futex_word_val != val {
-            return Err(nix::errno::Errno::EAGAIN);
-        }
-        let condvar = hashmap
-            .entry(futex_word as *const _ as usize)
-            .or_insert(Arc::new(Condvar::new()))
-            .clone();
-        // We could get a spurious wakeup here, but that's ok.
-        // Futexes are subject to spurious wakeups too.
-        condvar.wait(hashmap).unwrap();
-        Ok(0)
-    }
-
-    #[cfg(not(loom))]
-    pub(super) unsafe fn futex_wake(futex_word: &super::AtomicFutexWord) -> nix::Result<()> {
-        // The kernel just checks for equality of the value at this pointer.
-        // Just validate that it's the right size and alignment.
-        assert_eq!(
-            std::mem::size_of::<super::AtomicFutexWord>(),
-            std::mem::size_of::<u32>()
-        );
-        assert_eq!(
-            std::mem::align_of::<super::AtomicFutexWord>(),
-            std::mem::align_of::<u32>()
-        );
-        let futex_word: *const u32 = futex_word as *const _ as *const u32;
-
-        nix::errno::Errno::result(unsafe {
-            libc::syscall(
-                libc::SYS_futex,
-                futex_word,
-                libc::FUTEX_WAKE,
-                1,
-                std::ptr::null() as *const libc::timespec,
-                std::ptr::null_mut() as *mut u32,
-                0u32,
-            )
-        })?;
-        Ok(())
-    }
-    #[cfg(loom)]
-    pub(super) unsafe fn futex_wake(futex_word: &super::AtomicFutexWord) -> nix::Result<()> {
-        let hashmap = FUTEXES.lock().unwrap();
-        let Some(condvar) = hashmap.get(&(futex_word as *const _ as usize)) else {
-            return Ok(());
-        };
-        condvar.notify_one();
-        Ok(())
-    }
-
-    #[cfg(not(loom))]
-    pub struct MutPtr<T: ?Sized>(*mut T);
-    #[cfg(not(loom))]
-    impl<T: ?Sized> MutPtr<T> {
-        /// SAFETY: See [`loom::cell::MutPtr::deref`].
-        #[allow(clippy::mut_from_ref)]
-        pub unsafe fn deref(&self) -> &mut T {
-            unsafe { &mut *self.0 }
-        }
-
-        pub fn with<F, R>(&self, f: F) -> R
-        where
-            F: FnOnce(*mut T) -> R,
-        {
-            f(self.0)
-        }
-    }
-    // We have to wrap loom's MutPtr as well, since it's otherwise !Send.
-    // https://github.com/tokio-rs/loom/issues/294
-    #[cfg(loom)]
-    pub struct MutPtr<T: ?Sized>(loom::cell::MutPtr<T>);
-    #[cfg(loom)]
-    impl<T: ?Sized> MutPtr<T> {
-        #[allow(clippy::mut_from_ref)]
-        pub unsafe fn deref(&self) -> &mut T {
-            unsafe { self.0.deref() }
-        }
-
-        pub fn with<F, R>(&self, f: F) -> R
-        where
-            F: FnOnce(*mut T) -> R,
-        {
-            self.0.with(f)
-        }
-    }
-
-    unsafe impl<T: ?Sized> Send for MutPtr<T> where T: Send {}
-
-    // From https://docs.rs/loom/latest/loom/#handling-loom-api-differences
-    #[cfg(not(loom))]
-    #[derive(Debug)]
-    #[repr(transparent)]
-    pub struct UnsafeCell<T>(std::cell::UnsafeCell<T>);
-    #[cfg(not(loom))]
-    impl<T> UnsafeCell<T> {
-        pub fn new(data: T) -> UnsafeCell<T> {
-            UnsafeCell(std::cell::UnsafeCell::new(data))
-        }
-
-        pub fn get_mut(&self) -> MutPtr<T> {
-            MutPtr(self.0.get())
-        }
-    }
-    #[cfg(loom)]
-    #[derive(Debug)]
-    pub struct UnsafeCell<T>(loom::cell::UnsafeCell<T>);
-    #[cfg(loom)]
-    impl<T> UnsafeCell<T> {
-        pub fn new(data: T) -> UnsafeCell<T> {
-            UnsafeCell(loom::cell::UnsafeCell::new(data))
-        }
-
-        pub fn get_mut(&self) -> MutPtr<T> {
-            MutPtr(self.0.get_mut())
-        }
-    }
-}
-
-#[cfg(loom)]
-// Lets us clear global state in between loom iterations, in loom tests.
-pub fn loom_reset() {
-    sync::FUTEXES.lock().unwrap().clear();
-}
-
-/// An atomic [`FutexWord`].
-/// We could be a little more efficient using an AtomicU64 here,
-/// and accessing the two halves at &AtomicU32, but this doesn't work under loom.
-/// See https://github.com/tokio-rs/loom/issues/295
 #[repr(transparent)]
 struct AtomicFutexWord(sync::atomic::AtomicU32);
 
 impl AtomicFutexWord {
     pub fn new(val: FutexWord) -> Self {
         Self(sync::atomic::AtomicU32::new(val.into()))
-    }
-
-    /// Used in our futex wrapper for compatibility with the futex syscall.
-    #[cfg(not(loom))]
-    pub fn as_u32_ptr(&self) -> *const u32 {
-        // Must be same shape as a u32 for compatibility with the Linux futex API.
-        #[cfg(not(loom))]
-        static_assertions::assert_eq_size!(AtomicFutexWord, u32);
-        #[cfg(not(loom))]
-        static_assertions::assert_eq_align!(AtomicFutexWord, u32);
-        self as *const _ as *const u32
     }
 
     pub fn inc_sleepers_and_fetch(&self, ord: sync::atomic::Ordering) -> FutexWord {
@@ -401,7 +200,7 @@ impl<T> SelfContainedMutex<T> {
                 if current.lock_state == UNLOCKED {
                     break;
                 }
-                match unsafe { sync::futex_wait(&self.futex, current) } {
+                match sync::futex_wait(&self.futex.0, current.into()) {
                     Ok(_) | Err(nix::errno::Errno::EINTR) => break,
                     Err(nix::errno::Errno::EAGAIN) => {
                         // We may have gotten this because another thread is
@@ -443,7 +242,7 @@ impl<T> SelfContainedMutex<T> {
         // Only perform a FUTEX_WAKE operation if other threads are actually
         // sleeping on the lock.
         if current.num_sleepers > 0 {
-            unsafe { sync::futex_wake(&self.futex).unwrap() };
+            sync::futex_wake(&self.futex.0).unwrap();
         }
     }
 }

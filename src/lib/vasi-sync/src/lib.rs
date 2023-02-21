@@ -14,7 +14,7 @@
 //! [loom] documentation for full details, but a basic way to run these under
 //! loom, from the shadow source directory is:
 //!
-//! ```
+//! ```shell
 //! LOOM_MAX_PREEMPTIONS=3 \
 //! RUSTFLAGS="--cfg loom" \
 //! cargo test \
@@ -36,3 +36,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod scmutex;
+
+/// This is public primarily for the integration tests in `tests/*`, which is the
+/// recommended way of writing loom tests. Not actually intended for usage by
+/// other crates.
+pub mod sync;

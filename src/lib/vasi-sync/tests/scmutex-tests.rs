@@ -13,7 +13,7 @@ mod sync {
     {
         loom::model(move || {
             f();
-            vasi_sync::scmutex::loom_reset();
+            vasi_sync::sync::loom_reset();
         });
     }
     #[cfg(not(loom))]
