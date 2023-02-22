@@ -72,15 +72,26 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
 #[cfg(not(loom))]
 pub fn futex_wake(futex_word: &AtomicU32) -> nix::Result<()> {
     // The kernel just checks for equality of the value at `futex_word`,
-    // which it interprets as `* const u32`. This is safe since `AtomicU32`
-    // is guaranteed to be the same size and alignment as `u32`.
-    static_assertions::assert_eq_size!(AtomicU32, u32);
-    static_assertions::assert_eq_align!(AtomicU32, u32);
+    // which it interprets as `* const u32`.
+    //
+    // This is safe since `AtomicU32` ["has the same in-memory
+    // representation as the underlying integer type,
+    // u32"](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html#).
+    //
+    // TODO: Consider using
+    // [`as_mut_ptr`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html#method.as_mut_ptr)
+    // here once it's stabilized.
+    type SourceT = AtomicU32;
+    type TargetT = u32;
+    let futex_word: &SourceT = futex_word;
+    static_assertions::assert_eq_size!(SourceT, TargetT);
+    static_assertions::assert_eq_align!(SourceT, TargetT);
+    let futex_word: *const TargetT = futex_word as *const SourceT as *const TargetT;
 
     nix::errno::Errno::result(unsafe {
         libc::syscall(
             libc::SYS_futex,
-            futex_word as *const _,
+            futex_word,
             libc::FUTEX_WAKE,
             1,
             std::ptr::null() as *const libc::timespec,

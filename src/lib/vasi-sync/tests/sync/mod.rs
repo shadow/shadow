@@ -3,6 +3,9 @@
 //! test itself. See
 //! https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests
 
+// Items in here may not end up being used by every test.
+#![allow(unused)]
+
 #[cfg(loom)]
 pub fn model<F>(f: F)
 where
