@@ -71,13 +71,12 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
 
 #[cfg(not(loom))]
 pub fn futex_wake(futex_word: &AtomicU32) -> nix::Result<()> {
-    // The kernel just checks for equality of the value at this pointer.
-    // Just validate that it's the right size and alignment.
-    assert_eq!(std::mem::size_of::<AtomicU32>(), std::mem::size_of::<u32>());
-    assert_eq!(
-        std::mem::align_of::<AtomicU32>(),
-        std::mem::align_of::<u32>()
-    );
+    // The kernel just checks for equality of the value at `futex_word`,
+    // which it interprets as `* const u32`. This is safe since `AtomicU32`
+    // is guaranteed to be the same size and alignment as `u32`.
+    static_assertions::assert_eq_size!(AtomicU32, u32);
+    static_assertions::assert_eq_align!(AtomicU32, u32);
+
     nix::errno::Errno::result(unsafe {
         libc::syscall(
             libc::SYS_futex,
