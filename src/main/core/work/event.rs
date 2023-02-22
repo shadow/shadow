@@ -122,10 +122,9 @@ pub struct LocalEventData {
     event_id: u64,
 }
 
-impl PacketEventData {
-    /// Get the packet contained within this event.
-    pub fn packet(self) -> Packet {
-        self.packet
+impl From<PacketEventData> for Packet {
+    fn from(data: PacketEventData) -> Self {
+        data.packet
     }
 }
 
@@ -155,10 +154,9 @@ impl PartialOrd for PacketEventData {
     }
 }
 
-impl LocalEventData {
-    /// Get the task contained within this event.
-    pub fn task(self) -> TaskRef {
-        self.task
+impl From<LocalEventData> for TaskRef {
+    fn from(data: LocalEventData) -> Self {
+        data.task
     }
 }
 

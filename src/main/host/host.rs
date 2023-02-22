@@ -697,10 +697,10 @@ impl Host {
             match event.data() {
                 EventData::Packet(data) => {
                     self.upstream_router_borrow_mut()
-                        .route_incoming_packet(data.packet());
+                        .route_incoming_packet(data.into());
                     self.notify_router_has_packets();
                 }
-                EventData::Local(data) => data.task().execute(self),
+                EventData::Local(data) => TaskRef::from(data).execute(self),
             }
             self.stop_execution_timer();
             Worker::clear_current_time();
