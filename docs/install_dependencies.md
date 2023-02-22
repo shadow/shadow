@@ -15,12 +15,6 @@
 Notice: Clang 13.0.0 is unsupported as it has a miscompilation bug that affects
         Shadow (see [issue #1741](https://github.com/shadow/shadow/issues/1741)).
 
-### Recommended Python Modules (for helper/analysis scripts):
-  + numpy, scipy, matplotlib, networkx, lxml, pyyaml
-
-### Recommended System Tools:
-  + git, dstat, htop, tmux
-
 ## APT (Debian/Ubuntu):
 
 ```bash
