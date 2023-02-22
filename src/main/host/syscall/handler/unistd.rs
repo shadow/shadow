@@ -178,7 +178,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_read, ctx);
         }
 
-        Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
@@ -220,12 +220,11 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
         }
 
-        Self::read_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, file, buf_ptr, buf_size, offset)
     }
 
     fn read_helper(
         ctx: &mut SyscallContext,
-        _fd: libc::c_int,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
@@ -318,7 +317,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_write, ctx);
         }
 
-        Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, file, buf_ptr, buf_size, offset)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -361,12 +360,11 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
         }
 
-        Self::write_helper(ctx, fd, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, file, buf_ptr, buf_size, offset)
     }
 
     fn write_helper(
         ctx: &mut SyscallContext,
-        _fd: libc::c_int,
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
