@@ -24,9 +24,6 @@
     - [Network Configuration]()
         - [Network Graph Overview](network_graph_overview.md)
         - [Network Graph Specification](network_graph_spec.md)
-    - [Shadow Output]()
-        - [Format of the Log Messages](log_format.md)
-        - [Parsing Statistics from the Logs](parsing_shadow_logs.md)
     - [Performance Tuning]()
         - [Disabling Side-channel Mitigations](sidechannels.md)
         - [Parallel Simulations](parallel_sims.md)
@@ -40,6 +37,9 @@
     - [Extra Tests](extra_tests.md)
     - [Continuous integration tests](ci.md)
     - [Maintainer playbook](maintainer_playbook.md)
+    - [Shadow Output]()
+        - [Format of the Log Messages](log_format.md)
+        - [Parsing Statistics from the Logs](parsing_shadow_logs.md)
 
 # The Shadow Project
 
