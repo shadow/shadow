@@ -19,7 +19,7 @@ use crate::utility::sockaddr::SockaddrStorage;
 
 use log::*;
 use nix::errno::Errno;
-use nix::sys::socket::{MsgFlags, SockFlag};
+use nix::sys::socket::{MsgFlags, Shutdown, SockFlag};
 
 use syscall_logger::log_syscall;
 
@@ -736,7 +736,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
-    pub fn shutdown(ctx: &mut SyscallContext, fd: libc::c_int, _how: libc::c_int) -> SyscallResult {
+    pub fn shutdown(ctx: &mut SyscallContext, fd: libc::c_int, how: libc::c_int) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -750,23 +750,23 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_shutdown, ctx);
-        }
+        let how = match how {
+            libc::SHUT_RD => Shutdown::Read,
+            libc::SHUT_WR => Shutdown::Write,
+            libc::SHUT_RDWR => Shutdown::Both,
+            _ => return Err(Errno::EINVAL.into()),
+        };
 
         let File::Socket(socket) = file.inner_file() else {
             drop(desc_table);
             return Err(Errno::ENOTSOCK.into());
         };
 
-        // TODO: support rust sockets
-        log::warn!(
-            "shutdown() syscall not yet supported for fd {} of type {:?}; Returning ENOSYS",
-            fd,
-            socket,
-        );
-        Err(Errno::ENOSYS.into())
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().shutdown(how, cb_queue))
+        })?;
+
+        Ok(0.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,

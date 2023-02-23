@@ -3,6 +3,7 @@ use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
+use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::{
@@ -234,6 +235,15 @@ impl UnixSocket {
         cb_queue: &mut CallbackQueue,
     ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
         self.protocol_state.accept(&mut self.common, cb_queue)
+    }
+
+    pub fn shutdown(
+        &mut self,
+        _how: Shutdown,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        log::warn!("shutdown() syscall not yet supported for unix sockets; Returning ENOSYS");
+        Err(Errno::ENOSYS.into())
     }
 
     pub fn getsockopt(

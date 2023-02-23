@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
@@ -267,6 +268,10 @@ impl SocketRefMut<'_> {
             Self::Inet(socket) => socket.accept(cb_queue).map(Socket::Inet),
         }
     }
+
+    enum_passthrough!(self, (how, cb_queue), Unix, Inet;
+        pub fn shutdown(&mut self, how: Shutdown, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
+    );
 }
 
 impl std::fmt::Debug for SocketRef<'_> {
