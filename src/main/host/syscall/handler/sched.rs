@@ -1,5 +1,5 @@
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
 
@@ -31,7 +31,7 @@ impl SyscallHandler {
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
         mask_ptr: PluginPtr,
-    ) -> SyscallResult {
+    ) -> Result<libc::c_int, SyscallError> {
         let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
@@ -54,7 +54,7 @@ impl SyscallHandler {
 
         mask.flush()?;
 
-        Ok(0.into())
+        Ok(0)
     }
 
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
@@ -63,7 +63,7 @@ impl SyscallHandler {
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
         mask_ptr: PluginPtr,
-    ) -> SyscallResult {
+    ) -> Result<libc::c_int, SyscallError> {
         let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
@@ -85,14 +85,14 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        Ok(0.into())
+        Ok(0)
     }
 
     #[log_syscall(/* rv */ i32)]
-    pub fn sched_yield(_ctx: &mut SyscallContext) -> SyscallResult {
+    pub fn sched_yield(_ctx: &mut SyscallContext) -> Result<libc::c_int, SyscallError> {
         // Do nothing. We already yield and reschedule after some number of
         // unblocked syscalls.
-        Ok(0.into())
+        Ok(0)
     }
 
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
@@ -102,7 +102,7 @@ impl SyscallHandler {
         rseq_len: u32,
         flags: libc::c_int,
         sig: u32,
-    ) -> SyscallResult {
+    ) -> Result<libc::c_int, SyscallError> {
         let rseq_ptr = TypedPluginPtr::new::<rseq>(rseq_ptr, 1);
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
@@ -123,7 +123,7 @@ impl SyscallHandler {
         rseq_ptr: TypedPluginPtr<rseq>,
         flags: i32,
         _sig: u32,
-    ) -> SyscallResult {
+    ) -> Result<libc::c_int, SyscallError> {
         if flags & (!RSEQ_FLAG_UNREGISTER) != 0 {
             warn!("Unrecognized rseq flags: {}", flags);
             return Err(Errno::EINVAL.into());
@@ -134,7 +134,7 @@ impl SyscallHandler {
             // * Validate that `sig` matches registration
             // * Set the cpu_id of the previously registerd rseq to the uninitialized
             //   state.
-            return Ok(0.into());
+            return Ok(0);
         }
         let mut mem = ctx.objs.process.memory_borrow_mut();
         let mut rseq = mem.memory_ref_mut(rseq_ptr)?;
@@ -158,6 +158,6 @@ impl SyscallHandler {
         rseq[0].cpu_id_start = CURRENT_CPU as i32;
         rseq.flush()?;
 
-        Ok(0.into())
+        Ok(0)
     }
 }

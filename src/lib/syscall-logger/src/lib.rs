@@ -14,12 +14,12 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
+/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
 ///     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {}
+///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> Result<libc::c_int, SyscallError> {}
 /// }
 /// ```
 ///
@@ -28,17 +28,17 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallResult};
+/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
-///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
+///     pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> Result<libc::c_int, SyscallError> {
 ///         // ...
 ///         let rv = close_original(ctx, fd);
 ///         // ...
 ///         rv
 ///     }
-///     fn close_original(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
+///     fn close_original(ctx: &mut SyscallContext, fd: libc::c_int) -> Result<libc::c_int, SyscallError> {
 ///     }
 /// }
 /// ```
@@ -54,6 +54,8 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let syscall_args: Vec<_>;
     // the syscall arguments as a token stream (ex: "ctx: SyscallContext, fd: u32. val: i32")
     let syscall_args_and_types;
+    // the syscal return type (including the `->` token)
+    let syscall_ret_type;
     // the name of the first argument, which should be of type `SyscallContext`
     let context_arg_name;
 
@@ -93,6 +95,8 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             ident.clone()
         }).collect();
 
+        syscall_ret_type = input_fn.sig.output.clone();
+
         context_arg_name = syscall_args[0].clone();
     }
 
@@ -128,7 +132,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let syscall_wrapper = quote::quote! {
         pub fn #syscall_name(
             #syscall_args_and_types
-        ) -> crate::host::syscall_types::SyscallResult {
+        ) #syscall_ret_type {
             let Some(strace_fmt_options) = #context_arg_name.objs.process.strace_logging_options() else {
                 // exit early if strace logging is not enabled
                 return Self::#syscall_name_original(#(#syscall_args),*);
@@ -157,8 +161,16 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
                 #context_arg_name.objs.process.free_unsafe_borrows_noflush();
             }
 
-            // format the result (returns None if the syscall didn't complete)
             let memory = #context_arg_name.objs.process.memory_borrow();
+
+            // Ugly hack to convert the `Result<T, SyscallError>` to a `SyscallResult` (so the `T`
+            // to a `SysCallReg`) without cloning the `SyscallError`. Since we need to convert back
+            // to a `Result<T, SyscallError>` later, we keep a copy of the original `Result::Ok(T)`
+            // value. This assumes that `T: Into<SysCallReg> + Clone`.
+            let rv_original_ok = rv.as_ref().ok().cloned();
+            let rv = rv.map(|x| x.into());
+
+            // format the result (returns None if the syscall didn't complete)
             let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, #context_arg_name.args.args, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {
@@ -173,6 +185,13 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
                     ).unwrap();
                 });
             }
+
+            // convert the `SyscallResult` back to the original `Result<T, SyscallError>`
+            let rv = if let Some(rv_original_ok) = rv_original_ok {
+                Ok(rv_original_ok)
+            } else {
+                Err(rv.err().unwrap())
+            };
 
             rv
         }

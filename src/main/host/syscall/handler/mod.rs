@@ -248,75 +248,83 @@ pub trait SyscallHandlerFn<T> {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult;
 }
 
-impl<F> SyscallHandlerFn<()> for F
+impl<F, T0> SyscallHandlerFn<()> for F
 where
-    F: Fn(&mut SyscallContext) -> SyscallResult,
+    F: Fn(&mut SyscallContext) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        self(ctx)
+        self(ctx).map(Into::into)
     }
 }
 
-impl<F, T> SyscallHandlerFn<(T,)> for F
+impl<F, T0, T1> SyscallHandlerFn<(T1,)> for F
 where
-    F: Fn(&mut SyscallContext, T) -> SyscallResult,
-    T: From<SysCallReg>,
+    F: Fn(&mut SyscallContext, T1) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
+    T1: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(ctx, ctx.args.get(0).into())
+        self(ctx, ctx.args.get(0).into()).map(Into::into)
     }
 }
 
-impl<F, T1, T2> SyscallHandlerFn<(T1, T2)> for F
+impl<F, T0, T1, T2> SyscallHandlerFn<(T1, T2)> for F
 where
-    F: Fn(&mut SyscallContext, T1, T2) -> SyscallResult,
+    F: Fn(&mut SyscallContext, T1, T2) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
     T1: From<SysCallReg>,
     T2: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(ctx, ctx.args.get(0).into(), ctx.args.get(1).into())
+        self(ctx, ctx.args.get(0).into(), ctx.args.get(1).into()).map(Into::into)
     }
 }
 
-impl<F, T1, T2, T3> SyscallHandlerFn<(T1, T2, T3)> for F
+impl<F, T0, T1, T2, T3> SyscallHandlerFn<(T1, T2, T3)> for F
 where
-    F: Fn(&mut SyscallContext, T1, T2, T3) -> SyscallResult,
+    F: Fn(&mut SyscallContext, T1, T2, T3) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
     T1: From<SysCallReg>,
     T2: From<SysCallReg>,
     T3: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(
+        self(
             ctx,
             ctx.args.get(0).into(),
             ctx.args.get(1).into(),
             ctx.args.get(2).into(),
         )
+        .map(Into::into)
     }
 }
 
-impl<F, T1, T2, T3, T4> SyscallHandlerFn<(T1, T2, T3, T4)> for F
+impl<F, T0, T1, T2, T3, T4> SyscallHandlerFn<(T1, T2, T3, T4)> for F
 where
-    F: Fn(&mut SyscallContext, T1, T2, T3, T4) -> SyscallResult,
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
     T1: From<SysCallReg>,
     T2: From<SysCallReg>,
     T3: From<SysCallReg>,
     T4: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(
+        self(
             ctx,
             ctx.args.get(0).into(),
             ctx.args.get(1).into(),
             ctx.args.get(2).into(),
             ctx.args.get(3).into(),
         )
+        .map(Into::into)
     }
 }
 
-impl<F, T1, T2, T3, T4, T5> SyscallHandlerFn<(T1, T2, T3, T4, T5)> for F
+impl<F, T0, T1, T2, T3, T4, T5> SyscallHandlerFn<(T1, T2, T3, T4, T5)> for F
 where
-    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5) -> SyscallResult,
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
     T1: From<SysCallReg>,
     T2: From<SysCallReg>,
     T3: From<SysCallReg>,
@@ -324,7 +332,7 @@ where
     T5: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(
+        self(
             ctx,
             ctx.args.get(0).into(),
             ctx.args.get(1).into(),
@@ -332,12 +340,14 @@ where
             ctx.args.get(3).into(),
             ctx.args.get(4).into(),
         )
+        .map(Into::into)
     }
 }
 
-impl<F, T1, T2, T3, T4, T5, T6> SyscallHandlerFn<(T1, T2, T3, T4, T5, T6)> for F
+impl<F, T0, T1, T2, T3, T4, T5, T6> SyscallHandlerFn<(T1, T2, T3, T4, T5, T6)> for F
 where
-    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5, T6) -> SyscallResult,
+    F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5, T6) -> Result<T0, SyscallError>,
+    T0: Into<SysCallReg>,
     T1: From<SysCallReg>,
     T2: From<SysCallReg>,
     T3: From<SysCallReg>,
@@ -346,7 +356,7 @@ where
     T6: From<SysCallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
-        (self)(
+        self(
             ctx,
             ctx.args.get(0).into(),
             ctx.args.get(1).into(),
@@ -355,6 +365,7 @@ where
             ctx.args.get(4).into(),
             ctx.args.get(5).into(),
         )
+        .map(Into::into)
     }
 }
 
