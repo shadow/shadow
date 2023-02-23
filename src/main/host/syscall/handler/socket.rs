@@ -499,11 +499,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            drop(desc_table);
-            return Self::legacy_syscall(c::syscallhandler_listen, ctx);
-        }
-
         let File::Socket(socket) = file.inner_file() else {
             drop(desc_table);
             return Err(Errno::ENOTSOCK.into());

@@ -331,7 +331,7 @@ static void _tcpserver_updateBacklog(TCPServer* server, gint _backlog) {
     server->pendingMax = backlog;
 }
 
-static TCPServer* _tcpserver_new(gint backlog, const ProcessRefCell* processForChildren) {
+static TCPServer* _tcpserver_new(gint backlog, pid_t processForChildren) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
 
@@ -341,7 +341,7 @@ static TCPServer* _tcpserver_new(gint backlog, const ProcessRefCell* processForC
     server->pending = g_queue_new();
     server->pendingMax = 0;
 
-    server->processForChildren = process_getProcessID(processForChildren);
+    server->processForChildren = processForChildren;
 
     _tcpserver_updateBacklog(server, backlog);
 
@@ -1633,7 +1633,7 @@ static gint _tcp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t
     return -EINPROGRESS;
 }
 
-void tcp_enterServerMode(TCP* tcp, const Host* host, const ProcessRefCell* process, gint backlog) {
+void tcp_enterServerMode(TCP* tcp, const Host* host, pid_t process, gint backlog) {
     MAGIC_ASSERT(tcp);
 
     /* we are a server ready to listen, build our server state */
@@ -1704,7 +1704,16 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
         legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
     }
 
+    /* if we're trying to accept the socket from a different process than the process that the
+     * socket is registered in (the fd handle won't be correct for this process), then panic to
+     * avoid confusing errors later (see https://github.com/shadow/shadow/issues/1780) */
+    utility_alwaysAssert(tcpChild->child->parent->server->processForChildren ==
+                         process_getProcessID(worker_getCurrentProcess()));
+
     *acceptedHandle = tcpChild->child->handle;
+    /* shouldn't be used anymore */
+    tcpChild->child->handle = -1;
+
     utility_debugAssert(ip);
     *ip = tcpChild->super.peerIP;
     utility_debugAssert(port);

@@ -1085,33 +1085,9 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     }
     utility_debugAssert(tcp_desc);
 
-    /* only listen on the socket if it is not used for other functions */
-    if (!tcp_isListeningAllowed(tcp_desc)) {
-        debug("Cannot listen on previously used socket %i", sockfd);
-        return syscallreturn_makeDoneErrno(EOPNOTSUPP);
-    }
-
-    /* if we are already listening, just update the backlog and return 0. */
-    if (tcp_isValidListener(tcp_desc)) {
-        trace("Socket %i already set up as a listener; updating backlog", sockfd);
-        tcp_updateServerBacklog(tcp_desc, backlog);
-        return syscallreturn_makeDoneU64(0);
-    }
-
-    /* We are allowed to listen but not already listening, start now. */
-    if (!legacysocket_isBound((LegacySocket*)tcp_desc)) {
-        /* Implicit bind: bind to all interfaces at an ephemeral port. */
-        trace("Implicitly binding listener socket %i", sockfd);
-        errcode =
-            _syscallhandler_bindHelper(sys, (LegacySocket*)tcp_desc, htonl(INADDR_ANY), 0, 0, 0);
-        if (errcode < 0) {
-            return syscallreturn_makeDoneErrno(-errcode);
-        }
-    }
-
-    tcp_enterServerMode(
-        tcp_desc, _syscallhandler_getHost(sys), _syscallhandler_getProcess(sys), backlog);
-    return syscallreturn_makeDoneU64(0);
+    /* When we add a TCP socket to the descriptor table we add it as a rust LegacyTcpSocket and
+     * handle it in the rust listen() syscall handler, so we should never get here. */
+    utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
 }
 
 SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
