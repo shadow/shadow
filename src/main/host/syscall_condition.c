@@ -294,7 +294,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 
 static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host, const Thread* thread) {
     if (cond->timeoutExpiration != EMUTIME_INVALID &&
-        cond->timeoutExpiration >= worker_getCurrentEmulatedTime()) {
+        worker_getCurrentEmulatedTime() >= cond->timeoutExpiration) {
         // Timed out.
         return true;
     }
