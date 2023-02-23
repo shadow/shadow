@@ -509,7 +509,14 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().listen(backlog, cb_queue))?;
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
+
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::listen(socket, backlog, &net_ns, &mut *rng, cb_queue)
+            })
+        })?;
 
         Ok(0.into())
     }

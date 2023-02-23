@@ -387,8 +387,10 @@ impl LegacyTcpSocket {
     }
 
     pub fn listen(
-        &mut self,
+        _socket: &Arc<AtomicRefCell<Self>>,
         _backlog: i32,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         todo!();

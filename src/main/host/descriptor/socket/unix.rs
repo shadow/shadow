@@ -1,4 +1,5 @@
 use std::collections::{LinkedList, VecDeque};
+use std::ops::DerefMut;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
@@ -211,12 +212,17 @@ impl UnixSocket {
     }
 
     pub fn listen(
-        &mut self,
+        socket: &Arc<AtomicRefCell<Self>>,
         backlog: i32,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        self.protocol_state
-            .listen(&mut self.common, backlog, cb_queue)
+        let mut socket_ref = socket.borrow_mut();
+        let socket_ref = socket_ref.deref_mut();
+        socket_ref
+            .protocol_state
+            .listen(&mut socket_ref.common, backlog, cb_queue)
     }
 
     pub fn connect(
