@@ -68,6 +68,20 @@ impl InetSocket {
         }
     }
 
+    pub fn listen(
+        &self,
+        backlog: i32,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        match self {
+            Self::LegacyTcp(socket) => {
+                LegacyTcpSocket::listen(socket, backlog, net_ns, rng, cb_queue)
+            }
+        }
+    }
+
     pub fn connect(
         &self,
         addr: &SockaddrStorage,
@@ -253,10 +267,6 @@ impl InetSocketRefMut<'_> {
         pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
             -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
         where W: std::io::Write + std::io::Seek
-    );
-
-    enum_passthrough!(self, (backlog, cb_queue), LegacyTcp;
-        pub fn listen(&mut self, backlog: i32, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
 
     pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<InetSocket, SyscallError> {

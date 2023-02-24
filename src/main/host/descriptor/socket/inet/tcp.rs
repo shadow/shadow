@@ -387,11 +387,73 @@ impl LegacyTcpSocket {
     }
 
     pub fn listen(
-        &mut self,
-        _backlog: i32,
+        socket: &Arc<AtomicRefCell<Self>>,
+        backlog: i32,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        todo!();
+        let socket_ref = socket.borrow();
+
+        // only listen on the socket if it is not used for other functions
+        let is_listening_allowed =
+            unsafe { c::tcp_isListeningAllowed(socket_ref.as_legacy_tcp()) } == 1;
+        if !is_listening_allowed {
+            log::debug!("Cannot listen on previously used socket");
+            return Err(Errno::EOPNOTSUPP.into());
+        }
+
+        // if we are already listening, just update the backlog and return 0
+        let is_valid_listener = unsafe { c::tcp_isValidListener(socket_ref.as_legacy_tcp()) } == 1;
+        if is_valid_listener {
+            log::trace!("Socket already set up as a listener; updating backlog");
+            unsafe { c::tcp_updateServerBacklog(socket_ref.as_legacy_tcp(), backlog) };
+            return Ok(());
+        }
+
+        // a listening socket must be bound
+        let is_bound = unsafe { c::legacysocket_isBound(socket_ref.as_legacy_socket()) } == 1;
+        if !is_bound {
+            log::trace!("Implicitly binding listener socket");
+
+            // implicit bind: bind to all interfaces at an ephemeral port
+            let local_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+
+            // this will allow us to receive packets from any peer address
+            let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+
+            // associate the socket
+            let local_addr = super::associate_socket(
+                super::InetSocket::LegacyTcp(socket.clone()),
+                local_addr,
+                peer_addr,
+                net_ns,
+                rng,
+            )?;
+
+            unsafe {
+                c::legacysocket_setSocketName(
+                    socket_ref.as_legacy_socket(),
+                    u32::from(*local_addr.ip()).to_be(),
+                    local_addr.port().to_be(),
+                )
+            };
+        }
+
+        // we are allowed to listen but not already listening; start now
+        Worker::with_active_host(|host| {
+            unsafe {
+                c::tcp_enterServerMode(
+                    socket_ref.as_legacy_tcp(),
+                    host,
+                    Worker::active_process_id().unwrap().into(),
+                    backlog,
+                )
+            };
+        })
+        .unwrap();
+
+        Ok(())
     }
 
     pub fn connect(
