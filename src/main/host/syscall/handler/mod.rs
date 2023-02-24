@@ -26,7 +26,7 @@ mod time;
 mod unistd;
 
 type LegacySyscallFn =
-    unsafe extern "C" fn(*mut c::SysCallHandler, *const c::SysCallArgs) -> c::SysCallReturn;
+    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> c::SysCallReturn;
 
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler
@@ -393,7 +393,7 @@ mod export {
     pub extern "C" fn rustsyscallhandler_syscall(
         sys: *mut SyscallHandler,
         csys: *mut c::SysCallHandler,
-        args: *const c::SysCallArgs,
+        args: *const SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null());
         let sys = unsafe { &mut *sys };

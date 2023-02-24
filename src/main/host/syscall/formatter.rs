@@ -280,7 +280,7 @@ mod export {
         tid: libc::pid_t,
         name: *const libc::c_char,
         args_str: *const libc::c_char,
-        args: &[c::SysCallReg; 6],
+        args: &[SysCallReg; 6],
         result: c::SysCallReturn,
     ) -> c::SysCallReturn {
         assert!(!proc.is_null());

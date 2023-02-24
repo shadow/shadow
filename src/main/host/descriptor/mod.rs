@@ -1137,7 +1137,9 @@ mod tests {
     use super::*;
     use crate::host::syscall::Trigger;
     use crate::host::syscall_condition::SysCallCondition;
-    use crate::host::syscall_types::{Blocked, Failed, SyscallError};
+    use crate::host::syscall_types::{
+        Blocked, Failed, SysCallReturnBlocked, SysCallReturnBody, SysCallReturnDone, SyscallError,
+    };
 
     #[test]
     // can't call foreign function: syscallcondition_new
@@ -1191,8 +1193,8 @@ mod tests {
         for val in vec![
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                u: c::SysCallReturnBody {
-                    done: c::SysCallReturnDone {
+                u: SysCallReturnBody {
+                    done: SysCallReturnDone {
                         retval: 1.into(),
                         restartable: false,
                     },
@@ -1200,8 +1202,8 @@ mod tests {
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: c::SysCallReturnBody {
-                    blocked: c::SysCallReturnBlocked {
+                u: SysCallReturnBody {
+                    blocked: SysCallReturnBlocked {
                         cond: condition.into_inner(),
                         restartable: true,
                     },
@@ -1209,7 +1211,7 @@ mod tests {
             },
             c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
-                u: unsafe { std::mem::zeroed::<c::SysCallReturnBody>() },
+                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
             },
         ]
         .drain(..)

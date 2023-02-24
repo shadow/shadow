@@ -1524,7 +1524,7 @@ mod export {
     pub extern "C" fn process_readPtr(
         proc: *const ProcessRefCell,
         dst: *mut c_void,
-        src: cshadow::PluginPtr,
+        src: PluginPtr,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1552,7 +1552,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
         proc: *const ProcessRefCell,
-        dst: cshadow::PluginPtr,
+        dst: PluginPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {
@@ -1582,7 +1582,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1606,7 +1606,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1628,7 +1628,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1652,7 +1652,7 @@ mod export {
     pub unsafe extern "C" fn process_readString(
         proc: *const ProcessRefCell,
         strbuf: *mut libc::c_char,
-        ptr: cshadow::PluginPtr,
+        ptr: PluginPtr,
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1682,7 +1682,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
         out_str: *mut *const c_char,
         out_strlen: *mut size_t,
@@ -1711,7 +1711,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         len: usize,
         prot: i32,
         flags: i32,
@@ -1735,7 +1735,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         len: usize,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1754,11 +1754,11 @@ mod export {
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        old_addr: cshadow::PluginPtr,
+        old_addr: PluginPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_addr: cshadow::PluginPtr,
+        new_addr: PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1783,7 +1783,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         size: usize,
         prot: i32,
     ) -> cshadow::SysCallReturn {
@@ -1804,7 +1804,7 @@ mod export {
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -2035,8 +2035,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
         proc: *const ProcessRefCell,
-        vptr: cshadow::PluginVirtualPtr,
-    ) -> cshadow::PluginPhysicalPtr {
+        vptr: PluginPtr,
+    ) -> PluginPhysicalPtr {
         let proc = unsafe { proc.as_ref().unwrap() };
 
         Worker::with_active_host(|host| {

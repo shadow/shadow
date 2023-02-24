@@ -278,6 +278,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
+        .raw_line("use crate::host::syscall_types::{PluginPtr, PluginPhysicalPtr, SysCallArgs, SysCallReturnBody};")
         .raw_line("use crate::host::thread::Thread;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
@@ -289,8 +290,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("#[allow(unused)]")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHost, ShimShmemHostLock, ShimShmemProcess, ShimShmemThread};")
         .raw_line("")
-        // Temporarily re-export to ease the migration of PluginPtr from C to Rust
-        .raw_line("pub use crate::host::syscall_types::{PluginPtr, PluginPhysicalPtr, SysCallReg, SysCallArgs, SysCallReturnBody, SysCallReturnBlocked, SysCallReturnDone};")
         // We have to manually generated the SysCallCondition opaque type.
         // bindgen skip auto-generating it because it's forward-declared in the cbindgen
         // generated headers, which we blocklist.

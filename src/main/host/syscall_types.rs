@@ -251,7 +251,7 @@ impl From<()> for SysCallReg {
     }
 }
 
-impl std::fmt::Debug for c::SysCallReg {
+impl std::fmt::Debug for SysCallReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SysCallReg")
             .field("as_i64", unsafe { &self.as_i64 })
@@ -426,8 +426,8 @@ impl From<SyscallResult> for c::SysCallReturn {
         match syscall_return {
             Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                u: c::SysCallReturnBody {
-                    done: c::SysCallReturnDone {
+                u: SysCallReturnBody {
+                    done: SysCallReturnDone {
                         retval: r,
                         // N/A for non-error result (and non-EINTR result in particular)
                         restartable: false,
@@ -436,8 +436,8 @@ impl From<SyscallResult> for c::SysCallReturn {
             },
             Err(SyscallError::Failed(failed)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                u: c::SysCallReturnBody {
-                    done: c::SysCallReturnDone {
+                u: SysCallReturnBody {
+                    done: SysCallReturnDone {
                         retval: (-(failed.errno as i64)).into(),
                         restartable: failed.restartable,
                     },
@@ -445,8 +445,8 @@ impl From<SyscallResult> for c::SysCallReturn {
             },
             Err(SyscallError::Blocked(blocked)) => Self {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: c::SysCallReturnBody {
-                    blocked: c::SysCallReturnBlocked {
+                u: SysCallReturnBody {
+                    blocked: SysCallReturnBlocked {
                         cond: blocked.condition.into_inner(),
                         restartable: blocked.restartable,
                     },
@@ -456,7 +456,7 @@ impl From<SyscallResult> for c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
                 // No field for native. This is the recommended way to default-initialize a union.
                 // https://rust-lang.github.io/rust-bindgen/using-unions.html#using-the-union-builtin
-                u: unsafe { std::mem::zeroed::<c::SysCallReturnBody>() },
+                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
             },
         }
     }
