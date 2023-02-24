@@ -5,16 +5,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "main/bindings/c/bindings-opaque.h"
+
 // A virtual address in the plugin's address space
-typedef struct _PluginVirtualPtr PluginVirtualPtr;
-// Deprecated; use PluginVirtualPtr instead
-typedef struct _PluginVirtualPtr PluginPtr;
+typedef PluginPtr PluginVirtualPtr;
 // A physical address that should be unique to the machine
 typedef struct _PluginPhysicalPtr PluginPhysicalPtr;
-
-struct _PluginVirtualPtr {
-    uint64_t val;
-};
 
 struct _PluginPhysicalPtr {
     uint64_t val;

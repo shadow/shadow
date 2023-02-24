@@ -11,8 +11,10 @@ use std::mem::size_of;
 
 /// Represents a pointer to a virtual address in plugin memory.
 #[derive(Copy, Clone, Debug)]
+#[repr(C)]
 pub struct PluginPtr {
-    ptr: usize,
+    // Temporarily public to ease the migration of replacing cshadow::PluginPtr.
+    pub val: usize,
 }
 
 impl PluginPtr {
@@ -21,55 +23,39 @@ impl PluginPtr {
     }
 
     pub fn is_null(&self) -> bool {
-        self.ptr == 0
-    }
-}
-
-impl From<PluginPtr> for c::PluginPtr {
-    fn from(v: PluginPtr) -> c::PluginPtr {
-        c::PluginPtr {
-            val: v.ptr.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<c::PluginPtr> for PluginPtr {
-    fn from(v: c::PluginPtr) -> PluginPtr {
-        PluginPtr {
-            ptr: v.val.try_into().unwrap(),
-        }
+        self.val == 0
     }
 }
 
 impl From<PluginPtr> for usize {
     fn from(v: PluginPtr) -> usize {
-        v.ptr
+        v.val
     }
 }
 
 impl From<usize> for PluginPtr {
     fn from(v: usize) -> PluginPtr {
-        PluginPtr { ptr: v }
+        PluginPtr { val: v }
     }
 }
 
 impl From<u64> for PluginPtr {
     fn from(v: u64) -> PluginPtr {
         PluginPtr {
-            ptr: v.try_into().unwrap(),
+            val: v.try_into().unwrap(),
         }
     }
 }
 
 impl From<PluginPtr> for u64 {
     fn from(v: PluginPtr) -> u64 {
-        v.ptr.try_into().unwrap()
+        v.val.try_into().unwrap()
     }
 }
 
 impl std::fmt::Pointer for PluginPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ptr = self.ptr as *const libc::c_void;
+        let ptr = self.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
     }
 }
@@ -379,7 +365,7 @@ impl<T> TypedPluginPtr<T> {
         assert!(included_start <= self.count);
         TypedPluginPtr {
             base: PluginPtr {
-                ptr: (self.base.ptr + included_start * size_of::<T>()),
+                val: (self.base.val + included_start * size_of::<T>()),
             },
             count: excluded_end - included_start,
             _phantom: PhantomData,

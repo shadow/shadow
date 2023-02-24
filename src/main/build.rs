@@ -8,7 +8,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         // Avoid re-exporting C types
         c.export.exclude.extend_from_slice(&[
             "LogLevel".into(),
-            "PluginPtr".into(),
             "PluginPhysicalPtr".into(),
             "SysCallReg".into(),
             "SysCallArgs".into(),
@@ -283,6 +282,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ProcessShmem, ThreadShmem};")
         .raw_line("#[allow(unused)]")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHost, ShimShmemHostLock, ShimShmemProcess, ShimShmemThread};")
+        .raw_line("")
+        // Temporarily re-export to ease the migration of PluginPtr from C to Rust
+        .raw_line("pub use crate::host::syscall_types::PluginPtr;")
         //# used to generate #[must_use] annotations)
         .enable_function_attribute_detection()
         //# don't generate rust bindings for c bindings of rust code)
