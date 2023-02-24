@@ -95,7 +95,6 @@ impl From<PluginPhysicalPtr> for u64 {
 }
 
 pub type SysCallArgs = c::SysCallArgs;
-pub type SysCallReg = c::SysCallReg;
 
 impl SysCallArgs {
     pub fn get(&self, i: usize) -> SysCallReg {
@@ -471,4 +470,12 @@ impl From<std::io::Error> for SyscallError {
             }
         }
     }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union SysCallReg {
+    as_i64: i64,
+    as_u64: u64,
+    as_ptr: PluginPtr,
 }

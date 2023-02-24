@@ -11,12 +11,6 @@
 typedef PluginPtr PluginVirtualPtr;
 
 // A register used for input/output in a syscall.
-typedef union _SysCallReg {
-    int64_t as_i64;
-    uint64_t as_u64;
-    PluginPtr as_ptr;
-} SysCallReg;
-
 typedef struct _SysCallArgs {
     // SYS_* from sys/syscall.h.
     // (mostly included from
