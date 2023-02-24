@@ -9,12 +9,6 @@
 
 // A virtual address in the plugin's address space
 typedef PluginPtr PluginVirtualPtr;
-// A physical address that should be unique to the machine
-typedef struct _PluginPhysicalPtr PluginPhysicalPtr;
-
-struct _PluginPhysicalPtr {
-    uint64_t val;
-};
 
 // A register used for input/output in a syscall.
 typedef union _SysCallReg {
