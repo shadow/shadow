@@ -27,10 +27,29 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
+    // We currently have circular dependencies between C headers and function
+    // declarations in Rust code. If we try to generate only a single Rust
+    // binding file, we end up with circular includes since the generated function declarations
+    // need to reference types defined in C headers, and those headers end up needing to
+    // include the bindings header to reference Rust types.
+    //
+    // We resolve this by splitting the bindings into 2 headers:
+    // * bindings.h exports only function definitions, and opaque struct
+    // definitions (which are legal to appear multiple times in a compilation
+    // unit.)
+    // * bindings-opaque.h exports everything *except* function definitions, allowing
+    // it to not need to include any of the C headers.
+    //
+    // i.e. C headers in this project can include bindings-opaque.h and be guaranteed that
+    // there will be no circular include dependency.
+
+    // bindings.h:
     cbindgen::Builder::new()
         .with_crate(crate_dir.clone())
         .with_config(cbindgen::Config {
             include_guard: Some("main_bindings_h".into()),
+            // Some of our function signatures reference types defined in C headers,
+            // so we need to include those here.
             includes: vec![
                 "lib/logger/log_level.h".into(),
                 "lib/shadow-shim-helper-rs/shim_helper.h".into(),
@@ -64,19 +83,14 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 Some(v)
             },
             export: cbindgen::ExportConfig {
-                // Generate all item types, excluding enum types.
-                //
-                // While the opaque items are already exported, and included here via
-                // bindings-opaque.h, cbindgen doesn't see their definitions if we don't
-                // re-export them again here. i.e. it appears to not actually parse the headers
-                // included in the `includes` list.
-                item_types: base_config
-                    .export
-                    .item_types
-                    .iter()
-                    .cloned()
-                    .filter(|t| *t != cbindgen::ItemType::Enums)
-                    .collect(),
+                // This header's primary purpose is to export function
+                // declarations.  We also need to export OpaqueItems here, or
+                // else cbindgen generates bad type names when referencing those
+                // types.
+                item_types: vec![
+                    cbindgen::ItemType::Functions,
+                    cbindgen::ItemType::OpaqueItems,
+                ],
                 ..base_config.export.clone()
             },
             ..base_config.clone()
@@ -85,14 +99,25 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         .expect("Unable to generate bindings")
         .write_to_file("../../build/src/main/bindings/c/bindings.h");
 
+    // bindings-opaque.h
     cbindgen::Builder::new()
         .with_crate(crate_dir)
         .with_config(cbindgen::Config {
+            // We want to avoid including any C headers from this crate here,
+            // which lets us avoid circular dependencies.
+            includes: vec![],
             include_guard: Some("main_opaque_bindings_h".into()),
-            no_includes: true,
             export: cbindgen::ExportConfig {
                 include: vec!["QDiscMode".into()],
-                item_types: vec![cbindgen::ItemType::OpaqueItems, cbindgen::ItemType::Enums],
+                // Export everything except function definitions, since those are already
+                // exported in the other header file, and need the C header files.
+                item_types: base_config
+                    .export
+                    .item_types
+                    .iter()
+                    .cloned()
+                    .filter(|t| *t != cbindgen::ItemType::Functions)
+                    .collect(),
                 ..base_config.export.clone()
             },
             ..base_config
