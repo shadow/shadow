@@ -2,8 +2,7 @@
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub struct PluginPtr {
-    // Temporarily public to ease the migration of replacing cshadow::PluginPtr.
-    pub val: usize,
+    val: usize,
 }
 
 impl PluginPtr {
@@ -53,8 +52,7 @@ impl std::fmt::Pointer for PluginPtr {
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct PluginPhysicalPtr {
-    // Temporarily public to ease the migration of replacing cshadow::PluginPhysicalPtr.
-    pub val: usize,
+    val: usize,
 }
 
 impl From<PluginPhysicalPtr> for usize {

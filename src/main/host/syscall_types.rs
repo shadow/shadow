@@ -117,9 +117,7 @@ impl<T> TypedPluginPtr<T> {
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
         TypedPluginPtr {
-            base: PluginPtr {
-                val: (self.base.val + included_start * size_of::<T>()),
-            },
+            base: PluginPtr::from(usize::from(self.base) + included_start * size_of::<T>()),
             count: excluded_end - included_start,
             _phantom: PhantomData,
         }
