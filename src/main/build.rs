@@ -103,8 +103,16 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             // which lets us avoid circular dependencies.
             includes: vec![],
             include_guard: Some("main_opaque_bindings_h".into()),
+            after_includes: {
+                let mut v = base_config.after_includes.clone().unwrap();
+                // Manual forward declarations of C structs that we need,
+                // since we can't include the corresponding header files without
+                // circular definitions.
+                v.push_str("typedef struct _SysCallCondition SysCallCondition;");
+                Some(v)
+            },
             export: cbindgen::ExportConfig {
-                include: vec!["QDiscMode".into()],
+                include: vec!["QDiscMode".into(), "SysCallReturnBody".into()],
                 // Export everything except function definitions, since those are already
                 // exported in the other header file, and need the C header files.
                 item_types: base_config
@@ -212,7 +220,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("PluginPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")
-        .allowlist_type("SysCall.*")
+        .allowlist_type("SysCallCondition")
         .allowlist_type("LegacyFile")
         .allowlist_type("Manager")
         .allowlist_type("RegularFile")
@@ -230,6 +238,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_var("SUID_DUMP_USER")
         .allowlist_var("SUID_DUMP_DISABLE")
         .allowlist_var("TCP_CONG_RENO_NAME")
+        .opaque_type("SysCallCondition")
         .opaque_type("LegacyFile")
         .opaque_type("Manager")
         .opaque_type("Descriptor")
@@ -281,7 +290,14 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHost, ShimShmemHostLock, ShimShmemProcess, ShimShmemThread};")
         .raw_line("")
         // Temporarily re-export to ease the migration of PluginPtr from C to Rust
-        .raw_line("pub use crate::host::syscall_types::{PluginPtr, PluginPhysicalPtr, SysCallReg, SysCallArgs};")
+        .raw_line("pub use crate::host::syscall_types::{PluginPtr, PluginPhysicalPtr, SysCallReg, SysCallArgs, SysCallReturnBody, SysCallReturnBlocked, SysCallReturnDone};")
+        // We have to manually generated the SysCallCondition opaque type.
+        // bindgen skip auto-generating it because it's forward-declared in the cbindgen
+        // generated headers, which we blocklist.
+        .raw_line("#[repr(C)]")
+        .raw_line("pub struct SysCallCondition{")
+        .raw_line("    _unused: [u8; 0],")
+        .raw_line("}")
         //# used to generate #[must_use] annotations)
         .enable_function_attribute_detection()
         //# don't generate rust bindings for c bindings of rust code)

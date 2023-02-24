@@ -26,34 +26,13 @@ const char* syscallreturnstate_str(SysCallReturnState s);
  * should include a SysCallCondition by which the thread should be unblocked. */
 typedef struct _SysCallCondition SysCallCondition;
 
-typedef struct {
-    SysCallReg retval;
-    // Only meaningful when `retval` is -EINTR.
-    //
-    // Whether the interrupted syscall is restartable.
-    bool restartable;
-} SysCallReturnDone;
-
-typedef struct {
-    SysCallCondition* cond;
-    // True if the syscall is restartable in the case that it was interrupted by
-    // a signal. e.g. if the syscall was a `read` operation on a socket without
-    // a configured timeout. See socket(7).
-    bool restartable;
-} SysCallReturnBlocked;
-
-union SysCallReturnBody {
-    SysCallReturnDone done;
-    SysCallReturnBlocked blocked;
-};
-
 typedef struct _SysCallReturn {
     SysCallReturnState state;
     // We need to name both the union type and the field for the Rust bindings
     // to work well.
     //
     // Avoid accessing directly; use the helper functions below instead.
-    union SysCallReturnBody u;
+    SysCallReturnBody u;
 } SysCallReturn;
 
 SysCallReturn syscallreturn_makeDone(SysCallReg retval);

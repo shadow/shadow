@@ -123,9 +123,9 @@ impl PartialEq for SysCallReg {
 #[derive(Copy, Clone, Eq)]
 #[repr(C)]
 pub union SysCallReg {
-    as_i64: i64,
-    as_u64: u64,
-    as_ptr: PluginPtr,
+    pub as_i64: i64,
+    pub as_u64: u64,
+    pub as_ptr: PluginPtr,
 }
 
 impl From<u64> for SysCallReg {
@@ -485,4 +485,31 @@ impl From<std::io::Error> for SyscallError {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct SysCallReturnDone {
+    pub retval: SysCallReg,
+    // Only meaningful when `retval` is -EINTR.
+    //
+    // Whether the interrupted syscall is restartable.
+    pub restartable: bool,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct SysCallReturnBlocked {
+    pub cond: *mut c::SysCallCondition,
+    // True if the syscall is restartable in the case that it was interrupted by
+    // a signal. e.g. if the syscall was a `read` operation on a socket without
+    // a configured timeout. See socket(7).
+    pub restartable: bool,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union SysCallReturnBody {
+    pub done: SysCallReturnDone,
+    pub blocked: SysCallReturnBlocked,
 }
