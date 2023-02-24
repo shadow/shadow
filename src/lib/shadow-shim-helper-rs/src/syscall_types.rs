@@ -255,3 +255,61 @@ impl std::fmt::Debug for SysCallReg {
             .finish()
     }
 }
+
+// implement conversions from `SysCallReg`
+
+impl TryFrom<SysCallReg> for nix::fcntl::OFlag {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::eventfd::EfdFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::socket::AddressFamily {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_i32(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::socket::MsgFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::stat::Mode {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::mman::ProtFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::mman::MapFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
+impl TryFrom<SysCallReg> for nix::sys::mman::MRemapFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}

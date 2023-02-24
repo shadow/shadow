@@ -7,6 +7,12 @@ use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 /// Convert from a `SysCallReg`. This is a helper trait for the `simple_display_impl` and
 /// `simple_debug_impl` macros. This is used instead of just `TryFrom` so that we can implement this
 /// on any types without affecting `TryFrom` implementations in the rest of Shadow.
+///
+/// XXX: This is trickier to maintain now that SysCallReg is owned by another crate;
+/// the implementations have been changed to `TryFrom<SysCallReg>` instead.
+/// TODO: Remove this trait and use `TryFrom<SysCallReg>` directly (or else remove the
+/// blanket implementation and explicitly implement `TryFromSysCallReg` for all types
+/// we need formatting for).
 pub trait TryFromSyscallReg
 where
     Self: Sized,
@@ -147,56 +153,6 @@ macro_rules! deref_array_impl {
             }
         }
     };
-}
-
-// implement conversions from `SysCallReg`
-
-impl TryFromSyscallReg for nix::fcntl::OFlag {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::eventfd::EfdFlags {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::socket::AddressFamily {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_i32(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::socket::MsgFlags {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::stat::Mode {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::mman::ProtFlags {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::mman::MapFlags {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
-}
-
-impl TryFromSyscallReg for nix::sys::mman::MRemapFlags {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::from_bits(reg.into())
-    }
 }
 
 // implement display formatting
