@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 
 /// Represents a pointer to a virtual address in plugin memory.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub struct PluginPtr {
     // Temporarily public to ease the migration of replacing cshadow::PluginPtr.
@@ -94,7 +94,15 @@ impl From<PluginPhysicalPtr> for u64 {
     }
 }
 
-pub type SysCallArgs = c::SysCallArgs;
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct SysCallArgs {
+    // SYS_* from sys/syscall.h.
+    // (mostly included from
+    // /usr/include/x86_64-linux-gnu/bits/syscall.h)
+    pub number: libc::c_long,
+    pub args: [SysCallReg; 6],
+}
 
 impl SysCallArgs {
     pub fn get(&self, i: usize) -> SysCallReg {
@@ -111,7 +119,14 @@ impl PartialEq for SysCallReg {
     }
 }
 
-impl Eq for SysCallReg {}
+/// A register used for input/output in a syscall.
+#[derive(Copy, Clone, Eq)]
+#[repr(C)]
+pub union SysCallReg {
+    as_i64: i64,
+    as_u64: u64,
+    as_ptr: PluginPtr,
+}
 
 impl From<u64> for SysCallReg {
     fn from(v: u64) -> Self {
@@ -470,12 +485,4 @@ impl From<std::io::Error> for SyscallError {
             }
         }
     }
-}
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union SysCallReg {
-    as_i64: i64,
-    as_u64: u64,
-    as_ptr: PluginPtr,
 }

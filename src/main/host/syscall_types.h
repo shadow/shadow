@@ -10,15 +10,6 @@
 // A virtual address in the plugin's address space
 typedef PluginPtr PluginVirtualPtr;
 
-// A register used for input/output in a syscall.
-typedef struct _SysCallArgs {
-    // SYS_* from sys/syscall.h.
-    // (mostly included from
-    // /usr/include/x86_64-linux-gnu/bits/syscall.h)
-    long number;
-    SysCallReg args[6];
-} SysCallArgs;
-
 typedef enum {
     // Done executing the syscall; ready to let the plugin thread resume.
     SYSCALL_DONE,
