@@ -89,11 +89,13 @@ impl Socket {
     pub fn connect(
         &self,
         addr: &SockaddrStorage,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         match self {
-            Self::Unix(socket) => UnixSocket::connect(socket, addr, cb_queue),
-            Self::Inet(socket) => InetSocket::connect(socket, addr, cb_queue),
+            Self::Unix(socket) => UnixSocket::connect(socket, addr, net_ns, rng, cb_queue),
+            Self::Inet(socket) => InetSocket::connect(socket, addr, net_ns, rng, cb_queue),
         }
     }
 }

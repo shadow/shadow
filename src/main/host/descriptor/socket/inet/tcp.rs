@@ -459,6 +459,8 @@ impl LegacyTcpSocket {
     pub fn connect(
         _socket: &Arc<AtomicRefCell<Self>>,
         _addr: &SockaddrStorage,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         todo!();

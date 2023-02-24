@@ -723,8 +723,14 @@ impl SyscallHandler {
         let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
             .ok_or(Errno::EINVAL)?;
 
-        let mut rv =
-            CallbackQueue::queue_and_run(|cb_queue| Socket::connect(socket, &addr, cb_queue));
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
+
+        let mut rv = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::connect(socket, &addr, &net_ns, &mut *rng, cb_queue)
+            })
+        });
 
         // if we will block
         if let Err(SyscallError::Blocked(ref mut blocked)) = rv {
