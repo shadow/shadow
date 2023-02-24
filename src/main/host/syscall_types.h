@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings-opaque.h"
 
 // A virtual address in the plugin's address space

@@ -4,9 +4,9 @@
 // Communication between Shadow and the shim. This is a header-only library
 // used in both places.
 
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/host/syscall/kernel_types.h"
-#include "main/host/syscall_types.h"
 
 typedef enum {
     // Next val: 13

@@ -11,7 +11,13 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         include_guard: Some("shim_helpers_h".into()),
         after_includes: Some("".into()),
         export: cbindgen::ExportConfig {
-            include: vec!["shd_kernel_sigaction".into(), "HostId".into()],
+            include: vec![
+                "shd_kernel_sigaction".into(),
+                "HostId".into(),
+                "SysCallArgs".into(),
+                "SysCallReg".into(),
+                "PluginPhysicalPtr".into(),
+            ],
             ..base_config.export.clone()
         },
         ..base_config
