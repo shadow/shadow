@@ -234,13 +234,13 @@ impl TryFrom<SysCallReg> for i16 {
 
 impl From<PluginPtr> for SysCallReg {
     fn from(v: PluginPtr) -> Self {
-        Self { as_ptr: v.into() }
+        Self { as_ptr: v }
     }
 }
 
 impl From<SysCallReg> for PluginPtr {
     fn from(v: SysCallReg) -> PluginPtr {
-        PluginPtr::from(unsafe { v.as_ptr })
+        unsafe { v.as_ptr }
     }
 }
 

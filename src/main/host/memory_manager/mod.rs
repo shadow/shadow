@@ -791,7 +791,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> PluginPtr {
-        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().into() }
+        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
     }
 
     #[no_mangle]

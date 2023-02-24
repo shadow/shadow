@@ -566,14 +566,14 @@ mod export {
         addr: c::PluginVirtualPtr,
     ) {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.set_tid_address(addr.into());
+        thread.set_tid_address(addr);
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
     pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> c::PluginVirtualPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.get_tid_address().into()
+        thread.get_tid_address()
     }
 
     /// Writes the serialized shared memory block handle to `out`
