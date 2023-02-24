@@ -712,16 +712,12 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_connect, ctx);
-        }
-
         let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
         let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
-            .ok_or(Errno::EINVAL)?;
+            .ok_or(Errno::EFAULT)?;
 
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();

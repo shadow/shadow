@@ -493,6 +493,10 @@ impl Worker {
         Worker::with(|w| SIM_STATS.add_from_local_stats(&w.sim_stats)).unwrap()
     }
 
+    pub fn is_routable(src: std::net::IpAddr, dst: std::net::IpAddr) -> bool {
+        Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
+    }
+
     pub fn increment_plugin_error_count() {
         Worker::with(|w| w.shared.increment_plugin_error_count()).unwrap()
     }
@@ -701,7 +705,7 @@ mod export {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
-        Worker::with(|w| w.shared.is_routable(src, dst)).unwrap()
+        Worker::is_routable(src, dst)
     }
 
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
