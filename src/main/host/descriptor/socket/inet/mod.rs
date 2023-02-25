@@ -85,10 +85,14 @@ impl InetSocket {
     pub fn connect(
         &self,
         addr: &SockaddrStorage,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         match self {
-            Self::LegacyTcp(socket) => LegacyTcpSocket::connect(socket, addr, cb_queue),
+            Self::LegacyTcp(socket) => {
+                LegacyTcpSocket::connect(socket, addr, net_ns, rng, cb_queue)
+            }
         }
     }
 }

@@ -9,13 +9,17 @@ use nix::sys::socket::{Shutdown, SockaddrIn};
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
+use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
+    File, FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::write_partial;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::host::syscall::Trigger;
+use crate::host::syscall_condition::SysCallCondition;
+use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
@@ -28,6 +32,8 @@ pub struct LegacyTcpSocket {
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
+    /// Did the last connect() call block, and if so what thread?
+    thread_of_blocked_connect: Option<ThreadId>,
     _counter: ObjectCounter,
 }
 
@@ -55,6 +61,7 @@ impl LegacyTcpSocket {
         let socket = Self {
             socket: HostTreePointer::new(legacy_tcp),
             has_open_file: false,
+            thread_of_blocked_connect: None,
             _counter: ObjectCounter::new("LegacyTcpSocket"),
         };
 
@@ -457,11 +464,154 @@ impl LegacyTcpSocket {
     }
 
     pub fn connect(
-        _socket: &Arc<AtomicRefCell<Self>>,
-        _addr: &SockaddrStorage,
+        socket: &Arc<AtomicRefCell<Self>>,
+        peer_addr: &SockaddrStorage,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        todo!();
+        let mut socket_ref = socket.borrow_mut();
+
+        if let Some(tid) = socket_ref.thread_of_blocked_connect {
+            // check if there is already a blocking connect() call on another thread
+            if tid != Worker::active_thread_id().unwrap() {
+                // connect(2) says "Generally,  connection-based protocol sockets may successfully
+                // connect() only once", but the application is attempting to call connect() in two
+                // threads on a blocking socket at the same time. Let's just return an error and
+                // hope no one ever does this.
+                log::warn!("Two threads are attempting to connect() on a blocking socket");
+                return Err(Errno::EBADFD.into());
+            }
+        }
+
+        let Some(peer_addr) = peer_addr.as_inet() else {
+            return Err(Errno::EINVAL.into());
+        };
+
+        let mut peer_addr: std::net::SocketAddrV4 = (*peer_addr).into();
+
+        // https://stackoverflow.com/a/22425796
+        if peer_addr.ip().is_unspecified() {
+            peer_addr.set_ip(std::net::Ipv4Addr::LOCALHOST);
+        }
+
+        let host_default_ip = net_ns.default_ip;
+
+        // NOTE: it would be nice to use `Ipv4Addr::is_loopback` in this code rather than comparing
+        // to `Ipv4Addr::LOCALHOST`, but the rest of Shadow probably can't handle other loopback
+        // addresses (ex: 127.0.0.2) and it's probably best not to change this behaviour
+
+        // make sure we will be able to route this later
+        // TODO: should we just send the SYN and let the connection fail normally?
+        if peer_addr.ip() != &std::net::Ipv4Addr::LOCALHOST {
+            let is_routable = Worker::is_routable(host_default_ip.into(), (*peer_addr.ip()).into());
+
+            if !is_routable {
+                // can't route it - there is no node with this address
+                log::warn!(
+                    "Attempting to connect to address '{peer_addr}' for which no host exists"
+                );
+                return Err(Errno::ECONNREFUSED.into());
+            }
+        }
+
+        // a connected tcp socket must be bound
+        let is_bound = unsafe { c::legacysocket_isBound(socket_ref.as_legacy_socket()) } == 1;
+        if !is_bound {
+            log::trace!("Implicitly binding listener socket");
+
+            // implicit bind: bind to an ephemeral port (use default interface unless the remote
+            // peer is on loopback)
+            let local_addr = if peer_addr.ip() == &std::net::Ipv4Addr::LOCALHOST {
+                SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)
+            } else {
+                SocketAddrV4::new(host_default_ip, 0)
+            };
+
+            // associate the socket
+            let local_addr = super::associate_socket(
+                super::InetSocket::LegacyTcp(socket.clone()),
+                local_addr,
+                peer_addr,
+                net_ns,
+                rng,
+            )?;
+
+            unsafe {
+                c::legacysocket_setSocketName(
+                    socket_ref.as_legacy_socket(),
+                    u32::from(*local_addr.ip()).to_be(),
+                    local_addr.port().to_be(),
+                )
+            };
+        }
+
+        unsafe {
+            c::legacysocket_setPeerName(
+                socket_ref.as_legacy_socket(),
+                u32::from(*peer_addr.ip()).to_be(),
+                peer_addr.port().to_be(),
+            )
+        };
+
+        // now we are ready to connect
+        let errcode = Worker::with_active_host(|host| unsafe {
+            c::legacysocket_connectToPeer(
+                socket_ref.as_legacy_socket(),
+                host,
+                u32::from(*peer_addr.ip()).to_be(),
+                peer_addr.port().to_be(),
+                libc::AF_INET as u16,
+            )
+        })
+        .unwrap();
+
+        assert!(errcode <= 0);
+
+        let mut errcode = if errcode < 0 {
+            Err(Errno::from_i32(-errcode))
+        } else {
+            Ok(())
+        };
+
+        if !socket_ref.get_status().contains(FileStatus::NONBLOCK) {
+            // this is a blocking connect call
+            if errcode == Err(Errno::EINPROGRESS) {
+                // This is the first time we ever called connect, and so we need to wait for the
+                // 3-way handshake to complete. We will wait indefinitely for a success or failure.
+
+                let trigger = Trigger::from_file(
+                    File::Socket(Socket::Inet(InetSocket::LegacyTcp(Arc::clone(socket)))),
+                    FileState::ACTIVE | FileState::WRITABLE,
+                );
+                let blocked = Blocked {
+                    condition: SysCallCondition::new(trigger),
+                    restartable: socket_ref.supports_sa_restart(),
+                };
+
+                // block the current thread
+                socket_ref.thread_of_blocked_connect = Some(Worker::active_thread_id().unwrap());
+                return Err(SyscallError::Blocked(blocked));
+            }
+
+            // if we were previously blocked (we checked the thread ID above) and are now connected
+            if socket_ref.thread_of_blocked_connect.is_some() && errcode == Err(Errno::EISCONN) {
+                // it was EINPROGRESS, but is now a successful blocking connect
+                errcode = Ok(());
+            }
+        }
+
+        // make sure we return valid error codes for connect
+        if errcode == Err(Errno::ECONNRESET) || errcode == Err(Errno::ENOTCONN) {
+            errcode = Err(Errno::EISCONN);
+        }
+        // EALREADY is well defined in man page, but Linux returns EINPROGRESS
+        if errcode == Err(Errno::EALREADY) {
+            errcode = Err(Errno::EINPROGRESS);
+        }
+
+        socket_ref.thread_of_blocked_connect = None;
+        errcode.map_err(Into::into)
     }
 
     pub fn accept(

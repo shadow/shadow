@@ -798,8 +798,12 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
     utility_debugAssert(socket_desc);
 
-    /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
-    // size_t unix_len = sizeof(struct sockaddr_un); // if sa_family==AF_UNIX
+    if (legacysocket_getProtocol(socket_desc) == PTCP) {
+        /* When we add a TCP socket to the descriptor table we add it as a rust LegacyTcpSocket and
+         * handle it in the rust connect() syscall handler, so we should never get here. */
+        utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
+    }
+
     size_t inet_len = sizeof(struct sockaddr_in);
     if (addrlen < inet_len) {
         return syscallreturn_makeDoneErrno(EINVAL);
@@ -813,7 +817,6 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
 
-    /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     if (addr->sa_family != AF_INET && addr->sa_family != AF_UNSPEC) {
         warning("connecting to address family %i, but we only support AF_INET",
                 (int)addr->sa_family);
@@ -822,7 +825,6 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
         return syscallreturn_makeDoneErrno(EAFNOSUPPORT);
     }
 
-    /* TODO: update for AF_UNIX */
     struct sockaddr_in* inet_addr = (struct sockaddr_in*)addr;
 
     sa_family_t family = inet_addr->sin_family;

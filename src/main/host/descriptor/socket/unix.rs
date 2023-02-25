@@ -228,6 +228,8 @@ impl UnixSocket {
     pub fn connect(
         socket: &Arc<AtomicRefCell<Self>>,
         addr: &SockaddrStorage,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
