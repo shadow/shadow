@@ -139,7 +139,11 @@ impl Error for SelfContainedChannelError {
 /// A fairly minimal channel implementation that implements the
 /// [`vasi::VirtualAddressSpaceIndependent`] trait.
 ///
-/// Only supports a single message at a time, and panics on unexpected state
+/// This is a single-producer, single-consumer channel. Parallel `send`
+/// operations or parallel `receive` operations may panic and corrupt the
+/// channel state.
+///
+/// It only supports a single message at a time, and panics on unexpected state
 /// transitions (e.g. attempting to send when there is already a pending message
 /// in the channel).
 ///
@@ -253,6 +257,9 @@ impl<T> SelfContainedChannel<T> {
 unsafe impl<T> Send for SelfContainedChannel<T> where T: Send {}
 unsafe impl<T> Sync for SelfContainedChannel<T> where T: Send {}
 
+// TODO: Use the VirtualAddressSpaceIndependent Derive macro when it supports
+// trait bounds.
+//
 // SAFETY: SelfContainedChannel is VirtualAddressSpaceIndependent as long as T is.
 unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedChannel<T> where
     T: VirtualAddressSpaceIndependent

@@ -134,6 +134,9 @@ pub struct SelfContainedMutex<T> {
 unsafe impl<T> Send for SelfContainedMutex<T> where T: Send {}
 unsafe impl<T> Sync for SelfContainedMutex<T> where T: Send {}
 
+// TODO: Use the VirtualAddressSpaceIndependent Derive macro when it supports
+// trait bounds.
+//
 // SAFETY: SelfContainedMutex is VirtualAddressSpaceIndependent as long as T is.
 unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedMutex<T> where
     T: VirtualAddressSpaceIndependent
