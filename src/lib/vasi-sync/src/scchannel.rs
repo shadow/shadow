@@ -76,44 +76,42 @@ impl AtomicChannelState {
         ))
     }
 
-    /// Change the inner state from `from` to `to`. Panics if the previous state
-    /// doesn't match `from`.
-    fn transition_contents_state(
+    /// Typed interface to `AtomicU32::fetch_update`
+    fn fetch_update<F>(
         &self,
-        from: ChannelContentsState,
-        to: ChannelContentsState,
-        order: sync::atomic::Ordering,
-    ) -> ChannelState {
-        let prev: ChannelState = if to as u32 > from as u32 {
-            let inc = to as u32 - from as u32;
-            self.0.fetch_add(inc, order).into()
-        } else {
-            let dec = from as u32 - to as u32;
-            self.0.fetch_sub(dec, order).into()
-        };
-        assert_eq!(prev.contents_state, from);
-        prev
+        set_order: sync::atomic::Ordering,
+        fetch_order: sync::atomic::Ordering,
+        mut f: F,
+    ) -> Result<ChannelState, ChannelState>
+    where
+        F: FnMut(ChannelState) -> Option<ChannelState>,
+    {
+        self.0
+            .fetch_update(set_order, fetch_order, |x| {
+                let res = f(ChannelState::from(x));
+                res.map(u32::from)
+            })
+            .map(ChannelState::from)
+            .map_err(ChannelState::from)
     }
 
-    /// Atomically change `has_sleeper` from false to true. Panics if it was already true.
-    fn set_sleeper(&self, order: sync::atomic::Ordering) -> ChannelState {
-        let prev = ChannelState::from(self.0.fetch_add(HAS_SLEEPER, order));
-        assert!(!prev.has_sleeper);
-        prev
+    /// Typed interface to `AtomicU32::load`
+    fn load(&self, order: sync::atomic::Ordering) -> ChannelState {
+        ChannelState::from(self.0.load(order))
     }
 
-    /// Atomically change `has_sleeper` from true to false. Panics if it was already false.
-    fn clear_sleeper(&self, order: sync::atomic::Ordering) -> ChannelState {
-        let prev = ChannelState::from(self.0.fetch_sub(HAS_SLEEPER, order));
-        assert!(prev.has_sleeper);
-        prev
-    }
-
-    /// Atomically change `writer_died` from false to true. Panics if it was already true.
-    fn set_writer_dead(&self, order: sync::atomic::Ordering) -> ChannelState {
-        let prev = ChannelState::from(self.0.fetch_add(WRITER_DIED, order));
-        assert!(!prev.writer_died);
-        prev
+    /// Typed interface to `AtomicU32::compare_exchange`
+    fn compare_exchange(
+        &self,
+        current: ChannelState,
+        new: ChannelState,
+        success: sync::atomic::Ordering,
+        failure: sync::atomic::Ordering,
+    ) -> Result<ChannelState, ChannelState> {
+        self.0
+            .compare_exchange(current.into(), new.into(), success, failure)
+            .map(ChannelState::from)
+            .map_err(ChannelState::from)
     }
 }
 
@@ -139,18 +137,12 @@ impl Error for SelfContainedChannelError {
 /// A fairly minimal channel implementation that implements the
 /// [`vasi::VirtualAddressSpaceIndependent`] trait.
 ///
-/// This is a single-producer, single-consumer channel. Parallel `send`
-/// operations or parallel `receive` operations may panic and corrupt the
-/// channel state.
-///
-/// It only supports a single message at a time, and panics on unexpected state
-/// transitions (e.g. attempting to send when there is already a pending message
-/// in the channel).
-///
-/// Additionally, no attempt is made to ensure consistency after an operation
-/// that panics.  e.g. if one side of a channel makes an API usage error that
-/// causes a panic, the other side of the channel is likely to panic or
-/// deadlock.
+/// Breaking the documented API contracts may result both in immediate panics,
+/// and panics in subsequent operations on the channel. To avoid this, the user
+/// must:
+/// * Never allow parallel `send` or `receive` operations. This is a single-producer,
+/// single-consumer channel.
+/// * Never call `send` when there is already a message pending.
 ///
 /// Loosely inspired by the channel implementation examples in "Rust Atomics and
 /// Locks" by Mara Box (O'Reilly). Copyright 2023 Mara Box, 978-1-098-11944-7.
@@ -173,17 +165,30 @@ impl<T> SelfContainedChannel<T> {
     ///
     /// Panics if the channel already has an unreceived message.
     pub fn send(&self, message: T) {
-        self.state.transition_contents_state(
-            ChannelContentsState::Empty,
-            ChannelContentsState::Writing,
-            sync::atomic::Ordering::Acquire,
-        );
-        unsafe { self.message.get_mut().deref().write(message) };
-        let prev = self.state.transition_contents_state(
-            ChannelContentsState::Writing,
-            ChannelContentsState::Ready,
-            sync::atomic::Ordering::Release,
-        );
+        self.state
+            .fetch_update(
+                sync::atomic::Ordering::Acquire,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Empty);
+                    state.contents_state = ChannelContentsState::Writing;
+                    Some(state)
+                },
+            )
+            .unwrap();
+        unsafe { self.message.get_mut().deref().as_mut_ptr().write(message) };
+        let prev = self
+            .state
+            .fetch_update(
+                sync::atomic::Ordering::Release,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Writing);
+                    state.contents_state = ChannelContentsState::Ready;
+                    Some(state)
+                },
+            )
+            .unwrap();
         if prev.has_sleeper {
             sync::futex_wake(&self.state.0).unwrap();
         }
@@ -196,8 +201,8 @@ impl<T> SelfContainedChannel<T> {
     ///
     /// Panics if another thread is already trying to receive on this channel.
     pub fn receive(&self) -> Result<T, SelfContainedChannelError> {
+        let mut state = self.state.load(sync::atomic::Ordering::Relaxed);
         loop {
-            let state = ChannelState::from(self.state.0.load(sync::atomic::Ordering::Relaxed));
             if state.contents_state == ChannelContentsState::Ready {
                 break;
             }
@@ -208,35 +213,67 @@ impl<T> SelfContainedChannel<T> {
                 state.contents_state == ChannelContentsState::Empty
                     || state.contents_state == ChannelContentsState::Writing
             );
-            let pre_sleeper_state = self.state.set_sleeper(sync::atomic::Ordering::Relaxed);
-            if pre_sleeper_state != state {
-                // Something changed; clear the sleeper bit and try again.
-                self.state.clear_sleeper(sync::atomic::Ordering::Relaxed);
-                continue;
-            }
-            let mut sleeper_state = pre_sleeper_state;
+            assert!(!state.has_sleeper);
+            let mut sleeper_state = state;
             sleeper_state.has_sleeper = true;
+            match self.state.compare_exchange(
+                state,
+                sleeper_state,
+                sync::atomic::Ordering::Relaxed,
+                sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => (),
+                Err(s) => {
+                    // Something changed; re-evaluate.
+                    state = s;
+                    continue;
+                }
+            };
             let expected = sleeper_state.into();
             match sync::futex_wait(&self.state.0, expected) {
                 Ok(_) | Err(nix::errno::Errno::EINTR) | Err(nix::errno::Errno::EAGAIN) => {
                     // Something changed; clear the sleeper bit and try again.
-                    self.state.clear_sleeper(sync::atomic::Ordering::Relaxed);
+                    let mut updated_state = self
+                        .state
+                        .fetch_update(
+                            sync::atomic::Ordering::Relaxed,
+                            sync::atomic::Ordering::Relaxed,
+                            |mut state| {
+                                state.has_sleeper = false;
+                                Some(state)
+                            },
+                        )
+                        .unwrap();
+                    updated_state.has_sleeper = false;
+                    state = updated_state;
                     continue;
                 }
                 Err(e) => panic!("Unexpected futex error {:?}", e),
             };
         }
-        self.state.transition_contents_state(
-            ChannelContentsState::Ready,
-            ChannelContentsState::Reading,
-            sync::atomic::Ordering::Acquire,
-        );
+        self.state
+            .fetch_update(
+                sync::atomic::Ordering::Acquire,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Ready);
+                    state.contents_state = ChannelContentsState::Reading;
+                    Some(state)
+                },
+            )
+            .unwrap();
         let val = unsafe { self.message.get_mut().deref().assume_init_read() };
-        self.state.transition_contents_state(
-            ChannelContentsState::Reading,
-            ChannelContentsState::Empty,
-            sync::atomic::Ordering::Release,
-        );
+        self.state
+            .fetch_update(
+                sync::atomic::Ordering::Release,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Reading);
+                    state.contents_state = ChannelContentsState::Empty;
+                    Some(state)
+                },
+            )
+            .unwrap();
         Ok(val)
     }
 
@@ -244,10 +281,18 @@ impl<T> SelfContainedChannel<T> {
     /// if it's already blocked. This is generally useful in conjunction with some type
     /// of "watchdog" that detects that the writer has died, such as
     /// `main::utility::ChildPidWatcher`.
-    ///
-    /// Panics if called more than once.
     pub fn set_writer_dead(&self) {
-        let prev = self.state.set_writer_dead(sync::atomic::Ordering::Relaxed);
+        let prev = self
+            .state
+            .fetch_update(
+                sync::atomic::Ordering::Relaxed,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    state.writer_died = true;
+                    Some(state)
+                },
+            )
+            .unwrap();
         if prev.has_sleeper {
             sync::futex_wake(&self.state.0).unwrap();
         }
@@ -275,7 +320,7 @@ impl<T> Drop for SelfContainedChannel<T> {
         // external synchronization must have already happened over the whole channel. Indeed
         // the original Box implementation uses get_mut here, which doesn't have an atomic
         // operation at all.
-        let state = ChannelState::from(self.state.0.load(sync::atomic::Ordering::Acquire));
+        let state = self.state.load(sync::atomic::Ordering::Acquire);
         if state.contents_state == ChannelContentsState::Ready {
             unsafe { self.message.get_mut().deref().assume_init_drop() }
         }
