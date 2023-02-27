@@ -11,7 +11,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
+    File, FileMode, FileState, FileStatus, OpenFile, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
@@ -614,10 +614,7 @@ impl LegacyTcpSocket {
         errcode.map_err(Into::into)
     }
 
-    pub fn accept(
-        &mut self,
-        _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<Self>>, SyscallError> {
+    pub fn accept(&mut self, _cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
         todo!()
     }
 

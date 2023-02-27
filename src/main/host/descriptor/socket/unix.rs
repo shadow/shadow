@@ -13,7 +13,8 @@ use crate::host::descriptor::shared_buf::{
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
+    File, FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenerFilter,
+    SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::Trigger;
@@ -238,10 +239,7 @@ impl UnixSocket {
             .connect(&mut socket_ref.common, socket, addr, cb_queue)
     }
 
-    pub fn accept(
-        &mut self,
-        cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
         self.protocol_state.accept(&mut self.common, cb_queue)
     }
 
@@ -734,7 +732,7 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    ) -> Result<OpenFile, SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().accept(common, cb_queue),
             Self::ConnOrientedListening(x) => x.as_mut().unwrap().accept(common, cb_queue),
@@ -924,7 +922,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    ) -> Result<OpenFile, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
@@ -1225,7 +1223,7 @@ impl Protocol for ConnOrientedInitial {
         &mut self,
         _common: &mut UnixSocketCommon,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    ) -> Result<OpenFile, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
     }
@@ -1292,7 +1290,7 @@ impl Protocol for ConnOrientedListening {
         &mut self,
         common: &mut UnixSocketCommon,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    ) -> Result<OpenFile, SyscallError> {
         let child_socket = match self.queue.pop_front() {
             Some(x) => x,
             None => return Err(Errno::EWOULDBLOCK.into()),
@@ -1301,7 +1299,7 @@ impl Protocol for ConnOrientedListening {
         // refresh the socket's file state
         self.refresh_file_state(common, cb_queue);
 
-        Ok(child_socket)
+        Ok(OpenFile::new(File::Socket(Socket::Unix(child_socket))))
     }
 
     fn queue_incoming_conn(
@@ -1508,7 +1506,7 @@ impl Protocol for ConnOrientedConnected {
         &mut self,
         _common: &mut UnixSocketCommon,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<UnixSocket>>, SyscallError> {
+    ) -> Result<OpenFile, SyscallError> {
         log::warn!("accept() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EINVAL.into())
     }
