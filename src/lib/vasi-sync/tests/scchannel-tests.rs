@@ -58,14 +58,14 @@ mod scchannel_tests {
     }
 
     #[test]
-    fn test_writer_writes_then_dies() {
+    fn test_writer_writes_then_closes() {
         sync::model(|| {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
                 let channel = channel.clone();
                 sync::thread::spawn(move || {
                     channel.send(42);
-                    channel.set_writer_dead();
+                    channel.close_writer();
                 })
             };
             let reader = {
@@ -77,16 +77,16 @@ mod scchannel_tests {
             assert_eq!(reader.join().unwrap(), Ok(42));
 
             // Reading from the channel again should return an error since
-            // the writer is dead. (And shouldn't deadlock or panic).
+            // the writer has closed. (And shouldn't deadlock or panic).
             assert_eq!(
                 channel.receive(),
-                Err(SelfContainedChannelError::WriterIsDead)
+                Err(SelfContainedChannelError::WriterIsClosed)
             );
         })
     }
 
     #[test]
-    fn test_writer_death_race() {
+    fn test_writer_close_watchdog() {
         sync::model(|| {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
@@ -97,16 +97,18 @@ mod scchannel_tests {
                 let channel = channel.clone();
                 sync::thread::spawn(move || channel.receive())
             };
-            let killer = {
+            // Simulate a separate watchdog thread that detects that the writer process
+            // has exited, and closes the channel in parallel with the other operations.
+            let watchdog = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.set_writer_dead())
+                sync::thread::spawn(move || channel.close_writer())
             };
             let res = reader.join().unwrap();
-            // We should either get the written value, or an error,
-            // depending on whether the killer thread has completed yet.
-            assert!(res == Ok(42) || res == Err(SelfContainedChannelError::WriterIsDead));
+            // We should either get the written value, or an error, depending on
+            // the execution order.
+            assert!(res == Ok(42) || res == Err(SelfContainedChannelError::WriterIsClosed));
             writer.join().unwrap();
-            killer.join().unwrap();
+            watchdog.join().unwrap();
         })
     }
 

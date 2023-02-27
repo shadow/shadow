@@ -32,12 +32,12 @@ impl From<u8> for ChannelContentsState {
 }
 
 // bit flags in ChannelState
-const WRITER_DIED: u32 = 0x1 << 9;
+const WRITER_CLOSED: u32 = 0x1 << 9;
 const HAS_SLEEPER: u32 = 0x1 << 10;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 struct ChannelState {
-    writer_died: bool,
+    writer_closed: bool,
     has_sleeper: bool,
     contents_state: ChannelContentsState,
 }
@@ -45,11 +45,11 @@ struct ChannelState {
 impl From<u32> for ChannelState {
     fn from(value: u32) -> Self {
         let has_sleeper = (value & HAS_SLEEPER) != 0;
-        let writer_died = (value & WRITER_DIED) != 0;
+        let writer_closed = (value & WRITER_CLOSED) != 0;
         let contents_state = ((value & 0xff) as u8).into();
         ChannelState {
             has_sleeper,
-            writer_died,
+            writer_closed,
             contents_state,
         }
     }
@@ -58,8 +58,12 @@ impl From<u32> for ChannelState {
 impl From<ChannelState> for u32 {
     fn from(value: ChannelState) -> Self {
         let has_sleeper = if value.has_sleeper { HAS_SLEEPER } else { 0 };
-        let writer_died = if value.writer_died { WRITER_DIED } else { 0 };
-        writer_died | has_sleeper | (value.contents_state as u32)
+        let writer_closed = if value.writer_closed {
+            WRITER_CLOSED
+        } else {
+            0
+        };
+        writer_closed | has_sleeper | (value.contents_state as u32)
     }
 }
 
@@ -69,7 +73,7 @@ impl AtomicChannelState {
         Self(AtomicU32::new(
             ChannelState {
                 has_sleeper: false,
-                writer_died: false,
+                writer_closed: false,
                 contents_state: ChannelContentsState::Empty,
             }
             .into(),
@@ -117,13 +121,13 @@ impl AtomicChannelState {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SelfContainedChannelError {
-    WriterIsDead,
+    WriterIsClosed,
 }
 
 impl Display for SelfContainedChannelError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SelfContainedChannelError::WriterIsDead => write!(f, "WriterIsDead"),
+            SelfContainedChannelError::WriterIsClosed => write!(f, "WriterIsClosed"),
         }
     }
 }
@@ -194,10 +198,11 @@ impl<T> SelfContainedChannel<T> {
         }
     }
 
-    /// Blocks until either the channel contains a message, or the writer has died.
+    /// Blocks until either the channel contains a message, or the writer has
+    /// closed the channel.
     ///
     /// Returns `Ok(T)` if a message was received, or
-    /// `Err(SelfContainedMutexError::WriterIsDead)` if the writer is dead.
+    /// `Err(SelfContainedMutexError::WriterIsClosed)` if the writer is closed.
     ///
     /// Panics if another thread is already trying to receive on this channel.
     pub fn receive(&self) -> Result<T, SelfContainedChannelError> {
@@ -206,8 +211,8 @@ impl<T> SelfContainedChannel<T> {
             if state.contents_state == ChannelContentsState::Ready {
                 break;
             }
-            if state.writer_died {
-                return Err(SelfContainedChannelError::WriterIsDead);
+            if state.writer_closed {
+                return Err(SelfContainedChannelError::WriterIsClosed);
             }
             assert!(
                 state.contents_state == ChannelContentsState::Empty
@@ -277,18 +282,20 @@ impl<T> SelfContainedChannel<T> {
         Ok(val)
     }
 
-    /// Marks the writer as dead, causing `receive` to not block, and to return
-    /// if it's already blocked. This is generally useful in conjunction with some type
-    /// of "watchdog" that detects that the writer has died, such as
-    /// `main::utility::ChildPidWatcher`.
-    pub fn set_writer_dead(&self) {
+    /// Closes the "write" end of the channel. This will cause any current
+    /// and subsequent `receive` operations to fail once the channel is empty.
+    ///
+    /// This method *can* be called in parallel with other methods on the
+    /// channel, making it suitable to be called from a separate watchdog thread
+    /// that detects that the writing thread (or process) has died.
+    pub fn close_writer(&self) {
         let prev = self
             .state
             .fetch_update(
                 sync::atomic::Ordering::Relaxed,
                 sync::atomic::Ordering::Relaxed,
                 |mut state| {
-                    state.writer_died = true;
+                    state.writer_closed = true;
                     Some(state)
                 },
             )
