@@ -24,7 +24,10 @@ pub use vasi_macro::VirtualAddressSpaceIndependent;
 /// # Safety
 ///
 /// The type must actually be self-contained, as above.
-pub unsafe trait VirtualAddressSpaceIndependent {}
+pub unsafe trait VirtualAddressSpaceIndependent {
+    /// Used by the derive macro to validate that fields are Vasi.
+    const IGNORE: () = ();
+}
 
 // Types not containing any pointers are trivially VirtualAddressSpaceIndependent.
 unsafe impl VirtualAddressSpaceIndependent for i64 {}

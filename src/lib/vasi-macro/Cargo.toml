@@ -14,4 +14,5 @@ quote = "1.0.23"
 syn = "1.0.107"
 
 [dev-dependencies]
+static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
