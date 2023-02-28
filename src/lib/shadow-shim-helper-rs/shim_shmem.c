@@ -9,7 +9,7 @@
 #include "shim_event.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {
-    assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_REQ);
+    assert(ev && ev->event_id == SHIM_EVENT_ID_CLONE_REQ);
 
     ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
@@ -17,7 +17,7 @@ void shim_shmemHandleClone(const ShimEvent* ev) {
 }
 
 void shim_shmemHandleCloneString(const ShimEvent* ev) {
-    assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_STRING_REQ);
+    assert(ev && ev->event_id == SHIM_EVENT_ID_CLONE_STRING_REQ);
 
     ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
@@ -26,7 +26,7 @@ void shim_shmemHandleCloneString(const ShimEvent* ev) {
 }
 
 void shim_shmemHandleWrite(const ShimEvent* ev) {
-    assert(ev && ev->event_id == SHD_SHIM_EVENT_WRITE_REQ);
+    assert(ev && ev->event_id == SHIM_EVENT_ID_WRITE_REQ);
 
     ShMemBlock blk = shmemserializer_globalBlockDeserialize(&ev->event_data.shmem_blk.serial);
 
@@ -35,7 +35,7 @@ void shim_shmemHandleWrite(const ShimEvent* ev) {
 
 void shim_shmemNotifyComplete(struct IPCData* data) {
     ShimEvent ev = {
-        .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+        .event_id = SHIM_EVENT_ID_SHMEM_COMPLETE,
     };
     shimevent_sendEventToShadow(data, &ev);
 }
