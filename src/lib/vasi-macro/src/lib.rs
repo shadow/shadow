@@ -88,6 +88,28 @@ use syn::Field;
 /// }
 /// ```
 ///
+/// An enum containing only `VirtualAddressSpaceIndependent` variants qualifies:
+/// ```
+/// use vasi::VirtualAddressSpaceIndependent;
+///
+/// #[derive(VirtualAddressSpaceIndependent)]
+/// enum Foo {
+///   Bar(i32),
+///   Baz(i32),
+/// }
+/// ```
+///
+/// An enum containing a non-vasi variant doesn't qualify:
+/// ```compile_fail
+/// use vasi::VirtualAddressSpaceIndependent;
+///
+/// #[derive(VirtualAddressSpaceIndependent)]
+/// enum Foo {
+///   Bar(i32),
+///   Baz(*const i32),
+/// }
+/// ```
+///
 /// TODO: Extend to support trait bounds. See e.g.
 /// <https://github.com/dtolnay/syn/blob/master/examples/heapsize/heapsize_derive/src/lib.rs#L16>
 #[proc_macro_derive(
@@ -130,7 +152,13 @@ fn impl_derive_virtual_address_space_independent(ast: syn::DeriveInput) -> proc_
                 assertions.push(assertions_for_field(field));
             }
         }
-        syn::Data::Enum(_) => unimplemented!("Enums aren't yet implemented"),
+        syn::Data::Enum(e) => {
+            for variant in &e.variants {
+                for field in &variant.fields {
+                    assertions.push(assertions_for_field(field));
+                }
+            }
+        }
         syn::Data::Union(u) => {
             for field in &u.fields.named {
                 assertions.push(assertions_for_field(field));
