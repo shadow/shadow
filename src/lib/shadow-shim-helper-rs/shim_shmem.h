@@ -2,7 +2,7 @@
 #define SHD_SHIM_SHMEM_H_
 
 #include "ipc.h"
-#include "shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 // Handle SHIM_EVENT_ID_CLONE_REQ
 void shim_shmemHandleClone(const ShimEvent* ev);
