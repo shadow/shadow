@@ -64,6 +64,9 @@ use quote::quote;
 ///   x: *const i32,
 /// }
 /// ```
+///
+/// TODO: Extend to support trait bounds. See e.g.
+/// <https://github.com/dtolnay/syn/blob/master/examples/heapsize/heapsize_derive/src/lib.rs#L16>
 #[proc_macro_derive(
     VirtualAddressSpaceIndependent,
     attributes(unsafe_assume_virtual_address_space_independent)

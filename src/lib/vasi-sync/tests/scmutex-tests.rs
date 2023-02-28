@@ -1,65 +1,11 @@
-//! This module contains tests that are designed to work with [loom].  See
-//! [loom] documentation for full details, but a basic way to run these under
-//! loom, from the shadow source directory is:
-//!
-//! ```
-//! LOOM_MAX_PREEMPTIONS=3 \
-//! RUSTFLAGS="--cfg loom" \
-//! cargo test \
-//! --manifest-path=src/Cargo.toml \
-//! -p shadow_shmem \
-//! --test scmutex-tests \
-//! --target-dir=loomtarget \
-//! -- --nocapture
-//! ```
-//!
-//! Setting `--target-dir` avoids thrashing the build cache back and forth
-//! between a loom build or not.
-//!
-//! In case of failure, see the loom documentation for guidance on debugging.
-//! In particular LOOM_LOG=trace and/or LOOM_LOCATIONS=1 are a good place to start.
+//! This file contains tests intended to be run using [loom]. See the
+//! [crate-level documentation](crate) for details about running these under
+//! loom.
 //!
 //! [loom]: <https://docs.rs/loom/latest/loom/>
-use shadow_shmem::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
+use vasi_sync::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
 
-mod sync {
-    #[cfg(loom)]
-    pub fn model<F>(f: F)
-    where
-        F: Fn() + Sync + Send + 'static,
-    {
-        loom::model(move || {
-            f();
-            shadow_shmem::scmutex::loom_reset();
-        });
-    }
-    #[cfg(not(loom))]
-    pub fn model<F>(f: F)
-    where
-        F: Fn() + Sync + Send + 'static,
-    {
-        f()
-    }
-
-    #[cfg(loom)]
-    pub use loom::sync::Arc;
-    #[cfg(not(loom))]
-    pub use std::sync::Arc;
-
-    #[cfg(loom)]
-    pub use loom::thread;
-    #[cfg(not(loom))]
-    pub use std::thread;
-
-    #[cfg(loom)]
-    pub fn rand_sleep() {}
-    #[cfg(not(loom))]
-    pub fn rand_sleep() {
-        std::thread::sleep(std::time::Duration::from_nanos(
-            rand::random::<u64>() % 10_000_000,
-        ));
-    }
-}
+mod sync;
 
 mod tests {
     use super::*;
