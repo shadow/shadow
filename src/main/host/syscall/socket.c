@@ -177,65 +177,10 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     }
     utility_debugAssert(tcp_desc);
 
-    /* We must be listening in order to accept. */
-    if (!tcp_isValidListener(tcp_desc)) {
-        debug("socket %i is not listening", sockfd);
-        return syscallreturn_makeDoneErrno(EINVAL);
-    }
-
-    /* OK, now we can check if we have anything to accept. */
-    struct sockaddr_in inet_addr = {.sin_family = AF_INET};
-    int accepted_fd = 0;
-    errcode = tcp_acceptServerPeer(tcp_desc, _syscallhandler_getHost(sys),
-                                   &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
-
-    LegacyFile* legacyDesc = (LegacyFile*)tcp_desc;
-    if (errcode == -EWOULDBLOCK && !(legacyfile_getFlags(legacyDesc) & O_NONBLOCK)) {
-        /* This is a blocking accept, and we don't have a connection yet.
-         * The socket becomes readable when we have a connection to accept.
-         * This blocks indefinitely without a timeout. */
-        trace("Listening socket %i waiting for acceptable connection.", sockfd);
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = legacyDesc, .status = STATUS_FILE_READABLE};
-        return syscallreturn_makeBlocked(
-            syscallcondition_new(trigger), legacyfile_supportsSaRestart(legacyDesc));
-    } else if (errcode < 0) {
-        trace("TCP error when accepting connection on socket %i", sockfd);
-        return syscallreturn_makeDoneErrno(-errcode);
-    }
-
-    /* We accepted something! */
-    utility_debugAssert(accepted_fd > 0);
-    TCP* accepted_tcp_desc = NULL;
-    errcode = _syscallhandler_validateTCPSocketHelper(
-        sys, accepted_fd, &accepted_tcp_desc);
-    utility_debugAssert(errcode == 0);
-
-    trace("listening socket %i accepted fd %i", sockfd, accepted_fd);
-
-    /* Get the descriptor for this new socket and set flags if necessary. */
-    Descriptor* desc =
-        process_getRegisteredDescriptorMut(_syscallhandler_getProcess(sys), accepted_fd);
-    if (flags & SOCK_CLOEXEC) {
-        descriptor_setFlags(desc, O_CLOEXEC);
-    }
-    desc = NULL;
-
-    /* Set the flags on the accepted socket if requested. */
-    if (flags & SOCK_NONBLOCK) {
-        legacyfile_addFlags((LegacyFile*)accepted_tcp_desc, O_NONBLOCK);
-    }
-
-    /* check if they wanted to know where we got the data from */
-    if (addrPtr.val) {
-        errcode = _syscallhandler_getnameHelper(
-            sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), addrPtr, addrlenPtr);
-        if (errcode != 0) {
-            return syscallreturn_makeDoneErrno(-errcode);
-        }
-    }
-
-    return syscallreturn_makeDoneI64(accepted_fd);
+    /* When we add a TCP socket to the descriptor table we add it as a rust LegacyTcpSocket and
+     * handle it in the rust accept() and accept4() syscall handlers, so we should never get here.
+     */
+    utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
 }
 
 static int _syscallhandler_bindHelper(SysCallHandler* sys, LegacySocket* socket_desc,

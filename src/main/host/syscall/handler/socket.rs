@@ -550,10 +550,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept, ctx);
-        }
-
         Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
@@ -592,10 +588,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
-        }
-
         Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
     }
 
@@ -620,7 +612,9 @@ impl SyscallHandler {
             }
         };
 
-        let result = CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue));
+        let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue))
+        });
 
         let file_status = socket.borrow().get_status();
 
