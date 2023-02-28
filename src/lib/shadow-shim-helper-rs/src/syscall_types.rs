@@ -104,9 +104,9 @@ impl SysCallArgs {
 #[derive(Copy, Clone, Eq)]
 #[repr(C)]
 pub union SysCallReg {
-    pub as_i64: i64,
-    pub as_u64: u64,
-    pub as_ptr: PluginPtr,
+    as_i64: i64,
+    as_u64: u64,
+    as_ptr: PluginPtr,
 }
 // SysCallReg and all of its fields must be transmutable with a 64 bit integer.
 // TODO: Store as a single `u64` and explicitly transmute in the conversion

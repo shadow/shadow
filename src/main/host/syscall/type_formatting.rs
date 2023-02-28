@@ -44,7 +44,7 @@ macro_rules! simple_display_impl {
                 match <$type>::try_from_reg(self.reg) {
                     Some(x) => write!(f, "{x}"),
                     // if the conversion to type T was unsuccessful, just show an integer
-                    None => write!(f, "{:#x} <invalid>", unsafe { self.reg.as_u64 }),
+                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
                 }
             }
         }
@@ -69,7 +69,7 @@ macro_rules! simple_debug_impl {
                 match <$type>::try_from_reg(self.reg) {
                     Some(x) => write!(f, "{x:?}"),
                     // if the conversion to type T was unsuccessful, just show an integer
-                    None => write!(f, "{:#x} <invalid>", unsafe { self.reg.as_u64 }),
+                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
                 }
             }
         }

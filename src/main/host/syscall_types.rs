@@ -152,7 +152,7 @@ impl From<c::SysCallReturn> for SyscallResult {
         match r.state {
             c::SysCallReturnState_SYSCALL_DONE => {
                 match crate::utility::syscall::raw_return_value_to_result(unsafe {
-                    r.u.done.retval.as_i64
+                    i64::from(r.u.done.retval)
                 }) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(SyscallError::Failed(Failed {

@@ -235,9 +235,7 @@ where
             }
             SyscallResult::Err(SyscallError::Failed(failed)) => {
                 let errno: Errno = failed.errno;
-                let rv = SysCallReg {
-                    as_i64: -(errno as i64),
-                };
+                let rv = SysCallReg::from(-(errno as i64));
                 let rv = SyscallVal::<'_, RV>::new(rv, self.args, self.options, self.mem);
                 write!(f, "{rv} ({errno})")
             }
