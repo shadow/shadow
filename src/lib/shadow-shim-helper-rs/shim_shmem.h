@@ -4,13 +4,13 @@
 #include "ipc.h"
 #include "shim_event.h"
 
-// Handle SHD_SHIM_EVENT_CLONE_REQ
+// Handle SHIM_EVENT_ID_CLONE_REQ
 void shim_shmemHandleClone(const ShimEvent* ev);
 
-// Handle SHD_SHIM_EVENT_CLONE_STRING_REQ
+// Handle SHIM_EVENT_ID_CLONE_STRING_REQ
 void shim_shmemHandleCloneString(const ShimEvent* ev);
 
-// Handle SHD_SHIM_EVENT_WRITE_REQ
+// Handle SHIM_EVENT_ID_WRITE_REQ
 void shim_shmemHandleWrite(const ShimEvent* ev);
 
 // Notify Shadow that a shared memory event has been handled.

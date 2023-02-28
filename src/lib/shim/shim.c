@@ -417,7 +417,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     shim_newThreadChildInitd();
 
     shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
-    assert(event.event_id == SHD_SHIM_EVENT_START);
+    assert(event.event_id == SHIM_EVENT_ID_START);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -427,7 +427,7 @@ static void _shim_ipc_wait_for_start_event() {
     ShimEvent event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
-    assert(event.event_id == SHD_SHIM_EVENT_START);
+    assert(event.event_id == SHIM_EVENT_ID_START);
 }
 
 static void _shim_parent_init_seccomp() {
