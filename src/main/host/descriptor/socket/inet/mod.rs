@@ -6,7 +6,7 @@ use nix::errno::Errno;
 use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
-use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
+use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::network::net_namespace::NetworkNamespace;
@@ -273,9 +273,9 @@ impl InetSocketRefMut<'_> {
         where W: std::io::Write + std::io::Seek
     );
 
-    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<InetSocket, SyscallError> {
+    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
         match self {
-            Self::LegacyTcp(socket) => socket.accept(cb_queue).map(InetSocket::LegacyTcp),
+            Self::LegacyTcp(socket) => socket.accept(cb_queue),
         }
     }
 

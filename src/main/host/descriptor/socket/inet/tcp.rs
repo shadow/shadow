@@ -11,7 +11,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateListenerFilter, SyscallResult,
+    CompatFile, File, FileMode, FileState, FileStatus, OpenFile, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
@@ -614,11 +614,83 @@ impl LegacyTcpSocket {
         errcode.map_err(Into::into)
     }
 
-    pub fn accept(
-        &mut self,
-        _cb_queue: &mut CallbackQueue,
-    ) -> Result<Arc<AtomicRefCell<Self>>, SyscallError> {
-        todo!()
+    pub fn accept(&mut self, _cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+        let is_valid_listener = unsafe { c::tcp_isValidListener(self.as_legacy_tcp()) } == 1;
+
+        // we must be listening in order to accept
+        if !is_valid_listener {
+            log::debug!("Socket is not listening");
+            return Err(Errno::EINVAL.into());
+        }
+
+        let mut peer_addr: libc::sockaddr_in = pod::zeroed();
+        peer_addr.sin_family = libc::AF_INET as u16;
+        let mut accepted_fd = -1;
+
+        // now we can check if we have anything to accept
+        let errcode = Worker::with_active_host(|host| unsafe {
+            c::tcp_acceptServerPeer(
+                self.as_legacy_tcp(),
+                host,
+                &mut peer_addr.sin_addr.s_addr,
+                &mut peer_addr.sin_port,
+                &mut accepted_fd,
+            )
+        })
+        .unwrap();
+
+        assert!(errcode <= 0);
+
+        if errcode < 0 {
+            log::trace!("TCP error when accepting connection");
+            return Err(Errno::from_i32(-errcode).into());
+        }
+
+        // we accepted something!
+        assert!(accepted_fd >= 0);
+
+        // The rust socket syscall interface expects us to return the socket object so that it can
+        // add it to the descriptor table, but the TCP code has already added it to the descriptor
+        // table (see https://github.com/shadow/shadow/issues/1780). We'll remove the socket from
+        // the descriptor table, return it to the syscall handler, and let the syscall handler
+        // re-add it to the descriptor table. It may end up with a different fd handle, but that
+        // should be fine since nothing should be relying on the socket having a specific/fixed fd
+        // handle.
+
+        let new_descriptor = Worker::with_active_process(|proc| {
+            proc.descriptor_table_borrow_mut()
+                .deregister_descriptor(accepted_fd.try_into().unwrap())
+                .unwrap()
+        })
+        .unwrap();
+
+        let CompatFile::New(open_file) = new_descriptor.into_file() else {
+            panic!("The TCP code should have added the TCP socket to the descriptor table as a rust socket");
+        };
+
+        // sanity check: make sure new socket peer address matches address returned from
+        // tcp_acceptServerPeer() above
+        {
+            let File::Socket(Socket::Inet(InetSocket::LegacyTcp(new_socket))) = open_file.inner_file() else {
+                panic!("Expected this to be a LegacyTcpSocket");
+            };
+
+            let new_socket = new_socket.borrow();
+
+            let mut ip: libc::in_addr_t = 0;
+            let mut port: libc::in_port_t = 0;
+
+            // should return ip and port in network byte order
+            let okay = unsafe {
+                c::legacysocket_getPeerName(new_socket.as_legacy_socket(), &mut ip, &mut port)
+            };
+
+            assert_eq!(okay, 1);
+            assert_eq!(ip, peer_addr.sin_addr.s_addr);
+            assert_eq!(port, peer_addr.sin_port);
+        }
+
+        Ok(open_file)
     }
 
     pub fn shutdown(

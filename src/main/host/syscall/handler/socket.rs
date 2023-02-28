@@ -550,10 +550,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept, ctx);
-        }
-
         Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
     }
 
@@ -592,10 +588,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
-        }
-
         Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
     }
 
@@ -620,7 +612,9 @@ impl SyscallHandler {
             }
         };
 
-        let result = CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue));
+        let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue))
+        });
 
         let file_status = socket.borrow().get_status();
 
@@ -639,30 +633,32 @@ impl SyscallHandler {
             }));
         }
 
-        // must not drop the new socket without closing
         let new_socket = result?;
 
-        let from_addr = new_socket.borrow().getpeername().unwrap();
+        let from_addr = {
+            let File::Socket(new_socket) = new_socket.inner_file() else {
+                panic!("Accepted file should be a socket");
+            };
+            new_socket.borrow().getpeername().unwrap()
+        };
 
         if !addr_ptr.is_null() {
-            if let Err(e) = write_sockaddr(
+            write_sockaddr(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
                 TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
-            ) {
-                CallbackQueue::queue_and_run(|cb_queue| new_socket.borrow_mut().close(cb_queue))
-                    .unwrap();
-                return Err(e);
-            }
+            )?;
         }
 
         if flags.contains(SockFlag::SOCK_NONBLOCK) {
-            new_socket.borrow_mut().set_status(FileStatus::NONBLOCK);
+            new_socket
+                .inner_file()
+                .borrow_mut()
+                .set_status(FileStatus::NONBLOCK);
         }
 
-        let mut new_desc =
-            Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(new_socket))));
+        let mut new_desc = Descriptor::new(CompatFile::New(new_socket));
 
         if flags.contains(SockFlag::SOCK_CLOEXEC) {
             new_desc.set_flags(DescriptorFlags::CLOEXEC);

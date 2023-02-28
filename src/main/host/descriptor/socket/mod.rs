@@ -4,7 +4,7 @@ use atomic_refcell::AtomicRefCell;
 use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
-use crate::host::descriptor::{FileMode, FileState, FileStatus, SyscallResult};
+use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::network::net_namespace::NetworkNamespace;
@@ -273,10 +273,10 @@ impl SocketRefMut<'_> {
         where W: std::io::Write + std::io::Seek
     );
 
-    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<Socket, SyscallError> {
+    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
         match self {
-            Self::Unix(socket) => socket.accept(cb_queue).map(Socket::Unix),
-            Self::Inet(socket) => socket.accept(cb_queue).map(Socket::Inet),
+            Self::Unix(socket) => socket.accept(cb_queue),
+            Self::Inet(socket) => socket.accept(cb_queue),
         }
     }
 

@@ -643,6 +643,10 @@ impl Descriptor {
         self.flags = flags;
     }
 
+    pub fn into_file(self) -> CompatFile {
+        self.file
+    }
+
     /// Close the descriptor. The `host` option is a legacy option for legacy file.
     pub fn close(
         self,
