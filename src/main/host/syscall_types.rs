@@ -9,271 +9,10 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
 
-/// Represents a pointer to a virtual address in plugin memory.
-#[derive(Copy, Clone, Debug)]
-pub struct PluginPtr {
-    ptr: usize,
-}
-
-impl PluginPtr {
-    pub fn null() -> Self {
-        0usize.into()
-    }
-
-    pub fn is_null(&self) -> bool {
-        self.ptr == 0
-    }
-}
-
-impl From<PluginPtr> for c::PluginPtr {
-    fn from(v: PluginPtr) -> c::PluginPtr {
-        c::PluginPtr {
-            val: v.ptr.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<c::PluginPtr> for PluginPtr {
-    fn from(v: c::PluginPtr) -> PluginPtr {
-        PluginPtr {
-            ptr: v.val.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<PluginPtr> for usize {
-    fn from(v: PluginPtr) -> usize {
-        v.ptr
-    }
-}
-
-impl From<usize> for PluginPtr {
-    fn from(v: usize) -> PluginPtr {
-        PluginPtr { ptr: v }
-    }
-}
-
-impl From<u64> for PluginPtr {
-    fn from(v: u64) -> PluginPtr {
-        PluginPtr {
-            ptr: v.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<PluginPtr> for u64 {
-    fn from(v: PluginPtr) -> u64 {
-        v.ptr.try_into().unwrap()
-    }
-}
-
-impl std::fmt::Pointer for PluginPtr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ptr = self.ptr as *const libc::c_void;
-        std::fmt::Pointer::fmt(&ptr, f)
-    }
-}
-
-/// Represents a pointer to a *physical* address in plugin memory.
-#[derive(Copy, Clone, Debug)]
-pub struct PluginPhysicalPtr {
-    ptr: usize,
-}
-
-impl From<PluginPhysicalPtr> for c::PluginPhysicalPtr {
-    fn from(v: PluginPhysicalPtr) -> c::PluginPhysicalPtr {
-        c::PluginPhysicalPtr {
-            val: v.ptr.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<c::PluginPhysicalPtr> for PluginPhysicalPtr {
-    fn from(v: c::PluginPhysicalPtr) -> PluginPhysicalPtr {
-        PluginPhysicalPtr {
-            ptr: v.val.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<PluginPhysicalPtr> for usize {
-    fn from(v: PluginPhysicalPtr) -> usize {
-        v.ptr
-    }
-}
-
-impl From<usize> for PluginPhysicalPtr {
-    fn from(v: usize) -> PluginPhysicalPtr {
-        PluginPhysicalPtr { ptr: v }
-    }
-}
-
-impl From<u64> for PluginPhysicalPtr {
-    fn from(v: u64) -> PluginPhysicalPtr {
-        PluginPhysicalPtr {
-            ptr: v.try_into().unwrap(),
-        }
-    }
-}
-
-impl From<PluginPhysicalPtr> for u64 {
-    fn from(v: PluginPhysicalPtr) -> u64 {
-        v.ptr.try_into().unwrap()
-    }
-}
-
-pub type SysCallArgs = c::SysCallArgs;
-pub type SysCallReg = c::SysCallReg;
-
-impl SysCallArgs {
-    pub fn get(&self, i: usize) -> SysCallReg {
-        self.args[i]
-    }
-    pub fn number(&self) -> i64 {
-        self.number
-    }
-}
-
-impl PartialEq for SysCallReg {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe { self.as_u64 == other.as_u64 }
-    }
-}
-
-impl Eq for SysCallReg {}
-
-impl From<u64> for SysCallReg {
-    fn from(v: u64) -> Self {
-        Self { as_u64: v }
-    }
-}
-
-impl From<SysCallReg> for u64 {
-    fn from(v: SysCallReg) -> u64 {
-        unsafe { v.as_u64 }
-    }
-}
-
-impl From<u32> for SysCallReg {
-    fn from(v: u32) -> Self {
-        Self { as_u64: v as u64 }
-    }
-}
-
-impl From<SysCallReg> for u32 {
-    fn from(v: SysCallReg) -> u32 {
-        (unsafe { v.as_u64 }) as u32
-    }
-}
-
-impl From<usize> for SysCallReg {
-    fn from(v: usize) -> Self {
-        Self { as_u64: v as u64 }
-    }
-}
-
-impl From<SysCallReg> for usize {
-    fn from(v: SysCallReg) -> usize {
-        unsafe { v.as_u64 as usize }
-    }
-}
-
-impl From<isize> for SysCallReg {
-    fn from(v: isize) -> Self {
-        Self { as_i64: v as i64 }
-    }
-}
-
-impl From<SysCallReg> for isize {
-    fn from(v: SysCallReg) -> isize {
-        unsafe { v.as_i64 as isize }
-    }
-}
-
-impl From<i64> for SysCallReg {
-    fn from(v: i64) -> Self {
-        Self { as_i64: v }
-    }
-}
-
-impl From<SysCallReg> for i64 {
-    fn from(v: SysCallReg) -> i64 {
-        unsafe { v.as_i64 }
-    }
-}
-
-impl From<i32> for SysCallReg {
-    fn from(v: i32) -> Self {
-        Self { as_i64: v as i64 }
-    }
-}
-
-impl From<SysCallReg> for i32 {
-    fn from(v: SysCallReg) -> i32 {
-        (unsafe { v.as_i64 }) as i32
-    }
-}
-
-impl TryFrom<SysCallReg> for u8 {
-    type Error = <u8 as TryFrom<u64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<u8, Self::Error> {
-        (unsafe { v.as_u64 }).try_into()
-    }
-}
-
-impl TryFrom<SysCallReg> for u16 {
-    type Error = <u16 as TryFrom<u64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<u16, Self::Error> {
-        (unsafe { v.as_u64 }).try_into()
-    }
-}
-
-impl TryFrom<SysCallReg> for i8 {
-    type Error = <i8 as TryFrom<i64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<i8, Self::Error> {
-        (unsafe { v.as_i64 }).try_into()
-    }
-}
-
-impl TryFrom<SysCallReg> for i16 {
-    type Error = <i16 as TryFrom<i64>>::Error;
-
-    fn try_from(v: SysCallReg) -> Result<i16, Self::Error> {
-        (unsafe { v.as_i64 }).try_into()
-    }
-}
-
-impl From<PluginPtr> for SysCallReg {
-    fn from(v: PluginPtr) -> Self {
-        Self { as_ptr: v.into() }
-    }
-}
-
-impl From<SysCallReg> for PluginPtr {
-    fn from(v: SysCallReg) -> PluginPtr {
-        PluginPtr::from(unsafe { v.as_ptr })
-    }
-}
-
-// Useful for syscalls whose strongly-typed wrappers return some Result<(), ErrType>
-impl From<()> for SysCallReg {
-    fn from(_: ()) -> SysCallReg {
-        SysCallReg { as_i64: 0 }
-    }
-}
-
-impl std::fmt::Debug for c::SysCallReg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SysCallReg")
-            .field("as_i64", unsafe { &self.as_i64 })
-            .field("as_u64", unsafe { &self.as_u64 })
-            .field("as_ptr", unsafe { &self.as_ptr })
-            .finish()
-    }
-}
+// XXX temp
+pub use shadow_shim_helper_rs::syscall_types::{
+    PluginPhysicalPtr, PluginPtr, SysCallArgs, SysCallReg,
+};
 
 /// Wrapper around a PluginPtr that encapsulates its type, size, and current
 /// position.
@@ -378,9 +117,7 @@ impl<T> TypedPluginPtr<T> {
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
         TypedPluginPtr {
-            base: PluginPtr {
-                ptr: (self.base.ptr + included_start * size_of::<T>()),
-            },
+            base: PluginPtr::from(usize::from(self.base) + included_start * size_of::<T>()),
             count: excluded_end - included_start,
             _phantom: PhantomData,
         }
@@ -415,7 +152,7 @@ impl From<c::SysCallReturn> for SyscallResult {
         match r.state {
             c::SysCallReturnState_SYSCALL_DONE => {
                 match crate::utility::syscall::raw_return_value_to_result(unsafe {
-                    r.u.done.retval.as_i64
+                    i64::from(r.u.done.retval)
                 }) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(SyscallError::Failed(Failed {
@@ -440,8 +177,8 @@ impl From<SyscallResult> for c::SysCallReturn {
         match syscall_return {
             Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                u: c::SysCallReturnBody {
-                    done: c::SysCallReturnDone {
+                u: SysCallReturnBody {
+                    done: SysCallReturnDone {
                         retval: r,
                         // N/A for non-error result (and non-EINTR result in particular)
                         restartable: false,
@@ -450,8 +187,8 @@ impl From<SyscallResult> for c::SysCallReturn {
             },
             Err(SyscallError::Failed(failed)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                u: c::SysCallReturnBody {
-                    done: c::SysCallReturnDone {
+                u: SysCallReturnBody {
+                    done: SysCallReturnDone {
                         retval: (-(failed.errno as i64)).into(),
                         restartable: failed.restartable,
                     },
@@ -459,8 +196,8 @@ impl From<SyscallResult> for c::SysCallReturn {
             },
             Err(SyscallError::Blocked(blocked)) => Self {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: c::SysCallReturnBody {
-                    blocked: c::SysCallReturnBlocked {
+                u: SysCallReturnBody {
+                    blocked: SysCallReturnBlocked {
                         cond: blocked.condition.into_inner(),
                         restartable: blocked.restartable,
                     },
@@ -470,7 +207,7 @@ impl From<SyscallResult> for c::SysCallReturn {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,
                 // No field for native. This is the recommended way to default-initialize a union.
                 // https://rust-lang.github.io/rust-bindgen/using-unions.html#using-the-union-builtin
-                u: unsafe { std::mem::zeroed::<c::SysCallReturnBody>() },
+                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
             },
         }
     }
@@ -499,4 +236,31 @@ impl From<std::io::Error> for SyscallError {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct SysCallReturnDone {
+    pub retval: SysCallReg,
+    // Only meaningful when `retval` is -EINTR.
+    //
+    // Whether the interrupted syscall is restartable.
+    pub restartable: bool,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct SysCallReturnBlocked {
+    pub cond: *mut c::SysCallCondition,
+    // True if the syscall is restartable in the case that it was interrupted by
+    // a signal. e.g. if the syscall was a `read` operation on a socket without
+    // a configured timeout. See socket(7).
+    pub restartable: bool,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union SysCallReturnBody {
+    pub done: SysCallReturnDone,
+    pub blocked: SysCallReturnBlocked,
 }

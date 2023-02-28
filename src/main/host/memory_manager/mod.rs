@@ -15,7 +15,6 @@
 //! all access to process memory must go through it. This includes servicing syscalls that
 //! modify the process address space (such as `mmap`).
 
-use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
 use crate::host::thread::Thread;
 use crate::utility::pod;
@@ -791,8 +790,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> c::PluginPtr {
-        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().into() }
+    pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> PluginPtr {
+        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
     }
 
     #[no_mangle]

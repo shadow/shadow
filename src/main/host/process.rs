@@ -952,10 +952,7 @@ impl Process {
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
             let futex = unsafe {
-                cshadow::futextable_get(
-                    &mut *futexes,
-                    self.physical_address(clear_child_tid_pvp).into(),
-                )
+                cshadow::futextable_get(&mut *futexes, self.physical_address(clear_child_tid_pvp))
             };
             if !futex.is_null() {
                 unsafe { cshadow::futex_wake(futex, 1) };
@@ -1524,11 +1521,11 @@ mod export {
     pub extern "C" fn process_readPtr(
         proc: *const ProcessRefCell,
         dst: *mut c_void,
-        src: cshadow::PluginPtr,
+        src: PluginPtr,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let src = TypedPluginPtr::new::<u8>(src.into(), n);
+        let src = TypedPluginPtr::new::<u8>(src, n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         Worker::with_active_host(|h| {
@@ -1552,12 +1549,12 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
         proc: *const ProcessRefCell,
-        dst: cshadow::PluginPtr,
+        dst: PluginPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let dst = TypedPluginPtr::new::<u8>(dst.into(), n);
+        let dst = TypedPluginPtr::new::<u8>(dst, n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         Worker::with_active_host(|h| {
             match proc
@@ -1582,11 +1579,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
@@ -1606,11 +1603,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1628,11 +1625,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src.into(), n);
+        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1652,7 +1649,7 @@ mod export {
     pub unsafe extern "C" fn process_readString(
         proc: *const ProcessRefCell,
         strbuf: *mut libc::c_char,
-        ptr: cshadow::PluginPtr,
+        ptr: PluginPtr,
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1663,7 +1660,7 @@ mod export {
                 std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
             };
             let cstr = match memory_manager
-                .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(PluginPtr::from(ptr), maxlen))
+                .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(ptr, maxlen))
             {
                 Ok(cstr) => cstr,
                 Err(e) => return -(e as libc::ssize_t),
@@ -1682,7 +1679,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
         proc: *const ProcessRefCell,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
         n: usize,
         out_str: *mut *const c_char,
         out_strlen: *mut size_t,
@@ -1690,7 +1687,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let ptr = TypedPluginPtr::new::<c_char>(plugin_src.into(), n);
+            let ptr = TypedPluginPtr::new::<c_char>(plugin_src, n);
             match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
                 Ok((str, strlen)) => {
                     assert!(!out_str.is_null());
@@ -1711,7 +1708,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         len: usize,
         prot: i32,
         flags: i32,
@@ -1724,7 +1721,7 @@ mod export {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             memory_manager
-                .do_mmap(thread, PluginPtr::from(addr), len, prot, flags, fd, offset)
+                .do_mmap(thread, addr, len, prot, flags, fd, offset)
                 .into()
         })
         .unwrap()
@@ -1735,7 +1732,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         len: usize,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1743,9 +1740,7 @@ mod export {
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            memory_manager
-                .handle_munmap(thread, PluginPtr::from(addr), len)
-                .into()
+            memory_manager.handle_munmap(thread, addr, len).into()
         })
         .unwrap()
     }
@@ -1754,11 +1749,11 @@ mod export {
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        old_addr: cshadow::PluginPtr,
+        old_addr: PluginPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_addr: cshadow::PluginPtr,
+        new_addr: PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1766,14 +1761,7 @@ mod export {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             memory_manager
-                .handle_mremap(
-                    thread,
-                    PluginPtr::from(old_addr),
-                    old_size,
-                    new_size,
-                    flags,
-                    PluginPtr::from(new_addr),
-                )
+                .handle_mremap(thread, old_addr, old_size, new_size, flags, new_addr)
                 .into()
         })
         .unwrap()
@@ -1783,7 +1771,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: cshadow::PluginPtr,
+        addr: PluginPtr,
         size: usize,
         prot: i32,
     ) -> cshadow::SysCallReturn {
@@ -1793,7 +1781,7 @@ mod export {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
             memory_manager
-                .handle_mprotect(thread, PluginPtr::from(addr), size, prot)
+                .handle_mprotect(thread, addr, size, prot)
                 .into()
         })
         .unwrap()
@@ -1804,16 +1792,14 @@ mod export {
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        plugin_src: cshadow::PluginPtr,
+        plugin_src: PluginPtr,
     ) -> cshadow::SysCallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             let mut memory_manager = proc.memory_borrow_mut();
-            memory_manager
-                .handle_brk(thread, PluginPtr::from(plugin_src))
-                .into()
+            memory_manager.handle_brk(thread, plugin_src).into()
         })
         .unwrap()
     }
@@ -2035,13 +2021,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
         proc: *const ProcessRefCell,
-        vptr: cshadow::PluginVirtualPtr,
-    ) -> cshadow::PluginPhysicalPtr {
+        vptr: PluginPtr,
+    ) -> PluginPhysicalPtr {
         let proc = unsafe { proc.as_ref().unwrap() };
 
         Worker::with_active_host(|host| {
             let proc = proc.borrow(host.root());
-            proc.physical_address(vptr.into()).into()
+            proc.physical_address(vptr)
         })
         .unwrap()
     }

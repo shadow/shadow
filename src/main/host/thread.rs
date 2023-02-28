@@ -492,12 +492,12 @@ mod export {
     unsafe extern "C" fn thread_nativeSyscall(
         thread: *const Thread,
         n: libc::c_long,
-        arg1: c::SysCallReg,
-        arg2: c::SysCallReg,
-        arg3: c::SysCallReg,
-        arg4: c::SysCallReg,
-        arg5: c::SysCallReg,
-        arg6: c::SysCallReg,
+        arg1: SysCallReg,
+        arg2: SysCallReg,
+        arg3: SysCallReg,
+        arg4: SysCallReg,
+        arg5: SysCallReg,
+        arg6: SysCallReg,
     ) -> libc::c_long {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.native_syscall_raw(n, &[arg1, arg2, arg3, arg4, arg5, arg6])
@@ -566,14 +566,14 @@ mod export {
         addr: c::PluginVirtualPtr,
     ) {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.set_tid_address(addr.into());
+        thread.set_tid_address(addr);
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
     pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> c::PluginVirtualPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.get_tid_address().into()
+        thread.get_tid_address()
     }
 
     /// Writes the serialized shared memory block handle to `out`
