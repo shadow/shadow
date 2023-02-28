@@ -7,7 +7,6 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/ipc.h"
-#include "lib/shadow-shim-helper-rs/shim_event.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shim/shim.h"

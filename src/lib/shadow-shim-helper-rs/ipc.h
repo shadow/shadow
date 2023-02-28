@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#include "shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 /*
  * Message-passing API between plugins and Shadow.

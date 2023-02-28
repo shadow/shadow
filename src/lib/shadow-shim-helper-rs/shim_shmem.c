@@ -6,7 +6,7 @@
 #include "lib/shmem/shmem_allocator.h"
 
 #include "ipc.h"
-#include "shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHIM_EVENT_ID_CLONE_REQ);
