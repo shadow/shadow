@@ -173,6 +173,7 @@ where
 /// A serialized descriptor for a `ShMemBlock`, suitable to be transferred
 /// across processes, which can be used to create a `ShMemBlockAlias` referencing
 /// the original `ShMemBlock`.
+#[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
