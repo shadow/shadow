@@ -71,7 +71,6 @@ hosts:
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
-- [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler`](#experimentalscheduler)
 - [`experimental.socket_recv_autotune`](#experimentalsocket_recv_autotune)
@@ -83,7 +82,6 @@ hosts:
 - [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
-- [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
 - [`experimental.use_extended_yaml`](#experimentaluse_extended_yaml)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
@@ -347,13 +345,6 @@ Ignored when
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
 
-#### `experimental.preload_spin_max`
-
-Default: 0  
-Type: Integer
-
-Max number of iterations to busy-wait on IPC semaphore before blocking.
-
 #### `experimental.runahead`
 
 Default: "1 ms"  
@@ -462,14 +453,6 @@ Default: false
 Type: Bool
 
 Update the minimum runahead dynamically throughout the simulation.
-
-#### `experimental.use_explicit_block_message`
-
-Default: false  
-Type: Bool
-
-Send message to managed process telling it to stop spinning when a syscall
-blocks.
 
 #### `experimental.use_extended_yaml`
 
