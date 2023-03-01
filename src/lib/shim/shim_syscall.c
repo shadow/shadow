@@ -125,12 +125,12 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
         trace("got response of type %d on %p", shimevent_getId(&res), ipc);
 
         switch (shimevent_getId(&res)) {
-            case SHIM_EVENT_ID_BLOCK: {
+            case SHIM_EVENT_BLOCK: {
                 // Ack the message.
                 shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
-            case SHIM_EVENT_ID_SYSCALL_COMPLETE: {
+            case SHIM_EVENT_SYSCALL_COMPLETE: {
                 const ShimEventSyscallComplete* syscall_complete =
                     shimevent_getSyscallCompleteData(&res);
                 // We'll ultimately return the provided result.
@@ -166,7 +166,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
                 return rv;
             }
-            case SHIM_EVENT_ID_SYSCALL_DO_NATIVE: {
+            case SHIM_EVENT_SYSCALL_DO_NATIVE: {
                 // Make the original syscall ourselves and use the result.
                 const ShimEventSyscall* syscall = shimevent_getSyscallData(syscall_event);
                 const SysCallReg* regs = syscall->syscall_args.args;
@@ -212,7 +212,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
                 return rv;
             }
-            case SHIM_EVENT_ID_SYSCALL: {
+            case SHIM_EVENT_SYSCALL: {
                 // Make the requested syscall ourselves and return the result
                 // to Shadow.
                 const ShimEventSyscall* syscall = shimevent_getSyscallData(&res);
@@ -226,19 +226,19 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
-            case SHIM_EVENT_ID_CLONE_REQ:
+            case SHIM_EVENT_CLONE_REQ:
                 shim_shmemHandleClone(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHIM_EVENT_ID_CLONE_STRING_REQ:
+            case SHIM_EVENT_CLONE_STRING_REQ:
                 shim_shmemHandleCloneString(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHIM_EVENT_ID_WRITE_REQ:
+            case SHIM_EVENT_WRITE_REQ:
                 shim_shmemHandleWrite(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHIM_EVENT_ID_ADD_THREAD_REQ: {
+            case SHIM_EVENT_ADD_THREAD_REQ: {
                 const ShimEventAddThreadReq* add_thread_req = shimevent_getAddThreadReqData(&res);
                 shim_newThreadStart(&add_thread_req->ipc_block);
                 ShimEvent res;

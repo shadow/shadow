@@ -5,27 +5,6 @@ use crate::syscall_types::{PluginPtr, SysCallArgs, SysCallReg};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub enum ShimEventID {
-    Null = 0,
-    Start = 1,
-    // The whole process has died.
-    // We inject this event to trigger cleanup after we've detected that the
-    // native process has died.
-    ProcessDeath = 2,
-    Syscall = 3,
-    SyscallComplete = 4,
-    SyscallDoNative = 8,
-    CloneReq = 5,
-    CloneStringReq = 9,
-    ShmemComplete = 6,
-    WriteReq = 7,
-    Block = 10,
-    AddThreadReq = 11,
-    AddThreadParentRes = 12,
-}
-
-#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
-#[repr(C)]
 pub struct ShimEventSyscall {
     pub syscall_args: SysCallArgs,
 }
@@ -54,7 +33,7 @@ pub struct ShimEventAddThreadReq {
 }
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
-#[repr(C)]
+#[repr(C, u32)]
 pub enum ShimEvent {
     Null,
     Start,
@@ -78,23 +57,14 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> ShimEventID {
+    pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> u32 {
         let event = unsafe { event.as_ref().unwrap() };
-        match event {
-            ShimEvent::Null => ShimEventID::Null,
-            ShimEvent::Start => ShimEventID::Start,
-            ShimEvent::ProcessDeath => ShimEventID::ProcessDeath,
-            ShimEvent::Syscall(_) => ShimEventID::Syscall,
-            ShimEvent::SyscallComplete(_) => ShimEventID::SyscallComplete,
-            ShimEvent::SyscallDoNative => ShimEventID::SyscallDoNative,
-            ShimEvent::CloneReq(_) => ShimEventID::CloneReq,
-            ShimEvent::CloneStringReq(_) => ShimEventID::CloneStringReq,
-            ShimEvent::ShmemComplete => ShimEventID::ShmemComplete,
-            ShimEvent::WriteReq(_) => ShimEventID::WriteReq,
-            ShimEvent::Block => ShimEventID::Block,
-            ShimEvent::AddThreadReq(_) => ShimEventID::AddThreadReq,
-            ShimEvent::AddThreadParentRes => ShimEventID::AddThreadParentRes,
-        }
+        // Taken from documentation for `std::mem::Discriminant`:
+        //
+        // SAFETY: Because `ShimEvent` is marked `repr(u32)`, its layout is a `repr(C)` `union`
+        // between `repr(C)` structs, each of which has the `u32` discriminant as its first
+        // field, so we can read the discriminant without offsetting the pointer.
+        unsafe { *<*const _>::from(event).cast::<u32>() }
     }
 
     #[no_mangle]
