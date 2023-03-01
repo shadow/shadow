@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/ipc.h"
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shadow_spinlock.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"

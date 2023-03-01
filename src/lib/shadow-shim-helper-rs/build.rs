@@ -30,6 +30,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         "ShimShmemHostLock",
         "ShimShmemProcess",
         "ShimShmemThread",
+        "IPCData",
     ]);
 
     cbindgen::Builder::new()
@@ -50,10 +51,4 @@ fn main() {
         .cc_build()
         .files(&["shadow_sem.c", "shadow_spinlock.c", "shim_shmem.c"])
         .compile("shim_c");
-
-    build_common
-        .cc_build()
-        .cpp(true)
-        .files(&["binary_spinning_sem.cc", "ipc.cc"])
-        .compile("shim_cpp");
 }

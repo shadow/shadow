@@ -56,6 +56,7 @@ pub struct ShimEventAddThreadReq {
 #[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub union ShimEventData {
+    pub none: (),
     pub syscall: ShimEventSyscall,
     pub syscall_complete: ShimEventSyscallComplete,
     pub shmem_blk: ShimEventShmemBlk,
