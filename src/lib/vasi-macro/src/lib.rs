@@ -199,7 +199,7 @@ fn impl_derive_virtual_address_space_independent(ast: syn::DeriveInput) -> proc_
     //   y: i32,
     // }
     // ```
-    // 
+    //
     // We'll end up generating code like:
     // ```
     // impl VirtualAddressSpaceIndependent for MyStruct {

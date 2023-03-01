@@ -18,6 +18,9 @@ pub use std::{
     sync::Arc,
 };
 
+#[cfg(not(loom))]
+use vasi::VirtualAddressSpaceIndependent;
+
 // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
 // processes, or into different virtual addresses in the same process, etc.
 #[cfg(loom)]
@@ -153,7 +156,7 @@ unsafe impl<T: ?Sized> Send for MutPtr<T> where T: Send {}
 
 // From https://docs.rs/loom/latest/loom/#handling-loom-api-differences
 #[cfg(not(loom))]
-#[derive(Debug)]
+#[derive(Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct UnsafeCell<T>(std::cell::UnsafeCell<T>);
 #[cfg(not(loom))]

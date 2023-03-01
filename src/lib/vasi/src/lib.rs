@@ -79,4 +79,16 @@ unsafe impl<T> VirtualAddressSpaceIndependent for std::cell::UnsafeCell<T> where
 {
 }
 
+// ManuallyDrop is `repr(transparent)` around a `<T>`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::mem::ManuallyDrop<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+// MaybeUninit is `repr(transparent)` around a union of `()` and `ManuallyDrop<T>`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::mem::MaybeUninit<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
 unsafe impl VirtualAddressSpaceIndependent for () {}
