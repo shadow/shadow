@@ -279,7 +279,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
     }
 
     // TODO get to the point where the plugin blocks before calling main()
-    mthread->currentEvent.event_id = SHIM_EVENT_ID_START;
+    shimevent_initStart(&mthread->currentEvent);
 
     /* mthread is now active */
     mthread->isRunning = 1;
@@ -291,7 +291,7 @@ static inline void _managedthread_waitForNextEvent(ManagedThread* mthread, ShimE
     // The managed mthread has yielded control back to us. Reacquire the shared
     // memory lock, which we released in `_managedthread_continuePlugin`.
     host_lockShimShmemLock(_mthread_getHost(mthread));
-    trace("received shim_event %d", mthread->currentEvent.event_id);
+    trace("received shim_event %d", shimevent_getId(&mthread->currentEvent));
 
     // Update time, which may have been incremented in the shim.
     CEmulatedTime shimTime =
@@ -307,7 +307,7 @@ ShMemBlock* managedthread_getIPCBlock(ManagedThread* mthread) { return &mthread-
 
 SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     utility_debugAssert(mthread->isRunning);
-    utility_debugAssert(mthread->currentEvent.event_id != SHIM_EVENT_ID_NULL);
+    utility_debugAssert(shimevent_getId(&mthread->currentEvent) != SHIM_EVENT_ID_NULL);
 
     const Thread* thread = _mthread_getThread(mthread);
     const ProcessRefCell* process = _mthread_getProcess(mthread);
@@ -323,7 +323,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
     }
 
     while (true) {
-        switch (mthread->currentEvent.event_id) {
+        switch (shimevent_getId(&mthread->currentEvent)) {
             case SHIM_EVENT_ID_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
@@ -346,23 +346,23 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 // `exit` is tricky since it only exits the *mthread*, and we don't have a way
                 // to be notified that the mthread has exited. We have to "fire and forget"
                 // the command to execute the syscall natively.
-                if (mthread->currentEvent.event_data.syscall.syscall_args.number == SYS_exit) {
+                const ShimEventSyscall* syscall = shimevent_getSyscallData(&mthread->currentEvent);
+                if (syscall->syscall_args.number == SYS_exit) {
                     // Tell mthread to go ahead and make the exit syscall itself.
                     // We *don't* call `_managedthread_continuePlugin` here,
                     // since that'd release the ShimSharedMemHostLock, and we
                     // aren't going to get a message back to know when it'd be
                     // safe to take it again.
-                    shimevent_sendEventToPlugin(
-                        mthread->ipc_data,
-                        &(ShimEvent){.event_id = SHIM_EVENT_ID_SYSCALL_DO_NATIVE});
+                    ShimEvent ev;
+                    shimevent_initSyscallDoNative(&ev);
+                    shimevent_sendEventToPlugin(mthread->ipc_data, &ev);
                     // Clean up the mthread.
                     _managedthread_cleanup(mthread);
                     return NULL;
                 }
 
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread_getSysCallHandler(thread),
-                    &mthread->currentEvent.event_data.syscall.syscall_args);
+                    thread_getSysCallHandler(thread), &syscall->syscall_args);
 
                 // remove the mthread's old syscall condition since it's no longer needed
                 thread_clearSysCallCondition(thread);
@@ -388,18 +388,10 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
                     SysCallReturnDone* done = syscallreturn_done(&result);
-                    shim_result =
-                        (ShimEvent){.event_id = SHIM_EVENT_ID_SYSCALL_COMPLETE,
-                                    .event_data = {
-                                        .syscall_complete = {.retval = done->retval,
-                                                             .restartable = done->restartable},
-
-                                    }};
+                    shimevent_initSysCallComplete(&shim_result, done->retval, done->restartable);
                 } else if (result.state == SYSCALL_NATIVE) {
                     // Tell the shim to make the syscall itself
-                    shim_result = (ShimEvent){
-                        .event_id = SHIM_EVENT_ID_SYSCALL_DO_NATIVE,
-                    };
+                    shimevent_initSyscallDoNative(&shim_result);
                 }
                 _managedthread_continuePlugin(mthread, &shim_result);
                 break;
@@ -409,7 +401,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 break;
             }
             default: {
-                utility_panic("unknown event type: %d", mthread->currentEvent.event_id);
+                utility_panic("unknown event type: %d", shimevent_getId(&mthread->currentEvent));
                 break;
             }
         }
@@ -452,13 +444,12 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new mthread to use.
-    _managedthread_continuePlugin(parent, &(ShimEvent){.event_id = SHIM_EVENT_ID_ADD_THREAD_REQ,
-                                                       .event_data.add_thread_req = {
-                                                           .ipc_block = ipc_blk_serial,
-                                                       }});
+    ShimEvent ev;
+    shimevent_initAddThreadReq(&ev, &ipc_blk_serial);
+    _managedthread_continuePlugin(parent, &ev);
     ShimEvent response = {0};
     _managedthread_waitForNextEvent(parent, &response);
-    utility_debugAssert(response.event_id == SHIM_EVENT_ID_ADD_THREAD_PARENT_RES);
+    utility_debugAssert(shimevent_getId(&response) == SHIM_EVENT_ID_ADD_THREAD_PARENT_RES);
 
     // Create the new managed thread.
     pid_t childNativeTid = thread_nativeSyscall(
@@ -472,17 +463,15 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     child->nativeTid = childNativeTid;
 
     // Child is now ready to start.
-    child->currentEvent.event_id = SHIM_EVENT_ID_START;
+    shimevent_initStart(&child->currentEvent);
     child->isRunning = 1;
 
     return 0;
 }
 
 long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...) {
-    ShimEvent req = {
-        .event_id = SHIM_EVENT_ID_SYSCALL,
-        .event_data.syscall.syscall_args.number = n,
-    };
+    SysCallArgs syscall_args;
+    syscall_args.number = n;
     // We don't know how many arguments there actually are, but the x86_64 linux
     // ABI supports at most 6 arguments, and processing more arguments here than
     // were actually passed doesn't hurt anything. e.g. this is what libc's
@@ -490,15 +479,18 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...) {
     va_list(args);
     va_start(args, n);
     for (int i = 0; i < 6; ++i) {
-        req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
+        syscall_args.args[i].as_i64 = va_arg(args, int64_t);
     }
     va_end(args);
 
+    ShimEvent req;
+    shimevent_initSyscall(&req, &syscall_args);
     _managedthread_continuePlugin(mthread, &req);
 
     ShimEvent res;
     _managedthread_waitForNextEvent(mthread, &res);
-    if (res.event_id == SHIM_EVENT_ID_PROCESS_DEATH) {
+    ShimEventID res_id = shimevent_getId(&res);
+    if (res_id == SHIM_EVENT_ID_PROCESS_DEATH) {
         trace("Plugin exited while executing native syscall %ld", n);
         process_markAsExiting(_mthread_getProcess(mthread));
         _managedthread_cleanup(mthread);
@@ -506,8 +498,9 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...) {
         // We have to return *something* here. Probably doesn't matter much what.
         return -ESRCH;
     }
-    utility_debugAssert(res.event_id == SHIM_EVENT_ID_SYSCALL_COMPLETE);
-    return res.event_data.syscall_complete.retval.as_i64;
+    utility_debugAssert(res_id == SHIM_EVENT_ID_SYSCALL_COMPLETE);
+    const ShimEventSyscallComplete* syscall_complete = shimevent_getSyscallCompleteData(&res);
+    return syscall_complete->retval.as_i64;
 }
 
 ManagedThread* managedthread_new(HostId hostId, pid_t processId, pid_t threadId) {

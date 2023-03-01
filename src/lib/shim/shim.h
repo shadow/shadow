@@ -27,7 +27,7 @@ struct IPCData* shim_thisThreadEventIPC();
 
 // To be called in parent thread before making the `clone` syscall.
 // It sets up data for the new thread.
-void shim_newThreadStart(ShMemBlockSerialized* block);
+void shim_newThreadStart(const ShMemBlockSerialized* block);
 
 // To be called in parent thread after making the `clone` syscall.
 // It doesn't return until after the child has initialized itself.
