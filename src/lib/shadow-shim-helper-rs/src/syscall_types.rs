@@ -1,5 +1,12 @@
+use vasi::VirtualAddressSpaceIndependent;
+
 /// Represents a pointer to a virtual address in plugin memory.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+///
+/// This type derives the `VirtualAddressSpaceIndependent` trait, since it is
+/// specifically meant to transfer pointers between processes. However it is of
+/// course unsafe to turn its inner value back into a pointer and dereference
+/// from a different virtual address space than where the pointer originated.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct PluginPtr {
     val: usize,
@@ -81,7 +88,7 @@ impl From<PluginPhysicalPtr> for u64 {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct SysCallArgs {
     // SYS_* from sys/syscall.h.
@@ -101,7 +108,7 @@ impl SysCallArgs {
 }
 
 /// A register used for input/output in a syscall.
-#[derive(Copy, Clone, Eq)]
+#[derive(Copy, Clone, Eq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub union SysCallReg {
     as_i64: i64,
