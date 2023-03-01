@@ -68,7 +68,7 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn ipcData_init(ipc_data: *mut IPCData, spin_max: i64) {
+    pub unsafe extern "C" fn ipcData_init(ipc_data: *mut IPCData) {
         unsafe { ipc_data.write(IPCData::new()) }
     }
 
@@ -117,7 +117,6 @@ mod export {
     pub unsafe extern "C" fn shimevent_recvEventFromShadow(
         ipc_data: *const IPCData,
         ev: *mut ShimEvent,
-        spin: bool,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = ipc_data.from_shadow().receive().unwrap();

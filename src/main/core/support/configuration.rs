@@ -304,12 +304,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_sched_fifo").unwrap().as_str())]
     pub use_sched_fifo: Option<bool>,
 
-    /// Send message to plugin telling it to stop spinning when a syscall blocks
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap().as_str())]
-    pub use_explicit_block_message: Option<bool>,
-
     /// Count the number of occurrences for individual syscalls
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
@@ -341,12 +335,6 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_preload_openssl_crypto").unwrap().as_str())]
     pub use_preload_openssl_crypto: Option<bool>,
-
-    /// Max number of iterations to busy-wait on IPC semaphore before blocking
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "iterations")]
-    #[clap(help = EXP_HELP.get("preload_spin_max").unwrap().as_str())]
-    pub preload_spin_max: Option<i32>,
 
     /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
     /// most cases
@@ -493,13 +481,11 @@ impl Default for ExperimentalOptions {
     fn default() -> Self {
         Self {
             use_sched_fifo: Some(false),
-            use_explicit_block_message: Some(false),
             use_syscall_counters: Some(true),
             use_object_counters: Some(true),
             use_preload_libc: Some(true),
             use_preload_openssl_rng: Some(true),
             use_preload_openssl_crypto: Some(false),
-            preload_spin_max: Some(0),
             max_unapplied_cpu_latency: Some(units::Time::new(1, units::TimePrefix::Micro)),
             // 1-2 microseconds is a ballpark estimate of the minimal latency for
             // context switching to the kernel and back on modern machines.
@@ -1319,13 +1305,6 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn config_getUseExplicitBlockMessage(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_explicit_block_message.unwrap()
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseSyscallCounters(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1344,13 +1323,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.use_shim_syscall_handler()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getPreloadSpinMax(config: *const ConfigOptions) -> i32 {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.preload_spin_max.unwrap()
     }
 
     #[no_mangle]
