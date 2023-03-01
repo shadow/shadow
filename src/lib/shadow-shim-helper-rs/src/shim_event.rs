@@ -69,3 +69,151 @@ pub struct ShimEvent {
     pub event_id: ShimEventID,
     pub event_data: ShimEventData,
 }
+
+mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> ShimEventID {
+        let event = unsafe { event.as_ref().unwrap() };
+        event.event_id
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_getSyscallData(
+        event: *const ShimEvent,
+    ) -> *const ShimEventSyscall {
+        let event = unsafe { event.as_ref().unwrap() };
+        match event.event_id {
+            ShimEventID::Syscall => (),
+            id => panic!("Unexpected event id {id:?}"),
+        };
+        unsafe { &event.event_data.syscall }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_getSyscallCompleteData(
+        event: *const ShimEvent,
+    ) -> *const ShimEventSyscallComplete {
+        let event = unsafe { event.as_ref().unwrap() };
+        match event.event_id {
+            ShimEventID::SyscallComplete => (),
+            id => panic!("Unexpected event id {id:?}"),
+        };
+        unsafe { &event.event_data.syscall_complete }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_getShmemBlkData(
+        event: *const ShimEvent,
+    ) -> *const ShimEventShmemBlk {
+        let event = unsafe { event.as_ref().unwrap() };
+        match event.event_id {
+            ShimEventID::CloneReq | ShimEventID::CloneStringReq | ShimEventID::WriteReq => (),
+            id => panic!("Unexpected event id {id:?}"),
+        };
+        unsafe { &event.event_data.shmem_blk }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_getAddThreadReqData(
+        event: *const ShimEvent,
+    ) -> *const ShimEventAddThreadReq {
+        let event = unsafe { event.as_ref().unwrap() };
+        match event.event_id {
+            ShimEventID::AddThreadReq => (),
+            id => panic!("Unexpected event id {id:?}"),
+        };
+        unsafe { &event.event_data.add_thread_req }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initSyscall(
+        dst: *mut ShimEvent,
+        syscall_args: *const SysCallArgs,
+    ) {
+        let syscall_args = unsafe { syscall_args.as_ref().unwrap() };
+        let event = ShimEvent {
+            event_id: ShimEventID::Syscall,
+            event_data: ShimEventData {
+                syscall: ShimEventSyscall {
+                    syscall_args: *syscall_args,
+                },
+            },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initShmemComplete(dst: *mut ShimEvent) {
+        let event = ShimEvent {
+            event_id: ShimEventID::ShmemComplete,
+            event_data: ShimEventData { none: () },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initSysCallComplete(
+        dst: *mut ShimEvent,
+        retval: SysCallReg,
+        restartable: bool,
+    ) {
+        let event = ShimEvent {
+            event_id: ShimEventID::SyscallComplete,
+            event_data: ShimEventData {
+                syscall_complete: ShimEventSyscallComplete {
+                    retval,
+                    restartable,
+                },
+            },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initAddThreadParentRes(dst: *mut ShimEvent) {
+        let event = ShimEvent {
+            event_id: ShimEventID::AddThreadParentRes,
+            event_data: ShimEventData { none: () },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initSyscallDoNative(dst: *mut ShimEvent) {
+        let event = ShimEvent {
+            event_id: ShimEventID::SyscallDoNative,
+            event_data: ShimEventData { none: () },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initAddThreadReq(
+        dst: *mut ShimEvent,
+        ipc_block: *const ShMemBlockSerialized,
+    ) {
+        let ipc_block = unsafe { ipc_block.as_ref().unwrap() };
+        let event = ShimEvent {
+            event_id: ShimEventID::AddThreadReq,
+            event_data: ShimEventData {
+                shmem_blk: ShimEventShmemBlk {
+                    serial: *ipc_block,
+                    plugin_ptr: PluginPtr::null(),
+                    n: 0,
+                },
+            },
+        };
+        unsafe { dst.write(event) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent_initStart(dst: *mut ShimEvent) {
+        let event = ShimEvent {
+            event_id: ShimEventID::Start,
+            event_data: ShimEventData { none: () },
+        };
+        unsafe { dst.write(event) };
+    }
+}

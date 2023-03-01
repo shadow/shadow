@@ -84,7 +84,7 @@ static struct {
     shadow_sem_t childInitd;
 } _startThread;
 
-void shim_newThreadStart(ShMemBlockSerialized* block) {
+void shim_newThreadStart(const ShMemBlockSerialized* block) {
     if (shadow_spin_lock(&_startThreadLock)) {
         panic("shadow_spin_lock: %s", strerror(errno));
     };
@@ -416,7 +416,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     shim_newThreadChildInitd();
 
     shimevent_recvEventFromShadow(ipc, &event);
-    assert(event.event_id == SHIM_EVENT_ID_START);
+    assert(shimevent_getId(&event) == SHIM_EVENT_ID_START);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -426,7 +426,7 @@ static void _shim_ipc_wait_for_start_event() {
     ShimEvent event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event);
-    assert(event.event_id == SHIM_EVENT_ID_START);
+    assert(shimevent_getId(&event) == SHIM_EVENT_ID_START);
 }
 
 static void _shim_parent_init_seccomp() {

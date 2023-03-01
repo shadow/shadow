@@ -112,8 +112,8 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
 
-    trace("sending syscall %ld event on %p", syscall_event->event_data.syscall.syscall_args.number,
-          ipc);
+    trace("sending syscall %ld event on %p",
+          shimevent_getSyscallData(syscall_event)->syscall_args.number, ipc);
 
     shimevent_sendEventToShadow(ipc, syscall_event);
     SysCallReg rv = {0};
@@ -122,17 +122,19 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
         trace("waiting for event on %p", ipc);
         ShimEvent res = {0};
         shimevent_recvEventFromShadow(ipc, &res);
-        trace("got response of type %d on %p", res.event_id, ipc);
+        trace("got response of type %d on %p", shimevent_getId(&res), ipc);
 
-        switch (res.event_id) {
+        switch (shimevent_getId(&res)) {
             case SHIM_EVENT_ID_BLOCK: {
                 // Ack the message.
                 shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
             case SHIM_EVENT_ID_SYSCALL_COMPLETE: {
+                const ShimEventSyscallComplete* syscall_complete =
+                    shimevent_getSyscallCompleteData(&res);
                 // We'll ultimately return the provided result.
-                SysCallReg rv = res.event_data.syscall_complete.retval;
+                SysCallReg rv = syscall_complete->retval;
 
                 if (!shim_hostSharedMem() || !shim_processSharedMem() || !shim_threadSharedMem()) {
                     // We get here while initializing shim_threadSharedMem
@@ -152,8 +154,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 // results to -EINTR when an unblocked signal is pending.
                 if (rv.as_i64 == -EINTR) {
                     // Syscall was interrupted by a signal. Consider restarting. See signal(7).
-                    const bool syscallSupportsSaRestart =
-                        res.event_data.syscall_complete.restartable;
+                    const bool syscallSupportsSaRestart = syscall_complete->restartable;
                     trace("Syscall interrupted by signals. allSigactionsHadSaRestart:%d "
                           "syscallSupportsSaRestart:%d",
                           allSigactionsHadSaRestart, syscallSupportsSaRestart);
@@ -167,11 +168,12 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
             }
             case SHIM_EVENT_ID_SYSCALL_DO_NATIVE: {
                 // Make the original syscall ourselves and use the result.
-                SysCallReg rv = res.event_data.syscall_complete.retval;
-                const SysCallReg* regs = syscall_event->event_data.syscall.syscall_args.args;
-                rv.as_i64 = shim_native_syscall(
-                    syscall_event->event_data.syscall.syscall_args.number, regs[0].as_u64,
-                    regs[1].as_u64, regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                const ShimEventSyscall* syscall = shimevent_getSyscallData(syscall_event);
+                const SysCallReg* regs = syscall->syscall_args.args;
+                SysCallReg rv = {.as_i64 = shim_native_syscall(syscall->syscall_args.number,
+                                                               regs[0].as_u64, regs[1].as_u64,
+                                                               regs[2].as_u64, regs[3].as_u64,
+                                                               regs[4].as_u64, regs[5].as_u64)};
 
                 int straceFd = shimshmem_getProcessStraceFd(shim_processSharedMem());
 
@@ -213,14 +215,14 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
             case SHIM_EVENT_ID_SYSCALL: {
                 // Make the requested syscall ourselves and return the result
                 // to Shadow.
-                const SysCallReg* regs = res.event_data.syscall.syscall_args.args;
+                const ShimEventSyscall* syscall = shimevent_getSyscallData(&res);
+                const SysCallReg* regs = syscall->syscall_args.args;
                 long syscall_rv = shim_native_syscall(
-                    res.event_data.syscall.syscall_args.number, regs[0].as_u64, regs[1].as_u64,
-                    regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
-                ShimEvent syscall_complete_event = {
-                    .event_id = SHIM_EVENT_ID_SYSCALL_COMPLETE,
-                    .event_data.syscall_complete.retval.as_i64 = syscall_rv,
-                };
+                    syscall->syscall_args.number, regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
+                    regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                ShimEvent syscall_complete_event;
+                shimevent_initSysCallComplete(
+                    &syscall_complete_event, (SysCallReg){.as_i64 = syscall_rv}, false);
                 shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
@@ -237,15 +239,15 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 shim_shmemNotifyComplete(ipc);
                 break;
             case SHIM_EVENT_ID_ADD_THREAD_REQ: {
-                shim_newThreadStart(&res.event_data.add_thread_req.ipc_block);
-                shimevent_sendEventToShadow(
-                    ipc, &(ShimEvent){
-                             .event_id = SHIM_EVENT_ID_ADD_THREAD_PARENT_RES,
-                         });
+                const ShimEventAddThreadReq* add_thread_req = shimevent_getAddThreadReqData(&res);
+                shim_newThreadStart(&add_thread_req->ipc_block);
+                ShimEvent res;
+                shimevent_initAddThreadParentRes(&res);
+                shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
             default: {
-                panic("Got unexpected event %d", res.event_id);
+                panic("Got unexpected event %d", shimevent_getId(&res));
                 abort();
             }
         }
@@ -260,14 +262,14 @@ long shim_emulated_syscallv(long n, va_list args) {
         shim_freeSignalStack();
     }
 
-    ShimEvent e = {
-        .event_id = SHIM_EVENT_ID_SYSCALL,
-        .event_data.syscall.syscall_args.number = n,
-    };
-    SysCallReg* regs = e.event_data.syscall.syscall_args.args;
+    SysCallArgs ev_args;
+    ev_args.number = n;
     for (int i = 0; i < 6; ++i) {
-        regs[i].as_u64 = va_arg(args, uint64_t);
+        ev_args.args[i].as_u64 = va_arg(args, uint64_t);
     }
+
+    ShimEvent e;
+    shimevent_initSyscall(&e, &ev_args);
 
     SysCallReg retval = _shim_emulated_syscall_event(&e);
 
