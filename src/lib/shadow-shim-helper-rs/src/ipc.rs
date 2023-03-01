@@ -35,6 +35,12 @@ impl IPCData {
     }
 }
 
+impl Default for IPCData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod export {
     use vasi_sync::scchannel::SelfContainedChannelError;
 
