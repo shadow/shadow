@@ -3,6 +3,7 @@ use rkyv::{Archive, Serialize};
 use std::{marker::PhantomData, ops::Deref, pin::Pin};
 use vasi::VirtualAddressSpaceIndependent;
 
+#[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 #[repr(transparent)]
 struct AtomicFutexWord(sync::atomic::AtomicU32);
 
@@ -125,6 +126,7 @@ impl From<FutexWord> for u32 {
 /// * Works across processes (e.g. doesn't use FUTEX_PRIVATE_FLAG)
 ///
 /// Performance is optimized primarily for low-contention scenarios.
+#[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 #[repr(C)]
 pub struct SelfContainedMutex<T> {
     futex: AtomicFutexWord,
@@ -133,15 +135,6 @@ pub struct SelfContainedMutex<T> {
 
 unsafe impl<T> Send for SelfContainedMutex<T> where T: Send {}
 unsafe impl<T> Sync for SelfContainedMutex<T> where T: Send {}
-
-// TODO: Use the VirtualAddressSpaceIndependent Derive macro when it supports
-// trait bounds.
-//
-// SAFETY: SelfContainedMutex is VirtualAddressSpaceIndependent as long as T is.
-unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedMutex<T> where
-    T: VirtualAddressSpaceIndependent
-{
-}
 
 const UNLOCKED: u16 = 0;
 const LOCKED: u16 = 1;

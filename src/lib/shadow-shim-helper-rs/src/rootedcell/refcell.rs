@@ -9,20 +9,13 @@ use vasi::VirtualAddressSpaceIndependent;
 /// Unlike [std::cell::RefCell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to borrow.
-#[derive(Debug)]
+#[derive(Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct RootedRefCell<T> {
     tag: Tag,
     val: UnsafeCell<T>,
     reader_count: Cell<u32>,
     writer: Cell<bool>,
-}
-
-// SAFETY: RootedRefCell is VirtualAddressSpaceIndependent as long as T is.
-// e.g. UnsafeCell and Cell are `repr(transparent)`.
-unsafe impl<T> VirtualAddressSpaceIndependent for RootedRefCell<T> where
-    T: VirtualAddressSpaceIndependent
-{
 }
 
 impl<T> RootedRefCell<T> {
