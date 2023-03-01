@@ -6,7 +6,7 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::sync::{self, AtomicU32, UnsafeCell};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(u8)]
 enum ChannelContentsState {
     Empty,
@@ -35,7 +35,7 @@ impl From<u8> for ChannelContentsState {
 const WRITER_CLOSED: u32 = 0x1 << 9;
 const HAS_SLEEPER: u32 = 0x1 << 10;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, VirtualAddressSpaceIndependent)]
 struct ChannelState {
     writer_closed: bool,
     has_sleeper: bool,
@@ -67,6 +67,7 @@ impl From<ChannelState> for u32 {
     }
 }
 
+#[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 struct AtomicChannelState(AtomicU32);
 impl AtomicChannelState {
     pub fn new() -> Self {
@@ -152,6 +153,7 @@ impl Error for SelfContainedChannelError {
 /// Locks" by Mara Box (O'Reilly). Copyright 2023 Mara Box, 978-1-098-11944-7.
 /// (From the preface: "You may use all example code offered with this book for
 /// any purpose").
+#[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 pub struct SelfContainedChannel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     state: AtomicChannelState,
@@ -308,15 +310,6 @@ impl<T> SelfContainedChannel<T> {
 
 unsafe impl<T> Send for SelfContainedChannel<T> where T: Send {}
 unsafe impl<T> Sync for SelfContainedChannel<T> where T: Send {}
-
-// TODO: Use the VirtualAddressSpaceIndependent Derive macro when it supports
-// trait bounds.
-//
-// SAFETY: SelfContainedChannel is VirtualAddressSpaceIndependent as long as T is.
-unsafe impl<T> VirtualAddressSpaceIndependent for SelfContainedChannel<T> where
-    T: VirtualAddressSpaceIndependent
-{
-}
 
 impl<T> Drop for SelfContainedChannel<T> {
     fn drop(&mut self) {

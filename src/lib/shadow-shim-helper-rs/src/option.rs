@@ -1,14 +1,22 @@
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use vasi::VirtualAddressSpaceIndependent;
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    VirtualAddressSpaceIndependent,
+)]
 #[repr(C)]
 pub enum FfiOption<T> {
     #[default]
     None,
     Some(T),
-}
-
-unsafe impl<T> vasi::VirtualAddressSpaceIndependent for FfiOption<T> where
-    T: vasi::VirtualAddressSpaceIndependent
-{
 }
 
 impl<T> FfiOption<T> {

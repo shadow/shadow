@@ -24,7 +24,10 @@ pub use vasi_macro::VirtualAddressSpaceIndependent;
 /// # Safety
 ///
 /// The type must actually be self-contained, as above.
-pub unsafe trait VirtualAddressSpaceIndependent {}
+pub unsafe trait VirtualAddressSpaceIndependent {
+    /// Used by the derive macro to validate that fields are Vasi.
+    const IGNORE: () = ();
+}
 
 // Types not containing any pointers are trivially VirtualAddressSpaceIndependent.
 unsafe impl VirtualAddressSpaceIndependent for i64 {}
@@ -72,6 +75,18 @@ unsafe impl<T> VirtualAddressSpaceIndependent for std::cell::Cell<T> where
 
 // UnsafeCell is `repr(transparent)` around a `T`.
 unsafe impl<T> VirtualAddressSpaceIndependent for std::cell::UnsafeCell<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+// ManuallyDrop is `repr(transparent)` around a `<T>`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::mem::ManuallyDrop<T> where
+    T: VirtualAddressSpaceIndependent
+{
+}
+
+// MaybeUninit is `repr(transparent)` around a union of `()` and `ManuallyDrop<T>`.
+unsafe impl<T> VirtualAddressSpaceIndependent for std::mem::MaybeUninit<T> where
     T: VirtualAddressSpaceIndependent
 {
 }

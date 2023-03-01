@@ -9,8 +9,10 @@ edition = "2021"
 proc_macro=true
 
 [dependencies]
+proc-macro2 = "1.0.51"
 quote = "1.0.23"
 syn = "1.0.107"
 
 [dev-dependencies]
+static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
