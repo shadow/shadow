@@ -59,23 +59,26 @@ pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
 }
 
-/// Data for [`ShimEvent`].
-#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
-#[repr(C)]
-pub union ShimEventData {
-    pub none: (),
-    pub syscall: ShimEventSyscall,
-    pub syscall_complete: ShimEventSyscallComplete,
-    pub shmem_blk: ShimEventShmemBlk,
-    pub add_thread_req: ShimEventAddThreadReq,
-}
 /// A message between Shadow and the Shim.
-/// TODO: Refactor from a tagged union into an enum.
-#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct ShimEvent {
-    pub event_id: ShimEventID,
-    pub event_data: ShimEventData,
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+pub enum ShimEvent {
+    Null,
+    Start,
+    // The whole process has died.
+    // We inject this event to trigger cleanup after we've detected that the
+    // native process has died.
+    ProcessDeath,
+    Syscall(ShimEventSyscall),
+    SyscallComplete(ShimEventSyscallComplete),
+    SyscallDoNative,
+    CloneReq(ShimEventShmemBlk),
+    CloneStringReq(ShimEventShmemBlk),
+    ShmemComplete,
+    WriteReq(ShimEventShmemBlk),
+    Block,
+    AddThreadReq(ShimEventAddThreadReq),
+    AddThreadParentRes,
 }
 
 mod export {
@@ -84,7 +87,21 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> ShimEventID {
         let event = unsafe { event.as_ref().unwrap() };
-        event.event_id
+        match event {
+            ShimEvent::Null => ShimEventID::Null,
+            ShimEvent::Start => ShimEventID::Start,
+            ShimEvent::ProcessDeath => ShimEventID::ProcessDeath,
+            ShimEvent::Syscall(_) => ShimEventID::Syscall,
+            ShimEvent::SyscallComplete(_) => ShimEventID::SyscallComplete,
+            ShimEvent::SyscallDoNative => ShimEventID::SyscallDoNative,
+            ShimEvent::CloneReq(_) => ShimEventID::CloneReq,
+            ShimEvent::CloneStringReq(_) => ShimEventID::CloneStringReq,
+            ShimEvent::ShmemComplete => ShimEventID::ShmemComplete,
+            ShimEvent::WriteReq(_) => ShimEventID::WriteReq,
+            ShimEvent::Block => ShimEventID::Block,
+            ShimEvent::AddThreadReq(_) => ShimEventID::AddThreadReq,
+            ShimEvent::AddThreadParentRes => ShimEventID::AddThreadParentRes,
+        }
     }
 
     #[no_mangle]
@@ -92,11 +109,12 @@ mod export {
         event: *const ShimEvent,
     ) -> *const ShimEventSyscall {
         let event = unsafe { event.as_ref().unwrap() };
-        match event.event_id {
-            ShimEventID::Syscall => (),
-            id => panic!("Unexpected event id {id:?}"),
-        };
-        unsafe { &event.event_data.syscall }
+        match event {
+            ShimEvent::Syscall(data) => data,
+            _ => {
+                panic!("Unexpected event type: {event:?}");
+            }
+        }
     }
 
     #[no_mangle]
@@ -104,11 +122,12 @@ mod export {
         event: *const ShimEvent,
     ) -> *const ShimEventSyscallComplete {
         let event = unsafe { event.as_ref().unwrap() };
-        match event.event_id {
-            ShimEventID::SyscallComplete => (),
-            id => panic!("Unexpected event id {id:?}"),
-        };
-        unsafe { &event.event_data.syscall_complete }
+        match event {
+            ShimEvent::SyscallComplete(data) => data,
+            _ => {
+                panic!("Unexpected event type: {event:?}");
+            }
+        }
     }
 
     #[no_mangle]
@@ -116,11 +135,14 @@ mod export {
         event: *const ShimEvent,
     ) -> *const ShimEventShmemBlk {
         let event = unsafe { event.as_ref().unwrap() };
-        match event.event_id {
-            ShimEventID::CloneReq | ShimEventID::CloneStringReq | ShimEventID::WriteReq => (),
-            id => panic!("Unexpected event id {id:?}"),
-        };
-        unsafe { &event.event_data.shmem_blk }
+        match event {
+            ShimEvent::CloneReq(blk) => blk,
+            ShimEvent::CloneStringReq(blk) => blk,
+            ShimEvent::WriteReq(blk) => blk,
+            _ => {
+                panic!("Unexpected event type: {event:?}");
+            }
+        }
     }
 
     #[no_mangle]
@@ -128,11 +150,12 @@ mod export {
         event: *const ShimEvent,
     ) -> *const ShimEventAddThreadReq {
         let event = unsafe { event.as_ref().unwrap() };
-        match event.event_id {
-            ShimEventID::AddThreadReq => (),
-            id => panic!("Unexpected event id {id:?}"),
-        };
-        unsafe { &event.event_data.add_thread_req }
+        match event {
+            ShimEvent::AddThreadReq(data) => data,
+            _ => {
+                panic!("Unexpected event type: {event:?}");
+            }
+        }
     }
 
     #[no_mangle]
@@ -141,23 +164,15 @@ mod export {
         syscall_args: *const SysCallArgs,
     ) {
         let syscall_args = unsafe { syscall_args.as_ref().unwrap() };
-        let event = ShimEvent {
-            event_id: ShimEventID::Syscall,
-            event_data: ShimEventData {
-                syscall: ShimEventSyscall {
-                    syscall_args: *syscall_args,
-                },
-            },
-        };
+        let event = ShimEvent::Syscall(ShimEventSyscall {
+            syscall_args: *syscall_args,
+        });
         unsafe { dst.write(event) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_initShmemComplete(dst: *mut ShimEvent) {
-        let event = ShimEvent {
-            event_id: ShimEventID::ShmemComplete,
-            event_data: ShimEventData { none: () },
-        };
+        let event = ShimEvent::ShmemComplete;
         unsafe { dst.write(event) };
     }
 
@@ -167,33 +182,22 @@ mod export {
         retval: SysCallReg,
         restartable: bool,
     ) {
-        let event = ShimEvent {
-            event_id: ShimEventID::SyscallComplete,
-            event_data: ShimEventData {
-                syscall_complete: ShimEventSyscallComplete {
-                    retval,
-                    restartable,
-                },
-            },
-        };
+        let event = ShimEvent::SyscallComplete(ShimEventSyscallComplete {
+            retval,
+            restartable,
+        });
         unsafe { dst.write(event) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_initAddThreadParentRes(dst: *mut ShimEvent) {
-        let event = ShimEvent {
-            event_id: ShimEventID::AddThreadParentRes,
-            event_data: ShimEventData { none: () },
-        };
+        let event = ShimEvent::AddThreadParentRes;
         unsafe { dst.write(event) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_initSyscallDoNative(dst: *mut ShimEvent) {
-        let event = ShimEvent {
-            event_id: ShimEventID::SyscallDoNative,
-            event_data: ShimEventData { none: () },
-        };
+        let event = ShimEvent::SyscallDoNative;
         unsafe { dst.write(event) };
     }
 
@@ -203,25 +207,15 @@ mod export {
         ipc_block: *const ShMemBlockSerialized,
     ) {
         let ipc_block = unsafe { ipc_block.as_ref().unwrap() };
-        let event = ShimEvent {
-            event_id: ShimEventID::AddThreadReq,
-            event_data: ShimEventData {
-                shmem_blk: ShimEventShmemBlk {
-                    serial: *ipc_block,
-                    plugin_ptr: PluginPtr::null(),
-                    n: 0,
-                },
-            },
-        };
+        let event = ShimEvent::AddThreadReq(ShimEventAddThreadReq {
+            ipc_block: *ipc_block,
+        });
         unsafe { dst.write(event) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_initStart(dst: *mut ShimEvent) {
-        let event = ShimEvent {
-            event_id: ShimEventID::Start,
-            event_data: ShimEventData { none: () },
-        };
+        let event = ShimEvent::Start;
         unsafe { dst.write(event) };
     }
 }
