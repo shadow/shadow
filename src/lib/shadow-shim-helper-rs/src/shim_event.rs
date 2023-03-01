@@ -5,33 +5,12 @@ use crate::syscall_types::{PluginPtr, SysCallArgs, SysCallReg};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub enum ShimEventID {
-    Null = 0,
-    Start = 1,
-    /// The whole process has died.
-    /// We inject this event to trigger cleanup after we've detected that the
-    /// native process has died.
-    ProcessDeath = 2,
-    Syscall = 3,
-    SyscallComplete = 4,
-    SyscallDoNative = 8,
-    CloneReq = 5,
-    CloneStringReq = 9,
-    ShmemComplete = 6,
-    WriteReq = 7,
-    Block = 10,
-    AddThreadReq = 11,
-    AddThreadParentRes = 12,
-}
-
-/// Data for [`ShimEventID::Syscall`]
-#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
-#[repr(C)]
+/// Data for [`ShimEvent::Syscall`]
 pub struct ShimEventSyscall {
     pub syscall_args: SysCallArgs,
 }
 
-/// Data for [`ShimEventID::SyscallComplete`]
+/// Data for [`ShimEvent::SyscallComplete`]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscallComplete {
@@ -52,7 +31,7 @@ pub struct ShimEventShmemBlk {
     pub n: usize,
 }
 
-/// Data for [`ShimEventID::AddThreadReq`]
+/// Data for [`ShimEvent::AddThreadReq`]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventAddThreadReq {
@@ -60,8 +39,10 @@ pub struct ShimEventAddThreadReq {
 }
 
 /// A message between Shadow and the Shim.
-#[repr(C)]
+
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+// SAFETY: `shimevent_getId` assumes this representation.
+#[repr(u32)]
 pub enum ShimEvent {
     Null,
     Start,
@@ -85,23 +66,14 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> ShimEventID {
+    pub unsafe extern "C" fn shimevent_getId(event: *const ShimEvent) -> u32 {
         let event = unsafe { event.as_ref().unwrap() };
-        match event {
-            ShimEvent::Null => ShimEventID::Null,
-            ShimEvent::Start => ShimEventID::Start,
-            ShimEvent::ProcessDeath => ShimEventID::ProcessDeath,
-            ShimEvent::Syscall(_) => ShimEventID::Syscall,
-            ShimEvent::SyscallComplete(_) => ShimEventID::SyscallComplete,
-            ShimEvent::SyscallDoNative => ShimEventID::SyscallDoNative,
-            ShimEvent::CloneReq(_) => ShimEventID::CloneReq,
-            ShimEvent::CloneStringReq(_) => ShimEventID::CloneStringReq,
-            ShimEvent::ShmemComplete => ShimEventID::ShmemComplete,
-            ShimEvent::WriteReq(_) => ShimEventID::WriteReq,
-            ShimEvent::Block => ShimEventID::Block,
-            ShimEvent::AddThreadReq(_) => ShimEventID::AddThreadReq,
-            ShimEvent::AddThreadParentRes => ShimEventID::AddThreadParentRes,
-        }
+        // Example cast taken from documentation for `std::mem::Discriminant`.
+        //
+        // SAFETY: In a repr(Int) or repr(C, Int) struct, The integer discrimenant
+        // is guaranteed to be at the start of the object.
+        // * https://github.com/rust-lang/rfcs/blob/master/text/2195-really-tagged-unions.md
+        unsafe { *<*const _>::from(event).cast::<u32>() }
     }
 
     #[no_mangle]
