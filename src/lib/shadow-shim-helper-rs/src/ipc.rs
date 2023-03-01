@@ -38,18 +38,18 @@ impl IPCData {
 mod export {
     use vasi_sync::scchannel::SelfContainedChannelError;
 
-    use crate::shim_event::{ShimEventID, ShimEventData};
+    use crate::shim_event::{ShimEventData, ShimEventID};
 
     use super::*;
 
     #[no_mangle]
     pub unsafe extern "C" fn ipcData_init(ipc_data: *mut IPCData, spin_max: i64) {
-        unsafe  { ipc_data.write(IPCData::new())}
+        unsafe { ipc_data.write(IPCData::new()) }
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn ipcData_destroy(ipc_data: *mut IPCData) {
-        unsafe { std::ptr::drop_in_place(ipc_data)}
+        unsafe { std::ptr::drop_in_place(ipc_data) }
     }
 
     // After calling this function, the next (or current) call to
@@ -71,35 +71,46 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_sendEventToShadow(ipc_data: *const IPCData, ev: *const ShimEvent) {
+    pub unsafe extern "C" fn shimevent_sendEventToShadow(
+        ipc_data: *const IPCData,
+        ev: *const ShimEvent,
+    ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
         ipc_data.to_shadow().send(*ev)
     }
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_sendEventToPlugin(ipc_data: *const IPCData, ev: *const ShimEvent) {
+    pub unsafe extern "C" fn shimevent_sendEventToPlugin(
+        ipc_data: *const IPCData,
+        ev: *const ShimEvent,
+    ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
         ipc_data.to_plugin().send(*ev)
     }
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_recvEventFromShadow(ipc_data: *const IPCData, ev: *mut ShimEvent, spin: bool) {
+    pub unsafe extern "C" fn shimevent_recvEventFromShadow(
+        ipc_data: *const IPCData,
+        ev: *mut ShimEvent,
+        spin: bool,
+    ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = ipc_data.from_shadow().receive().unwrap();
-        unsafe { ev.write(event)};
+        unsafe { ev.write(event) };
     }
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_recvEventFromPlugin(ipc_data: *const IPCData, ev: *mut ShimEvent) {
+    pub unsafe extern "C" fn shimevent_recvEventFromPlugin(
+        ipc_data: *const IPCData,
+        ev: *mut ShimEvent,
+    ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = match ipc_data.from_plugin().receive() {
             Ok(e) => e,
-            Err(SelfContainedChannelError::WriterIsClosed) => {
-                ShimEvent {
-                    event_id: ShimEventID::ProcessDeath,
-                    event_data: ShimEventData { none: ()},
-                }
+            Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent {
+                event_id: ShimEventID::ProcessDeath,
+                event_data: ShimEventData { none: () },
             },
         };
-        unsafe { ev.write(event)};
+        unsafe { ev.write(event) };
     }
 }
