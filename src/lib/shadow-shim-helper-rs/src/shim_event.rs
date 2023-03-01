@@ -1,8 +1,9 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
+use vasi::VirtualAddressSpaceIndependent;
 
 use crate::syscall_types::{PluginPtr, SysCallArgs, SysCallReg};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub enum ShimEventID {
     Null = 0,
@@ -23,13 +24,13 @@ pub enum ShimEventID {
     AddThreadParentRes = 12,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscall {
     pub syscall_args: SysCallArgs,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscallComplete {
     pub retval: SysCallReg,
@@ -38,7 +39,7 @@ pub struct ShimEventSyscallComplete {
     pub restartable: bool,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventShmemBlk {
     pub serial: ShMemBlockSerialized,
@@ -46,13 +47,13 @@ pub struct ShimEventShmemBlk {
     pub n: usize,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub union ShimEventData {
     pub syscall: ShimEventSyscall,
@@ -61,7 +62,7 @@ pub union ShimEventData {
     pub add_thread_req: ShimEventAddThreadReq,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEvent {
     pub event_id: ShimEventID,

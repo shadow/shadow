@@ -173,11 +173,14 @@ where
 /// A serialized descriptor for a `ShMemBlock`, suitable to be transferred
 /// across processes, which can be used to create a `ShMemBlockAlias` referencing
 /// the original `ShMemBlock`.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
 }
+
+// SAFETY: This is a serialized blob, designed to be VASI.
+unsafe impl VirtualAddressSpaceIndependent for c_bindings::ShMemBlockSerialized {}
 
 impl ShMemBlockSerialized {
     // Keep in sync with macro of same name in shmem_allocator.h.
