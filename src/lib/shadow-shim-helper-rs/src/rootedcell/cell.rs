@@ -9,17 +9,11 @@ use vasi::VirtualAddressSpaceIndependent;
 /// Unlike [std::cell::Cell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to access.
-#[derive(Debug)]
+#[derive(Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct RootedCell<T> {
     tag: Tag,
     val: UnsafeCell<T>,
-}
-
-// SAFETY: RootedCell is VirtualAddressSpaceIndependent as long as T is.
-unsafe impl<T> VirtualAddressSpaceIndependent for RootedCell<T> where
-    T: VirtualAddressSpaceIndependent
-{
 }
 
 impl<T> RootedCell<T> {
