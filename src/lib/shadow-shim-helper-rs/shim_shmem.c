@@ -5,7 +5,6 @@
 
 #include "lib/shmem/shmem_allocator.h"
 
-#include "ipc.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {

@@ -14,7 +14,6 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/ipc.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/worker.h"
