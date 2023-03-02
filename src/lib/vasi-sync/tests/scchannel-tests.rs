@@ -86,7 +86,7 @@ mod scchannel_tests {
     }
 
     #[test]
-    fn test_writer_close_watchdog() {
+    fn test_writer_close_watchdog_with_write() {
         sync::model(|| {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
@@ -109,6 +109,23 @@ mod scchannel_tests {
             assert!(res == Ok(42) || res == Err(SelfContainedChannelError::WriterIsClosed));
             writer.join().unwrap();
             watchdog.join().unwrap();
+        })
+    }
+
+    #[test]
+    fn test_writer_close_watchdog_without_write() {
+        sync::model(|| {
+            let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
+            let reader = {
+                let channel = channel.clone();
+                sync::thread::spawn(move || channel.receive())
+            };
+            // Parallel with channel.receive()
+            channel.close_writer();
+            let res = reader.join().unwrap();
+            // We should either get the written value, or an error, depending on
+            // the execution order.
+            assert_eq!(res, Err(SelfContainedChannelError::WriterIsClosed));
         })
     }
 
