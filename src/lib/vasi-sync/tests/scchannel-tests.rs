@@ -15,7 +15,7 @@ mod scchannel_tests {
     fn test_single_thread() {
         sync::model(|| {
             let channel = SelfContainedChannel::new();
-            channel.send(42);
+            unsafe { channel.send(42) };
             let val = channel.receive().unwrap();
             assert_eq!(val, 42);
         })
@@ -28,7 +28,7 @@ mod scchannel_tests {
             let writer = {
                 let channel = channel.clone();
                 sync::thread::spawn(move || {
-                    channel.send(42);
+                    unsafe { channel.send(42) };
                 })
             };
             let reader = {
@@ -46,7 +46,7 @@ mod scchannel_tests {
             let channel = SelfContainedChannel::new();
             let writer = {
                 sync::thread::spawn(move || {
-                    channel.send(Box::new(42));
+                    unsafe { channel.send(Box::new(42)) };
                     channel
                 })
             };
@@ -64,7 +64,7 @@ mod scchannel_tests {
             let writer = {
                 let channel = channel.clone();
                 sync::thread::spawn(move || {
-                    channel.send(42);
+                    unsafe { channel.send(42) };
                     channel.close_writer();
                 })
             };
@@ -91,7 +91,7 @@ mod scchannel_tests {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.send(42))
+                sync::thread::spawn(move || unsafe { channel.send(42) })
             };
             let reader = {
                 let channel = channel.clone();
@@ -142,11 +142,11 @@ mod scchannel_tests {
                 let recv_channel = beta_to_alpha.clone();
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
-                    send_channel.send(1);
+                    unsafe { send_channel.send(1) };
                     v.push(recv_channel.receive());
-                    send_channel.send(2);
+                    unsafe { send_channel.send(2) };
                     v.push(recv_channel.receive());
-                    send_channel.send(3);
+                    unsafe { send_channel.send(3) };
                     v.push(recv_channel.receive());
                     v
                 })
@@ -157,11 +157,11 @@ mod scchannel_tests {
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
                     v.push(recv_channel.receive());
-                    send_channel.send(4);
+                    unsafe { send_channel.send(4) };
                     v.push(recv_channel.receive());
-                    send_channel.send(5);
+                    unsafe { send_channel.send(5) };
                     v.push(recv_channel.receive());
-                    send_channel.send(6);
+                    unsafe { send_channel.send(6) };
                     v
                 })
             };

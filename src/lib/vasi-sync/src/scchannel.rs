@@ -10,7 +10,6 @@ use crate::sync::{self, AtomicU32, UnsafeCell};
 #[repr(u8)]
 enum ChannelContentsState {
     Empty,
-    Writing,
     Ready,
     Reading,
 }
@@ -18,12 +17,10 @@ enum ChannelContentsState {
 impl From<u8> for ChannelContentsState {
     fn from(value: u8) -> Self {
         const EMPTY: u8 = ChannelContentsState::Empty as u8;
-        const WRITING: u8 = ChannelContentsState::Writing as u8;
         const READY: u8 = ChannelContentsState::Ready as u8;
         const READING: u8 = ChannelContentsState::Reading as u8;
         match value {
             EMPTY => ChannelContentsState::Empty,
-            WRITING => ChannelContentsState::Writing,
             READY => ChannelContentsState::Ready,
             READING => ChannelContentsState::Reading,
             _ => panic!("Bad value {value}"),
@@ -169,19 +166,10 @@ impl<T> SelfContainedChannel<T> {
 
     /// Sends `message` through the channel.
     ///
-    /// Panics if the channel already has an unreceived message.
-    pub fn send(&self, message: T) {
-        self.state
-            .fetch_update(
-                sync::atomic::Ordering::Acquire,
-                sync::atomic::Ordering::Relaxed,
-                |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Empty);
-                    state.contents_state = ChannelContentsState::Writing;
-                    Some(state)
-                },
-            )
-            .unwrap();
+    /// # Safety
+    ///
+    /// Channel must be empty, and there must not be a parallel call to `send`.
+    pub unsafe fn send(&self, message: T) {
         unsafe { self.message.get_mut().deref().as_mut_ptr().write(message) };
         let prev = self
             .state
@@ -189,7 +177,7 @@ impl<T> SelfContainedChannel<T> {
                 sync::atomic::Ordering::Release,
                 sync::atomic::Ordering::Relaxed,
                 |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Writing);
+                    assert_eq!(state.contents_state, ChannelContentsState::Empty);
                     state.contents_state = ChannelContentsState::Ready;
                     Some(state)
                 },
@@ -216,10 +204,7 @@ impl<T> SelfContainedChannel<T> {
             if state.writer_closed {
                 return Err(SelfContainedChannelError::WriterIsClosed);
             }
-            assert!(
-                state.contents_state == ChannelContentsState::Empty
-                    || state.contents_state == ChannelContentsState::Writing
-            );
+            assert!(state.contents_state == ChannelContentsState::Empty);
             assert!(!state.has_sleeper);
             let mut sleeper_state = state;
             sleeper_state.has_sleeper = true;
