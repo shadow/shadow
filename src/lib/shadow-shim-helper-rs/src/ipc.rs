@@ -81,7 +81,7 @@ mod export {
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
-        ipc_data.to_shadow().send(*ev)
+        unsafe { ipc_data.to_shadow().send(*ev) }
     }
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_sendEventToPlugin(
@@ -90,7 +90,7 @@ mod export {
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
-        ipc_data.to_plugin().send(*ev)
+        unsafe { ipc_data.to_plugin().send(*ev) }
     }
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_recvEventFromShadow(
