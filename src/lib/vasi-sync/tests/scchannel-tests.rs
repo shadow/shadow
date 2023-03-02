@@ -16,7 +16,7 @@ mod scchannel_tests {
         sync::model(|| {
             let channel = SelfContainedChannel::new();
             unsafe { channel.send(42) };
-            let val = channel.receive().unwrap();
+            let val = unsafe { channel.receive().unwrap() };
             assert_eq!(val, 42);
         })
     }
@@ -33,7 +33,7 @@ mod scchannel_tests {
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.receive())
+                sync::thread::spawn(move || unsafe { channel.receive() })
             };
             writer.join().unwrap();
             assert_eq!(reader.join().unwrap(), Ok(42));
@@ -70,7 +70,7 @@ mod scchannel_tests {
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.receive())
+                sync::thread::spawn(move || unsafe { channel.receive() })
             };
             writer.join().unwrap();
             // Reader should have gotten the written value.
@@ -79,7 +79,7 @@ mod scchannel_tests {
             // Reading from the channel again should return an error since
             // the writer has closed. (And shouldn't deadlock or panic).
             assert_eq!(
-                channel.receive(),
+                unsafe { channel.receive() },
                 Err(SelfContainedChannelError::WriterIsClosed)
             );
         })
@@ -95,7 +95,7 @@ mod scchannel_tests {
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.receive())
+                sync::thread::spawn(move || unsafe { channel.receive() })
             };
             // Simulate a separate watchdog thread that detects that the writer process
             // has exited, and closes the channel in parallel with the other operations.
@@ -118,7 +118,7 @@ mod scchannel_tests {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || channel.receive())
+                sync::thread::spawn(move || unsafe { channel.receive() })
             };
             // Parallel with channel.receive()
             channel.close_writer();
@@ -143,11 +143,11 @@ mod scchannel_tests {
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
                     unsafe { send_channel.send(1) };
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     unsafe { send_channel.send(2) };
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     unsafe { send_channel.send(3) };
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     v
                 })
             };
@@ -156,11 +156,11 @@ mod scchannel_tests {
                 let recv_channel = alpha_to_beta.clone();
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     unsafe { send_channel.send(4) };
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     unsafe { send_channel.send(5) };
-                    v.push(recv_channel.receive());
+                    v.push(unsafe { recv_channel.receive() });
                     unsafe { send_channel.send(6) };
                     v
                 })
