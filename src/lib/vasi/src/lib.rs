@@ -51,6 +51,7 @@ unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU16 {}
 unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI16 {}
 unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicU8 {}
 unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicI8 {}
+unsafe impl VirtualAddressSpaceIndependent for std::sync::atomic::AtomicBool {}
 
 // An array of T is [VirtualAddressSpaceIndependent] if its elements are.
 unsafe impl<T, const N: usize> VirtualAddressSpaceIndependent for [T; N] where
