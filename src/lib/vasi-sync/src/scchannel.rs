@@ -11,18 +11,15 @@ use crate::sync::{self, AtomicU32, UnsafeCell};
 enum ChannelContentsState {
     Empty,
     Ready,
-    Reading,
 }
 
 impl From<u8> for ChannelContentsState {
     fn from(value: u8) -> Self {
         const EMPTY: u8 = ChannelContentsState::Empty as u8;
         const READY: u8 = ChannelContentsState::Ready as u8;
-        const READING: u8 = ChannelContentsState::Reading as u8;
         match value {
             EMPTY => ChannelContentsState::Empty,
             READY => ChannelContentsState::Ready,
-            READING => ChannelContentsState::Reading,
             _ => panic!("Bad value {value}"),
         }
     }
@@ -194,8 +191,10 @@ impl<T> SelfContainedChannel<T> {
     /// Returns `Ok(T)` if a message was received, or
     /// `Err(SelfContainedMutexError::WriterIsClosed)` if the writer is closed.
     ///
-    /// Panics if another thread is already trying to receive on this channel.
-    pub fn receive(&self) -> Result<T, SelfContainedChannelError> {
+    /// # Safety
+    ///
+    /// There must be no parallel call to `self.receive`.
+    pub unsafe fn receive(&self) -> Result<T, SelfContainedChannelError> {
         let mut state = self.state.load(sync::atomic::Ordering::Relaxed);
         loop {
             if state.contents_state == ChannelContentsState::Ready {
@@ -243,24 +242,16 @@ impl<T> SelfContainedChannel<T> {
                 Err(e) => panic!("Unexpected futex error {:?}", e),
             };
         }
-        self.state
-            .fetch_update(
-                sync::atomic::Ordering::Acquire,
-                sync::atomic::Ordering::Relaxed,
-                |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Ready);
-                    state.contents_state = ChannelContentsState::Reading;
-                    Some(state)
-                },
-            )
-            .unwrap();
+        // We use an Acquire fence here instead of making every load above
+        // have Acquire ordering.
+        sync::atomic::fence(sync::atomic::Ordering::Acquire);
         let val = unsafe { self.message.get_mut().deref().assume_init_read() };
         self.state
             .fetch_update(
                 sync::atomic::Ordering::Release,
                 sync::atomic::Ordering::Relaxed,
                 |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Reading);
+                    assert_eq!(state.contents_state, ChannelContentsState::Ready);
                     state.contents_state = ChannelContentsState::Empty;
                     Some(state)
                 },

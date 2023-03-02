@@ -98,7 +98,7 @@ mod export {
         ev: *mut ShimEvent,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
-        let event = ipc_data.from_shadow().receive().unwrap();
+        let event = unsafe { ipc_data.from_shadow().receive().unwrap() };
         unsafe { ev.write(event) };
     }
     #[no_mangle]
@@ -107,7 +107,7 @@ mod export {
         ev: *mut ShimEvent,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
-        let event = match ipc_data.from_plugin().receive() {
+        let event = match unsafe { ipc_data.from_plugin().receive() } {
             Ok(e) => e,
             Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent::ProcessDeath,
         };
