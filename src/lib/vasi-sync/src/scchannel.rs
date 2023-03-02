@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::sync::{self, AtomicU32, UnsafeCell};
+use crate::sync::{self, AtomicBool, AtomicU32, UnsafeCell};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(u8)]
@@ -27,22 +27,18 @@ impl From<u8> for ChannelContentsState {
 
 // bit flags in ChannelState
 const WRITER_CLOSED: u32 = 0x1 << 9;
-const HAS_SLEEPER: u32 = 0x1 << 10;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, VirtualAddressSpaceIndependent)]
 struct ChannelState {
     writer_closed: bool,
-    has_sleeper: bool,
     contents_state: ChannelContentsState,
 }
 
 impl From<u32> for ChannelState {
     fn from(value: u32) -> Self {
-        let has_sleeper = (value & HAS_SLEEPER) != 0;
         let writer_closed = (value & WRITER_CLOSED) != 0;
         let contents_state = ((value & 0xff) as u8).into();
         ChannelState {
-            has_sleeper,
             writer_closed,
             contents_state,
         }
@@ -51,13 +47,12 @@ impl From<u32> for ChannelState {
 
 impl From<ChannelState> for u32 {
     fn from(value: ChannelState) -> Self {
-        let has_sleeper = if value.has_sleeper { HAS_SLEEPER } else { 0 };
         let writer_closed = if value.writer_closed {
             WRITER_CLOSED
         } else {
             0
         };
-        writer_closed | has_sleeper | (value.contents_state as u32)
+        writer_closed | (value.contents_state as u32)
     }
 }
 
@@ -67,7 +62,6 @@ impl AtomicChannelState {
     pub fn new() -> Self {
         Self(AtomicU32::new(
             ChannelState {
-                has_sleeper: false,
                 writer_closed: false,
                 contents_state: ChannelContentsState::Empty,
             }
@@ -151,6 +145,7 @@ impl Error for SelfContainedChannelError {
 pub struct SelfContainedChannel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     state: AtomicChannelState,
+    has_sleeper: AtomicBool,
 }
 
 impl<T> SelfContainedChannel<T> {
@@ -158,6 +153,7 @@ impl<T> SelfContainedChannel<T> {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
             state: AtomicChannelState::new(),
+            has_sleeper: AtomicBool::new(false),
         }
     }
 
@@ -168,7 +164,7 @@ impl<T> SelfContainedChannel<T> {
     /// Channel must be empty, and there must not be a parallel call to `send`.
     pub unsafe fn send(&self, message: T) {
         unsafe { self.message.get_mut().deref().as_mut_ptr().write(message) };
-        let prev = self
+        self
             .state
             .fetch_update(
                 sync::atomic::Ordering::Release,
@@ -180,7 +176,8 @@ impl<T> SelfContainedChannel<T> {
                 },
             )
             .unwrap();
-        if prev.has_sleeper {
+        sync::atomic::fence(sync::atomic::Ordering::SeqCst);
+        if self.has_sleeper.load(sync::atomic::Ordering::Relaxed) {
             sync::futex_wake(&self.state.0).unwrap();
         }
     }
@@ -204,39 +201,16 @@ impl<T> SelfContainedChannel<T> {
                 return Err(SelfContainedChannelError::WriterIsClosed);
             }
             assert!(state.contents_state == ChannelContentsState::Empty);
-            assert!(!state.has_sleeper);
-            let mut sleeper_state = state;
-            sleeper_state.has_sleeper = true;
-            match self.state.compare_exchange(
-                state,
-                sleeper_state,
-                sync::atomic::Ordering::Relaxed,
-                sync::atomic::Ordering::Acquire,
-            ) {
-                Ok(_) => (),
-                Err(s) => {
-                    // Something changed; re-evaluate.
-                    state = s;
-                    continue;
-                }
-            };
-            let expected = sleeper_state.into();
-            match sync::futex_wait(&self.state.0, expected) {
+
+            self.has_sleeper.store(true, sync::atomic::Ordering::Relaxed);
+            sync::atomic::fence(sync::atomic::Ordering::SeqCst);
+            let res = sync::futex_wait(&self.state.0, state.into());
+            self.has_sleeper.store(false, sync::atomic::Ordering::Relaxed);
+
+            match res {
                 Ok(_) | Err(nix::errno::Errno::EINTR) | Err(nix::errno::Errno::EAGAIN) => {
-                    // Something changed; clear the sleeper bit and try again.
-                    let mut updated_state = self
-                        .state
-                        .fetch_update(
-                            sync::atomic::Ordering::Relaxed,
-                            sync::atomic::Ordering::Acquire,
-                            |mut state| {
-                                state.has_sleeper = false;
-                                Some(state)
-                            },
-                        )
-                        .unwrap();
-                    updated_state.has_sleeper = false;
-                    state = updated_state;
+                    // Something changed; try again.
+                    state = self.state.load(sync::atomic::Ordering::Acquire);
                     continue;
                 }
                 Err(e) => panic!("Unexpected futex error {:?}", e),
@@ -264,18 +238,19 @@ impl<T> SelfContainedChannel<T> {
     /// channel, making it suitable to be called from a separate watchdog thread
     /// that detects that the writing thread (or process) has died.
     pub fn close_writer(&self) {
-        let prev = self
+        self
             .state
             .fetch_update(
                 sync::atomic::Ordering::Relaxed,
-                sync::atomic::Ordering::Relaxed,
+                sync::atomic::Ordering::Acquire,
                 |mut state| {
                     state.writer_closed = true;
                     Some(state)
                 },
             )
             .unwrap();
-        if prev.has_sleeper {
+        sync::atomic::fence(sync::atomic::Ordering::SeqCst);
+        if self.has_sleeper.load(sync::atomic::Ordering::Relaxed) {
             sync::futex_wake(&self.state.0).unwrap();
         }
     }
