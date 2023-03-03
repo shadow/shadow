@@ -29,6 +29,8 @@ typedef struct _ShMemBlock {
 // Keep in sync with constant of same name in allocator.rs.
 #define SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN (21 + 21 + 21 + SHD_SHMEM_FILE_NAME_NBYTES + 1)
 
+// Serialized handle to a shared memory block. Must be self-contained /
+// VirtualAddressSpaceIndependent.
 typedef struct _ShMemBlockSerialized {
     size_t offset;                         // offset of the file within the shared memory file
     size_t nbytes;                         // size of the shared memory file

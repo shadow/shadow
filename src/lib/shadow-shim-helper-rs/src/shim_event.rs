@@ -1,8 +1,9 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
+use vasi::VirtualAddressSpaceIndependent;
 
 use crate::syscall_types::{PluginPtr, SysCallArgs, SysCallReg};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub enum ShimEventID {
     Null = 0,
@@ -24,14 +25,14 @@ pub enum ShimEventID {
 }
 
 /// Data for [`ShimEventID::Syscall`]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscall {
     pub syscall_args: SysCallArgs,
 }
 
 /// Data for [`ShimEventID::SyscallComplete`]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscallComplete {
     pub retval: SysCallReg,
@@ -43,7 +44,7 @@ pub struct ShimEventSyscallComplete {
 /// Data for several shared-memory shim events.
 /// TODO: Document for which. Will be easier to see and maintain once ShimEvent
 /// is refactored into an enum.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventShmemBlk {
     pub serial: ShMemBlockSerialized,
@@ -52,14 +53,14 @@ pub struct ShimEventShmemBlk {
 }
 
 /// Data for [`ShimEventID::AddThreadReq`]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
 }
 
 /// Data for [`ShimEvent`].
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub union ShimEventData {
     pub syscall: ShimEventSyscall,
@@ -70,7 +71,7 @@ pub union ShimEventData {
 
 /// A message between Shadow and the Shim.
 /// TODO: Refactor from a tagged union into an enum.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEvent {
     pub event_id: ShimEventID,
