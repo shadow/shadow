@@ -9,10 +9,12 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let mut config = cbindgen::Config {
         sys_includes: vec!["signal.h".into()],
         include_guard: Some("shim_helpers_h".into()),
+        includes: vec!["lib/shmem/shmem_allocator.h".into()],
         after_includes: Some("".into()),
         export: cbindgen::ExportConfig {
             include: vec![
                 "shd_kernel_sigaction".into(),
+                "ShimEvent".into(),
                 "HostId".into(),
                 "SysCallArgs".into(),
                 "SysCallReg".into(),

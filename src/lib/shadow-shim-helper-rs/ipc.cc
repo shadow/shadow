@@ -70,7 +70,7 @@ void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e, bool spin
 void shimevent_recvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
     data->xfer_ctrl_to_shadow.wait();
     if (data->plugin_died.load(std::memory_order_relaxed)) {
-        e->event_id = SHD_SHIM_EVENT_PROCESS_DEATH;
+        e->event_id = SHIM_EVENT_ID_PROCESS_DEATH;
     } else {
         *e = data->plugin_to_shadow;
     }
@@ -91,7 +91,7 @@ int shimevent_tryRecvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
         return rv;
     }
     if (data->plugin_died.load(std::memory_order_relaxed)) {
-        e->event_id = SHD_SHIM_EVENT_PROCESS_DEATH;
+        e->event_id = SHIM_EVENT_ID_PROCESS_DEATH;
         return 0;
     }
 

@@ -15,7 +15,7 @@
 #include <inttypes.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/shim_event.h"
+#include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"

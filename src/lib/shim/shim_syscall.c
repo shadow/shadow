@@ -7,7 +7,6 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/ipc.h"
-#include "lib/shadow-shim-helper-rs/shim_event.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shim/shim.h"
@@ -129,18 +128,18 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
         shimevent_recvEventFromShadow(ipc, &res, spin);
         trace("got response of type %d on %p", res.event_id, ipc);
 
-        // Reset spin-flag to true. (May have been set to false by a SHD_SHIM_EVENT_BLOCK in the
+        // Reset spin-flag to true. (May have been set to false by a SHIM_EVENT_ID_BLOCK in the
         // previous iteration)
         spin = true;
         switch (res.event_id) {
-            case SHD_SHIM_EVENT_BLOCK: {
+            case SHIM_EVENT_ID_BLOCK: {
                 // Loop again, this time relinquishing the CPU while waiting for the next message.
                 spin = false;
                 // Ack the message.
                 shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
-            case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
+            case SHIM_EVENT_ID_SYSCALL_COMPLETE: {
                 // We'll ultimately return the provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
 
@@ -175,7 +174,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
                 return rv;
             }
-            case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {
+            case SHIM_EVENT_ID_SYSCALL_DO_NATIVE: {
                 // Make the original syscall ourselves and use the result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
                 const SysCallReg* regs = syscall_event->event_data.syscall.syscall_args.args;
@@ -220,7 +219,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
                 return rv;
             }
-            case SHD_SHIM_EVENT_SYSCALL: {
+            case SHIM_EVENT_ID_SYSCALL: {
                 // Make the requested syscall ourselves and return the result
                 // to Shadow.
                 const SysCallReg* regs = res.event_data.syscall.syscall_args.args;
@@ -228,29 +227,29 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                     res.event_data.syscall.syscall_args.number, regs[0].as_u64, regs[1].as_u64,
                     regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
                 ShimEvent syscall_complete_event = {
-                    .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                    .event_id = SHIM_EVENT_ID_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
                 };
                 shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
-            case SHD_SHIM_EVENT_CLONE_REQ:
+            case SHIM_EVENT_ID_CLONE_REQ:
                 shim_shmemHandleClone(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHD_SHIM_EVENT_CLONE_STRING_REQ:
+            case SHIM_EVENT_ID_CLONE_STRING_REQ:
                 shim_shmemHandleCloneString(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHD_SHIM_EVENT_WRITE_REQ:
+            case SHIM_EVENT_ID_WRITE_REQ:
                 shim_shmemHandleWrite(&res);
                 shim_shmemNotifyComplete(ipc);
                 break;
-            case SHD_SHIM_EVENT_ADD_THREAD_REQ: {
+            case SHIM_EVENT_ID_ADD_THREAD_REQ: {
                 shim_newThreadStart(&res.event_data.add_thread_req.ipc_block);
                 shimevent_sendEventToShadow(
                     ipc, &(ShimEvent){
-                             .event_id = SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES,
+                             .event_id = SHIM_EVENT_ID_ADD_THREAD_PARENT_RES,
                          });
                 break;
             }
@@ -271,7 +270,7 @@ long shim_emulated_syscallv(long n, va_list args) {
     }
 
     ShimEvent e = {
-        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_id = SHIM_EVENT_ID_SYSCALL,
         .event_data.syscall.syscall_args.number = n,
     };
     SysCallReg* regs = e.event_data.syscall.syscall_args.args;
