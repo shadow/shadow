@@ -840,7 +840,7 @@ mod export {
 
     use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
-    use crate::host::descriptor::socket::inet::tcp::LegacyTcpSocket;
+    use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;
 

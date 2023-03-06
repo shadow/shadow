@@ -1,5 +1,5 @@
 use crate::cshadow as c;
-use crate::host::descriptor::socket::inet::tcp::LegacyTcpSocket;
+use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::Socket;
