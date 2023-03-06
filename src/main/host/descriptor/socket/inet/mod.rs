@@ -15,9 +15,9 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
 
-use tcp::LegacyTcpSocket;
+use legacy_tcp::LegacyTcpSocket;
 
-pub mod tcp;
+pub mod legacy_tcp;
 
 #[derive(Clone)]
 pub enum InetSocket {
