@@ -10,7 +10,7 @@ where
     T: Seek,
 {
     fn stream_len_bp(&mut self) -> std::io::Result<u64> {
-        let current = self.seek(SeekFrom::Current(0))?;
+        let current = self.stream_position()?;
         let end = self.seek(SeekFrom::End(0))?;
         if current != end {
             self.seek(SeekFrom::Start(current))?;
