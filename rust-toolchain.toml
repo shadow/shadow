@@ -7,4 +7,4 @@
 # that the newly specified version is baked in and doesn't have to be installed
 # (and rust deps rebuilt) during every incremental build.
 [toolchain]
-channel = "1.66.1"
+channel = "1.68.0"
