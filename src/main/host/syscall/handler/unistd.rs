@@ -146,8 +146,6 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
     ) -> SyscallResult {
-        let offset = 0;
-
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -178,7 +176,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_read, ctx);
         }
 
-        Self::read_helper(ctx, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, file, buf_ptr, buf_size, None)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
@@ -220,7 +218,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
         }
 
-        Self::read_helper(ctx, file, buf_ptr, buf_size, offset)
+        Self::read_helper(ctx, file, buf_ptr, buf_size, Some(offset))
     }
 
     fn read_helper(
@@ -228,13 +226,13 @@ impl SyscallHandler {
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
     ) -> SyscallResult {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
         if let File::Socket(..) = generic_file {
-            if offset != 0 {
+            if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
@@ -285,8 +283,6 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
     ) -> SyscallResult {
-        let offset = 0;
-
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -317,7 +313,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_write, ctx);
         }
 
-        Self::write_helper(ctx, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, file, buf_ptr, buf_size, None)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -360,7 +356,7 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
         }
 
-        Self::write_helper(ctx, file, buf_ptr, buf_size, offset)
+        Self::write_helper(ctx, file, buf_ptr, buf_size, Some(offset))
     }
 
     fn write_helper(
@@ -368,13 +364,13 @@ impl SyscallHandler {
         open_file: OpenFile,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
     ) -> SyscallResult {
         let generic_file = open_file.inner_file();
 
         // if it's a socket, call recvfrom() instead
         if let File::Socket(..) = generic_file {
-            if offset != 0 {
+            if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }

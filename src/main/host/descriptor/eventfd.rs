@@ -71,14 +71,14 @@ impl EventFd {
     pub fn read<W>(
         &mut self,
         mut bytes: W,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         W: std::io::Write + std::io::Seek,
     {
         // eventfds don't support seeking
-        if offset != 0 {
+        if offset.is_some() {
             return Err(Errno::ESPIPE.into());
         }
 
@@ -119,14 +119,14 @@ impl EventFd {
     pub fn write<R>(
         &mut self,
         mut bytes: R,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         // eventfds don't support seeking
-        if offset != 0 {
+        if offset.is_some() {
             return Err(Errno::ESPIPE.into());
         }
 
