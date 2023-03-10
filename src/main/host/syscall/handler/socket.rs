@@ -465,6 +465,8 @@ impl SyscallHandler {
                 return Err(Errno::EFAULT.into());
             }
 
+            // this is a clippy false-positive
+            #[allow(clippy::let_and_return)]
             let addr_to_write = socket.borrow().getpeername()?;
             addr_to_write
         };
