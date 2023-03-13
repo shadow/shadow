@@ -150,7 +150,7 @@ impl UnixSocket {
     pub fn read<W>(
         &mut self,
         mut _bytes: W,
-        _offset: libc::off_t,
+        _offset: Option<libc::off_t>,
         _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
@@ -165,7 +165,7 @@ impl UnixSocket {
     pub fn write<R>(
         &mut self,
         mut _bytes: R,
-        _offset: libc::off_t,
+        _offset: Option<libc::off_t>,
         _cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where

@@ -120,14 +120,14 @@ impl Pipe {
     pub fn read<W>(
         &mut self,
         mut bytes: W,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         W: std::io::Write + std::io::Seek,
     {
         // pipes don't support seeking
-        if offset != 0 {
+        if offset.is_some() {
             return Err(nix::errno::Errno::ESPIPE.into());
         }
 
@@ -160,14 +160,14 @@ impl Pipe {
     pub fn write<R>(
         &mut self,
         mut bytes: R,
-        offset: libc::off_t,
+        offset: Option<libc::off_t>,
         cb_queue: &mut CallbackQueue,
     ) -> SyscallResult
     where
         R: std::io::Read + std::io::Seek,
     {
         // pipes don't support seeking
-        if offset != 0 {
+        if offset.is_some() {
             return Err(nix::errno::Errno::ESPIPE.into());
         }
 

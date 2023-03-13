@@ -430,12 +430,12 @@ impl FileRefMut<'_> {
     );
 
     enum_passthrough_generic!(self, (bytes, offset, cb_queue), Pipe, EventFd, Socket;
-        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
+        pub fn read<W>(&mut self, bytes: W, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
         where W: std::io::Write + std::io::Seek
     );
 
     enum_passthrough_generic!(self, (source, offset, cb_queue), Pipe, EventFd, Socket;
-        pub fn write<R>(&mut self, source: R, offset: libc::off_t, cb_queue: &mut CallbackQueue) -> SyscallResult
+        pub fn write<R>(&mut self, source: R, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
 }
