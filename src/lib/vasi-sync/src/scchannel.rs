@@ -57,7 +57,13 @@ impl From<ChannelState> for u32 {
 }
 
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
+// Align to 64 bytes to ensure it's on a different cache line than the
+// `has_sleeper` `AtomicBool`, so that writes to one don't invalidate the cache
+// for both. 64 bytes is a suggested "big enough" size from Bos's "Rust Atomics
+// and Locks".
+#[repr(align(64))]
 struct AtomicChannelState(AtomicU32);
+
 impl AtomicChannelState {
     pub fn new() -> Self {
         Self(AtomicU32::new(
