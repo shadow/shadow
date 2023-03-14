@@ -28,7 +28,7 @@ jobs:
       run: |
           # Must be a version built with miri; check
           # https://rust-lang.github.io/rustup-components-history/
-          TOOLCHAIN=nightly-2022-10-14
+          TOOLCHAIN=nightly-2023-03-13
           rustup toolchain install ${TOOLCHAIN} --component miri
           rustup override set ${TOOLCHAIN}
           cargo miri setup
