@@ -87,7 +87,6 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         .threadId = threadId,
         .syscall_handler_rs = rustsyscallhandler_new(),
         .blockedSyscallNR = -1,
-        .referenceCount = 1,
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
         .epoll = epoll_new(),
@@ -107,7 +106,7 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
     return sys;
 }
 
-static void _syscallhandler_free(SysCallHandler* sys) {
+void syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
 #ifdef USE_PERF_TIMERS
@@ -146,20 +145,6 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_CLEAR(sys);
     free(sys);
     worker_count_deallocation(SysCallHandler);
-}
-
-void syscallhandler_ref(SysCallHandler* sys) {
-    MAGIC_ASSERT(sys);
-    (sys->referenceCount)++;
-}
-
-void syscallhandler_unref(SysCallHandler* sys) {
-    MAGIC_ASSERT(sys);
-    (sys->referenceCount)--;
-    utility_debugAssert(sys->referenceCount >= 0);
-    if(sys->referenceCount == 0) {
-        _syscallhandler_free(sys);
-    }
 }
 
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
