@@ -430,7 +430,7 @@ impl Drop for Thread {
             unsafe { c::syscallcondition_unref(c) };
         }
         unsafe { c::managedthread_free(self.mthread.ptr()) };
-        unsafe { c::syscallhandler_unref(self.syscallhandler.ptr()) };
+        unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
     }
 }
 

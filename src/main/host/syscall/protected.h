@@ -69,8 +69,6 @@ struct _SysCallHandler {
     bool havePendingResult;
     SysCallReturn pendingResult;
 
-    int referenceCount;
-
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;
