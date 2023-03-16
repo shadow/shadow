@@ -40,17 +40,17 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
                 nix::sched::sched_setaffinity(Pid::from_raw(0), &pinned_cpu_set).unwrap();
             }
             loop {
-                if ipc.0.receive().is_err() {
+                if unsafe { ipc.0.receive() }.is_err() {
                     break;
                 }
-                ipc.1.send(());
+                unsafe { ipc.1.send(()) };
             }
         })
     };
 
     bencher.iter(|| {
-        ipc.0.send(());
-        ipc.1.receive().unwrap();
+        unsafe { ipc.0.send(()) };
+        unsafe { ipc.1.receive().unwrap() };
     });
 
     ipc.0.close_writer();
