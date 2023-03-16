@@ -18,3 +18,7 @@ rand = "0.8.5"
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
+
+[[bench]]
+name = "scchannel"
+harness = false
