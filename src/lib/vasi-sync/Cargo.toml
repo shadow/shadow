@@ -13,6 +13,7 @@ static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 
 [dev-dependencies]
+criterion = "0.4.0"
 rand = "0.8.5"
 
 [target.'cfg(loom)'.dependencies]
