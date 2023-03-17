@@ -17,6 +17,6 @@ jobs:
     steps:
     - name: Block autosquash commits
       # before updating the version of this untrusted action, check the code manually
-      uses: xt0rted/block-autosquash-commits-action@b5c7dab0b82dd6902d2401fcc4d724baec90853a
+      uses: xt0rted/block-autosquash-commits-action@cc176cf8be083cea83e23f1c026ea4f5c6318036
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}

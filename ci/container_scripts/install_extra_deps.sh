@@ -65,7 +65,7 @@ source "$HOME/.cargo/env"
 if [ "${BUILDTYPE:-}" = coverage ]
 then
   # Add a directory override, which overrides rust-toolchain.toml
-  rustup override set nightly-2022-10-14
+  rustup override set nightly-2023-03-13
 fi
 
 # This forces installation of the toolchain. When used with Docker,

@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2"
-nix = "0.26.1"
-rkyv = "0.7.39"
+nix = "0.26.2"
+rkyv = "0.7.40"
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 

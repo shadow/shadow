@@ -138,7 +138,7 @@ jobs:
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
-          key: tgen-build-key-${{ env.CONTAINER }}-fa98ebdcd309e1e5a3d9596e58dda05efd99c5e7
+          key: tgen-build-key-${{ env.CONTAINER }}-77a0d12eb09b89816b8b8141e930a7c759cd3cac
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -146,7 +146,7 @@ jobs:
           path: tgen
           repository: shadow/tgen
           # When updating, change cache key in "Restore cache" step above
-          ref: fa98ebdcd309e1e5a3d9596e58dda05efd99c5e7
+          ref: 77a0d12eb09b89816b8b8141e930a7c759cd3cac
           persist-credentials: false
       - name: Install dependencies
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
@@ -205,11 +205,9 @@ jobs:
 
     strategy:
       matrix:
-        # supported tor releases are here:
-        # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
         # when changing the tor versions, make sure to also update the
         # required CI tests in the GitHub repository settings
-        tor: ['tor-0.4.5.14', 'tor-0.4.6.12', 'tor-0.4.7.10']
+        tor: ['tor-0.4.7.13']
 
     steps:
       - run: apt-get update
