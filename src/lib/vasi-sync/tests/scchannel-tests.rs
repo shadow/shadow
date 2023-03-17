@@ -15,8 +15,8 @@ mod scchannel_tests {
     fn test_single_thread() {
         sync::model(|| {
             let channel = SelfContainedChannel::new();
-            unsafe { channel.send(42) };
-            let val = unsafe { channel.receive().unwrap() };
+            channel.send(42);
+            let val = channel.receive().unwrap();
             assert_eq!(val, 42);
         })
     }
@@ -28,12 +28,12 @@ mod scchannel_tests {
             let writer = {
                 let channel = channel.clone();
                 sync::thread::spawn(move || {
-                    unsafe { channel.send(42) };
+                    channel.send(42);
                 })
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || unsafe { channel.receive() })
+                sync::thread::spawn(move || channel.receive())
             };
             writer.join().unwrap();
             assert_eq!(reader.join().unwrap(), Ok(42));
@@ -46,7 +46,7 @@ mod scchannel_tests {
             let channel = SelfContainedChannel::new();
             let writer = {
                 sync::thread::spawn(move || {
-                    unsafe { channel.send(Box::new(42)) };
+                    channel.send(Box::new(42));
                     channel
                 })
             };
@@ -64,13 +64,13 @@ mod scchannel_tests {
             let writer = {
                 let channel = channel.clone();
                 sync::thread::spawn(move || {
-                    unsafe { channel.send(42) };
+                    channel.send(42);
                     channel.close_writer();
                 })
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || unsafe { channel.receive() })
+                sync::thread::spawn(move || channel.receive())
             };
             writer.join().unwrap();
             // Reader should have gotten the written value.
@@ -79,7 +79,7 @@ mod scchannel_tests {
             // Reading from the channel again should return an error since
             // the writer has closed. (And shouldn't deadlock or panic).
             assert_eq!(
-                unsafe { channel.receive() },
+                channel.receive(),
                 Err(SelfContainedChannelError::WriterIsClosed)
             );
         })
@@ -91,11 +91,11 @@ mod scchannel_tests {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || unsafe { channel.send(42) })
+                sync::thread::spawn(move || channel.send(42))
             };
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || unsafe { channel.receive() })
+                sync::thread::spawn(move || channel.receive())
             };
             // Simulate a separate watchdog thread that detects that the writer process
             // has exited, and closes the channel in parallel with the other operations.
@@ -118,7 +118,7 @@ mod scchannel_tests {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let reader = {
                 let channel = channel.clone();
-                sync::thread::spawn(move || unsafe { channel.receive() })
+                sync::thread::spawn(move || channel.receive())
             };
             // Parallel with channel.receive()
             channel.close_writer();
@@ -142,12 +142,12 @@ mod scchannel_tests {
                 let recv_channel = beta_to_alpha.clone();
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
-                    unsafe { send_channel.send(1) };
-                    v.push(unsafe { recv_channel.receive() });
-                    unsafe { send_channel.send(2) };
-                    v.push(unsafe { recv_channel.receive() });
-                    unsafe { send_channel.send(3) };
-                    v.push(unsafe { recv_channel.receive() });
+                    send_channel.send(1);
+                    v.push(recv_channel.receive());
+                    send_channel.send(2);
+                    v.push(recv_channel.receive());
+                    send_channel.send(3);
+                    v.push(recv_channel.receive());
                     v
                 })
             };
@@ -156,12 +156,12 @@ mod scchannel_tests {
                 let recv_channel = alpha_to_beta.clone();
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
-                    v.push(unsafe { recv_channel.receive() });
-                    unsafe { send_channel.send(4) };
-                    v.push(unsafe { recv_channel.receive() });
-                    unsafe { send_channel.send(5) };
-                    v.push(unsafe { recv_channel.receive() });
-                    unsafe { send_channel.send(6) };
+                    v.push(recv_channel.receive());
+                    send_channel.send(4);
+                    v.push(recv_channel.receive());
+                    send_channel.send(5);
+                    v.push(recv_channel.receive());
+                    send_channel.send(6);
                     v
                 })
             };

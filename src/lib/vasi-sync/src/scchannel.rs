@@ -10,16 +10,22 @@ use crate::sync::{self, AtomicU32, UnsafeCell};
 #[repr(u8)]
 enum ChannelContentsState {
     Empty,
+    Writing,
     Ready,
+    Reading,
 }
 
 impl From<u8> for ChannelContentsState {
     fn from(value: u8) -> Self {
         const EMPTY: u8 = ChannelContentsState::Empty as u8;
+        const WRITING: u8 = ChannelContentsState::Writing as u8;
         const READY: u8 = ChannelContentsState::Ready as u8;
+        const READING: u8 = ChannelContentsState::Reading as u8;
         match value {
             EMPTY => ChannelContentsState::Empty,
+            WRITING => ChannelContentsState::Writing,
             READY => ChannelContentsState::Ready,
+            READING => ChannelContentsState::Reading,
             _ => panic!("Bad value {value}"),
         }
     }
@@ -147,6 +153,19 @@ impl Error for SelfContainedChannelError {
 /// Locks" by Mara Box (O'Reilly). Copyright 2023 Mara Box, 978-1-098-11944-7.
 /// (From the preface: "You may use all example code offered with this book for
 /// any purpose").
+///
+/// TODO: Several candidate optimizations have been evaluated and discarded, but
+/// are left in the commit history for posterity along with their corresponding
+/// microbenchmark results.
+///
+/// One that might be worth revisiting is to remove the internal "Reading" and
+/// "Writing" states and either make the interfaces `unsafe` (since it becomes
+/// the caller's responsibility to avoid parallel reads or writes), or add
+/// checked creation of `!Sync` Reader and Writer objects. This optimization
+/// appeared to have a 22% benefit in the "ping pong" microbenchmark on a large
+/// simulation machine, but only a 3.5% benefit in the "ping pong pinned"
+/// microbenchmark; the latter is expected to be more representative of real
+/// large simulation runs (i.e. pinning should be enabled).
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 pub struct SelfContainedChannel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
@@ -163,10 +182,19 @@ impl<T> SelfContainedChannel<T> {
 
     /// Sends `message` through the channel.
     ///
-    /// # Safety
-    ///
-    /// Channel must be empty, and there must not be a parallel call to `send`.
-    pub unsafe fn send(&self, message: T) {
+    /// Panics if the channel already has an unreceived message.
+    pub fn send(&self, message: T) {
+        self.state
+            .fetch_update(
+                sync::atomic::Ordering::Acquire,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Empty);
+                    state.contents_state = ChannelContentsState::Writing;
+                    Some(state)
+                },
+            )
+            .unwrap();
         unsafe { self.message.get_mut().deref().as_mut_ptr().write(message) };
         let prev = self
             .state
@@ -174,7 +202,7 @@ impl<T> SelfContainedChannel<T> {
                 sync::atomic::Ordering::Release,
                 sync::atomic::Ordering::Relaxed,
                 |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Empty);
+                    assert_eq!(state.contents_state, ChannelContentsState::Writing);
                     state.contents_state = ChannelContentsState::Ready;
                     Some(state)
                 },
@@ -191,10 +219,8 @@ impl<T> SelfContainedChannel<T> {
     /// Returns `Ok(T)` if a message was received, or
     /// `Err(SelfContainedMutexError::WriterIsClosed)` if the writer is closed.
     ///
-    /// # Safety
-    ///
-    /// There must be no parallel call to `self.receive`.
-    pub unsafe fn receive(&self) -> Result<T, SelfContainedChannelError> {
+    /// Panics if another thread is already trying to receive on this channel.
+    pub fn receive(&self) -> Result<T, SelfContainedChannelError> {
         let mut state = self.state.load(sync::atomic::Ordering::Relaxed);
         loop {
             if state.contents_state == ChannelContentsState::Ready {
@@ -203,7 +229,10 @@ impl<T> SelfContainedChannel<T> {
             if state.writer_closed {
                 return Err(SelfContainedChannelError::WriterIsClosed);
             }
-            assert!(state.contents_state == ChannelContentsState::Empty);
+            assert!(
+                state.contents_state == ChannelContentsState::Empty
+                    || state.contents_state == ChannelContentsState::Writing
+            );
             assert!(!state.has_sleeper);
             let mut sleeper_state = state;
             sleeper_state.has_sleeper = true;
@@ -242,16 +271,24 @@ impl<T> SelfContainedChannel<T> {
                 Err(e) => panic!("Unexpected futex error {:?}", e),
             };
         }
-        // We use an Acquire fence here instead of making every load above
-        // have Acquire ordering.
-        sync::atomic::fence(sync::atomic::Ordering::Acquire);
+        self.state
+            .fetch_update(
+                sync::atomic::Ordering::Acquire,
+                sync::atomic::Ordering::Relaxed,
+                |mut state| {
+                    assert_eq!(state.contents_state, ChannelContentsState::Ready);
+                    state.contents_state = ChannelContentsState::Reading;
+                    Some(state)
+                },
+            )
+            .unwrap();
         let val = unsafe { self.message.get_mut().deref().assume_init_read() };
         self.state
             .fetch_update(
                 sync::atomic::Ordering::Release,
                 sync::atomic::Ordering::Relaxed,
                 |mut state| {
-                    assert_eq!(state.contents_state, ChannelContentsState::Ready);
+                    assert_eq!(state.contents_state, ChannelContentsState::Reading);
                     state.contents_state = ChannelContentsState::Empty;
                     Some(state)
                 },
