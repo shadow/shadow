@@ -1,7 +1,6 @@
 #ifndef SHD_SHIM_SHMEM_H_
 #define SHD_SHIM_SHMEM_H_
 
-#include "ipc.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 // Handle SHIM_EVENT_ID_CLONE_REQ

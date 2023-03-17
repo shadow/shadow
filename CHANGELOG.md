@@ -5,7 +5,12 @@ A list of user-facing changes since the latest Shadow release.
 * Set the shim library's stdout/stderr to the shim log file. This should only
   affect simulations that use experimental features to disable interposition.
   https://github.com/shadow/shadow/pull/2725
-* (add entry here)
+* Removed the experimental options `preload_spin_max` and `use_explicit_block_message`.
+  These options were to support an execution model where Shadow workers ran on different
+  CPU cores than the managed threads they were controlling, and each side would "spin"
+  while waiting for a message from the other side. After extensive benchmarking we found
+  that this was rarely a significant win, and dropped support for this behavior while
+  migrating the core IPC functionality to Rust.
 
 Raw changes since v2.4.0:
 

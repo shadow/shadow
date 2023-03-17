@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/ipc.h"
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shadow_spinlock.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
@@ -416,7 +415,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     // receiving the start event.
     shim_newThreadChildInitd();
 
-    shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
+    shimevent_recvEventFromShadow(ipc, &event);
     assert(event.event_id == SHIM_EVENT_ID_START);
 }
 
@@ -426,7 +425,7 @@ static void _shim_ipc_wait_for_start_event() {
 
     ShimEvent event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
-    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
+    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event);
     assert(event.event_id == SHIM_EVENT_ID_START);
 }
 

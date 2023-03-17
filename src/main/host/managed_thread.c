@@ -14,12 +14,10 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/ipc.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"
-#include "main/host/shimipc.h"
 #include "main/host/syscall_condition.h"
 
 struct _ManagedThread {
@@ -236,7 +234,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
     mthread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_debugAssert(mthread->ipc_blk.p);
     mthread->ipc_data = mthread->ipc_blk.p;
-    ipcData_init(mthread->ipc_data, shimipc_spinMax());
+    ipcData_init(mthread->ipc_data);
 
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&mthread->ipc_blk);
 
@@ -383,16 +381,6 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                 }
 
                 if (result.state == SYSCALL_BLOCK) {
-                    if (shimipc_sendExplicitBlockMessageEnabled()) {
-                        trace("Sending block message to plugin");
-                        // mthread is blocked on simulation progress. Tell it to
-                        // stop spinning so that releases its CPU core for the next
-                        // mthread to be run.
-                        ShimEvent block_event = {.event_id = SHIM_EVENT_ID_BLOCK};
-                        _managedthread_continuePlugin(mthread, &block_event);
-                        _managedthread_waitForNextEvent(mthread, &mthread->currentEvent);
-                    }
-
                     return syscallreturn_blocked(&result)->cond;
                 }
 
@@ -458,7 +446,7 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     child->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_debugAssert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
-    ipcData_init(child->ipc_data, shimipc_spinMax());
+    ipcData_init(child->ipc_data);
     childpidwatcher_watch(
         worker_getChildPidWatcher(), parent->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
