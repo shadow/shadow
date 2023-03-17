@@ -8,13 +8,13 @@
 #[cfg(loom)]
 pub use loom::{
     sync::atomic,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
+    sync::atomic::{AtomicI32, AtomicU32, Ordering},
     sync::Arc,
 };
 #[cfg(not(loom))]
 pub use std::{
     sync::atomic,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
+    sync::atomic::{AtomicI32, AtomicU32, Ordering},
     sync::Arc,
 };
 
