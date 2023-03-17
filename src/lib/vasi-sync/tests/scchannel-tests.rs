@@ -57,11 +57,6 @@ mod scchannel_tests {
         })
     }
 
-    // This test causes an internal panic in loom. Unclear why.
-    // This scenario shouldn't actually occur in Shadow's usage;
-    // test_writer_close_watchdog_with_write more closely covers that.
-    // XXX: debug or file loom issue.
-    #[cfg(not(loom))]
     #[test]
     fn test_writer_writes_then_closes() {
         sync::model(|| {
@@ -78,10 +73,8 @@ mod scchannel_tests {
                 sync::thread::spawn(move || unsafe { channel.receive() })
             };
             writer.join().unwrap();
-            // We should either get the written value, or an error, depending on
-            // the execution order.
-            let res = reader.join().unwrap();
-            assert!(res == Ok(42) || res == Err(SelfContainedChannelError::WriterIsClosed));
+            // Reader should have gotten the written value.
+            assert_eq!(reader.join().unwrap(), Ok(42));
 
             // Reading from the channel again should return an error since
             // the writer has closed. (And shouldn't deadlock or panic).
