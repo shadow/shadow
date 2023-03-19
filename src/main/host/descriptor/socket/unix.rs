@@ -11,15 +11,16 @@ use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     File, FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenerFilter,
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter, MmsgHdr};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
@@ -147,59 +148,58 @@ impl UnixSocket {
             .bind(&mut socket_ref.common, socket, addr, rng)
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut _bytes: W,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // TODO: update comment
         // we could call UnixSocket::recvfrom() here, but for now we expect that there are no code
-        // paths that would call UnixSocket::read() since the read() syscall handler should have
+        // paths that would call UnixSocket::read() since the readv() syscall handler should have
         // called UnixSocket::recvfrom() instead
-        panic!("Called UnixSocket::read() on a unix socket.");
+        panic!("Called UnixSocket::readv() on a unix socket.");
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut _bytes: R,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // TODO: update comment
         // we could call UnixSocket::sendto() here, but for now we expect that there are no code
-        // paths that would call UnixSocket::write() since the write() syscall handler should have
+        // paths that would call UnixSocket::write() since the writev() syscall handler should have
         // called UnixSocket::sendto() instead
-        panic!("Called UnixSocket::write() on a unix socket");
+        panic!("Called UnixSocket::writev() on a unix socket");
     }
 
-    pub fn sendto<R>(
-        &mut self,
-        bytes: R,
-        addr: Option<SockaddrStorage>,
+    pub fn sendmsg(
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        self.protocol_state
-            .sendto(&mut self.common, bytes, addr, cb_queue)
+    ) -> Result<libc::ssize_t, SyscallError> {
+        let socket_ref = &mut *socket.borrow_mut();
+        socket_ref
+            .protocol_state
+            .sendmsg(&mut socket_ref.common, socket, args, mem, cb_queue)
     }
 
-    pub fn recvfrom<W>(
-        &mut self,
-        bytes: W,
+    pub fn recvmsg(
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        self.protocol_state
-            .recvfrom(&mut self.common, bytes, cb_queue)
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        let socket_ref = &mut *socket.borrow_mut();
+        socket_ref
+            .protocol_state
+            .recvmsg(&mut socket_ref.common, socket, args, mem, cb_queue)
     }
 
     pub fn ioctl(
@@ -529,50 +529,75 @@ impl ProtocolState {
         }
     }
 
-    fn sendto<R>(
+    fn sendmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: R,
-        addr: Option<SockaddrStorage>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         match self {
-            Self::ConnOrientedInitial(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
-            }
-            Self::ConnOrientedListening(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
-            }
-            Self::ConnOrientedConnected(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
-            }
-            Self::ConnOrientedClosed(x) => {
-                x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue)
-            }
-            Self::ConnLessInitial(x) => x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue),
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().sendto(common, bytes, addr, cb_queue),
+            Self::ConnOrientedInitial(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedListening(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedConnected(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedClosed(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
+            Self::ConnLessInitial(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
+            Self::ConnLessClosed(x) => x
+                .as_mut()
+                .unwrap()
+                .sendmsg(common, socket, args, mem, cb_queue),
         }
     }
 
-    fn recvfrom<W>(
+    fn recvmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: W,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<RecvmsgReturn, SyscallError> {
         match self {
-            Self::ConnOrientedInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
-            Self::ConnOrientedListening(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
-            Self::ConnOrientedConnected(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
-            Self::ConnOrientedClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
-            Self::ConnLessInitial(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
-            Self::ConnLessClosed(x) => x.as_mut().unwrap().recvfrom(common, bytes, cb_queue),
+            Self::ConnOrientedInitial(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedListening(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedConnected(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
+            Self::ConnOrientedClosed(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
+            Self::ConnLessInitial(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
+            Self::ConnLessClosed(x) => x
+                .as_mut()
+                .unwrap()
+                .recvmsg(common, socket, args, mem, cb_queue),
         }
     }
 
@@ -830,33 +855,27 @@ where
         Err(Errno::EOPNOTSUPP.into())
     }
 
-    fn sendto<R>(
+    fn sendmsg(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _bytes: R,
-        _addr: Option<SockaddrStorage>,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
+        _args: SendmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        log::warn!("sendto() while in state {}", std::any::type_name::<Self>());
+    ) -> Result<libc::ssize_t, SyscallError> {
+        log::warn!("sendmsg() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
 
-    fn recvfrom<W>(
+    fn recvmsg(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _bytes: W,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
+        _args: RecvmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        log::warn!(
-            "recvfrom() while in state {}",
-            std::any::type_name::<Self>()
-        );
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        log::warn!("recvmsg() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
 
@@ -986,17 +1005,15 @@ impl Protocol for ConnOrientedInitial {
         Ok(0.into())
     }
 
-    fn sendto<R>(
+    fn sendmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        _bytes: R,
-        addr: Option<SockaddrStorage>,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: SendmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        match (common.socket_type, addr) {
+    ) -> Result<libc::ssize_t, SyscallError> {
+        match (common.socket_type, args.addr) {
             (UnixSocketType::Stream, Some(_)) => Err(Errno::EOPNOTSUPP.into()),
             (UnixSocketType::Stream, None) => Err(Errno::ENOTCONN.into()),
             (UnixSocketType::SeqPacket, _) => Err(Errno::ENOTCONN.into()),
@@ -1007,15 +1024,14 @@ impl Protocol for ConnOrientedInitial {
         }
     }
 
-    fn recvfrom<W>(
+    fn recvmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        _bytes: W,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
+        _args: RecvmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<RecvmsgReturn, SyscallError> {
         match common.socket_type {
             UnixSocketType::Stream => Err(Errno::EINVAL.into()),
             UnixSocketType::SeqPacket => Err(Errno::ENOTCONN.into()),
@@ -1438,34 +1454,32 @@ impl Protocol for ConnOrientedConnected {
         (new_state.into(), common.close(cb_queue))
     }
 
-    fn sendto<R>(
+    fn sendmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: R,
-        addr: Option<SockaddrStorage>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        let recv_socket = common.resolve_destination(Some(&self.peer), addr)?;
-        let rv = common.sendto(bytes, &recv_socket, cb_queue)?;
+    ) -> Result<libc::ssize_t, SyscallError> {
+        let recv_socket = common.resolve_destination(Some(&self.peer), args.addr)?;
+        let rv = common.sendmsg(socket, args.iovs, args.flags, &recv_socket, mem, cb_queue)?;
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok(rv.into())
+        Ok(rv.try_into().unwrap())
     }
 
-    fn recvfrom<W>(
+    fn recvmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: W,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, cb_queue)?;
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        let (num_copied, num_removed_from_buf) =
+            common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
         if num_removed_from_buf > 0 {
@@ -1479,7 +1493,12 @@ impl Protocol for ConnOrientedConnected {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((num_copied.into(), self.peer_addr.map(|x| x.into())))
+        Ok(RecvmsgReturn {
+            bytes_read: num_copied.try_into().unwrap(),
+            addr: self.peer_addr.map(Into::into),
+            msg_flags: 0,
+            control_len: 0,
+        })
     }
 
     fn inform_bytes_read(
@@ -1615,18 +1634,17 @@ impl Protocol for ConnLessInitial {
         Ok(0.into())
     }
 
-    fn sendto<R>(
+    fn sendmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: R,
-        addr: Option<SockaddrStorage>,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        let recv_socket = common.resolve_destination(self.peer.as_ref(), addr)?;
-        let rv = common.sendto(bytes, &recv_socket, cb_queue)?;
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // TODO: return error if control_ptr is non-empty
+        let recv_socket = common.resolve_destination(self.peer.as_ref(), args.addr)?;
+        let rv = common.sendmsg(socket, args.iovs, args.flags, &recv_socket, mem, cb_queue)?;
 
         let byte_data = ByteData {
             from_socket: self.this_socket.upgrade().unwrap(),
@@ -1646,19 +1664,19 @@ impl Protocol for ConnLessInitial {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok(rv.into())
+        Ok(rv.try_into().unwrap())
     }
 
-    fn recvfrom<W>(
+    fn recvmsg(
         &mut self,
         common: &mut UnixSocketCommon,
-        bytes: W,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        let (num_copied, num_removed_from_buf) = common.recvfrom(bytes, cb_queue)?;
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        let (num_copied, num_removed_from_buf) =
+            common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
         let byte_data = self.recv_data.pop_front().unwrap();
@@ -1674,7 +1692,12 @@ impl Protocol for ConnLessInitial {
 
         self.refresh_file_state(common, cb_queue);
 
-        Ok((num_copied.into(), byte_data.from_addr.map(|x| x.into())))
+        Ok(RecvmsgReturn {
+            bytes_read: num_copied.try_into().unwrap(),
+            addr: byte_data.from_addr.map(Into::into),
+            msg_flags: 0,
+            control_len: 0,
+        })
     }
 
     fn inform_bytes_read(
@@ -1919,104 +1942,165 @@ impl UnixSocketCommon {
         Ok(peer)
     }
 
-    pub fn sendto<R>(
+    pub fn sendmsg(
         &mut self,
-        mut bytes: R,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        iovs: &[IoVec],
+        mut flags: libc::c_int,
         peer: &Arc<AtomicRefCell<UnixSocket>>,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<usize, SyscallError>
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        let peer_ref = peer.borrow();
-        let mut send_buffer = peer_ref.recv_buffer().borrow_mut();
+    ) -> Result<usize, SyscallError> {
+        if self.status.contains(FileStatus::NONBLOCK) {
+            flags |= libc::MSG_DONTWAIT;
+        }
 
-        // if the buffer has no readers, the destination socket is closed
-        if send_buffer.num_readers() == 0 {
-            return Err(match self.socket_type {
-                // connection-oriented socket
-                UnixSocketType::Stream | UnixSocketType::SeqPacket => nix::errno::Errno::EPIPE,
-                // connectionless socket
-                UnixSocketType::Dgram => nix::errno::Errno::ECONNREFUSED,
+        //eagain_to_blocking(
+        //    !self.status.contains(FileStatus::NONBLOCK) && !(flags && libc::MSG_DONTWAIT),
+        //    socket,
+        //    FileState::WRITABLE,
+        //    true,
+        //    || {
+        let mut result: Result<_, SyscallError> = (|| {
+            let peer_ref = peer.borrow();
+            let mut send_buffer = peer_ref.recv_buffer().borrow_mut();
+
+            // if the buffer has no readers, the destination socket is closed
+            if send_buffer.num_readers() == 0 {
+                return Err(match self.socket_type {
+                    // connection-oriented socket
+                    UnixSocketType::Stream | UnixSocketType::SeqPacket => nix::errno::Errno::EPIPE,
+                    // connectionless socket
+                    UnixSocketType::Dgram => nix::errno::Errno::ECONNREFUSED,
+                }
+                .into());
             }
-            .into());
-        }
 
-        let len = bytes.stream_len_bp()? as usize;
+            let len: usize = iovs
+                .iter()
+                .map(|x| x.len)
+                .sum::<libc::size_t>()
+                .try_into()
+                .unwrap();
 
-        // we keep track of the send buffer size manually, since the unix socket buffers all have
-        // usize::MAX length
-        let space_available = self
-            .send_limit
-            .saturating_sub(self.sent_len)
-            .try_into()
-            .unwrap();
+            // we keep track of the send buffer size manually, since the unix socket buffers all have
+            // usize::MAX length
+            let space_available = self
+                .send_limit
+                .saturating_sub(self.sent_len)
+                .try_into()
+                .unwrap();
 
-        if space_available == 0 {
-            return Err(Errno::EAGAIN.into());
-        }
+            if space_available == 0 {
+                return Err(Errno::EAGAIN.into());
+            }
 
-        let len = match self.socket_type {
-            UnixSocketType::Stream => std::cmp::min(len, space_available),
-            UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
-                if len <= space_available {
+            let len = match self.socket_type {
+                UnixSocketType::Stream => std::cmp::min(len, space_available),
+                UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
+                    if len <= space_available {
+                        len
+                    } else if len <= self.send_limit.try_into().unwrap() {
+                        // we can send this when the buffer has more space available
+                        return Err(Errno::EAGAIN.into());
+                    } else {
+                        // we could never send this message
+                        return Err(Errno::EMSGSIZE.into());
+                    }
+                }
+            };
+
+            let mut reader = IoVecReader::new(iovs, mem);
+
+            // TODO: do we need this?
+            use std::io::Read;
+            let reader = reader.take(len.try_into().unwrap());
+
+            let num_copied = match self.socket_type {
+                UnixSocketType::Stream => {
+                    if len == 0 {
+                        0
+                    } else {
+                        send_buffer.write_stream(reader, len, cb_queue)?
+                    }
+                }
+                UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
+                    send_buffer.write_packet(reader, len, cb_queue)?;
                     len
-                } else if len <= self.send_limit.try_into().unwrap() {
-                    // we can send this when the buffer has more space available
-                    return Err(Errno::EAGAIN.into());
-                } else {
-                    // we could never send this message
-                    return Err(Errno::EMSGSIZE.into());
                 }
-            }
-        };
+            };
 
-        let bytes = bytes.take(len.try_into().unwrap());
+            // if we successfully sent bytes, update the sent count
+            self.sent_len += u64::try_from(num_copied).unwrap();
 
-        let num_copied = match self.socket_type {
-            UnixSocketType::Stream => {
-                if len == 0 {
-                    0
-                } else {
-                    send_buffer.write_stream(bytes, len, cb_queue)?
-                }
-            }
-            UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
-                send_buffer.write_packet(bytes, len, cb_queue)?;
-                len
-            }
-        };
+            Ok(num_copied)
+            //    },
+            //)
+        })();
 
-        // if we successfully sent bytes, update the sent count
-        self.sent_len += u64::try_from(num_copied).unwrap();
+        // if the syscall would block and we don't have the MSG_DONTWAIT flag
+        if result.as_ref().err().and_then(|e| e.errno()) == Some(Errno::EWOULDBLOCK)
+            && (flags & libc::MSG_DONTWAIT) == 0
+        {
+            result = Err(SyscallError::new_blocked(
+                File::Socket(Socket::Unix(socket.clone())),
+                FileState::WRITABLE,
+                // TODO: link this with supports_sa_restart()
+                /* restartable */
+                true,
+            ));
+        }
 
-        Ok(num_copied)
+        result
     }
 
-    pub fn recvfrom<W>(
+    pub fn recvmsg(
         &mut self,
-        mut bytes: W,
+        socket: &Arc<AtomicRefCell<UnixSocket>>,
+        iovs: &[IoVec],
+        mut flags: libc::c_int,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(usize, usize), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        let mut recv_buffer = self.recv_buffer.borrow_mut();
-
-        // the read would block if all:
-        //  1. the recv buffer has no data
-        //  2. it's a connectionless socket OR the connection-oriented destination socket is not
-        //     closed
-        if !recv_buffer.has_data()
-            && (self.socket_type == UnixSocketType::Dgram || recv_buffer.num_writers() > 0)
-        {
-            // return EWOULDBLOCK even if 'bytes' has length 0
-            return Err(Errno::EWOULDBLOCK.into());
+    ) -> Result<(usize, usize), SyscallError> {
+        if self.status.contains(FileStatus::NONBLOCK) {
+            flags |= libc::MSG_DONTWAIT;
         }
 
-        let (num_copied, num_removed_from_buf) = recv_buffer.read(&mut bytes, cb_queue)?;
+        let mut result: Result<_, SyscallError> = (|| {
+            let mut recv_buffer = self.recv_buffer.borrow_mut();
 
-        Ok((num_copied, num_removed_from_buf))
+            // the read would block if all:
+            //  1. the recv buffer has no data
+            //  2. it's a connectionless socket OR the connection-oriented destination socket is not
+            //     closed
+            if !recv_buffer.has_data()
+                && (self.socket_type == UnixSocketType::Dgram || recv_buffer.num_writers() > 0)
+            {
+                // return EWOULDBLOCK even if 'bytes' has length 0
+                return Err(Errno::EWOULDBLOCK.into());
+            }
+
+            let mut writer = IoVecWriter::new(iovs, mem);
+
+            let (num_copied, num_removed_from_buf) = recv_buffer.read(writer, cb_queue)?;
+
+            Ok((num_copied, num_removed_from_buf))
+        })();
+
+        // if the syscall would block and we don't have the MSG_DONTWAIT flag
+        if result.as_ref().err().and_then(|e| e.errno()) == Some(Errno::EWOULDBLOCK)
+            && (flags & libc::MSG_DONTWAIT) == 0
+        {
+            result = Err(SyscallError::new_blocked(
+                File::Socket(Socket::Unix(socket.clone())),
+                FileState::READABLE,
+                // TODO: link this with supports_sa_restart()
+                /* restartable */
+                true,
+            ));
+        }
+
+        result
     }
 
     pub fn ioctl(

@@ -128,8 +128,22 @@ void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr pa
 
     /* the payload starts with 1 ref, which we hold */
     packet->payload = payload_new(thread, payload, payloadLength);
+    utility_alwaysAssert(packet->payload != NULL);
     /* application data needs a priority ordering for FIFO onto the wire */
     packet->priority = host_getNextPacketPriority(thread_getHost(thread));
+}
+
+void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, PluginVirtualPtr payload,
+                                        gsize payloadLength, MemoryManager* mem) {
+    MAGIC_ASSERT(packet);
+    utility_debugAssert(payload.val);
+    utility_debugAssert(!packet->payload);
+
+    /* the payload starts with 1 ref, which we hold */
+    packet->payload = payload_newWithMemoryManager(payload, payloadLength, mem);
+    utility_alwaysAssert(packet->payload != NULL);
+    /* application data needs a priority ordering for FIFO onto the wire */
+    packet->priority = host_getNextPacketPriority(host);
 }
 
 /* copy everything except the payload.
@@ -522,6 +536,19 @@ gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payl
 
     if(packet->payload) {
         return payload_getData(packet->payload, thread, payloadOffset, buffer, bufferLength);
+    } else {
+        return 0;
+    }
+}
+
+gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
+                                           PluginVirtualPtr buffer, gsize bufferLength,
+                                           MemoryManager* mem) {
+    MAGIC_ASSERT(packet);
+
+    if(packet->payload) {
+        return payload_getDataWithMemoryManager(
+            packet->payload, payloadOffset, buffer, bufferLength, mem);
     } else {
         return 0;
     }

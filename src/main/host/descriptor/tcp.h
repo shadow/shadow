@@ -13,6 +13,7 @@
 #include <sys/un.h>
 
 #include "main/core/support/definitions.h"
+#include "main/host/syscall_types.h"
 #include "main/routing/packet.minimal.h"
 
 #define TCP_MIN_CWND 10
@@ -81,6 +82,11 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
+
+gssize tcp_sendUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                        in_addr_t ip, in_port_t port, MemoryManager* mem);
+gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                           in_addr_t* ip, in_port_t* port, MemoryManager* mem);
 
 gint tcp_shutdown(TCP* tcp, const Host* host, gint how);
 

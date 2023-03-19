@@ -169,6 +169,10 @@ deref_array_impl!(u8, u16, u32, u64, usize);
 safe_pointer_impl!(libc::c_void);
 safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(libc::sysinfo);
+safe_pointer_impl!(libc::iovec);
+safe_pointer_impl!(libc::msghdr);
+safe_pointer_impl!(libc::mmsghdr);
+safe_pointer_impl!(libc::timespec);
 
 simple_debug_impl!(nix::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
@@ -186,7 +190,7 @@ fn fmt_buffer(
     options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
-    const DISPLAY_LEN: usize = 40;
+    const DISPLAY_LEN: usize = 120;
 
     if options == FmtOptions::Deterministic {
         return write!(f, "<pointer>");
@@ -231,7 +235,7 @@ fn fmt_string(
     options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
-    const DISPLAY_LEN: usize = 40;
+    const DISPLAY_LEN: usize = 120;
 
     if options == FmtOptions::Deterministic {
         return write!(f, "<pointer>");

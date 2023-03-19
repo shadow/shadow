@@ -1,4 +1,6 @@
 use crate::cshadow as c;
+use crate::host::descriptor::{File, FileState};
+use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::utility::NoTypeInference;
 
@@ -234,6 +236,35 @@ impl From<std::io::Error> for SyscallError {
                 warn!("Mapping error {} to {}", e, default);
                 SyscallError::from(default)
             }
+        }
+    }
+}
+
+impl SyscallError {
+    pub fn new_blocked(file: File, state: FileState, restartable: bool) -> Self {
+        Self::Blocked(Blocked {
+            condition: SysCallCondition::new(Trigger::from_file(file, state)),
+            restartable,
+        })
+    }
+
+    /// Returns the block [condition](SysCallCondition) if it's a blocking error.
+    pub fn blocked_condition(&mut self) -> Option<&mut SysCallCondition> {
+        if let Self::Blocked(Blocked {
+            ref mut condition, ..
+        }) = self
+        {
+            Some(condition)
+        } else {
+            None
+        }
+    }
+
+    pub fn errno(&self) -> Option<Errno> {
+        if let Self::Failed(Failed { errno, .. }) = self {
+            Some(*errno)
+        } else {
+            None
         }
     }
 }

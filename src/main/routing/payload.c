@@ -45,6 +45,29 @@ Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLeng
     return payload;
 }
 
+Payload* payload_newWithMemoryManager(PluginVirtualPtr data, gsize dataLength, MemoryManager* mem) {
+    Payload* payload = g_new0(Payload, 1);
+    MAGIC_INIT(payload);
+
+    if (data.val && dataLength > 0) {
+        payload->data = g_malloc0(dataLength);
+        if (process_readPtrWithMemoryManager(mem, payload->data, data, dataLength) != 0) {
+            warning("Couldn't read data for packet");
+            g_free(payload);
+            return NULL;
+        }
+        utility_debugAssert(payload->data != NULL);
+        payload->length = dataLength;
+    }
+
+    g_mutex_init(&(payload->lock));
+    payload->referenceCount = 1;
+
+    worker_count_allocation(Payload);
+
+    return payload;
+}
+
 static void _payload_free(Payload* payload) {
     MAGIC_ASSERT(payload);
 
@@ -110,6 +133,30 @@ gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, Plu
     if (copyLength > 0) {
         int err = process_writePtr(
             thread_getProcess(thread), destBuffer, payload->data + offset, copyLength);
+        if (err) {
+            return -err;
+        }
+    }
+
+    _payload_unlock(payload);
+
+    return copyLength;
+}
+
+gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+                                        gsize destBufferLength, MemoryManager* mem) {
+    MAGIC_ASSERT(payload);
+
+    _payload_lock(payload);
+
+    utility_debugAssert(offset <= payload->length);
+
+    gssize targetLength = payload->length - offset;
+    gssize copyLength = MIN(targetLength, destBufferLength);
+
+    if (copyLength > 0) {
+        int err =
+            process_writePtrWithMemoryManager(mem, destBuffer, payload->data + offset, copyLength);
         if (err) {
             return -err;
         }

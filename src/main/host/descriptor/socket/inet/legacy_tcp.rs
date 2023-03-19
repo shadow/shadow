@@ -9,13 +9,14 @@ use nix::sys::socket::{Shutdown, SockaddrIn};
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     CompatFile, File, FileMode, FileState, FileStatus, OpenFile, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::write_partial;
+use crate::host::syscall::io::{IoVec, MmsgHdr};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
@@ -278,57 +279,229 @@ impl LegacyTcpSocket {
         Ok(0.into())
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut _bytes: W,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // TODO: update comment
         // we could call LegacyTcpSocket::recvfrom() here, but for now we expect that there are no
-        // code paths that would call LegacyTcpSocket::read() since the read() syscall handler
+        // code paths that would call LegacyTcpSocket::readv() since the readv() syscall handler
         // should have called LegacyTcpSocket::recvfrom() instead
-        panic!("Called LegacyTcpSocket::read() on a TCP socket.");
+        panic!("Called LegacyTcpSocket::readv() on a TCP socket.");
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut _bytes: R,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // TODO: update comment
         // we could call LegacyTcpSocket::sendto() here, but for now we expect that there are no
-        // code paths that would call LegacyTcpSocket::write() since the write() syscall handler
+        // code paths that would call LegacyTcpSocket::writev() since the writev() syscall handler
         // should have called LegacyTcpSocket::sendto() instead
-        panic!("Called LegacyTcpSocket::write() on a TCP socket");
+        panic!("Called LegacyTcpSocket::writev() on a TCP socket");
     }
 
-    pub fn sendto<R>(
-        &mut self,
-        _bytes: R,
-        _addr: Option<SockaddrStorage>,
+    pub fn sendmsg(
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        todo!()
+    ) -> Result<libc::ssize_t, SyscallError> {
+        let socket_ref = socket.borrow_mut();
+        let tcp = socket_ref.as_legacy_tcp();
+
+        let mut result: Result<_, SyscallError> = (|| {
+            let mut bytes_sent = 0;
+
+            for (i, iov) in args.iovs.iter().enumerate() {
+                //if iov.len == 0 {
+                //    continue;
+                //}
+
+                /*
+                if iov.base.is_null() {
+                    if bytes_sent == 0 {
+                        return Err(Errno::EFAULT.into());
+                    } else {
+                        break;
+                    }
+                }
+                */
+
+                let errcode = unsafe { c::tcp_getConnectionError(tcp) };
+
+                log::trace!("Connection error state is currently {errcode}");
+
+                if errcode > 0 {
+                    // connect() was not called yet
+                    // TODO: Can they can piggy back a connect() on sendto() if they
+                    // provide an address for the connection?
+                    if bytes_sent == 0 {
+                        return Err(Errno::EPIPE.into());
+                    } else {
+                        break;
+                    }
+                } else if errcode == 0 {
+                    // They connected, but never read the success code with a second
+                    // call to connect(). That's OK, proceed to send as usual.
+                } else if errcode == -libc::EISCONN {
+                    // they are connected, and we can send now
+                } else if errcode == -libc::EALREADY {
+                    // connection in progress
+                    // TODO: should we wait, or just return -EALREADY?
+                    if bytes_sent == 0 {
+                        return Err(Errno::EWOULDBLOCK.into());
+                    } else {
+                        break;
+                    }
+                }
+
+                let rv = Worker::with_active_host(|host| unsafe {
+                    c::tcp_sendUserData(tcp, host, iov.base, iov.len.try_into().unwrap(), 0, 0, mem)
+                })
+                .unwrap();
+
+                if rv < 0 {
+                    if bytes_sent == 0 {
+                        let errno = -rv as i32;
+                        return Err(Errno::from_i32(errno).into());
+                    } else {
+                        break;
+                    }
+                }
+
+                bytes_sent += rv;
+
+                if usize::try_from(rv).unwrap() < iov.len {
+                    // stop if we didn't write all of the data in the iov
+                    break;
+                }
+            }
+
+            Ok(bytes_sent.try_into().unwrap())
+        })();
+
+        // if the syscall would block, it's a blocking descriptor, and we don't have the
+        // MSG_DONTWAIT flag
+        if result.as_ref().err().and_then(|e| e.errno()) == Some(Errno::EWOULDBLOCK)
+            && !socket_ref.get_status().contains(FileStatus::NONBLOCK)
+            && (args.flags & libc::MSG_DONTWAIT) == 0
+        {
+            result = Err(SyscallError::new_blocked(
+                File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
+                FileState::WRITABLE,
+                socket_ref.supports_sa_restart(),
+            ));
+        }
+
+        result
     }
 
-    pub fn recvfrom<W>(
-        &mut self,
-        _bytes: W,
+    pub fn recvmsg(
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        todo!()
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        let socket_ref = socket.borrow_mut();
+        let tcp = socket_ref.as_legacy_tcp();
+
+        let mut result: Result<_, SyscallError> = (|| {
+            let mut bytes_read = 0;
+
+            for (i, iov) in args.iovs.iter().enumerate() {
+                //if iov.len == 0 {
+                //    continue;
+                //}
+
+                /*
+                if iov.base.is_null() {
+                    if bytes_read == 0 {
+                        return Err(Errno::EFAULT.into());
+                    } else {
+                        break;
+                    }
+                }
+                */
+
+                let errcode = unsafe { c::tcp_getConnectionError(tcp) };
+
+                if errcode > 0 {
+                    // connect() was not called yet
+                    if bytes_read == 0 {
+                        return Err(Errno::ENOTCONN.into());
+                    } else {
+                        break;
+                    }
+                } else if errcode == -libc::EALREADY {
+                    // Connection in progress
+                    if bytes_read == 0 {
+                        return Err(Errno::EWOULDBLOCK.into());
+                    } else {
+                        break;
+                    }
+                }
+
+                let rv = Worker::with_active_host(|host| unsafe {
+                    c::tcp_receiveUserData(
+                        tcp,
+                        host,
+                        iov.base,
+                        iov.len.try_into().unwrap(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        mem,
+                    )
+                })
+                .unwrap();
+
+                if rv < 0 {
+                    if bytes_read == 0 {
+                        let errno = -rv as i32;
+                        return Err(Errno::from_i32(errno).into());
+                    } else {
+                        break;
+                    }
+                }
+
+                bytes_read += rv;
+
+                if usize::try_from(rv).unwrap() < iov.len {
+                    // stop if we didn't receive all of the data in the iov
+                    break;
+                }
+            }
+
+            Ok(RecvmsgReturn {
+                bytes_read: bytes_read.try_into().unwrap(),
+                addr: None,
+                msg_flags: 0,
+                control_len: 0,
+            })
+        })();
+
+        // if the syscall would block, it's a blocking descriptor, and we don't have the
+        // MSG_DONTWAIT flag
+        if result.as_ref().err().and_then(|e| e.errno()) == Some(Errno::EWOULDBLOCK)
+            && !socket_ref.get_status().contains(FileStatus::NONBLOCK)
+            && (args.flags & libc::MSG_DONTWAIT) == 0
+        {
+            result = Err(SyscallError::new_blocked(
+                File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
+                FileState::READABLE,
+                socket_ref.supports_sa_restart(),
+            ));
+        }
+
+        result
     }
 
     pub fn ioctl(

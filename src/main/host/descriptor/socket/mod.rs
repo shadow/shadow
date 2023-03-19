@@ -6,7 +6,8 @@ use nix::sys::socket::Shutdown;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall::io::{IoVec, MmsgHdr};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -96,6 +97,30 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::connect(socket, addr, net_ns, rng, cb_queue),
             Self::Inet(socket) => InetSocket::connect(socket, addr, net_ns, rng, cb_queue),
+        }
+    }
+
+    pub fn sendmsg(
+        &self,
+        args: SendmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        match self {
+            Self::Unix(socket) => UnixSocket::sendmsg(socket, args, memory_manager, cb_queue),
+            Self::Inet(socket) => InetSocket::sendmsg(socket, args, memory_manager, cb_queue),
+        }
+    }
+
+    pub fn recvmsg(
+        &self,
+        args: RecvmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        match self {
+            Self::Unix(socket) => UnixSocket::recvmsg(socket, args, memory_manager, cb_queue),
+            Self::Inet(socket) => InetSocket::recvmsg(socket, args, memory_manager, cb_queue),
         }
     }
 }
@@ -217,15 +242,13 @@ impl SocketRefMut<'_> {
     enum_passthrough!(self, (ptr), Unix, Inet;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
-
-    enum_passthrough_generic!(self, (bytes, offset, cb_queue), Unix, Inet;
-        pub fn read<W>(&mut self, bytes: W, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
-        where W: std::io::Write + std::io::Seek
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Unix, Inet;
+        pub fn readv(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
+                     mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
-
-    enum_passthrough_generic!(self, (source, offset, cb_queue), Unix, Inet;
-        pub fn write<R>(&mut self, source: R, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
-        where R: std::io::Read + std::io::Seek
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Unix, Inet;
+        pub fn writev(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
+                      mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
 }
 
@@ -259,18 +282,6 @@ impl SocketRefMut<'_> {
         pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
-    );
-
-    enum_passthrough_generic!(self, (source, addr, cb_queue), Unix, Inet;
-        pub fn sendto<R>(&mut self, source: R, addr: Option<SockaddrStorage>, cb_queue: &mut CallbackQueue)
-            -> SyscallResult
-        where R: std::io::Read + std::io::Seek
-    );
-
-    enum_passthrough_generic!(self, (bytes, cb_queue), Unix, Inet;
-        pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
-            -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-        where W: std::io::Write + std::io::Seek
     );
 
     pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
@@ -315,4 +326,24 @@ impl std::fmt::Debug for SocketRefMut<'_> {
             self.get_status()
         )
     }
+}
+
+pub struct SendmsgArgs<'a> {
+    pub addr: Option<SockaddrStorage>,
+    pub iovs: &'a [IoVec],
+    pub control_ptr: TypedPluginPtr<u8>,
+    pub flags: libc::c_int,
+}
+
+pub struct RecvmsgArgs<'a> {
+    pub iovs: &'a [IoVec],
+    pub control_ptr: TypedPluginPtr<u8>,
+    pub flags: libc::c_int,
+}
+
+pub struct RecvmsgReturn {
+    pub bytes_read: libc::ssize_t,
+    pub addr: Option<SockaddrStorage>,
+    pub msg_flags: libc::c_int,
+    pub control_len: libc::size_t,
 }

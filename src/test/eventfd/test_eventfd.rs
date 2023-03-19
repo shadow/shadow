@@ -5,10 +5,11 @@
 
 use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
+use nix::sys::uio::{readv, writev};
 use nix::unistd::{close, read, write};
 use std::os::unix::io::RawFd;
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::{iov_helper, iov_helper_mut, set};
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?
@@ -29,6 +30,16 @@ fn main() -> Result<(), String> {
         test_utils::ShadowTest::new(
             "test_eventfd_read_write_nonblock",
             || test_eventfd_read_write_nonblock(/* use_ioctl_fionbio = */ false),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_eventfd_readv_writev_nonblock",
+            || test_eventfd_readv_writev_nonblock(),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_eventfd_readv_writev_multiple_iovs",
+            || test_eventfd_readv_writev_multiple_iovs(),
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -108,11 +119,48 @@ fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
     Ok(())
 }
 
+fn check_readv_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
+    let mut bytes: [u8; 8] = [0; 8];
+    let bytes_split = bytes.split_at_mut(2);
+    let mut iov = iov_helper_mut([bytes_split.0, &mut [][..], bytes_split.1]);
+
+    test_utils::result_assert(
+        readv(efd, &mut iov).map_err(|e| e.to_string())? == 8,
+        &format!("Unable to read 8 bytes from eventfd {}", efd),
+    )?;
+
+    test_utils::result_assert(
+        u64::from_ne_bytes(bytes) == expected_val,
+        &format!(
+            "The value we read from the eventfd {} counter was incorrect",
+            efd
+        ),
+    )?;
+
+    Ok(())
+}
+
 fn check_read_eagain(efd: RawFd) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
 
     test_utils::result_assert(
         read(efd, &mut bytes) == Err(Errno::EAGAIN),
+        &format!(
+            "Reading empty counter did not block eventfd {} as expected",
+            efd
+        ),
+    )?;
+
+    Ok(())
+}
+
+fn check_readv_eagain(efd: RawFd) -> Result<(), String> {
+    let mut bytes: [u8; 8] = [0; 8];
+    let bytes_split = bytes.split_at_mut(2);
+    let mut iov = iov_helper_mut([bytes_split.0, &mut [][..], bytes_split.1]);
+
+    test_utils::result_assert(
+        readv(efd, &mut iov) == Err(Errno::EAGAIN),
         &format!(
             "Reading empty counter did not block eventfd {} as expected",
             efd
@@ -133,11 +181,38 @@ fn check_write_success(efd: RawFd, val: u64) -> Result<(), String> {
     Ok(())
 }
 
+fn check_writev_success(efd: RawFd, val: u64) -> Result<(), String> {
+    let bytes: [u8; 8] = val.to_ne_bytes();
+    let iov = iov_helper([&bytes]);
+
+    test_utils::result_assert(
+        writev(efd, &iov).map_err(|e| e.to_string())? == 8,
+        &format!("Unable to writev 8 bytes to eventfd {}", efd),
+    )?;
+
+    Ok(())
+}
+
 fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
     let bytes: [u8; 8] = val.to_ne_bytes();
 
     test_utils::result_assert(
         write(efd, &bytes) == Err(Errno::EINVAL),
+        &format!(
+            "Overflowing counter did not block eventfd {} as expected",
+            efd
+        ),
+    )?;
+
+    Ok(())
+}
+
+fn check_writev_einval(efd: RawFd, val: u64) -> Result<(), String> {
+    let bytes: [u8; 8] = val.to_ne_bytes();
+    let iov = iov_helper([&bytes]);
+
+    test_utils::result_assert(
+        writev(efd, &iov) == Err(Errno::EINVAL),
         &format!(
             "Overflowing counter did not block eventfd {} as expected",
             efd
@@ -196,6 +271,100 @@ fn test_eventfd_read_write_nonblock(use_ioctl_fionbio: bool) -> Result<(), Strin
         check_read_eagain(efd)?;
         // ...but u64_max is not
         check_write_einval(efd, u64::MAX)?;
+
+        Ok(())
+    })
+}
+
+fn test_eventfd_readv_writev_nonblock() -> Result<(), String> {
+    // Initialize eventfd with initial value of 2
+    let init_val = 2;
+
+    let flag = EfdFlags::EFD_NONBLOCK;
+    let efd: RawFd = call_eventfd(init_val, flag)?;
+
+    test_utils::result_assert(
+        efd >= 0,
+        &format!(
+            "Unexpected retval {} from eventfd with flag {}",
+            efd,
+            flag.bits()
+        ),
+    )?;
+
+    test_utils::run_and_close_fds(&[efd], || {
+        // Make sure the initval of 2 was set correctly
+        check_readv_success(efd, 2)?;
+
+        // Now we should get EAGAIN since the counter was reset
+        check_readv_eagain(efd)?;
+
+        // Writing values should add them to the counter
+        check_writev_success(efd, 2)?;
+        check_writev_success(efd, 3)?;
+        check_writev_success(efd, 4)?;
+        check_readv_success(efd, 9)?;
+        check_readv_eagain(efd)?;
+
+        // Writing u64_max-1 is allowed...
+        check_writev_success(efd, u64::MAX - 1)?;
+        check_readv_success(efd, u64::MAX - 1)?;
+        check_readv_eagain(efd)?;
+        // ...but u64_max is not
+        check_writev_einval(efd, u64::MAX)?;
+
+        Ok(())
+    })
+}
+
+fn test_eventfd_readv_writev_multiple_iovs() -> Result<(), String> {
+    // Initialize eventfd with initial value of 2
+    let init_val = 2;
+
+    let flag = EfdFlags::EFD_NONBLOCK;
+    let efd: RawFd = call_eventfd(init_val, flag)?;
+
+    test_utils::result_assert(
+        efd >= 0,
+        &format!(
+            "Unexpected retval {} from eventfd with flag {}",
+            efd,
+            flag.bits()
+        ),
+    )?;
+
+    test_utils::run_and_close_fds(&[efd], || {
+        // Linux allows reading into multiple iovecs
+        let mut bytes: [u8; 8] = [0; 8];
+        let bytes_split = bytes.split_at_mut(2);
+
+        let mut iov = iov_helper_mut([bytes_split.0, &mut [][..], bytes_split.1]);
+        assert_eq!(iov.iter().map(|x| x.len()).sum::<usize>(), 8);
+
+        test_utils::result_assert_eq(
+            readv(efd, &mut iov),
+            Ok(8),
+            &format!("Unable to read 8 bytes from eventfd {}", efd),
+        )?;
+
+        test_utils::result_assert_eq(
+            u64::from_ne_bytes(bytes),
+            2,
+            &format!("The value we read from the eventfd counter was incorrect"),
+        )?;
+
+        // Linux *does not* allow writing from multiple iovecs
+        let bytes: [u8; 8] = [0; 8];
+        let bytes_split = bytes.split_at(2);
+
+        let iov = iov_helper([bytes_split.0, &[][..], bytes_split.1]);
+        assert_eq!(iov.iter().map(|x| x.len()).sum::<usize>(), 8);
+
+        test_utils::result_assert_eq(
+            writev(efd, &iov),
+            Err(Errno::EINVAL),
+            &format!("Expected writev to return EINVAL"),
+        )?;
 
         Ok(())
     })

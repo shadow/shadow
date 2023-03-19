@@ -6,7 +6,7 @@ use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTabl
 use crate::host::descriptor::Descriptor;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
-    PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
+    Failed, PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
 };
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
@@ -23,6 +23,7 @@ mod sched;
 mod socket;
 mod sysinfo;
 mod time;
+mod uio;
 mod unistd;
 
 type LegacySyscallFn =
@@ -68,10 +69,17 @@ impl SyscallHandler {
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
             libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
+            libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
+            libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
+            libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
+            libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
             libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
             libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
+            libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
             libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
+            libc::SYS_recvmsg => SyscallHandlerFn::call(Self::recvmsg, &mut ctx),
+            libc::SYS_recvmmsg => SyscallHandlerFn::call(Self::recvmmsg, &mut ctx),
             libc::SYS_sched_getaffinity => {
                 SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
             }
@@ -79,6 +87,8 @@ impl SyscallHandler {
                 SyscallHandlerFn::call(Self::sched_setaffinity, &mut ctx)
             }
             libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
+            libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
+            libc::SYS_sendmmsg => SyscallHandlerFn::call(Self::sendmmsg, &mut ctx),
             libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
             libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
             libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
@@ -87,6 +97,7 @@ impl SyscallHandler {
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
             libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
+            libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
@@ -133,7 +144,13 @@ impl SyscallHandler {
     }
 }
 
-pub fn write_sockaddr(
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`, and
+/// writes the socket address length into `plugin_addr_len`. The `plugin_addr_len` pointer is a
+/// value-result argument, so it should be initialized with the size of the `plugin_addr` buffer. If
+/// the original value of `plugin_addr_len` is smaller than the socket address' length, then the
+/// written socket address will be truncated. In this case the value written to `plugin_addr_len`
+/// will be larger than its original value.
+pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
     plugin_addr: PluginPtr,
@@ -176,6 +193,32 @@ pub fn write_sockaddr(
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
+}
+
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`. If the
+/// buffer length is smaller than the socket address length, the written address will be truncated.
+/// The length of the socket address is returned.
+pub fn write_sockaddr(
+    mem: &mut MemoryManager,
+    addr: &SockaddrStorage,
+    plugin_addr: PluginPtr,
+    plugin_addr_len: libc::socklen_t,
+) -> Result<libc::socklen_t, SyscallError> {
+    let from_addr_slice = addr.as_slice();
+    let from_len: u32 = from_addr_slice.len().try_into().unwrap();
+
+    // return early if the address length is 0
+    if plugin_addr_len == 0 {
+        return Ok(from_len);
+    }
+
+    // the minimum of the given address buffer length and the real address length
+    let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
+
+    let plugin_addr = TypedPluginPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
+    mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
+
+    Ok(from_len)
 }
 
 pub fn read_sockaddr(
@@ -238,6 +281,56 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
 
     Ok(val_len)
 }
+
+/*
+/// Optionally (if `convert` is `true`) convert any `EAGAIN` result to a `SyscallError::Blocked`
+/// result. This is useful if
+///
+/// ```
+/// let is_blocking = !(self.flags & NONBLOCK) && !(msg.flags & MSG_DONTWAIT);
+/// let count = eagain_to_blocking(
+///     is_blocking,
+///     file,
+///     FileState::WRITABLE,
+///     file.supports_sa_restart(),
+///     || {
+///     if len == 0 {
+///         return Err(Errno::EAGAIN.into());
+///     }
+///     file.readv()
+/// })?;
+/// ```
+pub fn eagain_to_blocking<F, R>(
+    convert: bool,
+    file: &File,
+    unblock_on: FileState,
+    restartable: bool,
+    f: F,
+) -> Result<R, SyscallError>
+where
+    F: FnOnce() -> Result<R, SyscallError>,
+{
+    let result = f();
+
+    if convert
+        && matches!(
+            result,
+            Err(SyscallError::Failed(Failed {
+                errno: Errno::EAGAIN,
+                ..
+            })),
+        )
+    {
+        return Err(SyscallError::new_blocked(
+            file.clone(),
+            unblock_on,
+            restartable,
+        ));
+    }
+
+    result
+}
+*/
 
 pub struct SyscallContext<'a, 'b> {
     pub objs: &'a mut ThreadContext<'b>,

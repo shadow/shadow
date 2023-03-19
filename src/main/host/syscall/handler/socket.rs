@@ -2,12 +2,15 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{
-    read_sockaddr, write_sockaddr, SyscallContext, SyscallHandler,
+    read_sockaddr, write_sockaddr, write_sockaddr_and_len, SyscallContext, SyscallHandler,
+};
+use crate::host::syscall::io::{
+    self, read_mmsghdrs, read_msghdr, write_mmsghdrs, write_msghdr, IoVec, MmsgHdr, MsgHdr,
 };
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall::Trigger;
@@ -160,6 +163,759 @@ impl SyscallHandler {
         flags: libc::c_int,
         addr_ptr: PluginPtr,
         addr_len: libc::socklen_t,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    // if it's a legacy file, use the C syscall handler instead
+                    CompatFile::Legacy(_) => {
+                        drop(desc_table);
+                        return Self::legacy_syscall(c::syscallhandler_sendto, ctx).map(Into::into);
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Self::legacy_syscall(c::syscallhandler_sendto, ctx).map(Into::into);
+        //}
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        let args = SendmsgArgs {
+            addr: read_sockaddr(&mem, addr_ptr, addr_len)?,
+            iovs: &[iov],
+            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+            flags,
+        };
+
+        // call the socket's sendmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_written = result?;
+
+        Ok(bytes_written.try_into().unwrap())
+
+        /*
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        let msg = MsgHdr {
+            name: addr_ptr,
+            name_len: addr_len,
+            iovs: Vec::from([iov]),
+            control: PluginPtr::null(),
+            control_len: 0,
+            flags,
+        };
+
+        let mut result = Self::sendmsg_helper(ctx, socket, msg);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let (bytes_written, _msg) = result?;
+
+        Ok(bytes_written.into())
+        */
+    }
+
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* msg */ *const libc::msghdr,
+                  /* flags */ nix::sys::socket::MsgFlags)]
+    pub fn sendmsg(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        msg_ptr: PluginPtr,
+        flags: libc::c_int,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    CompatFile::Legacy(file) => {
+                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
+                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
+                            return Err(Errno::ENOSYS.into());
+                        }
+                        return Err(Errno::ENOTSOCK.into());
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Err(Errno::ENOSYS.into());
+        //}
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let msg = read_msghdr(&mem, msg_ptr)?;
+
+        let args = SendmsgArgs {
+            addr: read_sockaddr(&mem, msg.name, msg.name_len)?,
+            iovs: &msg.iovs,
+            control_ptr: TypedPluginPtr::new::<u8>(msg.control, msg.control_len),
+            // note: "the msg_flags field is ignored" for sendmsg; see send(2)
+            // TODO: for sendmmsg, the MSG_EOR flag is used: https://sourceware.org/bugzilla/show_bug.cgi?id=23037
+            flags,
+        };
+
+        // call the socket's sendmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_written = result?;
+
+        Ok(bytes_written.try_into().unwrap())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* msgvec */ *const libc::mmsghdr,
+                  /* vlen */ libc::c_uint, /* flags */ nix::sys::socket::MsgFlags)]
+    pub fn sendmmsg(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        mmsg_ptr: PluginPtr,
+        mmsg_count: libc::c_uint,
+        flags: libc::c_int,
+    ) -> Result<libc::c_int, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    CompatFile::Legacy(file) => {
+                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
+                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
+                            return Err(Errno::ENOSYS.into());
+                        }
+                        return Err(Errno::ENOTSOCK.into());
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Err(Errno::ENOSYS.into());
+        //}
+
+        if mmsg_count > libc::UIO_MAXIOV.try_into().unwrap() {
+            // TODO: test this
+            return Err(Errno::EINVAL.into());
+        }
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let mut mmsgs = read_mmsghdrs(&mem, mmsg_ptr, mmsg_count.try_into().unwrap())?;
+        let mut num_msgs = 0;
+
+        // TODO: the blocking behaviour isn't correct: "A blocking sendmmsg() call blocks until vlen
+        // messages have been sent."
+
+        // run in a closure so that a `?` doesn't return from the syscall handler
+        let result: Result<_, SyscallError> = (|| {
+            for mmsg in &mut mmsgs {
+                let args = SendmsgArgs {
+                    addr: read_sockaddr(&mem, mmsg.hdr.name, mmsg.hdr.name_len)?,
+                    iovs: &mmsg.hdr.iovs,
+                    control_ptr: TypedPluginPtr::new::<u8>(mmsg.hdr.control, mmsg.hdr.control_len),
+                    // note: "the msg_flags field is ignored" for sendmsg; see send(2)
+                    // TODO: for sendmmsg, the MSG_EOR flag is used: https://sourceware.org/bugzilla/show_bug.cgi?id=23037
+                    flags: flags | (mmsg.hdr.flags & libc::MSG_EOR),
+                };
+
+                // call the socket's sendmsg(), and run any resulting events
+                let bytes_written =
+                    crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                        CallbackQueue::queue_and_run(|cb_queue| {
+                            Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                        })
+                    })?;
+
+                mmsg.len = bytes_written.try_into().unwrap();
+                num_msgs += 1;
+            }
+
+            Ok(())
+        })();
+
+        assert!(num_msgs as u32 <= mmsg_count);
+        write_mmsghdrs(&mut mem, mmsg_ptr, &mmsgs[..num_msgs.try_into().unwrap()])?;
+
+        if let Err(mut err) = result {
+            // sendmmsg(2): "If an error occurs after at least one message has been sent, the call
+            // succeeds, and returns the number of messages sent. The error code is lost."
+            if num_msgs == 0 {
+                // if the syscall will block, keep the file open until the syscall restarts
+                if let Some(cond) = err.blocked_condition() {
+                    cond.set_active_file(file);
+                }
+
+                return Err(err);
+            }
+        }
+
+        Ok(num_msgs)
+    }
+
+    /*
+    pub fn sendmsg_helper(
+        ctx: &mut SyscallContext,
+        socket: &Socket,
+        addr: Option<SockaddrStorage>,
+        iovs: &[IoVec],
+        control_ptr: TypedPluginPtr<u8>,
+        flags: libc::c_int,
+    ) -> Result<(libc::ssize_t, MsgHdr), SyscallError> {
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        // call the socket's sendmsg(), and run any resulting events
+        let bytes_written = CallbackQueue::queue_and_run(|cb_queue| {
+            Socket::sendmsg(socket, &mut msgs, &mut mem, cb_queue)
+        })?;
+
+
+
+        /*
+        let mmsg = MmsgHdr {
+            hdr: msg,
+            // this should get filled in by sendmmsg
+            len: 0,
+        };
+
+        let (num_msgs, mut mmsgs) = Self::sendmmsg_helper(ctx, socket, Vec::from([mmsg]))?;
+        let mmsg = mmsgs.pop().unwrap();
+
+        // we only gave it one message, so it can't have sent more
+        assert!(num_msgs <= 1);
+
+        // if it sent 0 messages, then the length should still be 0
+        assert!(num_msgs != 0 || mmsg.len == 0);
+
+        return Ok((mmsg.len.try_into().unwrap(), mmsg.hdr));
+        */
+    }
+
+    pub fn sendmmsg_helper(
+        ctx: &mut SyscallContext,
+        socket: &Socket,
+        mut msgs: Vec<MmsgHdr>,
+    ) -> Result<(libc::c_int, Vec<MmsgHdr>), SyscallError> {
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        // call the socket's sendmmsg(), and run any resulting events
+        let num_msgs = CallbackQueue::queue_and_run(|cb_queue| {
+            Socket::sendmmsg(socket, &mut msgs, &mut mem, cb_queue)
+        })?;
+
+        Ok((num_msgs, msgs))
+    }
+    */
+
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
+                  /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
+                  /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
+    pub fn recvfrom(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        buf_ptr: PluginPtr,
+        buf_len: libc::size_t,
+        flags: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len_ptr: PluginPtr,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    // if it's a legacy file, use the C syscall handler instead
+                    CompatFile::Legacy(_) => {
+                        drop(desc_table);
+                        return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx)
+                            .map(Into::into);
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx).map(Into::into);
+        //}
+
+        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        let args = RecvmsgArgs {
+            iovs: &[iov],
+            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+            flags,
+        };
+
+        // call the socket's recvmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::recvmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let RecvmsgReturn {
+            bytes_read,
+            addr: from_addr,
+            ..
+        } = result?;
+
+        if !addr_ptr.is_null() {
+            write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
+        }
+
+        Ok(bytes_read.try_into().unwrap())
+
+        /*
+        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        // TODO: should this addr len code be simplified?
+
+        // only access the addrlen pointer if both addr and addrlen are non-null
+        let use_addrlen = !addr_ptr.is_null() && !addr_len_ptr.is_null();
+
+        // if non-null address but null address length
+        if !addr_ptr.is_null() && addr_len_ptr.is_null() {
+            return Err(Errno::EFAULT.into());
+        }
+
+        let orig_name_len = if use_addrlen {
+            let mem = ctx.objs.process.memory_borrow_mut();
+            mem.read_vals::<_, 1>(addr_len_ptr)?[0]
+        } else {
+            // addr_ptr must be null, so a 0 should be fine
+            0
+        };
+
+        let msg = MsgHdr {
+            name: addr_ptr,
+            name_len: orig_name_len,
+            iovs: Vec::from([iov]),
+            control: PluginPtr::null(),
+            control_len: 0,
+            flags,
+        };
+
+        let mut result = Self::recvmsg_helper(ctx, socket, msg);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let (bytes_read, msg) = result?;
+
+        // write the size of the returned address to the plugin
+        if use_addrlen {
+            let mut mem = ctx.objs.process.memory_borrow_mut();
+            mem.copy_to_ptr(addr_len_ptr, &[msg.name_len]).unwrap();
+        }
+
+        Ok(bytes_read.into())
+        */
+    }
+
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* msg */ *const libc::msghdr,
+                  /* flags */ nix::sys::socket::MsgFlags)]
+    pub fn recvmsg(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        msg_ptr: PluginPtr,
+        flags: libc::c_int,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    CompatFile::Legacy(file) => {
+                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
+                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
+                            return Err(Errno::ENOSYS.into());
+                        }
+                        return Err(Errno::ENOTSOCK.into());
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Err(Errno::ENOSYS.into());
+        //}
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let mut msg = read_msghdr(&mem, msg_ptr)?;
+
+        let args = RecvmsgArgs {
+            iovs: &msg.iovs,
+            control_ptr: TypedPluginPtr::new::<u8>(msg.control, msg.control_len),
+            flags,
+        };
+
+        // call the socket's recvmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::recvmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let result = result?;
+
+        // write the socket address to the plugin and update the length in msg
+        if !msg.name.is_null() {
+            if let Some(from_addr) = result.addr.as_ref() {
+                msg.name_len = write_sockaddr(&mut mem, from_addr, msg.name, msg.name_len)?;
+            } else {
+                msg.name_len = 0;
+            }
+        }
+
+        // update the control len and flags in msg
+        msg.control_len = result.control_len;
+        msg.flags = result.msg_flags;
+
+        // write msg back to the plugin
+        write_msghdr(&mut mem, msg_ptr, msg)?;
+
+        Ok(result.bytes_read.try_into().unwrap())
+    }
+
+    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* msgvec */ *const libc::mmsghdr,
+                  /* vlen */ libc::c_uint, /* flags */ nix::sys::socket::MsgFlags,
+                  /* timeout */ *const libc::timespec)]
+    pub fn recvmmsg(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        mmsg_ptr: PluginPtr,
+        mmsg_count: libc::c_uint,
+        flags: libc::c_int,
+        timeout_ptr: PluginPtr,
+    ) -> Result<libc::c_int, SyscallError> {
+        // if we were previously blocked, get the active file from the last syscall handler
+        // invocation since it may no longer exist in the descriptor table
+        let file = ctx
+            .objs
+            .thread
+            .syscall_condition()
+            // if this was for a C descriptor, then there won't be an active file object
+            .and_then(|x| x.active_file().cloned());
+
+        let file = match file {
+            // we were previously blocked, so re-use the file from the previous syscall invocation
+            Some(x) => x,
+            // get the file from the descriptor table, or return early if it doesn't exist
+            None => {
+                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                match Self::get_descriptor(&desc_table, fd)?.file() {
+                    CompatFile::New(file) => file.clone(),
+                    CompatFile::Legacy(file) => {
+                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
+                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
+                            return Err(Errno::ENOSYS.into());
+                        }
+                        return Err(Errno::ENOTSOCK.into());
+                    }
+                }
+            }
+        };
+
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        //if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
+        //    return Err(Errno::ENOSYS.into());
+        //}
+
+        if mmsg_count > libc::UIO_MAXIOV.try_into().unwrap() {
+            // TODO: test this
+            return Err(Errno::EINVAL.into());
+        }
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let timeout_ptr = TypedPluginPtr::new::<libc::timespec>(timeout_ptr, 1);
+        let timeout = mem.read_vals::<_, 1>(timeout_ptr)?[0];
+
+        let mut mmsgs = read_mmsghdrs(&mem, mmsg_ptr, mmsg_count.try_into().unwrap())?;
+        let mut num_msgs = 0;
+
+        // TODO: the blocking behaviour isn't correct: "A blocking recvmmsg() call blocks until vlen
+        // messages have been received or until the timeout expires"
+
+        // run in a closure so that a `?` doesn't return from the syscall handler
+        let result: Result<_, SyscallError> = (|| {
+            for mmsg in &mut mmsgs {
+                let mut flags = flags;
+
+                if num_msgs > 0 && (flags & libc::MSG_WAITFORONE) != 0 {
+                    // recvmmsg(2): "Turns on MSG_DONTWAIT after the first message has been
+                    // received"
+                    flags |= libc::MSG_DONTWAIT;
+                }
+
+                let args = RecvmsgArgs {
+                    iovs: &mmsg.hdr.iovs,
+                    control_ptr: TypedPluginPtr::new::<u8>(mmsg.hdr.control, mmsg.hdr.control_len),
+                    flags,
+                };
+
+                // call the socket's sendmsg(), and run any resulting events
+                let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                    CallbackQueue::queue_and_run(|cb_queue| {
+                        Socket::recvmsg(socket, args, &mut mem, cb_queue)
+                    })
+                })?;
+
+                // write the socket address to the plugin and update the length in mmsg
+                if !mmsg.hdr.name.is_null() {
+                    // TODO: If this returns an error, the plugin will lose the message. Is this
+                    // what Linux does? We should probably add a test for this. (This applies to the
+                    // `write_mmsghdrs` below as well, and to the other recvfrom() and recvmsg()
+                    // syscall handlers.)
+                    if let Some(from_addr) = result.addr.as_ref() {
+                        mmsg.hdr.name_len =
+                            write_sockaddr(&mut mem, from_addr, mmsg.hdr.name, mmsg.hdr.name_len)?;
+                    } else {
+                        mmsg.hdr.name_len = 0;
+                    }
+                }
+
+                // update the control len and flags in mmsg
+                mmsg.hdr.control_len = result.control_len;
+                mmsg.hdr.flags = result.msg_flags;
+
+                mmsg.len = result.bytes_read.try_into().unwrap();
+                num_msgs += 1;
+
+                // TODO: check timeout value (we need to know when the syscall was first called)
+            }
+
+            Ok(())
+        })();
+
+        assert!(num_msgs as u32 <= mmsg_count);
+        write_mmsghdrs(&mut mem, mmsg_ptr, &mmsgs[..num_msgs.try_into().unwrap()])?;
+
+        if let Err(mut err) = result {
+            // recvmmsg(2): "If an error occurs after at least one message has been received, the
+            // call succeeds, and returns the number of messages received. The error code is
+            // expected to be returned on a subsequent call to recvmmsg()."
+            if num_msgs == 0 {
+                // if the syscall will block, keep the file open until the syscall restarts
+                if let Some(cond) = err.blocked_condition() {
+                    cond.set_active_file(file);
+                }
+
+                return Err(err);
+            }
+            // TODO: save the error so we can return it in a subsequent call to recvmmsg()
+        }
+
+        Ok(num_msgs)
+    }
+
+    /*
+    pub fn recvmsg_helper(
+        ctx: &mut SyscallContext,
+        socket: &Socket,
+        msg: MsgHdr,
+    ) -> Result<(libc::ssize_t, MsgHdr), SyscallError> {
+        let mmsg = MmsgHdr {
+            hdr: msg,
+            // this should get filled in by recvmmsg
+            len: 0,
+        };
+
+        let (num_msgs, mut mmsgs) = Self::recvmmsg_helper(ctx, socket, Vec::from([mmsg]))?;
+        let mmsg = mmsgs.pop().unwrap();
+
+        // we only gave it one message, so it can't have read more
+        assert!(num_msgs <= 1);
+
+        // if it read 0 messages, then the length should still be 0
+        assert!(num_msgs != 0 || mmsg.len == 0);
+
+        return Ok((mmsg.len.try_into().unwrap(), mmsg.hdr));
+    }
+
+    pub fn recvmmsg_helper(
+        ctx: &mut SyscallContext,
+        socket: &Socket,
+        mut mmsgs: Vec<MmsgHdr>,
+    ) -> Result<(libc::c_int, Vec<MmsgHdr>), SyscallError> {
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        // call the socket's recvmmsg(), and run any resulting events
+        let num_msgs = CallbackQueue::queue_and_run(|cb_queue| {
+            Socket::recvmmsg(socket, &mut mmsgs, &mut mem, cb_queue)
+        })?;
+
+        Ok((num_msgs, mmsgs))
+    }
+    */
+
+    /*
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int,
+                  /* buf */ SyscallBufferArg</* len */ 2>, /* len */ libc::size_t,
+                  /* flags */ nix::sys::socket::MsgFlags,
+                  /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
+                  /* addrlen */ libc::socklen_t)]
+    pub fn sendto(
+        ctx: &mut SyscallContext,
+        fd: libc::c_int,
+        buf_ptr: PluginPtr,
+        buf_len: libc::size_t,
+        flags: libc::c_int,
+        addr_ptr: PluginPtr,
+        addr_len: libc::socklen_t,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -264,7 +1020,9 @@ impl SyscallHandler {
 
         result
     }
+    */
 
+    /*
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
                   /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
                   /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
@@ -373,7 +1131,7 @@ impl SyscallHandler {
         let (result, from_addr) = result?;
 
         if !addr_ptr.is_null() {
-            write_sockaddr(
+            write_sockaddr_and_len(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
@@ -383,6 +1141,7 @@ impl SyscallHandler {
 
         Ok(result)
     }
+    */
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
@@ -422,7 +1181,7 @@ impl SyscallHandler {
         };
 
         debug!("Returning socket address of {:?}", addr_to_write);
-        write_sockaddr(
+        write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
@@ -472,7 +1231,7 @@ impl SyscallHandler {
         };
 
         debug!("Returning peer address of {:?}", addr_to_write);
-        write_sockaddr(
+        write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
@@ -645,7 +1404,7 @@ impl SyscallHandler {
         };
 
         if !addr_ptr.is_null() {
-            write_sockaddr(
+            write_sockaddr_and_len(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,

@@ -5,10 +5,12 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
-use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
+
+use std::io::{Read, Write};
 
 pub struct EventFd {
     counter: u64,
@@ -68,15 +70,14 @@ impl EventFd {
         Ok(())
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut bytes: W,
+        iovs: &[IoVec],
         offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // eventfds don't support seeking
         if offset.is_some() {
             return Err(Errno::ESPIPE.into());
@@ -85,9 +86,16 @@ impl EventFd {
         // eventfd(2): "Each successful read(2) returns an 8-byte integer"
         const NUM_BYTES: usize = 8;
 
+        let len: usize = iovs
+            .iter()
+            .map(|x| x.len)
+            .sum::<libc::size_t>()
+            .try_into()
+            .unwrap();
+
         // this check doesn't guarentee that we can write all bytes since the stream length is only
         // a hint
-        if usize::try_from(bytes.stream_len_bp()?).unwrap() < NUM_BYTES {
+        if len < NUM_BYTES {
             log::trace!(
                 "Reading from eventfd requires a buffer of at least {} bytes",
                 NUM_BYTES
@@ -100,31 +108,32 @@ impl EventFd {
             return Err(Errno::EWOULDBLOCK.into());
         }
 
+        let mut writer = IoVecWriter::new(iovs, mem);
+
         // behavior defined in `man 2 eventfd`
         if self.is_semaphore_mode {
             const ONE: [u8; NUM_BYTES] = 1u64.to_ne_bytes();
-            bytes.write_all(&ONE)?;
+            writer.write_all(&ONE)?;
             self.counter -= 1;
         } else {
             let to_write: [u8; NUM_BYTES] = self.counter.to_ne_bytes();
-            bytes.write_all(&to_write)?;
+            writer.write_all(&to_write)?;
             self.counter = 0;
         }
 
         self.update_state(cb_queue);
 
-        Ok(NUM_BYTES.into())
+        Ok(NUM_BYTES.try_into().unwrap())
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut bytes: R,
+        iovs: &[IoVec],
         offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // eventfds don't support seeking
         if offset.is_some() {
             return Err(Errno::ESPIPE.into());
@@ -134,9 +143,16 @@ impl EventFd {
         // counter"
         const NUM_BYTES: usize = 8;
 
+        let len: usize = iovs
+            .iter()
+            .map(|x| x.len)
+            .sum::<libc::size_t>()
+            .try_into()
+            .unwrap();
+
         // this check doesn't guarentee that we can read all bytes since the stream length is only
         // a hint
-        if usize::try_from(bytes.stream_len_bp()?).unwrap() < NUM_BYTES {
+        if len < NUM_BYTES {
             log::trace!(
                 "Writing to eventfd requires a buffer with at least {} bytes",
                 NUM_BYTES
@@ -144,8 +160,15 @@ impl EventFd {
             return Err(Errno::EINVAL.into());
         }
 
+        if iovs.len() > 1 {
+            // Linux doesn't seem to let you write to an eventfd with multiple iovecs
+            return Err(Errno::EINVAL.into());
+        }
+
+        let mut reader = IoVecReader::new(iovs, mem);
+
         let mut read_buf = [0u8; NUM_BYTES];
-        bytes.read_exact(&mut read_buf)?;
+        reader.read_exact(&mut read_buf)?;
         let value: u64 = u64::from_ne_bytes(read_buf);
 
         if value == u64::MAX {
@@ -162,7 +185,7 @@ impl EventFd {
         self.counter += value;
         self.update_state(cb_queue);
 
-        Ok(NUM_BYTES.into())
+        Ok(NUM_BYTES.try_into().unwrap())
     }
 
     pub fn ioctl(

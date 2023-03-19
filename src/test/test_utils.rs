@@ -421,3 +421,27 @@ pub fn setitimer(which: i32, new_value: &libc::itimerval) -> nix::Result<ITimer>
     }
     Ok(old_value.into())
 }
+
+/// Convert an iterator of slices to a [`Vec`] of [`IoSlice`](std::io::IoSlice) (which "is
+/// guaranteed to be ABI compatible with the `iovec` type on Unix platforms").
+pub fn iov_helper<'a, I, T>(iov: I) -> Vec<std::io::IoSlice<'a>>
+where
+    I: IntoIterator<Item = &'a T>,
+    T: AsRef<[u8]> + 'a + ?Sized,
+{
+    iov.into_iter()
+        .map(|x| std::io::IoSlice::new(x.as_ref()))
+        .collect()
+}
+
+/// Convert an iterator of mutable slices to a [`Vec`] of [`IoSliceMut`](std::io::IoSliceMut) (which
+/// "is guaranteed to be ABI compatible with the `iovec` type on Unix platforms").
+pub fn iov_helper_mut<'a, I, T>(iov: I) -> Vec<std::io::IoSliceMut<'a>>
+where
+    I: IntoIterator<Item = &'a mut T>,
+    T: AsMut<[u8]> + 'a + ?Sized,
+{
+    iov.into_iter()
+        .map(|x| std::io::IoSliceMut::new(x.as_mut()))
+        .collect()
+}

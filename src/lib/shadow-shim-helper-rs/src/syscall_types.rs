@@ -20,6 +20,12 @@ impl PluginPtr {
     pub fn is_null(&self) -> bool {
         self.val == 0
     }
+
+    /// Create a `PluginPtr` from a raw pointer to plugin memory.
+    pub fn from_raw_ptr<T>(ptr: *mut T) -> Self {
+        let val = ptr as usize;
+        PluginPtr { val }
+    }
 }
 
 impl From<PluginPtr> for usize {

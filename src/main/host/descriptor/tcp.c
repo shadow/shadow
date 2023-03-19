@@ -904,15 +904,15 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     return packet;
 }
 
-static Packet* _tcp_createDataPacket(TCP* tcp, const Thread* thread, enum ProtocolTCPFlags flags,
-                                     PluginVirtualPtr payload, gsize payloadLength) {
+static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags,
+                                     PluginVirtualPtr payload, gsize payloadLength,
+                                     MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
-    const Host* host = thread_getHost(thread);
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
-        packet_setPayload(packet, thread, payload, payloadLength);
+        packet_setPayloadWithMemoryManager(packet, host, payload, payloadLength, mem);
     }
     return packet;
 }
@@ -2353,9 +2353,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
-                                gsize nBytes, in_addr_t ip, in_port_t port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+gssize tcp_sendUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                        in_addr_t ip, in_port_t port, MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2379,13 +2378,30 @@ static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, Plug
     gsize maxPacketLength = CONFIG_TCP_MAX_SEGMENT_SIZE;
     gsize bytesCopied = 0;
 
+    if (buffer.val == 0) {
+        return -EFAULT;
+    }
+
     /* create as many packets as needed */
     while(remaining > 0) {
         gsize copyLength = MIN(maxPacketLength, remaining);
 
+        PluginVirtualPtr tempBuf = (PluginVirtualPtr){.val = buffer.val + bytesCopied};
+
+        /*
+        if (tempBuf.val == 0) {
+            if (bytesCopied == 0) {
+                return -EFAULT;
+            } else {
+                trace("Attempting to read into packet from NULL pointer; exit read");
+                break;
+            }
+        }
+        */
+
         /* use helper to create the packet */
-        Packet* packet = _tcp_createDataPacket(
-            tcp, thread, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
+        Packet* packet = _tcp_createDataPacket(tcp, host, PTCP_ACK, tempBuf, copyLength, mem);
+
         if(copyLength > 0) {
             /* we are sending more user data */
             tcp->send.end++;
@@ -2404,10 +2420,67 @@ static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, Plug
     trace("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
     /* now flush as much as possible out to socket */
-    _tcp_flush(tcp, thread_getHost(thread));
+    _tcp_flush(tcp, host);
 
     return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
+
+///* Address and port must be in network byte order. */
+//static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
+//                                gsize nBytes, in_addr_t ip, in_port_t port) {
+//    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+//    MAGIC_ASSERT(tcp);
+//
+//    /* return 0 to signal close, if necessary */
+//    if(tcp->error & TCPE_SEND_EOF)
+//    {
+//        trace("send EOF is set");
+//        if(tcp->state == TCPS_CLOSED) {
+//            return -ENOTCONN;
+//        } else {
+//            _tcp_endOfFileSignalled(tcp, TCPF_EOF_WR_SIGNALED);
+//            return -EPIPE;
+//        }
+//    }
+//
+//    /* maximum data we can send network, o/w tcp truncates and only sends 65536*/
+//    gsize acceptable = MIN(nBytes, 65535);
+//    gsize space = _tcp_getBufferSpaceOut(tcp);
+//    gsize remaining = MIN(acceptable, space);
+//
+//    /* break data into segments and send each in a packet */
+//    gsize maxPacketLength = CONFIG_TCP_MAX_SEGMENT_SIZE;
+//    gsize bytesCopied = 0;
+//
+//    /* create as many packets as needed */
+//    while(remaining > 0) {
+//        gsize copyLength = MIN(maxPacketLength, remaining);
+//
+//        /* use helper to create the packet */
+//        Packet* packet = _tcp_createDataPacket(
+//            tcp, thread, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
+//        if(copyLength > 0) {
+//            /* we are sending more user data */
+//            tcp->send.end++;
+//        }
+//
+//        /* buffer the outgoing packet in TCP */
+//        _tcp_bufferPacketOut(tcp, packet);
+//
+//        /* the output buffer holds the packet ref now */
+//        packet_unref(packet);
+//
+//        remaining -= copyLength;
+//        bytesCopied += copyLength;
+//    }
+//
+//    trace("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+//
+//    /* now flush as much as possible out to socket */
+//    _tcp_flush(tcp, thread_getHost(thread));
+//
+//    return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
+//}
 
 static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer data) {
     TCP* tcp = voidTcp;
@@ -2423,12 +2496,9 @@ static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer d
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
-                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                           in_addr_t* ip, in_port_t* port, MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
-
-    const Host* host = thread_getHost(thread);
 
     /*
      * TODO
@@ -2464,8 +2534,8 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
         utility_debugAssert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
-        gssize bytesCopied = packet_copyPayload(
-            tcp->partialUserDataPacket, thread, tcp->partialOffset, buffer, copyLength);
+        gssize bytesCopied = packet_copyPayloadWithMemoryManager(
+            tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength, mem);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             return bytesCopied;
@@ -2503,8 +2573,8 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
 
         gsize packetLength = packet_getPayloadSize(nextPacket);
         copyLength = MIN(packetLength, remaining);
-        gssize bytesCopied = packet_copyPayload(
-            nextPacket, thread, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
+        gssize bytesCopied = packet_copyPayloadWithMemoryManager(
+            nextPacket, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength, mem);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             if (totalCopied > 0) {
@@ -2580,7 +2650,7 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
 
         TaskRef* updateWindowTask = taskref_new_bound(
             host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
-        host_scheduleTaskWithDelay(thread_getHost(thread), updateWindowTask, 1);
+        host_scheduleTaskWithDelay(host, updateWindowTask, 1);
         taskref_drop(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
@@ -2597,6 +2667,182 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
 
     return totalCopied;
 }
+
+///* Address and port must be in network byte order. */
+//static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
+//                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
+//    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+//    MAGIC_ASSERT(tcp);
+//
+//    const Host* host = thread_getHost(thread);
+//
+//    /*
+//     * TODO
+//     * We call legacyfile_adjustStatus too many times here, to handle the readable
+//     * state of the socket at times when we have a partially read packet. Consider
+//     * adding a required hook for socket subclasses so the socket layer can
+//     * query TCP for readability status.
+//     */
+//
+//    /* make sure we pull in all readable user data */
+//    _tcp_flush(tcp, host);
+//
+//    gsize remaining = nBytes;
+//    gsize totalCopied = 0;
+//    gsize offset = 0;
+//    gsize copyLength = 0;
+//
+//    if ((legacysocket_getInputBufferLength(&tcp->super) == 0) &&
+//        (tcp->partialUserDataPacket == NULL) && !(tcp->error & TCPE_RECEIVE_EOF)) {
+//        // there is no data, and we have not received an EOF
+//        return -EWOULDBLOCK;
+//    }
+//
+//    if (buffer.val == 0 && nBytes > 0) {
+//        debug("Can't recv >0 bytes into NULL buffer on socket");
+//        return -EFAULT;
+//    }
+//
+//    /* check if we have a partial packet waiting to get finished */
+//    if(remaining > 0 && tcp->partialUserDataPacket) {
+//        gsize partialLength = packet_getPayloadSize(tcp->partialUserDataPacket);
+//        gsize partialBytes = partialLength - tcp->partialOffset;
+//        utility_debugAssert(partialBytes > 0);
+//
+//        copyLength = MIN(partialBytes, remaining);
+//        gssize bytesCopied = packet_copyPayload(
+//            tcp->partialUserDataPacket, thread, tcp->partialOffset, buffer, copyLength);
+//        if (bytesCopied < 0) {
+//            // Error writing to PluginVirtualPtr
+//            return bytesCopied;
+//        }
+//        totalCopied += bytesCopied;
+//        remaining -= bytesCopied;
+//        offset += bytesCopied;
+//
+//        if(bytesCopied >= partialBytes) {
+//            /* we finished off the partial packet */
+//            packet_addDeliveryStatus(tcp->partialUserDataPacket, PDS_RCV_SOCKET_DELIVERED);
+//            packet_unref(tcp->partialUserDataPacket);
+//            tcp->partialUserDataPacket = NULL;
+//            tcp->partialOffset = 0;
+//        } else {
+//            /* still more partial bytes left */
+//            tcp->partialOffset += bytesCopied;
+//            utility_debugAssert(remaining == 0);
+//        }
+//    }
+//
+//    while(remaining > 0) {
+//        /* if we get here, we should have read the partial packet above, or
+//         * broken out below */
+//        utility_debugAssert(tcp->partialUserDataPacket == NULL);
+//        utility_debugAssert(tcp->partialOffset == 0);
+//
+//        /* get the next buffered packet - we'll always need it.
+//         * this could mark the socket as unreadable if this is its last packet.*/
+//        const Packet* nextPacket = legacysocket_peekNextInPacket((LegacySocket*)tcp);
+//        if (!nextPacket) {
+//            /* no more packets or partial packets */
+//            break;
+//        }
+//
+//        gsize packetLength = packet_getPayloadSize(nextPacket);
+//        copyLength = MIN(packetLength, remaining);
+//        gssize bytesCopied = packet_copyPayload(
+//            nextPacket, thread, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
+//        if (bytesCopied < 0) {
+//            // Error writing to PluginVirtualPtr
+//            if (totalCopied > 0) {
+//                warning("Returning error %s, but already copied %lu bytes which will be lost",
+//                        g_strerror(-bytesCopied), totalCopied);
+//            }
+//            return bytesCopied;
+//        }
+//        totalCopied += bytesCopied;
+//        remaining -= bytesCopied;
+//        offset += bytesCopied;
+//
+//        Packet* packet = legacysocket_removeFromInputBuffer((LegacySocket*)tcp, host);
+//
+//        if(bytesCopied < packetLength) {
+//            /* we were only able to read part of this packet */
+//            tcp->partialUserDataPacket = packet;
+//            tcp->partialOffset = bytesCopied;
+//            break;
+//        }
+//
+//        /* we read the entire packet, and are now finished with it */
+//        packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
+//        packet_unref(packet);
+//    }
+//
+//    bool more_readable_data = false;
+//
+//    /* now we update readability of the socket */
+//    if ((legacysocket_getInputBufferLength(&(tcp->super)) > 0) ||
+//        (tcp->partialUserDataPacket != NULL)) {
+//        /* we still have readable data */
+//        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
+//        more_readable_data = true;
+//    } else {
+//        /* all of our ordered user data has been read */
+//        if((tcp->unorderedInputLength == 0) && (tcp->error & TCPE_RECEIVE_EOF)) {
+//            /* there is no more unordered data either, and we need to signal EOF */
+//            if(totalCopied > 0) {
+//                /* we just received bytes, so we can't EOF until the next call.
+//                 * make sure we stay readable so we DO actually EOF the socket */
+//                legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
+//            } else {
+//                /* OK, no more data and nothing just received. */
+//                if(tcp->state == TCPS_CLOSED) {
+//                    return -ENOTCONN;
+//                } else {
+//                    _tcp_endOfFileSignalled(tcp, TCPF_EOF_RD_SIGNALED);
+//                    return 0;
+//                }
+//            }
+//        } else {
+//            /* our socket still has unordered data or is still open, but empty for now */
+//            legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
+//        }
+//    }
+//
+//    /* update the receive buffer size based on new packets received */
+//    if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledReceive) {
+//        if(host_autotuneReceiveBuffer(host)) {
+//            _tcp_autotuneReceiveBuffer(tcp, host, totalCopied);
+//        }
+//    }
+//
+//    /* if we have advertised a 0 window because the application wasn't reading,
+//     * we now have to update the window and let the sender know */
+//    _tcp_updateReceiveWindow(tcp);
+//    if(tcp->receive.window > tcp->send.lastWindow && !tcp->receive.windowUpdatePending) {
+//        /* our receive window just opened, make sure the sender knows it can
+//         * send more. otherwise we get into a deadlock situation!
+//         * make sure we don't send multiple events when read is called many times per instant */
+//        legacyfile_ref(tcp);
+//
+//        TaskRef* updateWindowTask = taskref_new_bound(
+//            host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
+//        host_scheduleTaskWithDelay(thread_getHost(thread), updateWindowTask, 1);
+//        taskref_drop(updateWindowTask);
+//
+//        tcp->receive.windowUpdatePending = TRUE;
+//    }
+//
+//    trace("%s <-> %s: receiving %" G_GSIZE_FORMAT " user bytes", tcp->super.boundString,
+//          tcp->super.peerString, totalCopied);
+//
+//    // only return EWOULDBLOCK if no bytes were copied, and either we requested bytes or there is no
+//    // more data to read
+//    if (totalCopied == 0 && (nBytes != 0 || !more_readable_data)) {
+//        return -EWOULDBLOCK;
+//    }
+//
+//    return totalCopied;
+//}
 
 static void _tcp_cleanup(LegacyFile* descriptor) {
     TCP* tcp = _tcp_fromLegacyFile(descriptor);
@@ -2727,8 +2973,8 @@ gint tcp_shutdown(TCP* tcp, const Host* host, gint how) {
 SocketFunctionTable tcp_functions = {_tcp_close,
                                      _tcp_cleanup,
                                      _tcp_free,
-                                     _tcp_sendUserData,
-                                     _tcp_receiveUserData,
+                                     NULL,
+                                     NULL,
                                      _tcp_processPacket,
                                      _tcp_isFamilySupported,
                                      _tcp_connectToPeer,

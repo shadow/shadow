@@ -1,5 +1,7 @@
 general:
-  stop_time: 5
+  stop_time: 20
+experimental:
+  #use_memory_manager: false
 network:
   graph:
     type: 1_gbit_switch
