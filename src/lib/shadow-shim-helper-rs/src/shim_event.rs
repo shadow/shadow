@@ -1,7 +1,7 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::syscall_types::{PluginPtr, SysCallArgs, SysCallReg};
+use crate::syscall_types::{SysCallArgs, SysCallReg};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -20,17 +20,6 @@ pub struct ShimEventSyscallComplete {
     pub restartable: bool,
 }
 
-/// Data for several shared-memory shim events.
-/// TODO: Document for which. Will be easier to see and maintain once ShimEvent
-/// is refactored into an enum.
-#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
-#[repr(C)]
-pub struct ShimEventShmemBlk {
-    pub serial: ShMemBlockSerialized,
-    pub plugin_ptr: PluginPtr,
-    pub n: usize,
-}
-
 /// Data for [`ShimEvent::AddThreadReq`]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -43,6 +32,9 @@ pub struct ShimEventAddThreadReq {
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 // SAFETY: `shimevent_getId` assumes this representation.
 #[repr(u32)]
+// Clippy suggests boxing large enum variants. We can't do that, since
+// it'd make ShimEvent unsafe for use in shared memory.
+#[allow(clippy::large_enum_variant)]
 pub enum ShimEvent {
     Null,
     /// Sent from Shadow to Shim to allow a shim thread to start executing
@@ -56,28 +48,11 @@ pub enum ShimEvent {
     Syscall(ShimEventSyscall),
     /// Response from Shadow for a completed emulated syscall.
     SyscallComplete(ShimEventSyscallComplete),
-    /// Response from Shadow indicating that the shim should execute
-    /// the last requested syscall natively.
+    /// Request from Shadow to Shim to execute a syscall natively.
     SyscallDoNative,
-    /// Request from Shadow to copy data from shared memory.
-    /// XXX: Deprecated.
-    CloneReq(ShimEventShmemBlk),
-    /// Request from Shadow to copy a string from shared memory.
-    /// XXX: Deprecated.
-    CloneStringReq(ShimEventShmemBlk),
-    /// Response from the Shim that the requested shared memory operations has
-    /// completed.
-    /// XXX: Deprecated.
-    ShmemComplete,
-    /// Request from Shadow to copy data to shared memory.
-    /// XXX: Deprecated.
-    WriteReq(ShimEventShmemBlk),
-    /// Hint from Shadow to the shim that the current thread is about to be blocked.
-    /// i.e. the shim should stop spinning to wait for a response and block instead.
-    /// XXX: Deprecated: we no longer spin in Shadow/Shim IPC.
-    Block,
     /// Request from Shadow to Shim to take the included shared memory block,
-    /// which holds an `IpcData`, and use it to initialize a newly spawned thread.
+    /// which holds an `IpcData`, and use it to initialize a newly spawned
+    /// thread.
     AddThreadReq(ShimEventAddThreadReq),
     /// Response from Shim to Shadow that `AddThreadReq` has completed.
     AddThreadParentRes,
@@ -124,21 +99,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent_getShmemBlkData(
-        event: *const ShimEvent,
-    ) -> *const ShimEventShmemBlk {
-        let event = unsafe { event.as_ref().unwrap() };
-        match event {
-            ShimEvent::CloneReq(blk) => blk,
-            ShimEvent::CloneStringReq(blk) => blk,
-            ShimEvent::WriteReq(blk) => blk,
-            _ => {
-                panic!("Unexpected event type: {event:?}");
-            }
-        }
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn shimevent_getAddThreadReqData(
         event: *const ShimEvent,
     ) -> *const ShimEventAddThreadReq {
@@ -160,12 +120,6 @@ mod export {
         let event = ShimEvent::Syscall(ShimEventSyscall {
             syscall_args: *syscall_args,
         });
-        unsafe { dst.write(event) };
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn shimevent_initShmemComplete(dst: *mut ShimEvent) {
-        let event = ShimEvent::ShmemComplete;
         unsafe { dst.write(event) };
     }
 
