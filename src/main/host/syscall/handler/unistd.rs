@@ -143,7 +143,7 @@ impl SyscallHandler {
         fd: libc::c_int,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -164,14 +164,14 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_read, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_read, ctx);
+            return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
         }
 
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
@@ -195,7 +195,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -216,14 +216,15 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx)
+                            .map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
+            return Self::legacy_syscall(c::syscallhandler_pread64, ctx).map(Into::into);
         }
 
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
@@ -245,7 +246,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if it's a socket, call recvfrom() instead
         if let File::Socket(..) = file {
             if offset.is_some() {
@@ -284,7 +285,8 @@ impl SyscallHandler {
             ));
         }
 
-        result
+        let bytes_read = result?;
+        Ok(bytes_read.into())
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -294,7 +296,7 @@ impl SyscallHandler {
         fd: libc::c_int,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -315,14 +317,14 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_write, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_write, ctx);
+            return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
         }
 
         let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
@@ -347,7 +349,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -368,14 +370,15 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx)
+                            .map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
+            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx).map(Into::into);
         }
 
         let mut result =
@@ -398,7 +401,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if it's a socket, call recvfrom() instead
         if let File::Socket(..) = file {
             if offset.is_some() {
@@ -429,7 +432,8 @@ impl SyscallHandler {
             ));
         };
 
-        result
+        let bytes_written = result?;
+        Ok(bytes_written.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
