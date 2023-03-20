@@ -213,7 +213,7 @@ impl Drop for SharedBuf {
 }
 
 bitflags::bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Copy, Clone, Debug)]
     pub struct BufferState: u8 {
         /// There is data waiting in the buffer.
         const READABLE = 0b00000001;
