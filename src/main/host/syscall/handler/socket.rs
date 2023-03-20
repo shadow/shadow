@@ -9,9 +9,7 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{read_sockaddr, write_sockaddr};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
-use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -268,14 +266,11 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_file(file.clone(), FileState::WRITABLE);
-            let cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = socket.borrow().supports_sa_restart();
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::WRITABLE,
+                socket.borrow().supports_sa_restart(),
+            ));
         };
 
         result
@@ -393,14 +388,11 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_file(file.clone(), FileState::READABLE);
-            let cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = socket.borrow().supports_sa_restart();
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::READABLE,
+                socket.borrow().supports_sa_restart(),
+            ));
         };
 
         let (result, from_addr) = result?;
@@ -675,14 +667,11 @@ impl SyscallHandler {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())
             && !file_status.contains(FileStatus::NONBLOCK)
         {
-            let trigger = Trigger::from_file(file.clone(), FileState::READABLE);
-            let cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = socket.borrow().supports_sa_restart();
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::READABLE,
+                socket.borrow().supports_sa_restart(),
+            ));
         }
 
         let new_socket = result?;

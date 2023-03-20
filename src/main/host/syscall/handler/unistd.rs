@@ -8,9 +8,7 @@ use crate::host::descriptor::{
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallBufferArg;
-use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -279,14 +277,11 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_file(file.clone(), FileState::READABLE);
-            let cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = file.borrow().supports_sa_restart();
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::READABLE,
+                file.borrow().supports_sa_restart(),
+            ));
         }
 
         result
@@ -427,14 +422,11 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_file(file.clone(), FileState::WRITABLE);
-            let cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = file.borrow().supports_sa_restart();
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::WRITABLE,
+                file.borrow().supports_sa_restart(),
+            ));
         };
 
         result
