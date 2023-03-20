@@ -27,6 +27,7 @@ bitflags::bitflags! {
     /// are not stored anywhere. Many of these can be represented in different ways, for example:
     /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
     /// same value.
+    #[derive(Copy, Clone, Debug)]
     pub struct FileStatus: libc::c_int {
         const NONBLOCK = libc::O_NONBLOCK;
         const APPEND = libc::O_APPEND;
@@ -55,6 +56,7 @@ bitflags::bitflags! {
     /// don't match the kernel `FMODE_` values here.
     ///
     /// Examples: https://github.com/torvalds/linux/blob/master/include/linux/fs.h#L111
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct FileMode: u32 {
         const READ = 0b00000001;
         const WRITE = 0b00000010;
@@ -100,7 +102,7 @@ impl FileMode {
 }
 
 bitflags::bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Copy, Clone, Debug)]
     pub struct FileState: libc::c_int {
         /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
         /// state. (This is a legacy C state and should be considered deprecated.)
@@ -581,6 +583,7 @@ bitflags::bitflags! {
     ///
     /// Linux only supports a single descriptor flag:
     /// https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
+    #[derive(Copy, Clone, Debug)]
     pub struct DescriptorFlags: libc::c_int {
         const CLOEXEC = libc::FD_CLOEXEC;
     }
