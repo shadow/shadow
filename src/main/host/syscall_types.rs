@@ -238,6 +238,20 @@ impl From<std::io::Error> for SyscallError {
     }
 }
 
+impl SyscallError {
+    /// Returns the [condition](SysCallCondition) that the syscall is blocked on.
+    pub fn blocked_condition(&mut self) -> Option<&mut SysCallCondition> {
+        if let Self::Blocked(Blocked {
+            ref mut condition, ..
+        }) = self
+        {
+            Some(condition)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct SysCallReturnDone {

@@ -190,19 +190,37 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_sendto, ctx);
         }
 
-        Self::sendto_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len)
+        let mut result = Self::sendto_helper(
+            ctx,
+            file.inner_file(),
+            buf_ptr,
+            buf_len,
+            flags,
+            addr_ptr,
+            addr_len,
+        );
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_sent = result?;
+        Ok(bytes_sent)
     }
 
     pub fn sendto_helper(
         ctx: &mut SyscallContext,
-        open_file: OpenFile,
+        file: &File,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
         addr_ptr: PluginPtr,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
-        let File::Socket(ref socket) = open_file.inner_file() else {
+        let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -250,10 +268,9 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
-            let mut cond = SysCallCondition::new(trigger);
+            let trigger = Trigger::from_file(file.clone(), FileState::WRITABLE);
+            let cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
-            cond.set_active_file(open_file);
 
             return Err(SyscallError::Blocked(Blocked {
                 condition: cond,
@@ -306,19 +323,37 @@ impl SyscallHandler {
             return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx);
         }
 
-        Self::recvfrom_helper(ctx, file, buf_ptr, buf_len, flags, addr_ptr, addr_len_ptr)
+        let mut result = Self::recvfrom_helper(
+            ctx,
+            file.inner_file(),
+            buf_ptr,
+            buf_len,
+            flags,
+            addr_ptr,
+            addr_len_ptr,
+        );
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_received = result?;
+        Ok(bytes_received)
     }
 
     pub fn recvfrom_helper(
         ctx: &mut SyscallContext,
-        open_file: OpenFile,
+        file: &File,
         buf_ptr: PluginPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
         addr_ptr: PluginPtr,
         addr_len_ptr: PluginPtr,
     ) -> SyscallResult {
-        let File::Socket(ref socket) = open_file.inner_file() else {
+        let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -358,10 +393,9 @@ impl SyscallHandler {
             && !file_status.contains(FileStatus::NONBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
-            let mut cond = SysCallCondition::new(trigger);
+            let trigger = Trigger::from_file(file.clone(), FileState::READABLE);
+            let cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
-            cond.set_active_file(open_file);
 
             return Err(SyscallError::Blocked(Blocked {
                 condition: cond,
@@ -551,7 +585,16 @@ impl SyscallHandler {
             }
         };
 
-        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, 0)
+        let mut result = Self::accept_helper(ctx, file.inner_file(), addr_ptr, addr_len_ptr, 0);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        result
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
@@ -589,17 +632,26 @@ impl SyscallHandler {
             }
         };
 
-        Self::accept_helper(ctx, file, addr_ptr, addr_len_ptr, flags)
+        let mut result = Self::accept_helper(ctx, file.inner_file(), addr_ptr, addr_len_ptr, flags);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        result
     }
 
     fn accept_helper(
         ctx: &mut SyscallContext,
-        open_file: OpenFile,
+        file: &File,
         addr_ptr: PluginPtr,
         addr_len_ptr: PluginPtr,
         flags: libc::c_int,
     ) -> SyscallResult {
-        let File::Socket(ref socket) = open_file.inner_file() else {
+        let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -623,10 +675,9 @@ impl SyscallHandler {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())
             && !file_status.contains(FileStatus::NONBLOCK)
         {
-            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
-            let mut cond = SysCallCondition::new(trigger);
+            let trigger = Trigger::from_file(file.clone(), FileState::READABLE);
+            let cond = SysCallCondition::new(trigger);
             let supports_sa_restart = socket.borrow().supports_sa_restart();
-            cond.set_active_file(open_file);
 
             return Err(SyscallError::Blocked(Blocked {
                 condition: cond,
@@ -719,19 +770,20 @@ impl SyscallHandler {
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
 
-        let mut rv = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
                 Socket::connect(socket, &addr, &net_ns, &mut *rng, cb_queue)
             })
         });
 
-        // if we will block
-        if let Err(SyscallError::Blocked(ref mut blocked)) = rv {
-            // make sure the file does not close before the blocking syscall completes
-            blocked.condition.set_active_file(file);
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
         }
 
-        rv?;
+        result?;
 
         Ok(0.into())
     }
