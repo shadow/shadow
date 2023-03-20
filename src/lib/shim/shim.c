@@ -22,7 +22,6 @@
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shadow_spinlock.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shim/patch_vdso.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_rdtsc.h"

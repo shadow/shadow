@@ -7,7 +7,6 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "lib/shadow-shim-helper-rs/shim_shmem.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_signals.h"
@@ -125,11 +124,6 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
         trace("got response of type %d on %p", shimevent_getId(&res), ipc);
 
         switch (shimevent_getId(&res)) {
-            case SHIM_EVENT_BLOCK: {
-                // Ack the message.
-                shimevent_sendEventToShadow(ipc, &res);
-                break;
-            }
             case SHIM_EVENT_SYSCALL_COMPLETE: {
                 const ShimEventSyscallComplete* syscall_complete =
                     shimevent_getSyscallCompleteData(&res);
@@ -226,18 +220,6 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
-            case SHIM_EVENT_CLONE_REQ:
-                shim_shmemHandleClone(&res);
-                shim_shmemNotifyComplete(ipc);
-                break;
-            case SHIM_EVENT_CLONE_STRING_REQ:
-                shim_shmemHandleCloneString(&res);
-                shim_shmemNotifyComplete(ipc);
-                break;
-            case SHIM_EVENT_WRITE_REQ:
-                shim_shmemHandleWrite(&res);
-                shim_shmemNotifyComplete(ipc);
-                break;
             case SHIM_EVENT_ADD_THREAD_REQ: {
                 const ShimEventAddThreadReq* add_thread_req = shimevent_getAddThreadReqData(&res);
                 shim_newThreadStart(&add_thread_req->ipc_block);
