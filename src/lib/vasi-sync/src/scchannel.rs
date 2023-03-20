@@ -153,6 +153,19 @@ impl Error for SelfContainedChannelError {
 /// Locks" by Mara Box (O'Reilly). Copyright 2023 Mara Box, 978-1-098-11944-7.
 /// (From the preface: "You may use all example code offered with this book for
 /// any purpose").
+///
+/// TODO: Several candidate optimizations have been evaluated and discarded, but
+/// are left in the commit history for posterity along with their corresponding
+/// microbenchmark results.
+///
+/// One that might be worth revisiting is to remove the internal "Reading" and
+/// "Writing" states and either make the interfaces `unsafe` (since it becomes
+/// the caller's responsibility to avoid parallel reads or writes), or add
+/// checked creation of `!Sync` Reader and Writer objects. This optimization
+/// appeared to have a 22% benefit in the "ping pong" microbenchmark on a large
+/// simulation machine, but only a 3.5% benefit in the "ping pong pinned"
+/// microbenchmark; the latter is expected to be more representative of real
+/// large simulation runs (i.e. pinning should be enabled).
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 pub struct SelfContainedChannel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
