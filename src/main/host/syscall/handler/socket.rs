@@ -6,9 +6,8 @@ use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
-use crate::host::syscall::handler::{
-    read_sockaddr, write_sockaddr, SyscallContext, SyscallHandler,
-};
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::io::{read_sockaddr, write_sockaddr};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;

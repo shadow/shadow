@@ -15,7 +15,7 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall::handler::write_partial;
+use crate::host::syscall::io::write_partial;
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
