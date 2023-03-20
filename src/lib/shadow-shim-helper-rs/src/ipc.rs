@@ -62,10 +62,8 @@ impl Default for IPCData {
 mod export {
     use vasi_sync::scchannel::SelfContainedChannelError;
 
-    use crate::notnull::notnull_mut;
-    use crate::shim_event::{ShimEventData, ShimEventID};
-
     use super::*;
+    use crate::notnull::notnull_mut;
 
     #[no_mangle]
     pub unsafe extern "C" fn ipcData_init(ipc_data: *mut IPCData) {
@@ -130,10 +128,7 @@ mod export {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = match ipc_data.from_plugin().receive() {
             Ok(e) => e,
-            Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent {
-                event_id: ShimEventID::ProcessDeath,
-                event_data: ShimEventData { none: () },
-            },
+            Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent::ProcessDeath,
         };
         unsafe { ev.write(event) };
     }
