@@ -183,7 +183,7 @@ fn add_trait_bounds(mut generics: Generics) -> Generics {
 
 fn assume_vasi(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        attr.path
+        attr.path()
             .is_ident("unsafe_assume_virtual_address_space_independent")
     })
 }
