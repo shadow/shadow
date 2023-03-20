@@ -45,20 +45,41 @@ pub struct ShimEventAddThreadReq {
 #[repr(u32)]
 pub enum ShimEvent {
     Null,
+    /// Sent from Shadow to Shim to allow a shim thread to start executing
+    /// after creation.
     Start,
-    // The whole process has died.
-    // We inject this event to trigger cleanup after we've detected that the
-    // native process has died.
+    /// The whole process has died.
+    /// We inject this event to trigger cleanup after we've detected that the
+    /// native process has died.
     ProcessDeath,
+    /// Sent from Shim to Shadow to request handling of a syscall.
     Syscall(ShimEventSyscall),
+    /// Response from Shadow for a completed emulated syscall.
     SyscallComplete(ShimEventSyscallComplete),
+    /// Response from Shadow indicating that the shim should execute
+    /// the last requested syscall natively.
     SyscallDoNative,
+    /// Request from Shadow to copy data from shared memory.
+    /// XXX: Deprecated.
     CloneReq(ShimEventShmemBlk),
+    /// Request from Shadow to copy a string from shared memory.
+    /// XXX: Deprecated.
     CloneStringReq(ShimEventShmemBlk),
+    /// Response from the Shim that the requested shared memory operations has
+    /// completed.
+    /// XXX: Deprecated.
     ShmemComplete,
+    /// Request from Shadow to copy data to shared memory.
+    /// XXX: Deprecated.
     WriteReq(ShimEventShmemBlk),
+    /// Hint from Shadow to the shim that the current thread is about to be blocked.
+    /// i.e. the shim should stop spinning to wait for a response and block instead.
+    /// XXX: Deprecated: we no longer spin in Shadow/Shim IPC.
     Block,
+    /// Request from Shadow to Shim to take the included shared memory block,
+    /// which holds an `IpcData`, and use it to initialize a newly spawned thread.
     AddThreadReq(ShimEventAddThreadReq),
+    /// Response from Shim to Shadow that `AddThreadReq` has completed.
     AddThreadParentRes,
 }
 
