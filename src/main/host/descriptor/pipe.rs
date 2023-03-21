@@ -196,8 +196,8 @@ impl Pipe {
 
         let len = bytes.stream_len_bp()? as usize;
 
-        match self.write_mode {
-            WriteMode::Stream => Ok(buffer.write_stream(bytes.by_ref(), len, cb_queue)?.into()),
+        let result = match self.write_mode {
+            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), len, cb_queue),
             WriteMode::Packet => {
                 let mut num_written = 0;
 
@@ -224,7 +224,9 @@ impl Pipe {
                     num_written += bytes_to_write;
                 }
             }
-        }
+        };
+
+        Ok(result?.into())
     }
 
     pub fn ioctl(

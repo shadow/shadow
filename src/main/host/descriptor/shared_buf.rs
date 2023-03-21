@@ -1,6 +1,5 @@
 use nix::errno::Errno;
 
-use crate::host::syscall_types::SyscallError;
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 
@@ -80,7 +79,7 @@ impl SharedBuf {
         &mut self,
         bytes: W,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(usize, usize), SyscallError> {
+    ) -> Result<(usize, usize), std::io::Error> {
         let (num_copied, num_removed_from_buf, _chunk_type) = self.queue.pop(bytes)?;
         self.refresh_state(cb_queue);
 
@@ -92,7 +91,7 @@ impl SharedBuf {
         bytes: R,
         len: usize,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<usize, SyscallError> {
+    ) -> Result<usize, std::io::Error> {
         if len == 0 {
             return Ok(0);
         }
@@ -115,7 +114,7 @@ impl SharedBuf {
         mut bytes: R,
         len: usize,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), std::io::Error> {
         if len > self.max_len() {
             // the socket could never send this packet, even if the buffer was empty
             return Err(Errno::EMSGSIZE.into());
