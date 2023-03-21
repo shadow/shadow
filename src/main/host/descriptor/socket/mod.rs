@@ -6,7 +6,8 @@ use nix::sys::socket::Shutdown;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall::io::IoVec;
+use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -96,6 +97,30 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::connect(socket, addr, net_ns, rng, cb_queue),
             Self::Inet(socket) => InetSocket::connect(socket, addr, net_ns, rng, cb_queue),
+        }
+    }
+
+    pub fn sendmsg(
+        &self,
+        args: SendmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        match self {
+            Self::Unix(socket) => UnixSocket::sendmsg(socket, args, memory_manager, cb_queue),
+            Self::Inet(socket) => InetSocket::sendmsg(socket, args, memory_manager, cb_queue),
+        }
+    }
+
+    pub fn recvmsg(
+        &self,
+        args: RecvmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        match self {
+            Self::Unix(socket) => UnixSocket::recvmsg(socket, args, memory_manager, cb_queue),
+            Self::Inet(socket) => InetSocket::recvmsg(socket, args, memory_manager, cb_queue),
         }
     }
 }
@@ -261,18 +286,6 @@ impl SocketRefMut<'_> {
         -> Result<(), SyscallError>
     );
 
-    enum_passthrough_generic!(self, (source, addr, cb_queue), Unix, Inet;
-        pub fn sendto<R>(&mut self, source: R, addr: Option<SockaddrStorage>, cb_queue: &mut CallbackQueue)
-            -> SyscallResult
-        where R: std::io::Read + std::io::Seek
-    );
-
-    enum_passthrough_generic!(self, (bytes, cb_queue), Unix, Inet;
-        pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
-            -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-        where W: std::io::Write + std::io::Seek
-    );
-
     pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
         match self {
             Self::Unix(socket) => socket.accept(cb_queue),
@@ -315,4 +328,38 @@ impl std::fmt::Debug for SocketRefMut<'_> {
             self.get_status()
         )
     }
+}
+
+/// Arguments for [`Socket::sendmsg()`].
+pub struct SendmsgArgs<'a> {
+    /// Socket address to send the message to.
+    pub addr: Option<SockaddrStorage>,
+    /// [`IoVec`] buffers in plugin memory containing the message data.
+    pub iovs: &'a [IoVec],
+    /// Buffer in plugin memory containg message control data.
+    pub control_ptr: TypedPluginPtr<u8>,
+    /// Send flags.
+    pub flags: libc::c_int,
+}
+
+/// Arguments for [`Socket::recvmsg()`].
+pub struct RecvmsgArgs<'a> {
+    /// [`IoVec`] buffers in plugin memory to store the message data.
+    pub iovs: &'a [IoVec],
+    /// Buffer in plugin memory to store the message control data.
+    pub control_ptr: TypedPluginPtr<u8>,
+    /// Recv flags.
+    pub flags: libc::c_int,
+}
+
+/// Return values for [`Socket::recvmsg()`].
+pub struct RecvmsgReturn {
+    /// The number of message bytes read.
+    pub bytes_read: libc::ssize_t,
+    /// The socket address of the received message.
+    pub addr: Option<SockaddrStorage>,
+    /// Message flags.
+    pub msg_flags: libc::c_int,
+    /// The number of control data bytes read.
+    pub control_len: libc::size_t,
 }

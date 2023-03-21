@@ -207,7 +207,7 @@ impl Pipe {
 
                     // if there are no more bytes to write (pipes don't support 0-length packets)
                     if bytes_remaining == 0 {
-                        break Ok(num_written.into());
+                        break Ok(num_written);
                     }
 
                     // split the packet up into PIPE_BUF-sized packets
@@ -216,7 +216,7 @@ impl Pipe {
                     if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, cb_queue) {
                         // if we've already written bytes, return those instead of an error
                         if num_written > 0 {
-                            break Ok(num_written.into());
+                            break Ok(num_written);
                         }
                         break Err(e);
                     }
