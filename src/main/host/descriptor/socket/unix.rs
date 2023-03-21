@@ -17,9 +17,7 @@ use crate::host::descriptor::{
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
@@ -1104,16 +1102,13 @@ impl Protocol for ConnOrientedInitial {
                 }
 
                 // block until the server has room for new connections, or is closed
-                let trigger = Trigger::from_file(
+                let err = SyscallError::new_blocked(
                     File::Socket(Socket::Unix(Arc::clone(&server))),
                     FileState::SOCKET_ALLOWING_CONNECT | FileState::CLOSED,
+                    server_mut.supports_sa_restart(),
                 );
-                let blocked = Blocked {
-                    condition: SysCallCondition::new(trigger),
-                    restartable: server_mut.supports_sa_restart(),
-                };
 
-                return (self.into(), Err(SyscallError::Blocked(blocked)));
+                return (self.into(), Err(err));
             }
         };
 

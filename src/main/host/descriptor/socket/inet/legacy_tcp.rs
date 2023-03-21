@@ -15,10 +15,8 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall::handler::write_partial;
-use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::host::syscall::io::write_partial;
+use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
@@ -580,18 +578,15 @@ impl LegacyTcpSocket {
                 // This is the first time we ever called connect, and so we need to wait for the
                 // 3-way handshake to complete. We will wait indefinitely for a success or failure.
 
-                let trigger = Trigger::from_file(
+                let err = SyscallError::new_blocked(
                     File::Socket(Socket::Inet(InetSocket::LegacyTcp(Arc::clone(socket)))),
                     FileState::ACTIVE | FileState::WRITABLE,
+                    socket_ref.supports_sa_restart(),
                 );
-                let blocked = Blocked {
-                    condition: SysCallCondition::new(trigger),
-                    restartable: socket_ref.supports_sa_restart(),
-                };
 
                 // block the current thread
                 socket_ref.thread_of_blocked_connect = Some(Worker::active_thread_id().unwrap());
-                return Err(SyscallError::Blocked(blocked));
+                return Err(err);
             }
 
             // if we were previously blocked (we checked the thread ID above) and are now connected

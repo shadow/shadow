@@ -8,9 +8,7 @@ use crate::host::descriptor::{
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallBufferArg;
-use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{Blocked, PluginPtr, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -145,7 +143,7 @@ impl SyscallHandler {
         fd: libc::c_int,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -166,17 +164,27 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_read, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_read, ctx);
+            return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
         }
 
-        Self::read_helper(ctx, file, buf_ptr, buf_size, None)
+        let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_read = result?;
+        Ok(bytes_read)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
@@ -187,7 +195,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -208,37 +216,46 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx)
+                            .map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
+            return Self::legacy_syscall(c::syscallhandler_pread64, ctx).map(Into::into);
         }
 
-        Self::read_helper(ctx, file, buf_ptr, buf_size, Some(offset))
+        let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_read = result?;
+        Ok(bytes_read)
     }
 
     fn read_helper(
         ctx: &mut SyscallContext,
-        open_file: OpenFile,
+        file: &File,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
-    ) -> SyscallResult {
-        let generic_file = open_file.inner_file();
-
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if it's a socket, call recvfrom() instead
-        if let File::Socket(..) = generic_file {
+        if let File::Socket(..) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
             return Self::recvfrom_helper(
                 ctx,
-                open_file,
+                file,
                 buf_ptr,
                 buf_size,
                 0,
@@ -247,12 +264,12 @@ impl SyscallHandler {
             );
         }
 
-        let file_status = generic_file.borrow().get_status();
+        let file_status = file.borrow().get_status();
 
         let result =
             // call the file's read(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
-                generic_file.borrow_mut().read(
+                file.borrow_mut().read(
                     ctx.objs.process.memory_borrow_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
@@ -261,18 +278,15 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::READABLE);
-            let mut cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = generic_file.borrow().supports_sa_restart();
-            cond.set_active_file(open_file);
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::READABLE,
+                file.borrow().supports_sa_restart(),
+            ));
         }
 
-        result
+        let bytes_read = result?;
+        Ok(bytes_read.into())
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -282,7 +296,7 @@ impl SyscallHandler {
         fd: libc::c_int,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -303,17 +317,27 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_write, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_write, ctx);
+            return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
         }
 
-        Self::write_helper(ctx, file, buf_ptr, buf_size, None)
+        let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_written = result?;
+        Ok(bytes_written)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -325,7 +349,7 @@ impl SyscallHandler {
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
-    ) -> SyscallResult {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -346,43 +370,53 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
+                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx)
+                            .map(Into::into);
                     }
                 }
             }
         };
 
         if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
+            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx).map(Into::into);
         }
 
-        Self::write_helper(ctx, file, buf_ptr, buf_size, Some(offset))
+        let mut result =
+            Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
+
+        // if the syscall will block, keep the file open until the syscall restarts
+        if let Some(err) = result.as_mut().err() {
+            if let Some(cond) = err.blocked_condition() {
+                cond.set_active_file(file);
+            }
+        }
+
+        let bytes_written = result?;
+        Ok(bytes_written)
     }
 
     fn write_helper(
         ctx: &mut SyscallContext,
-        open_file: OpenFile,
+        file: &File,
         buf_ptr: PluginPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
-    ) -> SyscallResult {
-        let generic_file = open_file.inner_file();
-
+    ) -> Result<libc::ssize_t, SyscallError> {
         // if it's a socket, call recvfrom() instead
-        if let File::Socket(..) = generic_file {
+        if let File::Socket(..) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return Self::sendto_helper(ctx, open_file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
+            return Self::sendto_helper(ctx, file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
         }
 
-        let file_status = generic_file.borrow().get_status();
+        let file_status = file.borrow().get_status();
 
         let result =
             // call the file's write(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
-                generic_file.borrow_mut().write(
+                file.borrow_mut().write(
                     ctx.objs.process.memory_borrow().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                     offset,
                     cb_queue,
@@ -391,18 +425,15 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            let trigger = Trigger::from_file(open_file.inner_file().clone(), FileState::WRITABLE);
-            let mut cond = SysCallCondition::new(trigger);
-            let supports_sa_restart = generic_file.borrow().supports_sa_restart();
-            cond.set_active_file(open_file);
-
-            return Err(SyscallError::Blocked(Blocked {
-                condition: cond,
-                restartable: supports_sa_restart,
-            }));
+            return Err(SyscallError::new_blocked(
+                file.clone(),
+                FileState::WRITABLE,
+                file.borrow().supports_sa_restart(),
+            ));
         };
 
-        result
+        let bytes_written = result?;
+        Ok(bytes_written.into())
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
