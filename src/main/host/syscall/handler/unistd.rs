@@ -2,11 +2,12 @@ use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::socket::inet::InetSocket;
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::io::IoVec;
 use crate::host::syscall::type_formatting::SyscallBufferArg;
 use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -247,21 +248,32 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
-        // if it's a socket, call recvfrom() instead
-        if let File::Socket(..) = file {
+        // if it's a socket, call recvmsg() instead
+        if let File::Socket(ref socket) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return Self::recvfrom_helper(
-                ctx,
-                file,
-                buf_ptr,
-                buf_size,
-                0,
-                PluginPtr::null(),
-                PluginPtr::null(),
-            );
+
+            let iov = IoVec {
+                base: buf_ptr,
+                len: buf_size,
+            };
+
+            let args = RecvmsgArgs {
+                iovs: &[iov],
+                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+                flags: 0,
+            };
+
+            let mut mem = ctx.objs.process.memory_borrow_mut();
+
+            // call the socket's recvmsg(), and run any resulting events
+            let RecvmsgReturn { bytes_read, .. } = CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::recvmsg(socket, args, &mut mem, cb_queue)
+            })?;
+
+            return Ok(bytes_read);
         }
 
         let file_status = file.borrow().get_status();
@@ -402,13 +414,33 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
-        // if it's a socket, call recvfrom() instead
-        if let File::Socket(..) = file {
+        // if it's a socket, call sendmsg() instead
+        if let File::Socket(ref socket) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
             }
-            return Self::sendto_helper(ctx, file, buf_ptr, buf_size, 0, PluginPtr::null(), 0);
+
+            let iov = IoVec {
+                base: buf_ptr,
+                len: buf_size,
+            };
+
+            let args = SendmsgArgs {
+                addr: None,
+                iovs: &[iov],
+                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+                flags: 0,
+            };
+
+            let mut mem = ctx.objs.process.memory_borrow_mut();
+
+            // call the socket's sendmsg(), and run any resulting events
+            let bytes_written = CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+            })?;
+
+            return Ok(bytes_written);
         }
 
         let file_status = file.borrow().get_status();

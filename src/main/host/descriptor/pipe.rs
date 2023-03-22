@@ -196,8 +196,8 @@ impl Pipe {
 
         let len = bytes.stream_len_bp()? as usize;
 
-        match self.write_mode {
-            WriteMode::Stream => Ok(buffer.write_stream(bytes.by_ref(), len, cb_queue)?.into()),
+        let result = match self.write_mode {
+            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), len, cb_queue),
             WriteMode::Packet => {
                 let mut num_written = 0;
 
@@ -207,7 +207,7 @@ impl Pipe {
 
                     // if there are no more bytes to write (pipes don't support 0-length packets)
                     if bytes_remaining == 0 {
-                        break Ok(num_written.into());
+                        break Ok(num_written);
                     }
 
                     // split the packet up into PIPE_BUF-sized packets
@@ -216,7 +216,7 @@ impl Pipe {
                     if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, cb_queue) {
                         // if we've already written bytes, return those instead of an error
                         if num_written > 0 {
-                            break Ok(num_written.into());
+                            break Ok(num_written);
                         }
                         break Err(e);
                     }
@@ -224,7 +224,9 @@ impl Pipe {
                     num_written += bytes_to_write;
                 }
             }
-        }
+        };
+
+        Ok(result?.into())
     }
 
     pub fn ioctl(

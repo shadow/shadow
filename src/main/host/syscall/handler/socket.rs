@@ -2,12 +2,12 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::io::{read_sockaddr, write_sockaddr};
+use crate::host::syscall::io::{read_sockaddr, write_sockaddr, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -16,7 +16,7 @@ use crate::utility::sockaddr::SockaddrStorage;
 
 use log::*;
 use nix::errno::Errno;
-use nix::sys::socket::{MsgFlags, Shutdown, SockFlag};
+use nix::sys::socket::{Shutdown, SockFlag};
 
 use syscall_logger::log_syscall;
 
@@ -184,19 +184,38 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
             return Self::legacy_syscall(c::syscallhandler_sendto, ctx).map(Into::into);
         }
 
-        let mut result = Self::sendto_helper(
-            ctx,
-            file.inner_file(),
-            buf_ptr,
-            buf_len,
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let addr = read_sockaddr(&mem, addr_ptr, addr_len)?;
+
+        log::trace!("Attempting to send {} bytes to {:?}", buf_len, addr);
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        let args = SendmsgArgs {
+            addr,
+            iovs: &[iov],
+            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
             flags,
-            addr_ptr,
-            addr_len,
-        );
+        };
+
+        // call the socket's sendmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
 
         // if the syscall will block, keep the file open until the syscall restarts
         if let Some(err) = result.as_mut().err() {
@@ -207,74 +226,6 @@ impl SyscallHandler {
 
         let bytes_sent = result?;
         Ok(bytes_sent)
-    }
-
-    pub fn sendto_helper(
-        ctx: &mut SyscallContext,
-        file: &File,
-        buf_ptr: PluginPtr,
-        buf_len: libc::size_t,
-        flags: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len: libc::socklen_t,
-    ) -> Result<libc::ssize_t, SyscallError> {
-        let File::Socket(ref socket) = file else {
-            return Err(Errno::ENOTSOCK.into());
-        };
-
-        // get the send flags
-        let flags = match MsgFlags::from_bits(flags) {
-            Some(x) => x,
-            None => {
-                // linux doesn't return an error if there are unexpected flags
-                warn!("Invalid sendto flags: {}", flags);
-                MsgFlags::from_bits_truncate(flags)
-            }
-        };
-
-        // MSG_NOSIGNAL is currently a no-op, since we haven't implemented the behavior
-        // it's meant to disable.
-        // TODO: Once we've implemented generating a SIGPIPE when the peer on a
-        // stream-oriented socket has closed the connection, MSG_NOSIGNAL should
-        // disable it.
-        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_NOSIGNAL;
-        if flags.intersects(!supported_flags) {
-            warn!("Unsupported sendto flags: {:?}", flags);
-            return Err(Errno::EOPNOTSUPP.into());
-        }
-
-        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
-
-        debug!("Attempting to send {} bytes to {:?}", buf_len, addr);
-
-        let file_status = socket.borrow().get_status();
-
-        // call the socket's sendto(), and run any resulting events
-        let result = CallbackQueue::queue_and_run(|cb_queue| {
-            socket.borrow_mut().sendto(
-                ctx.objs
-                    .process
-                    .memory_borrow()
-                    .reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
-                addr,
-                cb_queue,
-            )
-        });
-
-        // if the syscall would block, it's a blocking descriptor, and the `MSG_DONTWAIT` flag is not set
-        if result == Err(Errno::EWOULDBLOCK.into())
-            && !file_status.contains(FileStatus::NONBLOCK)
-            && !flags.contains(MsgFlags::MSG_DONTWAIT)
-        {
-            return Err(SyscallError::new_blocked(
-                file.clone(),
-                FileState::WRITABLE,
-                socket.borrow().supports_sa_restart(),
-            ));
-        };
-
-        let bytes_sent = result?;
-        Ok(bytes_sent.into())
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
@@ -316,19 +267,37 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
+        let File::Socket(ref socket) = file.inner_file() else {
+            return Err(Errno::ENOTSOCK.into());
+        };
+
+        if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
             return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx).map(Into::into);
         }
 
-        let mut result = Self::recvfrom_helper(
-            ctx,
-            file.inner_file(),
-            buf_ptr,
-            buf_len,
+        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        log::trace!("Attempting to recv {} bytes", buf_len);
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_len,
+        };
+
+        let args = RecvmsgArgs {
+            iovs: &[iov],
+            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
             flags,
-            addr_ptr,
-            addr_len_ptr,
-        );
+        };
+
+        // call the socket's recvmsg(), and run any resulting events
+        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                Socket::recvmsg(socket, args, &mut mem, cb_queue)
+            })
+        });
 
         // if the syscall will block, keep the file open until the syscall restarts
         if let Some(err) = result.as_mut().err() {
@@ -337,78 +306,17 @@ impl SyscallHandler {
             }
         }
 
-        let bytes_received = result?;
-        Ok(bytes_received)
-    }
-
-    pub fn recvfrom_helper(
-        ctx: &mut SyscallContext,
-        file: &File,
-        buf_ptr: PluginPtr,
-        buf_len: libc::size_t,
-        flags: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
-    ) -> Result<libc::ssize_t, SyscallError> {
-        let File::Socket(ref socket) = file else {
-            return Err(Errno::ENOTSOCK.into());
-        };
-
-        // get the recv flags
-        let flags = match MsgFlags::from_bits(flags) {
-            Some(x) => x,
-            None => {
-                // linux doesn't return an error if there are unexpected flags
-                warn!("Invalid recvfrom flags: {}", flags);
-                MsgFlags::from_bits_truncate(flags)
-            }
-        };
-
-        let supported_flags = MsgFlags::MSG_DONTWAIT;
-        if flags.intersects(!supported_flags) {
-            warn!("Unsupported recvfrom flags: {:?}", flags);
-            return Err(Errno::EOPNOTSUPP.into());
-        }
-
-        debug!("Attempting to recv {} bytes", buf_len);
-
-        let file_status = socket.borrow().get_status();
-
-        // call the socket's recvfrom(), and run any resulting events
-        let result = CallbackQueue::queue_and_run(|cb_queue| {
-            socket.borrow_mut().recvfrom(
-                ctx.objs
-                    .process
-                    .memory_borrow_mut()
-                    .writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_len)),
-                cb_queue,
-            )
-        });
-
-        // if the syscall would block, it's a blocking descriptor, and the `MSG_DONTWAIT` flag is not set
-        if matches!(result, Err(ref err) if err == &Errno::EWOULDBLOCK.into())
-            && !file_status.contains(FileStatus::NONBLOCK)
-            && !flags.contains(MsgFlags::MSG_DONTWAIT)
-        {
-            return Err(SyscallError::new_blocked(
-                file.clone(),
-                FileState::READABLE,
-                socket.borrow().supports_sa_restart(),
-            ));
-        };
-
-        let (bytes_received, from_addr) = result?;
+        let RecvmsgReturn {
+            bytes_read: bytes_received,
+            addr: from_addr,
+            ..
+        } = result?;
 
         if !addr_ptr.is_null() {
-            write_sockaddr(
-                &mut ctx.objs.process.memory_borrow_mut(),
-                from_addr.as_ref(),
-                addr_ptr,
-                TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
-            )?;
+            write_sockaddr(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 
-        Ok(bytes_received.into())
+        Ok(bytes_received)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,

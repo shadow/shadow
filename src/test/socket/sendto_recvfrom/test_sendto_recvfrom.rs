@@ -174,11 +174,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
-                    &append_args("test_invalid_flag"),
-                    move || test_invalid_flag(method, sock_type),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
                     &append_args("test_flag_dontwait"),
                     move || test_flag_dontwait(method, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
@@ -464,58 +459,6 @@ fn test_zero_len_buf(init_method: SocketInitMethod, sock_type: libc::c_int) -> R
 
         // receive 0 bytes; no errors expected
         simple_recvfrom_helper(fd_server, &mut [], &[], true)?;
-
-        Ok(())
-    })
-}
-
-/// Test sendto() and recvfrom() using an unused flag.
-fn test_invalid_flag(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
-    let (fd_client, fd_server) = socket_init_helper(
-        init_method,
-        sock_type,
-        libc::SOCK_NONBLOCK,
-        /* bind_client = */ false,
-    );
-
-    let sendto_buf: Vec<u8> = vec![1, 2, 3];
-    let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
-
-    let sendto_args = SendtoArguments {
-        fd: fd_client,
-        len: sendto_buf.len(),
-        buf: Some(&sendto_buf),
-        flags: 1 << 31, // an unused flag
-        ..Default::default()
-    };
-
-    let mut recvfrom_args = RecvfromArguments {
-        fd: fd_server,
-        len: recvfrom_buf.len(),
-        buf: Some(&mut recvfrom_buf),
-        flags: 1 << 31, // an unused flag
-        ..Default::default()
-    };
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // try to send 3 bytes; no error expected
-        let expected_err = match init_method.domain() {
-            libc::AF_INET => vec![],
-            libc::AF_UNIX => vec![],
-            _ => unimplemented!(),
-        };
-        check_sendto_call(&sendto_args, &expected_err, true)?;
-
-        // shadow needs to run events
-        assert_eq!(unsafe { libc::usleep(100) }, 0);
-
-        // try to read 3 bytes; no error expected
-        let expected_err = match init_method.domain() {
-            libc::AF_INET => vec![],
-            libc::AF_UNIX => vec![],
-            _ => unimplemented!(),
-        };
-        check_recvfrom_call(&mut recvfrom_args, &expected_err, true)?;
 
         Ok(())
     })

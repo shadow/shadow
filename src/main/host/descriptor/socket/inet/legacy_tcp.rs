@@ -9,14 +9,14 @@ use nix::sys::socket::{Shutdown, SockaddrIn};
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
-use crate::host::descriptor::socket::Socket;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
     CompatFile, File, FileMode, FileState, FileStatus, OpenFile, StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::write_partial;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
@@ -285,9 +285,9 @@ impl LegacyTcpSocket {
     where
         W: std::io::Write + std::io::Seek,
     {
-        // we could call LegacyTcpSocket::recvfrom() here, but for now we expect that there are no
+        // we could call LegacyTcpSocket::recvmsg() here, but for now we expect that there are no
         // code paths that would call LegacyTcpSocket::read() since the read() syscall handler
-        // should have called LegacyTcpSocket::recvfrom() instead
+        // should have called LegacyTcpSocket::recvmsg() instead
         panic!("Called LegacyTcpSocket::read() on a TCP socket.");
     }
 
@@ -300,32 +300,27 @@ impl LegacyTcpSocket {
     where
         R: std::io::Read + std::io::Seek,
     {
-        // we could call LegacyTcpSocket::sendto() here, but for now we expect that there are no
+        // we could call LegacyTcpSocket::sendmsg() here, but for now we expect that there are no
         // code paths that would call LegacyTcpSocket::write() since the write() syscall handler
-        // should have called LegacyTcpSocket::sendto() instead
+        // should have called LegacyTcpSocket::sendmsg() instead
         panic!("Called LegacyTcpSocket::write() on a TCP socket");
     }
 
-    pub fn sendto<R>(
-        &mut self,
-        _bytes: R,
-        _addr: Option<SockaddrStorage>,
+    pub fn sendmsg(
+        _socket: &Arc<AtomicRefCell<Self>>,
+        _args: SendmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         todo!()
     }
 
-    pub fn recvfrom<W>(
-        &mut self,
-        _bytes: W,
+    pub fn recvmsg(
+        _socket: &Arc<AtomicRefCell<Self>>,
+        _args: RecvmsgArgs,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<RecvmsgReturn, SyscallError> {
         todo!()
     }
 

@@ -6,9 +6,10 @@ use nix::errno::Errno;
 use nix::sys::socket::Shutdown;
 
 use crate::cshadow as c;
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, SyscallError};
+use crate::host::syscall_types::{PluginPtr, SyscallError};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::CallbackQueue;
@@ -92,6 +93,32 @@ impl InetSocket {
         match self {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::connect(socket, addr, net_ns, rng, cb_queue)
+            }
+        }
+    }
+
+    pub fn sendmsg(
+        &self,
+        args: SendmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<libc::ssize_t, SyscallError> {
+        match self {
+            Self::LegacyTcp(socket) => {
+                LegacyTcpSocket::sendmsg(socket, args, memory_manager, cb_queue)
+            }
+        }
+    }
+
+    pub fn recvmsg(
+        &self,
+        args: RecvmsgArgs,
+        memory_manager: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<RecvmsgReturn, SyscallError> {
+        match self {
+            Self::LegacyTcp(socket) => {
+                LegacyTcpSocket::recvmsg(socket, args, memory_manager, cb_queue)
             }
         }
     }
@@ -259,18 +286,6 @@ impl InetSocketRefMut<'_> {
         pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
-    );
-
-    enum_passthrough_generic!(self, (source, addr, cb_queue), LegacyTcp;
-        pub fn sendto<R>(&mut self, source: R, addr: Option<SockaddrStorage>, cb_queue: &mut CallbackQueue)
-            -> SyscallResult
-        where R: std::io::Read + std::io::Seek
-    );
-
-    enum_passthrough_generic!(self, (bytes, cb_queue), LegacyTcp;
-        pub fn recvfrom<W>(&mut self, bytes: W, cb_queue: &mut CallbackQueue)
-            -> Result<(SysCallReg, Option<SockaddrStorage>), SyscallError>
-        where W: std::io::Write + std::io::Seek
     );
 
     pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
