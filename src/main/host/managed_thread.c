@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <sched.h>
 #include <search.h>
+#include <spawn.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
@@ -129,12 +130,13 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
     return envp;
 }
 
-static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
-                                      const char* const* argv_in, const char* const* envp_in,
-                                      const char* workingDir, int straceFd, int shimlogFd) {
-    utility_debugAssert(file != NULL);
+static pid_t _managedthread_spawn(ManagedThread* thread, const char* file,
+                                  const char* const* argv_in, const char* const* envp_in,
+                                  const char* workingDir, int straceFd, int shimlogFd) {
+    // We use `posix_spawn` to spawn the child process. This should be functionally
+    // equivalent to vfork + execve, but wrapped in a safer and more portable API.
 
-    // execve technically takes arrays of pointers to *mutable* char.
+    // posix_spawn technically takes arrays of pointers to *mutable* char.
     // conservatively dup here.
     gchar** argv = g_strdupv((gchar**)argv_in);
     gchar** envp = g_strdupv((gchar**)envp_in);
@@ -146,55 +148,44 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
         utility_panic("pipe2: %s", g_strerror(errno));
     }
 
-    // vfork has superior performance to fork with large workloads.
-    pid_t pid = vfork();
+    posix_spawn_file_actions_t file_actions;
+    if (posix_spawn_file_actions_init(&file_actions) != 0) {
+        utility_panic("posix_spawn_file_actions_init: %s", g_strerror(errno));
+    }
 
-    // Beware! Unless you really know what you're doing, don't add any code
-    // between here and the execvpe below. The forked child process is sharing
-    // memory and control structures with the parent at this point. See
-    // `man 2 vfork`.
+    // Dup the write end of the pipe; the dup'd descriptor won't have O_CLOEXEC set.
+    if (posix_spawn_file_actions_adddup2(&file_actions, pipefd[1], pipefd[1]) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
 
-    switch (pid) {
-        case -1:
-            utility_panic("fork failed");
-            return -1;
-            break;
-        case 0: {
-            // child
-
-            // *Don't* close the write end of the pipe on exec.
-            if (fcntl(pipefd[1], F_SETFD, 0)) {
-                die_after_vfork();
-            }
-
-            // clear the FD_CLOEXEC flag for the strace fd so that it's available in the shim
-            if (straceFd >= 0 && fcntl(straceFd, F_SETFD, 0)) {
-                die_after_vfork();
-            }
-
-            // set stdout/stderr as the shim log, and clear the FD_CLOEXEC flag so that it's
-            // available in the shim
-            if (dup2(shimlogFd, STDOUT_FILENO) < 0) {
-                die_after_vfork();
-            }
-            if (dup2(shimlogFd, STDERR_FILENO) < 0) {
-                die_after_vfork();
-            }
-
-            // Set the working directory
-            if (chdir(workingDir) < 0) {
-                die_after_vfork();
-            }
-
-            int rc = execvpe(file, argv, envp);
-            if (rc == -1) {
-                die_after_vfork();
-            }
-            // Unreachable
-            die_after_vfork();
+    // Likewise for straceFd.
+    if (straceFd >= 0) {
+        if (posix_spawn_file_actions_adddup2(&file_actions, straceFd, straceFd) != 0) {
+            utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
         }
-        default: // parent
-            break;
+    }
+
+    // set stdout/stderr as the shim log, and clear the FD_CLOEXEC flag so that it's
+    // available in the shim
+    if (posix_spawn_file_actions_adddup2(&file_actions, shimlogFd, STDOUT_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+    if (posix_spawn_file_actions_adddup2(&file_actions, shimlogFd, STDERR_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+
+    // Set the working directory
+    if (posix_spawn_file_actions_addchdir_np(&file_actions, workingDir) != 0) {
+        utility_panic("posix_spawn_file_actions_addchdir_np: %s", g_strerror(errno));
+    }
+
+    pid_t pid;
+    if (posix_spawn(&pid, file, &file_actions, NULL, argv, envp) != 0) {
+        utility_panic("posix_spawn: %s", g_strerror(errno));
+    }
+
+    if (posix_spawn_file_actions_destroy(&file_actions) != 0) {
+        utility_panic("posix_spawn_file_actions: %s", g_strerror(errno));
     }
 
     // *Must* close the write-end of the pipe, so that the child's copy is the
@@ -262,7 +253,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
         logPath, O_WRONLY | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | S_IWOTH);
     utility_alwaysAssert(shimlogFd >= 0);
 
-    mthread->nativePid = _managedthread_fork_exec(
+    mthread->nativePid = _managedthread_spawn(
         mthread, pluginPath, argv, (const char* const*)myenvv, workingDir, straceFd, shimlogFd);
 
     // should be opened in the shim, so no need for it anymore
