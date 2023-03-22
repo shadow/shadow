@@ -248,6 +248,13 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_size,
+        };
+
         // if it's a socket, call recvmsg() instead
         if let File::Socket(ref socket) = file {
             if offset.is_some() {
@@ -255,18 +262,11 @@ impl SyscallHandler {
                 return Err(Errno::ESPIPE.into());
             }
 
-            let iov = IoVec {
-                base: buf_ptr,
-                len: buf_size,
-            };
-
             let args = RecvmsgArgs {
                 iovs: &[iov],
                 control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
                 flags: 0,
             };
-
-            let mut mem = ctx.objs.process.memory_borrow_mut();
 
             // call the socket's recvmsg(), and run any resulting events
             let RecvmsgReturn { bytes_read, .. } = CallbackQueue::queue_and_run(|cb_queue| {
@@ -279,11 +279,13 @@ impl SyscallHandler {
         let file_status = file.borrow().get_status();
 
         let result =
-            // call the file's read(), and run any resulting events
+            // call the file's readv(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
-                file.borrow_mut().read(
-                    ctx.objs.process.memory_borrow_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                file.borrow_mut().readv(
+                    &[iov],
                     offset,
+                    0,
+                    &mut mem,
                     cb_queue,
                 )
             });
@@ -298,7 +300,7 @@ impl SyscallHandler {
         }
 
         let bytes_read = result?;
-        Ok(bytes_read.into())
+        Ok(bytes_read)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -414,6 +416,13 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
+        let mut mem = ctx.objs.process.memory_borrow_mut();
+
+        let iov = IoVec {
+            base: buf_ptr,
+            len: buf_size,
+        };
+
         // if it's a socket, call sendmsg() instead
         if let File::Socket(ref socket) = file {
             if offset.is_some() {
@@ -421,19 +430,12 @@ impl SyscallHandler {
                 return Err(Errno::ESPIPE.into());
             }
 
-            let iov = IoVec {
-                base: buf_ptr,
-                len: buf_size,
-            };
-
             let args = SendmsgArgs {
                 addr: None,
                 iovs: &[iov],
                 control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
                 flags: 0,
             };
-
-            let mut mem = ctx.objs.process.memory_borrow_mut();
 
             // call the socket's sendmsg(), and run any resulting events
             let bytes_written = CallbackQueue::queue_and_run(|cb_queue| {
@@ -446,11 +448,13 @@ impl SyscallHandler {
         let file_status = file.borrow().get_status();
 
         let result =
-            // call the file's write(), and run any resulting events
+            // call the file's writev(), and run any resulting events
             CallbackQueue::queue_and_run(|cb_queue| {
-                file.borrow_mut().write(
-                    ctx.objs.process.memory_borrow().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                file.borrow_mut().writev(
+                    &[iov],
                     offset,
+                    0,
+                    &mut mem,
                     cb_queue,
                 )
             });
@@ -465,7 +469,7 @@ impl SyscallHandler {
         };
 
         let bytes_written = result?;
-        Ok(bytes_written.into())
+        Ok(bytes_written)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]

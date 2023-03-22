@@ -10,9 +10,9 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
-use crate::utility::stream_len::StreamLen;
 use crate::utility::HostTreePointer;
 
 pub struct Pipe {
@@ -117,15 +117,14 @@ impl Pipe {
         Ok(())
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut bytes: W,
+        iovs: &[IoVec],
         offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // pipes don't support seeking
         if offset.is_some() {
             return Err(nix::errno::Errno::ESPIPE.into());
@@ -136,36 +135,39 @@ impl Pipe {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
+        let num_bytes_to_read: libc::size_t = iovs.iter().map(|x| x.len).sum();
+
+        let mut writer = IoVecWriter::new(iovs, mem);
+
         let (num_copied, _num_removed_from_buf) = self
             .buffer
             .as_ref()
             .unwrap()
             .borrow_mut()
-            .read(&mut bytes, cb_queue)?;
+            .read(&mut writer, cb_queue)?;
 
         // the read would block if all:
         //  1. we could not read any bytes
         //  2. we were asked to read >0 bytes
         //  3. there are open descriptors that refer to the write end of the pipe
         if num_copied == 0
-            && bytes.stream_len_bp()? != 0
+            && num_bytes_to_read != 0
             && self.buffer.as_ref().unwrap().borrow().num_writers() > 0
         {
             Err(Errno::EWOULDBLOCK.into())
         } else {
-            Ok(num_copied.into())
+            Ok(num_copied.try_into().unwrap())
         }
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut bytes: R,
+        iovs: &[IoVec],
         offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // pipes don't support seeking
         if offset.is_some() {
             return Err(nix::errno::Errno::ESPIPE.into());
@@ -194,10 +196,12 @@ impl Pipe {
             }
         }
 
-        let len = bytes.stream_len_bp()? as usize;
+        let len: libc::size_t = iovs.iter().map(|x| x.len).sum();
 
-        let result = match self.write_mode {
-            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), len, cb_queue),
+        let mut reader = IoVecReader::new(iovs, mem);
+
+        let num_copied = match self.write_mode {
+            WriteMode::Stream => buffer.write_stream(&mut reader, len, cb_queue)?,
             WriteMode::Packet => {
                 let mut num_written = 0;
 
@@ -207,18 +211,18 @@ impl Pipe {
 
                     // if there are no more bytes to write (pipes don't support 0-length packets)
                     if bytes_remaining == 0 {
-                        break Ok(num_written);
+                        break num_written;
                     }
 
                     // split the packet up into PIPE_BUF-sized packets
                     let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF);
 
-                    if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, cb_queue) {
+                    if let Err(e) = buffer.write_packet(&mut reader, bytes_to_write, cb_queue) {
                         // if we've already written bytes, return those instead of an error
                         if num_written > 0 {
-                            break Ok(num_written);
+                            break num_written;
                         }
-                        break Err(e);
+                        return Err(e.into());
                     }
 
                     num_written += bytes_to_write;
@@ -226,7 +230,7 @@ impl Pipe {
             }
         };
 
-        Ok(result?.into())
+        Ok(num_copied.try_into().unwrap())
     }
 
     pub fn ioctl(

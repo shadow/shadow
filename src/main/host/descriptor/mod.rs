@@ -6,6 +6,7 @@ use nix::fcntl::OFlag;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync};
@@ -430,15 +431,13 @@ impl FileRefMut<'_> {
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
-
-    enum_passthrough_generic!(self, (bytes, offset, cb_queue), Pipe, EventFd, Socket;
-        pub fn read<W>(&mut self, bytes: W, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
-        where W: std::io::Write + std::io::Seek
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket;
+        pub fn readv(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
+                     mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
-
-    enum_passthrough_generic!(self, (source, offset, cb_queue), Pipe, EventFd, Socket;
-        pub fn write<R>(&mut self, source: R, offset: Option<libc::off_t>, cb_queue: &mut CallbackQueue) -> SyscallResult
-        where R: std::io::Read + std::io::Seek
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket;
+        pub fn writev(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
+                      mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
 }
 
