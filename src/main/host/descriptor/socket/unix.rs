@@ -146,34 +146,32 @@ impl UnixSocket {
             .bind(&mut socket_ref.common, socket, addr, rng)
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut _bytes: W,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // we could call UnixSocket::recvmsg() here, but for now we expect that there are no code
-        // paths that would call UnixSocket::read() since the read() syscall handler should have
+        // paths that would call UnixSocket::readv() since the readv() syscall handler should have
         // called UnixSocket::recvmsg() instead
-        panic!("Called UnixSocket::read() on a unix socket.");
+        panic!("Called UnixSocket::readv() on a unix socket.");
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut _bytes: R,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // we could call UnixSocket::sendmsg() here, but for now we expect that there are no code
-        // paths that would call UnixSocket::write() since the write() syscall handler should have
+        // paths that would call UnixSocket::writev() since the writev() syscall handler should have
         // called UnixSocket::sendmsg() instead
-        panic!("Called UnixSocket::write() on a unix socket");
+        panic!("Called UnixSocket::writev() on a unix socket");
     }
 
     pub fn sendmsg(

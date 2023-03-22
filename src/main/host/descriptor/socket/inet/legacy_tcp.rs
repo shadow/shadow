@@ -15,7 +15,7 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall::io::write_partial;
+use crate::host::syscall::io::{write_partial, IoVec};
 use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
@@ -276,34 +276,32 @@ impl LegacyTcpSocket {
         Ok(0.into())
     }
 
-    pub fn read<W>(
+    pub fn readv(
         &mut self,
-        mut _bytes: W,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // we could call LegacyTcpSocket::recvmsg() here, but for now we expect that there are no
-        // code paths that would call LegacyTcpSocket::read() since the read() syscall handler
+        // code paths that would call LegacyTcpSocket::readv() since the readv() syscall handler
         // should have called LegacyTcpSocket::recvmsg() instead
-        panic!("Called LegacyTcpSocket::read() on a TCP socket.");
+        panic!("Called LegacyTcpSocket::readv() on a TCP socket.");
     }
 
-    pub fn write<R>(
+    pub fn writev(
         &mut self,
-        mut _bytes: R,
+        _iovs: &[IoVec],
         _offset: Option<libc::off_t>,
+        _flags: libc::c_int,
+        _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
+    ) -> Result<libc::ssize_t, SyscallError> {
         // we could call LegacyTcpSocket::sendmsg() here, but for now we expect that there are no
-        // code paths that would call LegacyTcpSocket::write() since the write() syscall handler
+        // code paths that would call LegacyTcpSocket::writev() since the writev() syscall handler
         // should have called LegacyTcpSocket::sendmsg() instead
-        panic!("Called LegacyTcpSocket::write() on a TCP socket");
+        panic!("Called LegacyTcpSocket::writev() on a TCP socket");
     }
 
     pub fn sendmsg(
