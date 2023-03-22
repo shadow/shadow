@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::{iov_helper, iov_helper_mut, set};
 
 use std::time::Duration;
 
@@ -38,6 +38,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_read_write",
             test_read_write,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_readv_writev",
+            test_readv_writev,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -88,6 +93,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_o_direct_large_packet",
             test_o_direct_large_packet,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_large_packet_vectored",
+            test_o_direct_large_packet_vectored,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -208,6 +218,64 @@ fn test_read_write() -> Result<(), String> {
         test_utils::result_assert_eq(rv, 4, "Expected to read 4 bytes")?;
 
         test_utils::result_assert_eq(write_buf, read_buf, "Buffers differ")?;
+
+        Ok(())
+    })
+}
+
+fn test_readv_writev() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe(fds.as_mut_ptr()) } }, &[])?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        let write_iovs = iov_helper([&[1, 2, 3, 4][..], &[5, 6][..], &[][..], &[7, 8, 9][..]]);
+
+        let rv = test_utils::check_system_call!(
+            || {
+                unsafe {
+                    libc::writev(
+                        write_fd,
+                        write_iovs.as_ptr() as *const libc::iovec,
+                        write_iovs.len() as i32,
+                    )
+                }
+            },
+            &[]
+        )?;
+
+        test_utils::result_assert_eq(rv, 9, "Expected to write 9 bytes")?;
+
+        let read_iovs = [
+            &mut [0; 2][..],
+            &mut [0; 1][..],
+            &mut [][..],
+            &mut [0; 6][..],
+        ];
+        let mut read_iovs = iov_helper_mut(read_iovs);
+
+        let rv = test_utils::check_system_call!(
+            || {
+                unsafe {
+                    libc::readv(
+                        read_fd,
+                        read_iovs.as_mut_ptr() as *const libc::iovec,
+                        read_iovs.len() as i32,
+                    )
+                }
+            },
+            &[]
+        )?;
+
+        test_utils::result_assert_eq(rv, 9, "Expected to read 9 bytes")?;
+
+        let write_iter = write_iovs.iter().flat_map(std::ops::Deref::deref);
+        let read_iter = read_iovs.iter().flat_map(std::ops::Deref::deref);
+        test_utils::result_assert(write_iter.eq(read_iter), "Buffers differ")?;
 
         Ok(())
     })
@@ -630,6 +698,78 @@ fn test_o_direct_large_packet() -> Result<(), String> {
         // no packets left
         assert_eq!(
             nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+    });
+
+    Ok(())
+}
+
+// when writing large packets, they should be broken up into PIPE_BUF-sized packets
+fn test_o_direct_large_packet_vectored() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // Write a packet with length 1.5 * PIPE_BUF. Bytes that cycle from 0 to 79 make it easy to
+        // later verify the bytes survived the round-trip.
+        let packet: Vec<u8> = (0..79)
+            .cycle()
+            .take(libc::PIPE_BUF + (libc::PIPE_BUF / 2))
+            .collect();
+
+        // split the packet into four iovecs
+        let iovs = iov_helper([&packet[..100], &packet[100..110], &[][..], &packet[110..]]);
+
+        // write everything
+        let len = nix::sys::uio::writev(write_fd, &iovs).unwrap();
+        assert_eq!(len, packet.len());
+
+        let mut in_buf = vec![0u8; packet.len()];
+
+        // helper to split the buffer slice into three slices
+        fn split(buf: &mut [u8]) -> (&mut [u8], &mut [u8], &mut [u8]) {
+            let buf = buf.split_at_mut(50);
+            let buf = (buf.0, buf.1.split_at_mut(libc::PIPE_BUF));
+            (buf.0, buf.1 .0, buf.1 .1)
+        }
+
+        // split the read buffer into four different iovecs
+        let in_buf_split = split(&mut in_buf);
+        let mut iovs =
+            iov_helper_mut([in_buf_split.0, &mut [][..], in_buf_split.1, in_buf_split.2]);
+
+        // read one packet of size 1 * PIPE_BUF
+        let len = nix::sys::uio::readv(read_fd, &mut iovs).unwrap();
+        assert_eq!(len, libc::PIPE_BUF);
+        assert_eq!(&in_buf[..len], &packet[..len]);
+
+        // split the read buffer into four different iovecs
+        let in_buf_split = split(&mut in_buf);
+        let mut iovs =
+            iov_helper_mut([in_buf_split.0, &mut [][..], in_buf_split.1, in_buf_split.2]);
+
+        // read one packet of size 0.5 * PIPE_BUF
+        let len = nix::sys::uio::readv(read_fd, &mut iovs).unwrap();
+        assert_eq!(len, libc::PIPE_BUF / 2);
+        assert_eq!(&in_buf[..len], &packet[libc::PIPE_BUF..][..len]);
+
+        // split the read buffer into four different iovecs
+        let in_buf_split = split(&mut in_buf);
+        let mut iovs =
+            iov_helper_mut([in_buf_split.0, &mut [][..], in_buf_split.1, in_buf_split.2]);
+
+        // no packets left
+        assert_eq!(
+            nix::sys::uio::readv(read_fd, &mut iovs).err(),
             Some(nix::errno::Errno::EWOULDBLOCK)
         );
     });
