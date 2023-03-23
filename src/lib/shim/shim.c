@@ -436,6 +436,23 @@ static void _shim_parent_init_rdtsc_emu() {
     shim_rdtsc_init();
 }
 
+// Sets the working directory. Should only need to be done for the first thread
+// of the process.
+//
+// TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
+// which was added in glibc 2.29. We should be able to do so once we've dropped
+// support for some platforms, as planned for the shadow 3.0 release.
+// https://github.com/shadow/shadow/discussions/2496
+static void _shim_parent_set_working_dir() {
+    const char* path = getenv("SHADOW_WORKING_DIR");
+    if (!path) {
+        panic("SHADOW_WORKING_DIR not set");
+    }
+    if (chdir(path) != 0) {
+        panic("chdir: %s", strerror(errno));
+    }
+}
+
 static void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
@@ -445,6 +462,7 @@ static void _shim_parent_init_preload() {
     _shim_parent_init_process_shm();
     _shim_parent_init_thread_shm();
     _shim_parent_init_logging();
+    _shim_parent_set_working_dir();
     _shim_parent_init_ipc();
     _shim_init_signal_stack();
     _shim_parent_init_death_signal();

@@ -135,11 +135,20 @@ static pid_t _managedthread_spawn(ManagedThread* thread, const char* file,
                                   const char* workingDir, int straceFd, int shimlogFd) {
     // We use `posix_spawn` to spawn the child process. This should be functionally
     // equivalent to vfork + execve, but wrapped in a safer and more portable API.
+    utility_debugAssert(file != NULL);
 
     // posix_spawn technically takes arrays of pointers to *mutable* char.
     // conservatively dup here.
     gchar** argv = g_strdupv((gchar**)argv_in);
     gchar** envp = g_strdupv((gchar**)envp_in);
+
+    // Tell the shim to change the working dir.
+    //
+    // TODO: Instead use posix_spawn_file_actions_addchdir_np, which was added
+    // in glibc 2.29. We should be able to do so once we've dropped support
+    // for some platforms, as planned for the shadow 3.0 release.
+    // https://github.com/shadow/shadow/discussions/2496
+    envp = g_environ_setenv(envp, "SHADOW_WORKING_DIR", workingDir, TRUE);
 
     // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
     // "leaking" into a concurrently forked child.
@@ -154,13 +163,35 @@ static pid_t _managedthread_spawn(ManagedThread* thread, const char* file,
     }
 
     // Dup the write end of the pipe; the dup'd descriptor won't have O_CLOEXEC set.
-    if (posix_spawn_file_actions_adddup2(&file_actions, pipefd[1], pipefd[1]) != 0) {
+    //
+    // Since dup2 is a no-op when the new and old file descriptors are equal, we have
+    // to arrange to call dup2 twice - first to a temporary descriptor, and then back
+    // to the original descriptor number.
+    //
+    // Here we use STDOUT_FILENO as the temporary descriptor, since we later
+    // replace that below.
+    //
+    // Once we drop support for platforms with glibc older than 2.29, we *could*
+    // consider taking advantage of a new feature that would let us just use a
+    // single `posix_spawn_file_actions_adddup2` call with equal descriptors.
+    // OTOH it's a non-standard extension, and I think ultimately uses the same
+    // number of syscalls, so it might be better to continue using this slightly
+    // more awkward method anyway.
+    // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
+    // https://austingroupbugs.net/view.php?id=411
+    if (posix_spawn_file_actions_adddup2(&file_actions, pipefd[1], STDOUT_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+    if (posix_spawn_file_actions_adddup2(&file_actions, STDOUT_FILENO, pipefd[1]) != 0) {
         utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
     }
 
     // Likewise for straceFd.
     if (straceFd >= 0) {
-        if (posix_spawn_file_actions_adddup2(&file_actions, straceFd, straceFd) != 0) {
+        if (posix_spawn_file_actions_adddup2(&file_actions, straceFd, STDOUT_FILENO) != 0) {
+            utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+        }
+        if (posix_spawn_file_actions_adddup2(&file_actions, STDOUT_FILENO, straceFd) != 0) {
             utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
         }
     }
@@ -174,18 +205,28 @@ static pid_t _managedthread_spawn(ManagedThread* thread, const char* file,
         utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
     }
 
-    // Set the working directory
-    if (posix_spawn_file_actions_addchdir_np(&file_actions, workingDir) != 0) {
-        utility_panic("posix_spawn_file_actions_addchdir_np: %s", g_strerror(errno));
+    posix_spawnattr_t attr;
+    if (posix_spawnattr_init(&attr) != 0) {
+        utility_panic("posix_spawnattr_init: %s", g_strerror(errno));
+    }
+
+    // In versions of glibc before 2.24, we need this to tell posix_spawn
+    // to use vfork instead of fork. In later versions it's a no-op.
+    if (posix_spawnattr_setflags(&attr, POSIX_SPAWN_USEVFORK) != 0) {
+        utility_panic("posix_spawnattr_setflags: %s", g_strerror(errno));
     }
 
     pid_t pid;
-    if (posix_spawn(&pid, file, &file_actions, NULL, argv, envp) != 0) {
+    if (posix_spawn(&pid, file, &file_actions, &attr, argv, envp) != 0) {
         utility_panic("posix_spawn: %s", g_strerror(errno));
     }
 
     if (posix_spawn_file_actions_destroy(&file_actions) != 0) {
         utility_panic("posix_spawn_file_actions: %s", g_strerror(errno));
+    }
+
+    if (posix_spawnattr_destroy(&attr) != 0) {
+        utility_panic("posix_spawnattr_destroy: %s", g_strerror(errno));
     }
 
     // *Must* close the write-end of the pipe, so that the child's copy is the
