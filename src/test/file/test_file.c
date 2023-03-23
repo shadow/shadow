@@ -205,6 +205,52 @@ static void _test_pwritev() {
     assert_nonneg_errno(rv = pwritev(fd, iov, 0, 0));
     g_assert_cmpint(rv, ==, 0);
 
+    // writing to a negative offset should be an error
+    rv = pwritev(fd, iov, sizeof(iov) / sizeof(*iov), -1);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(EINVAL);
+
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_pwritev2() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd, rv;
+
+    char buf_1[] = "test ";
+    char buf_2[] = "file writev";
+
+    struct iovec iov[3] = {0};
+    iov[0].iov_base = buf_1;
+    iov[0].iov_len = sizeof(buf_1);
+    iov[2].iov_base = buf_2;
+    iov[2].iov_len = sizeof(buf_2);
+
+    assert_nonneg_errno(fd = open(adf.name, O_WRONLY));
+    assert_nonneg_errno(rv = pwritev2(fd, iov, sizeof(iov) / sizeof(*iov), 0, 0));
+    g_assert_cmpint(rv, ==, sizeof(buf_1) + sizeof(buf_2));
+
+    // should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // check that 0 bytes is allowed
+    assert_nonneg_errno(rv = pwritev2(fd, iov, 0, 0, 0));
+    g_assert_cmpint(rv, ==, 0);
+
+    // writing to an offset of -1 should disable the offset
+    assert_nonneg_errno(rv = pwritev2(fd, iov, sizeof(iov) / sizeof(*iov), -1, 0));
+    g_assert_cmpint(rv, ==, sizeof(buf_1) + sizeof(buf_2));
+
+    // should have updated the position
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(buf_1) + sizeof(buf_2));
+
+    // writing to an offset of -2 should be an error
+    rv = pwritev(fd, iov, sizeof(iov) / sizeof(*iov), -2);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(EINVAL);
+
     assert_nonneg_errno(close(fd));
 }
 
@@ -359,6 +405,103 @@ static void _test_preadv() {
     // should still be at EOF
     assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
     g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // reading from a negative offset should be an error
+    memset(buf_1, 0, sizeof(buf_1));
+    memset(buf_2, 0, sizeof(buf_2));
+    rv = preadv(fd, iov, sizeof(iov) / sizeof(*iov), -1);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(EINVAL);
+
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_preadv2() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "0123456789";
+    int fd, rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+
+    // the total buffer size should not be larger than the number of bytes available to read
+    char buf_1[4] = {0};
+    char buf_2[3] = {0};
+    g_assert_cmpint(sizeof(wbuf), >=, sizeof(buf_1) + sizeof(buf_2));
+
+    struct iovec iov[3] = {0};
+    iov[0].iov_base = buf_1;
+    iov[0].iov_len = sizeof(buf_1);
+    iov[2].iov_base = buf_2;
+    iov[2].iov_len = sizeof(buf_2);
+
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+
+    assert_nonneg_errno(rv = preadv2(fd, iov, sizeof(iov) / sizeof(*iov), 0, 0));
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
+    g_assert_cmpmem(iov[0].iov_base, iov[0].iov_len, wbuf, iov[0].iov_len);
+    g_assert_cmpmem(iov[2].iov_base, iov[2].iov_len, wbuf + iov[0].iov_len, iov[2].iov_len);
+
+    // should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // only read 5 bytes from now on
+    iov[0].iov_len = 2;
+    iov[2].iov_len = 3;
+
+    // pread from non-zero offset
+    memset(buf_1, 0, sizeof(buf_1));
+    memset(buf_2, 0, sizeof(buf_2));
+    assert_nonneg_errno(rv = preadv2(fd, iov, sizeof(iov) / sizeof(*iov), 2, 0));
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
+    g_assert_cmpmem(iov[0].iov_base, iov[0].iov_len, "23", 2);
+    g_assert_cmpmem(iov[2].iov_base, iov[2].iov_len, "456", 3);
+
+    // should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // seek to end
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_END));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // reading earlier offset should work the same
+    memset(buf_1, 0, sizeof(buf_1));
+    memset(buf_2, 0, sizeof(buf_2));
+    assert_nonneg_errno(rv = preadv2(fd, iov, sizeof(iov) / sizeof(*iov), 4, 0));
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
+    g_assert_cmpmem(iov[0].iov_base, iov[0].iov_len, "45", 2);
+    g_assert_cmpmem(iov[2].iov_base, iov[2].iov_len, "678", 3);
+
+    // should still be at EOF
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // seek to middle
+    assert_nonneg_errno(rv = lseek(fd, 3, SEEK_SET));
+    g_assert_cmpint(rv, ==, 3);
+
+    // reading from an offset of -1 should disable the offset argument
+    memset(buf_1, 0, sizeof(buf_1));
+    memset(buf_2, 0, sizeof(buf_2));
+    assert_nonneg_errno(rv = preadv2(fd, iov, sizeof(iov) / sizeof(*iov), -1, 0));
+    g_assert_cmpint(rv, ==, iov[0].iov_len + iov[2].iov_len);
+    g_assert_cmpmem(iov[0].iov_base, iov[0].iov_len, "34", 2);
+    g_assert_cmpmem(iov[2].iov_base, iov[2].iov_len, "567", 3);
+
+    // offset should have been updated
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 8);
+
+    // seek to middle
+    assert_nonneg_errno(rv = lseek(fd, 3, SEEK_SET));
+    g_assert_cmpint(rv, ==, 3);
+
+    // reading from an offset of -2 should result in an error
+    memset(buf_1, 0, sizeof(buf_1));
+    memset(buf_2, 0, sizeof(buf_2));
+    rv = preadv2(fd, iov, sizeof(iov) / sizeof(*iov), -2, 0);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(EINVAL);
 
     assert_nonneg_errno(close(fd));
 }
@@ -810,10 +953,12 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/pwrite", _test_pwrite);
     g_test_add_func("/file/writev", _test_writev);
     g_test_add_func("/file/pwritev", _test_pwritev);
+    g_test_add_func("/file/pwritev2", _test_pwritev2);
     g_test_add_func("/file/read", _test_read);
     g_test_add_func("/file/pread", _test_pread);
     g_test_add_func("/file/readv", _test_readv);
     g_test_add_func("/file/preadv", _test_preadv);
+    g_test_add_func("/file/preadv2", _test_preadv2);
     g_test_add_func("/file/lseek", _test_lseek);
     g_test_add_func("/file/fopen", _test_fopen);
     g_test_add_func("/file/fclose", _test_fclose);
