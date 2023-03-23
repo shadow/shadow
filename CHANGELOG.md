@@ -17,6 +17,9 @@ A list of user-facing changes since the latest Shadow release.
   unrelated to running Shadow in Docker following the [existing supported
   documentation](https://shadow.github.io/docs/guide/supported_platforms.html#docker),
   and we continue to support running Shadow in Docker.
+* Fixed the offset calculation in preadv/preadv2/pwritev/pwritev2 to correctly
+  handle negative offsets and large offsets.
+  https://github.com/shadow/shadow/pull/2802
 
 Raw changes since v2.4.0:
 
