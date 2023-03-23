@@ -11,6 +11,12 @@ A list of user-facing changes since the latest Shadow release.
   while waiting for a message from the other side. After extensive benchmarking we found
   that this was rarely a significant win, and dropped support for this behavior while
   migrating the core IPC functionality to Rust.
+* Changed the order that events are processed in Shadow. Some simulations may
+  see improved runtime performance. https://github.com/shadow/shadow/pull/2522
+* Removed the experimental Dockerfile and related documentation. This is
+  unrelated to running Shadow in Docker following the [existing supported
+  documentation](https://shadow.github.io/docs/guide/supported_platforms.html#docker),
+  and we continue to support running Shadow in Docker.
 
 Raw changes since v2.4.0:
 
