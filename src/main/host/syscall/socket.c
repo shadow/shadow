@@ -424,35 +424,24 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
+    if (legacysocket_getProtocol(socket_desc) == PTCP) {
+        /* When we add a TCP socket to the descriptor table we add it as a rust LegacyTcpSocket and
+         * handle it in the rust read/recv syscall handlers, so we should never get here. */
+        utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
+    }
+
     if (flags & ~MSG_DONTWAIT) {
         warning("Unsupported recv flag(s): %d", flags);
     }
 
     ssize_t retval = 0;
 
-    if (legacyfile_getType(desc) == DT_TCPSOCKET) {
-        int errcode = tcp_getConnectionError((TCP*)socket_desc);
-
-        if (errcode > 0) {
-            /* connect() was not called yet. */
-            return syscallreturn_makeDoneErrno(ENOTCONN);
-        } else if (errcode == -EALREADY) {
-            /* Connection in progress. */
-            retval = -EWOULDBLOCK;
-        }
-    }
-
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
 
     if (retval == 0) {
         size_t sizeNeeded = bufSize;
 
-        if (legacyfile_getType(desc) == DT_TCPSOCKET) {
-            // we can only truncate the data if it is a TCP connection
-            /* TODO: Dynamically compute size based on how much data is actually
-             * available in the descriptor. */
-            sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
-        } else if (legacyfile_getType(desc) == DT_UDPSOCKET) {
+        if (legacyfile_getType(desc) == DT_UDPSOCKET) {
             // allow it to be 1 byte longer than the max datagram size
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
@@ -512,6 +501,12 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
+    if (legacysocket_getProtocol(socket_desc) == PTCP) {
+        /* When we add a TCP socket to the descriptor table we add it as a rust LegacyTcpSocket and
+         * handle it in the rust write/send syscall handlers, so we should never get here. */
+        utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
+    }
+
     /* Need non-NULL buffer. */
     /* FIXME: should push this check to the point the data is actually read,
      * to correctly handle non-NULL pointers that aren't accessible.
@@ -522,7 +517,6 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         return syscallreturn_makeDoneErrno(EFAULT);
     }
 
-    /* TODO: when we support AF_UNIX this could be sockaddr_un */
     size_t inet_len = sizeof(struct sockaddr_in);
     if (destAddrPtr.val && addrlen < inet_len) {
         debug("Address length %ld is too small on socket %i", (long int)addrlen, sockfd);
@@ -542,7 +536,6 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             process_getReadablePtr(_syscallhandler_getProcess(sys), destAddrPtr, addrlen);
         utility_debugAssert(dest_addr);
 
-        /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
         if (dest_addr->sa_family != AF_INET) {
             warning(
                 "We only support address family AF_INET on socket %i", sockfd);
@@ -592,27 +585,6 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             host_associateInterface(
                 _syscallhandler_getHost(sys), &compat_socket, ptype, bindAddr, bindPort, 0, 0);
         }
-    } else if (legacyfile_getType(desc) == DT_TCPSOCKET) {
-        errcode = tcp_getConnectionError((TCP*)socket_desc);
-
-        trace("connection error state is currently %i", errcode);
-
-        if (errcode > 0) {
-            /* connect() was not called yet.
-             * TODO: Can they can piggy back a connect() on sendto() if they
-             * provide an address for the connection? */
-            return syscallreturn_makeDoneErrno(EPIPE);
-        } else if (errcode == 0) {
-            /* They connected, but never read the success code with a second
-             * call to connect(). That's OK, proceed to send as usual. */
-        } else if (errcode == -EISCONN) {
-            /* They are connected, and we can send now. */
-            errcode = 0;
-        } else if (errcode == -EALREADY) {
-            /* Connection in progress.
-             * TODO: should we wait, or just return -EALREADY? */
-            errcode = -EWOULDBLOCK;
-        }
     }
 
     gssize retval = (gssize)errcode;
@@ -620,12 +592,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     if (errcode == 0) {
         size_t sizeNeeded = bufSize;
 
-        if (legacyfile_getType(desc) == DT_TCPSOCKET) {
-            // we can only truncate the data if it is a TCP connection
-            /* TODO: Dynamically compute size based on how much data is actually
-             * available in the descriptor. */
-            sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
-        } else if (legacyfile_getType(desc) == DT_UDPSOCKET) {
+        if (legacyfile_getType(desc) == DT_UDPSOCKET) {
             // allow it to be 1 byte longer than the max so that we can receive EMSGSIZE
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }

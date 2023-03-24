@@ -9,8 +9,6 @@ use syscall_logger::log_syscall;
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
-use crate::host::descriptor::socket::inet::InetSocket;
-use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileStatus, OpenFile,
 };
@@ -171,10 +169,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
-        }
-
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -223,10 +217,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pread64, ctx).map(Into::into);
-        }
 
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
@@ -289,10 +279,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
-        }
-
         let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -342,10 +328,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx).map(Into::into);
-        }
 
         let mut result =
             Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));

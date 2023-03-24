@@ -854,4 +854,47 @@ mod export {
         // No way to safely recover here if the flush fails.
         mref.noflush()
     }
+
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of the specified
+    /// range couldn't be accessed. Always succeeds with n==0.
+    #[no_mangle]
+    pub extern "C" fn memorymanager_readPtr(
+        mem: *const MemoryManager,
+        dst: *mut c_void,
+        src: PluginPtr,
+        n: usize,
+    ) -> i32 {
+        let mem = unsafe { mem.as_ref() }.unwrap();
+        let src = TypedPluginPtr::new::<u8>(src, n);
+        let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
+
+        match mem.copy_from_ptr(dst, src) {
+            Ok(_) => 0,
+            Err(e) => {
+                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                -(e as i32)
+            }
+        }
+    }
+
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of the specified
+    /// range couldn't be accessed. The write is flushed immediately.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_writePtr(
+        mem: *mut MemoryManager,
+        dst: PluginPtr,
+        src: *const c_void,
+        n: usize,
+    ) -> i32 {
+        let mem = unsafe { mem.as_mut() }.unwrap();
+        let dst = TypedPluginPtr::new::<u8>(dst, n);
+        let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
+        match mem.copy_to_ptr(dst, src) {
+            Ok(_) => 0,
+            Err(e) => {
+                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                -(e as i32)
+            }
+        }
+    }
 }

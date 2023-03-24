@@ -282,6 +282,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::descriptor::OpenFile;")
         .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
         .raw_line("use crate::host::host::Host;")
+        .raw_line("use crate::host::memory_manager::MemoryManager;")
         .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::syscall_types::SysCallReturnBody;")

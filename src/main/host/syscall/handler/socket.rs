@@ -188,10 +188,6 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
-            return Self::legacy_syscall(c::syscallhandler_sendto, ctx).map(Into::into);
-        }
-
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         let addr = read_sockaddr(&mem, addr_ptr, addr_len)?;
@@ -270,10 +266,6 @@ impl SyscallHandler {
         let File::Socket(ref socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
-
-        if let Socket::Inet(InetSocket::LegacyTcp(_)) = socket {
-            return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx).map(Into::into);
-        }
 
         let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 

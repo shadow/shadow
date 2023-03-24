@@ -3,7 +3,6 @@ use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
-use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{CompatFile, File, FileState, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -45,10 +44,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_readv, ctx).map(Into::into);
-        }
 
         let iov_count = iov_count.try_into().or(Err(Errno::EINVAL))?;
 
@@ -110,10 +105,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_preadv, ctx).map(Into::into);
-        }
 
         // make sure the offset is not negative
         if offset < 0 {
@@ -184,10 +175,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_preadv2, ctx).map(Into::into);
-        }
-
         // readv(2): "Unlike preadv() and pwritev(), if the offset argument is -1, then the current
         // file offset is used and updated."
         let offset = (offset != -1).then_some(offset);
@@ -243,9 +230,12 @@ impl SyscallHandler {
             };
 
             // call the socket's recvmsg(), and run any resulting events
-            let RecvmsgReturn { bytes_read, .. } = CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::recvmsg(socket, args, &mut mem, cb_queue)
-            })?;
+            let RecvmsgReturn { bytes_read, .. } =
+                crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                    CallbackQueue::queue_and_run(|cb_queue| {
+                        Socket::recvmsg(socket, args, &mut mem, cb_queue)
+                    })
+                })?;
 
             return Ok(bytes_read);
         }
@@ -254,7 +244,7 @@ impl SyscallHandler {
 
         let result =
             // call the file's read(), and run any resulting events
-            CallbackQueue::queue_and_run(|cb_queue| {
+            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {CallbackQueue::queue_and_run(|cb_queue| {
                 file.borrow_mut().readv(
                     iovs,
                     offset,
@@ -262,7 +252,7 @@ impl SyscallHandler {
                     &mut mem,
                     cb_queue,
                 )
-            });
+            })});
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
@@ -309,10 +299,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_writev, ctx).map(Into::into);
-        }
 
         let iov_count = iov_count.try_into().or(Err(Errno::EINVAL))?;
 
@@ -375,10 +361,6 @@ impl SyscallHandler {
                 }
             }
         };
-
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwritev, ctx).map(Into::into);
-        }
 
         // make sure the offset is not negative
         if offset < 0 {
@@ -449,10 +431,6 @@ impl SyscallHandler {
             }
         };
 
-        if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(_))) = file.inner_file() {
-            return Self::legacy_syscall(c::syscallhandler_pwritev2, ctx).map(Into::into);
-        }
-
         // readv(2): "Unlike preadv() and pwritev(), if the offset argument is -1, then the current
         // file offset is used and updated."
         let offset = (offset != -1).then_some(offset);
@@ -509,9 +487,12 @@ impl SyscallHandler {
             };
 
             // call the socket's sendmsg(), and run any resulting events
-            let bytes_written = CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
-            })?;
+            let bytes_written =
+                crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                    CallbackQueue::queue_and_run(|cb_queue| {
+                        Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                    })
+                })?;
 
             return Ok(bytes_written);
         }
@@ -520,7 +501,7 @@ impl SyscallHandler {
 
         let result =
             // call the file's write(), and run any resulting events
-            CallbackQueue::queue_and_run(|cb_queue| {
+            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {CallbackQueue::queue_and_run(|cb_queue| {
                 file.borrow_mut().writev(
                     iovs,
                     offset,
@@ -528,7 +509,7 @@ impl SyscallHandler {
                     &mut mem,
                     cb_queue,
                 )
-            });
+            })});
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {

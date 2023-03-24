@@ -22,6 +22,7 @@ struct _Payload {
     MAGIC_DECLARE;
 };
 
+/* If modifying this function, you should also modify `payload_newWithMemoryManager` below. */
 Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLength) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
@@ -29,6 +30,33 @@ Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLeng
     if (data.val && dataLength > 0) {
         payload->data = g_malloc0(dataLength);
         if (process_readPtr(thread_getProcess(thread), payload->data, data, dataLength) != 0) {
+            warning("Couldn't read data for packet");
+            g_free(payload);
+            return NULL;
+        }
+        utility_debugAssert(payload->data != NULL);
+        payload->length = dataLength;
+    }
+
+    g_mutex_init(&(payload->lock));
+    payload->referenceCount = 1;
+
+    worker_count_allocation(Payload);
+
+    return payload;
+}
+
+/* This is a copy of `payload_new` but passes the memory manager through. Once we've moved
+ * UDP sockets to rust, we can remove `payload_new` and rename this function to
+ * `payload_new`. */
+Payload* payload_newWithMemoryManager(PluginVirtualPtr data, gsize dataLength,
+                                      const MemoryManager* mem) {
+    Payload* payload = g_new0(Payload, 1);
+    MAGIC_INIT(payload);
+
+    if (data.val && dataLength > 0) {
+        payload->data = g_malloc0(dataLength);
+        if (memorymanager_readPtr(mem, payload->data, data, dataLength) != 0) {
             warning("Couldn't read data for packet");
             g_free(payload);
             return NULL;
@@ -96,6 +124,7 @@ gsize payload_getLength(Payload* payload) {
     return length;
 }
 
+/* If modifying this function, you should also modify `payload_getDataWithMemoryManager` below. */
 gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
                        gsize destBufferLength) {
     MAGIC_ASSERT(payload);
@@ -110,6 +139,33 @@ gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, Plu
     if (copyLength > 0) {
         int err = process_writePtr(
             thread_getProcess(thread), destBuffer, payload->data + offset, copyLength);
+        if (err) {
+            return -err;
+        }
+    }
+
+    _payload_unlock(payload);
+
+    return copyLength;
+}
+
+/* This is a copy of `payload_getData` but passes the memory manager through. Once we've moved
+ * UDP sockets to rust, we can remove `payload_getData` and rename this function to
+ * `payload_getData`. */
+gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+                                        gsize destBufferLength, MemoryManager* mem) {
+    MAGIC_ASSERT(payload);
+
+    _payload_lock(payload);
+
+    utility_debugAssert(offset <= payload->length);
+
+    gssize targetLength = payload->length - offset;
+    gssize copyLength = MIN(targetLength, destBufferLength);
+
+    if (copyLength > 0) {
+        int err =
+            memorymanager_writePtr(mem, destBuffer, payload->data + offset, copyLength);
         if (err) {
             return -err;
         }
