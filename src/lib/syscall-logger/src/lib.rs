@@ -52,8 +52,8 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let syscall_name_original;
     // the syscall argument names (ex: ["ctx", "fd", "val"])
     let syscall_args: Vec<_>;
-    // the syscall arguments as a token stream (ex: "ctx: SyscallContext, fd: u32. val: i32")
-    let syscall_args_and_types;
+    // the syscall arguments as a token stream (ex: "ctx: SyscallContext, fd: u32, val: i32")
+    let mut syscall_args_and_types;
     // the syscal return type (including the `->` token)
     let syscall_ret_type;
     // the name of the first argument, which should be of type `SyscallContext`
@@ -79,6 +79,18 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
         // get the function arguments
         syscall_args_and_types = input_fn.sig.inputs.clone();
+        for input in &mut syscall_args_and_types {
+            let syn::FnArg::Typed(arg) = input else {
+                continue;
+            };
+
+            let syn::Pat::Ident(ident_pat) = &mut *arg.pat else {
+                continue;
+            };
+
+            // remove the `mut` keyword on arguments for our wrapper function
+            ident_pat.mutability = None;
+        }
 
         // get the names of the function arguments
         syscall_args = input_fn.sig.inputs.iter().map(|arg| {
@@ -88,11 +100,11 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
 
             // rust functions can be complicated (for example struct destructured args), but syscall
             // arguments will be simple
-            let syn::Pat::Ident(ident) = &*arg.pat else {
+            let syn::Pat::Ident(ident_pat) = &*arg.pat else {
                 panic!("Function arguments must be identities (ex: `name: Type`), not {:?}", arg.pat);
             };
 
-            ident.clone()
+            ident_pat.ident.clone()
         }).collect();
 
         syscall_ret_type = input_fn.sig.output.clone();

@@ -16,6 +16,7 @@ mod sched;
 mod socket;
 mod sysinfo;
 mod time;
+mod uio;
 mod unistd;
 
 type LegacySyscallFn =
@@ -61,9 +62,14 @@ impl SyscallHandler {
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
             libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
+            libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
+            libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
+            libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
+            libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
             libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
             libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
+            libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
             libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
             libc::SYS_sched_getaffinity => {
                 SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
@@ -80,6 +86,7 @@ impl SyscallHandler {
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
             libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
+            libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a

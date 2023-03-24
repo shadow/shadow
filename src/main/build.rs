@@ -156,6 +156,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/ioctl.h")
         .header("host/syscall/mman.h")
         .header("host/syscall/socket.h")
+        .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
         .header("host/syscall_condition.h")
         .header("host/syscall_types.h")

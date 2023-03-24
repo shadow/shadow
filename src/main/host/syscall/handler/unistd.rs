@@ -2,9 +2,9 @@ use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::socket::inet::InetSocket;
-use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
+use crate::host::descriptor::socket::Socket;
 use crate::host::descriptor::{
-    CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileState, FileStatus, OpenFile,
+    CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::IoVec;
@@ -248,59 +248,11 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
-        let mut mem = ctx.objs.process.memory_borrow_mut();
-
         let iov = IoVec {
             base: buf_ptr,
             len: buf_size,
         };
-
-        // if it's a socket, call recvmsg() instead
-        if let File::Socket(ref socket) = file {
-            if offset.is_some() {
-                // sockets don't support offsets
-                return Err(Errno::ESPIPE.into());
-            }
-
-            let args = RecvmsgArgs {
-                iovs: &[iov],
-                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
-                flags: 0,
-            };
-
-            // call the socket's recvmsg(), and run any resulting events
-            let RecvmsgReturn { bytes_read, .. } = CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::recvmsg(socket, args, &mut mem, cb_queue)
-            })?;
-
-            return Ok(bytes_read);
-        }
-
-        let file_status = file.borrow().get_status();
-
-        let result =
-            // call the file's readv(), and run any resulting events
-            CallbackQueue::queue_and_run(|cb_queue| {
-                file.borrow_mut().readv(
-                    &[iov],
-                    offset,
-                    0,
-                    &mut mem,
-                    cb_queue,
-                )
-            });
-
-        // if the syscall would block and it's a blocking descriptor
-        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            return Err(SyscallError::new_blocked(
-                file.clone(),
-                FileState::READABLE,
-                file.borrow().supports_sa_restart(),
-            ));
-        }
-
-        let bytes_read = result?;
-        Ok(bytes_read)
+        Self::readv_helper(ctx, file, &[iov], offset, 0)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
@@ -416,60 +368,11 @@ impl SyscallHandler {
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
-        let mut mem = ctx.objs.process.memory_borrow_mut();
-
         let iov = IoVec {
             base: buf_ptr,
             len: buf_size,
         };
-
-        // if it's a socket, call sendmsg() instead
-        if let File::Socket(ref socket) = file {
-            if offset.is_some() {
-                // sockets don't support offsets
-                return Err(Errno::ESPIPE.into());
-            }
-
-            let args = SendmsgArgs {
-                addr: None,
-                iovs: &[iov],
-                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
-                flags: 0,
-            };
-
-            // call the socket's sendmsg(), and run any resulting events
-            let bytes_written = CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
-            })?;
-
-            return Ok(bytes_written);
-        }
-
-        let file_status = file.borrow().get_status();
-
-        let result =
-            // call the file's writev(), and run any resulting events
-            CallbackQueue::queue_and_run(|cb_queue| {
-                file.borrow_mut().writev(
-                    &[iov],
-                    offset,
-                    0,
-                    &mut mem,
-                    cb_queue,
-                )
-            });
-
-        // if the syscall would block and it's a blocking descriptor
-        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            return Err(SyscallError::new_blocked(
-                file.clone(),
-                FileState::WRITABLE,
-                file.borrow().supports_sa_restart(),
-            ));
-        };
-
-        let bytes_written = result?;
-        Ok(bytes_written)
+        Self::writev_helper(ctx, file, &[iov], offset, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
