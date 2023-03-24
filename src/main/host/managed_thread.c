@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <sched.h>
 #include <search.h>
+#include <spawn.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
@@ -129,15 +130,25 @@ static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
     return envp;
 }
 
-static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
-                                      const char* const* argv_in, const char* const* envp_in,
-                                      const char* workingDir, int straceFd, int shimlogFd) {
+static pid_t _managedthread_spawn(ManagedThread* thread, const char* file,
+                                  const char* const* argv_in, const char* const* envp_in,
+                                  const char* workingDir, int straceFd, int shimlogFd) {
+    // We use `posix_spawn` to spawn the child process. This should be functionally
+    // equivalent to vfork + execve, but wrapped in a safer and more portable API.
     utility_debugAssert(file != NULL);
 
-    // execve technically takes arrays of pointers to *mutable* char.
+    // posix_spawn technically takes arrays of pointers to *mutable* char.
     // conservatively dup here.
     gchar** argv = g_strdupv((gchar**)argv_in);
     gchar** envp = g_strdupv((gchar**)envp_in);
+
+    // Tell the shim to change the working dir.
+    //
+    // TODO: Instead use posix_spawn_file_actions_addchdir_np, which was added
+    // in glibc 2.29. We should be able to do so once we've dropped support
+    // for some platforms, as planned for the shadow 3.0 release.
+    // https://github.com/shadow/shadow/discussions/2496
+    envp = g_environ_setenv(envp, "SHADOW_WORKING_DIR", workingDir, TRUE);
 
     // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
     // "leaking" into a concurrently forked child.
@@ -146,55 +157,76 @@ static pid_t _managedthread_fork_exec(ManagedThread* thread, const char* file,
         utility_panic("pipe2: %s", g_strerror(errno));
     }
 
-    // vfork has superior performance to fork with large workloads.
-    pid_t pid = vfork();
+    posix_spawn_file_actions_t file_actions;
+    if (posix_spawn_file_actions_init(&file_actions) != 0) {
+        utility_panic("posix_spawn_file_actions_init: %s", g_strerror(errno));
+    }
 
-    // Beware! Unless you really know what you're doing, don't add any code
-    // between here and the execvpe below. The forked child process is sharing
-    // memory and control structures with the parent at this point. See
-    // `man 2 vfork`.
+    // Dup the write end of the pipe; the dup'd descriptor won't have O_CLOEXEC set.
+    //
+    // Since dup2 is a no-op when the new and old file descriptors are equal, we have
+    // to arrange to call dup2 twice - first to a temporary descriptor, and then back
+    // to the original descriptor number.
+    //
+    // Here we use STDOUT_FILENO as the temporary descriptor, since we later
+    // replace that below.
+    //
+    // Once we drop support for platforms with glibc older than 2.29, we *could*
+    // consider taking advantage of a new feature that would let us just use a
+    // single `posix_spawn_file_actions_adddup2` call with equal descriptors.
+    // OTOH it's a non-standard extension, and I think ultimately uses the same
+    // number of syscalls, so it might be better to continue using this slightly
+    // more awkward method anyway.
+    // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
+    // https://austingroupbugs.net/view.php?id=411
+    if (posix_spawn_file_actions_adddup2(&file_actions, pipefd[1], STDOUT_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+    if (posix_spawn_file_actions_adddup2(&file_actions, STDOUT_FILENO, pipefd[1]) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
 
-    switch (pid) {
-        case -1:
-            utility_panic("fork failed");
-            return -1;
-            break;
-        case 0: {
-            // child
-
-            // *Don't* close the write end of the pipe on exec.
-            if (fcntl(pipefd[1], F_SETFD, 0)) {
-                die_after_vfork();
-            }
-
-            // clear the FD_CLOEXEC flag for the strace fd so that it's available in the shim
-            if (straceFd >= 0 && fcntl(straceFd, F_SETFD, 0)) {
-                die_after_vfork();
-            }
-
-            // set stdout/stderr as the shim log, and clear the FD_CLOEXEC flag so that it's
-            // available in the shim
-            if (dup2(shimlogFd, STDOUT_FILENO) < 0) {
-                die_after_vfork();
-            }
-            if (dup2(shimlogFd, STDERR_FILENO) < 0) {
-                die_after_vfork();
-            }
-
-            // Set the working directory
-            if (chdir(workingDir) < 0) {
-                die_after_vfork();
-            }
-
-            int rc = execvpe(file, argv, envp);
-            if (rc == -1) {
-                die_after_vfork();
-            }
-            // Unreachable
-            die_after_vfork();
+    // Likewise for straceFd.
+    if (straceFd >= 0) {
+        if (posix_spawn_file_actions_adddup2(&file_actions, straceFd, STDOUT_FILENO) != 0) {
+            utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
         }
-        default: // parent
-            break;
+        if (posix_spawn_file_actions_adddup2(&file_actions, STDOUT_FILENO, straceFd) != 0) {
+            utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+        }
+    }
+
+    // set stdout/stderr as the shim log, and clear the FD_CLOEXEC flag so that it's
+    // available in the shim
+    if (posix_spawn_file_actions_adddup2(&file_actions, shimlogFd, STDOUT_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+    if (posix_spawn_file_actions_adddup2(&file_actions, shimlogFd, STDERR_FILENO) != 0) {
+        utility_panic("posix_spawn_file_actions_adddup2: %s", g_strerror(errno));
+    }
+
+    posix_spawnattr_t attr;
+    if (posix_spawnattr_init(&attr) != 0) {
+        utility_panic("posix_spawnattr_init: %s", g_strerror(errno));
+    }
+
+    // In versions of glibc before 2.24, we need this to tell posix_spawn
+    // to use vfork instead of fork. In later versions it's a no-op.
+    if (posix_spawnattr_setflags(&attr, POSIX_SPAWN_USEVFORK) != 0) {
+        utility_panic("posix_spawnattr_setflags: %s", g_strerror(errno));
+    }
+
+    pid_t pid;
+    if (posix_spawn(&pid, file, &file_actions, &attr, argv, envp) != 0) {
+        utility_panic("posix_spawn: %s", g_strerror(errno));
+    }
+
+    if (posix_spawn_file_actions_destroy(&file_actions) != 0) {
+        utility_panic("posix_spawn_file_actions: %s", g_strerror(errno));
+    }
+
+    if (posix_spawnattr_destroy(&attr) != 0) {
+        utility_panic("posix_spawnattr_destroy: %s", g_strerror(errno));
     }
 
     // *Must* close the write-end of the pipe, so that the child's copy is the
@@ -262,7 +294,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
         logPath, O_WRONLY | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | S_IWOTH);
     utility_alwaysAssert(shimlogFd >= 0);
 
-    mthread->nativePid = _managedthread_fork_exec(
+    mthread->nativePid = _managedthread_spawn(
         mthread, pluginPath, argv, (const char* const*)myenvv, workingDir, straceFd, shimlogFd);
 
     // should be opened in the shim, so no need for it anymore
