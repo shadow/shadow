@@ -302,7 +302,7 @@ void managedthread_run(ManagedThread* mthread, const char* pluginPath, const cha
 
     // In Linux, the PID is equal to the TID of its first thread.
     mthread->nativeTid = mthread->nativePid;
-    childpidwatcher_watch(
+    mthread->notificationHandle = childpidwatcher_watch(
         worker_getChildPidWatcher(), mthread->nativePid, _markPluginExited, mthread->ipc_data);
 
     /* cleanup the dupd env*/
@@ -471,7 +471,7 @@ pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned 
     utility_debugAssert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data);
-    childpidwatcher_watch(
+    child->notificationHandle = childpidwatcher_watch(
         worker_getChildPidWatcher(), parent->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
