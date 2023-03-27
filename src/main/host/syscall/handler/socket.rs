@@ -13,7 +13,7 @@ use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::io::{read_sockaddr, write_sockaddr, IoVec};
+use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall_types::TypedArrayForeignPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -135,7 +135,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
+        let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
         log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
 
@@ -190,7 +190,7 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let addr = read_sockaddr(&mem, addr_ptr, addr_len)?;
+        let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
 
         log::trace!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
@@ -305,7 +305,7 @@ impl SyscallHandler {
         } = result?;
 
         if !addr_ptr.is_null() {
-            write_sockaddr(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
+            io::write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 
         Ok(bytes_received)
@@ -349,7 +349,7 @@ impl SyscallHandler {
         };
 
         debug!("Returning socket address of {:?}", addr_to_write);
-        write_sockaddr(
+        io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
@@ -399,7 +399,7 @@ impl SyscallHandler {
         };
 
         debug!("Returning peer address of {:?}", addr_to_write);
-        write_sockaddr(
+        io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
             addr_ptr,
@@ -586,7 +586,7 @@ impl SyscallHandler {
         };
 
         if !addr_ptr.is_null() {
-            write_sockaddr(
+            io::write_sockaddr_and_len(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
@@ -655,7 +655,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr = read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
+        let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
             .ok_or(Errno::EFAULT)?;
 
         let mut rng = ctx.objs.host.random_mut();

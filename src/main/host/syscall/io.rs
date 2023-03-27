@@ -9,7 +9,13 @@ use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
 
-pub fn write_sockaddr(
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`, and
+/// writes the socket address length into `plugin_addr_len`. The `plugin_addr_len` pointer is a
+/// value-result argument, so it should be initialized with the size of the `plugin_addr` buffer. If
+/// the original value of `plugin_addr_len` is smaller than the socket address' length, then the
+/// written socket address will be truncated. In this case the value written to `plugin_addr_len`
+/// will be larger than its original value.
+pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
     plugin_addr: ForeignPtr,
