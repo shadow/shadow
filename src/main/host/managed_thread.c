@@ -393,7 +393,7 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                     return NULL;
                 }
 
-                SysCallReturn result = syscallhandler_make_syscall(
+                SyscallReturn result = syscallhandler_make_syscall(
                     thread_getSysCallHandler(thread), &syscall->syscall_args);
 
                 // remove the mthread's old syscall condition since it's no longer needed
@@ -412,16 +412,16 @@ SysCallCondition* managedthread_resume(ManagedThread* mthread) {
                     }
                 }
 
-                if (result.state == SYSCALL_BLOCK) {
+                if (result.tag == SYSCALL_RETURN_BLOCK) {
                     return syscallreturn_blocked(&result)->cond;
                 }
 
                 ShimEvent shim_result;
-                if (result.state == SYSCALL_DONE) {
+                if (result.tag == SYSCALL_RETURN_DONE) {
                     // Now send the result of the syscall
-                    SysCallReturnDone* done = syscallreturn_done(&result);
+                    SyscallReturnDone* done = syscallreturn_done(&result);
                     shimevent_initSysCallComplete(&shim_result, done->retval, done->restartable);
-                } else if (result.state == SYSCALL_NATIVE) {
+                } else if (result.tag == SYSCALL_RETURN_NATIVE) {
                     // Tell the shim to make the syscall itself
                     shimevent_initSyscallDoNative(&shim_result);
                 }

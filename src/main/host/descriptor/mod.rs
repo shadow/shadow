@@ -817,25 +817,6 @@ impl CompatFile {
     }
 }
 
-impl std::fmt::Debug for c::SysCallReturn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("SysCallReturn");
-        ds.field("state", &self.state);
-        match self.state {
-            c::SysCallReturnState_SYSCALL_BLOCK => {
-                ds.field("cond", unsafe { &self.u.blocked.cond });
-                ds.field("restartable", unsafe { &self.u.blocked.restartable });
-            }
-            c::SysCallReturnState_SYSCALL_DONE => {
-                ds.field("retval", unsafe { &self.u.done.retval });
-                ds.field("restartable", unsafe { &self.u.done.restartable });
-            }
-            _ => {}
-        };
-        ds.finish()
-    }
-}
-
 mod export {
     use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
@@ -1138,7 +1119,7 @@ mod tests {
     use crate::host::syscall::Trigger;
     use crate::host::syscall_condition::SysCallCondition;
     use crate::host::syscall_types::{
-        Blocked, Failed, SysCallReturnBlocked, SysCallReturnBody, SysCallReturnDone, SyscallError,
+        Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
 
     #[test]
@@ -1170,10 +1151,10 @@ mod tests {
         .drain(..)
         {
             // We can't easily compare the value to the roundtripped result, since
-            // roundtripping consumes the original value, and SysCallReturn doesn't implement Clone.
+            // roundtripping consumes the original value, and SyscallReturn doesn't implement Clone.
             // Compare their debug strings instead.
             let orig_debug = format!("{:?}", &val);
-            let roundtripped = SyscallResult::from(c::SysCallReturn::from(val));
+            let roundtripped = SyscallResult::from(SyscallReturn::from(val));
             let roundtripped_debug = format!("{:?}", roundtripped);
             assert_eq!(orig_debug, roundtripped_debug);
         }
@@ -1191,37 +1172,24 @@ mod tests {
             status: 2,
         }));
         for val in vec![
-            c::SysCallReturn {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                u: SysCallReturnBody {
-                    done: SysCallReturnDone {
-                        retval: 1.into(),
-                        restartable: false,
-                    },
-                },
-            },
-            c::SysCallReturn {
-                state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: SysCallReturnBody {
-                    blocked: SysCallReturnBlocked {
-                        cond: condition.into_inner(),
-                        restartable: true,
-                    },
-                },
-            },
-            c::SysCallReturn {
-                state: c::SysCallReturnState_SYSCALL_NATIVE,
-                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
-            },
+            SyscallReturn::Done(SyscallReturnDone {
+                retval: 1.into(),
+                restartable: false,
+            }),
+            SyscallReturn::Block(SyscallReturnBlocked {
+                cond: condition.into_inner(),
+                restartable: true,
+            }),
+            SyscallReturn::Native,
         ]
         .drain(..)
         {
             // We can't easily compare the value to the roundtripped result,
             // since roundtripping consumes the original value, and
-            // SysCallReturn doesn't implement Clone. Compare their debug
+            // SyscallReturn doesn't implement Clone. Compare their debug
             // strings instead.
             let orig_debug = format!("{:?}", &val);
-            let roundtripped = c::SysCallReturn::from(SyscallResult::from(val));
+            let roundtripped = SyscallReturn::from(SyscallResult::from(val));
             let roundtripped_debug = format!("{:?}", roundtripped);
             assert_eq!(orig_debug, roundtripped_debug);
         }

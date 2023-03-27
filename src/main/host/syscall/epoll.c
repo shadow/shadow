@@ -45,8 +45,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+SyscallReturn syscallhandler_epoll_create(SysCallHandler* sys, const SysCallArgs* args) {
     int64_t size = args->args[0].as_i64;
 
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
@@ -54,8 +53,7 @@ SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(result);
 }
 
-SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
-                                           const SysCallArgs* args) {
+SyscallReturn syscallhandler_epoll_create1(SysCallHandler* sys, const SysCallArgs* args) {
     int64_t flags = args->args[0].as_i64;
 
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
@@ -63,8 +61,7 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(result);
 }
 
-SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_epoll_ctl(SysCallHandler* sys, const SysCallArgs* args) {
     gint epfd = args->args[0].as_i64;
     gint op = args->args[1].as_i64;
     gint fd = args->args[2].as_i64;
@@ -129,8 +126,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(errorCode);
 }
 
-SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
-                                        const SysCallArgs* args) {
+SyscallReturn syscallhandler_epoll_wait(SysCallHandler* sys, const SysCallArgs* args) {
     gint epfd = args->args[0].as_i64;
     PluginPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
     gint maxevents = args->args[2].as_i64;
@@ -217,7 +213,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(nEvents);
 }
 
-SysCallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr sigmask = args->args[4].as_ptr;
 
     if (sigmask.val != 0) {

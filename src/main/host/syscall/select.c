@@ -20,7 +20,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds,
+static SyscallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds,
                                                    PluginVirtualPtr readfds_ptr,
                                                    PluginVirtualPtr writefds_ptr,
                                                    PluginVirtualPtr exceptfds_ptr,
@@ -77,9 +77,9 @@ static SysCallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
         }
     }
 
-    SysCallReturn scr = _syscallhandler_pollHelper(sys, pfds, (nfds_t)nfds_max, timeout);
-    if (scr.state == SYSCALL_BLOCK ||
-        (scr.state == SYSCALL_DONE && syscallreturn_done(&scr)->retval.as_i64 < 0)) {
+    SyscallReturn scr = _syscallhandler_pollHelper(sys, pfds, (nfds_t)nfds_max, timeout);
+    if (scr.tag == SYSCALL_RETURN_BLOCK ||
+        (scr.tag == SYSCALL_RETURN_DONE && syscallreturn_done(&scr)->retval.as_i64 < 0)) {
         goto done;
     }
 
@@ -178,7 +178,7 @@ static int _syscallhandler_check_timeout(const struct timespec* timeout) {
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args) {
     int nfds = args->args[0].as_i64;
     PluginVirtualPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
     PluginVirtualPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
@@ -222,7 +222,7 @@ SysCallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
                                          timeout_ptr.val ? &ts_timeout_val : NULL);
 }
 
-SysCallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* args) {
     int nfds = args->args[0].as_i64;
     PluginVirtualPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
     PluginVirtualPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*

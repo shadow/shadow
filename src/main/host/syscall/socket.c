@@ -153,9 +153,8 @@ static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* s
     return 0;
 }
 
-static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
-                                                  int sockfd, PluginPtr addrPtr,
-                                                  PluginPtr addrlenPtr,
+static SyscallReturn _syscallhandler_acceptHelper(SysCallHandler* sys, int sockfd,
+                                                  PluginPtr addrPtr, PluginPtr addrlenPtr,
                                                   int flags) {
     trace("trying to accept on socket %i", sockfd);
 
@@ -404,9 +403,8 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
 // Protected helpers
 ///////////////////////////////////////////////////////////
 
-SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
-                                             PluginPtr bufPtr, size_t bufSize,
-                                             int flags, PluginPtr srcAddrPtr,
+SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd, PluginPtr bufPtr,
+                                             size_t bufSize, int flags, PluginPtr srcAddrPtr,
                                              PluginPtr addrlenPtr) {
     trace("trying to recv %zu bytes on socket %i", bufSize, sockfd);
 
@@ -487,9 +485,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     return syscallreturn_makeDoneI64(retval);
 }
 
-SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
-                                           PluginPtr bufPtr, size_t bufSize,
-                                           int flags, PluginPtr destAddrPtr,
+SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd, PluginPtr bufPtr,
+                                           size_t bufSize, int flags, PluginPtr destAddrPtr,
                                            socklen_t addrlen) {
     trace("trying to send %zu bytes on socket %i", bufSize, sockfd);
 
@@ -624,22 +621,19 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_accept(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_accept(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_acceptHelper(sys, (int)args->args[0].as_i64,
                                         args->args[1].as_ptr,
                                         args->args[2].as_ptr, 0);
 }
 
-SysCallReturn syscallhandler_accept4(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_accept4(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_acceptHelper(
         sys, (int)args->args[0].as_i64, args->args[1].as_ptr,
         args->args[2].as_ptr, args->args[3].as_i64);
 }
 
-SysCallReturn syscallhandler_bind(SysCallHandler* sys,
-                                  const SysCallArgs* args) {
+SyscallReturn syscallhandler_bind(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = (int)args->args[0].as_i64;
     PluginPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
     socklen_t addrlen = (socklen_t)args->args[2].as_u64;
@@ -693,8 +687,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(errcode);
 }
 
-SysCallReturn syscallhandler_connect(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_connect(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
     PluginPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
     socklen_t addrlen = args->args[2].as_u64;
@@ -814,8 +807,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(errcode);
 }
 
-SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
-                                         const SysCallArgs* args) {
+SyscallReturn syscallhandler_getpeername(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
 
     trace("trying to get peer name on socket %i", sockfd);
@@ -863,8 +855,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
         sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr));
 }
 
-SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
-                                         const SysCallArgs* args) {
+SyscallReturn syscallhandler_getsockname(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
 
     trace("trying to get sock name on socket %i", sockfd);
@@ -907,8 +898,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
         sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr));
 }
 
-SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
-                                        const SysCallArgs* args) {
+SyscallReturn syscallhandler_getsockopt(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
     int level = args->args[1].as_i64;
     int optname = args->args[2].as_i64;
@@ -983,8 +973,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_listen(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_listen(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
     int backlog = args->args[1].as_i64;
 
@@ -1004,22 +993,19 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     utility_panic("We shouldn't have any C TCP sockets in the descriptor table");
 }
 
-SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
-                                      const SysCallArgs* args) {
+SyscallReturn syscallhandler_recvfrom(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_recvfromHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
         args->args[3].as_i64, args->args[4].as_ptr, args->args[5].as_ptr);
 }
 
-SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_sendto(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_sendtoHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
         args->args[3].as_i64, args->args[4].as_ptr, args->args[5].as_u64);
 }
 
-SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
-                                        const SysCallArgs* args) {
+SyscallReturn syscallhandler_setsockopt(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
     int level = args->args[1].as_i64;
     int optname = args->args[2].as_i64;
@@ -1066,8 +1052,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(errcode);
 }
 
-SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
-                                      const SysCallArgs* args) {
+SyscallReturn syscallhandler_shutdown(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
     int how = args->args[1].as_i64;
 
@@ -1100,8 +1085,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     return syscallreturn_makeDoneErrno(ENOTCONN);
 }
 
-SysCallReturn syscallhandler_socket(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_socket(SysCallHandler* sys, const SysCallArgs* args) {
     int domain = args->args[0].as_i64;
     int type = args->args[1].as_i64;
     int protocol = args->args[2].as_i64;

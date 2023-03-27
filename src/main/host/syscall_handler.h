@@ -18,7 +18,6 @@ typedef struct _SysCallHandler SysCallHandler;
 
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId);
 void syscallhandler_free(SysCallHandler* sys);
-SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
-                                          const SysCallArgs* args);
+SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args);
 
 #endif /* SRC_MAIN_HOST_SHD_SYSCALL_HANDLER_H_ */

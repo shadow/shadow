@@ -141,8 +141,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_ioctl(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long request = args->args[1].as_i64;
     PluginPtr argPtr = args->args[2].as_ptr; // type depends on request

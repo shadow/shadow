@@ -23,7 +23,7 @@
  */
 static CEmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
 
-static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
+static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
                                                       int flags, PluginPtr request,
                                                       PluginPtr remainder) {
     if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
@@ -95,7 +95,7 @@ static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr req = args->args[0].as_ptr;
     PluginPtr rem = args->args[1].as_ptr;
     // from man 2 nanosleep:
@@ -104,7 +104,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* a
     return _syscallhandler_nanosleep_helper(sys, CLOCK_MONOTONIC, 0, req, rem);
 }
 
-SysCallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
     clockid_t clock_id = args->args[0].as_i64;
     int flags = args->args[1].as_i64;
     PluginPtr req = args->args[2].as_ptr;
@@ -112,8 +112,7 @@ SysCallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallA
     return _syscallhandler_nanosleep_helper(sys, clock_id, flags, req, rem);
 }
 
-SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
-                                           const SysCallArgs* args) {
+SyscallReturn syscallhandler_clock_gettime(SysCallHandler* sys, const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_i64;
     trace("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
@@ -138,7 +137,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr tlocPtr = args->args[0].as_ptr; // time_t*
 
     time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
@@ -155,7 +154,7 @@ SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) 
     return syscallreturn_makeDoneU64(seconds);
 }
 
-SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr tvPtr = args->args[0].as_ptr; // struct timeval*
 
     if (tvPtr.val) {

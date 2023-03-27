@@ -49,8 +49,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
-                                            const SysCallArgs* args) {
+SyscallReturn syscallhandler_timerfd_create(SysCallHandler* sys, const SysCallArgs* args) {
     int clockid = args->args[0].as_i64;
     int flags = args->args[1].as_i64;
 
@@ -95,8 +94,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(tfd);
 }
 
-SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
-                                             const SysCallArgs* args) {
+SyscallReturn syscallhandler_timerfd_settime(SysCallHandler* sys, const SysCallArgs* args) {
     int tfd = args->args[0].as_i64;
     int flags = args->args[1].as_i64;
     PluginPtr newValuePtr = args->args[2].as_ptr; // const struct itimerspec*
@@ -142,8 +140,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
-                                             const SysCallArgs* args) {
+SyscallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys, const SysCallArgs* args) {
     int tfd = args->args[0].as_i64;
     PluginPtr currValuePtr = args->args[1].as_ptr; // struct itimerspec*
 

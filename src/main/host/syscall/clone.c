@@ -14,7 +14,7 @@
 #include "main/host/syscall/protected.h"
 #include "main/utility/utility.h"
 
-SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     // Note that the syscall args are different than the libc wrapper.
@@ -76,7 +76,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     return syscallreturn_makeDoneI64(thread_getID(child));
 }
 
-SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     return syscallreturn_makeDoneI64(sys->threadId);
 }

@@ -113,7 +113,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 Some(v)
             },
             export: cbindgen::ExportConfig {
-                include: vec!["QDiscMode".into(), "SysCallReturnBody".into()],
+                include: vec!["QDiscMode".into()],
                 // Export everything except function definitions, since those are already
                 // exported in the other header file, and need the C header files.
                 item_types: base_config
@@ -285,7 +285,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::memory_manager::MemoryManager;")
         .raw_line("use crate::host::process::ProcessRefCell;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
-        .raw_line("use crate::host::syscall_types::SysCallReturnBody;")
+        .raw_line("use crate::host::syscall_types::SyscallReturn;")
         .raw_line("use crate::host::thread::Thread;")
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")

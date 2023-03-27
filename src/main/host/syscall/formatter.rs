@@ -271,8 +271,8 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::cshadow as c;
     use crate::host::process::ProcessRefCell;
+    use crate::host::syscall_types::SyscallReturn;
 
     #[no_mangle]
     pub extern "C" fn log_syscall(
@@ -282,8 +282,8 @@ mod export {
         name: *const libc::c_char,
         args_str: *const libc::c_char,
         args: &[SysCallReg; 6],
-        result: c::SysCallReturn,
-    ) -> c::SysCallReturn {
+        result: SyscallReturn,
+    ) -> SyscallReturn {
         assert!(!proc.is_null());
         assert!(!name.is_null());
         assert!(!args_str.is_null());

@@ -166,8 +166,8 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
 #endif
 }
 
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
-                                         const char* name, SysCallReturn* scr) {
+static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name,
+                                         SyscallReturn* scr) {
 #ifdef USE_PERF_TIMERS
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
@@ -178,8 +178,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 
         const char* valstr = "n/a";
         char valbuf[100];
-        if (scr->state == SYSCALL_DONE) {
-            SysCallReturnDone* done = syscallreturn_done(scr);
+        if (scr->tag == SYSCALL_RETURN_DONE) {
+            SyscallReturnDone* done = syscallreturn_done(scr);
             if (done->retval.as_i64 < 0) {
                 errstr = strerror_r(-done->retval.as_i64, errstrbuf, sizeof(errstrbuf));
             }
@@ -189,7 +189,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
               "val=%s(%s)",
               _syscallhandler_getProcessName(sys), sys->threadId, number, name,
-              _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "", syscallreturnstate_str(scr->state),
+              _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "", syscallreturnstate_str(scr->tag),
               valstr, errstr);
     }
 
@@ -197,7 +197,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     debug("handling syscall %ld %s took %f seconds", number, name, sys->perfSecondsCurrent);
 #endif
 
-    if (scr->state != SYSCALL_BLOCK) {
+    if (scr->tag != SYSCALL_RETURN_BLOCK) {
         /* The syscall completed, count it and the cumulative time to complete it. */
         sys->numSyscalls++;
 #ifdef USE_PERF_TIMERS
@@ -208,7 +208,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 
     // We need to flush pointers here, so that the syscall formatter can
     // reliably borrow process memory without an incompatible borrow.
-    if (!(scr->state == SYSCALL_DONE &&
+    if (!(scr->tag == SYSCALL_RETURN_DONE &&
           syscall_rawReturnValueToErrno(syscallreturn_done(scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
@@ -263,8 +263,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
     } break
 
-SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
@@ -272,7 +271,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     const ProcessRefCell* process = _syscallhandler_getProcess(sys);
     const Thread* thread = _syscallhandler_getThread(sys);
 
-    SysCallReturn scr;
+    SyscallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -288,7 +287,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Return that response now.
         trace("Returning delayed result");
         sys->havePendingResult = false;
-        utility_debugAssert(sys->pendingResult.state != SYSCALL_BLOCK);
+        utility_debugAssert(sys->pendingResult.tag != SYSCALL_RETURN_BLOCK);
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
     } else {
@@ -582,15 +581,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // some data by the time it is interrupted by a signal handler, then the
     // call will return a success  status  (normally,  the  number of bytes
     // transferred)."
-    if (scr.state == SYSCALL_BLOCK &&
+    if (scr.tag == SYSCALL_RETURN_BLOCK &&
         thread_unblockedSignalPending(thread, host_getShimShmemLock(host))) {
-        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+        SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
         syscallcondition_unref(blocked->cond);
         scr = syscallreturn_makeInterrupted(blocked->restartable);
     }
 
     // Ensure pointers are flushed.
-    if (!(scr.state == SYSCALL_DONE &&
+    if (!(scr.tag == SYSCALL_RETURN_DONE &&
           syscall_rawReturnValueToErrno(syscallreturn_done(&scr)->retval.as_i64) == 0)) {
         // The syscall didn't complete successfully; don't write back pointers.
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
@@ -603,7 +602,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(host_getSharedMem(host)) &&
-        process_isRunning(process) && (scr.state == SYSCALL_DONE || scr.state == SYSCALL_NATIVE)) {
+        process_isRunning(process) &&
+        (scr.tag == SYSCALL_RETURN_DONE || scr.tag == SYSCALL_RETURN_NATIVE)) {
         CSimulationTime maxUnappliedCpuLatency =
             shimshmem_maxUnappliedCpuLatency(host_getSharedMem(host));
         // Increment unblocked syscall latency, but only for
@@ -638,14 +638,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         }
     }
 
-    if (scr.state == SYSCALL_BLOCK) {
+    if (scr.tag == SYSCALL_RETURN_BLOCK) {
         /* We are blocking: store the syscall number so we know
          * to expect the same syscall again when it unblocks. */
         sys->blockedSyscallNR = args->number;
     } else {
         sys->blockedSyscallNR = -1;
     }
-
 
     return scr;
 }

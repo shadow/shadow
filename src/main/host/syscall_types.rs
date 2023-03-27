@@ -146,68 +146,45 @@ pub struct Failed {
 
 pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
 
-impl From<c::SysCallReturn> for SyscallResult {
-    fn from(r: c::SysCallReturn) -> Self {
-        match r.state {
-            c::SysCallReturnState_SYSCALL_DONE => {
-                match crate::utility::syscall::raw_return_value_to_result(unsafe {
-                    i64::from(r.u.done.retval)
-                }) {
+impl From<SyscallReturn> for SyscallResult {
+    fn from(r: SyscallReturn) -> Self {
+        match r {
+            SyscallReturn::Done(done) => {
+                match crate::utility::syscall::raw_return_value_to_result(i64::from(done.retval)) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(SyscallError::Failed(Failed {
                         errno: e,
-                        restartable: unsafe { r.u.done.restartable },
+                        restartable: done.restartable,
                     })),
                 }
             }
             // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
-            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Blocked(Blocked {
-                condition: unsafe { SysCallCondition::consume_from_c(r.u.blocked.cond) },
-                restartable: unsafe { r.u.blocked.restartable },
+            SyscallReturn::Block(blocked) => Err(SyscallError::Blocked(Blocked {
+                condition: unsafe { SysCallCondition::consume_from_c(blocked.cond) },
+                restartable: blocked.restartable,
             })),
-            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
-            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
+            SyscallReturn::Native => Err(SyscallError::Native),
         }
     }
 }
 
-impl From<SyscallResult> for c::SysCallReturn {
+impl From<SyscallResult> for SyscallReturn {
     fn from(syscall_return: SyscallResult) -> Self {
         match syscall_return {
-            Ok(r) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                u: SysCallReturnBody {
-                    done: SysCallReturnDone {
-                        retval: r,
-                        // N/A for non-error result (and non-EINTR result in particular)
-                        restartable: false,
-                    },
-                },
-            },
-            Err(SyscallError::Failed(failed)) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                u: SysCallReturnBody {
-                    done: SysCallReturnDone {
-                        retval: (-(failed.errno as i64)).into(),
-                        restartable: failed.restartable,
-                    },
-                },
-            },
-            Err(SyscallError::Blocked(blocked)) => Self {
-                state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: SysCallReturnBody {
-                    blocked: SysCallReturnBlocked {
-                        cond: blocked.condition.into_inner(),
-                        restartable: blocked.restartable,
-                    },
-                },
-            },
-            Err(SyscallError::Native) => Self {
-                state: c::SysCallReturnState_SYSCALL_NATIVE,
-                // No field for native. This is the recommended way to default-initialize a union.
-                // https://rust-lang.github.io/rust-bindgen/using-unions.html#using-the-union-builtin
-                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
-            },
+            Ok(r) => SyscallReturn::Done(SyscallReturnDone {
+                retval: r,
+                // N/A for non-error result (and non-EINTR result in particular)
+                restartable: false,
+            }),
+            Err(SyscallError::Failed(failed)) => SyscallReturn::Done(SyscallReturnDone {
+                retval: (-(failed.errno as i64)).into(),
+                restartable: failed.restartable,
+            }),
+            Err(SyscallError::Blocked(blocked)) => SyscallReturn::Block(SyscallReturnBlocked {
+                cond: blocked.condition.into_inner(),
+                restartable: blocked.restartable,
+            }),
+            Err(SyscallError::Native) => SyscallReturn::Native,
         }
     }
 }
@@ -260,7 +237,7 @@ impl SyscallError {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct SysCallReturnDone {
+pub struct SyscallReturnDone {
     pub retval: SysCallReg,
     // Only meaningful when `retval` is -EINTR.
     //
@@ -270,7 +247,7 @@ pub struct SysCallReturnDone {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct SysCallReturnBlocked {
+pub struct SyscallReturnBlocked {
     pub cond: *mut c::SysCallCondition,
     // True if the syscall is restartable in the case that it was interrupted by
     // a signal. e.g. if the syscall was a `read` operation on a socket without
@@ -278,9 +255,101 @@ pub struct SysCallReturnBlocked {
     pub restartable: bool,
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union SysCallReturnBody {
-    pub done: SysCallReturnDone,
-    pub blocked: SysCallReturnBlocked,
+#[derive(Copy, Clone, Debug)]
+#[repr(i8, C)]
+pub enum SyscallReturn {
+    /// Done executing the syscall; ready to let the plugin thread resume.
+    Done(SyscallReturnDone),
+    /// We don't have the result yet.
+    Block(SyscallReturnBlocked),
+    /// Direct plugin to make the syscall natively.
+    Native,
+}
+
+mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeDone(retval: SysCallReg) -> SyscallReturn {
+        SyscallReturn::Done(SyscallReturnDone {
+            retval,
+            restartable: false,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeDoneI64(retval: i64) -> SyscallReturn {
+        SyscallReturn::Done(SyscallReturnDone {
+            retval: retval.into(),
+            restartable: false,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeDoneU64(retval: u64) -> SyscallReturn {
+        SyscallReturn::Done(SyscallReturnDone {
+            retval: retval.into(),
+            restartable: false,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: PluginPtr) -> SyscallReturn {
+        SyscallReturn::Done(SyscallReturnDone {
+            retval: retval.into(),
+            restartable: false,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeDoneErrno(err: i32) -> SyscallReturn {
+        debug_assert!(err > 0);
+        // Should use `syscallreturn_makeInterrupted` instead
+        debug_assert!(err != libc::EINTR);
+        SyscallReturn::Done(SyscallReturnDone {
+            retval: (-err).into(),
+            restartable: false,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeInterrupted(restartable: bool) -> SyscallReturn {
+        SyscallReturn::Done(SyscallReturnDone {
+            retval: (-libc::EINTR).into(),
+            restartable,
+        })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeBlocked(
+        cond: *mut c::SysCallCondition,
+        restartable: bool,
+    ) -> SyscallReturn {
+        SyscallReturn::Block(SyscallReturnBlocked { cond, restartable })
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_makeNative() -> SyscallReturn {
+        SyscallReturn::Native
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_blocked(
+        scr: *mut SyscallReturn,
+    ) -> *mut SyscallReturnBlocked {
+        let scr = unsafe { scr.as_mut().unwrap() };
+        let SyscallReturn::Block(b)= scr else {
+            panic!("Unexpected scr {:?}", scr);
+        };
+        b
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn syscallreturn_done(scr: *mut SyscallReturn) -> *mut SyscallReturnDone {
+        let scr = unsafe { scr.as_mut().unwrap() };
+        let SyscallReturn::Done(d)= scr else {
+            panic!("Unexpected scr {:?}", scr);
+        };
+        d
+    }
 }

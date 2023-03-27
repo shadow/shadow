@@ -67,7 +67,7 @@ struct _SysCallHandler {
     // to move time forward. This stores the result of the completed syscall, to
     // be returned when the caller resumes.
     bool havePendingResult;
-    SysCallReturn pendingResult;
+    SyscallReturn pendingResult;
 
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.
@@ -83,9 +83,8 @@ struct _SysCallHandler {
 /* Use this to define the syscalls that a particular handler implements.
  * The functions defined with this macro should never be called outside
  * of syscall_handler.c. */
-#define SYSCALL_HANDLER(s)                                                     \
-    SysCallReturn syscallhandler_##s(                                          \
-        SysCallHandler* sys, const SysCallArgs* args);
+#define SYSCALL_HANDLER(s)                                                                         \
+    SyscallReturn syscallhandler_##s(SysCallHandler* sys, const SysCallArgs* args);
 
 CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);

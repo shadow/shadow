@@ -122,7 +122,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
     }
 }
 
-SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds,
+SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds,
                                          const struct timespec* timeout) {
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
@@ -173,7 +173,7 @@ done:
     return syscallreturn_makeDoneI64(num_ready);
 }
 
-static SysCallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, PluginPtr fds_ptr,
+static SyscallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, PluginPtr fds_ptr,
                                                          nfds_t nfds,
                                                          const struct timespec* timeout) {
     // Get the pollfd struct in our memory so we can read from and write to it.
@@ -201,7 +201,7 @@ static int _syscallhandler_checkPollArgs(PluginPtr fds_ptr, nfds_t nfds) {
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     int timeout_millis = args->args[2].as_i64;
@@ -219,7 +219,7 @@ SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
     }
 }
 
-SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     PluginPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
