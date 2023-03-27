@@ -166,8 +166,8 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
 #endif
 }
 
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
-                                         const char* name, SysCallReturn* scr) {
+static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name,
+                                         SyscallReturn* scr) {
 #ifdef USE_PERF_TIMERS
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
@@ -179,7 +179,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         const char* valstr = "n/a";
         char valbuf[100];
         if (scr->state == SYSCALL_DONE) {
-            SysCallReturnDone* done = syscallreturn_done(scr);
+            SyscallReturnDone* done = syscallreturn_done(scr);
             if (done->retval.as_i64 < 0) {
                 errstr = strerror_r(-done->retval.as_i64, errstrbuf, sizeof(errstrbuf));
             }
@@ -263,8 +263,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
     } break
 
-SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
@@ -272,7 +271,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     const ProcessRefCell* process = _syscallhandler_getProcess(sys);
     const Thread* thread = _syscallhandler_getThread(sys);
 
-    SysCallReturn scr;
+    SyscallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -584,7 +583,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // transferred)."
     if (scr.state == SYSCALL_BLOCK &&
         thread_unblockedSignalPending(thread, host_getShimShmemLock(host))) {
-        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+        SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
         syscallcondition_unref(blocked->cond);
         scr = syscallreturn_makeInterrupted(blocked->restartable);
     }

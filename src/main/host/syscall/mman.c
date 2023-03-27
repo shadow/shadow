@@ -202,7 +202,7 @@ static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     }
 }
 
-static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr, size_t len,
+static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr, size_t len,
                                           int prot, int flags, int fd, int64_t offset) {
     trace("mmap called on fd %d for %zu bytes", fd, len);
 
@@ -227,7 +227,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     }
 
     // Delegate execution of the mmap itself to the memorymanager.
-    SysCallReturn result =
+    SyscallReturn result =
         process_handleMmap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addrPtr,
                            len, prot, flags, pluginFD, offset);
     if (result.state == SYSCALL_NATIVE) {
@@ -252,7 +252,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr newBrk = args->args[0].as_ptr;
 
     // Delegate to the memoryManager.
@@ -260,7 +260,7 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
         _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), newBrk);
 }
 
-SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr addrPtr = args->args[0].as_ptr; // void*
     size_t len = args->args[1].as_u64;
     int prot = args->args[2].as_i64;
@@ -270,7 +270,7 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) 
     return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, offset);
 }
 
-SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr old_addr = args->args[0].as_ptr;
     uint64_t old_size = args->args[1].as_u64;
     uint64_t new_size = args->args[2].as_u64;
@@ -282,7 +282,7 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
                                 old_addr, old_size, new_size, flags, new_addr);
 }
 
-SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr addr = args->args[0].as_ptr;
     uint64_t len = args->args[1].as_u64;
 
@@ -291,7 +291,7 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
         _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addr, len);
 }
 
-SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr addr = args->args[0].as_ptr;
     size_t len = args->args[1].as_u64;
     int prot = args->args[2].as_i64;

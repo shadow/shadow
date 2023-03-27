@@ -22,7 +22,7 @@
 static bool _useMM = true;
 ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 
-SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
+SyscallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     PluginPtr name_ptr = args->args[0].as_ptr;
@@ -90,7 +90,7 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
     }
 }
 
-SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
     PluginPtr shm_blk_pptr = args->args[0].as_ptr;
@@ -100,7 +100,8 @@ SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCa
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys,
+                                                        const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     if (_useMM) {
         trace("Initializing memory manager");
@@ -111,6 +112,6 @@ SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, con
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_shadow_yield(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_shadow_yield(SysCallHandler* sys, const SysCallArgs* args) {
     return syscallreturn_makeDoneI64(0);
 }

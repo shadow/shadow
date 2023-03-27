@@ -78,7 +78,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
     return 0;
 }
 
-static SysCallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
+static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                                                  unsigned long iovlen, unsigned long pos_l,
                                                  unsigned long pos_h, int flags, bool doPreadv,
                                                  bool negativeOffsetDisables) {
@@ -141,7 +141,7 @@ static SysCallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
                     thisOffset += totalBytesWritten;
                 }
 
-                SysCallReturn scr =
+                SyscallReturn scr =
                     _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, thisOffset, doPreadv);
 
                 // if the above syscall handler created any pointers, we may
@@ -158,7 +158,7 @@ static SysCallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
                     }
                     case SYSCALL_BLOCK: {
                         // assume that there was no timer, and that we're blocked on this socket
-                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
                         syscallcondition_unref(blocked->cond);
                         result = -EWOULDBLOCK;
                         break;
@@ -211,7 +211,7 @@ static SysCallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
     return syscallreturn_makeDoneI64(result);
 }
 
-static SysCallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
+static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                                                   unsigned long iovlen, unsigned long pos_l,
                                                   unsigned long pos_h, int flags, bool doPwritev,
                                                   bool negativeOffsetDisables) {
@@ -274,7 +274,7 @@ static SysCallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, P
                     thisOffset += totalBytesWritten;
                 }
 
-                SysCallReturn scr =
+                SyscallReturn scr =
                     _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, thisOffset, doPwritev);
 
                 // if the above syscall handler created any pointers, we may
@@ -291,7 +291,7 @@ static SysCallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, P
                     }
                     case SYSCALL_BLOCK: {
                         // assume that there was no timer, and that we're blocked on this socket
-                        SysCallReturnBlocked* blocked = syscallreturn_blocked(&scr);
+                        SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
                         syscallcondition_unref(blocked->cond);
                         result = -EWOULDBLOCK;
                         break;
@@ -348,41 +348,35 @@ static SysCallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, P
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_readv(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_readv(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SysCallReturn syscallhandler_preadv(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, 0, true, false);
 }
 
-SysCallReturn syscallhandler_preadv2(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv2(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, args->args[5].as_i64, true, true);
 }
 
-SysCallReturn syscallhandler_writev(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_writev(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SysCallReturn syscallhandler_pwritev(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, 0, true, false);
 }
 
-SysCallReturn syscallhandler_pwritev2(SysCallHandler* sys,
-                                      const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev2(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, args->args[5].as_i64, true, true);

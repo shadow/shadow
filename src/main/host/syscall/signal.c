@@ -32,7 +32,7 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
+static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
                                                    const ProcessRefCell* process, int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
@@ -56,7 +56,8 @@ static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(0);
 }
 
-static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thread* thread, int sig) {
+static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thread* thread,
+                                                  int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
@@ -135,7 +136,7 @@ static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
@@ -175,7 +176,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
     return _syscallhandler_signalProcess(sys, process, sig);
 }
 
-SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     pid_t tgid = args->args[0].as_i64;
@@ -198,7 +199,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
     return _syscallhandler_signalThread(sys, thread, sig);
 }
 
-SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     pid_t tid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
@@ -210,11 +211,11 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
         return syscallreturn_makeDoneErrno(ESRCH);
     }
 
-    SysCallReturn ret = _syscallhandler_signalThread(sys, thread, sig);
+    SyscallReturn ret = _syscallhandler_signalThread(sys, thread, sig);
     return ret;
 }
 
-static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
+static SyscallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
                                    PluginPtr oldActPtr, size_t masksize) {
     utility_debugAssert(sys);
 
@@ -256,16 +257,16 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
-    SysCallReturn ret =
+    SyscallReturn ret =
         _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
                       /*actPtr=*/args->args[1].as_ptr,
                       /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
     return ret;
 }
 
-SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     PluginPtr ss_ptr = args->args[0].as_ptr;
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
@@ -311,7 +312,7 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     return syscallreturn_makeDoneI64(0);
 }
 
-static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
+static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
                                      PluginPtr oldSetPtr, size_t sigsetsize) {
     utility_debugAssert(sys);
 
@@ -367,10 +368,10 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
     return syscallreturn_makeDoneI64(0);
 }
 
-SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
-    SysCallReturn ret =
+    SyscallReturn ret =
         _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
                         /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
 

@@ -22,7 +22,7 @@ mod uio;
 mod unistd;
 
 type LegacySyscallFn =
-    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> c::SysCallReturn;
+    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> c::SyscallReturn;
 
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler
@@ -289,7 +289,7 @@ mod export {
         sys: *mut SyscallHandler,
         csys: *mut c::SysCallHandler,
         args: *const SysCallArgs,
-    ) -> c::SysCallReturn {
+    ) -> c::SyscallReturn {
         assert!(!sys.is_null());
         let sys = unsafe { &mut *sys };
         Worker::with_active_host(|host| {

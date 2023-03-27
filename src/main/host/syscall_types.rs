@@ -146,10 +146,10 @@ pub struct Failed {
 
 pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
 
-impl From<c::SysCallReturn> for SyscallResult {
-    fn from(r: c::SysCallReturn) -> Self {
+impl From<c::SyscallReturn> for SyscallResult {
+    fn from(r: c::SyscallReturn) -> Self {
         match r.state {
-            c::SysCallReturnState_SYSCALL_DONE => {
+            c::SyscallReturnState_SYSCALL_DONE => {
                 match crate::utility::syscall::raw_return_value_to_result(unsafe {
                     i64::from(r.u.done.retval)
                 }) {
@@ -161,23 +161,23 @@ impl From<c::SysCallReturn> for SyscallResult {
                 }
             }
             // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
-            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Blocked(Blocked {
+            c::SyscallReturnState_SYSCALL_BLOCK => Err(SyscallError::Blocked(Blocked {
                 condition: unsafe { SysCallCondition::consume_from_c(r.u.blocked.cond) },
                 restartable: unsafe { r.u.blocked.restartable },
             })),
-            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
-            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
+            c::SyscallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
+            _ => panic!("Unexpected c::SyscallReturn state {}", r.state),
         }
     }
 }
 
-impl From<SyscallResult> for c::SysCallReturn {
+impl From<SyscallResult> for c::SyscallReturn {
     fn from(syscall_return: SyscallResult) -> Self {
         match syscall_return {
             Ok(r) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                u: SysCallReturnBody {
-                    done: SysCallReturnDone {
+                state: c::SyscallReturnState_SYSCALL_DONE,
+                u: SyscallReturnBody {
+                    done: SyscallReturnDone {
                         retval: r,
                         // N/A for non-error result (and non-EINTR result in particular)
                         restartable: false,
@@ -185,28 +185,28 @@ impl From<SyscallResult> for c::SysCallReturn {
                 },
             },
             Err(SyscallError::Failed(failed)) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                u: SysCallReturnBody {
-                    done: SysCallReturnDone {
+                state: c::SyscallReturnState_SYSCALL_DONE,
+                u: SyscallReturnBody {
+                    done: SyscallReturnDone {
                         retval: (-(failed.errno as i64)).into(),
                         restartable: failed.restartable,
                     },
                 },
             },
             Err(SyscallError::Blocked(blocked)) => Self {
-                state: c::SysCallReturnState_SYSCALL_BLOCK,
-                u: SysCallReturnBody {
-                    blocked: SysCallReturnBlocked {
+                state: c::SyscallReturnState_SYSCALL_BLOCK,
+                u: SyscallReturnBody {
+                    blocked: SyscallReturnBlocked {
                         cond: blocked.condition.into_inner(),
                         restartable: blocked.restartable,
                     },
                 },
             },
             Err(SyscallError::Native) => Self {
-                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                state: c::SyscallReturnState_SYSCALL_NATIVE,
                 // No field for native. This is the recommended way to default-initialize a union.
                 // https://rust-lang.github.io/rust-bindgen/using-unions.html#using-the-union-builtin
-                u: unsafe { std::mem::zeroed::<SysCallReturnBody>() },
+                u: unsafe { std::mem::zeroed::<SyscallReturnBody>() },
             },
         }
     }
@@ -260,7 +260,7 @@ impl SyscallError {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct SysCallReturnDone {
+pub struct SyscallReturnDone {
     pub retval: SysCallReg,
     // Only meaningful when `retval` is -EINTR.
     //
@@ -270,7 +270,7 @@ pub struct SysCallReturnDone {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct SysCallReturnBlocked {
+pub struct SyscallReturnBlocked {
     pub cond: *mut c::SysCallCondition,
     // True if the syscall is restartable in the case that it was interrupted by
     // a signal. e.g. if the syscall was a `read` operation on a socket without
@@ -280,7 +280,7 @@ pub struct SysCallReturnBlocked {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union SysCallReturnBody {
-    pub done: SysCallReturnDone,
-    pub blocked: SysCallReturnBlocked,
+pub union SyscallReturnBody {
+    pub done: SyscallReturnDone,
+    pub blocked: SyscallReturnBlocked,
 }

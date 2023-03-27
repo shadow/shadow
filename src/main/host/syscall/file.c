@@ -47,8 +47,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     return 0;
 }
 
-static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
-                                                PluginPtr pathnamePtr,
+static SyscallReturn _syscallhandler_openHelper(SysCallHandler* sys, PluginPtr pathnamePtr,
                                                 int flags, mode_t mode) {
     trace("Trying to open file with path name at plugin addr %p",
           (void*)pathnamePtr.val);
@@ -79,7 +78,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(handle);
 }
 
-static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
+static SyscallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
     int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
@@ -94,21 +93,18 @@ static SysCallReturn _syscallhandler_fsyncHelper(SysCallHandler* sys, int fd) {
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_creat(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_creat(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_openHelper(sys, args->args[0].as_ptr,
                                       O_CREAT | O_WRONLY | O_TRUNC,
                                       args->args[1].as_u64);
 }
 
-SysCallReturn syscallhandler_open(SysCallHandler* sys,
-                                  const SysCallArgs* args) {
+SyscallReturn syscallhandler_open(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_openHelper(
         sys, args->args[0].as_ptr, args->args[1].as_i64, args->args[2].as_u64);
 }
 
-SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_fstat(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr bufPtr = args->args[1].as_ptr; // struct stat*
 
@@ -129,8 +125,7 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fstat(file_desc, buf));
 }
 
-SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_fstatfs(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr bufPtr = args->args[1].as_ptr; // struct statfs*
 
@@ -151,23 +146,19 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fstatfs(file_desc, buf));
 }
 
-SysCallReturn syscallhandler_fsync(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_fsync(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_fsyncHelper(sys, args->args[0].as_i64);
 }
 
-SysCallReturn syscallhandler_fdatasync(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_fdatasync(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_fsyncHelper(sys, args->args[0].as_i64);
 }
 
-SysCallReturn syscallhandler_syncfs(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_syncfs(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_fsyncHelper(sys, args->args[0].as_i64);
 }
 
-SysCallReturn syscallhandler_fchown(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_fchown(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -181,8 +172,7 @@ SysCallReturn syscallhandler_fchown(SysCallHandler* sys,
         regularfile_fchown(file_desc, args->args[1].as_u64, args->args[2].as_u64));
 }
 
-SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_fchmod(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -195,8 +185,7 @@ SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fchmod(file_desc, args->args[1].as_u64));
 }
 
-SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_fallocate(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -210,8 +199,7 @@ SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
         file_desc, args->args[1].as_i64, args->args[2].as_u64, args->args[3].as_u64));
 }
 
-SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_ftruncate(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -224,8 +212,7 @@ SysCallReturn syscallhandler_ftruncate(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_ftruncate(file_desc, args->args[1].as_u64));
 }
 
-SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_fadvise64(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -239,8 +226,7 @@ SysCallReturn syscallhandler_fadvise64(SysCallHandler* sys,
         file_desc, args->args[1].as_u64, args->args[2].as_u64, args->args[3].as_i64));
 }
 
-SysCallReturn syscallhandler_flock(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_flock(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
 
     /* Get and validate the file descriptor. */
@@ -253,8 +239,7 @@ SysCallReturn syscallhandler_flock(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_flock(file_desc, args->args[1].as_i64));
 }
 
-SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_fsetxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr namePtr = args->args[1].as_ptr;  // const char*
     PluginPtr valuePtr = args->args[2].as_ptr; // const void*
@@ -284,8 +269,7 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fsetxattr(file_desc, name, value, size, flags));
 }
 
-SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_fgetxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr namePtr = args->args[1].as_ptr;  // const char*
     PluginPtr valuePtr = args->args[2].as_ptr; // void*
@@ -313,8 +297,7 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fgetxattr(file_desc, name, value, size));
 }
 
-SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
-                                        const SysCallArgs* args) {
+SyscallReturn syscallhandler_flistxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr listPtr = args->args[1].as_ptr; // char*
     size_t size = args->args[2].as_u64;
@@ -333,8 +316,7 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_flistxattr(file_desc, list, size));
 }
 
-SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+SyscallReturn syscallhandler_fremovexattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr namePtr = args->args[1].as_ptr; // const char*
 
@@ -356,8 +338,7 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_fremovexattr(file_desc, name));
 }
 
-SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
-                                             const SysCallArgs* args) {
+SyscallReturn syscallhandler_sync_file_range(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     off64_t offset = args->args[1].as_u64;
     off64_t nbytes = args->args[2].as_u64;
@@ -373,8 +354,7 @@ SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_sync_range(file_desc, offset, nbytes, flags));
 }
 
-SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+SyscallReturn syscallhandler_readahead(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     off64_t offset = args->args[1].as_u64;
     size_t count = args->args[2].as_u64;
@@ -389,8 +369,7 @@ SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_readahead(file_desc, offset, count));
 }
 
-SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_lseek(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     off_t offset = args->args[1].as_u64;
     int whence = args->args[2].as_i64;
@@ -405,8 +384,7 @@ SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_lseek(file_desc, offset, whence));
 }
 
-SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
-                                      const SysCallArgs* args) {
+SyscallReturn syscallhandler_getdents(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
     unsigned int count = args->args[2].as_u64;
@@ -428,8 +406,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     return syscallreturn_makeDoneI64(regularfile_getdents(file_desc, dirp, count));
 }
 
-SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
-                                        const SysCallArgs* args) {
+SyscallReturn syscallhandler_getdents64(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
     unsigned int count = args->args[2].as_u64;

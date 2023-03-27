@@ -23,7 +23,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, PluginPtr futexVPtr,
+static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, PluginPtr futexVPtr,
                                                      int expectedVal, PluginPtr timeoutVPtr,
                                                      TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
@@ -120,7 +120,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     return syscallreturn_makeBlocked(cond, true);
 }
 
-static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,
+static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,
                                                      int numWakeups) {
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
     PluginPhysicalPtr futexPPtr =
@@ -150,7 +150,7 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
 // Support across different address spaces requires us to compute a unique id from the
 // hardware address (i.e., page table and offset). This is needed, e.g., when using
 // futexes across process boundaries.
-SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     PluginPtr uaddrptr = args->args[0].as_ptr; // int*
@@ -211,7 +211,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
     return syscallreturn_makeDoneErrno(ENOSYS);
 }
 
-SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     debug("get_robust_list was called but we don't yet support it");
@@ -219,7 +219,7 @@ SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallA
     return syscallreturn_makeDoneErrno(ENOSYS);
 }
 
-SysCallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     debug("set_robust_list was called but we don't yet support it");

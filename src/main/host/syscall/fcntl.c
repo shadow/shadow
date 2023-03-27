@@ -170,8 +170,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_fcntl(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long command = args->args[1].as_i64;
     SysCallReg argReg = args->args[2]; // type depends on command

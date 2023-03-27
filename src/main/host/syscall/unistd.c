@@ -29,7 +29,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
                                          size_t bufSize, off_t offset, bool doPread) {
     trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
@@ -123,7 +123,7 @@ SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr 
     return syscallreturn_makeDoneI64(result);
 }
 
-SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
                                           size_t bufSize, off_t offset, bool doPwrite) {
     trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
@@ -211,57 +211,51 @@ SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_read(SysCallHandler* sys,
-                                  const SysCallArgs* args) {
+SyscallReturn syscallhandler_read(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SysCallReturn syscallhandler_pread64(SysCallHandler* sys,
-                                     const SysCallArgs* args) {
+SyscallReturn syscallhandler_pread64(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                       args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SysCallReturn syscallhandler_write(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_write(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writeHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
-                                      const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
     trace("Exit group with exit code %ld", args->args[0].as_i64);
     process_markAsExiting(_syscallhandler_getProcess(sys));
     return syscallreturn_makeNative();
 }
 
-SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SyscallReturn syscallhandler_getpid(SysCallHandler* sys, const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     pid_t pid = sys->processId;
     return syscallreturn_makeDoneI64(pid);
 }
 
-SysCallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     // Just return a constant
     return syscallreturn_makeDoneI64(1);
 }
 
-SysCallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr tidptr = args->args[0].as_ptr; // int*
     thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);
     return syscallreturn_makeDoneI64(sys->threadId);
 }
 
-SysCallReturn syscallhandler_uname(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SyscallReturn syscallhandler_uname(SysCallHandler* sys, const SysCallArgs* args) {
     struct utsname* buf = NULL;
 
     buf = process_getWriteablePtr(

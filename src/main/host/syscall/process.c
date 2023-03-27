@@ -17,7 +17,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pid, int resource,
+static SyscallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pid, int resource,
                                                    PluginPtr newlim, PluginPtr oldlim) {
     // TODO: for determinism, we may want to enforce static limits for certain resources, like
     // RLIMIT_NOFILE. Some applications like Tor will change behavior depending on these limits.
@@ -36,7 +36,7 @@ static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pi
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     int option = args->args[0].as_i64;
@@ -130,7 +130,7 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
     return syscallreturn_makeDoneErrno(EINVAL);
 }
 
-SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
@@ -140,7 +140,7 @@ SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* arg
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 
-SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
@@ -150,7 +150,7 @@ SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 
-SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
     // The MemoryManager's state is no longer valid after an exec.
     // Destroy it, to be recreated on the next syscall.
     process_resetMemoryManager(_syscallhandler_getProcess(sys));
