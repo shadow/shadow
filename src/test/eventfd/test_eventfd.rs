@@ -3,11 +3,12 @@
  * See LICENSE for licensing information
  */
 
+use std::os::unix::io::RawFd;
+
 use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
 use nix::sys::uio::{readv, writev};
 use nix::unistd::{close, read, write};
-use std::os::unix::io::RawFd;
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{iov_helper, iov_helper_mut, set};
 

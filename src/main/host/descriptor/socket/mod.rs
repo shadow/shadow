@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
 use nix::sys::socket::Shutdown;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use unix::UnixSocket;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
@@ -12,10 +15,6 @@ use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
-use unix::UnixSocket;
 
 pub mod abstract_unix_ns;
 pub mod inet;

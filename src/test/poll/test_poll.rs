@@ -5,10 +5,10 @@
 #![allow(clippy::too_many_arguments)]
 
 use std::cmp::Ordering;
+use std::time::Duration;
 
 use nix::sys::signal;
 use nix::sys::signal::Signal;
-use std::time::Duration;
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 

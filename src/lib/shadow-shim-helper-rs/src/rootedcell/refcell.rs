@@ -1,6 +1,8 @@
-use super::{Root, Tag};
 use std::cell::{Cell, UnsafeCell};
+
 use vasi::VirtualAddressSpaceIndependent;
+
+use super::{Root, Tag};
 
 /// Analagous to [std::cell::RefCell]. In particular like [std::cell::RefCell]
 /// and unlike [std::sync::Mutex], it  doesn't perform any atomic operations
@@ -127,10 +129,10 @@ impl<'a, T> Drop for RootedRefCellRefMut<'a, T> {
 
 #[cfg(test)]
 mod test_rooted_refcell {
-    use super::*;
-
-    use crate::rootedcell::rc::RootedRc;
     use std::thread;
+
+    use super::*;
+    use crate::rootedcell::rc::RootedRc;
 
     #[test]
     fn construct_and_drop() {

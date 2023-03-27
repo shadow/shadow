@@ -12,9 +12,10 @@
 
 use std::{collections::VecDeque, time::Duration};
 
+use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::SimulationTime};
+
 use crate::cshadow as c;
 use crate::network::packet::{Packet, PacketStatus};
-use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::SimulationTime};
 
 /// The target minimum standing queue delay time, corresponding to the "TARGET"
 /// parameter in the RFC. This is recommended to be set to 5 milliseconds in

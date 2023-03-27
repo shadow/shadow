@@ -1,15 +1,3 @@
-use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
-use crate::host::thread::Thread;
-use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
-use crate::utility::pod::Pod;
-use crate::utility::proc_maps;
-use crate::utility::proc_maps::{MappingPath, Sharing};
-use log::*;
-use nix::unistd::Pid;
-use nix::{fcntl, sys};
-use shadow_shim_helper_rs::notnull::*;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -20,6 +8,20 @@ use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
+
+use log::*;
+use nix::unistd::Pid;
+use nix::{fcntl, sys};
+use shadow_shim_helper_rs::notnull::*;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+
+use crate::host::memory_manager::{page_size, MemoryManager};
+use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
+use crate::host::thread::Thread;
+use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
+use crate::utility::pod::Pod;
+use crate::utility::proc_maps;
+use crate::utility::proc_maps::{MappingPath, Sharing};
 
 const HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 const STACK_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;

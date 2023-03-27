@@ -1,18 +1,13 @@
-use crate::core::support::configuration::QDiscMode;
-use crate::core::work::event::{Event, EventData};
-use crate::core::work::event_queue::EventQueue;
-use crate::core::work::task::TaskRef;
-use crate::core::worker::Worker;
-use crate::cshadow;
-use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::network_interface::{NetworkInterface, PcapOptions};
-use crate::host::process::Process;
-use crate::host::thread::ThreadId;
-use crate::network::net_namespace::NetworkNamespace;
-use crate::network::relay::{RateLimit, Relay};
-use crate::network::router::Router;
-use crate::network::PacketDevice;
-use crate::utility::{self, SyncSendPointer};
+use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
+use std::collections::BTreeMap;
+use std::ffi::{CStr, CString, OsString};
+use std::net::{Ipv4Addr, SocketAddrV4};
+use std::num::NonZeroU8;
+use std::ops::{Deref, DerefMut};
+use std::os::unix::prelude::OsStringExt;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
 use atomic_refcell::AtomicRefCell;
 use log::{debug, info, trace};
 use logger::LogLevel;
@@ -28,19 +23,25 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
-use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
-use std::collections::BTreeMap;
-use std::ffi::{CStr, CString, OsString};
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::num::NonZeroU8;
-use std::ops::{Deref, DerefMut};
-use std::os::unix::prelude::OsStringExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use vasi_sync::scmutex::SelfContainedMutexGuard;
 
+use crate::core::support::configuration::QDiscMode;
+use crate::core::work::event::{Event, EventData};
+use crate::core::work::event_queue::EventQueue;
+use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
+use crate::cshadow;
+use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::host::network_interface::{NetworkInterface, PcapOptions};
+use crate::host::process::Process;
+use crate::host::thread::ThreadId;
+use crate::network::net_namespace::NetworkNamespace;
+use crate::network::relay::{RateLimit, Relay};
+use crate::network::router::Router;
+use crate::network::PacketDevice;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
+use crate::utility::{self, SyncSendPointer};
 
 pub struct HostParameters {
     pub id: HostId,
@@ -858,23 +859,23 @@ impl Drop for Host {
 }
 
 mod export {
-    use libc::{in_addr_t, in_port_t};
-    use rand::{Rng, RngCore};
-    use shadow_shim_helper_rs::shim_shmem;
-    use shadow_shmem::allocator::ShMemBlockSerialized;
     use std::{
         ops::{Deref, DerefMut},
         os::raw::c_char,
         time::Duration,
     };
 
+    use libc::{in_addr_t, in_port_t};
+    use rand::{Rng, RngCore};
+    use shadow_shim_helper_rs::shim_shmem;
+    use shadow_shmem::allocator::ShMemBlockSerialized;
+
+    use super::*;
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
         host::{process::ProcessRefCell, thread::Thread},
         network::router::Router,
     };
-
-    use super::*;
 
     #[no_mangle]
     pub unsafe extern "C" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {

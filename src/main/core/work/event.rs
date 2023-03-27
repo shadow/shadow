@@ -1,10 +1,10 @@
-use crate::host::host::Host;
-use crate::network::packet::Packet;
-use crate::utility::{Magic, ObjectCounter};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::HostId;
 
 use super::task::TaskRef;
+use crate::host::host::Host;
+use crate::network::packet::Packet;
+use crate::utility::{Magic, ObjectCounter};
 
 #[derive(Debug)]
 pub struct Event {

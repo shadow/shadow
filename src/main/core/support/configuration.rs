@@ -5,17 +5,16 @@ use std::os::unix::ffi::OsStrExt;
 use std::str::FromStr;
 
 use clap::Parser;
+use logger as c_log;
 use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::formatter::FmtOptions;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
-
-use logger as c_log;
 
 const START_HELP_TEXT: &str = "\
     Run real applications over simulated networks.\n\n\

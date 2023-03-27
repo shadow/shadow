@@ -3,8 +3,9 @@
  * See LICENSE for licensing information
  */
 
-use nix::unistd;
 use std::time::{Duration, Instant};
+
+use nix::unistd;
 
 type SleepFn = (fn(u32) -> Option<Duration>, &'static str);
 type TimeFn = (fn() -> Duration, &'static str);

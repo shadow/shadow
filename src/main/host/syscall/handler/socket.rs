@@ -1,3 +1,9 @@
+use log::*;
+use nix::errno::Errno;
+use nix::sys::socket::{Shutdown, SockFlag};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use syscall_logger::log_syscall;
+
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
@@ -13,13 +19,6 @@ use crate::host::syscall_types::TypedPluginPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-use log::*;
-use nix::errno::Errno;
-use nix::sys::socket::{Shutdown, SockFlag};
-
-use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::socket::{Shutdown, SockaddrIn};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
@@ -24,7 +25,6 @@ use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 pub struct LegacyTcpSocket {
     socket: HostTreePointer<c::TCP>,

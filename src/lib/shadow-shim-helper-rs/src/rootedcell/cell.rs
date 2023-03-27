@@ -1,6 +1,8 @@
-use super::{Root, Tag};
 use std::cell::UnsafeCell;
+
 use vasi::VirtualAddressSpaceIndependent;
+
+use super::{Root, Tag};
 
 /// Analagous to [std::cell::Cell]. In particular like [std::cell::Cell], it
 /// doesn't perform any atomic operations internally, making it relatively
@@ -75,10 +77,10 @@ unsafe impl<T: Send> Sync for RootedCell<T> where T: Copy {}
 
 #[cfg(test)]
 mod test_rooted_cell {
-    use super::*;
-
-    use crate::rootedcell::rc::RootedRc;
     use std::thread;
+
+    use super::*;
+    use crate::rootedcell::rc::RootedRc;
 
     #[test]
     fn get() {

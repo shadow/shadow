@@ -4,6 +4,8 @@ use std::time::Duration;
 use anyhow::Context;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::core::manager::{Manager, ManagerConfig};
 use crate::core::sim_config::SimConfig;
@@ -11,8 +13,6 @@ use crate::core::support::configuration::ConfigOptions;
 use crate::core::worker;
 use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
 use crate::utility::time::TimeParts;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 pub struct Controller<'a> {
     // general options and user configuration for the simulation

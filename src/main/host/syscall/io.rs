@@ -1,13 +1,13 @@
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 
+use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-use nix::errno::Errno;
 
 pub fn write_sockaddr(
     mem: &mut MemoryManager,

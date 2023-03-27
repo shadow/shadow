@@ -6,11 +6,7 @@
 
 // Use std sync primitives, or loom equivalents
 #[cfg(loom)]
-pub use loom::{
-    sync::atomic,
-    sync::atomic::{AtomicI32, AtomicU32, Ordering},
-    sync::Arc,
-};
+use std::collections::HashMap;
 #[cfg(not(loom))]
 pub use std::{
     sync::atomic,
@@ -18,15 +14,18 @@ pub use std::{
     sync::Arc,
 };
 
-#[cfg(not(loom))]
-use vasi::VirtualAddressSpaceIndependent;
-
 // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
 // processes, or into different virtual addresses in the same process, etc.
 #[cfg(loom)]
 use loom::sync::{Condvar, Mutex};
 #[cfg(loom)]
-use std::collections::HashMap;
+pub use loom::{
+    sync::atomic,
+    sync::atomic::{AtomicI32, AtomicU32, Ordering},
+    sync::Arc,
+};
+#[cfg(not(loom))]
+use vasi::VirtualAddressSpaceIndependent;
 #[cfg(loom)]
 loom::lazy_static! {
     pub static ref FUTEXES: Mutex<HashMap<usize, Arc<Condvar>>> = Mutex::new(HashMap::new());

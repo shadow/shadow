@@ -276,10 +276,10 @@ fn incremental_name<const L: usize>(mut index: usize) -> [u8; L] {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rand_core::SeedableRng;
     use rand_xoshiro::Xoshiro256PlusPlus;
+
+    use super::*;
 
     #[test]
     fn test_random_name() {

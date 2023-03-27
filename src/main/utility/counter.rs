@@ -202,10 +202,11 @@ impl Sub for Counter {
 }
 
 mod export {
-    use super::*;
     use std::ffi::CStr;
     use std::ffi::CString;
     use std::os::raw::c_char;
+
+    use super::*;
 
     #[no_mangle]
     pub extern "C" fn counter_new() -> *mut Counter {

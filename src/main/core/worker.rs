@@ -1,9 +1,18 @@
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::{Arc, Mutex};
+
 use atomic_refcell::{AtomicRef, AtomicRefCell};
 use once_cell::sync::Lazy;
 use rand::Rng;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::HostId;
 
+use super::work::event_queue::EventQueue;
 use crate::core::controller::ShadowStatusBarState;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
@@ -19,16 +28,6 @@ use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::status_bar;
 use crate::utility::SyncSendPointer;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::HostId;
-
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32};
-use std::sync::{Arc, Mutex};
-
-use super::work::event_queue::EventQueue;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 
@@ -660,12 +659,11 @@ pub fn with_global_sim_stats<T>(f: impl FnOnce(&SharedSimStats) -> T) -> T {
 }
 
 mod export {
-    use crate::host::process::ProcessRefCell;
-
-    use super::*;
-
     use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
+
+    use super::*;
+    use crate::host::process::ProcessRefCell;
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {

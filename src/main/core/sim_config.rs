@@ -9,6 +9,7 @@ use anyhow::Context;
 use log::warn;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::core::support::configuration::Flatten;
 use crate::core::support::configuration::{
@@ -18,7 +19,6 @@ use crate::core::support::configuration::{
 use crate::core::support::units::{self, Unit};
 use crate::network::graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::tilde_expansion;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 /// The simulation configuration after processing the configuration options and network graph.
 pub struct SimConfig {

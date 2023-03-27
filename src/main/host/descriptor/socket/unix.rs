@@ -6,6 +6,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::{
@@ -24,7 +25,6 @@ use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
 use crate::utility::HostTreePointer;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: u64 = 212_992;
 

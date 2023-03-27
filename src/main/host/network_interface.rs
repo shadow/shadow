@@ -1,12 +1,13 @@
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::PathBuf;
 
+use shadow_shim_helper_rs::HostId;
+
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow as c;
 use crate::network::packet::Packet;
 use crate::network::PacketDevice;
 use crate::utility::{self, HostTreePointer};
-use shadow_shim_helper_rs::HostId;
 
 #[derive(Debug, Clone)]
 pub struct PcapOptions {

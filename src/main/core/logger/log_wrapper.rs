@@ -1,5 +1,6 @@
-use log::log_enabled;
 use std::os::raw::{c_char, c_int, c_void};
+
+use log::log_enabled;
 use vsprintf::vsprintf_raw;
 
 /// Flush Rust's log::logger().

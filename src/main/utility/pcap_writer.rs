@@ -148,11 +148,12 @@ pub trait PacketDisplay {
 }
 
 mod export {
-    use super::*;
     use std::ffi::{CStr, OsStr};
     use std::fs::File;
     use std::io::BufWriter;
     use std::os::unix::ffi::OsStrExt;
+
+    use super::*;
 
     /// A new packet capture writer. Each packet (header and payload) captured will be truncated to
     /// a length `capture_len`.
@@ -212,8 +213,9 @@ mod export {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Cursor;
+
+    use super::*;
 
     #[test]
     fn test_empty_pcap_writer() {

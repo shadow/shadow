@@ -1,13 +1,12 @@
 use std::cell::RefCell;
 use std::net::Ipv4Addr;
 
+use self::codel_queue::CoDelQueue;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::network::packet::Packet;
 use crate::network::PacketDevice;
 use crate::utility::{Magic, ObjectCounter};
-
-use self::codel_queue::CoDelQueue;
 mod codel_queue;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;

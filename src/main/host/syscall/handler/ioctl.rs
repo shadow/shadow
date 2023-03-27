@@ -1,10 +1,10 @@
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use syscall_logger::log_syscall;
+
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]

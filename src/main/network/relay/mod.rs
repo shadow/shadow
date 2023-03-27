@@ -2,6 +2,9 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use atomic_refcell::AtomicRefCell;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
+
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
@@ -10,8 +13,6 @@ use crate::network::packet::PacketStatus;
 use crate::network::relay::token_bucket::TokenBucket;
 use crate::network::Packet;
 use crate::utility::ObjectCounter;
-use atomic_refcell::AtomicRefCell;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 mod token_bucket;
 

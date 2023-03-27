@@ -2,14 +2,13 @@ use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
 use log::trace;
-
-use crate::core::work::task::TaskRef;
-use crate::core::worker::Worker;
-use crate::utility::{Magic, ObjectCounter};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use super::host::Host;
+use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
+use crate::utility::{Magic, ObjectCounter};
 
 pub struct Timer {
     magic: Magic<Self>,

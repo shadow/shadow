@@ -24,15 +24,15 @@ where
     f()
 }
 
-#[cfg(loom)]
-pub use loom::sync::Arc;
 #[cfg(not(loom))]
 pub use std::sync::Arc;
-
-#[cfg(loom)]
-pub use loom::thread;
 #[cfg(not(loom))]
 pub use std::thread;
+
+#[cfg(loom)]
+pub use loom::sync::Arc;
+#[cfg(loom)]
+pub use loom::thread;
 
 #[cfg(loom)]
 pub fn rand_sleep() {}

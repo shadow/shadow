@@ -3,9 +3,10 @@
 //! mutate the same state simultaneously, an event queue is used to defer new events until the
 //! current event has finished running.
 
+use std::sync::{Arc, Weak};
+
 use atomic_refcell::AtomicRefCell;
 use log::*;
-use std::sync::{Arc, Weak};
 
 /// A queue of events (functions/closures) which when run can add their own events to the queue.
 /// This allows events to be deferred and run later.

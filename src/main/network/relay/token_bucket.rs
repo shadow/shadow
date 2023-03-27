@@ -1,6 +1,7 @@
-use crate::core::worker::Worker;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+
+use crate::core::worker::Worker;
 
 pub struct TokenBucket {
     capacity: u64,

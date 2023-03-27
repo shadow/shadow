@@ -10,7 +10,6 @@ use std::os::unix::io::AsRawFd;
 use nix::sys::socket::MsgFlags;
 use rand::RngCore;
 use rand::SeedableRng;
-
 use test_utils::running_in_shadow;
 use test_utils::socket_utils::{
     autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper, SockAddr,

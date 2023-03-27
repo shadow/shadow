@@ -9,6 +9,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+#[cfg(feature = "perf_timers")]
+use std::time::Duration;
 
 use log::{debug, error, info, trace, warn};
 use nix::errno::Errno;
@@ -24,16 +26,9 @@ use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
 use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::syscall_types::{PluginPhysicalPtr, PluginPtr};
+use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
-
-use crate::core::work::task::TaskRef;
-use crate::core::worker::Worker;
-use crate::cshadow;
-use crate::host::context::ProcessContext;
-use crate::host::descriptor::{CompatFile, Descriptor};
-use crate::host::syscall::formatter::FmtOptions;
-use crate::utility::callback_queue::CallbackQueue;
-use crate::utility::pathbuf_to_nul_term_cstring;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
@@ -42,14 +37,16 @@ use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::TypedPluginPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
-use shadow_shim_helper_rs::syscall_types::{PluginPhysicalPtr, PluginPtr};
-
-use shadow_shim_helper_rs::HostId;
-
+use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
+use crate::cshadow;
+use crate::host::context::ProcessContext;
+use crate::host::descriptor::{CompatFile, Descriptor};
+use crate::host::syscall::formatter::FmtOptions;
+use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::pathbuf_to_nul_term_cstring;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-#[cfg(feature = "perf_timers")]
-use std::time::Duration;
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -1398,16 +1395,15 @@ mod export {
     use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
+    use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
+    use super::*;
     use crate::core::worker::Worker;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
     use crate::host::syscall_types::TypedPluginPtr;
     use crate::host::thread::Thread;
-    use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-    use super::*;
 
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
     /// after.

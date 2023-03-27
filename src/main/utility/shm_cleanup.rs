@@ -121,10 +121,11 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs::OpenOptions;
     use std::io;
     use std::process;
+
+    use super::*;
 
     fn touch(path: impl AsRef<Path>) -> io::Result<()> {
         OpenOptions::new()

@@ -3,10 +3,10 @@
  * See LICENSE for licensing information
  */
 
-use bytes::{Bytes, BytesMut};
-
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
+
+use bytes::{Bytes, BytesMut};
 
 /// A queue of bytes that supports reading and writing stream and/or packet data.
 ///
@@ -394,8 +394,9 @@ impl ByteChunk {
 }
 
 mod export {
-    use super::*;
     use std::slice;
+
+    use super::*;
 
     #[no_mangle]
     pub extern "C" fn bytequeue_new(default_chunk_size: usize) -> *mut ByteQueue {

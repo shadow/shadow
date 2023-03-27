@@ -1,3 +1,11 @@
+use std::sync::Arc;
+
+use atomic_refcell::AtomicRefCell;
+use log::*;
+use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use syscall_logger::log_syscall;
+
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
@@ -12,15 +20,6 @@ use crate::host::syscall::type_formatting::SyscallBufferArg;
 use crate::host::syscall_types::TypedPluginPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
-
-use std::sync::Arc;
-
-use atomic_refcell::AtomicRefCell;
-use log::*;
-use nix::errno::Errno;
-
-use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]

@@ -1,9 +1,9 @@
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* addr */ *const libc::c_void)]
