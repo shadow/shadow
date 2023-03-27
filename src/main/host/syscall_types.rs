@@ -7,14 +7,10 @@ use crate::utility::NoTypeInference;
 use log::Level::Debug;
 use log::*;
 use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::{PluginPtr, SysCallReg};
 use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
-
-// XXX temp
-pub use shadow_shim_helper_rs::syscall_types::{
-    PluginPhysicalPtr, PluginPtr, SysCallArgs, SysCallReg,
-};
 
 /// Wrapper around a PluginPtr that encapsulates its type, size, and current
 /// position.

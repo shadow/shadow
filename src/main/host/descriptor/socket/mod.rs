@@ -7,11 +7,12 @@ use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
 use unix::UnixSocket;

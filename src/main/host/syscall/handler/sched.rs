@@ -1,7 +1,8 @@
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use log::warn;
 use nix::errno::Errno;

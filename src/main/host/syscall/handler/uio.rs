@@ -4,8 +4,9 @@ use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, S
 use crate::host::descriptor::{CompatFile, File, FileState, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::utility::callback_queue::CallbackQueue;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use nix::errno::Errno;
 

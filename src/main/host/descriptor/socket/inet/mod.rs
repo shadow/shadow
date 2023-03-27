@@ -10,12 +10,13 @@ use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{PluginPtr, SyscallError};
+use crate::host::syscall_types::SyscallError;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use legacy_tcp::LegacyTcpSocket;
 

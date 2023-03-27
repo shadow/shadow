@@ -6,9 +6,10 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
-use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::HostTreePointer;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use std::io::{Read, Write};
 

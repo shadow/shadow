@@ -1,7 +1,8 @@
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SysCallReg, SyscallResult};
+use crate::host::syscall_types::SyscallResult;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 use log::warn;
 use nix::errno::Errno;

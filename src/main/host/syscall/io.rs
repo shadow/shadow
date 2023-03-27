@@ -2,9 +2,10 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use nix::errno::Errno;
 

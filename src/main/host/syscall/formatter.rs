@@ -4,10 +4,11 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{SysCallReg, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FmtOptions {
@@ -325,7 +326,7 @@ mod export {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::host::syscall_types::SysCallArgs;
+    use shadow_shim_helper_rs::syscall_types::SysCallArgs;
     use std::process::Command;
 
     #[test]

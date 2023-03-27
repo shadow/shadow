@@ -2,7 +2,9 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
-use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
+use shadow_shim_helper_rs::syscall_types::SysCallArgs;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 use nix::errno::Errno;
 

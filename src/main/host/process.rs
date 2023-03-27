@@ -39,9 +39,10 @@ use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::{PluginPhysicalPtr, PluginPtr, TypedPluginPtr};
+use super::syscall_types::TypedPluginPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
+use shadow_shim_helper_rs::syscall_types::{PluginPhysicalPtr, PluginPtr};
 
 use shadow_shim_helper_rs::HostId;
 
@@ -1402,8 +1403,9 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
-    use crate::host::syscall_types::{PluginPtr, TypedPluginPtr};
+    use crate::host::syscall_types::TypedPluginPtr;
     use crate::host::thread::Thread;
+    use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
     use super::*;
 

@@ -15,7 +15,7 @@
 //! all access to process memory must go through it. This includes servicing syscalls that
 //! modify the process address space (such as `mmap`).
 
-use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, SyscallResult, TypedPluginPtr};
 use crate::host::thread::Thread;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
@@ -23,6 +23,7 @@ use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
 use nix::{errno::Errno, unistd::Pid};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};

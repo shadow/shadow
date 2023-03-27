@@ -5,7 +5,6 @@ use std::os::fd::RawFd;
 use super::context::ProcessContext;
 use super::host::Host;
 use super::process::{Process, ProcessId};
-use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, IsSend, SendPointer};
@@ -13,6 +12,7 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
+use shadow_shim_helper_rs::syscall_types::{PluginPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 

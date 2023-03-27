@@ -1,5 +1,5 @@
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
 use crate::host::thread::Thread;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::pod::Pod;
@@ -9,6 +9,7 @@ use log::*;
 use nix::unistd::Pid;
 use nix::{fcntl, sys};
 use shadow_shim_helper_rs::notnull::*;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;

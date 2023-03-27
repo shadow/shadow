@@ -7,9 +7,10 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use socket::{Socket, SocketRef, SocketRefMut};
 

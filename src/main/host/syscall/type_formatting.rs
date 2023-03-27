@@ -1,6 +1,8 @@
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::read_sockaddr;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, TypedPluginPtr};
+use crate::host::syscall_types::TypedPluginPtr;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 

@@ -1,7 +1,8 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use syscall_logger::log_syscall;
 
