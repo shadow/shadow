@@ -904,15 +904,15 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     return packet;
 }
 
-static Packet* _tcp_createDataPacket(TCP* tcp, const Thread* thread, enum ProtocolTCPFlags flags,
-                                     PluginVirtualPtr payload, gsize payloadLength) {
+static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags,
+                                     PluginVirtualPtr payload, gsize payloadLength,
+                                     const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
-    const Host* host = thread_getHost(thread);
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
-        packet_setPayload(packet, thread, payload, payloadLength);
+        packet_setPayloadWithMemoryManager(packet, host, payload, payloadLength, mem);
     }
     return packet;
 }
@@ -2353,9 +2353,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
-                                gsize nBytes, in_addr_t ip, in_port_t port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+gssize tcp_sendUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                        in_addr_t ip, in_port_t port, const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2379,13 +2378,26 @@ static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, Plug
     gsize maxPacketLength = CONFIG_TCP_MAX_SEGMENT_SIZE;
     gsize bytesCopied = 0;
 
+    /* Need non-NULL buffer. */
+    /* FIXME: should push this check to the point the data is actually read, to correctly handle
+     * non-NULL pointers that aren't accessible. This is currently in the Payload code; need to
+     * bubble up errors from there. If we do bubble up from the payload code, we also need to undo
+     * the TCP state changes made earlier, for example the sequence number increment in the
+     * _tcp_createPacketWithoutPayload code.
+     */
+    if (buffer.val == 0) {
+        return -EFAULT;
+    }
+
     /* create as many packets as needed */
     while(remaining > 0) {
         gsize copyLength = MIN(maxPacketLength, remaining);
 
         /* use helper to create the packet */
-        Packet* packet = _tcp_createDataPacket(
-            tcp, thread, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
+        Packet* packet = _tcp_createDataPacket(tcp, host, PTCP_ACK,
+                                               (PluginVirtualPtr){.val = buffer.val + bytesCopied},
+                                               copyLength, mem);
+
         if(copyLength > 0) {
             /* we are sending more user data */
             tcp->send.end++;
@@ -2404,7 +2416,7 @@ static gssize _tcp_sendUserData(LegacySocket* socket, const Thread* thread, Plug
     trace("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
     /* now flush as much as possible out to socket */
-    _tcp_flush(tcp, thread_getHost(thread));
+    _tcp_flush(tcp, host);
 
     return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
@@ -2423,12 +2435,9 @@ static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer d
 }
 
 /* Address and port must be in network byte order. */
-static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, PluginVirtualPtr buffer,
-                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
-    TCP* tcp = _tcp_fromLegacyFile((LegacyFile*)socket);
+gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+                           in_addr_t* ip, in_port_t* port, MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
-
-    const Host* host = thread_getHost(thread);
 
     /*
      * TODO
@@ -2464,8 +2473,8 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
         utility_debugAssert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
-        gssize bytesCopied = packet_copyPayload(
-            tcp->partialUserDataPacket, thread, tcp->partialOffset, buffer, copyLength);
+        gssize bytesCopied = packet_copyPayloadWithMemoryManager(
+            tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength, mem);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             return bytesCopied;
@@ -2503,8 +2512,8 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
 
         gsize packetLength = packet_getPayloadSize(nextPacket);
         copyLength = MIN(packetLength, remaining);
-        gssize bytesCopied = packet_copyPayload(
-            nextPacket, thread, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
+        gssize bytesCopied = packet_copyPayloadWithMemoryManager(
+            nextPacket, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength, mem);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             if (totalCopied > 0) {
@@ -2580,7 +2589,7 @@ static gssize _tcp_receiveUserData(LegacySocket* socket, const Thread* thread, P
 
         TaskRef* updateWindowTask = taskref_new_bound(
             host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
-        host_scheduleTaskWithDelay(thread_getHost(thread), updateWindowTask, 1);
+        host_scheduleTaskWithDelay(host, updateWindowTask, 1);
         taskref_drop(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
@@ -2723,12 +2732,28 @@ gint tcp_shutdown(TCP* tcp, const Host* host, gint how) {
     return 0;
 }
 
+static gssize _sendUserDataPanic(LegacySocket* socket, const Thread* thread,
+                                 PluginVirtualPtr buffer, gsize nBytes, in_addr_t ip,
+                                 in_port_t port) {
+    /* sending should be handled by the rust `LegacyTcpSocket` wrapper, which should call
+     * tcp_sendUserData directly */
+    utility_panic("Called `legacysocket_sendUserData` on a TCP socket");
+}
+
+static gssize _receiveUserDataPanic(LegacySocket* socket, const Thread* thread,
+                                    PluginVirtualPtr buffer, gsize nBytes, in_addr_t* ip,
+                                    in_port_t* port) {
+    /* receiving should be handled by the rust `LegacyTcpSocket` wrapper, which should call
+     * tcp_receiveUserData directly */
+    utility_panic("Called `legacysocket_receiveUserData` on a TCP socket");
+}
+
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {_tcp_close,
                                      _tcp_cleanup,
                                      _tcp_free,
-                                     _tcp_sendUserData,
-                                     _tcp_receiveUserData,
+                                     _sendUserDataPanic,
+                                     _receiveUserDataPanic,
                                      _tcp_processPacket,
                                      _tcp_isFamilySupported,
                                      _tcp_connectToPeer,

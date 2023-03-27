@@ -119,6 +119,8 @@ Packet* packet_new(const Host* host) {
     return packet;
 }
 
+/* If modifying this function, you should also modify `packet_setPayloadWithMemoryManager` below.
+ */
 void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength) {
     MAGIC_ASSERT(packet);
@@ -128,8 +130,25 @@ void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr pa
 
     /* the payload starts with 1 ref, which we hold */
     packet->payload = payload_new(thread, payload, payloadLength);
+    utility_alwaysAssert(packet->payload != NULL);
     /* application data needs a priority ordering for FIFO onto the wire */
     packet->priority = host_getNextPacketPriority(thread_getHost(thread));
+}
+
+/* This is a copy of `packet_setPayload` but passes the memory manager through. Once we've moved UDP
+ * sockets to rust, we can remove `packet_setPayload` and rename this function to
+ * `packet_setPayload`. */
+void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, PluginVirtualPtr payload,
+                                        gsize payloadLength, const MemoryManager* mem) {
+    MAGIC_ASSERT(packet);
+    utility_debugAssert(payload.val);
+    utility_debugAssert(!packet->payload);
+
+    /* the payload starts with 1 ref, which we hold */
+    packet->payload = payload_newWithMemoryManager(payload, payloadLength, mem);
+    utility_alwaysAssert(packet->payload != NULL);
+    /* application data needs a priority ordering for FIFO onto the wire */
+    packet->priority = host_getNextPacketPriority(host);
 }
 
 /* copy everything except the payload.
@@ -516,12 +535,30 @@ ProtocolType packet_getProtocol(const Packet* packet) {
     return packet->protocol;
 }
 
+/* If modifying this function, you should also modify `packet_copyPayloadWithMemoryManager` below.
+ */
 gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
                           PluginVirtualPtr buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
         return payload_getData(packet->payload, thread, payloadOffset, buffer, bufferLength);
+    } else {
+        return 0;
+    }
+}
+
+/* This is a copy of `packet_copyPayload` but passes the memory manager through. Once we've moved
+ * UDP sockets to rust, we can remove `packet_copyPayload` and rename this function to
+ * `packet_copyPayload`. */
+gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
+                                           PluginVirtualPtr buffer, gsize bufferLength,
+                                           MemoryManager* mem) {
+    MAGIC_ASSERT(packet);
+
+    if(packet->payload) {
+        return payload_getDataWithMemoryManager(
+            packet->payload, payloadOffset, buffer, bufferLength, mem);
     } else {
         return 0;
     }

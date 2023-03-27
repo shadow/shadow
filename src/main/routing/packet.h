@@ -44,6 +44,8 @@ const gchar* protocol_toString(ProtocolType type);
 Packet* packet_new(const Host* host);
 void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
                        gsize payloadLength);
+void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, PluginVirtualPtr payload,
+                                        gsize payloadLength, const MemoryManager* mem);
 Packet* packet_copy(Packet* packet);
 
 // Exposed for unit testing only. Use `packet_new` outside of tests.
@@ -93,6 +95,9 @@ ProtocolType packet_getProtocol(const Packet* packet);
 
 gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
                           PluginVirtualPtr buffer, gsize bufferLength);
+gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
+                                           PluginVirtualPtr buffer, gsize bufferLength,
+                                           MemoryManager* mem);
 guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                gsize bufferLength);
 GList* packet_copyTCPSelectiveACKs(Packet* packet);

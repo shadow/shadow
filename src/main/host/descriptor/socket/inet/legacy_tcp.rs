@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
-use nix::sys::socket::{Shutdown, SockaddrIn};
+use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::core::worker::Worker;
@@ -306,21 +306,210 @@ impl LegacyTcpSocket {
     }
 
     pub fn sendmsg(
-        _socket: &Arc<AtomicRefCell<Self>>,
-        _args: SendmsgArgs,
-        _mem: &mut MemoryManager,
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: SendmsgArgs,
+        mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<libc::ssize_t, SyscallError> {
-        todo!()
+        let socket_ref = socket.borrow_mut();
+        let tcp = socket_ref.as_legacy_tcp();
+
+        if socket_ref.state().contains(FileState::CLOSED) {
+            // A file that is referenced in the descriptor table should never be a closed file. File
+            // handles (fds) are handles to open files, so if we have a file handle to a closed
+            // file, then there's an error somewhere in Shadow. Shadow's TCP sockets do close
+            // themselves even if there are still file handles (see `_tcp_endOfFileSignalled`), so
+            // we can't make this a panic.
+            log::warn!("Sending on a closed TCP socket");
+            return Err(Errno::EBADF.into());
+        }
+
+        let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
+            log::warn!("Unrecognized send flags: {:#b}", args.flags);
+            return Err(Errno::EINVAL.into());
+        };
+
+        if socket_ref.get_status().contains(FileStatus::NONBLOCK) {
+            flags.insert(MsgFlags::MSG_DONTWAIT);
+        }
+
+        // run in a closure so that an early return doesn't skip checking if we should block
+        let result = (|| {
+            let mut bytes_sent = 0;
+
+            for iov in args.iovs {
+                let errcode = unsafe { c::tcp_getConnectionError(tcp) };
+
+                log::trace!("Connection error state is currently {errcode}");
+
+                #[allow(clippy::if_same_then_else)]
+                if errcode > 0 {
+                    // connect() was not called yet
+                    // TODO: Can they can piggy back a connect() on sendto() if they provide an
+                    // address for the connection?
+                    if bytes_sent == 0 {
+                        return Err(Errno::EPIPE);
+                    } else {
+                        break;
+                    }
+                } else if errcode == 0 {
+                    // They connected, but never read the success code with a second call to
+                    // connect(). That's OK, proceed to send as usual.
+                } else if errcode == -libc::EISCONN {
+                    // they are connected, and we can send now
+                } else if errcode == -libc::EALREADY {
+                    // connection in progress
+                    // TODO: should we wait, or just return -EALREADY?
+                    if bytes_sent == 0 {
+                        return Err(Errno::EWOULDBLOCK);
+                    } else {
+                        break;
+                    }
+                }
+
+                // SAFETY: We're passing an immutable pointer to the memory manager. We should not
+                // have any other mutable references to the memory manager at this point.
+                let rv = Worker::with_active_host(|host| unsafe {
+                    c::tcp_sendUserData(tcp, host, iov.base, iov.len.try_into().unwrap(), 0, 0, mem)
+                })
+                .unwrap();
+
+                if rv < 0 {
+                    if bytes_sent == 0 {
+                        return Err(Errno::from_i32(-rv as i32));
+                    } else {
+                        break;
+                    }
+                }
+
+                bytes_sent += rv;
+
+                if usize::try_from(rv).unwrap() < iov.len {
+                    // stop if we didn't write all of the data in the iov
+                    break;
+                }
+            }
+
+            Ok(bytes_sent)
+        })();
+
+        // if the syscall would block and we don't have the MSG_DONTWAIT flag
+        if result == Err(Errno::EWOULDBLOCK) && !flags.contains(MsgFlags::MSG_DONTWAIT) {
+            return Err(SyscallError::new_blocked(
+                File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
+                FileState::WRITABLE,
+                socket_ref.supports_sa_restart(),
+            ));
+        }
+
+        Ok(result?.try_into().unwrap())
     }
 
     pub fn recvmsg(
-        _socket: &Arc<AtomicRefCell<Self>>,
-        _args: RecvmsgArgs,
-        _mem: &mut MemoryManager,
+        socket: &Arc<AtomicRefCell<Self>>,
+        args: RecvmsgArgs,
+        mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<RecvmsgReturn, SyscallError> {
-        todo!()
+        let socket_ref = socket.borrow_mut();
+        let tcp = socket_ref.as_legacy_tcp();
+
+        if socket_ref.state().contains(FileState::CLOSED) {
+            // A file that is referenced in the descriptor table should never be a closed file. File
+            // handles (fds) are handles to open files, so if we have a file handle to a closed
+            // file, then there's an error somewhere in Shadow. Shadow's TCP sockets do close
+            // themselves even if there are still file handles (see `_tcp_endOfFileSignalled`), so
+            // we can't make this a panic.
+            if unsafe { c::tcp_getConnectionError(tcp) != -libc::EISCONN } {
+                // connection error will be -ENOTCONN when reading is done
+                log::warn!("Receiving on a closed TCP socket");
+                return Err(Errno::EBADF.into());
+            }
+        }
+
+        let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
+            log::warn!("Unrecognized recv flags: {:#b}", args.flags);
+            return Err(Errno::EINVAL.into());
+        };
+
+        if socket_ref.get_status().contains(FileStatus::NONBLOCK) {
+            flags.insert(MsgFlags::MSG_DONTWAIT);
+        }
+
+        // run in a closure so that an early return doesn't skip checking if we should block
+        let result = (|| {
+            let mut bytes_read = 0;
+
+            for iov in args.iovs {
+                let errcode = unsafe { c::tcp_getConnectionError(tcp) };
+
+                if errcode > 0 {
+                    // connect() was not called yet
+                    if bytes_read == 0 {
+                        return Err(Errno::ENOTCONN);
+                    } else {
+                        break;
+                    }
+                } else if errcode == -libc::EALREADY {
+                    // Connection in progress
+                    if bytes_read == 0 {
+                        return Err(Errno::EWOULDBLOCK);
+                    } else {
+                        break;
+                    }
+                }
+
+                // SAFETY: We're passing a mutable pointer to the memory manager. We should not have
+                // any other mutable references to the memory manager at this point.
+                let rv = Worker::with_active_host(|host| unsafe {
+                    c::tcp_receiveUserData(
+                        tcp,
+                        host,
+                        iov.base,
+                        iov.len.try_into().unwrap(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        mem,
+                    )
+                })
+                .unwrap();
+
+                if rv < 0 {
+                    if bytes_read == 0 {
+                        return Err(Errno::from_i32(-rv as i32));
+                    } else {
+                        break;
+                    }
+                }
+
+                bytes_read += rv;
+
+                if usize::try_from(rv).unwrap() < iov.len {
+                    // stop if we didn't receive all of the data in the iov
+                    break;
+                }
+            }
+
+            Ok(RecvmsgReturn {
+                bytes_read: bytes_read.try_into().unwrap(),
+                addr: None,
+                msg_flags: 0,
+                control_len: 0,
+            })
+        })();
+
+        // if the syscall would block and we don't have the MSG_DONTWAIT flag
+        if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
+            && !flags.contains(MsgFlags::MSG_DONTWAIT)
+        {
+            return Err(SyscallError::new_blocked(
+                File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
+                FileState::READABLE,
+                socket_ref.supports_sa_restart(),
+            ));
+        }
+
+        Ok(result?)
     }
 
     pub fn ioctl(
