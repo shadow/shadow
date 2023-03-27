@@ -402,6 +402,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(readlinkat);
             HANDLE_RUST(readv);
             HANDLE_RUST(recvfrom);
+            HANDLE_RUST(recvmsg);
             HANDLE_C(renameat);
             HANDLE_C(renameat2);
             HANDLE_RUST(rseq);
@@ -413,6 +414,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(shadow_init_memory_manager);
             HANDLE_C(shadow_yield);
             HANDLE_C(select);
+            HANDLE_RUST(sendmsg);
             HANDLE_RUST(sendto);
             HANDLE_RUST(setsockopt);
 #ifdef SYS_sigaction
@@ -472,8 +474,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // NATIVE(tee);
 
             //// additional socket io
-            // NATIVE(recvmsg);
-            // NATIVE(sendmsg);
             // NATIVE(recvmmsg);
             // NATIVE(sendmmsg);
 

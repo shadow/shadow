@@ -74,6 +74,7 @@ impl SyscallHandler {
             libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
             libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
             libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
+            libc::SYS_recvmsg => SyscallHandlerFn::call(Self::recvmsg, &mut ctx),
             libc::SYS_sched_getaffinity => {
                 SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
             }
@@ -81,6 +82,7 @@ impl SyscallHandler {
                 SyscallHandlerFn::call(Self::sched_setaffinity, &mut ctx)
             }
             libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
+            libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
             libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
             libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
             libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
