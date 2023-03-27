@@ -151,19 +151,19 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
                     break;
                 }
 
-                switch (scr.state) {
-                    case SYSCALL_DONE: {
+                switch (scr.tag) {
+                    case SYSCALL_RETURN_DONE: {
                         result = syscallreturn_done(&scr)->retval.as_i64;
                         break;
                     }
-                    case SYSCALL_BLOCK: {
+                    case SYSCALL_RETURN_BLOCK: {
                         // assume that there was no timer, and that we're blocked on this socket
                         SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
                         syscallcondition_unref(blocked->cond);
                         result = -EWOULDBLOCK;
                         break;
                     }
-                    case SYSCALL_NATIVE: {
+                    case SYSCALL_RETURN_NATIVE: {
                         panic("recv() returned SYSCALL_NATIVE");
                     }
                 }
@@ -284,19 +284,19 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, P
                     break;
                 }
 
-                switch (scr.state) {
-                    case SYSCALL_DONE: {
+                switch (scr.tag) {
+                    case SYSCALL_RETURN_DONE: {
                         result = syscallreturn_done(&scr)->retval.as_i64;
                         break;
                     }
-                    case SYSCALL_BLOCK: {
+                    case SYSCALL_RETURN_BLOCK: {
                         // assume that there was no timer, and that we're blocked on this socket
                         SyscallReturnBlocked* blocked = syscallreturn_blocked(&scr);
                         syscallcondition_unref(blocked->cond);
                         result = -EWOULDBLOCK;
                         break;
                     }
-                    case SYSCALL_NATIVE: {
+                    case SYSCALL_RETURN_NATIVE: {
                         panic("send() returned SYSCALL_NATIVE");
                     }
                 }

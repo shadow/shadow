@@ -78,8 +78,8 @@ static SyscallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds
     }
 
     SyscallReturn scr = _syscallhandler_pollHelper(sys, pfds, (nfds_t)nfds_max, timeout);
-    if (scr.state == SYSCALL_BLOCK ||
-        (scr.state == SYSCALL_DONE && syscallreturn_done(&scr)->retval.as_i64 < 0)) {
+    if (scr.tag == SYSCALL_RETURN_BLOCK ||
+        (scr.tag == SYSCALL_RETURN_DONE && syscallreturn_done(&scr)->retval.as_i64 < 0)) {
         goto done;
     }
 

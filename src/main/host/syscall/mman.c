@@ -230,7 +230,7 @@ static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     SyscallReturn result =
         process_handleMmap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addrPtr,
                            len, prot, flags, pluginFD, offset);
-    if (result.state == SYSCALL_NATIVE) {
+    if (result.tag == SYSCALL_RETURN_NATIVE) {
         return syscallreturn_makeDoneI64(thread_nativeSyscall(
             _syscallhandler_getThread(sys), SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset));
     }

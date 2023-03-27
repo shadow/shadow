@@ -1402,7 +1402,7 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
-    use crate::host::syscall_types::TypedPluginPtr;
+    use crate::host::syscall_types::{SyscallReturn, TypedPluginPtr};
     use crate::host::thread::Thread;
 
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
@@ -1712,7 +1712,7 @@ mod export {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> cshadow::SyscallReturn {
+    ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
@@ -1732,7 +1732,7 @@ mod export {
         thread: *const Thread,
         addr: PluginPtr,
         len: usize,
-    ) -> cshadow::SyscallReturn {
+    ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
@@ -1752,7 +1752,7 @@ mod export {
         new_size: usize,
         flags: i32,
         new_addr: PluginPtr,
-    ) -> cshadow::SyscallReturn {
+    ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
@@ -1772,7 +1772,7 @@ mod export {
         addr: PluginPtr,
         size: usize,
         prot: i32,
-    ) -> cshadow::SyscallReturn {
+    ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {
@@ -1791,7 +1791,7 @@ mod export {
         proc: *const ProcessRefCell,
         thread: *const Thread,
         plugin_src: PluginPtr,
-    ) -> cshadow::SyscallReturn {
+    ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|h| {

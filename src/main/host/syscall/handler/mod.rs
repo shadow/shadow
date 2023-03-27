@@ -6,6 +6,7 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
 mod eventfd;
@@ -22,7 +23,7 @@ mod uio;
 mod unistd;
 
 type LegacySyscallFn =
-    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> c::SyscallReturn;
+    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
 
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler
@@ -289,7 +290,7 @@ mod export {
         sys: *mut SyscallHandler,
         csys: *mut c::SysCallHandler,
         args: *const SysCallArgs,
-    ) -> c::SyscallReturn {
+    ) -> SyscallReturn {
         assert!(!sys.is_null());
         let sys = unsafe { &mut *sys };
         Worker::with_active_host(|host| {
