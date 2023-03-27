@@ -1,11 +1,10 @@
-use crate::HostId;
 use libc::{siginfo_t, stack_t};
 use nix::sys::signal::Signal;
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
 use crate::option::FfiOption;
-
+use crate::HostId;
 use crate::{
     emulated_time::{AtomicEmulatedTime, EmulatedTime},
     rootedcell::{refcell::RootedRefCell, Root},
@@ -419,10 +418,10 @@ fn signal_from_i32(s: i32) -> Signal {
 pub mod export {
     use std::sync::atomic::Ordering;
 
-    use crate::{emulated_time::CEmulatedTime, simulation_time::CSimulationTime};
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
+    use crate::{emulated_time::CEmulatedTime, simulation_time::CSimulationTime};
 
     // Legacy type names; keeping the more verbose names for the C API, since
     // they're not namespaced.

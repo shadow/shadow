@@ -5,6 +5,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::socket::{Shutdown, SockaddrIn};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
@@ -16,7 +17,7 @@ use crate::host::descriptor::{
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{write_partial, IoVec};
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;

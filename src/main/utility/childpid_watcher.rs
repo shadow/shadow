@@ -1,9 +1,3 @@
-use nix::errno::Errno;
-use nix::fcntl::{FcntlArg, FdFlag, OFlag};
-use nix::sys::epoll::{
-    epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
-};
-use nix::unistd::Pid;
 use std::collections::HashMap;
 use std::fs::File;
 use std::os::unix::io::RawFd;
@@ -11,6 +5,13 @@ use std::os::unix::prelude::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
+
+use nix::errno::Errno;
+use nix::fcntl::{FcntlArg, FdFlag, OFlag};
+use nix::sys::epoll::{
+    epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
+};
+use nix::unistd::Pid;
 
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
@@ -361,10 +362,12 @@ impl std::fmt::Debug for PidData {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::{Arc, Condvar};
+
     use nix::sys::wait::WaitStatus;
     use nix::sys::wait::{waitpid, WaitPidFlag};
-    use std::sync::{Arc, Condvar};
+
+    use super::*;
 
     fn is_zombie(pid: Pid) -> bool {
         let stat_name = format!("/proc/{}/stat", pid.as_raw());

@@ -29,9 +29,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 
+use shadow_shim_helper_rs::HostId;
+
 use crate::core::worker::Worker;
 use crate::host::host::Host;
-use shadow_shim_helper_rs::HostId;
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.

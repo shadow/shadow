@@ -1,9 +1,10 @@
-use once_cell::sync::Lazy;
-use regex::Regex;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
+
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 /// Whether a region of memory is shared.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]

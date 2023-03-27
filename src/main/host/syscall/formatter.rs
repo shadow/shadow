@@ -1,13 +1,15 @@
-use nix::errno::Errno;
 use std::any::TypeId;
 use std::fmt::Display;
 use std::marker::PhantomData;
 
+use nix::errno::Errno;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
+
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{SysCallReg, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FmtOptions {
@@ -265,11 +267,12 @@ pub fn write_syscall(
 }
 
 mod export {
+    use std::ffi::CStr;
+
     use super::*;
     use crate::core::worker::Worker;
     use crate::cshadow as c;
     use crate::host::process::ProcessRefCell;
-    use std::ffi::CStr;
 
     #[no_mangle]
     pub extern "C" fn log_syscall(
@@ -324,9 +327,11 @@ mod export {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::host::syscall_types::SysCallArgs;
     use std::process::Command;
+
+    use shadow_shim_helper_rs::syscall_types::SysCallArgs;
+
+    use super::*;
 
     #[test]
     // can't call foreign function: gnu_get_libc_version

@@ -1,10 +1,9 @@
 use std::cell::RefCell;
 use std::sync::Mutex;
 
+use super::CORE_AFFINITY;
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
 use crate::host::host::Host;
-
-use super::CORE_AFFINITY;
 
 std::thread_local! {
     /// The host that belongs to this thread.

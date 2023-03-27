@@ -2,18 +2,17 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use nix::fcntl::OFlag;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use socket::{Socket, SocketRef, SocketRefMut};
 
+use super::host::Host;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync};
-
-use socket::{Socket, SocketRef, SocketRefMut};
-
-use super::host::Host;
 
 pub mod descriptor_table;
 pub mod eventfd;
@@ -838,10 +837,9 @@ impl std::fmt::Debug for c::SysCallReturn {
 }
 
 mod export {
-    use super::*;
-
     use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
+    use super::*;
     use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;

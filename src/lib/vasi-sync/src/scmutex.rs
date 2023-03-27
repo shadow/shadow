@@ -1,7 +1,9 @@
-use crate::sync;
-use rkyv::{Archive, Serialize};
 use std::{marker::PhantomData, ops::Deref, pin::Pin};
+
+use rkyv::{Archive, Serialize};
 use vasi::VirtualAddressSpaceIndependent;
+
+use crate::sync;
 
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
 #[repr(transparent)]

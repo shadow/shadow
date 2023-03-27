@@ -1,17 +1,16 @@
+use std::sync::Arc;
+
+use atomic_refcell::AtomicRefCell;
+use nix::errno::Errno;
+use nix::sys::eventfd::EfdFlags;
+use syscall_logger::log_syscall;
+
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{
     CompatFile, Descriptor, DescriptorFlags, File, FileStatus, OpenFile,
 };
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
-
-use std::sync::Arc;
-
-use atomic_refcell::AtomicRefCell;
-use nix::errno::Errno;
-use nix::sys::eventfd::EfdFlags;
-
-use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]

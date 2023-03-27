@@ -11,6 +11,8 @@ use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
@@ -26,8 +28,6 @@ use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
 use crate::utility::{self, SyncSendPointer};
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 pub struct Manager<'a> {
     manager_config: Option<ManagerConfig>,

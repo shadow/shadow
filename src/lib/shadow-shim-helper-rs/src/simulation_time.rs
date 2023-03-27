@@ -9,9 +9,11 @@ This module contains some identically-named constants defined as C macros in
 `main/core/support/definitions.h`.
 */
 
-use super::emulated_time;
 use std::time::Duration;
+
 use vasi::VirtualAddressSpaceIndependent;
+
+use super::emulated_time;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -345,9 +347,8 @@ pub const SIMTIME_ONE_MINUTE: CSimulationTime = 60000000000u64;
 pub const SIMTIME_ONE_HOUR: CSimulationTime = 3600000000000u64;
 
 pub mod export {
-    use crate::notnull::*;
-
     use super::*;
+    use crate::notnull::*;
 
     #[no_mangle]
     pub extern "C" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {

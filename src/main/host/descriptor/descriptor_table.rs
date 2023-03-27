@@ -1,9 +1,9 @@
-use crate::cshadow as c;
-use crate::host::descriptor::{CompatFile, Descriptor};
-
 use std::collections::{BTreeSet, HashMap};
 
 use log::*;
+
+use crate::cshadow as c;
+use crate::host::descriptor::{CompatFile, Descriptor};
 
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;

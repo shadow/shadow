@@ -59,7 +59,6 @@ pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
 }
 mod export {
     use super::*;
-
     use crate::core::worker;
 
     /// Notify listeners using the global callback queue. If the queue hasn't been set using

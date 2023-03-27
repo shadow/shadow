@@ -1,10 +1,11 @@
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use syscall_logger::log_syscall;
+
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
 use crate::utility::pod;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-
-use syscall_logger::log_syscall;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]

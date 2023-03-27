@@ -1,11 +1,11 @@
-use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
-use rand::RngCore;
-
 use log::*;
 use nix::errno::Errno;
-
+use rand::RngCore;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use syscall_logger::log_syscall;
+
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall_types::{SyscallResult, TypedPluginPtr};
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const libc::c_void, /* count */ libc::size_t,

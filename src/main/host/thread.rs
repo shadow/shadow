@@ -2,19 +2,20 @@ use std::cell::Cell;
 use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 
-use super::context::ProcessContext;
-use super::host::Host;
-use super::process::{Process, ProcessId};
-use super::syscall_types::{PluginPtr, SysCallReg};
-use crate::cshadow as c;
-use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
-use crate::utility::{syscall, IsSend, SendPointer};
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
+use shadow_shim_helper_rs::syscall_types::{PluginPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
+
+use super::context::ProcessContext;
+use super::host::Host;
+use super::process::{Process, ProcessId};
+use crate::cshadow as c;
+use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
+use crate::utility::{syscall, IsSend, SendPointer};
 
 /// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
 /// which this object owns, and frees on Drop.
@@ -468,11 +469,10 @@ mod export {
     use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemThread};
     use shadow_shmem::allocator::ShMemBlockSerialized;
 
+    use super::*;
     use crate::core::worker::Worker;
     use crate::host::host::Host;
     use crate::host::process::ProcessRefCell;
-
-    use super::*;
 
     /// Make the requested syscall from within the plugin.
     ///

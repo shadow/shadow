@@ -1,5 +1,5 @@
-use crate::host::syscall_types::SysCallReg;
 use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 // Linux reserves -1 through -4095 for errors. See
 // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41

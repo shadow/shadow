@@ -1,11 +1,12 @@
-use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{PluginPtr, SyscallError, TypedPluginPtr};
-use crate::host::thread::ThreadId;
-use crate::utility::pod::Pod;
-
 use log::warn;
 use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 use syscall_logger::log_syscall;
+
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::thread::ThreadId;
+use crate::utility::pod::Pod;
 
 // We always report that the thread is running on CPU 0, Node 0
 const CURRENT_CPU: u32 = 0;

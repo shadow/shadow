@@ -60,13 +60,13 @@ impl PartialEq for TaskRef {
 impl Eq for TaskRef {}
 
 pub mod export {
-    use super::*;
+    use shadow_shim_helper_rs::{notnull::notnull_mut, HostId};
 
+    use super::*;
     use crate::{
         host::host::Host,
         utility::{HostTreePointer, SyncSendPointer},
     };
-    use shadow_shim_helper_rs::{notnull::notnull_mut, HostId};
 
     pub type TaskCallbackFunc = extern "C" fn(*const Host, *mut libc::c_void, *mut libc::c_void);
     pub type TaskObjectFreeFunc = Option<extern "C" fn(*mut libc::c_void)>;

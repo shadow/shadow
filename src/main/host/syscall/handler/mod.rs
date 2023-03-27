@@ -1,10 +1,12 @@
+use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::SysCallArgs;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
+
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
-use crate::host::syscall_types::{SysCallArgs, SysCallReg, SyscallError, SyscallResult};
-
-use nix::errno::Errno;
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 
 mod eventfd;
 mod fcntl;
@@ -266,9 +268,8 @@ where
 mod export {
     use shadow_shim_helper_rs::notnull::*;
 
-    use crate::core::worker::Worker;
-
     use super::*;
+    use crate::core::worker::Worker;
 
     #[no_mangle]
     pub extern "C" fn rustsyscallhandler_new() -> *mut SyscallHandler {

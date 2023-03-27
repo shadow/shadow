@@ -1,12 +1,11 @@
+use std::marker::PhantomData;
+
 use nix::sys::signal::Signal;
 
+use super::host::Host;
 use crate::cshadow;
 use crate::host::descriptor::OpenFile;
 use crate::host::syscall::Trigger;
-
-use std::marker::PhantomData;
-
-use super::host::Host;
 
 /// An immutable reference to a syscall condition.
 #[derive(Debug, PartialEq, Eq)]

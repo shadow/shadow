@@ -2,22 +2,22 @@ use std::net::SocketAddrV4;
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use legacy_tcp::LegacyTcpSocket;
 use nix::errno::Errno;
 use nix::sys::socket::Shutdown;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{PluginPtr, SyscallError};
+use crate::host::syscall_types::SyscallError;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
-
-use legacy_tcp::LegacyTcpSocket;
 
 pub mod legacy_tcp;
 

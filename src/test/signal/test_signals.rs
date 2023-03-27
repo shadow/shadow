@@ -1,9 +1,3 @@
-use nix::errno::Errno;
-use nix::sys::signal;
-use nix::sys::signal::Signal;
-use nix::unistd;
-use once_cell::sync::OnceCell;
-use signal_hook::low_level::channel::Channel as SignalSafeChannel;
 use std::arch::asm;
 use std::error::Error;
 use std::iter::Iterator;
@@ -11,6 +5,13 @@ use std::os::unix::io::RawFd;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
+
+use nix::errno::Errno;
+use nix::sys::signal;
+use nix::sys::signal::Signal;
+use nix::unistd;
+use once_cell::sync::OnceCell;
+use signal_hook::low_level::channel::Channel as SignalSafeChannel;
 use test_utils::set;
 use test_utils::ShadowTest;
 use test_utils::TestEnvironment as TestEnv;

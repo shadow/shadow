@@ -3,12 +3,11 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::TestEnvironment as TestEnv;
-use test_utils::{iov_helper, iov_helper_mut, set};
-
 use std::time::Duration;
 
 use nix::poll::PollFlags;
+use test_utils::TestEnvironment as TestEnv;
+use test_utils::{iov_helper, iov_helper_mut, set};
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?

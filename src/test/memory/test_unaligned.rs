@@ -1,5 +1,6 @@
-use nix::errno::Errno;
 use std::error::Error;
+
+use nix::errno::Errno;
 use test_utils::set;
 use test_utils::ShadowTest;
 use test_utils::TestEnvironment as TestEnv;

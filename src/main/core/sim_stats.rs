@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::sync::Mutex;
 
-use crate::utility::counter::Counter;
-
 use anyhow::Context;
 use serde::Serialize;
+
+use crate::utility::counter::Counter;
 
 /// Simulation statistics to be accessed by a single thread.
 #[derive(Debug)]

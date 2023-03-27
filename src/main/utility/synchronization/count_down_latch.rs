@@ -212,12 +212,12 @@ impl std::ops::Drop for LatchWaiter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::time::Duration;
 
     use atomic_refcell::AtomicRefCell;
     use rand::{Rng, SeedableRng};
+
+    use super::*;
 
     #[test]
     fn test_clone() {

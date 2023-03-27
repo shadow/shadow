@@ -1,8 +1,9 @@
-use super::{Root, Tag};
 use std::{
     cell::{Cell, UnsafeCell},
     ptr::NonNull,
 };
+
+use super::{Root, Tag};
 
 struct RootedRcInternal<T> {
     val: UnsafeCell<Option<T>>,
@@ -237,9 +238,9 @@ impl<T> std::ops::Deref for RootedRc<T> {
 
 #[cfg(test)]
 mod test_rooted_rc {
-    use super::*;
-
     use std::{sync::Arc, thread};
+
+    use super::*;
 
     #[test]
     fn construct_and_drop() {

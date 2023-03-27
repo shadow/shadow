@@ -21,8 +21,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Cursor;
+
+    use super::*;
 
     #[test]
     fn test_stream_len_bp() -> std::io::Result<()> {

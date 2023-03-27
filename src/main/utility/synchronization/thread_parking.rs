@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 

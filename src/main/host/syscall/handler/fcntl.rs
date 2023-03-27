@@ -1,13 +1,13 @@
-use crate::cshadow;
-use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
-use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SysCallReg, SyscallResult};
-
 use log::warn;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use syscall_logger::log_syscall;
+
+use crate::cshadow;
+use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
+use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]

@@ -1,8 +1,10 @@
-use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall::io::read_sockaddr;
-use crate::host::syscall_types::{PluginPtr, SysCallReg, TypedPluginPtr};
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
+use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::read_sockaddr;
+use crate::host::syscall_types::TypedPluginPtr;
 
 /// Convert from a `SysCallReg`. This is a helper trait for the `simple_display_impl` and
 /// `simple_debug_impl` macros. This is used instead of just `TryFrom` so that we can implement this

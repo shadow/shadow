@@ -4,8 +4,9 @@ Deals with instances of time in a Shadow simulation.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 use vasi::VirtualAddressSpaceIndependent;
+
+use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 
 /// An instant in time (analagous to std::time::Instant) in the Shadow
 /// simulation.

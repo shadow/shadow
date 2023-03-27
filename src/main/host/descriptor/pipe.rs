@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
-use std::sync::Arc;
+use shadow_shim_helper_rs::syscall_types::PluginPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::{
@@ -11,7 +13,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
-use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::HostTreePointer;
 

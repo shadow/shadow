@@ -1,20 +1,17 @@
+use std::convert::From;
+use std::marker::PhantomData;
+use std::mem::size_of;
+
+use log::Level::Debug;
+use log::*;
+use nix::errno::Errno;
+use shadow_shim_helper_rs::syscall_types::{PluginPtr, SysCallReg};
+
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::utility::NoTypeInference;
-
-use log::Level::Debug;
-use log::*;
-use nix::errno::Errno;
-use std::convert::From;
-use std::marker::PhantomData;
-use std::mem::size_of;
-
-// XXX temp
-pub use shadow_shim_helper_rs::syscall_types::{
-    PluginPhysicalPtr, PluginPtr, SysCallArgs, SysCallReg,
-};
 
 /// Wrapper around a PluginPtr that encapsulates its type, size, and current
 /// position.
