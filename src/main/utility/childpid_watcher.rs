@@ -322,12 +322,13 @@ impl ChildPidWatcher {
     /// guaranteed either to have already run, or to never run. i.e. it's safe to
     /// free data that the callback might otherwise access.
     ///
-    /// Panics if `pid` was never registered.
+    /// No-op if `pid` isn't registered.
     pub fn unregister_callback(&self, pid: Pid, handle: WatchHandle) {
         let mut inner = self.inner.lock().unwrap();
-        let pid_data = inner.pids.get_mut(&pid).unwrap();
-        pid_data.callbacks.remove(&handle);
-        inner.maybe_remove_pid(self.epoll, pid);
+        if let Some(pid_data) = inner.pids.get_mut(&pid) {
+            pid_data.callbacks.remove(&handle);
+            inner.maybe_remove_pid(self.epoll, pid);
+        }
     }
 }
 
