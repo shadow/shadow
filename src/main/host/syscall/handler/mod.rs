@@ -9,6 +9,7 @@ use crate::host::descriptor::Descriptor;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
+mod clone;
 mod eventfd;
 mod fcntl;
 mod file;
@@ -41,6 +42,7 @@ impl SyscallHandler {
             libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
             libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
             libc::SYS_brk => SyscallHandlerFn::call(Self::brk, &mut ctx),
+            libc::SYS_clone => SyscallHandlerFn::call(Self::clone, &mut ctx),
             libc::SYS_close => SyscallHandlerFn::call(Self::close, &mut ctx),
             libc::SYS_connect => SyscallHandlerFn::call(Self::connect, &mut ctx),
             libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),

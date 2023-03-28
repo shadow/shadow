@@ -306,7 +306,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(brk);
             SHIM_ONLY(clock_gettime);
             HANDLE_C(clock_nanosleep);
-            HANDLE_C(clone);
+            HANDLE_RUST(clone);
             HANDLE_RUST(close);
             HANDLE_RUST(connect);
             HANDLE_C(creat);
