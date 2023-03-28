@@ -219,6 +219,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         move || test_flag_dontwait(sys_method, init_method, sock_type),
                         passing.clone(),
                     ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_blocking"),
+                        move || test_blocking(sys_method, init_method, sock_type),
+                        passing,
+                    ),
                 ]);
             }
 
@@ -606,6 +611,52 @@ fn test_flag_dontwait(
         check_recv_call(&mut recvfrom_args, sys_method, &[libc::EAGAIN], true)?;
 
         Ok(())
+    })
+}
+
+/// Test sendto() and recvfrom() with a blocking socket.
+fn test_blocking(
+    sys_method: SendRecvMethod,
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, 0, /* bind_client = */ false);
+
+    let outbuf_10_bytes: Vec<u8> = vec![1u8; 10];
+    let mut inbuf_10_bytes: Vec<u8> = vec![0u8; 10];
+
+    let sendto_args = SendtoArguments {
+        fd: fd_client,
+        len: outbuf_10_bytes.len(),
+        buf: Some(&outbuf_10_bytes),
+        ..Default::default()
+    };
+
+    let mut recvfrom_args = RecvfromArguments {
+        fd: fd_server,
+        len: inbuf_10_bytes.len(),
+        buf: Some(&mut inbuf_10_bytes),
+        ..Default::default()
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        std::thread::scope(|scope| {
+            // wait 100 ms and then send
+            let handle = scope.spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                check_send_call(&sendto_args, sys_method, &[], true)
+            });
+
+            // recv on the socket and make sure it didn't return immediately
+            let time_start = std::time::Instant::now();
+            check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+            assert!(time_start.elapsed() > std::time::Duration::from_millis(70));
+
+            handle.join().unwrap()?;
+
+            Ok(())
+        })
     })
 }
 
