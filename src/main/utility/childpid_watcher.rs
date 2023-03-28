@@ -61,9 +61,15 @@ impl Inner {
     }
 
     fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
-        if let Some(fd) = self.pids.get_mut(&pid).unwrap().fd.take() {
-            epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
-        }
+        let Some(piddata) = self.pids.get_mut(&pid) else {
+            // Already unregistered the pid
+            return;
+        };
+        let Some(fd) = piddata.fd.take() else {
+            // Already unwatched the pid
+            return;
+        };
+        epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
