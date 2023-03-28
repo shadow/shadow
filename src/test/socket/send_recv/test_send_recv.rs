@@ -111,11 +111,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
-                &append_args("test_large_buf_udp"),
-                test_large_buf_udp,
-                set![TestEnv::Libc, TestEnv::Shadow],
-            ),
-            test_utils::ShadowTest::new(
                 &append_args("test_send_after_dgram_peer_close"),
                 move || test_send_after_dgram_peer_close(domain),
                 set![TestEnv::Libc, TestEnv::Shadow],
@@ -313,11 +308,18 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         }
     }
 
-    tests.extend(vec![test_utils::ShadowTest::new(
-        "test_unix_dgram_multiple_senders",
-        test_unix_dgram_multiple_senders,
-        set![TestEnv::Libc, TestEnv::Shadow],
-    )]);
+    tests.extend(vec![
+        test_utils::ShadowTest::new(
+            "test_large_buf_udp",
+            test_large_buf_udp,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_unix_dgram_multiple_senders",
+            test_unix_dgram_multiple_senders,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+    ]);
 
     tests
 }
