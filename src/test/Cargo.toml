@@ -66,8 +66,8 @@ name = "test_shutdown"
 path = "socket/shutdown/test_shutdown.rs"
 
 [[bin]]
-name = "test_sendto_recvfrom"
-path = "socket/sendto_recvfrom/test_sendto_recvfrom.rs"
+name = "test_send_recv"
+path = "socket/send_recv/test_send_recv.rs"
 
 [[bin]]
 name = "test_sockopt"

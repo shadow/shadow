@@ -10,7 +10,7 @@ add_subdirectory(connect)
 add_subdirectory(getpeername)
 add_subdirectory(socketpair)
 add_subdirectory(shutdown)
-add_subdirectory(sendto_recvfrom)
+add_subdirectory(send_recv)
 add_subdirectory(sockopt)
 add_subdirectory(ioctl)
 
