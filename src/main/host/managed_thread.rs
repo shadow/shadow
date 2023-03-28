@@ -14,14 +14,13 @@ use shadow_shim_helper_rs::shim_event::{
     ShimEvent, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
-use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use vasi_sync::scchannel::SelfContainedChannelError;
 
 use super::host::Host;
-use super::process::{Process, ProcessId};
+use super::process::Process;
 use super::syscall_condition::SysCallCondition;
-use super::thread::{Thread, ThreadId};
+use super::thread::Thread;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
@@ -29,10 +28,6 @@ use crate::host::syscall_types::SyscallReturn;
 use crate::utility::{childpid_watcher, pod, syscall};
 
 pub struct ManagedThread {
-    thread_id: ThreadId,
-    process_id: ProcessId,
-    host_id: HostId,
-
     ipc_shmem: Arc<ShMemBlock<'static, IPCData>>,
     is_running: Cell<bool>,
     return_code: Cell<Option<i32>>,
@@ -53,13 +48,14 @@ pub struct ManagedThread {
 }
 
 impl ManagedThread {
-    pub fn new(host_id: HostId, process_id: ProcessId, thread_id: ThreadId) -> Self {
+    /// Create a new `ManagedThread`.
+    // While this currently doesn't take any arguments, it wouldn't be
+    // surprising if we end up needing to add some.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
         let ipc_shmem =
             Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
         Self {
-            thread_id,
-            process_id,
-            host_id,
             ipc_shmem,
             is_running: Cell::new(false),
             return_code: Cell::new(None),
@@ -295,7 +291,6 @@ impl ManagedThread {
         &self,
         host: &Host,
         process: &Process,
-        child_tid: ThreadId,
         flags: libc::c_ulong,
         child_stack: ForeignPtr,
         ptid: ForeignPtr,
@@ -352,9 +347,6 @@ impl ManagedThread {
         trace!("native clone treated tid {child_native_tid}");
 
         Self {
-            thread_id: child_tid,
-            process_id: self.process_id,
-            host_id: self.host_id,
             ipc_shmem: child_ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),

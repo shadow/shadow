@@ -245,7 +245,7 @@ impl Thread {
         thread_id: ThreadId,
     ) -> RootedRc<RootedRefCell<Self>> {
         let thread = Self {
-            mthread: RefCell::new(ManagedThread::new(host.id(), process.id(), thread_id)),
+            mthread: RefCell::new(ManagedThread::new()),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
                     host.id(),
@@ -281,7 +281,6 @@ impl Thread {
         let child_mthread = self.mthread.borrow().handle_clone_syscall(
             host,
             process,
-            child_tid,
             flags,
             child_stack,
             ptid,
