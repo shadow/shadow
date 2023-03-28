@@ -1,4 +1,4 @@
-
+use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
@@ -34,11 +34,11 @@ pub struct ManagedThread {
     host_id: HostId,
 
     ipc_shmem: Arc<ShMemBlock<'static, IPCData>>,
-    is_running: bool,
-    return_code: Option<i32>,
+    is_running: Cell<bool>,
+    return_code: Cell<Option<i32>>,
 
     /* holds the event for the most recent call from the plugin/shim */
-    current_event: ShimEvent,
+    current_event: RefCell<ShimEvent>,
 
     notification_handle: Option<childpid_watcher::WatchHandle>,
 
@@ -49,7 +49,7 @@ pub struct ManagedThread {
     // of the native thread backing this thread object). This value will be set
     // to AFFINITY_UNINIT if CPU pinning is not enabled or if the thread has
     // not yet been pinned to a CPU.
-    affinity: i32,
+    affinity: Cell<i32>,
 }
 
 impl ManagedThread {
@@ -61,13 +61,13 @@ impl ManagedThread {
             process_id,
             host_id,
             ipc_shmem,
-            is_running: false,
-            return_code: None,
-            current_event: ShimEvent::Null,
+            is_running: Cell::new(false),
+            return_code: Cell::new(None),
+            current_event: RefCell::new(ShimEvent::Null),
             notification_handle: None,
             native_pid: None,
             native_tid: None,
-            affinity: cshadow::AFFINITY_UNINIT,
+            affinity: Cell::new(cshadow::AFFINITY_UNINIT),
         }
     }
 
@@ -80,7 +80,7 @@ impl ManagedThread {
     }
 
     pub fn native_syscall(
-        &mut self,
+        &self,
         host: &Host,
         process: &Process,
         n: i64,
@@ -162,13 +162,13 @@ impl ManagedThread {
         self.notification_handle = Some(handle);
 
         // When `continue`d we'll tell the plugin to start executing.
-        self.current_event = ShimEvent::Start;
+        *self.current_event.get_mut() = ShimEvent::Start;
 
-        self.is_running = true;
+        self.is_running.set(true);
     }
 
     pub fn resume(
-        &mut self,
+        &self,
         thread: &Thread,
         process: &Process,
         host: &Host,
@@ -182,7 +182,7 @@ impl ManagedThread {
         process.free_unsafe_borrows_flush().unwrap();
 
         loop {
-            match self.current_event {
+            match *self.current_event.borrow() {
                 e @ ShimEvent::Null => panic!("Unexpected event {e:?}"),
                 e @ ShimEvent::Start => {
                     // send the message to the shim to call main().
@@ -259,14 +259,14 @@ impl ManagedThread {
             }
             assert!(self.is_running());
 
-            self.current_event = match self.wait_for_next_event(host) {
+            *self.current_event.borrow_mut() = match self.wait_for_next_event(host) {
                 Ok(e) => e,
                 Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent::ProcessDeath,
             };
         }
     }
 
-    pub fn handle_process_exit(&mut self) {
+    pub fn handle_process_exit(&self) {
         // TODO: Only do this once per process; maybe by moving into `Process`.
         WORKER_SHARED
             .borrow()
@@ -283,16 +283,16 @@ impl ManagedThread {
     }
 
     pub fn return_code(&self) -> Option<i32> {
-        self.return_code
+        self.return_code.get()
     }
 
     pub fn is_running(&self) -> bool {
-        self.is_running
+        self.is_running.get()
     }
 
     // FIXME: return Result, propagating clone error instead of panicking.
     pub fn handle_clone_syscall(
-        &mut self,
+        &self,
         host: &Host,
         process: &Process,
         child_tid: ThreadId,
@@ -356,14 +356,14 @@ impl ManagedThread {
             process_id: self.process_id,
             host_id: self.host_id,
             ipc_shmem: child_ipc_shmem,
-            is_running: true,
-            return_code: None,
-            current_event: ShimEvent::Start,
+            is_running: Cell::new(true),
+            return_code: Cell::new(None),
+            current_event: RefCell::new(ShimEvent::Start),
             notification_handle: Some(child_notification_handle),
             native_pid: self.native_pid,
             native_tid: Some(nix::unistd::Pid::from_raw(child_native_tid)),
             // TODO: can we assume it's inherited from the current thread affinity?
-            affinity: cshadow::AFFINITY_UNINIT,
+            affinity: Cell::new(cshadow::AFFINITY_UNINIT),
         }
     }
 
@@ -381,7 +381,7 @@ impl ManagedThread {
         self.ipc_shmem.to_plugin().send(*event);
     }
 
-    fn wait_for_next_event(&mut self, host: &Host) -> Result<ShimEvent, SelfContainedChannelError> {
+    fn wait_for_next_event(&self, host: &Host) -> Result<ShimEvent, SelfContainedChannelError> {
         let event = self.ipc_shmem.from_plugin().receive();
 
         // The managed mthread has yielded control back to us. Reacquire the shared
@@ -404,22 +404,22 @@ impl ManagedThread {
         event
     }
 
-    fn cleanup(&mut self) {
+    fn cleanup(&self) {
         trace!("child {:?} exited", self.native_tid());
-        self.is_running = false;
+        self.is_running.set(false);
     }
 
-    fn sync_affinity_with_worker(&mut self) {
+    fn sync_affinity_with_worker(&self) {
         let current_affinity = scheduler::core_affinity()
             .map(|x| i32::try_from(x).unwrap())
             .unwrap_or(cshadow::AFFINITY_UNINIT);
-        self.affinity = unsafe {
+        self.affinity.set(unsafe {
             cshadow::affinity_setProcessAffinity(
                 self.native_tid().into(),
                 current_affinity,
-                self.affinity,
+                self.affinity.get(),
             )
-        };
+        });
     }
 
     fn spawn(

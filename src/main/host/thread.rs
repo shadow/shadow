@@ -47,7 +47,7 @@ impl Thread {
         Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
                 self.mthread
-                    .borrow_mut()
+                    .borrow()
                     .native_syscall(host, process, n, args)
                     .into()
             })
@@ -278,7 +278,7 @@ impl Thread {
         newtls: libc::c_ulong,
     ) -> Result<ThreadId, Errno> {
         let child_tid = ThreadId::from(host.get_new_process_id());
-        let child_mthread = self.mthread.borrow_mut().handle_clone_syscall(
+        let child_mthread = self.mthread.borrow().handle_clone_syscall(
             host,
             process,
             child_tid,
@@ -356,7 +356,7 @@ impl Thread {
 
         let cond = self
             .mthread
-            .borrow_mut()
+            .borrow()
             .resume(self, process_ctx.process, process_ctx.host);
 
         // Now we're done with old condition.
@@ -386,7 +386,7 @@ impl Thread {
 
     pub fn handle_process_exit(&self) {
         self.cleanup_syscall_condition();
-        self.mthread.borrow_mut().handle_process_exit();
+        self.mthread.borrow().handle_process_exit();
     }
 
     pub fn return_code(&self) -> Option<i32> {
