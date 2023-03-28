@@ -288,7 +288,6 @@ impl ManagedThread {
         self.is_running.get()
     }
 
-    // FIXME: return Result, propagating clone error instead of panicking.
     pub fn handle_clone_syscall(
         &self,
         host: &Host,
@@ -298,7 +297,7 @@ impl ManagedThread {
         ptid: ForeignPtr,
         ctid: ForeignPtr,
         newtls: libc::c_ulong,
-    ) -> ManagedThread {
+    ) -> Result<ManagedThread, Errno> {
         let child_ipc_shmem =
             Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
         let child_notification_handle = {
@@ -328,27 +327,24 @@ impl ManagedThread {
         // Create the new managed thread.
         // FIXME: we shouldn't pass the original ctid and ptid through; should use our own
         // values (e.g. in shared memory) and emulate.
-        let child_native_tid = libc::pid_t::from(
-            syscall::raw_return_value_to_result(
-                self.native_syscall(
-                    host,
-                    process,
-                    libc::SYS_clone,
-                    &[
-                        flags.into(),
-                        child_stack.into(),
-                        ptid.into(),
-                        ctid.into(),
-                        newtls.into(),
-                    ],
-                )
-                .into(),
+        let child_native_tid = libc::pid_t::from(syscall::raw_return_value_to_result(
+            self.native_syscall(
+                host,
+                process,
+                libc::SYS_clone,
+                &[
+                    flags.into(),
+                    child_stack.into(),
+                    ptid.into(),
+                    ctid.into(),
+                    newtls.into(),
+                ],
             )
-            .unwrap(),
-        );
+            .into(),
+        )?);
         trace!("native clone treated tid {child_native_tid}");
 
-        Self {
+        Ok(Self {
             ipc_shmem: child_ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
@@ -358,7 +354,7 @@ impl ManagedThread {
             native_tid: Some(nix::unistd::Pid::from_raw(child_native_tid)),
             // TODO: can we assume it's inherited from the current thread affinity?
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
-        }
+        })
     }
 
     fn continue_plugin(&self, host: &Host, event: &ShimEvent) {

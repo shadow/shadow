@@ -286,7 +286,7 @@ impl Thread {
             ptid,
             ctid,
             newtls,
-        );
+        )?;
         let child = Self {
             mthread: RefCell::new(child_mthread),
             syscallhandler: unsafe {
