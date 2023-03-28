@@ -61,9 +61,15 @@ impl Inner {
     }
 
     fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
-        if let Some(fd) = self.pids.get_mut(&pid).unwrap().fd.take() {
-            epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
-        }
+        let Some(piddata) = self.pids.get_mut(&pid) else {
+            // Already unregistered the pid
+            return;
+        };
+        let Some(fd) = piddata.fd.take() else {
+            // Already unwatched the pid
+            return;
+        };
+        epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
@@ -405,6 +411,11 @@ mod tests {
             );
         }
 
+        // Should be safe to unregister the pid now.
+        // We don't be able to register any more callbacks, but existing one
+        // should still work.
+        watcher.unregister_pid(child);
+
         // Child should still be alive.
         assert_eq!(
             waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
@@ -470,6 +481,11 @@ mod tests {
             );
         }
 
+        // Should be safe to unregister the pid now.
+        // We don't be able to register any more callbacks, but existing one
+        // should still work.
+        watcher.unregister_pid(child);
+
         // Wait for our callback to run.
         let mut callback_ran_lock = callback_ran.0.lock().unwrap();
         while !*callback_ran_lock {
@@ -509,6 +525,11 @@ mod tests {
                 }),
             );
         }
+
+        // Should be safe to unregister the pid now.
+        // We don't be able to register any more callbacks, but existing one
+        // should still work.
+        watcher.unregister_pid(child);
 
         for cb_ran in vec![cb1_ran, cb2_ran].drain(..) {
             let mut cb_ran_lock = cb_ran.0.lock().unwrap();
@@ -559,6 +580,11 @@ mod tests {
                 )
             })
             .collect();
+
+        // Should be safe to unregister the pid now.
+        // We don't be able to register any more callbacks, but existing one
+        // should still work.
+        watcher.unregister_pid(child);
 
         watcher.unregister_callback(child, handles[0]);
 
