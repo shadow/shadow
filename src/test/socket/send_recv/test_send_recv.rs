@@ -102,8 +102,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
     let sys_methods = [
         SendRecvMethod::ToFrom,
-        // TODO: support sendmsg/recvmsg
-        //SendRecvMethod::Msg,
+        SendRecvMethod::Msg,
         // TODO: support sendmmsg/recvmmsg
         //SendRecvMethod::Mmsg,
     ];
@@ -137,7 +136,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_send_after_dgram_peer_close"),
                     move || test_send_after_dgram_peer_close(sys_method, domain),
-                    set![TestEnv::Libc, TestEnv::Shadow],
+                    match (sys_method, domain) {
+                        // TODO: dgram inet sockets aren't yet supported by msg syscalls
+                        (SendRecvMethod::Msg, libc::AF_INET) => set![TestEnv::Libc],
+                        _ => set![TestEnv::Libc, TestEnv::Shadow],
+                    },
                 ),
             ]);
 
@@ -158,7 +161,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_not_connected"),
                     move || test_not_connected(sys_method, domain, sock_type),
-                    set![TestEnv::Libc, TestEnv::Shadow],
+                    match (sys_method, domain, sock_type) {
+                        // TODO: dgram inet sockets aren't yet supported by msg syscalls
+                        (SendRecvMethod::Msg, libc::AF_INET, libc::SOCK_DGRAM) => {
+                            set![TestEnv::Libc]
+                        }
+                        _ => set![TestEnv::Libc, TestEnv::Shadow],
+                    },
                 )]);
             }
         }
@@ -186,21 +195,29 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     format!("{s} <sys_method={sys_method:?}, init_method={init_method:?}, sock_type={sock_type}>")
                 };
 
+                let passing = match (sys_method, init_method, sock_type) {
+                    // TODO: dgram inet sockets aren't yet supported by msg syscalls
+                    (SendRecvMethod::Msg, SocketInitMethod::Inet, libc::SOCK_DGRAM) => {
+                        set![TestEnv::Libc]
+                    }
+                    _ => set![TestEnv::Libc, TestEnv::Shadow],
+                };
+
                 tests.extend(vec![
                     test_utils::ShadowTest::new(
                         &append_args("test_null_buf"),
                         move || test_null_buf(sys_method, init_method, sock_type),
-                        set![TestEnv::Libc, TestEnv::Shadow],
+                        passing.clone(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_zero_len_buf"),
                         move || test_zero_len_buf(sys_method, init_method, sock_type),
-                        set![TestEnv::Libc, TestEnv::Shadow],
+                        passing.clone(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_flag_dontwait"),
                         move || test_flag_dontwait(sys_method, init_method, sock_type),
-                        set![TestEnv::Libc, TestEnv::Shadow],
+                        passing.clone(),
                     ),
                 ]);
             }
@@ -232,31 +249,39 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         )
                     };
 
+                    let passing = match (sys_method, init_method, sock_type) {
+                        // TODO: dgram inet sockets aren't yet supported by msg syscalls
+                        (SendRecvMethod::Msg, SocketInitMethod::Inet, libc::SOCK_DGRAM) => {
+                            set![TestEnv::Libc]
+                        }
+                        _ => set![TestEnv::Libc, TestEnv::Shadow],
+                    };
+
                     tests.extend(vec![
                         test_utils::ShadowTest::new(
                             &append_args("test_null_addr"),
                             move || test_null_addr(sys_method, init_method, sock_type, flag),
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing.clone(),
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_null_both"),
                             move || test_null_both(sys_method, init_method, sock_type, flag),
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing.clone(),
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_nonnull_addr"),
                             move || test_nonnull_addr(sys_method, init_method, sock_type, flag),
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing.clone(),
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_recv_addr <bind_client=false>"),
                             move || test_recv_addr(sys_method, init_method, sock_type, flag, false),
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing.clone(),
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_recv_addr <bind_client=true>"),
                             move || test_recv_addr(sys_method, init_method, sock_type, flag, true),
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing.clone(),
                         ),
                     ]);
 
@@ -275,7 +300,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             test_utils::ShadowTest::new(
                                 &append_args("test_large_buf"),
                                 move || test_large_buf(sys_method, init_method, sock_type, flag),
-                                set![TestEnv::Libc, TestEnv::Shadow],
+                                passing.clone(),
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_after_peer_close_empty_buf"),
@@ -287,7 +312,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         flag,
                                     )
                                 },
-                                set![TestEnv::Libc, TestEnv::Shadow],
+                                passing.clone(),
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_after_peer_close_nonempty_buf"),
@@ -334,14 +359,14 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                         flag,
                                     )
                                 },
-                                set![TestEnv::Libc, TestEnv::Shadow],
+                                passing.clone(),
                             ),
                             test_utils::ShadowTest::new(
                                 &append_args("test_msg_order_dgram"),
                                 move || {
                                     test_msg_order_dgram(sys_method, init_method, sock_type, flag)
                                 },
-                                set![TestEnv::Libc, TestEnv::Shadow],
+                                passing.clone(),
                             ),
                         ]);
                     }
@@ -357,7 +382,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                     flag,
                                 )
                             },
-                            set![TestEnv::Libc, TestEnv::Shadow],
+                            passing,
                         )]);
                     }
                 }
@@ -367,7 +392,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         tests.extend(vec![test_utils::ShadowTest::new(
             &append_args("test_large_buf_udp"),
             move || test_large_buf_udp(sys_method),
-            set![TestEnv::Libc, TestEnv::Shadow],
+            match sys_method {
+                // TODO: dgram inet sockets aren't yet supported by msg syscalls
+                SendRecvMethod::Msg => set![TestEnv::Libc],
+                _ => set![TestEnv::Libc, TestEnv::Shadow],
+            },
         )]);
     }
 
@@ -1834,7 +1863,25 @@ fn check_send_call(
             expected_errnos,
         )?,
         SendRecvMethod::Msg => {
-            todo!();
+            let mut iov = libc::iovec {
+                // casting a const pointer to a mut pointer, but syscall should not mutate data
+                iov_base: buf_ptr as *mut core::ffi::c_void,
+                iov_len: args.len,
+            };
+            let msg = libc::msghdr {
+                // casting a const pointer to a mut pointer, but syscall should not mutate data
+                msg_name: addr_ptr as *mut _,
+                msg_namelen: args.addr_len,
+                msg_iov: &mut iov,
+                msg_iovlen: 1,
+                msg_control: std::ptr::null_mut(),
+                msg_controllen: 0,
+                msg_flags: 0,
+            };
+            test_utils::check_system_call!(
+                || unsafe { libc::sendmsg(args.fd, &msg, args.flags) },
+                expected_errnos,
+            )?
         }
         SendRecvMethod::Mmsg => {
             todo!();
@@ -1895,7 +1942,27 @@ fn check_recv_call(
             expected_errnos,
         )?,
         SendRecvMethod::Msg => {
-            todo!();
+            let mut iov = libc::iovec {
+                iov_base: buf_ptr as *mut core::ffi::c_void,
+                iov_len: args.len,
+            };
+            let mut msg = libc::msghdr {
+                msg_name: addr_ptr as *mut libc::c_void,
+                msg_namelen: args.addr_len.unwrap_or(0),
+                msg_iov: &mut iov,
+                msg_iovlen: 1,
+                msg_control: std::ptr::null_mut(),
+                msg_controllen: 0,
+                msg_flags: 0,
+            };
+            let rv = test_utils::check_system_call!(
+                || unsafe { libc::recvmsg(args.fd, &mut msg, args.flags) },
+                expected_errnos,
+            )?;
+            if let Some(ref mut addr_len) = args.addr_len {
+                *addr_len = msg.msg_namelen;
+            }
+            rv
         }
         SendRecvMethod::Mmsg => {
             todo!();
