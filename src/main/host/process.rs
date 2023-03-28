@@ -458,7 +458,7 @@ impl Process {
         main_thread.run(
             host,
             &self.plugin_path,
-            &self.argv,
+            self.argv.clone(),
             self.envv.clone(),
             &self.working_dir,
             self.strace_logging

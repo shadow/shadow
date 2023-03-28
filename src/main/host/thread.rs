@@ -320,7 +320,7 @@ impl Thread {
         &self,
         host: &Host,
         plugin_path: &CStr,
-        argv: &[CString],
+        argv: Vec<CString>,
         mut envv: Vec<CString>,
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
@@ -337,8 +337,7 @@ impl Thread {
         self.mthread.borrow_mut().run(
             host,
             plugin_path,
-            // FIXME: take a Vec
-            Vec::from(argv),
+            argv,
             envv,
             working_dir,
             strace_fd,
