@@ -172,7 +172,6 @@ safe_pointer_impl!(libc::c_void);
 safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(libc::sysinfo);
 safe_pointer_impl!(libc::iovec);
-safe_pointer_impl!(libc::msghdr);
 
 simple_debug_impl!(nix::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
@@ -287,6 +286,66 @@ fn fmt_string(
     }
 }
 
+/// Format a plugin's `libc::msghdr`. Any pointers contained in the `libc::msghdr` must be pointers
+/// within the plugin's memory space.
+fn fmt_msghdr(
+    f: &mut std::fmt::Formatter<'_>,
+    msg: &libc::msghdr,
+    _options: FmtOptions,
+    mem: &MemoryManager,
+) -> std::fmt::Result {
+    // read the socket address from `msg.msg_name`
+    let addr = match read_sockaddr(mem, ForeignPtr::from_raw_ptr(msg.msg_name), msg.msg_namelen) {
+        Ok(Some(addr)) => Some(addr),
+        Ok(None) | Err(_) => None,
+    };
+
+    // prepare the socket address for formatting
+    let msg_name = DebugFormatter(move |fmt| {
+        match addr {
+            Some(addr) => write!(fmt, "{addr} ({:p})", msg.msg_name),
+            // if we weren't able to read the sockaddr (NULL, EFAULT, etc), just show the pointer
+            None => write!(fmt, "{:p}", msg.msg_name),
+        }
+    });
+
+    // prepare the message flags for formatting
+    let msg_flags =
+        DebugFormatter(
+            move |fmt| match nix::sys::socket::MsgFlags::from_bits(msg.msg_flags) {
+                Some(x) => write!(fmt, "{x:?}"),
+                None => write!(fmt, "{:#x} <invalid>", msg.msg_flags),
+            },
+        );
+
+    // format msg
+    f.debug_struct("msghdr")
+        .field("msg_name", &msg_name)
+        .field("msg_namelen", &msg.msg_namelen)
+        .field("msg_iov", &msg.msg_iov)
+        .field("msg_iovlen", &msg.msg_iovlen)
+        .field("msg_control", &msg.msg_control)
+        .field("msg_controllen", &msg.msg_controllen)
+        .field("msg_flags", &msg_flags)
+        .finish()?;
+
+    Ok(())
+}
+
+/// Implements [`Debug`](std::fmt::Debug) using the provided closure.
+struct DebugFormatter<F>(F)
+where
+    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+
+impl<F> std::fmt::Debug for DebugFormatter<F>
+where
+    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0(f)
+    }
+}
+
 /// Displays a byte buffer with a specified length.
 pub struct SyscallBufferArg<const LEN_INDEX: usize> {}
 
@@ -339,5 +398,34 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrAr
         };
 
         write!(f, "{addr}")
+    }
+}
+
+impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        let ptr = self.reg.into();
+
+        if options == FmtOptions::Deterministic {
+            return write!(f, "<pointer>");
+        }
+
+        // read the msghdr
+        let ptr = TypedArrayForeignPtr::new::<libc::msghdr>(ptr, 1);
+        let Ok(msg) = mem.memory_ref(ptr) else {
+            // if we couldn't read the memory, just show the pointer instead
+            return write!(f, "{:p}", ptr.ptr());
+        };
+        let msg = &(*msg)[0];
+
+        // format the msghdr
+        fmt_msghdr(f, msg, options, mem)?;
+
+        // show the original pointer
+        write!(f, " ({:p})", ptr.ptr())
     }
 }
