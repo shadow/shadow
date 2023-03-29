@@ -18,7 +18,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "HostId".into(),
                 "SysCallArgs".into(),
                 "SysCallReg".into(),
-                "PluginPhysicalPtr".into(),
+                "ManagedPhysicalMemoryAddr".into(),
             ],
             ..base_config.export.clone()
         },

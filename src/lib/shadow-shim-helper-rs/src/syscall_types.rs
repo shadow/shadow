@@ -64,32 +64,32 @@ impl std::fmt::Pointer for ForeignPtr {
 /// Represents a pointer to a *physical* address in plugin memory.
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct PluginPhysicalPtr {
+pub struct ManagedPhysicalMemoryAddr {
     val: usize,
 }
 
-impl From<PluginPhysicalPtr> for usize {
-    fn from(v: PluginPhysicalPtr) -> usize {
+impl From<ManagedPhysicalMemoryAddr> for usize {
+    fn from(v: ManagedPhysicalMemoryAddr) -> usize {
         v.val
     }
 }
 
-impl From<usize> for PluginPhysicalPtr {
-    fn from(v: usize) -> PluginPhysicalPtr {
-        PluginPhysicalPtr { val: v }
+impl From<usize> for ManagedPhysicalMemoryAddr {
+    fn from(v: usize) -> ManagedPhysicalMemoryAddr {
+        ManagedPhysicalMemoryAddr { val: v }
     }
 }
 
-impl From<u64> for PluginPhysicalPtr {
-    fn from(v: u64) -> PluginPhysicalPtr {
-        PluginPhysicalPtr {
+impl From<u64> for ManagedPhysicalMemoryAddr {
+    fn from(v: u64) -> ManagedPhysicalMemoryAddr {
+        ManagedPhysicalMemoryAddr {
             val: v.try_into().unwrap(),
         }
     }
 }
 
-impl From<PluginPhysicalPtr> for u64 {
-    fn from(v: PluginPhysicalPtr) -> u64 {
+impl From<ManagedPhysicalMemoryAddr> for u64 {
+    fn from(v: ManagedPhysicalMemoryAddr) -> u64 {
         v.val.try_into().unwrap()
     }
 }

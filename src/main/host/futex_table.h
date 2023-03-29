@@ -46,6 +46,6 @@ bool futextable_remove(FutexTable* table, Futex* futex);
 
 /* Returns the futex at the given physical address, or NULL if we are not
  * storing a futex at the given address. */
-Futex* futextable_get(FutexTable* table, PluginPhysicalPtr ptr);
+Futex* futextable_get(FutexTable* table, ManagedPhysicalMemoryAddr ptr);
 
 #endif /* SRC_MAIN_HOST_FUTEX_TABLE_H_ */

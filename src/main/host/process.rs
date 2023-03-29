@@ -26,7 +26,7 @@ use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
 use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, PluginPhysicalPtr};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, ManagedPhysicalMemoryAddr};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -845,7 +845,7 @@ impl Process {
         }
     }
 
-    pub fn physical_address(&self, vptr: ForeignPtr) -> PluginPhysicalPtr {
+    pub fn physical_address(&self, vptr: ForeignPtr) -> ManagedPhysicalMemoryAddr {
         // We currently don't keep a true system-wide virtual <-> physical address
         // mapping. Instead we simply assume that no shadow processes map the same
         // underlying physical memory, and that therefore (pid, virtual address)
@@ -853,7 +853,7 @@ impl Process {
         //
         // If we ever want to support futexes in memory shared between processes,
         // we'll need to change this.  The most foolproof way to do so is probably
-        // to change PluginPhysicalPtr to be a bigger struct that identifies where
+        // to change ManagedPhysicalMemoryAddr to be a bigger struct that identifies where
         // the mapped region came from (e.g. what file), and the offset into that
         // region. Such "fat" physical pointers might make memory management a
         // little more cumbersome though, e.g. when using them as keys in the futex
@@ -880,7 +880,7 @@ impl Process {
         let low_part = u64::from(vptr);
         assert_eq!(low_part >> VADDR_BITS, 0);
 
-        PluginPhysicalPtr::from(high_part | low_part)
+        ManagedPhysicalMemoryAddr::from(high_part | low_part)
     }
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
@@ -2020,7 +2020,7 @@ mod export {
     pub unsafe extern "C" fn process_getPhysicalAddress(
         proc: *const ProcessRefCell,
         vptr: ForeignPtr,
-    ) -> PluginPhysicalPtr {
+    ) -> ManagedPhysicalMemoryAddr {
         let proc = unsafe { proc.as_ref().unwrap() };
 
         Worker::with_active_host(|host| {

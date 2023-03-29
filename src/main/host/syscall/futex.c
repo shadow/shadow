@@ -60,7 +60,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Foreig
     }
 
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
-    PluginPhysicalPtr futexPPtr =
+    ManagedPhysicalMemoryAddr futexPPtr =
         process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
 
     // Check if we already have a futex
@@ -123,7 +123,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Foreig
 static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, ForeignPtr futexVPtr,
                                                      int numWakeups) {
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
-    PluginPhysicalPtr futexPPtr =
+    ManagedPhysicalMemoryAddr futexPPtr =
         process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
 
     // Lookup the futex in the futex table
