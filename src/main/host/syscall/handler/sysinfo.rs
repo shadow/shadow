@@ -1,5 +1,5 @@
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
@@ -9,7 +9,7 @@ use crate::utility::pod;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
-    pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: PluginPtr) -> SyscallResult {
+    pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: ForeignPtr) -> SyscallResult {
         // Pointer to the plugin memory where we write the result.
         let info_ptr = TypedPluginPtr::new::<libc::sysinfo>(info_ptr, 1);
 

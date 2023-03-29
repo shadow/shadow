@@ -5,7 +5,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
@@ -515,7 +515,7 @@ impl LegacyTcpSocket {
     pub fn ioctl(
         &mut self,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match request {
@@ -900,7 +900,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: PluginPtr,
+        optval_ptr: ForeignPtr,
         optlen: libc::socklen_t,
         memory_manager: &mut MemoryManager,
     ) -> Result<libc::socklen_t, SyscallError> {
@@ -1043,7 +1043,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: PluginPtr,
+        optval_ptr: ForeignPtr,
         optlen: libc::socklen_t,
         memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {

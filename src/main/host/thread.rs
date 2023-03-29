@@ -6,7 +6,7 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
-use shadow_shim_helper_rs::syscall_types::{PluginPtr, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
@@ -25,7 +25,7 @@ pub struct Thread {
     process_id: ProcessId,
     // If non-NULL, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
-    tid_address: Cell<PluginPtr>,
+    tid_address: Cell<ForeignPtr>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
     cond: Cell<SendPointer<c::SysCallCondition>>,
@@ -150,7 +150,7 @@ impl Thread {
     }
 
     /// Natively execute munmap(2) on the given thread.
-    pub fn native_munmap(&self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
+    pub fn native_munmap(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
         self.native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?;
         Ok(())
     }
@@ -158,13 +158,13 @@ impl Thread {
     /// Natively execute mmap(2) on the given thread.
     pub fn native_mmap(
         &self,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         len: usize,
         prot: i32,
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> nix::Result<PluginPtr> {
+    ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
                 libc::SYS_mmap,
@@ -183,12 +183,12 @@ impl Thread {
     /// Natively execute mremap(2) on the given thread.
     pub fn native_mremap(
         &self,
-        old_addr: PluginPtr,
+        old_addr: ForeignPtr,
         old_len: usize,
         new_len: usize,
         flags: i32,
-        new_addr: PluginPtr,
-    ) -> nix::Result<PluginPtr> {
+        new_addr: ForeignPtr,
+    ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
                 libc::SYS_mremap,
@@ -204,7 +204,7 @@ impl Thread {
     }
 
     /// Natively execute mmap(2) on the given thread.
-    pub fn native_mprotect(&self, addr: PluginPtr, len: usize, prot: i32) -> nix::Result<()> {
+    pub fn native_mprotect(&self, addr: ForeignPtr, len: usize, prot: i32) -> nix::Result<()> {
         self.native_syscall(
             libc::SYS_mprotect,
             &[
@@ -217,7 +217,7 @@ impl Thread {
     }
 
     /// Natively execute open(2) on the given thread.
-    pub fn native_open(&self, pathname: PluginPtr, flags: i32, mode: i32) -> nix::Result<i32> {
+    pub fn native_open(&self, pathname: ForeignPtr, flags: i32, mode: i32) -> nix::Result<i32> {
         let res = self.native_syscall(
             libc::SYS_open,
             &[
@@ -236,17 +236,17 @@ impl Thread {
     }
 
     /// Natively execute brk(2) on the given thread.
-    pub fn native_brk(&self, addr: PluginPtr) -> nix::Result<PluginPtr> {
+    pub fn native_brk(&self, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
         let res = self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)])?;
-        Ok(PluginPtr::from(res))
+        Ok(ForeignPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    pub fn malloc_plugin_ptr(&self, size: usize) -> nix::Result<PluginPtr> {
+    pub fn malloc_foreign_ptr(&self, size: usize) -> nix::Result<ForeignPtr> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
-            PluginPtr::from(0usize),
+            ForeignPtr::from(0usize),
             size,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
@@ -255,8 +255,8 @@ impl Thread {
         )
     }
 
-    /// Frees a pointer previously returned by `malloc_plugin_ptr`
-    pub fn free_plugin_ptr(&self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
+    /// Frees a pointer previously returned by `malloc_foreign_ptr`
+    pub fn free_foreign_ptr(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
         self.native_munmap(ptr, size)?;
         Ok(())
     }
@@ -285,7 +285,7 @@ impl Thread {
             id: thread_id,
             host_id: host.id(),
             process_id: process.id(),
-            tid_address: Cell::new(PluginPtr::from(0usize)),
+            tid_address: Cell::new(ForeignPtr::from(0usize)),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
                 thread_id.into(),
@@ -391,11 +391,11 @@ impl Thread {
         unsafe { c::managedthread_isRunning(self.mthread.ptr()) }
     }
 
-    pub fn get_tid_address(&self) -> PluginPtr {
+    pub fn get_tid_address(&self) -> ForeignPtr {
         self.tid_address.get()
     }
 
-    pub fn set_tid_address(&self, ptr: PluginPtr) {
+    pub fn set_tid_address(&self, ptr: ForeignPtr) {
         self.tid_address.set(ptr)
     }
 

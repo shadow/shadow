@@ -1,7 +1,7 @@
 use log::*;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
@@ -25,7 +25,7 @@ impl SyscallHandler {
     pub fn getitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        curr_value_ptr: PluginPtr,
+        curr_value_ptr: ForeignPtr,
     ) -> SyscallResult {
         let curr_value_ptr = TypedPluginPtr::new::<libc::itimerval>(curr_value_ptr, 1);
 
@@ -47,8 +47,8 @@ impl SyscallHandler {
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        new_value_ptr: PluginPtr,
-        old_value_ptr: PluginPtr,
+        new_value_ptr: ForeignPtr,
+        old_value_ptr: ForeignPtr,
     ) -> SyscallResult {
         let new_value_ptr = TypedPluginPtr::new::<libc::itimerval>(new_value_ptr, 1);
         let old_value_ptr = TypedPluginPtr::new::<libc::itimerval>(old_value_ptr, 1);

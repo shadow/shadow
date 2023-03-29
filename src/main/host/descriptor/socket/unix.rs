@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::{
@@ -202,7 +202,7 @@ impl UnixSocket {
     pub fn ioctl(
         &mut self,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         self.protocol_state
@@ -253,7 +253,7 @@ impl UnixSocket {
         &self,
         _level: libc::c_int,
         _optname: libc::c_int,
-        _optval_ptr: PluginPtr,
+        _optval_ptr: ForeignPtr,
         _optlen: libc::socklen_t,
         _memory_manager: &mut MemoryManager,
     ) -> Result<libc::socklen_t, SyscallError> {
@@ -265,7 +265,7 @@ impl UnixSocket {
         &self,
         _level: libc::c_int,
         _optname: libc::c_int,
-        _optval_ptr: PluginPtr,
+        _optval_ptr: ForeignPtr,
         _optlen: libc::socklen_t,
         _memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {
@@ -628,7 +628,7 @@ impl ProtocolState {
         &mut self,
         common: &mut UnixSocketCommon,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match self {
@@ -892,7 +892,7 @@ where
         &mut self,
         _common: &mut UnixSocketCommon,
         _request: u64,
-        _arg_ptr: PluginPtr,
+        _arg_ptr: ForeignPtr,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         log::warn!("ioctl() while in state {}", std::any::type_name::<Self>());
@@ -1043,7 +1043,7 @@ impl Protocol for ConnOrientedInitial {
         &mut self,
         common: &mut UnixSocketCommon,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         common.ioctl(request, arg_ptr, memory_manager)
@@ -1519,7 +1519,7 @@ impl Protocol for ConnOrientedConnected {
         &mut self,
         common: &mut UnixSocketCommon,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         common.ioctl(request, arg_ptr, memory_manager)
@@ -1727,7 +1727,7 @@ impl Protocol for ConnLessInitial {
         &mut self,
         common: &mut UnixSocketCommon,
         request: u64,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         common.ioctl(request, arg_ptr, memory_manager)
@@ -2141,7 +2141,7 @@ impl UnixSocketCommon {
     pub fn ioctl(
         &mut self,
         request: u64,
-        _arg_ptr: PluginPtr,
+        _arg_ptr: ForeignPtr,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         log::warn!(

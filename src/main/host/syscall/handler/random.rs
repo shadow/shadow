@@ -1,7 +1,7 @@
 use log::*;
 use nix::errno::Errno;
 use rand::RngCore;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -12,7 +12,7 @@ impl SyscallHandler {
                   /* flags */ libc::c_uint)]
     pub fn getrandom(
         ctx: &mut SyscallContext,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         count: libc::size_t,
         _flags: libc::c_uint,
     ) -> SyscallResult {

@@ -26,7 +26,7 @@ use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
 use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::{PluginPhysicalPtr, PluginPtr};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, PluginPhysicalPtr};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -845,7 +845,7 @@ impl Process {
         }
     }
 
-    pub fn physical_address(&self, vptr: PluginPtr) -> PluginPhysicalPtr {
+    pub fn physical_address(&self, vptr: ForeignPtr) -> PluginPhysicalPtr {
         // We currently don't keep a true system-wide virtual <-> physical address
         // mapping. Instead we simply assume that no shadow processes map the same
         // underlying physical memory, and that therefore (pid, virtual address)
@@ -1395,7 +1395,7 @@ mod export {
     use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
-    use shadow_shim_helper_rs::syscall_types::PluginPtr;
+    use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
     use super::*;
     use crate::core::worker::Worker;
@@ -1519,7 +1519,7 @@ mod export {
     pub extern "C" fn process_readPtr(
         proc: *const ProcessRefCell,
         dst: *mut c_void,
-        src: PluginPtr,
+        src: ForeignPtr,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1547,7 +1547,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
         proc: *const ProcessRefCell,
-        dst: PluginPtr,
+        dst: ForeignPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {
@@ -1577,7 +1577,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: PluginPtr,
+        plugin_src: ForeignPtr,
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1601,7 +1601,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: PluginPtr,
+        plugin_src: ForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1623,7 +1623,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: PluginPtr,
+        plugin_src: ForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1647,7 +1647,7 @@ mod export {
     pub unsafe extern "C" fn process_readString(
         proc: *const ProcessRefCell,
         strbuf: *mut libc::c_char,
-        ptr: PluginPtr,
+        ptr: ForeignPtr,
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1677,7 +1677,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
         proc: *const ProcessRefCell,
-        plugin_src: PluginPtr,
+        plugin_src: ForeignPtr,
         n: usize,
         out_str: *mut *const c_char,
         out_strlen: *mut size_t,
@@ -1706,7 +1706,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         len: usize,
         prot: i32,
         flags: i32,
@@ -1730,7 +1730,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         len: usize,
     ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1747,11 +1747,11 @@ mod export {
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        old_addr: PluginPtr,
+        old_addr: ForeignPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_addr: PluginPtr,
+        new_addr: ForeignPtr,
     ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1769,7 +1769,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallReturn {
@@ -1790,7 +1790,7 @@ mod export {
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        plugin_src: PluginPtr,
+        plugin_src: ForeignPtr,
     ) -> SyscallReturn {
         let proc = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1966,7 +1966,7 @@ mod export {
         .unwrap()
     }
 
-    /// Frees all readable/writable plugin pointers. Unlike process_flushPtrs, any
+    /// Frees all readable/writable foreign pointers. Unlike process_flushPtrs, any
     /// previously returned writable pointer is *not* written back. Useful
     /// if an uninitialized writable pointer was obtained via `process_getWriteablePtr`,
     /// and we end up not wanting to write anything after all (in particular, don't
@@ -2019,7 +2019,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
         proc: *const ProcessRefCell,
-        vptr: PluginPtr,
+        vptr: ForeignPtr,
     ) -> PluginPhysicalPtr {
         let proc = unsafe { proc.as_ref().unwrap() };
 

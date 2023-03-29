@@ -9,7 +9,7 @@
 #include "main/bindings/c/bindings-opaque.h"
 
 // A virtual address in the plugin's address space
-typedef PluginPtr PluginVirtualPtr;
+typedef ForeignPtr PluginVirtualPtr;
 
 const char* syscallreturnstate_str(SyscallReturn_Tag s);
 

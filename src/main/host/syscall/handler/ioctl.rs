@@ -1,4 +1,4 @@
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
@@ -12,7 +12,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: libc::c_int,
         request: libc::c_ulong,
-        arg_ptr: PluginPtr,
+        arg_ptr: ForeignPtr,
     ) -> SyscallResult {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 

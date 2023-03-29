@@ -20,9 +20,9 @@ SyscallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
     unsigned long flags = args->args[0].as_i64;
-    PluginPtr child_stack = args->args[1].as_ptr;
-    PluginPtr ptid = args->args[2].as_ptr;
-    PluginPtr ctid = args->args[3].as_ptr;
+    ForeignPtr child_stack = args->args[1].as_ptr;
+    ForeignPtr ptid = args->args[2].as_ptr;
+    ForeignPtr ctid = args->args[3].as_ptr;
     unsigned long newtls = args->args[4].as_i64;
 
     unsigned long required_flags =

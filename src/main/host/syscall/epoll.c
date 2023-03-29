@@ -65,7 +65,7 @@ SyscallReturn syscallhandler_epoll_ctl(SysCallHandler* sys, const SysCallArgs* a
     gint epfd = args->args[0].as_i64;
     gint op = args->args[1].as_i64;
     gint fd = args->args[2].as_i64;
-    PluginPtr eventPtr = args->args[3].as_ptr; // const struct epoll_event*
+    ForeignPtr eventPtr = args->args[3].as_ptr; // const struct epoll_event*
 
     /* Make sure they didn't pass a NULL pointer if EPOLL_CTL_DEL is not used. */
     if (!eventPtr.val && op != EPOLL_CTL_DEL) {
@@ -128,7 +128,7 @@ SyscallReturn syscallhandler_epoll_ctl(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_epoll_wait(SysCallHandler* sys, const SysCallArgs* args) {
     gint epfd = args->args[0].as_i64;
-    PluginPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
+    ForeignPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
     gint maxevents = args->args[2].as_i64;
     gint timeout_ms = args->args[3].as_i64;
 
@@ -214,7 +214,7 @@ SyscallReturn syscallhandler_epoll_wait(SysCallHandler* sys, const SysCallArgs* 
 }
 
 SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
-    PluginPtr sigmask = args->args[4].as_ptr;
+    ForeignPtr sigmask = args->args[4].as_ptr;
 
     if (sigmask.val != 0) {
         error("epoll_pwait called with non-null sigmask, which is not yet supported by shadow; "

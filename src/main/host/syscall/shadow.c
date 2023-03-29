@@ -25,9 +25,9 @@ ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 SyscallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {
     utility_debugAssert(sys && args);
-    PluginPtr name_ptr = args->args[0].as_ptr;
+    ForeignPtr name_ptr = args->args[0].as_ptr;
     size_t name_len = args->args[1].as_u64;
-    PluginPtr addr_ptr = args->args[2].as_ptr;
+    ForeignPtr addr_ptr = args->args[2].as_ptr;
     size_t addr_len = args->args[3].as_u64;
 
     trace("Handling custom syscall shadow_hostname_to_addr_ipv4");
@@ -93,7 +93,7 @@ SyscallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
 SyscallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
-    PluginPtr shm_blk_pptr = args->args[0].as_ptr;
+    ForeignPtr shm_blk_pptr = args->args[0].as_ptr;
     ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
         _syscallhandler_getProcess(sys), shm_blk_pptr, sizeof(*shm_blk_ptr));
     thread_getShMBlockSerialized(_syscallhandler_getThread(sys), shm_blk_ptr);

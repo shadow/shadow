@@ -22,7 +22,7 @@ long managedthread_nativeSyscall(ManagedThread* mthread, long n, ...);
 // Execute a clone syscall in `parent`, and initialize `child` to manage the new
 // native thread.  Returns 0 on success or a negative errno on failure.
 int managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned long flags,
-                        PluginPtr child_stack, PluginPtr ptid, PluginPtr ctid,
+                        ForeignPtr child_stack, ForeignPtr ptid, ForeignPtr ctid,
                         unsigned long newtls);
 // XXX Can we avoid exposing these?
 pid_t managedthread_getNativePid(ManagedThread* mthread);

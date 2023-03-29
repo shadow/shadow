@@ -18,7 +18,7 @@
 ///////////////////////////////////////////////////////////
 
 static SyscallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pid, int resource,
-                                                   PluginPtr newlim, PluginPtr oldlim) {
+                                                   ForeignPtr newlim, ForeignPtr oldlim) {
     // TODO: for determinism, we may want to enforce static limits for certain resources, like
     // RLIMIT_NOFILE. Some applications like Tor will change behavior depending on these limits.
     if (pid == 0) {
@@ -104,7 +104,7 @@ SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             PluginVirtualPtr tid_addr = thread_getTidAddress(_syscallhandler_getThread(sys));
 
             // Make sure we have somewhere to copy the output
-            PluginPtr outptr = args->args[1].as_ptr;
+            ForeignPtr outptr = args->args[1].as_ptr;
             int res = process_writePtr(
                 _syscallhandler_getProcess(sys), outptr, &tid_addr.val, sizeof(tid_addr.val));
             if (res) {
@@ -134,8 +134,8 @@ SyscallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* arg
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
-    PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
-    PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
+    ForeignPtr newlim = args->args[2].as_ptr; // const struct rlimit*
+    ForeignPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
     trace("prlimit called on pid %i for resource %i", pid, resource);
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
@@ -144,8 +144,8 @@ SyscallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
-    PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
-    PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
+    ForeignPtr newlim = args->args[2].as_ptr; // const struct rlimit*
+    ForeignPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
     trace("prlimit called on pid %i for resource %i", pid, resource);
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }

@@ -24,7 +24,7 @@ use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
 use nix::{errno::Errno, unistd::Pid};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
 use crate::host::syscall_types::{SyscallError, SyscallResult, TypedPluginPtr};
@@ -586,7 +586,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, thread: &Thread, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &Thread, ptr: ForeignPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
@@ -596,7 +596,7 @@ impl MemoryManager {
     pub fn do_mmap(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         length: usize,
         prot: i32,
         flags: i32,
@@ -619,7 +619,7 @@ impl MemoryManager {
     pub fn handle_munmap(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         length: usize,
     ) -> SyscallResult {
         if self.memory_mapper.is_some() {
@@ -634,7 +634,7 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(&mut self, thread: &Thread, addr: PluginPtr, length: usize) -> nix::Result<()> {
+    fn do_munmap(&mut self, thread: &Thread, addr: ForeignPtr, length: usize) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
@@ -645,11 +645,11 @@ impl MemoryManager {
     pub fn handle_mremap(
         &mut self,
         thread: &Thread,
-        old_address: PluginPtr,
+        old_address: ForeignPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: PluginPtr,
+        new_address: ForeignPtr,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => {
@@ -662,7 +662,7 @@ impl MemoryManager {
     pub fn handle_mprotect(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
@@ -693,12 +693,12 @@ where
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
-        let ptr = PluginPtr::from(
+        let ptr = ForeignPtr::from(
             ctx.process
                 .memory_borrow_mut()
                 .do_mmap(
                     ctx.thread,
-                    PluginPtr::from(0usize),
+                    ForeignPtr::from(0usize),
                     len * std::mem::size_of::<T>(),
                     prot,
                     libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
@@ -791,7 +791,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> PluginPtr {
+    pub unsafe extern "C" fn allocdmem_foreignPtr(allocd_mem: *const AllocdMem<u8>) -> ForeignPtr {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
     }
 
@@ -861,7 +861,7 @@ mod export {
     pub extern "C" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
-        src: PluginPtr,
+        src: ForeignPtr,
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
@@ -882,7 +882,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
-        dst: PluginPtr,
+        dst: ForeignPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {

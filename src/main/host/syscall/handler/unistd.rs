@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use log::*;
 use nix::errno::Errno;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
@@ -140,7 +140,7 @@ impl SyscallHandler {
     pub fn read(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -187,7 +187,7 @@ impl SyscallHandler {
     pub fn pread64(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -234,7 +234,7 @@ impl SyscallHandler {
     fn read_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -250,7 +250,7 @@ impl SyscallHandler {
     pub fn write(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -298,7 +298,7 @@ impl SyscallHandler {
     pub fn pwrite64(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -346,7 +346,7 @@ impl SyscallHandler {
     fn write_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -358,17 +358,21 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: PluginPtr) -> SyscallResult {
+    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
                   /* flags */ nix::fcntl::OFlag)]
-    pub fn pipe2(ctx: &mut SyscallContext, fd_ptr: PluginPtr, flags: libc::c_int) -> SyscallResult {
+    pub fn pipe2(
+        ctx: &mut SyscallContext,
+        fd_ptr: ForeignPtr,
+        flags: libc::c_int,
+    ) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
-    fn pipe_helper(ctx: &mut SyscallContext, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
+    fn pipe_helper(ctx: &mut SyscallContext, fd_ptr: ForeignPtr, flags: i32) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
             return Err(nix::errno::Errno::EFAULT.into());

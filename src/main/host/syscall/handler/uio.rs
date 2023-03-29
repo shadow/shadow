@@ -1,5 +1,5 @@
 use nix::errno::Errno;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
@@ -16,7 +16,7 @@ impl SyscallHandler {
     pub fn readv(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -71,7 +71,7 @@ impl SyscallHandler {
     pub fn preadv(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -138,7 +138,7 @@ impl SyscallHandler {
     pub fn preadv2(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -225,7 +225,7 @@ impl SyscallHandler {
 
             let args = RecvmsgArgs {
                 iovs,
-                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+                control_ptr: TypedPluginPtr::new::<u8>(ForeignPtr::null(), 0),
                 flags: 0,
             };
 
@@ -271,7 +271,7 @@ impl SyscallHandler {
     pub fn writev(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -326,7 +326,7 @@ impl SyscallHandler {
     pub fn pwritev(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -394,7 +394,7 @@ impl SyscallHandler {
     pub fn pwritev2(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: PluginPtr,
+        iov_ptr: ForeignPtr,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -482,7 +482,7 @@ impl SyscallHandler {
             let args = SendmsgArgs {
                 addr: None,
                 iovs,
-                control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+                control_ptr: TypedPluginPtr::new::<u8>(ForeignPtr::null(), 0),
                 flags: 0,
             };
 
