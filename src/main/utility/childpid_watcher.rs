@@ -55,7 +55,7 @@ struct WorkerData {
     pids: HashMap<Pid, PidData>,
     // Used to be notified about processes exiting and commands being sent from
     // other threads.
-    epoll: std::os::unix::io::RawFd,
+    epoll: File,
     // The worker thread runs until this is set to true.
     cancelled: bool,
 }
@@ -70,7 +70,13 @@ impl WorkerData {
             // Already unwatched the pid
             return;
         };
-        epoll_ctl(self.epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
+        epoll_ctl(
+            self.epoll.as_raw_fd(),
+            EpollOp::EpollCtlDel,
+            fd.as_raw_fd(),
+            None,
+        )
+        .unwrap();
     }
 
     fn remove_pid(&mut self, pid: Pid) {
@@ -94,12 +100,6 @@ impl WorkerData {
         if self.should_remove_pid(pid) {
             self.remove_pid(pid)
         }
-    }
-}
-
-impl Drop for WorkerData {
-    fn drop(&mut self) {
-        nix::unistd::close(self.epoll).unwrap();
     }
 }
 
@@ -165,7 +165,7 @@ impl ChildPidWatcher {
         let mut worker_data = WorkerData {
             next_handle: 1,
             pids: HashMap::new(),
-            epoll,
+            epoll: unsafe { File::from_raw_fd(epoll) },
             cancelled: false,
         };
         while !worker_data.cancelled {
@@ -284,7 +284,7 @@ impl ChildPidWatcher {
             assert!(prev.is_none());
             let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
             epoll_ctl(
-                worker_data.epoll,
+                worker_data.epoll.as_raw_fd(),
                 EpollOp::EpollCtlAdd,
                 raw_read_fd,
                 Some(&mut event),
