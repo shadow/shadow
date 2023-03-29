@@ -172,6 +172,7 @@ safe_pointer_impl!(libc::c_void);
 safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(libc::sysinfo);
 safe_pointer_impl!(libc::iovec);
+safe_pointer_impl!(libc::msghdr);
 
 simple_debug_impl!(nix::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);

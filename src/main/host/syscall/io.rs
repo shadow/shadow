@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -9,7 +9,13 @@ use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
 
-pub fn write_sockaddr(
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`, and
+/// writes the socket address length into `plugin_addr_len`. The `plugin_addr_len` pointer is a
+/// value-result argument, so it should be initialized with the size of the `plugin_addr` buffer. If
+/// the original value of `plugin_addr_len` is smaller than the socket address' length, then the
+/// written socket address will be truncated. In this case the value written to `plugin_addr_len`
+/// will be larger than its original value.
+pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
     plugin_addr: ForeignPtr,
@@ -52,6 +58,32 @@ pub fn write_sockaddr(
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
+}
+
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`. If the
+/// buffer length is smaller than the socket address length, the written address will be truncated.
+/// The length of the socket address is returned.
+pub fn write_sockaddr(
+    mem: &mut MemoryManager,
+    addr: &SockaddrStorage,
+    plugin_addr: ForeignPtr,
+    plugin_addr_len: libc::socklen_t,
+) -> Result<libc::socklen_t, SyscallError> {
+    let from_addr_slice = addr.as_slice();
+    let from_len: u32 = from_addr_slice.len().try_into().unwrap();
+
+    // return early if the address length is 0
+    if plugin_addr_len == 0 {
+        return Ok(from_len);
+    }
+
+    // the minimum of the given address buffer length and the real address length
+    let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
+
+    let plugin_addr = TypedArrayForeignPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
+    mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
+
+    Ok(from_len)
 }
 
 pub fn read_sockaddr(
@@ -113,6 +145,16 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
     mem.copy_to_ptr(val_ptr, val)?;
 
     Ok(val_len)
+}
+
+/// Analogous to [`libc::msghdr`].
+pub struct MsgHdr {
+    pub name: ForeignPtr,
+    pub name_len: libc::socklen_t,
+    pub iovs: Vec<IoVec>,
+    pub control: ForeignPtr,
+    pub control_len: libc::size_t,
+    pub flags: libc::c_int,
 }
 
 /// Analogous to [`libc::iovec`].
@@ -312,4 +354,52 @@ pub fn read_iovecs(
     }
 
     Ok(iovs)
+}
+
+/// Read a plugin's [`libc::msghdr`] into a [`MsgHdr`].
+pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr) -> Result<MsgHdr, Errno> {
+    let msg_ptr = TypedArrayForeignPtr::new::<libc::msghdr>(msg_ptr, 1);
+    let mem_ref = mem.memory_ref(msg_ptr)?;
+    let plugin_msg = mem_ref.deref()[0];
+
+    msghdr_to_rust(&plugin_msg, mem)
+}
+
+/// Used to update a `libc::msghdr`. Only writes the [`libc::msghdr`] `msg_namelen`,
+/// `msg_controllen`, and `msg_flags` fields, which are the only fields that can be changed by
+/// `recvmsg()`.
+pub fn update_msghdr(
+    mem: &mut MemoryManager,
+    msg_ptr: ForeignPtr,
+    msg: MsgHdr,
+) -> Result<(), Errno> {
+    let msg_ptr = TypedArrayForeignPtr::new::<libc::msghdr>(msg_ptr, 1);
+    let mut mem_ref = mem.memory_ref_mut(msg_ptr)?;
+    let mut plugin_msg = &mut mem_ref.deref_mut()[0];
+
+    // write only the msg fields that may have changed
+    plugin_msg.msg_namelen = msg.name_len;
+    plugin_msg.msg_controllen = msg.control_len;
+    plugin_msg.msg_flags = msg.flags;
+
+    mem_ref.flush()?;
+
+    Ok(())
+}
+
+/// Helper to read a plugin's [`libc::msghdr`] into a [`MsgHdr`]. While `msg` is a local struct, it
+/// should have been copied from plugin memory, meaning any pointers in the struct are pointers to
+/// plugin memory, not local memory.
+fn msghdr_to_rust(msg: &libc::msghdr, mem: &MemoryManager) -> Result<MsgHdr, Errno> {
+    let iovs = read_iovecs(mem, ForeignPtr::from_raw_ptr(msg.msg_iov), msg.msg_iovlen)?;
+    assert_eq!(iovs.len(), msg.msg_iovlen);
+
+    Ok(MsgHdr {
+        name: ForeignPtr::from_raw_ptr(msg.msg_name),
+        name_len: msg.msg_namelen,
+        iovs,
+        control: ForeignPtr::from_raw_ptr(msg.msg_control),
+        control_len: msg.msg_controllen,
+        flags: msg.msg_flags,
+    })
 }
