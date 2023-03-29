@@ -18,14 +18,6 @@
 #include "main/bindings/c/bindings.h"
 #include "main/utility/utility.h"
 
-guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
-    GString* buffer = g_string_new(NULL);
-    g_string_printf(buffer, "%u:%u", ip, port);
-    guint hash_value = g_str_hash(buffer->str);
-    g_string_free(buffer, TRUE);
-    return hash_value;
-}
-
 gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
                                    gpointer userData) {
     utility_debugAssert(value1 && value2);
