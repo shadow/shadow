@@ -11,14 +11,6 @@ use crate::shim_event::ShimEvent;
 // https://github.com/shadow/shadow/pull/2791, adding a large alignment to
 // the mock IPC helped make some measurement artifacts go away by ensuring
 // the two channels are on the same cache line.
-//
-// Here it *appears* to have brought the changeover to the Rust IPC
-// implementation from having ~1.5% overhead to neutral. This is somewhat
-// surprising since `EventData` is probably big enough that the two
-// channels still won't end up on the same cache line. It could be
-// measurement error or randomness, but keeping it for now since it
-// shouldn't hurt anything.
-//FIXME #[repr(align(128))]
 pub struct IPCData {
     shadow_to_plugin: SelfContainedChannel<ShimEvent>,
     plugin_to_shadow: SelfContainedChannel<ShimEvent>,
