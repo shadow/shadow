@@ -18,40 +18,12 @@
 #include "main/bindings/c/bindings.h"
 #include "main/utility/utility.h"
 
-static GString* _utility_formatError(const gchar* file, gint line, const gchar* function,
-                                     const gchar* message, va_list vargs) {
-    GString* errorString = g_string_new("**ERROR ENCOUNTERED**\n");
-    g_string_append_printf(errorString, "\tAt process: %i (parent %i)\n", (gint) getpid(), (gint) getppid());
-    g_string_append_printf(errorString, "\tAt file: %s\n", file);
-    g_string_append_printf(errorString, "\tAt line: %i\n", line);
-    g_string_append_printf(errorString, "\tAt function: %s\n", function);
-    g_string_append_printf(errorString, "\tMessage: ");
-    g_string_append_vprintf(errorString, message, vargs);
-    g_string_append_printf(errorString, "\n");
-    return errorString;
-}
-
 void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message,
                          ...) {
-    logger_flush(logger_getDefault());
-
     va_list vargs;
     va_start(vargs, message);
-    GString* errorString = _utility_formatError(file, line, function, message, vargs);
+    utility_handleErrorInner(file, line, function, message, vargs);
     va_end(vargs);
-
-    char* backtraceString = backtrace();
-
-    if (!isatty(fileno(stdout))) {
-        g_print("%s**BEGIN BACKTRACE**\n%s\n**END BACKTRACE**\n**ABORTING**\n", errorString->str,
-                backtraceString);
-    }
-    g_printerr("%s**BEGIN BACKTRACE**\n%s\n**END BACKTRACE**\n**ABORTING**\n", errorString->str,
-               backtraceString);
-
-    g_string_free(errorString, TRUE);
-    backtrace_free(backtraceString);
-    abort();
 }
 
 gboolean utility_isRandomPath(const gchar* path) {
