@@ -8,11 +8,11 @@ use vasi::VirtualAddressSpaceIndependent;
 /// from a different virtual address space than where the pointer originated.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct PluginPtr {
+pub struct ForeignPtr {
     val: usize,
 }
 
-impl PluginPtr {
+impl ForeignPtr {
     pub fn null() -> Self {
         0usize.into()
     }
@@ -21,40 +21,40 @@ impl PluginPtr {
         self.val == 0
     }
 
-    /// Create a `PluginPtr` from a raw pointer to plugin memory.
+    /// Create a `ForeignPtr` from a raw pointer to plugin memory.
     pub fn from_raw_ptr<T>(ptr: *mut T) -> Self {
         let val = ptr as usize;
-        PluginPtr { val }
+        ForeignPtr { val }
     }
 }
 
-impl From<PluginPtr> for usize {
-    fn from(v: PluginPtr) -> usize {
+impl From<ForeignPtr> for usize {
+    fn from(v: ForeignPtr) -> usize {
         v.val
     }
 }
 
-impl From<usize> for PluginPtr {
-    fn from(v: usize) -> PluginPtr {
-        PluginPtr { val: v }
+impl From<usize> for ForeignPtr {
+    fn from(v: usize) -> ForeignPtr {
+        ForeignPtr { val: v }
     }
 }
 
-impl From<u64> for PluginPtr {
-    fn from(v: u64) -> PluginPtr {
-        PluginPtr {
+impl From<u64> for ForeignPtr {
+    fn from(v: u64) -> ForeignPtr {
+        ForeignPtr {
             val: v.try_into().unwrap(),
         }
     }
 }
 
-impl From<PluginPtr> for u64 {
-    fn from(v: PluginPtr) -> u64 {
+impl From<ForeignPtr> for u64 {
+    fn from(v: ForeignPtr) -> u64 {
         v.val.try_into().unwrap()
     }
 }
 
-impl std::fmt::Pointer for PluginPtr {
+impl std::fmt::Pointer for ForeignPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ptr = self.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
@@ -64,32 +64,32 @@ impl std::fmt::Pointer for PluginPtr {
 /// Represents a pointer to a *physical* address in plugin memory.
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-pub struct PluginPhysicalPtr {
+pub struct ManagedPhysicalMemoryAddr {
     val: usize,
 }
 
-impl From<PluginPhysicalPtr> for usize {
-    fn from(v: PluginPhysicalPtr) -> usize {
+impl From<ManagedPhysicalMemoryAddr> for usize {
+    fn from(v: ManagedPhysicalMemoryAddr) -> usize {
         v.val
     }
 }
 
-impl From<usize> for PluginPhysicalPtr {
-    fn from(v: usize) -> PluginPhysicalPtr {
-        PluginPhysicalPtr { val: v }
+impl From<usize> for ManagedPhysicalMemoryAddr {
+    fn from(v: usize) -> ManagedPhysicalMemoryAddr {
+        ManagedPhysicalMemoryAddr { val: v }
     }
 }
 
-impl From<u64> for PluginPhysicalPtr {
-    fn from(v: u64) -> PluginPhysicalPtr {
-        PluginPhysicalPtr {
+impl From<u64> for ManagedPhysicalMemoryAddr {
+    fn from(v: u64) -> ManagedPhysicalMemoryAddr {
+        ManagedPhysicalMemoryAddr {
             val: v.try_into().unwrap(),
         }
     }
 }
 
-impl From<PluginPhysicalPtr> for u64 {
-    fn from(v: PluginPhysicalPtr) -> u64 {
+impl From<ManagedPhysicalMemoryAddr> for u64 {
+    fn from(v: ManagedPhysicalMemoryAddr) -> u64 {
         v.val.try_into().unwrap()
     }
 }
@@ -119,7 +119,7 @@ impl SysCallArgs {
 pub union SysCallReg {
     as_i64: i64,
     as_u64: u64,
-    as_ptr: PluginPtr,
+    as_ptr: ForeignPtr,
 }
 // SysCallReg and all of its fields must be transmutable with a 64 bit integer.
 // TODO: Store as a single `u64` and explicitly transmute in the conversion
@@ -238,14 +238,14 @@ impl TryFrom<SysCallReg> for i16 {
     }
 }
 
-impl From<PluginPtr> for SysCallReg {
-    fn from(v: PluginPtr) -> Self {
+impl From<ForeignPtr> for SysCallReg {
+    fn from(v: ForeignPtr) -> Self {
         Self { as_ptr: v }
     }
 }
 
-impl From<SysCallReg> for PluginPtr {
-    fn from(v: SysCallReg) -> PluginPtr {
+impl From<SysCallReg> for ForeignPtr {
+    fn from(v: SysCallReg) -> ForeignPtr {
         unsafe { v.as_ptr }
     }
 }

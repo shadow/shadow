@@ -17,7 +17,7 @@ typedef struct _Futex Futex;
 #include "main/host/syscall_types.h"
 
 // Create a new futex object using the unique address as the futex word.
-Futex* futex_new(PluginPhysicalPtr word);
+Futex* futex_new(ManagedPhysicalMemoryAddr word);
 
 // Increment the reference count for the futex.
 void futex_ref(Futex* futex);
@@ -27,7 +27,7 @@ void futex_unref(Futex* futex);
 void futex_unref_func(void* futex);
 
 // Return the unique address of this futex.
-PluginPhysicalPtr futex_getAddress(Futex* futex);
+ManagedPhysicalMemoryAddr futex_getAddress(Futex* futex);
 
 // Wakeup at most the given number of listener threads waiting on this futex; return the number of
 // threads that were woken up.

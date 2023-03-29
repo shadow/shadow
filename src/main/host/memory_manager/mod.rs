@@ -24,10 +24,10 @@ use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
 use nix::{errno::Errno, unistd::Pid};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
-use crate::host::syscall_types::{SyscallError, SyscallResult, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, SyscallResult, TypedArrayForeignPtr};
 use crate::host::thread::Thread;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
@@ -39,7 +39,7 @@ mod memory_mapper;
 /// a range of plugin memory.
 pub struct MemoryReaderCursor<'a> {
     memory_manager: &'a MemoryManager,
-    ptr: TypedPluginPtr<u8>,
+    ptr: TypedArrayForeignPtr<u8>,
     offset: usize,
 }
 
@@ -85,7 +85,7 @@ impl<'a> std::io::Seek for MemoryReaderCursor<'a> {
 /// a range of plugin memory.
 pub struct MemoryWriterCursor<'a> {
     memory_manager: &'a mut MemoryManager,
-    ptr: TypedPluginPtr<u8>,
+    ptr: TypedArrayForeignPtr<u8>,
     offset: usize,
 }
 
@@ -125,7 +125,7 @@ enum CopiedOrMapped<'a, T: Debug + Pod> {
 /// allowing, e.g.:
 ///
 /// ```ignore
-/// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+/// let tpp = TypedArrayForeignPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref(ptr);
 /// assert_eq!(pmr.len(), 10);
 /// let x = pmr[5];
@@ -174,7 +174,7 @@ where
 #[derive(Debug)]
 enum CopiedOrMappedMut<'a, T: Debug + Pod> {
     // Data copied from process memory, to be written back.
-    Copied(MemoryCopier, TypedPluginPtr<T>, Vec<T>),
+    Copied(MemoryCopier, TypedArrayForeignPtr<T>, Vec<T>),
     // Memory-mapped process memory.
     Mapped(&'a mut [T]),
 }
@@ -183,7 +183,7 @@ enum CopiedOrMappedMut<'a, T: Debug + Pod> {
 /// allowing, e.g.:
 ///
 /// ```ignore
-/// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+/// let tpp = TypedArrayForeignPtr::<u32>::new(ptr, 10);
 /// let pmr = memory_manager.memory_ref_mut(ptr);
 /// assert_eq!(pmr.len(), 10);
 /// pmr[5] = 100;
@@ -198,7 +198,7 @@ pub struct ProcessMemoryRefMut<'a, T: Debug + Pod> {
 }
 
 impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
-    fn new_copied(copier: MemoryCopier, ptr: TypedPluginPtr<T>, v: Vec<T>) -> Self {
+    fn new_copied(copier: MemoryCopier, ptr: TypedArrayForeignPtr<T>, v: Vec<T>) -> Self {
         Self {
             copied_or_mapped: CopiedOrMappedMut::Copied(copier, ptr, v),
             dirty: true,
@@ -339,7 +339,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_ref<T: Pod + Debug>(&self, ptr: TypedPluginPtr<T>) -> Option<&[T]> {
+    fn mapped_ref<T: Pod + Debug>(&self, ptr: TypedArrayForeignPtr<T>) -> Option<&[T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No mutable refs to process memory exist by preconditions of
         // MemoryManager::new + we have a reference.
@@ -349,7 +349,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_mut<T: Pod + Debug>(&mut self, ptr: TypedPluginPtr<T>) -> Option<&mut [T]> {
+    fn mapped_mut<T: Pod + Debug>(&mut self, ptr: TypedArrayForeignPtr<T>) -> Option<&mut [T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No other refs to process memory exist by preconditions of
         // MemoryManager::new + we have an exclusive reference.
@@ -360,7 +360,7 @@ impl MemoryManager {
     /// the memory isn't mapped into Shadow.
     pub fn memory_ref<T: Pod + Debug>(
         &self,
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
         if let Some(mref) = self.mapped_ref(ptr) {
             Ok(ProcessMemoryRef::new_mapped(mref))
@@ -377,7 +377,7 @@ impl MemoryManager {
     /// buffer if the memory isn't mapped into Shadow.
     pub fn memory_ref_prefix<T: Pod + Debug>(
         &self,
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<ProcessMemoryRef<T>, Errno> {
         // Only use the mapped ref if it's able to get the whole region,
         // since otherwise the copying version might be able to get more
@@ -398,7 +398,7 @@ impl MemoryManager {
     /// Creates a std::io::Read accessor for the specified plugin memory. Useful
     /// for handing off the ability to read process memory to non-Shadow APIs,
     /// without copying it to local memory first.
-    pub fn reader(&self, ptr: TypedPluginPtr<u8>) -> MemoryReaderCursor<'_> {
+    pub fn reader(&self, ptr: TypedArrayForeignPtr<u8>) -> MemoryReaderCursor<'_> {
         MemoryReaderCursor {
             memory_manager: self,
             ptr,
@@ -412,7 +412,7 @@ impl MemoryManager {
     /// to process memory.
     pub fn read_vals<T: Pod + Debug, const N: usize>(
         &self,
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<[T; N], Errno> {
         assert_eq!(ptr.len(), N);
 
@@ -429,7 +429,7 @@ impl MemoryManager {
     pub fn copy_from_ptr<T: Debug + Pod>(
         &self,
         dst: &mut [T],
-        src: TypedPluginPtr<T>,
+        src: TypedArrayForeignPtr<T>,
     ) -> Result<(), Errno> {
         if let Some(src) = self.mapped_ref(src) {
             dst.copy_from_slice(src);
@@ -445,7 +445,7 @@ impl MemoryManager {
     fn copy_prefix_from_ptr<T: Debug + Pod>(
         &self,
         buf: &mut [T],
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<usize, Errno> {
         if let Some(src) = self.mapped_ref(ptr) {
             buf.copy_from_slice(src);
@@ -465,7 +465,7 @@ impl MemoryManager {
     pub fn copy_str_from_ptr<'a>(
         &self,
         dst: &'a mut [u8],
-        src: TypedPluginPtr<u8>,
+        src: TypedArrayForeignPtr<u8>,
     ) -> Result<&'a std::ffi::CStr, Errno> {
         let nread = self.copy_prefix_from_ptr(dst, src)?;
         let dst = &dst[..nread];
@@ -481,7 +481,7 @@ impl MemoryManager {
     /// back into the process if and when the reference is flushed.
     pub fn memory_ref_mut<T: Pod + Debug>(
         &mut self,
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
         // Work around a limitation of the borrow checker by getting this
         // immutable borrow of self out of the way before we do a mutable
@@ -510,7 +510,7 @@ impl MemoryManager {
     #[inline(always)]
     pub fn memory_ref_mut_uninit<T: Pod + Debug>(
         &mut self,
-        ptr: TypedPluginPtr<T>,
+        ptr: TypedArrayForeignPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
         // Work around a limitation of the borrow checker by getting this
         // immutable borrow of self out of the way before we do a mutable
@@ -548,7 +548,7 @@ impl MemoryManager {
     /// reference saves a copy.
     pub fn copy_to_ptr<T: Pod + Debug>(
         &mut self,
-        dst: TypedPluginPtr<T>,
+        dst: TypedArrayForeignPtr<T>,
         src: &[T],
     ) -> Result<(), Errno> {
         if let Some(dst) = self.mapped_mut(dst) {
@@ -578,7 +578,7 @@ impl MemoryManager {
     }
 
     /// Create a write accessor for the specified plugin memory.
-    pub fn writer(&mut self, ptr: TypedPluginPtr<u8>) -> MemoryWriterCursor<'_> {
+    pub fn writer(&mut self, ptr: TypedArrayForeignPtr<u8>) -> MemoryWriterCursor<'_> {
         MemoryWriterCursor {
             memory_manager: self,
             ptr,
@@ -586,7 +586,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, thread: &Thread, ptr: PluginPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, thread: &Thread, ptr: ForeignPtr) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(thread, ptr),
             None => Err(SyscallError::Native),
@@ -596,7 +596,7 @@ impl MemoryManager {
     pub fn do_mmap(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         length: usize,
         prot: i32,
         flags: i32,
@@ -607,7 +607,7 @@ impl MemoryManager {
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_mmap_result(
                 thread,
-                TypedPluginPtr::new::<u8>(addr, length),
+                TypedArrayForeignPtr::new::<u8>(addr, length),
                 prot,
                 flags,
                 fd,
@@ -619,7 +619,7 @@ impl MemoryManager {
     pub fn handle_munmap(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         length: usize,
     ) -> SyscallResult {
         if self.memory_mapper.is_some() {
@@ -634,7 +634,7 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(&mut self, thread: &Thread, addr: PluginPtr, length: usize) -> nix::Result<()> {
+    fn do_munmap(&mut self, thread: &Thread, addr: ForeignPtr, length: usize) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
@@ -645,11 +645,11 @@ impl MemoryManager {
     pub fn handle_mremap(
         &mut self,
         thread: &Thread,
-        old_address: PluginPtr,
+        old_address: ForeignPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: PluginPtr,
+        new_address: ForeignPtr,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => {
@@ -662,7 +662,7 @@ impl MemoryManager {
     pub fn handle_mprotect(
         &mut self,
         thread: &Thread,
-        addr: PluginPtr,
+        addr: ForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
@@ -678,7 +678,7 @@ pub struct AllocdMem<T>
 where
     T: Pod,
 {
-    ptr: TypedPluginPtr<T>,
+    ptr: TypedArrayForeignPtr<T>,
     // Whether the pointer has been freed.
     freed: bool,
 }
@@ -693,12 +693,12 @@ where
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
-        let ptr = PluginPtr::from(
+        let ptr = ForeignPtr::from(
             ctx.process
                 .memory_borrow_mut()
                 .do_mmap(
                     ctx.thread,
-                    PluginPtr::from(0usize),
+                    ForeignPtr::from(0usize),
                     len * std::mem::size_of::<T>(),
                     prot,
                     libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
@@ -709,13 +709,13 @@ where
         );
 
         Self {
-            ptr: TypedPluginPtr::new::<T>(ptr, len),
+            ptr: TypedArrayForeignPtr::new::<T>(ptr, len),
             freed: false,
         }
     }
 
     /// Pointer to the allocated memory.
-    pub fn ptr(&self) -> TypedPluginPtr<T> {
+    pub fn ptr(&self) -> TypedArrayForeignPtr<T> {
         self.ptr
     }
 
@@ -791,7 +791,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> PluginPtr {
+    pub unsafe extern "C" fn allocdmem_foreignPtr(allocd_mem: *const AllocdMem<u8>) -> ForeignPtr {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
     }
 
@@ -861,11 +861,11 @@ mod export {
     pub extern "C" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
-        src: PluginPtr,
+        src: ForeignPtr,
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
-        let src = TypedPluginPtr::new::<u8>(src, n);
+        let src = TypedArrayForeignPtr::new::<u8>(src, n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         match mem.copy_from_ptr(dst, src) {
@@ -882,12 +882,12 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
-        dst: PluginPtr,
+        dst: ForeignPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_mut() }.unwrap();
-        let dst = TypedPluginPtr::new::<u8>(dst, n);
+        let dst = TypedArrayForeignPtr::new::<u8>(dst, n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match mem.copy_to_ptr(dst, src) {
             Ok(_) => 0,

@@ -51,7 +51,7 @@ struct _ManagedThread {
 
 typedef struct _ShMemWriteBlock {
     ShMemBlock blk;
-    PluginPtr plugin_ptr;
+    ForeignPtr foreign_ptr;
     size_t n;
 } ShMemWriteBlock;
 
@@ -465,7 +465,7 @@ int managedthread_getReturnCode(ManagedThread* mthread) { return mthread->return
 bool managedthread_isRunning(ManagedThread* mthread) { return mthread->isRunning; }
 
 pid_t managedthread_clone(ManagedThread* child, ManagedThread* parent, unsigned long flags,
-                          PluginPtr child_stack, PluginPtr ptid, PluginPtr ctid,
+                          ForeignPtr child_stack, ForeignPtr ptid, ForeignPtr ctid,
                           unsigned long newtls) {
     child->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_debugAssert(child->ipc_blk.p);

@@ -1,10 +1,10 @@
 use log::warn;
 use nix::errno::Errno;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
 
@@ -31,9 +31,9 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: PluginPtr,
+        mask_ptr: ForeignPtr,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -63,9 +63,9 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: PluginPtr,
+        mask_ptr: ForeignPtr,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = TypedPluginPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -99,12 +99,12 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
     pub fn rseq(
         ctx: &mut SyscallContext,
-        rseq_ptr: PluginPtr,
+        rseq_ptr: ForeignPtr,
         rseq_len: u32,
         flags: libc::c_int,
         sig: u32,
     ) -> Result<libc::c_int, SyscallError> {
-        let rseq_ptr = TypedPluginPtr::new::<rseq>(rseq_ptr, 1);
+        let rseq_ptr = TypedArrayForeignPtr::new::<rseq>(rseq_ptr, 1);
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
@@ -121,7 +121,7 @@ impl SyscallHandler {
 
     fn rseq_impl(
         ctx: &mut SyscallContext,
-        rseq_ptr: TypedPluginPtr<rseq>,
+        rseq_ptr: TypedArrayForeignPtr<rseq>,
         flags: i32,
         _sig: u32,
     ) -> Result<libc::c_int, SyscallError> {

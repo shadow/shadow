@@ -17,7 +17,7 @@
 struct _FutexTable {
     /* All futexes that we are tracking. Each futex has a unique physical address associated with it
      * when it is stored in our table, which we refer to as a table index or table indices. Maps
-     * PluginPhysicalPtr to Futex*. */
+     * ManagedPhysicalMemoryAddr to Futex*. */
     GHashTable* futexes;
 
     /* Memory accounting. */
@@ -63,7 +63,7 @@ void futextable_unref(FutexTable* table) {
 bool futextable_add(FutexTable* table, Futex* futex) {
     MAGIC_ASSERT(table);
 
-    PluginPhysicalPtr ptr = futex_getAddress(futex);
+    ManagedPhysicalMemoryAddr ptr = futex_getAddress(futex);
     gpointer index = GUINT_TO_POINTER(ptr.val);
 
     if (!table->futexes) {
@@ -82,7 +82,7 @@ bool futextable_add(FutexTable* table, Futex* futex) {
 bool futextable_remove(FutexTable* table, Futex* futex) {
     MAGIC_ASSERT(table);
 
-    PluginPhysicalPtr ptr = futex_getAddress(futex);
+    ManagedPhysicalMemoryAddr ptr = futex_getAddress(futex);
     gpointer index = GUINT_TO_POINTER(ptr.val);
 
     if (table->futexes && g_hash_table_contains(table->futexes, index)) {
@@ -93,7 +93,7 @@ bool futextable_remove(FutexTable* table, Futex* futex) {
     }
 }
 
-Futex* futextable_get(FutexTable* table, PluginPhysicalPtr ptr) {
+Futex* futextable_get(FutexTable* table, ManagedPhysicalMemoryAddr ptr) {
     MAGIC_ASSERT(table);
 
     gpointer index = GUINT_TO_POINTER(ptr.val);

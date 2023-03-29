@@ -97,8 +97,8 @@ SyscallReturn syscallhandler_timerfd_create(SysCallHandler* sys, const SysCallAr
 SyscallReturn syscallhandler_timerfd_settime(SysCallHandler* sys, const SysCallArgs* args) {
     int tfd = args->args[0].as_i64;
     int flags = args->args[1].as_i64;
-    PluginPtr newValuePtr = args->args[2].as_ptr; // const struct itimerspec*
-    PluginPtr oldValuePtr = args->args[3].as_ptr; // struct itimerspec*
+    ForeignPtr newValuePtr = args->args[2].as_ptr; // const struct itimerspec*
+    ForeignPtr oldValuePtr = args->args[3].as_ptr; // struct itimerspec*
 
     /* Check for valid flags. */
 #ifndef TFD_TIMER_CANCEL_ON_SET
@@ -142,7 +142,7 @@ SyscallReturn syscallhandler_timerfd_settime(SysCallHandler* sys, const SysCallA
 
 SyscallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys, const SysCallArgs* args) {
     int tfd = args->args[0].as_i64;
-    PluginPtr currValuePtr = args->args[1].as_ptr; // struct itimerspec*
+    ForeignPtr currValuePtr = args->args[1].as_ptr; // struct itimerspec*
 
     /* Get the corresponding descriptor. */
     TimerFd* timer = NULL;

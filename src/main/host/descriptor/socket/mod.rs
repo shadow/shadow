@@ -3,14 +3,14 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
 use nix::sys::socket::Shutdown;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use unix::UnixSocket;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -195,13 +195,13 @@ impl SocketRef<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
@@ -234,7 +234,7 @@ impl SocketRefMut<'_> {
         pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Unix, Inet;
-        pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
+        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Unix, Inet;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
@@ -273,13 +273,13 @@ impl SocketRefMut<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: PluginPtr,
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
@@ -335,7 +335,7 @@ pub struct SendmsgArgs<'a> {
     /// [`IoVec`] buffers in plugin memory containing the message data.
     pub iovs: &'a [IoVec],
     /// Buffer in plugin memory containg message control data.
-    pub control_ptr: TypedPluginPtr<u8>,
+    pub control_ptr: TypedArrayForeignPtr<u8>,
     /// Send flags.
     pub flags: libc::c_int,
 }
@@ -345,7 +345,7 @@ pub struct RecvmsgArgs<'a> {
     /// [`IoVec`] buffers in plugin memory to store the message data.
     pub iovs: &'a [IoVec],
     /// Buffer in plugin memory to store the message control data.
-    pub control_ptr: TypedPluginPtr<u8>,
+    pub control_ptr: TypedArrayForeignPtr<u8>,
     /// Recv flags.
     pub flags: libc::c_int,
 }

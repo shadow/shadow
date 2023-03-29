@@ -23,7 +23,7 @@ struct _Payload {
 };
 
 /* If modifying this function, you should also modify `payload_newWithMemoryManager` below. */
-Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLength) {
+Payload* payload_new(const Thread* thread, ForeignPtr data, gsize dataLength) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
 
@@ -49,8 +49,7 @@ Payload* payload_new(const Thread* thread, PluginVirtualPtr data, gsize dataLeng
 /* This is a copy of `payload_new` but passes the memory manager through. Once we've moved
  * UDP sockets to rust, we can remove `payload_new` and rename this function to
  * `payload_new`. */
-Payload* payload_newWithMemoryManager(PluginVirtualPtr data, gsize dataLength,
-                                      const MemoryManager* mem) {
+Payload* payload_newWithMemoryManager(ForeignPtr data, gsize dataLength, const MemoryManager* mem) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
 
@@ -125,7 +124,7 @@ gsize payload_getLength(Payload* payload) {
 }
 
 /* If modifying this function, you should also modify `payload_getDataWithMemoryManager` below. */
-gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
+gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, ForeignPtr destBuffer,
                        gsize destBufferLength) {
     MAGIC_ASSERT(payload);
 
@@ -152,7 +151,7 @@ gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, Plu
 /* This is a copy of `payload_getData` but passes the memory manager through. Once we've moved
  * UDP sockets to rust, we can remove `payload_getData` and rename this function to
  * `payload_getData`. */
-gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset, ForeignPtr destBuffer,
                                         gsize destBufferLength, MemoryManager* mem) {
     MAGIC_ASSERT(payload);
 

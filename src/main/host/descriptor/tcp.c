@@ -905,7 +905,7 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
 }
 
 static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags,
-                                     PluginVirtualPtr payload, gsize payloadLength,
+                                     ForeignPtr payload, gsize payloadLength,
                                      const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
@@ -2353,8 +2353,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 }
 
 /* Address and port must be in network byte order. */
-gssize tcp_sendUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
-                        in_addr_t ip, in_port_t port, const MemoryManager* mem) {
+gssize tcp_sendUserData(TCP* tcp, const Host* host, ForeignPtr buffer, gsize nBytes, in_addr_t ip,
+                        in_port_t port, const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2394,9 +2394,8 @@ gssize tcp_sendUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsi
         gsize copyLength = MIN(maxPacketLength, remaining);
 
         /* use helper to create the packet */
-        Packet* packet = _tcp_createDataPacket(tcp, host, PTCP_ACK,
-                                               (PluginVirtualPtr){.val = buffer.val + bytesCopied},
-                                               copyLength, mem);
+        Packet* packet = _tcp_createDataPacket(
+            tcp, host, PTCP_ACK, (ForeignPtr){.val = buffer.val + bytesCopied}, copyLength, mem);
 
         if(copyLength > 0) {
             /* we are sending more user data */
@@ -2435,7 +2434,7 @@ static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer d
 }
 
 /* Address and port must be in network byte order. */
-gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, gsize nBytes,
+gssize tcp_receiveUserData(TCP* tcp, const Host* host, ForeignPtr buffer, gsize nBytes,
                            in_addr_t* ip, in_port_t* port, MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
 
@@ -2476,7 +2475,7 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, 
         gssize bytesCopied = packet_copyPayloadWithMemoryManager(
             tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength, mem);
         if (bytesCopied < 0) {
-            // Error writing to PluginVirtualPtr
+            // Error writing to ForeignPtr
             return bytesCopied;
         }
         totalCopied += bytesCopied;
@@ -2513,9 +2512,9 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, PluginVirtualPtr buffer, 
         gsize packetLength = packet_getPayloadSize(nextPacket);
         copyLength = MIN(packetLength, remaining);
         gssize bytesCopied = packet_copyPayloadWithMemoryManager(
-            nextPacket, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength, mem);
+            nextPacket, 0, (ForeignPtr){.val = buffer.val + offset}, copyLength, mem);
         if (bytesCopied < 0) {
-            // Error writing to PluginVirtualPtr
+            // Error writing to ForeignPtr
             if (totalCopied > 0) {
                 warning("Returning error %s, but already copied %lu bytes which will be lost",
                         g_strerror(-bytesCopied), totalCopied);
@@ -2732,17 +2731,15 @@ gint tcp_shutdown(TCP* tcp, const Host* host, gint how) {
     return 0;
 }
 
-static gssize _sendUserDataPanic(LegacySocket* socket, const Thread* thread,
-                                 PluginVirtualPtr buffer, gsize nBytes, in_addr_t ip,
-                                 in_port_t port) {
+static gssize _sendUserDataPanic(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
+                                 gsize nBytes, in_addr_t ip, in_port_t port) {
     /* sending should be handled by the rust `LegacyTcpSocket` wrapper, which should call
      * tcp_sendUserData directly */
     utility_panic("Called `legacysocket_sendUserData` on a TCP socket");
 }
 
-static gssize _receiveUserDataPanic(LegacySocket* socket, const Thread* thread,
-                                    PluginVirtualPtr buffer, gsize nBytes, in_addr_t* ip,
-                                    in_port_t* port) {
+static gssize _receiveUserDataPanic(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
+                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
     /* receiving should be handled by the rust `LegacyTcpSocket` wrapper, which should call
      * tcp_receiveUserData directly */
     utility_panic("Called `legacysocket_receiveUserData` on a TCP socket");

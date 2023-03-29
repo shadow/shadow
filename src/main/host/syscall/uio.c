@@ -23,7 +23,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, PluginPtr iovPtr,
+static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
                                              LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
@@ -59,7 +59,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
 
     /* Check that all of the buf pointers are valid. */
     for (unsigned long i = 0; i < iovlen; i++) {
-        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (!bufPtr.val && bufSize != 0) {
@@ -78,7 +78,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Plugin
     return 0;
 }
 
-static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
+static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
                                                  unsigned long iovlen, unsigned long pos_l,
                                                  unsigned long pos_h, int flags, bool doPreadv,
                                                  bool negativeOffsetDisables) {
@@ -123,7 +123,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
     size_t totalBytesWritten = 0;
 
     for (unsigned long i = 0; i < iovlen; i++) {
-        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (bufSize == 0) {
@@ -211,7 +211,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Pl
     return syscallreturn_makeDoneI64(result);
 }
 
-static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
+static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
                                                   unsigned long iovlen, unsigned long pos_l,
                                                   unsigned long pos_h, int flags, bool doPwritev,
                                                   bool negativeOffsetDisables) {
@@ -256,7 +256,7 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, P
     size_t totalBytesWritten = 0;
 
     for (unsigned long i = 0; i < iovlen; i++) {
-        PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
+        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (bufSize == 0) {

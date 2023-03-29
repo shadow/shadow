@@ -1,7 +1,7 @@
 use log::*;
 use nix::errno::Errno;
 use nix::sys::socket::{Shutdown, SockFlag};
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
@@ -15,7 +15,7 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{read_sockaddr, write_sockaddr, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
-use crate::host::syscall_types::TypedPluginPtr;
+use crate::host::syscall_types::TypedArrayForeignPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -111,7 +111,7 @@ impl SyscallHandler {
     pub fn bind(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         let file = {
@@ -152,10 +152,10 @@ impl SyscallHandler {
     pub fn sendto(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
-        addr_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
         addr_len: libc::socklen_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -202,7 +202,7 @@ impl SyscallHandler {
         let args = SendmsgArgs {
             addr,
             iovs: &[iov],
-            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+            control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
             flags,
         };
 
@@ -230,11 +230,11 @@ impl SyscallHandler {
     pub fn recvfrom(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: PluginPtr,
+        buf_ptr: ForeignPtr,
         buf_len: libc::size_t,
         flags: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -267,7 +267,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
@@ -280,7 +280,7 @@ impl SyscallHandler {
 
         let args = RecvmsgArgs {
             iovs: &[iov],
-            control_ptr: TypedPluginPtr::new::<u8>(PluginPtr::null(), 0),
+            control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
             flags,
         };
 
@@ -316,10 +316,10 @@ impl SyscallHandler {
     pub fn getsockname(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
     ) -> SyscallResult {
-        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
@@ -364,10 +364,10 @@ impl SyscallHandler {
     pub fn getpeername(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
     ) -> SyscallResult {
-        let addr_len_ptr = TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
@@ -450,8 +450,8 @@ impl SyscallHandler {
     pub fn accept(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -496,8 +496,8 @@ impl SyscallHandler {
     pub fn accept4(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
         flags: libc::c_int,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -541,8 +541,8 @@ impl SyscallHandler {
     fn accept_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        addr_ptr: PluginPtr,
-        addr_len_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
+        addr_len_ptr: ForeignPtr,
         flags: libc::c_int,
     ) -> SyscallResult {
         let File::Socket(ref socket) = file else {
@@ -590,7 +590,7 @@ impl SyscallHandler {
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
-                TypedPluginPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
+                TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             )?;
         }
 
@@ -622,7 +622,7 @@ impl SyscallHandler {
     pub fn connect(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: PluginPtr,
+        addr_ptr: ForeignPtr,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -720,7 +720,7 @@ impl SyscallHandler {
         domain: libc::c_int,
         socket_type: libc::c_int,
         protocol: libc::c_int,
-        fd_ptr: PluginPtr,
+        fd_ptr: ForeignPtr,
     ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
@@ -794,7 +794,7 @@ impl SyscallHandler {
             .objs
             .process
             .memory_borrow_mut()
-            .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
+            .copy_to_ptr(TypedArrayForeignPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {
@@ -822,8 +822,8 @@ impl SyscallHandler {
         fd: libc::c_int,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: PluginPtr,
-        optlen_ptr: PluginPtr,
+        optval_ptr: ForeignPtr,
+        optlen_ptr: ForeignPtr,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -845,7 +845,7 @@ impl SyscallHandler {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         // get the provided optlen
-        let optlen_ptr = TypedPluginPtr::new::<libc::socklen_t>(optlen_ptr, 1);
+        let optlen_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(optlen_ptr, 1);
         let optlen = mem.read_vals::<_, 1>(optlen_ptr)?[0];
 
         let mut optlen_new = socket
@@ -876,7 +876,7 @@ impl SyscallHandler {
         fd: libc::c_int,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: PluginPtr,
+        optval_ptr: ForeignPtr,
         optlen: libc::socklen_t,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist

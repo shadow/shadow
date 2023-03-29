@@ -8,9 +8,6 @@
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings-opaque.h"
 
-// A virtual address in the plugin's address space
-typedef PluginPtr PluginVirtualPtr;
-
 const char* syscallreturnstate_str(SyscallReturn_Tag s);
 
 /* This is an opaque structure holding the state needed to resume a thread

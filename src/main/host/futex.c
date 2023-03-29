@@ -17,7 +17,7 @@
 
 struct _Futex {
     // The unique physical address that is used to refer to this futex
-    PluginPhysicalPtr word;
+    ManagedPhysicalMemoryAddr word;
     // Listeners waiting for wakups on this futex
     // The key is a listener of type StatusListener*, the value is a boolean that indicates
     // whether or not a wakeup has already been performed on the listener.
@@ -27,7 +27,7 @@ struct _Futex {
     MAGIC_DECLARE;
 };
 
-Futex* futex_new(PluginPhysicalPtr word) {
+Futex* futex_new(ManagedPhysicalMemoryAddr word) {
     Futex* futex = malloc(sizeof(*futex));
     *futex = (Futex){.word = word,
                      .listeners = g_hash_table_new_full(
@@ -65,7 +65,7 @@ void futex_unref(Futex* futex) {
 
 void futex_unref_func(void* futex) { futex_unref((Futex*)futex); }
 
-PluginPhysicalPtr futex_getAddress(Futex* futex) {
+ManagedPhysicalMemoryAddr futex_getAddress(Futex* futex) {
     MAGIC_ASSERT(futex);
     return futex->word;
 }

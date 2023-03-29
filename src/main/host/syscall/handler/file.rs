@@ -1,4 +1,4 @@
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow;
@@ -11,7 +11,7 @@ impl SyscallHandler {
                   /* flags */ nix::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
     pub fn open(
         ctx: &mut SyscallContext,
-        _path: PluginPtr,
+        _path: ForeignPtr,
         _flags: libc::c_int,
         _mode: libc::mode_t,
     ) -> SyscallResult {
@@ -23,7 +23,7 @@ impl SyscallHandler {
     pub fn openat(
         ctx: &mut SyscallContext,
         _dir_fd: libc::c_int,
-        _path: PluginPtr,
+        _path: ForeignPtr,
         _flags: libc::c_int,
         _mode: libc::mode_t,
     ) -> SyscallResult {

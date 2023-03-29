@@ -2,18 +2,18 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 
 use nix::errno::Errno;
-use shadow_shim_helper_rs::syscall_types::PluginPtr;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{pod, NoTypeInference};
 
 pub fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
-    plugin_addr: PluginPtr,
-    plugin_addr_len: TypedPluginPtr<libc::socklen_t>,
+    plugin_addr: ForeignPtr,
+    plugin_addr_len: TypedArrayForeignPtr<libc::socklen_t>,
 ) -> Result<(), SyscallError> {
     let addr = match addr {
         Some(x) => x,
@@ -48,7 +48,7 @@ pub fn write_sockaddr(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = TypedPluginPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
+    let plugin_addr = TypedArrayForeignPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
@@ -56,7 +56,7 @@ pub fn write_sockaddr(
 
 pub fn read_sockaddr(
     mem: &MemoryManager,
-    addr_ptr: PluginPtr,
+    addr_ptr: ForeignPtr,
     addr_len: libc::socklen_t,
 ) -> Result<Option<SockaddrStorage>, SyscallError> {
     if addr_ptr.is_null() {
@@ -83,7 +83,7 @@ pub fn read_sockaddr(
 
     mem.copy_from_ptr(
         addr_buf,
-        TypedPluginPtr::new::<MaybeUninit<u8>>(addr_ptr, addr_len_usize),
+        TypedArrayForeignPtr::new::<MaybeUninit<u8>>(addr_ptr, addr_len_usize),
     )?;
 
     let addr = unsafe { SockaddrStorage::from_bytes(addr_buf).ok_or(Errno::EINVAL)? };
@@ -102,13 +102,13 @@ pub fn read_sockaddr(
 pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
     mem: &mut MemoryManager,
     val: &T,
-    val_ptr: PluginPtr,
+    val_ptr: ForeignPtr,
     val_len: usize,
 ) -> Result<usize, SyscallError> {
     let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
 
     let val = &pod::as_u8_slice(val)[..val_len];
-    let val_ptr = TypedPluginPtr::new::<MaybeUninit<u8>>(val_ptr, val_len);
+    let val_ptr = TypedArrayForeignPtr::new::<MaybeUninit<u8>>(val_ptr, val_len);
 
     mem.copy_to_ptr(val_ptr, val)?;
 
@@ -118,18 +118,18 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
 /// Analogous to [`libc::iovec`].
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct IoVec {
-    pub base: PluginPtr,
+    pub base: ForeignPtr,
     pub len: libc::size_t,
 }
 
-impl From<IoVec> for TypedPluginPtr<u8> {
+impl From<IoVec> for TypedArrayForeignPtr<u8> {
     fn from(iov: IoVec) -> Self {
         Self::new::<u8>(iov.base, iov.len)
     }
 }
 
-impl From<TypedPluginPtr<u8>> for IoVec {
-    fn from(ptr: TypedPluginPtr<u8>) -> Self {
+impl From<TypedArrayForeignPtr<u8>> for IoVec {
+    fn from(ptr: TypedArrayForeignPtr<u8>) -> Self {
         IoVec {
             base: ptr.ptr(),
             len: ptr.len(),
@@ -147,8 +147,8 @@ impl From<TypedPluginPtr<u8>> for IoVec {
 pub struct IoVecReader<'a, I> {
     iovs: I,
     mem: &'a MemoryManager,
-    /// A plugin pointer for the current iov.
-    current_src: Option<TypedPluginPtr<u8>>,
+    /// A foreign pointer for the current iov.
+    current_src: Option<TypedArrayForeignPtr<u8>>,
 }
 
 impl<'a, I> IoVecReader<'a, I> {
@@ -221,8 +221,8 @@ impl<'a, I: Iterator<Item = &'a IoVec>> std::io::Read for IoVecReader<'a, I> {
 pub struct IoVecWriter<'a, I> {
     iovs: I,
     mem: &'a mut MemoryManager,
-    /// A plugin pointer for the current iov.
-    current_dst: Option<TypedPluginPtr<u8>>,
+    /// A foreign pointer for the current iov.
+    current_dst: Option<TypedArrayForeignPtr<u8>>,
 }
 
 impl<'a, I> IoVecWriter<'a, I> {
@@ -291,7 +291,7 @@ impl<'a, I: Iterator<Item = &'a IoVec>> std::io::Write for IoVecWriter<'a, I> {
 /// Read a plugin's array of [`libc::iovec`] into a [`Vec<IoVec>`].
 pub fn read_iovecs(
     mem: &MemoryManager,
-    iov_ptr: PluginPtr,
+    iov_ptr: ForeignPtr,
     count: usize,
 ) -> Result<Vec<IoVec>, Errno> {
     if count > libc::UIO_MAXIOV.try_into().unwrap() {
@@ -300,13 +300,13 @@ pub fn read_iovecs(
 
     let mut iovs = Vec::with_capacity(count);
 
-    let iov_ptr = TypedPluginPtr::new::<libc::iovec>(iov_ptr, count);
+    let iov_ptr = TypedArrayForeignPtr::new::<libc::iovec>(iov_ptr, count);
     let mem_ref = mem.memory_ref(iov_ptr)?;
     let plugin_iovs = mem_ref.deref();
 
     for plugin_iov in plugin_iovs {
         iovs.push(IoVec {
-            base: PluginPtr::from_raw_ptr(plugin_iov.iov_base),
+            base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base),
             len: plugin_iov.iov_len,
         });
     }
