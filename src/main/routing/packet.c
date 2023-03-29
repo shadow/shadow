@@ -121,7 +121,7 @@ Packet* packet_new(const Host* host) {
 
 /* If modifying this function, you should also modify `packet_setPayloadWithMemoryManager` below.
  */
-void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
+void packet_setPayload(Packet* packet, const Thread* thread, ForeignPtr payload,
                        gsize payloadLength) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(thread);
@@ -138,7 +138,7 @@ void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr pa
 /* This is a copy of `packet_setPayload` but passes the memory manager through. Once we've moved UDP
  * sockets to rust, we can remove `packet_setPayload` and rename this function to
  * `packet_setPayload`. */
-void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, PluginVirtualPtr payload,
+void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, ForeignPtr payload,
                                         gsize payloadLength, const MemoryManager* mem) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(payload.val);
@@ -538,7 +538,7 @@ ProtocolType packet_getProtocol(const Packet* packet) {
 /* If modifying this function, you should also modify `packet_copyPayloadWithMemoryManager` below.
  */
 gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
-                          PluginVirtualPtr buffer, gsize bufferLength) {
+                          ForeignPtr buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
@@ -552,7 +552,7 @@ gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payl
  * UDP sockets to rust, we can remove `packet_copyPayload` and rename this function to
  * `packet_copyPayload`. */
 gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
-                                           PluginVirtualPtr buffer, gsize bufferLength,
+                                           ForeignPtr buffer, gsize bufferLength,
                                            MemoryManager* mem) {
     MAGIC_ASSERT(packet);
 

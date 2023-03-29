@@ -517,9 +517,9 @@ mod export {
     pub unsafe extern "C" fn thread_clone(
         thread: *const Thread,
         flags: libc::c_ulong,
-        child_stack: c::PluginVirtualPtr,
-        ptid: c::PluginVirtualPtr,
-        ctid: c::PluginVirtualPtr,
+        child_stack: ForeignPtr,
+        ptid: ForeignPtr,
+        ctid: ForeignPtr,
         newtls: libc::c_ulong,
         child: *mut *const Thread,
     ) -> i32 {
@@ -561,17 +561,14 @@ mod export {
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
     /// will perform a futex-wake operation on the given address on termination.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_setTidAddress(
-        thread: *const Thread,
-        addr: c::PluginVirtualPtr,
-    ) {
+    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: ForeignPtr) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.set_tid_address(addr);
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> c::PluginVirtualPtr {
+    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> ForeignPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.get_tid_address()
     }

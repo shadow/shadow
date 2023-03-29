@@ -101,7 +101,7 @@ SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             warning("Not allowing unimplemented prctl %d", option);
             return syscallreturn_makeDoneErrno(ENOSYS);
         case PR_GET_TID_ADDRESS: {
-            PluginVirtualPtr tid_addr = thread_getTidAddress(_syscallhandler_getThread(sys));
+            ForeignPtr tid_addr = thread_getTidAddress(_syscallhandler_getThread(sys));
 
             // Make sure we have somewhere to copy the output
             ForeignPtr outptr = args->args[1].as_ptr;

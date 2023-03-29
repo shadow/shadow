@@ -42,9 +42,9 @@ struct _PacketTCPHeader {
 const gchar* protocol_toString(ProtocolType type);
 
 Packet* packet_new(const Host* host);
-void packet_setPayload(Packet* packet, const Thread* thread, PluginVirtualPtr payload,
+void packet_setPayload(Packet* packet, const Thread* thread, ForeignPtr payload,
                        gsize payloadLength);
-void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, PluginVirtualPtr payload,
+void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, ForeignPtr payload,
                                         gsize payloadLength, const MemoryManager* mem);
 Packet* packet_copy(Packet* packet);
 
@@ -94,9 +94,9 @@ in_port_t packet_getSourcePort(const Packet* packet);
 ProtocolType packet_getProtocol(const Packet* packet);
 
 gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
-                          PluginVirtualPtr buffer, gsize bufferLength);
+                          ForeignPtr buffer, gsize bufferLength);
 gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
-                                           PluginVirtualPtr buffer, gsize bufferLength,
+                                           ForeignPtr buffer, gsize bufferLength,
                                            MemoryManager* mem);
 guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                gsize bufferLength);
