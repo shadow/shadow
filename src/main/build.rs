@@ -218,7 +218,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_function("worker_bootHosts")
         .blocklist_function("worker_freeHosts")
         .blocklist_function("syscallhandler_make_syscall")
-        .allowlist_function("return_code_for_signal")
         .allowlist_type("ForeignPtr")
         .allowlist_type("Status")
         .allowlist_type("StatusListener")

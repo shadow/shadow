@@ -100,7 +100,4 @@ __attribute__((__format__(__printf__, 4, 5)))
 _Noreturn void utility_handleError(const gchar* file, gint line, const gchar* funtcion,
                                    const gchar* message, ...);
 
-/* If a process exited by a signal, use this return code. */
-int return_code_for_signal(int signal);
-
 #endif /* SHD_UTILITY_H_ */

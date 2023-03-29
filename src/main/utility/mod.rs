@@ -383,6 +383,13 @@ pub fn pathbuf_to_nul_term_cstring(buf: PathBuf) -> CString {
     CString::from_vec_with_nul(bytes).unwrap()
 }
 
+/// Get the return code for a process that exited by the given signal, following the behaviour of
+/// bash.
+pub fn return_code_for_signal(signal: nix::sys::signal::Signal) -> i32 {
+    // bash adds 128 to to the signal
+    (signal as i32).checked_add(128).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

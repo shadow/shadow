@@ -94,9 +94,3 @@ gchar* utility_strvToNewStr(gchar** strv) {
 
     return g_string_free(strBuffer, FALSE);
 }
-
-int return_code_for_signal(int signal) {
-    // To calculate the return code if the process exited by a signal,
-    // follow the behaviour of bash and add 128 to to the signal.
-    return signal + 128;
-}
