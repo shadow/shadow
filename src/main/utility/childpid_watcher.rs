@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
-use std::sync::Arc;
+use std::sync::mpsc::{sync_channel, Receiver, RecvError, Sender};
 use std::sync::Mutex;
 use std::thread;
 
@@ -13,55 +13,55 @@ use nix::sys::epoll::{
 };
 use nix::unistd::Pid;
 
+use super::IsSync;
+
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
 /// when the object is dropped.
 #[derive(Debug)]
 pub struct ChildPidWatcher {
-    inner: Arc<Mutex<Inner>>,
-    epoll: std::os::unix::io::RawFd,
+    // Send commands to the worker thread. The worker thread exclusively owns
+    // most of our state, so we operate on it by sending functions to be run by
+    // that thread.
+    command_sender: Mutex<Sender<Box<dyn Send + FnOnce(&mut WorkerData)>>>,
+    // event_fd used to notify watcher thread via epoll. Calling thread writes a
+    // single byte, which the watcher thread reads to reset.
+    command_notifier: RawFd,
+    // Handle for the worker thread.
+    thread_handle: Option<thread::JoinHandle<()>>,
 }
+
+impl IsSync for ChildPidWatcher {}
 
 pub type WatchHandle = u64;
 
-#[derive(Debug)]
-enum Command {
-    RunCallbacks(Pid),
-    UnregisterPid(Pid),
-    Finish,
-}
-
 struct PidData {
-    // Registered callbacks.
+    // Registered callbacks to be executed when the process exits.
     callbacks: HashMap<WatchHandle, Box<dyn Send + FnOnce(Pid)>>,
-    // After the pid has exited, this fd is closed and set to None.
+    // A file descriptor that will become readable when the process exits.
+    // We close and set to None after it has done so.
     fd: Option<File>,
     // Whether this pid has been unregistered. The whole struct is removed after
     // both the pid is unregistered, and `callbacks` is empty.
     unregistered: bool,
 }
 
+// Data owned by ChildPidWatcher's worker thread.
 #[derive(Debug)]
-struct Inner {
+struct WorkerData {
     // Next unique handle ID.
     next_handle: WatchHandle,
-    // Pending commands for watcher thread.
-    commands: Vec<Command>,
     // Data for each monitored pid.
     pids: HashMap<Pid, PidData>,
-    // event_fd used to notify watcher thread via epoll. Calling thread writes a
-    // single byte, which the watcher thread reads to reset.
-    command_notifier: RawFd,
-    thread_handle: Option<thread::JoinHandle<()>>,
+    // Used to be notified about processes exiting and commands being sent from
+    // other threads.
+    epoll: std::os::unix::io::RawFd,
+    // The worker thread runs until this is set to true.
+    cancelled: bool,
 }
 
-impl Inner {
-    fn send_command(&mut self, cmd: Command) {
-        self.commands.push(cmd);
-        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
-    }
-
-    fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
+impl WorkerData {
+    fn unwatch_pid(&mut self, pid: Pid) {
         let Some(piddata) = self.pids.get_mut(&pid) else {
             // Already unregistered the pid
             return;
@@ -70,16 +70,12 @@ impl Inner {
             // Already unwatched the pid
             return;
         };
-        epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
+        epoll_ctl(self.epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
     }
 
-    fn pid_has_exited(&self, pid: Pid) -> bool {
-        self.pids.get(&pid).unwrap().fd.is_none()
-    }
-
-    fn remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn remove_pid(&mut self, pid: Pid) {
         debug_assert!(self.should_remove_pid(pid));
-        self.unwatch_pid(epoll, pid);
+        self.unwatch_pid(pid);
         self.pids.remove(&pid);
     }
 
@@ -94,10 +90,16 @@ impl Inner {
         pid_data.callbacks.is_empty() && pid_data.unregistered
     }
 
-    fn maybe_remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn maybe_remove_pid(&mut self, pid: Pid) {
         if self.should_remove_pid(pid) {
-            self.remove_pid(epoll, pid)
+            self.remove_pid(pid)
         }
+    }
+}
+
+impl Drop for WorkerData {
+    fn drop(&mut self) {
+        nix::unistd::close(self.epoll).unwrap();
     }
 }
 
@@ -105,44 +107,69 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = epoll_create1(EpollCreateFlags::empty()).unwrap();
         let command_notifier =
             nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
-        epoll_ctl(
-            epoll,
-            EpollOp::EpollCtlAdd,
-            command_notifier,
-            Some(&mut event),
-        )
-        .unwrap();
-        let watcher = ChildPidWatcher {
-            inner: Arc::new(Mutex::new(Inner {
-                next_handle: 1,
-                pids: HashMap::new(),
-                commands: Vec::new(),
-                command_notifier,
-                thread_handle: None,
-            })),
-            epoll,
-        };
+        let (command_sender, command_receiver) = std::sync::mpsc::channel();
         let thread_handle = {
-            let inner = Arc::clone(&watcher.inner);
-            let epoll = watcher.epoll;
             thread::Builder::new()
                 .name("child-pid-watcher".into())
-                .spawn(move || ChildPidWatcher::thread_loop(&inner, epoll))
+                .spawn(move || ChildPidWatcher::thread_loop(command_notifier, command_receiver))
                 .unwrap()
         };
-        watcher.inner.lock().unwrap().thread_handle = Some(thread_handle);
-        watcher
+        Self {
+            command_sender: Mutex::new(command_sender),
+            command_notifier,
+            thread_handle: Some(thread_handle),
+        }
     }
 
-    fn thread_loop(inner: &Mutex<Inner>, epoll: RawFd) {
-        let mut events = [EpollEvent::empty(); 10];
-        let mut commands = Vec::new();
-        let mut done = false;
-        while !done {
+    // Sends `cmd` to be run on the worker thread, and blocks until it has finished executing.
+    // Returns the result of receiving that acknowledgment.
+    fn run_command(
+        &self,
+        cmd: impl Send + FnOnce(&mut WorkerData) + 'static,
+    ) -> Result<(), RecvError> {
+        let (sender, receiver) = sync_channel(1);
+        {
+            let command_sender = self.command_sender.lock().unwrap();
+            command_sender
+                .send(Box::new(move |worker_data| {
+                    cmd(worker_data);
+                    sender.send(()).unwrap();
+                }))
+                .unwrap();
+        }
+        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
+        receiver.recv()
+    }
+
+    fn thread_loop(
+        command_notifier: RawFd,
+        command_receiver: Receiver<Box<dyn Send + FnOnce(&mut WorkerData) + 'static>>,
+    ) {
+        // Create an epoll fd, which will notify us when either we've received a
+        // command (and been pinged via the `command_notifier` fd, or a watched
+        // process has exited.
+        let epoll = epoll_create1(EpollCreateFlags::empty()).unwrap();
+        {
+            // Watch the `command_notifier`.
+            let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
+            epoll_ctl(
+                epoll,
+                EpollOp::EpollCtlAdd,
+                command_notifier,
+                Some(&mut event),
+            )
+            .unwrap();
+        }
+        let mut worker_data = WorkerData {
+            next_handle: 1,
+            pids: HashMap::new(),
+            epoll,
+            cancelled: false,
+        };
+        while !worker_data.cancelled {
+            let mut events = [EpollEvent::empty(); 10];
             let nevents = match epoll_wait(epoll, &mut events, -1) {
                 Ok(n) => n,
                 Err(Errno::EINTR) => {
@@ -152,59 +179,35 @@ impl ChildPidWatcher {
                 Err(e) => panic!("epoll_wait: {:?}", e),
             };
 
-            // We hold the lock the whole time we're processing events. While it'd
-            // be nice to avoid holding it while executing callbacks (and therefor
-            // not require that callbacks don't call ChildPidWatcher APIs), that'd
-            // make it difficult to guarantee a callback *won't* be run if the
-            // caller unregisters it.
-            let mut inner = inner.lock().unwrap();
-
+            // Run callbacks for any processes that exited.
             for event in &events[0..nevents] {
                 let pid = Pid::from_raw(i32::try_from(event.data()).unwrap());
                 // We get an event for pid=0 when there's a write to the command_notifier;
                 // Ignore that here and handle below.
                 if pid.as_raw() != 0 {
-                    inner.unwatch_pid(epoll, pid);
-                    inner.run_callbacks_for_pid(pid);
-                    inner.maybe_remove_pid(epoll, pid);
+                    worker_data.unwatch_pid(pid);
+                    worker_data.run_callbacks_for_pid(pid);
+                    worker_data.maybe_remove_pid(pid);
                 }
             }
+
+            // Run all queued commands.
+            while let Ok(cmd) = command_receiver.try_recv() {
+                cmd(&mut worker_data);
+            }
+
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
-            let mut buf = [0; 8];
-            let res = nix::unistd::read(inner.command_notifier, &mut buf);
+            let res = {
+                let mut buf = [0; 8];
+                nix::unistd::read(command_notifier, &mut buf)
+            };
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
                 Err(Errno::EAGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
-            // Run commands
-            std::mem::swap(&mut commands, &mut inner.commands);
-            for cmd in commands.drain(..) {
-                match cmd {
-                    Command::RunCallbacks(pid) => {
-                        debug_assert!(inner.pid_has_exited(pid));
-                        inner.run_callbacks_for_pid(pid);
-                        inner.maybe_remove_pid(epoll, pid);
-                    }
-                    Command::UnregisterPid(pid) => {
-                        if let Some(pid_data) = inner.pids.get_mut(&pid) {
-                            pid_data.unregistered = true;
-                            inner.maybe_remove_pid(epoll, pid);
-                        }
-                    }
-                    Command::Finish => {
-                        done = true;
-                        // There could be more commands queued and/or more epoll
-                        // events ready, but it doesn't matter. We don't
-                        // guarantee to callers whether callbacks have run or
-                        // not after having sent `Finish`; only that no more
-                        // callbacks will run after the thread is joined.
-                        break;
-                    }
-                }
-            }
         }
     }
 
@@ -268,24 +271,26 @@ impl ChildPidWatcher {
     ///
     /// Takes ownership of `read_fd`, and will close it when appropriate.
     pub fn register_pid(&self, pid: Pid, read_fd: File) {
-        let mut inner = self.inner.lock().unwrap();
-        let raw_read_fd = read_fd.as_raw_fd();
-        let prev = inner.pids.insert(
-            pid,
-            PidData {
-                callbacks: HashMap::new(),
-                fd: Some(read_fd),
-                unregistered: false,
-            },
-        );
-        assert!(prev.is_none());
-        let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
-        epoll_ctl(
-            self.epoll,
-            EpollOp::EpollCtlAdd,
-            raw_read_fd,
-            Some(&mut event),
-        )
+        self.run_command(move |worker_data| {
+            let raw_read_fd = read_fd.as_raw_fd();
+            let prev = worker_data.pids.insert(
+                pid,
+                PidData {
+                    callbacks: HashMap::new(),
+                    fd: Some(read_fd),
+                    unregistered: false,
+                },
+            );
+            assert!(prev.is_none());
+            let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
+            epoll_ctl(
+                worker_data.epoll,
+                EpollOp::EpollCtlAdd,
+                raw_read_fd,
+                Some(&mut event),
+            )
+            .unwrap();
+        })
         .unwrap();
     }
 
@@ -300,11 +305,13 @@ impl ChildPidWatcher {
     ///
     /// Safe to call multiple times.
     pub fn unregister_pid(&self, pid: Pid) {
-        // Let the worker handle the actual unregistration; otherwise we'd need
-        // to be extra careful to avoid races with e.g. simultaneous epoll
-        // events.
-        let mut inner = self.inner.lock().unwrap();
-        inner.send_command(Command::UnregisterPid(pid));
+        self.run_command(move |worker_data| {
+            if let Some(pid_data) = worker_data.pids.get_mut(&pid) {
+                pid_data.unregistered = true;
+                worker_data.maybe_remove_pid(pid);
+            }
+        })
+        .unwrap();
     }
 
     /// Call `callback` from another thread after the child `pid`
@@ -319,17 +326,23 @@ impl ChildPidWatcher {
         pid: Pid,
         callback: impl Send + FnOnce(Pid) + 'static,
     ) -> WatchHandle {
-        let mut inner = self.inner.lock().unwrap();
-        let handle = inner.next_handle;
-        inner.next_handle += 1;
-        let pid_data = inner.pids.get_mut(&pid).unwrap();
-        assert!(!pid_data.unregistered);
-        pid_data.callbacks.insert(handle, Box::new(callback));
-        if pid_data.fd.is_none() {
-            // pid is already dead. Run the callback we just registered.
-            inner.send_command(Command::RunCallbacks(pid));
-        }
-        handle
+        let (sender, receiver) = sync_channel(1);
+        self.run_command(move |worker_data| {
+            let handle = worker_data.next_handle;
+            worker_data.next_handle += 1;
+            let pid_data = worker_data.pids.get_mut(&pid).unwrap();
+            assert!(!pid_data.unregistered);
+            if pid_data.fd.is_none() {
+                // pid is already dead. Run the callback.
+                callback(pid);
+            } else {
+                // Save the callback to be executed when the process dies.
+                pid_data.callbacks.insert(handle, Box::new(callback));
+            }
+            sender.send(handle).unwrap();
+        })
+        .unwrap();
+        receiver.recv().unwrap()
     }
 
     /// Unregisters a callback. After returning, the corresponding callback is
@@ -338,11 +351,13 @@ impl ChildPidWatcher {
     ///
     /// No-op if `pid` isn't registered.
     pub fn unregister_callback(&self, pid: Pid, handle: WatchHandle) {
-        let mut inner = self.inner.lock().unwrap();
-        if let Some(pid_data) = inner.pids.get_mut(&pid) {
-            pid_data.callbacks.remove(&handle);
-            inner.maybe_remove_pid(self.epoll, pid);
-        }
+        self.run_command(move |worker_data| {
+            if let Some(pid_data) = worker_data.pids.get_mut(&pid) {
+                pid_data.callbacks.remove(&handle);
+                worker_data.maybe_remove_pid(pid);
+            }
+        })
+        .unwrap();
     }
 }
 
@@ -354,13 +369,14 @@ impl Default for ChildPidWatcher {
 
 impl Drop for ChildPidWatcher {
     fn drop(&mut self) {
-        let handle = {
-            let mut inner = self.inner.lock().unwrap();
-            inner.send_command(Command::Finish);
-            inner.thread_handle.take().unwrap()
-        };
-        handle.join().unwrap();
-        nix::unistd::close(self.epoll).unwrap();
+        // Signal thread to exit. Receiving an ack may fail since
+        // the sender end may have already closed.
+        self.run_command(move |pid_data| {
+            pid_data.cancelled = true;
+        })
+        .ok();
+        self.thread_handle.take().unwrap().join().unwrap();
+        nix::unistd::close(self.command_notifier).unwrap();
     }
 }
 
@@ -375,7 +391,7 @@ impl std::fmt::Debug for PidData {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Condvar};
+    use std::sync::{Arc, Condvar, Mutex};
 
     use nix::sys::wait::WaitStatus;
     use nix::sys::wait::{waitpid, WaitPidFlag};
