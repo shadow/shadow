@@ -171,7 +171,7 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     };
 
     // check sidechannel mitigations
-    if unsafe { c::main_sidechannelMitigationsEnabled() } {
+    if sidechannel_mitigations_enabled().context("Failed to get sidechannel mitigation status")? {
         log::warn!(
             "Speculative Store Bypass sidechannel mitigation is enabled (perhaps by seccomp?). \
              This typically adds ~30% performance overhead."
@@ -295,6 +295,21 @@ fn disable_aslr() -> anyhow::Result<()> {
     let pers = personality::get()?;
     personality::set(pers | personality::Persona::ADDR_NO_RANDOMIZE)?;
     Ok(())
+}
+
+fn sidechannel_mitigations_enabled() -> anyhow::Result<bool> {
+    let state = nix::errno::Errno::result(unsafe {
+        libc::prctl(
+            libc::PR_GET_SPECULATION_CTRL,
+            libc::PR_SPEC_STORE_BYPASS,
+            0,
+            0,
+            0,
+        )
+    })
+    .context("Failed prctl()")?;
+    let state = state as u32;
+    Ok((state & libc::PR_SPEC_DISABLE) != 0)
 }
 
 fn log_environment(args: Vec<&OsStr>) {

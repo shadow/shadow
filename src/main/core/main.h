@@ -11,7 +11,6 @@
 
 #include "main/bindings/c/bindings.h"
 
-bool main_sidechannelMitigationsEnabled();
 int main_checkGlibVersion();
 void main_printBuildInfo(const ShadowBuildInfo* shadowBuildInfo);
 void main_logBuildInfo(const ShadowBuildInfo* shadowBuildInfo);

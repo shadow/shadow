@@ -18,14 +18,6 @@
 #include "main/bindings/c/bindings.h"
 #include "shd-config.h"
 
-bool main_sidechannelMitigationsEnabled() {
-    int state = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
-    if (state == -1) {
-        panic("prctl: %s", g_strerror(errno));
-    }
-    return (state & PR_SPEC_DISABLE) != 0;
-}
-
 int main_checkGlibVersion() {
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
