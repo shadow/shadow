@@ -27,6 +27,7 @@ pub type WatchHandle = u64;
 #[derive(Debug)]
 enum Command {
     RunCallbacks(Pid),
+    UnregisterPid(Pid),
     Finish,
 }
 
@@ -187,6 +188,12 @@ impl ChildPidWatcher {
                         inner.run_callbacks_for_pid(pid);
                         inner.maybe_remove_pid(epoll, pid);
                     }
+                    Command::UnregisterPid(pid) => {
+                        if let Some(pid_data) = inner.pids.get_mut(&pid) {
+                            pid_data.unregistered = true;
+                            inner.maybe_remove_pid(epoll, pid);
+                        }
+                    }
                     Command::Finish => {
                         done = true;
                         // There could be more commands queued and/or more epoll
@@ -293,11 +300,11 @@ impl ChildPidWatcher {
     ///
     /// Safe to call multiple times.
     pub fn unregister_pid(&self, pid: Pid) {
+        // Let the worker handle the actual unregistration; otherwise we'd need
+        // to be extra careful to avoid races with e.g. simultaneous epoll
+        // events.
         let mut inner = self.inner.lock().unwrap();
-        if let Some(pid_data) = inner.pids.get_mut(&pid) {
-            pid_data.unregistered = true;
-            inner.maybe_remove_pid(self.epoll, pid);
-        }
+        inner.send_command(Command::UnregisterPid(pid));
     }
 
     /// Call `callback` from another thread after the child `pid`
