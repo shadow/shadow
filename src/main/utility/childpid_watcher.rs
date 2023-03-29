@@ -191,13 +191,11 @@ impl ChildPidWatcher {
                 }
             }
 
-            // Run all queued commands.
-            while let Ok(cmd) = command_receiver.try_recv() {
-                cmd(&mut worker_data);
-            }
-
-            // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
-            // no longer marked 'readable'.
+            // Read from `command_notifier` to reset its "readiness" in the epoll.
+            // We *must* do this before executing the queued commands below to avoid
+            // losing command notifications.
+            //
+            // Reading an eventfd should always returns an 8 byte integer.
             let res = {
                 let mut buf = [0; 8];
                 nix::unistd::read(command_notifier, &mut buf)
@@ -208,6 +206,12 @@ impl ChildPidWatcher {
                 Err(Errno::EAGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
+
+            // Run all queued commands.
+            while let Ok(cmd) = command_receiver.try_recv() {
+                cmd(&mut worker_data);
+            }
+
         }
     }
 
