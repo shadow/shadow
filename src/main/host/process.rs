@@ -34,7 +34,7 @@ use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::TypedPluginPtr;
+use super::syscall_types::TypedArrayForeignPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 use crate::core::work::task::TaskRef;
@@ -942,7 +942,7 @@ impl Process {
             }
 
             let typed_clear_child_tid_pvp =
-                TypedPluginPtr::new::<libc::pid_t>(clear_child_tid_pvp, 1);
+                TypedArrayForeignPtr::new::<libc::pid_t>(clear_child_tid_pvp, 1);
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
@@ -1205,7 +1205,7 @@ impl UnsafeBorrow {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn readable_ptr(
         process: &Process,
-        ptr: TypedPluginPtr<u8>,
+        ptr: TypedArrayForeignPtr<u8>,
     ) -> Result<*const c_void, Errno> {
         let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
@@ -1234,7 +1234,7 @@ impl UnsafeBorrow {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn readable_string(
         process: &Process,
-        ptr: TypedPluginPtr<c_char>,
+        ptr: TypedArrayForeignPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
         let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
@@ -1289,7 +1289,7 @@ impl UnsafeBorrowMut {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn writable_ptr(
         process: &Process,
-        ptr: TypedPluginPtr<u8>,
+        ptr: TypedArrayForeignPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
         let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
             mm.as_mut().unwrap()
@@ -1325,7 +1325,7 @@ impl UnsafeBorrowMut {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn mutable_ptr(
         process: &Process,
-        ptr: TypedPluginPtr<u8>,
+        ptr: TypedArrayForeignPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
         let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
             mm.as_mut().unwrap()
@@ -1402,7 +1402,7 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
-    use crate::host::syscall_types::{SyscallReturn, TypedPluginPtr};
+    use crate::host::syscall_types::{SyscallReturn, TypedArrayForeignPtr};
     use crate::host::thread::Thread;
 
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
@@ -1523,7 +1523,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let src = TypedPluginPtr::new::<u8>(src, n);
+        let src = TypedArrayForeignPtr::new::<u8>(src, n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         Worker::with_active_host(|h| {
@@ -1552,7 +1552,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let dst = TypedPluginPtr::new::<u8>(dst, n);
+        let dst = TypedArrayForeignPtr::new::<u8>(dst, n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         Worker::with_active_host(|h| {
             match proc
@@ -1581,7 +1581,7 @@ mod export {
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
+        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
@@ -1605,7 +1605,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
+        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1627,7 +1627,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedPluginPtr::new::<u8>(plugin_src, n);
+        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1658,7 +1658,7 @@ mod export {
                 std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
             };
             let cstr = match memory_manager
-                .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(ptr, maxlen))
+                .copy_str_from_ptr(buf, TypedArrayForeignPtr::new::<u8>(ptr, maxlen))
             {
                 Ok(cstr) => cstr,
                 Err(e) => return -(e as libc::ssize_t),
@@ -1685,7 +1685,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let ptr = TypedPluginPtr::new::<c_char>(plugin_src, n);
+            let ptr = TypedArrayForeignPtr::new::<c_char>(plugin_src, n);
             match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
                 Ok((str, strlen)) => {
                     assert!(!out_str.is_null());

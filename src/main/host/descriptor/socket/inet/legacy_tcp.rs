@@ -17,7 +17,7 @@ use crate::host::descriptor::{
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{write_partial, IoVec};
-use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
@@ -525,7 +525,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -536,7 +536,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -546,7 +546,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedPluginPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -952,7 +952,7 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let name = &name[..bytes_to_copy];
-                let optval_ptr = TypedPluginPtr::new::<u8>(optval_ptr, bytes_to_copy);
+                let optval_ptr = TypedArrayForeignPtr::new::<u8>(optval_ptr, bytes_to_copy);
 
                 memory_manager.copy_to_ptr(optval_ptr, name)?;
 
@@ -1060,7 +1060,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
                 let enable = memory_manager.read_vals::<_, 1>(optval_ptr)?[0];
 
                 if enable != 0 {
@@ -1081,7 +1081,7 @@ impl LegacyTcpSocket {
                 let optlen = std::cmp::min(optlen as usize, CONG_NAME_MAX);
                 let name = &mut name[..optlen];
 
-                let optval_ptr = TypedPluginPtr::new::<u8>(optval_ptr, optlen);
+                let optval_ptr = TypedArrayForeignPtr::new::<u8>(optval_ptr, optlen);
                 memory_manager.copy_from_ptr(name, optval_ptr)?;
 
                 // truncate the name at the first NUL character if there is one, but don't include
@@ -1108,7 +1108,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()
                     .or(Err(Errno::EINVAL))?;
@@ -1136,7 +1136,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedPluginPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()
                     .or(Err(Errno::EINVAL))?;

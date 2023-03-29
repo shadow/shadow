@@ -15,7 +15,7 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::type_formatting::SyscallBufferArg;
-use crate::host::syscall_types::TypedPluginPtr;
+use crate::host::syscall_types::TypedArrayForeignPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -446,7 +446,7 @@ impl SyscallHandler {
             .objs
             .process
             .memory_borrow_mut()
-            .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
+            .copy_to_ptr(TypedArrayForeignPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {

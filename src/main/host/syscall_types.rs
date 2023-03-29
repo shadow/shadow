@@ -16,15 +16,15 @@ use crate::utility::NoTypeInference;
 /// Wrapper around a ForeignPtr that encapsulates its type, size, and current
 /// position.
 #[derive(Copy, Clone)]
-pub struct TypedPluginPtr<T> {
+pub struct TypedArrayForeignPtr<T> {
     base: ForeignPtr,
     count: usize,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T> std::fmt::Debug for TypedPluginPtr<T> {
+impl<T> std::fmt::Debug for TypedArrayForeignPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TypedPluginPtr")
+        f.debug_struct("TypedArrayForeignPtr")
             .field("base", &self.base)
             .field("count", &self.count)
             .field("size_of::<T>", &size_of::<T>())
@@ -32,7 +32,7 @@ impl<T> std::fmt::Debug for TypedPluginPtr<T> {
     }
 }
 
-impl<T> TypedPluginPtr<T> {
+impl<T> TypedArrayForeignPtr<T> {
     /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
     /// to be aligned for `T`.
     pub fn new<U>(ptr: ForeignPtr, count: usize) -> Self
@@ -55,7 +55,7 @@ impl<T> TypedPluginPtr<T> {
                 ptr
             );
         }
-        TypedPluginPtr {
+        TypedArrayForeignPtr {
             base: ptr,
             count,
             _phantom: PhantomData,
@@ -81,24 +81,24 @@ impl<T> TypedPluginPtr<T> {
     }
 
     /// Cast to type `U`. Fails if the total size isn't a multiple of `sizeof<U>`.
-    pub fn cast<U>(&self) -> Option<TypedPluginPtr<U>> {
+    pub fn cast<U>(&self) -> Option<TypedArrayForeignPtr<U>> {
         let count_bytes = self.count * size_of::<T>();
         if count_bytes % size_of::<U>() != 0 {
             return None;
         }
-        Some(TypedPluginPtr::new::<U>(
+        Some(TypedArrayForeignPtr::new::<U>(
             self.base,
             count_bytes / size_of::<U>(),
         ))
     }
 
     /// Cast to u8. Infallible since `size_of<u8>` is 1.
-    pub fn cast_u8(&self) -> TypedPluginPtr<u8> {
+    pub fn cast_u8(&self) -> TypedArrayForeignPtr<u8> {
         self.cast::<u8>().unwrap()
     }
 
     /// Return a slice of this pointer.
-    pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> TypedPluginPtr<T> {
+    pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> TypedArrayForeignPtr<T> {
         use std::ops::Bound;
         let excluded_end = match range.end_bound() {
             Bound::Included(e) => e + 1,
@@ -115,7 +115,7 @@ impl<T> TypedPluginPtr<T> {
         // `<=` rather than `<`, to allow empty slice at end of ptr.
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
-        TypedPluginPtr {
+        TypedArrayForeignPtr {
             base: ForeignPtr::from(usize::from(self.base) + included_start * size_of::<T>()),
             count: excluded_end - included_start,
             _phantom: PhantomData,

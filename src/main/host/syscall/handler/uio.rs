@@ -7,7 +7,7 @@ use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, S
 use crate::host::descriptor::{CompatFile, File, FileState, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
-use crate::host::syscall_types::{SyscallError, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
@@ -225,7 +225,7 @@ impl SyscallHandler {
 
             let args = RecvmsgArgs {
                 iovs,
-                control_ptr: TypedPluginPtr::new::<u8>(ForeignPtr::null(), 0),
+                control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
                 flags: 0,
             };
 
@@ -482,7 +482,7 @@ impl SyscallHandler {
             let args = SendmsgArgs {
                 addr: None,
                 iovs,
-                control_ptr: TypedPluginPtr::new::<u8>(ForeignPtr::null(), 0),
+                control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
                 flags: 0,
             };
 
