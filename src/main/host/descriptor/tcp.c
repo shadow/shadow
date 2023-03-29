@@ -264,6 +264,13 @@ static guint _ipPortHash(in_addr_t ip, in_port_t port) {
     return hash_value;
 }
 
+static gint _simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
+                                   gpointer userData) {
+    utility_debugAssert(value1 && value2);
+    /* return neg if first before second, pos if second before first, 0 if equal */
+    return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
+}
+
 static void _tcp_flush(TCP* tcp, const Host* host);
 
 static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
@@ -2809,7 +2816,7 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     retransmit_tally_init(&tcp->retransmit.tally);
 
     tcp->retransmit.scheduledTimerExpirations =
-            priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);
+        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free);
 
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);

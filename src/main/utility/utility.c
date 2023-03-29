@@ -18,13 +18,6 @@
 #include "main/bindings/c/bindings.h"
 #include "main/utility/utility.h"
 
-gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
-                                   gpointer userData) {
-    utility_debugAssert(value1 && value2);
-    /* return neg if first before second, pos if second before first, 0 if equal */
-    return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
-}
-
 static GString* _utility_formatError(const gchar* file, gint line, const gchar* function,
                                      const gchar* message, va_list vargs) {
     GString* errorString = g_string_new("**ERROR ENCOUNTERED**\n");

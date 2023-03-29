@@ -89,8 +89,6 @@
 #define MAGIC_CLEAR(object)
 #endif
 
-gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
-                                   gpointer userData);
 gboolean utility_isRandomPath(const gchar* path);
 
 gchar* utility_strvToNewStr(gchar** strv);
