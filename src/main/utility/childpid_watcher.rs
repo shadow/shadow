@@ -26,7 +26,7 @@ pub struct ChildPidWatcher {
     command_sender: Mutex<Sender<Box<dyn Send + FnOnce(&mut WorkerData)>>>,
     // event_fd used to notify watcher thread via epoll. Calling thread writes a
     // single byte, which the watcher thread reads to reset.
-    command_notifier: RawFd,
+    command_notifier: File,
     // Handle for the worker thread.
     thread_handle: Option<thread::JoinHandle<()>>,
 }
@@ -118,7 +118,7 @@ impl ChildPidWatcher {
         };
         Self {
             command_sender: Mutex::new(command_sender),
-            command_notifier,
+            command_notifier: unsafe { File::from_raw_fd(command_notifier) },
             thread_handle: Some(thread_handle),
         }
     }
@@ -139,7 +139,7 @@ impl ChildPidWatcher {
                 }))
                 .unwrap();
         }
-        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
         receiver.recv()
     }
 
@@ -376,7 +376,6 @@ impl Drop for ChildPidWatcher {
         })
         .ok();
         self.thread_handle.take().unwrap().join().unwrap();
-        nix::unistd::close(self.command_notifier).unwrap();
     }
 }
 
