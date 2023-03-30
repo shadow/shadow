@@ -256,6 +256,21 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 #endif // RSWLOG
 }
 
+static guint _ipPortHash(in_addr_t ip, in_port_t port) {
+    GString* buffer = g_string_new(NULL);
+    g_string_printf(buffer, "%u:%u", ip, port);
+    guint hash_value = g_str_hash(buffer->str);
+    g_string_free(buffer, TRUE);
+    return hash_value;
+}
+
+static gint _simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
+                                   gpointer userData) {
+    utility_debugAssert(value1 && value2);
+    /* return neg if first before second, pos if second before first, 0 if equal */
+    return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
+}
+
 static void _tcp_flush(TCP* tcp, const Host* host);
 
 static TCP* _tcp_fromLegacyFile(LegacyFile* descriptor) {
@@ -273,7 +288,7 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peer
     MAGIC_INIT(child);
 
     /* my parent can find me by my key */
-    child->key = utility_ipPortHash(peerIP, peerPort);
+    child->key = _ipPortHash(peerIP, peerPort);
 
     legacyfile_ref(parent);
     child->parent = parent;
@@ -1737,7 +1752,7 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
         MAGIC_ASSERT(tcp->server);
 
         /* children are multiplexed based on remote ip and port */
-        guint childKey = utility_ipPortHash(ip, port);
+        guint childKey = _ipPortHash(ip, port);
         TCP* tcpChild = g_hash_table_lookup(tcp->server->children, &childKey);
 
         if(tcpChild) {
@@ -2801,7 +2816,7 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     retransmit_tally_init(&tcp->retransmit.tally);
 
     tcp->retransmit.scheduledTimerExpirations =
-            priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);
+        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free);
 
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);

@@ -43,8 +43,8 @@ use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
-use crate::utility::pathbuf_to_nul_term_cstring;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
 
@@ -245,7 +245,7 @@ impl Process {
         let shim_shared_mem_block =
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
 
-        let working_dir = pathbuf_to_nul_term_cstring(if use_legacy_working_dir {
+        let working_dir = utility::pathbuf_to_nul_term_cstring(if use_legacy_working_dir {
             nix::unistd::getcwd().unwrap()
         } else {
             std::fs::canonicalize(host.data_dir_path()).unwrap()
@@ -684,8 +684,8 @@ impl Process {
     ) -> *mut cshadow::RegularFile {
         let stdfile = unsafe { cshadow::regularfile_new() };
         let cwd = nix::unistd::getcwd().unwrap();
-        let path = pathbuf_to_nul_term_cstring(path);
-        let cwd = pathbuf_to_nul_term_cstring(cwd);
+        let path = utility::pathbuf_to_nul_term_cstring(path);
+        let cwd = utility::pathbuf_to_nul_term_cstring(cwd);
         let errorcode = unsafe {
             cshadow::regularfile_open(
                 stdfile,
@@ -1032,9 +1032,9 @@ impl Process {
         use nix::sys::wait::WaitStatus;
         let return_code = match nix::sys::wait::waitpid(native_pid, None) {
             Ok(WaitStatus::Exited(_pid, code)) => code,
-            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => unsafe {
-                cshadow::return_code_for_signal(signal as i32)
-            },
+            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => {
+                utility::return_code_for_signal(signal)
+            }
             Ok(status) => {
                 warn!("Unexpected status: {status:?}");
                 libc::EXIT_FAILURE

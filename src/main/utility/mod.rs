@@ -383,6 +383,13 @@ pub fn pathbuf_to_nul_term_cstring(buf: PathBuf) -> CString {
     CString::from_vec_with_nul(bytes).unwrap()
 }
 
+/// Get the return code for a process that exited by the given signal, following the behaviour of
+/// bash.
+pub fn return_code_for_signal(signal: nix::sys::signal::Signal) -> i32 {
+    // bash adds 128 to to the signal
+    (signal as i32).checked_add(128).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,26 +433,59 @@ mod tests {
 }
 
 mod export {
-    /// Get the backtrace. This function is slow. The string must be freed using `backtrace_free()`.
     #[no_mangle]
-    pub unsafe extern "C" fn backtrace() -> *mut libc::c_char {
-        let s = format!("{:?}", backtrace::Backtrace::new());
+    pub unsafe extern "C" fn utility_handleErrorInner(
+        file_name: *const libc::c_char,
+        line: libc::c_int,
+        fn_name: *const libc::c_char,
+        format: *const libc::c_char,
+        va_list: *mut libc::c_void,
+    ) -> ! {
+        use std::ffi::CStr;
+        let file_name = unsafe { CStr::from_ptr(file_name) };
+        let file_name = file_name.to_bytes().escape_ascii();
 
-        // add a tab at the start of every line
-        let s = s
+        let fn_name = unsafe { CStr::from_ptr(fn_name) };
+        let fn_name = fn_name.to_bytes().escape_ascii();
+
+        log::logger().flush();
+
+        let indent = "    ";
+
+        // add four spaces at the start of every line
+        let backtrace = format!("{:?}", backtrace::Backtrace::new());
+        let backtrace = backtrace
             .trim_end()
             .split('\n')
-            .map(|x| format!("\t{}", x))
+            .map(|x| format!("{indent}{x}"))
             .collect::<Vec<String>>()
             .join("\n");
 
-        let s = std::ffi::CString::new(s).unwrap();
-        s.into_raw()
-    }
+        let pid = nix::unistd::getpid();
+        let ppid = nix::unistd::getppid();
 
-    #[no_mangle]
-    pub unsafe extern "C" fn backtrace_free(backtrace: *mut libc::c_char) {
-        assert!(!backtrace.is_null());
-        unsafe { std::ffi::CString::from_raw(backtrace) };
+        let error_msg = unsafe { vsprintf::vsprintf_raw(format, va_list).unwrap() };
+        let error_msg = error_msg.escape_ascii();
+
+        let error_msg = format!(
+            "**ERROR ENCOUNTERED**\n\
+              {indent}At process: {pid} (parent {ppid})\n\
+              {indent}At file: {file_name}\n\
+              {indent}At line: {line}\n\
+              {indent}At function: {fn_name}\n\
+              {indent}Message: {error_msg}\n\
+            **BEGIN BACKTRACE**\n\
+            {backtrace}\n\
+            **END BACKTRACE**\n\
+            **ABORTING**"
+        );
+
+        if !nix::unistd::isatty(libc::STDOUT_FILENO).unwrap_or(true) {
+            println!("{error_msg}");
+        }
+
+        eprintln!("{error_msg}");
+
+        std::process::abort()
     }
 }

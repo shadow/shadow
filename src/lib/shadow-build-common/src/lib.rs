@@ -126,6 +126,7 @@ impl ShadowBuildCommon {
             },
             function: cbindgen::FunctionConfig {
                 must_use: Some("__attribute__((warn_unused_result))".into()),
+                no_return: Some("__attribute__((noreturn))".into()),
                 ..cbindgen::FunctionConfig::default()
             },
             export: cbindgen::ExportConfig {

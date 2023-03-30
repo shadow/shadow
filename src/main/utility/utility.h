@@ -89,9 +89,6 @@
 #define MAGIC_CLEAR(object)
 #endif
 
-guint utility_ipPortHash(in_addr_t ip, in_port_t port);
-gint utility_simulationTimeCompare(const CSimulationTime* value1, const CSimulationTime* value2,
-                                   gpointer userData);
 gboolean utility_isRandomPath(const gchar* path);
 
 gchar* utility_strvToNewStr(gchar** strv);
@@ -99,8 +96,5 @@ gchar* utility_strvToNewStr(gchar** strv);
 __attribute__((__format__(__printf__, 4, 5)))
 _Noreturn void utility_handleError(const gchar* file, gint line, const gchar* funtcion,
                                    const gchar* message, ...);
-
-/* If a process exited by a signal, use this return code. */
-int return_code_for_signal(int signal);
 
 #endif /* SHD_UTILITY_H_ */
