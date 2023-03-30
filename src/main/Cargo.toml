@@ -47,7 +47,7 @@ shadow_tsc = { path = "../lib/tsc" }
 signal-hook = "0.3.15"
 static_assertions = "1.1.0"
 syscall-logger = { path = "../lib/syscall-logger" }
-tempfile = "3.4"
+tempfile = "3.5"
 vasi-sync = { path = "../lib/vasi-sync" }
 # TODO: switch to upstream crate if/when they merge and release
 # https://github.com/dylanmckay/vsprintf/pull/2
