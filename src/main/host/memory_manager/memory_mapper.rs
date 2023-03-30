@@ -15,9 +15,10 @@ use nix::{fcntl, sys};
 use shadow_shim_helper_rs::notnull::*;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
+use crate::host::context::ProcessContext;
+use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
 use crate::host::syscall_types::{SyscallResult, TypedArrayForeignPtr};
-use crate::host::thread::Thread;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
@@ -169,9 +170,10 @@ impl ShmFile {
     }
 
     /// Map the given range of the file into the plugin's address space.
-    fn mmap_into_plugin(&self, thread: &Thread, interval: &Interval, prot: i32) {
-        thread
+    fn mmap_into_plugin(&self, ctx: &ThreadContext, interval: &Interval, prot: i32) {
+        ctx.thread
             .native_mmap(
+                &ProcessContext::new(ctx.host, ctx.process),
                 ForeignPtr::from(interval.start),
                 interval.len(),
                 prot,
@@ -214,8 +216,8 @@ fn get_regions(pid: Pid) -> IntervalMap<Region> {
 
 /// Find the heap range, and map it if non-empty.
 fn get_heap(
+    ctx: &ThreadContext,
     shm_file: &mut ShmFile,
-    thread: &Thread,
     memory_manager: &MemoryManager,
     regions: &mut IntervalMap<Region>,
 ) -> Interval {
@@ -230,8 +232,9 @@ fn get_heap(
         heap_mapping
     };
     if heap_mapping.is_none() {
+        let (ctx, thread) = ctx.split_thread();
         // There's no heap region allocated yet. Get the address where it will be and return.
-        let start = usize::from(thread.native_brk(ForeignPtr::from(0usize)).unwrap());
+        let start = usize::from(thread.native_brk(&ctx, ForeignPtr::from(0usize)).unwrap());
         return start..start;
     }
     let (heap_interval, heap_region) = heap_mapping.unwrap();
@@ -240,7 +243,7 @@ fn get_heap(
     let mut heap_region = heap_region.clone();
     heap_region.shadow_base = shm_file.mmap_into_shadow(&heap_interval, HEAP_PROT);
     shm_file.copy_into_file(memory_manager, &heap_interval, &heap_region, &heap_interval);
-    shm_file.mmap_into_plugin(thread, &heap_interval, HEAP_PROT);
+    shm_file.mmap_into_plugin(ctx, &heap_interval, HEAP_PROT);
 
     {
         let mutations = regions.insert(heap_interval.clone(), heap_region);
@@ -255,7 +258,7 @@ fn get_heap(
 /// stack size.
 fn map_stack(
     memory_manager: &mut MemoryManager,
-    thread: &Thread,
+    ctx: &ThreadContext,
     shm_file: &mut ShmFile,
     regions: &mut IntervalMap<Region>,
 ) {
@@ -297,7 +300,7 @@ fn map_stack(
         );
     }
 
-    shm_file.mmap_into_plugin(thread, &remapped_stack_bounds, STACK_PROT);
+    shm_file.mmap_into_plugin(ctx, &remapped_stack_bounds, STACK_PROT);
 
     let mutations = regions.insert(remapped_stack_bounds, region);
     if remapped_overlaps_current {
@@ -368,12 +371,12 @@ fn coalesce_regions(regions: IntervalMap<Region>) -> IntervalMap<Region> {
 }
 
 impl MemoryMapper {
-    pub fn new(memory_manager: &mut MemoryManager, thread: &Thread) -> MemoryMapper {
+    pub fn new(memory_manager: &mut MemoryManager, ctx: &ThreadContext) -> MemoryMapper {
         let shm_path = format!(
             "/dev/shm/shadow_memory_manager_{}_{:?}_{}",
             process::id(),
-            thread.host_id(),
-            u32::from(thread.process_id())
+            ctx.thread.host_id(),
+            u32::from(ctx.process.id())
         );
         let shm_file = OpenOptions::new()
             .read(true)
@@ -395,8 +398,9 @@ impl MemoryMapper {
         let shm_path = format!("/proc/{}/fd/{}\0", process::id(), shm_file.as_raw_fd());
 
         let shm_plugin_fd = {
+            let (ctx, thread) = ctx.split_thread();
             let path_buf_foreign_ptr = TypedArrayForeignPtr::new::<u8>(
-                thread.malloc_foreign_ptr(shm_path.len()).unwrap(),
+                thread.malloc_foreign_ptr(&ctx, shm_path.len()).unwrap(),
                 shm_path.len(),
             );
             memory_manager
@@ -404,13 +408,14 @@ impl MemoryMapper {
                 .unwrap();
             let shm_plugin_fd = thread
                 .native_open(
+                    &ctx,
                     path_buf_foreign_ptr.ptr(),
                     libc::O_RDWR | libc::O_CLOEXEC,
                     0,
                 )
                 .unwrap();
             thread
-                .free_foreign_ptr(path_buf_foreign_ptr.ptr(), path_buf_foreign_ptr.len())
+                .free_foreign_ptr(&ctx, path_buf_foreign_ptr.ptr(), path_buf_foreign_ptr.len())
                 .unwrap();
             shm_plugin_fd
         };
@@ -422,8 +427,8 @@ impl MemoryMapper {
         };
         let regions = get_regions(memory_manager.pid);
         let mut regions = coalesce_regions(regions);
-        let heap = get_heap(&mut shm_file, thread, memory_manager, &mut regions);
-        map_stack(memory_manager, thread, &mut shm_file, &mut regions);
+        let heap = get_heap(ctx, &mut shm_file, memory_manager, &mut regions);
+        map_stack(memory_manager, ctx, &mut shm_file, &mut regions);
 
         MemoryMapper {
             shm_file,
@@ -535,7 +540,7 @@ impl MemoryMapper {
     /// mappings are remapped.
     pub fn handle_mmap_result(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         ptr: TypedArrayForeignPtr<u8>,
         prot: i32,
         flags: i32,
@@ -564,7 +569,7 @@ impl MemoryMapper {
             // sense to eventually move the mechanics of opening the child fd into here (in which
             // case we'll already have it) than to pipe the string through this API.
             Some(MappingPath::Path(
-                std::fs::read_link(format!("/proc/{}/fd/{}", thread.native_pid(), fd))
+                std::fs::read_link(format!("/proc/{}/fd/{}", ctx.thread.native_pid(), fd))
                     .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
             ))
         };
@@ -585,7 +590,7 @@ impl MemoryMapper {
             // but doing so lets the OS decide if it's a legal mapping, and where to put it.
             self.shm_file.alloc(&interval);
             region.shadow_base = self.shm_file.mmap_into_shadow(&interval, prot);
-            self.shm_file.mmap_into_plugin(thread, &interval, prot);
+            self.shm_file.mmap_into_plugin(ctx, &interval, prot);
         }
 
         // TODO: We *could* handle file mappings and some shared mappings as well. Doesn't make
@@ -623,15 +628,17 @@ impl MemoryMapper {
     /// if applicable.
     pub fn handle_mremap(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         old_address: ForeignPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
         new_address: ForeignPtr,
     ) -> SyscallResult {
-        let new_address =
-            thread.native_mremap(old_address, old_size, new_size, flags, new_address)?;
+        let new_address = {
+            let (ctx, thread) = ctx.split_thread();
+            thread.native_mremap(&ctx, old_address, old_size, new_size, flags, new_address)?
+        };
         let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
         let new_interval = usize::from(new_address)..(usize::from(new_address) + new_size);
 
@@ -692,7 +699,7 @@ impl MemoryMapper {
 
                 // Remap the region in the child to the new position in the mem file.
                 self.shm_file
-                    .mmap_into_plugin(thread, &new_interval, region.prot);
+                    .mmap_into_plugin(ctx, &new_interval, region.prot);
 
                 // Map the new location into Shadow.
                 let new_shadow_base = self.shm_file.mmap_into_shadow(&new_interval, region.prot);
@@ -749,7 +756,7 @@ impl MemoryMapper {
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, thread: &Thread, ptr: ForeignPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -779,15 +786,17 @@ impl MemoryMapper {
                     assert_eq!(self.heap.start, self.heap.end);
                     self.shm_file.alloc(&new_heap);
                     let shadow_base = self.shm_file.mmap_into_shadow(&new_heap, HEAP_PROT);
-                    self.shm_file.mmap_into_plugin(thread, &new_heap, HEAP_PROT);
+                    self.shm_file.mmap_into_plugin(ctx, &new_heap, HEAP_PROT);
                     shadow_base
                 }
                 Some((_, heap_region)) => {
                     // Grow heap region.
                     self.shm_file.alloc(&self.heap);
                     // mremap in plugin, enforcing that base stays the same.
+                    let (ctx, thread) = ctx.split_thread();
                     thread
                         .native_mremap(
+                            &ctx,
                             /* old_addr: */ ForeignPtr::from(self.heap.start),
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
@@ -828,8 +837,10 @@ impl MemoryMapper {
             let (_, heap_region) = opt_heap_interval_and_region.unwrap();
 
             // mremap in plugin, enforcing that base stays the same.
+            let (ctx, thread) = ctx.split_thread();
             thread
                 .native_mremap(
+                    &ctx,
                     /* old_addr: */ ForeignPtr::from(self.heap.start),
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
@@ -869,13 +880,14 @@ impl MemoryMapper {
     /// memory in a way that the plugin itself can't.
     pub fn handle_mprotect(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         addr: ForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
+        let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
-        thread.native_mprotect(addr, size, prot)?;
+        thread.native_mprotect(&ctx, addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected

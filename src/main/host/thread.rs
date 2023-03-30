@@ -11,11 +11,10 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
-use super::context::{ProcessContext, ThreadContext};
+use super::context::ProcessContext;
 use super::host::Host;
 use super::managed_thread::ManagedThread;
 use super::process::{Process, ProcessId};
-use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, IsSend, SendPointer};
@@ -42,23 +41,26 @@ impl IsSend for Thread {}
 
 impl Thread {
     /// Have the plugin thread natively execute the given syscall.
-    fn native_syscall_raw(&self, n: i64, args: &[SysCallReg]) -> libc::c_long {
-        // FIXME: pass Host and Process explicitly.
-        Worker::with_active_host(|host| {
-            Worker::with_active_process(|process| {
-                self.mthread
-                    .borrow()
-                    .native_syscall(&ThreadContext::new(host, process, self), n, args)
-                    .into()
-            })
-            .unwrap()
-        })
-        .unwrap()
+    fn native_syscall_raw(
+        &self,
+        ctx: &ProcessContext,
+        n: i64,
+        args: &[SysCallReg],
+    ) -> libc::c_long {
+        self.mthread
+            .borrow()
+            .native_syscall(&ctx.with_thread(self), n, args)
+            .into()
     }
 
     /// Have the plugin thread natively execute the given syscall.
-    fn native_syscall(&self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
-        syscall::raw_return_value_to_result(self.native_syscall_raw(n, args))
+    fn native_syscall(
+        &self,
+        ctx: &ProcessContext,
+        n: i64,
+        args: &[SysCallReg],
+    ) -> nix::Result<SysCallReg> {
+        syscall::raw_return_value_to_result(self.native_syscall_raw(ctx, n, args))
     }
 
     pub fn process_id(&self) -> ProcessId {
@@ -128,14 +130,20 @@ impl Thread {
     }
 
     /// Natively execute munmap(2) on the given thread.
-    pub fn native_munmap(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
-        self.native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?;
+    pub fn native_munmap(
+        &self,
+        ctx: &ProcessContext,
+        ptr: ForeignPtr,
+        size: usize,
+    ) -> nix::Result<()> {
+        self.native_syscall(ctx, libc::SYS_munmap, &[ptr.into(), size.into()])?;
         Ok(())
     }
 
     /// Natively execute mmap(2) on the given thread.
     pub fn native_mmap(
         &self,
+        ctx: &ProcessContext,
         addr: ForeignPtr,
         len: usize,
         prot: i32,
@@ -145,6 +153,7 @@ impl Thread {
     ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
+                ctx,
                 libc::SYS_mmap,
                 &[
                     SysCallReg::from(addr),
@@ -161,6 +170,7 @@ impl Thread {
     /// Natively execute mremap(2) on the given thread.
     pub fn native_mremap(
         &self,
+        ctx: &ProcessContext,
         old_addr: ForeignPtr,
         old_len: usize,
         new_len: usize,
@@ -169,6 +179,7 @@ impl Thread {
     ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
+                ctx,
                 libc::SYS_mremap,
                 &[
                     SysCallReg::from(old_addr),
@@ -182,8 +193,15 @@ impl Thread {
     }
 
     /// Natively execute mmap(2) on the given thread.
-    pub fn native_mprotect(&self, addr: ForeignPtr, len: usize, prot: i32) -> nix::Result<()> {
+    pub fn native_mprotect(
+        &self,
+        ctx: &ProcessContext,
+        addr: ForeignPtr,
+        len: usize,
+        prot: i32,
+    ) -> nix::Result<()> {
         self.native_syscall(
+            ctx,
             libc::SYS_mprotect,
             &[
                 SysCallReg::from(addr),
@@ -195,8 +213,15 @@ impl Thread {
     }
 
     /// Natively execute open(2) on the given thread.
-    pub fn native_open(&self, pathname: ForeignPtr, flags: i32, mode: i32) -> nix::Result<i32> {
+    pub fn native_open(
+        &self,
+        ctx: &ProcessContext,
+        pathname: ForeignPtr,
+        flags: i32,
+        mode: i32,
+    ) -> nix::Result<i32> {
         let res = self.native_syscall(
+            ctx,
             libc::SYS_open,
             &[
                 SysCallReg::from(pathname),
@@ -208,22 +233,23 @@ impl Thread {
     }
 
     /// Natively execute close(2) on the given thread.
-    pub fn native_close(&self, fd: i32) -> nix::Result<()> {
-        self.native_syscall(libc::SYS_close, &[SysCallReg::from(fd)])?;
+    pub fn native_close(&self, ctx: &ProcessContext, fd: i32) -> nix::Result<()> {
+        self.native_syscall(ctx, libc::SYS_close, &[SysCallReg::from(fd)])?;
         Ok(())
     }
 
     /// Natively execute brk(2) on the given thread.
-    pub fn native_brk(&self, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
-        let res = self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)])?;
+    pub fn native_brk(&self, ctx: &ProcessContext, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
+        let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    pub fn malloc_foreign_ptr(&self, size: usize) -> nix::Result<ForeignPtr> {
+    pub fn malloc_foreign_ptr(&self, ctx: &ProcessContext, size: usize) -> nix::Result<ForeignPtr> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
+            ctx,
             ForeignPtr::from(0usize),
             size,
             libc::PROT_READ | libc::PROT_WRITE,
@@ -234,8 +260,13 @@ impl Thread {
     }
 
     /// Frees a pointer previously returned by `malloc_foreign_ptr`
-    pub fn free_foreign_ptr(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
-        self.native_munmap(ptr, size)?;
+    pub fn free_foreign_ptr(
+        &self,
+        ctx: &ProcessContext,
+        ptr: ForeignPtr,
+        size: usize,
+    ) -> nix::Result<()> {
+        self.native_munmap(ctx, ptr, size)?;
         Ok(())
     }
 
@@ -498,7 +529,17 @@ mod export {
         arg6: SysCallReg,
     ) -> libc::c_long {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.native_syscall_raw(n, &[arg1, arg2, arg3, arg4, arg5, arg6])
+        Worker::with_active_host(|host| {
+            Worker::with_active_process(|process| {
+                thread.native_syscall_raw(
+                    &ProcessContext::new(host, process),
+                    n,
+                    &[arg1, arg2, arg3, arg4, arg5, arg6],
+                )
+            })
+            .unwrap()
+        })
+        .unwrap()
     }
 
     #[no_mangle]

@@ -86,6 +86,18 @@ impl<'a> ThreadContext<'a> {
             thread,
         }
     }
+
+    /// Split into a `&Process` and a `HostContext`. Useful e.g.
+    /// for calling `Process` methods that take a `&HostContext`.
+    pub fn split_process(&self) -> (HostContext, &Process) {
+        (HostContext::new(self.host), self.process)
+    }
+
+    /// Split into a `&Thread` and a `ProcessContext`. Useful e.g.
+    /// for calling `Thread` methods that take a `&ProcessContext`.
+    pub fn split_thread(&self) -> (ProcessContext, &Thread) {
+        (ProcessContext::new(self.host, self.process), self.thread)
+    }
 }
 
 /// Shadow's C code doesn't know about contexts. In places where C code calls
