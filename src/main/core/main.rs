@@ -275,12 +275,12 @@ fn set_sched_fifo() -> anyhow::Result<()> {
     let mut param: libc::sched_param = unsafe { std::mem::zeroed() };
     param.sched_priority = 1;
 
-    if unsafe { libc::sched_setscheduler(0, libc::SCHED_FIFO, &param as *const _) } != 0 {
-        return Err(anyhow::anyhow!(
-            "Could not set kernel SCHED_FIFO: {}",
-            nix::errno::Errno::from_i32(nix::errno::errno()),
-        ));
-    }
+    let rv = nix::errno::Errno::result(unsafe {
+        libc::sched_setscheduler(0, libc::SCHED_FIFO, &param as *const _)
+    })
+    .context("Could not set kernel SCHED_FIFO")?;
+
+    assert_eq!(rv, 0);
 
     Ok(())
 }
