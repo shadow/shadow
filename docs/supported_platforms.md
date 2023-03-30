@@ -4,10 +4,9 @@
 
 We support the following Linux x86-64 distributions:
 
-- Ubuntu 18.04, 20.04, 22.04
+- Ubuntu 20.04, 22.04
 - Debian 10 and 11
-- Fedora 34, 35, 36, 37
-- CentOS Stream 8
+- Fedora 37
 
 We do not provide official support for other platforms. This means that we do
 not ensure that Shadow successfully builds and passes tests on other platforms.
@@ -16,6 +15,12 @@ unsupported platforms.
 
 Our policy regarding supported platforms can be found in our ["stability
 guarantees"](semver.md).
+
+Some Linux distributions support multiple kernel versions, for example an older
+General Availability (GA) kernel and newer hardware-enablement (HWE) kernels.
+We will try to allow Shadow to run on the oldest kernel supported on each
+distribution (the GA kernel), but we are currently only able to regularly test
+on the latest Ubuntu kernel, since that's what GitHub Actions provides.
 
 ## Docker
 
@@ -29,13 +34,6 @@ Example:
 ```bash
 docker run -it --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined ubuntu:22.04
 ```
-
-## Known incompatible platforms
-
-- CentOS 7: We rely on features of glibc that aren't available on CentOS 7.
-  Shadow won't compile there due to our use of C11 atomics, and threaded
-  virtual processes running with preload-based interposition will deadlock due
-  to an incompatible implementation of thread-local-storage.
 
 If you are having difficulty installing Shadow on any supported platforms, you
 may find the [continuous integration build
