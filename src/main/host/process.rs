@@ -456,7 +456,7 @@ impl Process {
         .unwrap();
 
         main_thread.run(
-            host,
+            &ProcessContext::new(host, self),
             &self.plugin_path,
             self.argv.clone(),
             self.envv.clone(),

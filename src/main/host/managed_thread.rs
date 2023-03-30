@@ -17,10 +17,9 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
 use shadow_shmem::allocator::ShMemBlock;
 use vasi_sync::scchannel::SelfContainedChannelError;
 
+use super::context::ThreadContext;
 use super::host::Host;
-use super::process::Process;
 use super::syscall_condition::SysCallCondition;
-use super::thread::Thread;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
@@ -75,27 +74,24 @@ impl ManagedThread {
         self.native_tid.unwrap()
     }
 
-    pub fn native_syscall(
-        &self,
-        host: &Host,
-        process: &Process,
-        n: i64,
-        args: &[SysCallReg],
-    ) -> SysCallReg {
+    pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
         {
             let mut syscall_args = SysCallArgs {
                 number: n,
                 args: [SysCallReg::from(0u64); 6],
             };
             syscall_args.args[..args.len()].copy_from_slice(args);
-            self.continue_plugin(host, &ShimEvent::Syscall(ShimEventSyscall { syscall_args }));
+            self.continue_plugin(
+                ctx.host,
+                &ShimEvent::Syscall(ShimEventSyscall { syscall_args }),
+            );
         }
 
-        match self.wait_for_next_event(host) {
+        match self.wait_for_next_event(ctx.host) {
             Ok(ShimEvent::SyscallComplete(res)) => res.retval,
             Err(SelfContainedChannelError::WriterIsClosed) => {
                 trace!("Plugin exited while executing native syscall {n}");
-                process.mark_as_exiting();
+                ctx.process.mark_as_exiting();
                 self.cleanup();
                 SysCallReg::from(-(Errno::ESRCH as i64))
             }
@@ -107,7 +103,7 @@ impl ManagedThread {
 
     pub fn run(
         &mut self,
-        host: &Host,
+        ctx: &ThreadContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -123,7 +119,9 @@ impl ManagedThread {
             .unwrap(),
         );
         envv.push(CString::new(format!("SHADOW_PID={}", getpid().as_raw())).unwrap());
-        envv.push(CString::new(format!("SHADOW_TSC_HZ={}", host.tsc().cyclesPerSecond)).unwrap());
+        envv.push(
+            CString::new(format!("SHADOW_TSC_HZ={}", ctx.host.tsc().cyclesPerSecond)).unwrap(),
+        );
 
         info!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
@@ -163,19 +161,14 @@ impl ManagedThread {
         self.is_running.set(true);
     }
 
-    pub fn resume(
-        &self,
-        thread: &Thread,
-        process: &Process,
-        host: &Host,
-    ) -> Option<SysCallCondition> {
+    pub fn resume(&self, ctx: &ThreadContext) -> Option<SysCallCondition> {
         debug_assert!(self.is_running());
 
         self.sync_affinity_with_worker();
 
         // Flush any pending writes, e.g. from a previous mthread that exited
         // without flushing.
-        process.free_unsafe_borrows_flush().unwrap();
+        ctx.process.free_unsafe_borrows_flush().unwrap();
 
         loop {
             match *self.current_event.borrow() {
@@ -184,12 +177,12 @@ impl ManagedThread {
                     // send the message to the shim to call main().
                     // The plugin will run until it makes a blocking call.
                     trace!("sending start event code to {}", self.native_pid.unwrap());
-                    self.continue_plugin(host, &e);
+                    self.continue_plugin(ctx.host, &e);
                 }
                 ShimEvent::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but
                     // clean up.
-                    process.mark_as_exiting();
+                    ctx.process.mark_as_exiting();
                     self.cleanup();
                     return None;
                 }
@@ -218,13 +211,13 @@ impl ManagedThread {
 
                     let scr = unsafe {
                         cshadow::syscallhandler_make_syscall(
-                            thread.csyscallhandler(),
+                            ctx.thread.csyscallhandler(),
                             &syscall.syscall_args,
                         )
                     };
 
                     // remove the mthread's old syscall condition since it's no longer needed
-                    thread.cleanup_syscall_condition();
+                    ctx.thread.cleanup_syscall_condition();
 
                     if !self.is_running() {
                         return None;
@@ -232,32 +225,32 @@ impl ManagedThread {
 
                     // Flush any writes that legacy C syscallhandlers may have
                     // made.
-                    process.free_unsafe_borrows_flush().unwrap();
+                    ctx.process.free_unsafe_borrows_flush().unwrap();
 
                     match scr {
                         SyscallReturn::Block(b) => {
                             return Some(unsafe { SysCallCondition::consume_from_c(b.cond) })
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(
-                            host,
+                            ctx.host,
                             &ShimEvent::SyscallComplete(ShimEventSyscallComplete {
                                 retval: d.retval,
                                 restartable: d.restartable,
                             }),
                         ),
                         SyscallReturn::Native => {
-                            self.continue_plugin(host, &ShimEvent::SyscallDoNative)
+                            self.continue_plugin(ctx.host, &ShimEvent::SyscallDoNative)
                         }
                     };
                 }
-                e @ ShimEvent::SyscallComplete(_) => self.continue_plugin(host, &e),
+                e @ ShimEvent::SyscallComplete(_) => self.continue_plugin(ctx.host, &e),
                 e @ ShimEvent::SyscallDoNative
                 | e @ ShimEvent::AddThreadReq(_)
                 | e @ ShimEvent::AddThreadParentRes => panic!("Unexpected event: {e:?}"),
             }
             assert!(self.is_running());
 
-            *self.current_event.borrow_mut() = match self.wait_for_next_event(host) {
+            *self.current_event.borrow_mut() = match self.wait_for_next_event(ctx.host) {
                 Ok(e) => e,
                 Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent::ProcessDeath,
             };
@@ -299,8 +292,7 @@ impl ManagedThread {
     /// all the "glue" and emulation code is in the shadow `clone` syscall handler.
     pub fn handle_clone_syscall(
         &self,
-        host: &Host,
-        process: &Process,
+        ctx: &ThreadContext,
         flags: libc::c_ulong,
         child_stack: ForeignPtr,
         ptid: ForeignPtr,
@@ -323,12 +315,12 @@ impl ManagedThread {
 
         // Send the IPC block for the new mthread to use.
         self.continue_plugin(
-            host,
+            ctx.host,
             &ShimEvent::AddThreadReq(ShimEventAddThreadReq {
                 ipc_block: child_ipc_shmem.serialize(),
             }),
         );
-        match self.wait_for_next_event(host) {
+        match self.wait_for_next_event(ctx.host) {
             Ok(ShimEvent::AddThreadParentRes) => (),
             r => panic!("Unexpected result: {r:?}"),
         };
@@ -336,8 +328,7 @@ impl ManagedThread {
         // Create the new managed thread.
         let child_native_tid = libc::pid_t::from(syscall::raw_return_value_to_result(
             self.native_syscall(
-                host,
-                process,
+                ctx,
                 libc::SYS_clone,
                 &[
                     flags.into(),

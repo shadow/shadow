@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
-use super::context::ProcessContext;
+use super::context::{ProcessContext, ThreadContext};
 use super::host::Host;
 use super::managed_thread::ManagedThread;
 use super::process::{Process, ProcessId};
@@ -48,7 +48,7 @@ impl Thread {
             Worker::with_active_process(|process| {
                 self.mthread
                     .borrow()
-                    .native_syscall(host, process, n, args)
+                    .native_syscall(&ThreadContext::new(host, process, self), n, args)
                     .into()
             })
             .unwrap()
@@ -269,18 +269,16 @@ impl Thread {
 
     pub fn handle_clone_syscall(
         &self,
-        host: &Host,
-        process: &Process,
+        ctx: &ProcessContext,
         flags: libc::c_ulong,
         child_stack: ForeignPtr,
         ptid: ForeignPtr,
         ctid: ForeignPtr,
         newtls: libc::c_ulong,
     ) -> Result<ThreadId, Errno> {
-        let child_tid = ThreadId::from(host.get_new_process_id());
+        let child_tid = ThreadId::from(ctx.host.get_new_process_id());
         let child_mthread = self.mthread.borrow().handle_clone_syscall(
-            host,
-            process,
+            &ctx.with_thread(self),
             flags,
             child_stack,
             ptid,
@@ -291,23 +289,23 @@ impl Thread {
             mthread: RefCell::new(child_mthread),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
-                    host.id(),
-                    process.id().into(),
+                    ctx.host.id(),
+                    ctx.process.id().into(),
                     child_tid.into(),
                 ))
             },
             cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
             id: child_tid,
-            host_id: host.id(),
-            process_id: process.id(),
+            host_id: ctx.host.id(),
+            process_id: ctx.process.id(),
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
-                &host.shim_shmem_lock_borrow().unwrap(),
+                &ctx.host.shim_shmem_lock_borrow().unwrap(),
                 child_tid.into(),
             )),
         };
-        let childrc = RootedRc::new(host.root(), RootedRefCell::new(host.root(), child));
-        process.add_thread(host, childrc);
+        let childrc = RootedRc::new(ctx.host.root(), RootedRefCell::new(ctx.host.root(), child));
+        ctx.process.add_thread(ctx.host, childrc);
         Ok(child_tid)
     }
 
@@ -318,7 +316,7 @@ impl Thread {
 
     pub fn run(
         &self,
-        host: &Host,
+        ctx: &ProcessContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -335,7 +333,7 @@ impl Thread {
         );
 
         self.mthread.borrow_mut().run(
-            host,
+            &ctx.with_thread(self),
             plugin_path,
             argv,
             envv,
@@ -345,17 +343,14 @@ impl Thread {
         );
     }
 
-    pub fn resume(&self, process_ctx: &ProcessContext) {
+    pub fn resume(&self, ctx: &ProcessContext) {
         // Ensure the condition isn't triggered again, but don't clear it yet.
         // Syscall handler can still access.
         if let Some(c) = unsafe { self.cond.get().ptr().as_mut() } {
             unsafe { c::syscallcondition_cancel(c) };
         }
 
-        let cond = self
-            .mthread
-            .borrow()
-            .resume(self, process_ctx.process, process_ctx.host);
+        let cond = self.mthread.borrow().resume(&ctx.with_thread(self));
 
         // Now we're done with old condition.
         if let Some(c) = unsafe {
@@ -374,8 +369,8 @@ impl Thread {
             unsafe {
                 c::syscallcondition_waitNonblock(
                     cond,
-                    process_ctx.host,
-                    process_ctx.process.cprocess(process_ctx.host),
+                    ctx.host,
+                    ctx.process.cprocess(ctx.host),
                     self,
                 )
             }
@@ -527,7 +522,14 @@ mod export {
         Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
                 thread
-                    .handle_clone_syscall(host, process, flags, child_stack, ptid, ctid, newtls)
+                    .handle_clone_syscall(
+                        &ProcessContext::new(host, process),
+                        flags,
+                        child_stack,
+                        ptid,
+                        ctid,
+                        newtls,
+                    )
                     .map(libc::pid_t::from)
                     .unwrap_or_else(|e| -(e as i32))
             })
