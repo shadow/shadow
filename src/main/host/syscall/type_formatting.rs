@@ -105,7 +105,7 @@ macro_rules! deref_pointer_impl {
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p} <invalid>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -157,7 +157,7 @@ macro_rules! deref_array_impl {
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p} <invalid>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -216,7 +216,7 @@ fn fmt_buffer(
     let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
-        Err(_) => return write!(f, "{ptr:p}"),
+        Err(_) => return write!(f, "{ptr:p} <invalid>"),
     };
 
     let mut s = String::with_capacity(DISPLAY_LEN);
@@ -271,7 +271,7 @@ fn fmt_string(
     let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
-        Err(_) => return write!(f, "{ptr:p}"),
+        Err(_) => return write!(f, "{ptr:p} <invalid>"),
     };
 
     let mut s = String::with_capacity(DISPLAY_LEN);
@@ -313,21 +313,19 @@ fn fmt_msghdr(
     mem: &MemoryManager,
 ) -> std::fmt::Result {
     // read the socket address from `msg.msg_name`
-    let addr = match read_sockaddr(
+    let addr = read_sockaddr(
         mem,
         ForeignPtr::from_raw_ptr(msg.msg_name as *mut u8),
         msg.msg_namelen,
-    ) {
-        Ok(Some(addr)) => Some(addr),
-        Ok(None) | Err(_) => None,
-    };
+    );
 
     // prepare the socket address for formatting
     let msg_name = DebugFormatter(move |fmt| {
         match addr {
-            Some(addr) => write!(fmt, "{addr} ({:p})", msg.msg_name),
+            Ok(Some(addr)) => write!(fmt, "{addr} ({:p})", msg.msg_name),
+            Ok(None) => write!(fmt, "{:p}", msg.msg_name),
             // if we weren't able to read the sockaddr (NULL, EFAULT, etc), just show the pointer
-            None => write!(fmt, "{:p}", msg.msg_name),
+            Err(_) => write!(fmt, "{:p} <invalid>", msg.msg_name),
         }
     });
 
@@ -401,7 +399,11 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrAr
         let ptr = self.reg.into();
         let len = self.args[LEN_INDEX].into();
 
-        let Ok(Some(addr)) = read_sockaddr(mem, ptr, len) else {
+        let Ok(addr) = read_sockaddr(mem, ptr, len) else {
+            return write!(f, "{ptr:p} <invalid>");
+        };
+
+        let Some(addr) = addr else {
             return write!(f, "{ptr:p}");
         };
 
@@ -426,7 +428,7 @@ impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
         let ptr = ForeignArrayPtr::new(ptr, 1);
         let Ok(msg) = mem.memory_ref(ptr) else {
             // if we couldn't read the memory, just show the pointer instead
-            return write!(f, "{:p}", ptr.ptr());
+            return write!(f, "{:p} <invalid>", ptr.ptr());
         };
         let msg = &(*msg)[0];
 
