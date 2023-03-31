@@ -567,9 +567,9 @@ impl MemoryManager {
 
     /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
     /// running thread.
-    pub fn init_mapper(&mut self, thread: &Thread) {
+    pub fn init_mapper(&mut self, ctx: &ThreadContext) {
         assert!(self.memory_mapper.is_none());
-        self.memory_mapper = Some(MemoryMapper::new(self, thread));
+        self.memory_mapper = Some(MemoryMapper::new(self, ctx));
     }
 
     /// Whether the internal MemoryMapper has been initialized.
@@ -586,16 +586,16 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, thread: &Thread, ptr: ForeignPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr) -> SyscallResult {
         match &mut self.memory_mapper {
-            Some(mm) => mm.handle_brk(thread, ptr),
+            Some(mm) => mm.handle_brk(ctx, ptr),
             None => Err(SyscallError::Native),
         }
     }
 
     pub fn do_mmap(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         addr: ForeignPtr,
         length: usize,
         prot: i32,
@@ -603,10 +603,13 @@ impl MemoryManager {
         fd: i32,
         offset: i64,
     ) -> SyscallResult {
-        let addr = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
+        let addr = {
+            let (ctx, thread) = ctx.split_thread();
+            thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
+        };
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_mmap_result(
-                thread,
+                ctx,
                 TypedArrayForeignPtr::new::<u8>(addr, length),
                 prot,
                 flags,
@@ -618,14 +621,14 @@ impl MemoryManager {
 
     pub fn handle_munmap(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         addr: ForeignPtr,
         length: usize,
     ) -> SyscallResult {
         if self.memory_mapper.is_some() {
             // Do it ourselves so that we can update our mappings based on
             // whether it succeeded.
-            self.do_munmap(thread, addr, length)?;
+            self.do_munmap(ctx, addr, length)?;
             Ok(0.into())
         } else {
             // We don't need to know the result, and it's more efficient to let
@@ -634,8 +637,14 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(&mut self, thread: &Thread, addr: ForeignPtr, length: usize) -> nix::Result<()> {
-        thread.native_munmap(addr, length)?;
+    fn do_munmap(
+        &mut self,
+        ctx: &ThreadContext,
+        addr: ForeignPtr,
+        length: usize,
+    ) -> nix::Result<()> {
+        let (ctx, thread) = ctx.split_thread();
+        thread.native_munmap(&ctx, addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
         }
@@ -644,7 +653,7 @@ impl MemoryManager {
 
     pub fn handle_mremap(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         old_address: ForeignPtr,
         old_size: usize,
         new_size: usize,
@@ -652,22 +661,20 @@ impl MemoryManager {
         new_address: ForeignPtr,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
-            Some(mm) => {
-                mm.handle_mremap(thread, old_address, old_size, new_size, flags, new_address)
-            }
+            Some(mm) => mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address),
             None => Err(SyscallError::Native),
         }
     }
 
     pub fn handle_mprotect(
         &mut self,
-        thread: &Thread,
+        ctx: &ThreadContext,
         addr: ForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
-            Some(mm) => mm.handle_mprotect(thread, addr, size, prot),
+            Some(mm) => mm.handle_mprotect(ctx, addr, size, prot),
             None => Err(SyscallError::Native),
         }
     }
@@ -697,7 +704,7 @@ where
             ctx.process
                 .memory_borrow_mut()
                 .do_mmap(
-                    ctx.thread,
+                    ctx,
                     ForeignPtr::from(0usize),
                     len * std::mem::size_of::<T>(),
                     prot,
@@ -722,7 +729,7 @@ where
     pub fn free(mut self, ctx: &mut ThreadContext) {
         ctx.process
             .memory_borrow_mut()
-            .do_munmap(ctx.thread, self.ptr.ptr(), self.ptr.len())
+            .do_munmap(ctx, self.ptr.ptr(), self.ptr.len())
             .unwrap();
         self.freed = true;
     }

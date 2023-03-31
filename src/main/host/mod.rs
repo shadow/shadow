@@ -3,6 +3,7 @@ pub mod cpu;
 pub mod descriptor;
 #[allow(clippy::module_inception)]
 pub mod host;
+pub mod managed_thread;
 pub mod memory_manager;
 pub mod network_interface;
 pub mod process;

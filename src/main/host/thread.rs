@@ -1,7 +1,8 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 
+use nix::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -12,6 +13,7 @@ use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
 use super::context::ProcessContext;
 use super::host::Host;
+use super::managed_thread::ManagedThread;
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
@@ -28,57 +30,37 @@ pub struct Thread {
     tid_address: Cell<ForeignPtr>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
+    // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
+    // Non-trivial because SysCallCondition is currently not `Send`.
     cond: Cell<SendPointer<c::SysCallCondition>>,
     /// The native, managed thread
-    mthread: SendPointer<c::ManagedThread>,
+    mthread: RefCell<ManagedThread>,
 }
 
 impl IsSend for Thread {}
 
 impl Thread {
     /// Have the plugin thread natively execute the given syscall.
-    fn native_syscall_raw(&self, n: i64, args: &[SysCallReg]) -> libc::c_long {
-        // We considered using an iterator here rather than having to pass an index everywhere
-        // below; we avoided it because argument evaluation order is currently a bit of a murky
-        // issue, even though it'll *probably* always be left-to-right.
-        // https://internals.rust-lang.org/t/rust-expression-order-of-evaluation/2605/16
-        let arg = |i| args[i];
-        let mthread = self.mthread.ptr();
-
-        unsafe {
-            match args.len() {
-                0 => c::managedthread_nativeSyscall(mthread, n),
-                1 => c::managedthread_nativeSyscall(mthread, n, arg(0)),
-                2 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1)),
-                3 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1), arg(2)),
-                4 => c::managedthread_nativeSyscall(mthread, n, arg(0), arg(1), arg(2), arg(3)),
-                5 => c::managedthread_nativeSyscall(
-                    mthread,
-                    n,
-                    arg(0),
-                    arg(1),
-                    arg(2),
-                    arg(3),
-                    arg(4),
-                ),
-                6 => c::managedthread_nativeSyscall(
-                    mthread,
-                    n,
-                    arg(0),
-                    arg(1),
-                    arg(2),
-                    arg(3),
-                    arg(4),
-                    arg(5),
-                ),
-                x => panic!("Bad number of syscall args {}", x),
-            }
-        }
+    fn native_syscall_raw(
+        &self,
+        ctx: &ProcessContext,
+        n: i64,
+        args: &[SysCallReg],
+    ) -> libc::c_long {
+        self.mthread
+            .borrow()
+            .native_syscall(&ctx.with_thread(self), n, args)
+            .into()
     }
 
     /// Have the plugin thread natively execute the given syscall.
-    fn native_syscall(&self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
-        syscall::raw_return_value_to_result(self.native_syscall_raw(n, args))
+    fn native_syscall(
+        &self,
+        ctx: &ProcessContext,
+        n: i64,
+        args: &[SysCallReg],
+    ) -> nix::Result<SysCallReg> {
+        syscall::raw_return_value_to_result(self.native_syscall_raw(ctx, n, args))
     }
 
     pub fn process_id(&self) -> ProcessId {
@@ -90,13 +72,11 @@ impl Thread {
     }
 
     pub fn native_pid(&self) -> Pid {
-        // Safety: Initialized in Self::new
-        Pid::from_raw(unsafe { c::managedthread_getNativePid(self.mthread.ptr()) })
+        self.mthread.borrow().native_pid()
     }
 
     pub fn native_tid(&self) -> Pid {
-        // Safety: Initialized in Self::new
-        Pid::from_raw(unsafe { c::managedthread_getNativeTid(self.mthread.ptr()) })
+        self.mthread.borrow().native_tid()
     }
 
     pub fn csyscallhandler(&self) -> *mut c::SysCallHandler {
@@ -137,7 +117,7 @@ impl Thread {
         }
     }
 
-    fn cleanup_syscall_condition(&self) {
+    pub fn cleanup_syscall_condition(&self) {
         if let Some(c) = unsafe {
             self.cond
                 .replace(SendPointer::new(std::ptr::null_mut()))
@@ -150,14 +130,20 @@ impl Thread {
     }
 
     /// Natively execute munmap(2) on the given thread.
-    pub fn native_munmap(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
-        self.native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?;
+    pub fn native_munmap(
+        &self,
+        ctx: &ProcessContext,
+        ptr: ForeignPtr,
+        size: usize,
+    ) -> nix::Result<()> {
+        self.native_syscall(ctx, libc::SYS_munmap, &[ptr.into(), size.into()])?;
         Ok(())
     }
 
     /// Natively execute mmap(2) on the given thread.
     pub fn native_mmap(
         &self,
+        ctx: &ProcessContext,
         addr: ForeignPtr,
         len: usize,
         prot: i32,
@@ -167,6 +153,7 @@ impl Thread {
     ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
+                ctx,
                 libc::SYS_mmap,
                 &[
                     SysCallReg::from(addr),
@@ -183,6 +170,7 @@ impl Thread {
     /// Natively execute mremap(2) on the given thread.
     pub fn native_mremap(
         &self,
+        ctx: &ProcessContext,
         old_addr: ForeignPtr,
         old_len: usize,
         new_len: usize,
@@ -191,6 +179,7 @@ impl Thread {
     ) -> nix::Result<ForeignPtr> {
         Ok(self
             .native_syscall(
+                ctx,
                 libc::SYS_mremap,
                 &[
                     SysCallReg::from(old_addr),
@@ -204,8 +193,15 @@ impl Thread {
     }
 
     /// Natively execute mmap(2) on the given thread.
-    pub fn native_mprotect(&self, addr: ForeignPtr, len: usize, prot: i32) -> nix::Result<()> {
+    pub fn native_mprotect(
+        &self,
+        ctx: &ProcessContext,
+        addr: ForeignPtr,
+        len: usize,
+        prot: i32,
+    ) -> nix::Result<()> {
         self.native_syscall(
+            ctx,
             libc::SYS_mprotect,
             &[
                 SysCallReg::from(addr),
@@ -217,8 +213,15 @@ impl Thread {
     }
 
     /// Natively execute open(2) on the given thread.
-    pub fn native_open(&self, pathname: ForeignPtr, flags: i32, mode: i32) -> nix::Result<i32> {
+    pub fn native_open(
+        &self,
+        ctx: &ProcessContext,
+        pathname: ForeignPtr,
+        flags: i32,
+        mode: i32,
+    ) -> nix::Result<i32> {
         let res = self.native_syscall(
+            ctx,
             libc::SYS_open,
             &[
                 SysCallReg::from(pathname),
@@ -230,22 +233,23 @@ impl Thread {
     }
 
     /// Natively execute close(2) on the given thread.
-    pub fn native_close(&self, fd: i32) -> nix::Result<()> {
-        self.native_syscall(libc::SYS_close, &[SysCallReg::from(fd)])?;
+    pub fn native_close(&self, ctx: &ProcessContext, fd: i32) -> nix::Result<()> {
+        self.native_syscall(ctx, libc::SYS_close, &[SysCallReg::from(fd)])?;
         Ok(())
     }
 
     /// Natively execute brk(2) on the given thread.
-    pub fn native_brk(&self, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
-        let res = self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)])?;
+    pub fn native_brk(&self, ctx: &ProcessContext, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
+        let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    pub fn malloc_foreign_ptr(&self, size: usize) -> nix::Result<ForeignPtr> {
+    pub fn malloc_foreign_ptr(&self, ctx: &ProcessContext, size: usize) -> nix::Result<ForeignPtr> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
+            ctx,
             ForeignPtr::from(0usize),
             size,
             libc::PROT_READ | libc::PROT_WRITE,
@@ -256,8 +260,13 @@ impl Thread {
     }
 
     /// Frees a pointer previously returned by `malloc_foreign_ptr`
-    pub fn free_foreign_ptr(&self, ptr: ForeignPtr, size: usize) -> nix::Result<()> {
-        self.native_munmap(ptr, size)?;
+    pub fn free_foreign_ptr(
+        &self,
+        ctx: &ProcessContext,
+        ptr: ForeignPtr,
+        size: usize,
+    ) -> nix::Result<()> {
+        self.native_munmap(ctx, ptr, size)?;
         Ok(())
     }
 
@@ -267,13 +276,7 @@ impl Thread {
         thread_id: ThreadId,
     ) -> RootedRc<RootedRefCell<Self>> {
         let thread = Self {
-            mthread: unsafe {
-                SendPointer::new(c::managedthread_new(
-                    host.id(),
-                    process.id().into(),
-                    thread_id.into(),
-                ))
-            },
+            mthread: RefCell::new(ManagedThread::new()),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
                     host.id(),
@@ -295,6 +298,48 @@ impl Thread {
         RootedRc::new(root, RootedRefCell::new(root, thread))
     }
 
+    pub fn handle_clone_syscall(
+        &self,
+        ctx: &ProcessContext,
+        flags: libc::c_ulong,
+        child_stack: ForeignPtr,
+        ptid: ForeignPtr,
+        ctid: ForeignPtr,
+        newtls: libc::c_ulong,
+    ) -> Result<ThreadId, Errno> {
+        let child_tid = ThreadId::from(ctx.host.get_new_process_id());
+        let child_mthread = self.mthread.borrow().handle_clone_syscall(
+            &ctx.with_thread(self),
+            flags,
+            child_stack,
+            ptid,
+            ctid,
+            newtls,
+        )?;
+        let child = Self {
+            mthread: RefCell::new(child_mthread),
+            syscallhandler: unsafe {
+                SendPointer::new(c::syscallhandler_new(
+                    ctx.host.id(),
+                    ctx.process.id().into(),
+                    child_tid.into(),
+                ))
+            },
+            cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
+            id: child_tid,
+            host_id: ctx.host.id(),
+            process_id: ctx.process.id(),
+            tid_address: Cell::new(ForeignPtr::null()),
+            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
+                &ctx.host.shim_shmem_lock_borrow().unwrap(),
+                child_tid.into(),
+            )),
+        };
+        let childrc = RootedRc::new(ctx.host.root(), RootedRefCell::new(ctx.host.root(), child));
+        ctx.process.add_thread(ctx.host, childrc);
+        Ok(child_tid)
+    }
+
     /// Shared memory for this thread.
     pub fn shmem(&self) -> &ThreadShmem {
         &self.shim_shared_memory
@@ -302,9 +347,9 @@ impl Thread {
 
     pub fn run(
         &self,
-        _host: &Host,
+        ctx: &ProcessContext,
         plugin_path: &CStr,
-        argv: &[CString],
+        argv: Vec<CString>,
         mut envv: Vec<CString>,
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
@@ -318,41 +363,25 @@ impl Thread {
             .unwrap(),
         );
 
-        let argv_ptrs: Vec<*const i8> = argv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of argv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
-        let envv_ptrs: Vec<*const i8> = envv
-            .iter()
-            .map(|x| x.as_ptr())
-            // the last element of envv must be NULL
-            .chain(std::iter::once(std::ptr::null()))
-            .collect();
-
-        unsafe {
-            c::managedthread_run(
-                self.mthread.ptr(),
-                plugin_path.as_ptr(),
-                argv_ptrs.as_ptr(),
-                envv_ptrs.as_ptr(),
-                working_dir.as_ptr(),
-                strace_fd.unwrap_or(-1),
-                log_path.as_ptr(),
-            )
-        };
+        self.mthread.borrow_mut().run(
+            &ctx.with_thread(self),
+            plugin_path,
+            argv,
+            envv,
+            working_dir,
+            strace_fd,
+            log_path,
+        );
     }
 
-    pub fn resume(&self, process_ctx: &ProcessContext) {
+    pub fn resume(&self, ctx: &ProcessContext) {
         // Ensure the condition isn't triggered again, but don't clear it yet.
         // Syscall handler can still access.
         if let Some(c) = unsafe { self.cond.get().ptr().as_mut() } {
             unsafe { c::syscallcondition_cancel(c) };
         }
 
-        let cond = unsafe { c::managedthread_resume(self.mthread.ptr()) };
+        let cond = self.mthread.borrow().resume(&ctx.with_thread(self));
 
         // Now we're done with old condition.
         if let Some(c) = unsafe {
@@ -365,13 +394,14 @@ impl Thread {
         }
 
         // Wait on new condition.
+        let cond = cond.map(|c| c.into_inner()).unwrap_or(std::ptr::null_mut());
         self.cond.set(unsafe { SendPointer::new(cond) });
         if let Some(cond) = unsafe { cond.as_mut() } {
             unsafe {
                 c::syscallcondition_waitNonblock(
                     cond,
-                    process_ctx.host,
-                    process_ctx.process.cprocess(process_ctx.host),
+                    ctx.host,
+                    ctx.process.cprocess(ctx.host),
                     self,
                 )
             }
@@ -380,15 +410,15 @@ impl Thread {
 
     pub fn handle_process_exit(&self) {
         self.cleanup_syscall_condition();
-        unsafe { c::managedthread_handleProcessExit(self.mthread.ptr()) };
+        self.mthread.borrow().handle_process_exit();
     }
 
-    pub fn return_code(&self) -> i32 {
-        unsafe { c::managedthread_getReturnCode(self.mthread.ptr()) }
+    pub fn return_code(&self) -> Option<i32> {
+        self.mthread.borrow().return_code()
     }
 
     pub fn is_running(&self) -> bool {
-        unsafe { c::managedthread_isRunning(self.mthread.ptr()) }
+        self.mthread.borrow().is_running()
     }
 
     pub fn get_tid_address(&self) -> ForeignPtr {
@@ -430,7 +460,6 @@ impl Drop for Thread {
             unsafe { c::syscallcondition_cancel(c) };
             unsafe { c::syscallcondition_unref(c) };
         }
-        unsafe { c::managedthread_free(self.mthread.ptr()) };
         unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
     }
 }
@@ -500,7 +529,17 @@ mod export {
         arg6: SysCallReg,
     ) -> libc::c_long {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.native_syscall_raw(n, &[arg1, arg2, arg3, arg4, arg5, arg6])
+        Worker::with_active_host(|host| {
+            Worker::with_active_process(|process| {
+                thread.native_syscall_raw(
+                    &ProcessContext::new(host, process),
+                    n,
+                    &[arg1, arg2, arg3, arg4, arg5, arg6],
+                )
+            })
+            .unwrap()
+        })
+        .unwrap()
     }
 
     #[no_mangle]
@@ -509,10 +548,8 @@ mod export {
         thread.id().into()
     }
 
-    /// Create a new child thread as for `clone(2)`. Returns 0 on success, or a
-    /// negative errno on failure.  On success, `child` will be set to a newly
-    /// allocated and initialized child Thread, which will have already be added
-    /// to the Process.
+    /// Create a new child thread as for `clone(2)`. Returns the new thread id
+    /// on success, or a negative errno on failure.
     #[no_mangle]
     pub unsafe extern "C" fn thread_clone(
         thread: *const Thread,
@@ -521,37 +558,21 @@ mod export {
         ptid: ForeignPtr,
         ctid: ForeignPtr,
         newtls: libc::c_ulong,
-        child: *mut *const Thread,
-    ) -> i32 {
+    ) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
-                let childrc = Thread::new(host, process, host.get_new_process_id().into());
-                let rv = {
-                    let child = childrc.borrow(host.root());
-                    unsafe {
-                        c::managedthread_clone(
-                            child.mthread.ptr(),
-                            thread.mthread.ptr(),
-                            flags,
-                            child_stack,
-                            ptid,
-                            ctid,
-                            newtls,
-                        )
-                    }
-                };
-                if rv != 0 {
-                    childrc.safely_drop(host.root());
-                    return rv;
-                }
-                {
-                    let child_ref = childrc.borrow(host.root());
-                    let child_ref: &Thread = &child_ref;
-                    unsafe { child.replace(child_ref as *const _) };
-                }
-                process.add_thread(host, childrc);
-                rv
+                thread
+                    .handle_clone_syscall(
+                        &ProcessContext::new(host, process),
+                        flags,
+                        child_stack,
+                        ptid,
+                        ctid,
+                        newtls,
+                    )
+                    .map(libc::pid_t::from)
+                    .unwrap_or_else(|e| -(e as i32))
             })
             .unwrap()
         })

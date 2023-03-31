@@ -50,7 +50,7 @@ impl<'a> HostContext<'a> {
     }
 
     /// Add the given process to the context.
-    pub fn with_process(&'a mut self, process: &'a Process) -> ProcessContext<'a> {
+    pub fn with_process(&'a self, process: &'a Process) -> ProcessContext<'a> {
         ProcessContext::new(self.host, process)
     }
 }
@@ -66,7 +66,7 @@ impl<'a> ProcessContext<'a> {
         Self { host, process }
     }
 
-    pub fn with_thread(&'a mut self, thread: &'a Thread) -> ThreadContext<'a> {
+    pub fn with_thread(&'a self, thread: &'a Thread) -> ThreadContext<'a> {
         ThreadContext::new(self.host, self.process, thread)
     }
 }
@@ -85,6 +85,18 @@ impl<'a> ThreadContext<'a> {
             process,
             thread,
         }
+    }
+
+    /// Split into a `&Process` and a `HostContext`. Useful e.g.
+    /// for calling `Process` methods that take a `&HostContext`.
+    pub fn split_process(&self) -> (HostContext, &Process) {
+        (HostContext::new(self.host), self.process)
+    }
+
+    /// Split into a `&Thread` and a `ProcessContext`. Useful e.g.
+    /// for calling `Thread` methods that take a `&ProcessContext`.
+    pub fn split_thread(&self) -> (ProcessContext, &Thread) {
+        (ProcessContext::new(self.host, self.process), self.thread)
     }
 }
 

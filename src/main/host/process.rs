@@ -456,9 +456,9 @@ impl Process {
         .unwrap();
 
         main_thread.run(
-            host,
+            &ProcessContext::new(host, self),
             &self.plugin_path,
-            &self.argv,
+            self.argv.clone(),
             self.envv.clone(),
             &self.working_dir,
             self.strace_logging
@@ -1128,10 +1128,9 @@ impl Process {
             }
             let return_code = thread.return_code();
             debug!(
-                "thread {} in process '{}' exited with code {}",
+                "thread {} in process '{}' exited with code {return_code:?}",
                 thread.id(),
                 self.name(),
-                return_code
             );
         }
         self.reap_thread(host, tid);
@@ -1399,6 +1398,7 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
+    use crate::host::context::ThreadContext;
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
@@ -1713,13 +1713,21 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> SyscallReturn {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .do_mmap(thread, addr, len, prot, flags, fd, offset)
+                .do_mmap(
+                    &ThreadContext::new(host, &process, thread),
+                    addr,
+                    len,
+                    prot,
+                    flags,
+                    fd,
+                    offset,
+                )
                 .into()
         })
         .unwrap()
@@ -1733,12 +1741,14 @@ mod export {
         addr: ForeignPtr,
         len: usize,
     ) -> SyscallReturn {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
-            memory_manager.handle_munmap(thread, addr, len).into()
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
+            memory_manager
+                .handle_munmap(&ThreadContext::new(host, &process, thread), addr, len)
+                .into()
         })
         .unwrap()
     }
@@ -1753,13 +1763,20 @@ mod export {
         flags: i32,
         new_addr: ForeignPtr,
     ) -> SyscallReturn {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_mremap(thread, old_addr, old_size, new_size, flags, new_addr)
+                .handle_mremap(
+                    &ThreadContext::new(host, &process, thread),
+                    old_addr,
+                    old_size,
+                    new_size,
+                    flags,
+                    new_addr,
+                )
                 .into()
         })
         .unwrap()
@@ -1773,13 +1790,18 @@ mod export {
         size: usize,
         prot: i32,
     ) -> SyscallReturn {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_mprotect(thread, addr, size, prot)
+                .handle_mprotect(
+                    &ThreadContext::new(host, &process, thread),
+                    addr,
+                    size,
+                    prot,
+                )
                 .into()
         })
         .unwrap()
@@ -1792,12 +1814,14 @@ mod export {
         thread: *const Thread,
         plugin_src: ForeignPtr,
     ) -> SyscallReturn {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
-            memory_manager.handle_brk(thread, plugin_src).into()
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
+            memory_manager
+                .handle_brk(&ThreadContext::new(host, &process, thread), plugin_src)
+                .into()
         })
         .unwrap()
     }
@@ -1809,13 +1833,13 @@ mod export {
         proc: *const ProcessRefCell,
         thread: *const Thread,
     ) {
-        let proc = unsafe { proc.as_ref().unwrap() };
+        let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let mut memory_manager = proc.memory_borrow_mut();
+        Worker::with_active_host(|host| {
+            let process = process.borrow(host.root());
+            let mut memory_manager = process.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                memory_manager.init_mapper(thread)
+                memory_manager.init_mapper(&ThreadContext::new(host, &process, thread))
             }
         })
         .unwrap()
