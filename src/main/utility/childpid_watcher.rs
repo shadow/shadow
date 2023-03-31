@@ -164,7 +164,7 @@ impl ChildPidWatcher {
             };
 
             // We hold the lock the whole time we're processing events. While it'd
-            // be nice to avoid holding it while executing callbacks (and therefor
+            // be nice to avoid holding it while executing callbacks (and therefore
             // not require that callbacks don't call ChildPidWatcher APIs), that'd
             // make it difficult to guarantee a callback *won't* be run if the
             // caller unregisters it.
@@ -311,9 +311,9 @@ impl ChildPidWatcher {
     ///
     /// Safe to call multiple times.
     pub fn unregister_pid(&self, pid: Pid) {
-        // Let the worker handle the actual unregistration; otherwise we'd need
-        // to be extra careful to avoid races with e.g. simultaneous epoll
-        // events.
+        // Let the worker handle the actual unregistration. This avoids a race
+        // where we unregister a pid at the same time as the worker thread
+        // receives an epoll event for it.
         let mut inner = self.inner.lock().unwrap();
         inner.send_command(Command::UnregisterPid(pid));
     }
