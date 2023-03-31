@@ -16,7 +16,7 @@ pub type UntypedForeignPtr = ForeignPtr<()>;
 /// from a different virtual address space than where the pointer originated.
 // do not change the definition of `ForeignPtr` without changing the C definition of
 // `UntypedForeignPtr` in the build script
-#[derive(Copy, Clone, Debug, Eq, PartialEq, VirtualAddressSpaceIndependent)]
+#[derive(Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ForeignPtr<T> {
     val: usize,
@@ -96,6 +96,22 @@ impl From<u64> for ForeignPtr<()> {
 impl<T> From<ForeignPtr<T>> for u64 {
     fn from(v: ForeignPtr<T>) -> Self {
         v.val.try_into().unwrap()
+    }
+}
+
+impl<T> Copy for ForeignPtr<T> {}
+
+impl<T> Clone for ForeignPtr<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> std::fmt::Debug for ForeignPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ForeignPtr")
+            .field("val", &self.val)
+            .finish()
     }
 }
 
