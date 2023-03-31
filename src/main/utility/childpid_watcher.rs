@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::os::unix::io::RawFd;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,7 +18,7 @@ use nix::unistd::Pid;
 #[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
-    epoll: File,
+    epoll: Arc<File>,
 }
 
 pub type WatchHandle = u64;
@@ -61,7 +60,7 @@ impl Inner {
         nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
     }
 
-    fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn unwatch_pid(&mut self, epoll: &File, pid: Pid) {
         let Some(piddata) = self.pids.get_mut(&pid) else {
             // Already unregistered the pid
             return;
@@ -70,14 +69,20 @@ impl Inner {
             // Already unwatched the pid
             return;
         };
-        epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
+        epoll_ctl(
+            epoll.as_raw_fd(),
+            EpollOp::EpollCtlDel,
+            fd.as_raw_fd(),
+            None,
+        )
+        .unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
         self.pids.get(&pid).unwrap().fd.is_none()
     }
 
-    fn remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn remove_pid(&mut self, epoll: &File, pid: Pid) {
         debug_assert!(self.should_remove_pid(pid));
         self.unwatch_pid(epoll, pid);
         self.pids.remove(&pid);
@@ -94,7 +99,7 @@ impl Inner {
         pid_data.callbacks.is_empty() && pid_data.unregistered
     }
 
-    fn maybe_remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn maybe_remove_pid(&mut self, epoll: &File, pid: Pid) {
         if self.should_remove_pid(pid) {
             self.remove_pid(epoll, pid)
         }
@@ -107,7 +112,7 @@ impl ChildPidWatcher {
     pub fn new() -> Self {
         let epoll = {
             let raw = epoll_create1(EpollCreateFlags::empty()).unwrap();
-            unsafe { File::from_raw_fd(raw) }
+            Arc::new(unsafe { File::from_raw_fd(raw) })
         };
         let command_notifier = {
             let raw =
@@ -134,22 +139,22 @@ impl ChildPidWatcher {
         };
         let thread_handle = {
             let inner = Arc::clone(&watcher.inner);
-            let epoll = watcher.epoll.as_raw_fd();
+            let epoll = watcher.epoll.clone();
             thread::Builder::new()
                 .name("child-pid-watcher".into())
-                .spawn(move || ChildPidWatcher::thread_loop(&inner, epoll))
+                .spawn(move || ChildPidWatcher::thread_loop(&inner, &epoll))
                 .unwrap()
         };
         watcher.inner.lock().unwrap().thread_handle = Some(thread_handle);
         watcher
     }
 
-    fn thread_loop(inner: &Mutex<Inner>, epoll: RawFd) {
+    fn thread_loop(inner: &Mutex<Inner>, epoll: &File) {
         let mut events = [EpollEvent::empty(); 10];
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = match epoll_wait(epoll, &mut events, -1) {
+            let nevents = match epoll_wait(epoll.as_raw_fd(), &mut events, -1) {
                 Ok(n) => n,
                 Err(Errno::EINTR) => {
                     // Just try again.
@@ -347,7 +352,7 @@ impl ChildPidWatcher {
         let mut inner = self.inner.lock().unwrap();
         if let Some(pid_data) = inner.pids.get_mut(&pid) {
             pid_data.callbacks.remove(&handle);
-            inner.maybe_remove_pid(self.epoll.as_raw_fd(), pid);
+            inner.maybe_remove_pid(&self.epoll, pid);
         }
     }
 }
