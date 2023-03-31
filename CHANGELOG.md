@@ -6,6 +6,9 @@ have been noticeable effect in typical simulations. In particular the per-thread
 data was already getting freed when the whole process exited, so it would only
 affect a process that created and terminated many threads over its lifetime.
 
+* Removed deprecated python scripts that only worked on Shadow 1.x config files
+and topologies.
+
 Raw changes since v2.5.0:
 
 * [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2023-03-23T18%3A20-0400)
