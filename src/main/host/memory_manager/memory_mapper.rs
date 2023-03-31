@@ -18,7 +18,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{SyscallResult, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
@@ -164,7 +164,7 @@ impl ShmFile {
         memory_manager
             .copy_from_ptr(
                 dst,
-                TypedArrayForeignPtr::new::<u8>(ForeignPtr::from(interval.start), interval.len()),
+                ForeignArrayPtr::new::<u8>(ForeignPtr::from(interval.start), interval.len()),
             )
             .unwrap()
     }
@@ -403,7 +403,7 @@ impl MemoryMapper {
 
         let shm_plugin_fd = {
             let (ctx, thread) = ctx.split_thread();
-            let path_buf_foreign_ptr = TypedArrayForeignPtr::new::<u8>(
+            let path_buf_foreign_ptr = ForeignArrayPtr::new::<u8>(
                 thread.malloc_foreign_ptr(&ctx, shm_path.len()).unwrap(),
                 shm_path.len(),
             );
@@ -545,7 +545,7 @@ impl MemoryMapper {
     pub fn handle_mmap_result(
         &mut self,
         ctx: &ThreadContext,
-        ptr: TypedArrayForeignPtr<u8>,
+        ptr: ForeignArrayPtr<u8>,
         prot: i32,
         flags: i32,
         fd: i32,
@@ -1010,7 +1010,7 @@ impl MemoryMapper {
 
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
     // Panics if called with zero-length `src`.
-    fn get_mapped_ptr<T: Pod + Debug>(&self, src: TypedArrayForeignPtr<T>) -> Option<*mut T> {
+    fn get_mapped_ptr<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         assert!(!src.is_empty());
 
         if usize::from(src.ptr()) % std::mem::align_of::<T>() != 0 {
@@ -1054,10 +1054,7 @@ impl MemoryMapper {
         Some(ptr)
     }
 
-    fn get_mapped_ptr_and_count<T: Pod + Debug>(
-        &self,
-        src: TypedArrayForeignPtr<T>,
-    ) -> Option<*mut T> {
+    fn get_mapped_ptr_and_count<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         let res = self.get_mapped_ptr(src);
         if res.is_none() {
             self.inc_misses(src);
@@ -1065,7 +1062,7 @@ impl MemoryMapper {
         res
     }
 
-    pub unsafe fn get_ref<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) -> Option<&[T]> {
+    pub unsafe fn get_ref<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&[T]> {
         if src.is_empty() {
             return Some(&[]);
         }
@@ -1073,7 +1070,7 @@ impl MemoryMapper {
         Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
-    pub unsafe fn get_mut<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) -> Option<&mut [T]> {
+    pub unsafe fn get_mut<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         if src.is_empty() {
             return Some(&mut []);
         }
@@ -1082,7 +1079,7 @@ impl MemoryMapper {
     }
 
     /// Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) {
+    fn inc_misses<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) {
         let key = match self.regions.get(usize::from(src.ptr())) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),

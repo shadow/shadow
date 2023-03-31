@@ -10,7 +10,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -335,7 +335,7 @@ pub struct SendmsgArgs<'a> {
     /// [`IoVec`] buffers in plugin memory containing the message data.
     pub iovs: &'a [IoVec],
     /// Buffer in plugin memory containg message control data.
-    pub control_ptr: TypedArrayForeignPtr<u8>,
+    pub control_ptr: ForeignArrayPtr<u8>,
     /// Send flags.
     pub flags: libc::c_int,
 }
@@ -345,7 +345,7 @@ pub struct RecvmsgArgs<'a> {
     /// [`IoVec`] buffers in plugin memory to store the message data.
     pub iovs: &'a [IoVec],
     /// Buffer in plugin memory to store the message control data.
-    pub control_ptr: TypedArrayForeignPtr<u8>,
+    pub control_ptr: ForeignArrayPtr<u8>,
     /// Recv flags.
     pub flags: libc::c_int,
 }

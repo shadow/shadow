@@ -4,7 +4,7 @@ use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::read_sockaddr;
-use crate::host::syscall_types::TypedArrayForeignPtr;
+use crate::host::syscall_types::ForeignArrayPtr;
 
 /// Convert from a `SysCallReg`. This is a helper trait for the `simple_display_impl` and
 /// `simple_debug_impl` macros. This is used instead of just `TryFrom` so that we can implement this
@@ -94,7 +94,7 @@ macro_rules! deref_pointer_impl {
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<()>::from(self.reg);
-                match (options, mem.memory_ref(TypedArrayForeignPtr::new::<$type>(ptr, 1))) {
+                match (options, mem.memory_ref(ForeignArrayPtr::new::<$type>(ptr, 1))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
@@ -146,7 +146,7 @@ macro_rules! deref_array_impl {
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<()>::from(self.reg);
-                match (options, mem.memory_ref(TypedArrayForeignPtr::new::<$type>(ptr, K))) {
+                match (options, mem.memory_ref(ForeignArrayPtr::new::<$type>(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
@@ -195,7 +195,7 @@ fn fmt_buffer(
         return write!(f, "<pointer>");
     }
 
-    let mem_ref = match mem.memory_ref_prefix(TypedArrayForeignPtr::new::<u8>(ptr, len)) {
+    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new::<u8>(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
@@ -250,7 +250,7 @@ fn fmt_string(
         DISPLAY_LEN + 1,
     );
 
-    let mem_ref = match mem.memory_ref_prefix(TypedArrayForeignPtr::new::<u8>(ptr, len)) {
+    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new::<u8>(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
@@ -419,7 +419,7 @@ impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
         }
 
         // read the msghdr
-        let ptr = TypedArrayForeignPtr::new::<libc::msghdr>(ptr, 1);
+        let ptr = ForeignArrayPtr::new::<libc::msghdr>(ptr, 1);
         let Ok(msg) = mem.memory_ref(ptr) else {
             // if we couldn't read the memory, just show the pointer instead
             return write!(f, "{:p}", ptr.ptr());

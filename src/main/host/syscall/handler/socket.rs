@@ -15,7 +15,7 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
-use crate::host::syscall_types::TypedArrayForeignPtr;
+use crate::host::syscall_types::ForeignArrayPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -202,7 +202,7 @@ impl SyscallHandler {
         let args = SendmsgArgs {
             addr,
             iovs: &[iov],
-            control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
+            control_ptr: ForeignArrayPtr::new::<u8>(ForeignPtr::null(), 0),
             flags,
         };
 
@@ -271,7 +271,7 @@ impl SyscallHandler {
         let args = SendmsgArgs {
             addr: io::read_sockaddr(&mem, msg.name, msg.name_len)?,
             iovs: &msg.iovs,
-            control_ptr: TypedArrayForeignPtr::new::<u8>(msg.control, msg.control_len),
+            control_ptr: ForeignArrayPtr::new::<u8>(msg.control, msg.control_len),
             // note: "the msg_flags field is ignored" for sendmsg; see send(2)
             flags,
         };
@@ -337,7 +337,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = ForeignArrayPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
@@ -350,7 +350,7 @@ impl SyscallHandler {
 
         let args = RecvmsgArgs {
             iovs: &[iov],
-            control_ptr: TypedArrayForeignPtr::new::<u8>(ForeignPtr::null(), 0),
+            control_ptr: ForeignArrayPtr::new::<u8>(ForeignPtr::null(), 0),
             flags,
         };
 
@@ -427,7 +427,7 @@ impl SyscallHandler {
 
         let args = RecvmsgArgs {
             iovs: &msg.iovs,
-            control_ptr: TypedArrayForeignPtr::new::<u8>(msg.control, msg.control_len),
+            control_ptr: ForeignArrayPtr::new::<u8>(msg.control, msg.control_len),
             flags,
         };
 
@@ -474,7 +474,7 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<()>,
         addr_len_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = ForeignArrayPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
@@ -522,7 +522,7 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<()>,
         addr_len_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        let addr_len_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
+        let addr_len_ptr = ForeignArrayPtr::new::<libc::socklen_t>(addr_len_ptr, 1);
 
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
@@ -745,7 +745,7 @@ impl SyscallHandler {
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
-                TypedArrayForeignPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
+                ForeignArrayPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             )?;
         }
 
@@ -949,7 +949,7 @@ impl SyscallHandler {
             .objs
             .process
             .memory_borrow_mut()
-            .copy_to_ptr(TypedArrayForeignPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
+            .copy_to_ptr(ForeignArrayPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {
@@ -1000,7 +1000,7 @@ impl SyscallHandler {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         // get the provided optlen
-        let optlen_ptr = TypedArrayForeignPtr::new::<libc::socklen_t>(optlen_ptr, 1);
+        let optlen_ptr = ForeignArrayPtr::new::<libc::socklen_t>(optlen_ptr, 1);
         let optlen = mem.read_vals::<_, 1>(optlen_ptr)?[0];
 
         let mut optlen_new = socket
