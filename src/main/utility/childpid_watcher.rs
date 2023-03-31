@@ -19,7 +19,7 @@ use nix::unistd::Pid;
 #[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
-    epoll: std::os::unix::io::RawFd,
+    epoll: File,
 }
 
 pub type WatchHandle = u64;
@@ -105,7 +105,10 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = epoll_create1(EpollCreateFlags::empty()).unwrap();
+        let epoll = {
+            let raw = epoll_create1(EpollCreateFlags::empty()).unwrap();
+            unsafe { File::from_raw_fd(raw) }
+        };
         let command_notifier = {
             let raw =
                 nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
@@ -113,7 +116,7 @@ impl ChildPidWatcher {
         };
         let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
         epoll_ctl(
-            epoll,
+            epoll.as_raw_fd(),
             EpollOp::EpollCtlAdd,
             command_notifier.as_raw_fd(),
             Some(&mut event),
@@ -131,7 +134,7 @@ impl ChildPidWatcher {
         };
         let thread_handle = {
             let inner = Arc::clone(&watcher.inner);
-            let epoll = watcher.epoll;
+            let epoll = watcher.epoll.as_raw_fd();
             thread::Builder::new()
                 .name("child-pid-watcher".into())
                 .spawn(move || ChildPidWatcher::thread_loop(&inner, epoll))
@@ -284,7 +287,7 @@ impl ChildPidWatcher {
         assert!(prev.is_none());
         let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
         epoll_ctl(
-            self.epoll,
+            self.epoll.as_raw_fd(),
             EpollOp::EpollCtlAdd,
             raw_read_fd,
             Some(&mut event),
@@ -344,7 +347,7 @@ impl ChildPidWatcher {
         let mut inner = self.inner.lock().unwrap();
         if let Some(pid_data) = inner.pids.get_mut(&pid) {
             pid_data.callbacks.remove(&handle);
-            inner.maybe_remove_pid(self.epoll, pid);
+            inner.maybe_remove_pid(self.epoll.as_raw_fd(), pid);
         }
     }
 }
@@ -363,7 +366,6 @@ impl Drop for ChildPidWatcher {
             inner.thread_handle.take().unwrap()
         };
         handle.join().unwrap();
-        nix::unistd::close(self.epoll).unwrap();
     }
 }
 
