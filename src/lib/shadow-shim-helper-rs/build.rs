@@ -10,7 +10,15 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         sys_includes: vec!["signal.h".into()],
         include_guard: Some("shim_helpers_h".into()),
         includes: vec!["lib/shmem/shmem_allocator.h".into()],
-        after_includes: Some("".into()),
+        // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
+        // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,
+        // alignment, non-zst fields, and field order as `ForeignPtr<()>`.
+        after_includes: Some(
+            "typedef struct CompatUntypedForeignPtr {\n    \
+                 uintptr_t val;\n\
+             } UntypedForeignPtr;\n"
+                .into(),
+        ),
         export: cbindgen::ExportConfig {
             include: vec![
                 "shd_kernel_sigaction".into(),
@@ -20,6 +28,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 "SysCallReg".into(),
                 "ManagedPhysicalMemoryAddr".into(),
             ],
+            // we provide our own definition for `UntypedForeignPtr` above
+            exclude: vec!["UntypedForeignPtr".into()],
             ..base_config.export.clone()
         },
         ..base_config

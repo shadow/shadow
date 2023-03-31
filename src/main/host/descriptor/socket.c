@@ -88,15 +88,17 @@ static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
     socket->vtable->close((LegacyFile*)socket, host);
 }
 
-gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                 gsize nBytes, in_addr_t ip, in_port_t port) {
+gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread,
+                                 UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
+                                 in_port_t port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send(socket, thread, buffer, nBytes, ip, port);
 }
 
-gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                    gsize nBytes, in_addr_t* ip, in_port_t* port) {
+gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
+                                    UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
+                                    in_port_t* port) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->receive(socket, thread, buffer, nBytes, ip, port);

@@ -93,7 +93,7 @@ macro_rules! deref_pointer_impl {
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                let ptr = ForeignPtr::from(self.reg);
+                let ptr = ForeignPtr::<()>::from(self.reg);
                 match (options, mem.memory_ref(TypedArrayForeignPtr::new::<$type>(ptr, 1))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
@@ -120,7 +120,7 @@ macro_rules! safe_pointer_impl {
                 options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
-                let ptr = ForeignPtr::from(self.reg);
+                let ptr = ForeignPtr::<()>::from(self.reg);
                 match options {
                     FmtOptions::Standard => write!(f, "{ptr:p}"),
                     FmtOptions::Deterministic => write!(f, "<pointer>"),
@@ -145,7 +145,7 @@ macro_rules! deref_array_impl {
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                let ptr = ForeignPtr::from(self.reg);
+                let ptr = ForeignPtr::<()>::from(self.reg);
                 match (options, mem.memory_ref(TypedArrayForeignPtr::new::<$type>(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
@@ -184,7 +184,7 @@ simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
 fn fmt_buffer(
     f: &mut std::fmt::Formatter<'_>,
-    ptr: ForeignPtr,
+    ptr: ForeignPtr<()>,
     len: usize,
     options: FmtOptions,
     mem: &MemoryManager,
@@ -229,7 +229,7 @@ fn fmt_buffer(
 
 fn fmt_string(
     f: &mut std::fmt::Formatter<'_>,
-    ptr: ForeignPtr,
+    ptr: ForeignPtr<()>,
     len: Option<usize>,
     options: FmtOptions,
     mem: &MemoryManager,
@@ -295,7 +295,11 @@ fn fmt_msghdr(
     mem: &MemoryManager,
 ) -> std::fmt::Result {
     // read the socket address from `msg.msg_name`
-    let addr = match read_sockaddr(mem, ForeignPtr::from_raw_ptr(msg.msg_name), msg.msg_namelen) {
+    let addr = match read_sockaddr(
+        mem,
+        ForeignPtr::<()>::from_raw_ptr(msg.msg_name),
+        msg.msg_namelen,
+    ) {
         Ok(Some(addr)) => Some(addr),
         Ok(None) | Err(_) => None,
     };

@@ -24,8 +24,8 @@
 static CEmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
 
 static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
-                                                      int flags, ForeignPtr request,
-                                                      ForeignPtr remainder) {
+                                                      int flags, UntypedForeignPtr request,
+                                                      UntypedForeignPtr remainder) {
     if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
         warning("Unsupported clock ID %d during nanosleep", clock_id);
         return syscallreturn_makeDoneErrno(ENOSYS);
@@ -96,8 +96,8 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 ///////////////////////////////////////////////////////////
 
 SyscallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr req = args->args[0].as_ptr;
-    ForeignPtr rem = args->args[1].as_ptr;
+    UntypedForeignPtr req = args->args[0].as_ptr;
+    UntypedForeignPtr rem = args->args[1].as_ptr;
     // from man 2 nanosleep:
     //   OSIX.1 specifies that nanosleep() should measure time against the CLOCK_REALTIME clock.
     //   However, Linux measures the time using the CLOCK_MONOTONIC clock.
@@ -107,8 +107,8 @@ SyscallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* a
 SyscallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
     clockid_t clock_id = args->args[0].as_i64;
     int flags = args->args[1].as_i64;
-    ForeignPtr req = args->args[2].as_ptr;
-    ForeignPtr rem = args->args[3].as_ptr;
+    UntypedForeignPtr req = args->args[2].as_ptr;
+    UntypedForeignPtr rem = args->args[3].as_ptr;
     return _syscallhandler_nanosleep_helper(sys, clock_id, flags, req, rem);
 }
 
@@ -138,7 +138,7 @@ SyscallReturn syscallhandler_clock_gettime(SysCallHandler* sys, const SysCallArg
 }
 
 SyscallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr tlocPtr = args->args[0].as_ptr; // time_t*
+    UntypedForeignPtr tlocPtr = args->args[0].as_ptr; // time_t*
 
     time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
 
@@ -155,7 +155,7 @@ SyscallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) 
 }
 
 SyscallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr tvPtr = args->args[0].as_ptr; // struct timeval*
+    UntypedForeignPtr tvPtr = args->args[0].as_ptr; // struct timeval*
 
     if (tvPtr.val) {
         CEmulatedTime now = _syscallhandler_getEmulatedTime();

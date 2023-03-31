@@ -174,7 +174,7 @@ impl ShmFile {
         ctx.thread
             .native_mmap(
                 &ProcessContext::new(ctx.host, ctx.process),
-                ForeignPtr::from(interval.start),
+                ForeignPtr::<()>::from(interval.start),
                 interval.len(),
                 prot,
                 libc::MAP_SHARED | libc::MAP_FIXED,
@@ -234,7 +234,11 @@ fn get_heap(
     if heap_mapping.is_none() {
         let (ctx, thread) = ctx.split_thread();
         // There's no heap region allocated yet. Get the address where it will be and return.
-        let start = usize::from(thread.native_brk(&ctx, ForeignPtr::from(0usize)).unwrap());
+        let start = usize::from(
+            thread
+                .native_brk(&ctx, ForeignPtr::<()>::from(0usize))
+                .unwrap(),
+        );
         return start..start;
     }
     let (heap_interval, heap_region) = heap_mapping.unwrap();
@@ -608,7 +612,7 @@ impl MemoryMapper {
     ///
     /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
     /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
-    pub fn handle_munmap_result(&mut self, addr: ForeignPtr, length: usize) {
+    pub fn handle_munmap_result(&mut self, addr: ForeignPtr<()>, length: usize) {
         trace!("handle_munmap_result({:?}, {})", addr, length);
         if length == 0 {
             return;
@@ -629,11 +633,11 @@ impl MemoryMapper {
     pub fn handle_mremap(
         &mut self,
         ctx: &ThreadContext,
-        old_address: ForeignPtr,
+        old_address: ForeignPtr<()>,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: ForeignPtr,
+        new_address: ForeignPtr<()>,
     ) -> SyscallResult {
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
@@ -756,14 +760,14 @@ impl MemoryMapper {
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<()>) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
         // handle is trying to set the end of heap before the start. In practice this case is
         // generally triggered with a NULL argument to get the current brk value.
         if requested_brk < self.heap.start {
-            return Ok(ForeignPtr::from(self.heap.end).into());
+            return Ok(ForeignPtr::<()>::from(self.heap.end).into());
         }
 
         // Unclear how to handle a non-page-size increment. panic for now.
@@ -797,11 +801,11 @@ impl MemoryMapper {
                     thread
                         .native_mremap(
                             &ctx,
-                            /* old_addr: */ ForeignPtr::from(self.heap.start),
+                            /* old_addr: */ ForeignPtr::<()>::from(self.heap.start),
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
-                            /* new_addr: */ ForeignPtr::from(0usize),
+                            /* new_addr: */ ForeignPtr::<()>::from(0usize),
                         )
                         .unwrap();
                     // mremap in shadow, allowing mapping to move if needed.
@@ -841,11 +845,11 @@ impl MemoryMapper {
             thread
                 .native_mremap(
                     &ctx,
-                    /* old_addr: */ ForeignPtr::from(self.heap.start),
+                    /* old_addr: */ ForeignPtr::<()>::from(self.heap.start),
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
-                    /* new_addr: */ ForeignPtr::from(0usize),
+                    /* new_addr: */ ForeignPtr::<()>::from(0usize),
                 )
                 .unwrap();
             // mremap in shadow, assuming no need to move.
@@ -864,7 +868,7 @@ impl MemoryMapper {
         }
         self.heap = new_heap;
 
-        Ok(ForeignPtr::from(requested_brk).into())
+        Ok(ForeignPtr::<()>::from(requested_brk).into())
     }
 
     /// Shadow should delegate a plugin's call to mprotect to this method.
@@ -881,7 +885,7 @@ impl MemoryMapper {
     pub fn handle_mprotect(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         size: usize,
         prot: i32,
     ) -> SyscallResult {

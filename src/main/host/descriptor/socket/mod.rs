@@ -195,13 +195,13 @@ impl SocketRef<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
@@ -234,7 +234,7 @@ impl SocketRefMut<'_> {
         pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Unix, Inet;
-        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr, memory_manager: &mut MemoryManager) -> SyscallResult
+        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Unix, Inet;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
@@ -273,13 +273,13 @@ impl SocketRefMut<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
+        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr,
+        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );

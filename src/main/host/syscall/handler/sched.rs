@@ -31,7 +31,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr,
+        mask_ptr: ForeignPtr<()>,
     ) -> Result<libc::c_int, SyscallError> {
         let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
 
@@ -63,7 +63,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr,
+        mask_ptr: ForeignPtr<()>,
     ) -> Result<libc::c_int, SyscallError> {
         let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
 
@@ -99,7 +99,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
     pub fn rseq(
         ctx: &mut SyscallContext,
-        rseq_ptr: ForeignPtr,
+        rseq_ptr: ForeignPtr<()>,
         rseq_len: u32,
         flags: libc::c_int,
         sig: u32,

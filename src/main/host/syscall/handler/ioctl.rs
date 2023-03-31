@@ -12,7 +12,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: libc::c_int,
         request: libc::c_ulong,
-        arg_ptr: ForeignPtr,
+        arg_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
         log::trace!("Called ioctl() on fd {} with request {}", fd, request);
 

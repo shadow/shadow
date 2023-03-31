@@ -27,7 +27,7 @@ pub struct Thread {
     process_id: ProcessId,
     // If non-NULL, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
-    tid_address: Cell<ForeignPtr>,
+    tid_address: Cell<ForeignPtr<()>>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
     // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
@@ -133,7 +133,7 @@ impl Thread {
     pub fn native_munmap(
         &self,
         ctx: &ProcessContext,
-        ptr: ForeignPtr,
+        ptr: ForeignPtr<()>,
         size: usize,
     ) -> nix::Result<()> {
         self.native_syscall(ctx, libc::SYS_munmap, &[ptr.into(), size.into()])?;
@@ -144,13 +144,13 @@ impl Thread {
     pub fn native_mmap(
         &self,
         ctx: &ProcessContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         len: usize,
         prot: i32,
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> nix::Result<ForeignPtr> {
+    ) -> nix::Result<ForeignPtr<()>> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -171,12 +171,12 @@ impl Thread {
     pub fn native_mremap(
         &self,
         ctx: &ProcessContext,
-        old_addr: ForeignPtr,
+        old_addr: ForeignPtr<()>,
         old_len: usize,
         new_len: usize,
         flags: i32,
-        new_addr: ForeignPtr,
-    ) -> nix::Result<ForeignPtr> {
+        new_addr: ForeignPtr<()>,
+    ) -> nix::Result<ForeignPtr<()>> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -196,7 +196,7 @@ impl Thread {
     pub fn native_mprotect(
         &self,
         ctx: &ProcessContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         len: usize,
         prot: i32,
     ) -> nix::Result<()> {
@@ -216,7 +216,7 @@ impl Thread {
     pub fn native_open(
         &self,
         ctx: &ProcessContext,
-        pathname: ForeignPtr,
+        pathname: ForeignPtr<()>,
         flags: i32,
         mode: i32,
     ) -> nix::Result<i32> {
@@ -239,14 +239,22 @@ impl Thread {
     }
 
     /// Natively execute brk(2) on the given thread.
-    pub fn native_brk(&self, ctx: &ProcessContext, addr: ForeignPtr) -> nix::Result<ForeignPtr> {
+    pub fn native_brk(
+        &self,
+        ctx: &ProcessContext,
+        addr: ForeignPtr<()>,
+    ) -> nix::Result<ForeignPtr<()>> {
         let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    pub fn malloc_foreign_ptr(&self, ctx: &ProcessContext, size: usize) -> nix::Result<ForeignPtr> {
+    pub fn malloc_foreign_ptr(
+        &self,
+        ctx: &ProcessContext,
+        size: usize,
+    ) -> nix::Result<ForeignPtr<()>> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             ctx,
@@ -263,7 +271,7 @@ impl Thread {
     pub fn free_foreign_ptr(
         &self,
         ctx: &ProcessContext,
-        ptr: ForeignPtr,
+        ptr: ForeignPtr<()>,
         size: usize,
     ) -> nix::Result<()> {
         self.native_munmap(ctx, ptr, size)?;
@@ -288,7 +296,7 @@ impl Thread {
             id: thread_id,
             host_id: host.id(),
             process_id: process.id(),
-            tid_address: Cell::new(ForeignPtr::from(0usize)),
+            tid_address: Cell::new(ForeignPtr::<()>::from(0usize)),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
                 thread_id.into(),
@@ -302,9 +310,9 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr,
-        ptid: ForeignPtr,
-        ctid: ForeignPtr,
+        child_stack: ForeignPtr<()>,
+        ptid: ForeignPtr<()>,
+        ctid: ForeignPtr<()>,
         newtls: libc::c_ulong,
     ) -> Result<ThreadId, Errno> {
         let child_tid = ThreadId::from(ctx.host.get_new_process_id());
@@ -421,11 +429,11 @@ impl Thread {
         self.mthread.borrow().is_running()
     }
 
-    pub fn get_tid_address(&self) -> ForeignPtr {
+    pub fn get_tid_address(&self) -> ForeignPtr<()> {
         self.tid_address.get()
     }
 
-    pub fn set_tid_address(&self, ptr: ForeignPtr) {
+    pub fn set_tid_address(&self, ptr: ForeignPtr<()>) {
         self.tid_address.set(ptr)
     }
 
@@ -554,9 +562,9 @@ mod export {
     pub unsafe extern "C" fn thread_clone(
         thread: *const Thread,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr,
-        ptid: ForeignPtr,
-        ctid: ForeignPtr,
+        child_stack: ForeignPtr<()>,
+        ptid: ForeignPtr<()>,
+        ctid: ForeignPtr<()>,
         newtls: libc::c_ulong,
     ) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -582,14 +590,14 @@ mod export {
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
     /// will perform a futex-wake operation on the given address on termination.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: ForeignPtr) {
+    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: ForeignPtr<()>) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.set_tid_address(addr);
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> ForeignPtr {
+    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> ForeignPtr<()> {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.get_tid_address()
     }

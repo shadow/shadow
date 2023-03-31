@@ -586,7 +586,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<()>) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(ctx, ptr),
             None => Err(SyscallError::Native),
@@ -596,7 +596,7 @@ impl MemoryManager {
     pub fn do_mmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         length: usize,
         prot: i32,
         flags: i32,
@@ -622,7 +622,7 @@ impl MemoryManager {
     pub fn handle_munmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         length: usize,
     ) -> SyscallResult {
         if self.memory_mapper.is_some() {
@@ -640,7 +640,7 @@ impl MemoryManager {
     fn do_munmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         length: usize,
     ) -> nix::Result<()> {
         let (ctx, thread) = ctx.split_thread();
@@ -654,11 +654,11 @@ impl MemoryManager {
     pub fn handle_mremap(
         &mut self,
         ctx: &ThreadContext,
-        old_address: ForeignPtr,
+        old_address: ForeignPtr<()>,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: ForeignPtr,
+        new_address: ForeignPtr<()>,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address),
@@ -669,7 +669,7 @@ impl MemoryManager {
     pub fn handle_mprotect(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<()>,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
@@ -700,12 +700,12 @@ where
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
-        let ptr = ForeignPtr::from(
+        let ptr = ForeignPtr::<()>::from(
             ctx.process
                 .memory_borrow_mut()
                 .do_mmap(
                     ctx,
-                    ForeignPtr::from(0usize),
+                    ForeignPtr::<()>::from(0usize),
                     len * std::mem::size_of::<T>(),
                     prot,
                     libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
@@ -802,7 +802,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_foreignPtr(allocd_mem: *const AllocdMem<u8>) -> ForeignPtr {
+    pub unsafe extern "C" fn allocdmem_foreignPtr(
+        allocd_mem: *const AllocdMem<u8>,
+    ) -> ForeignPtr<()> {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
     }
 
@@ -872,7 +874,7 @@ mod export {
     pub extern "C" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
-        src: ForeignPtr,
+        src: ForeignPtr<()>,
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
@@ -893,7 +895,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
-        dst: ForeignPtr,
+        dst: ForeignPtr<()>,
         src: *const c_void,
         n: usize,
     ) -> i32 {

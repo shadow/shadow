@@ -515,7 +515,7 @@ impl LegacyTcpSocket {
     pub fn ioctl(
         &mut self,
         request: u64,
-        arg_ptr: ForeignPtr,
+        arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match request {
@@ -900,7 +900,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: ForeignPtr,
+        optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         memory_manager: &mut MemoryManager,
     ) -> Result<libc::socklen_t, SyscallError> {
@@ -1043,7 +1043,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: ForeignPtr,
+        optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {

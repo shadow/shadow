@@ -1,18 +1,27 @@
 use vasi::VirtualAddressSpaceIndependent;
 
-/// Represents a pointer to a virtual address in plugin memory.
+/// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
+/// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
+/// and this prevents us from accidentally accessing an "untyped" pointer.
+pub type UntypedForeignPtr = ForeignPtr<()>;
+
+/// Represents a pointer to a virtual address in plugin memory. The pointer is not guaranteed to be
+/// valid or aligned.
 ///
 /// This type derives the `VirtualAddressSpaceIndependent` trait, since it is
 /// specifically meant to transfer pointers between processes. However it is of
 /// course unsafe to turn its inner value back into a pointer and dereference
 /// from a different virtual address space than where the pointer originated.
+// do not change the definition of `ForeignPtr` without changing the C definition of
+// `UntypedForeignPtr` in the build script
 #[derive(Copy, Clone, Debug, Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct ForeignPtr {
+pub struct ForeignPtr<T> {
     val: usize,
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl ForeignPtr {
+impl ForeignPtr<()> {
     pub fn null() -> Self {
         0usize.into()
     }
@@ -21,40 +30,47 @@ impl ForeignPtr {
         self.val == 0
     }
 
-    /// Create a `ForeignPtr` from a raw pointer to plugin memory.
+    /// Create a `ForeignPtr<()>` from a raw pointer to plugin memory.
     pub fn from_raw_ptr<T>(ptr: *mut T) -> Self {
         let val = ptr as usize;
-        ForeignPtr { val }
-    }
-}
-
-impl From<ForeignPtr> for usize {
-    fn from(v: ForeignPtr) -> usize {
-        v.val
-    }
-}
-
-impl From<usize> for ForeignPtr {
-    fn from(v: usize) -> ForeignPtr {
-        ForeignPtr { val: v }
-    }
-}
-
-impl From<u64> for ForeignPtr {
-    fn from(v: u64) -> ForeignPtr {
         ForeignPtr {
-            val: v.try_into().unwrap(),
+            val,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl From<ForeignPtr> for u64 {
-    fn from(v: ForeignPtr) -> u64 {
+impl From<ForeignPtr<()>> for usize {
+    fn from(v: ForeignPtr<()>) -> usize {
+        v.val
+    }
+}
+
+impl From<usize> for ForeignPtr<()> {
+    fn from(v: usize) -> ForeignPtr<()> {
+        ForeignPtr {
+            val: v,
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl From<u64> for ForeignPtr<()> {
+    fn from(v: u64) -> ForeignPtr<()> {
+        ForeignPtr {
+            val: v.try_into().unwrap(),
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl From<ForeignPtr<()>> for u64 {
+    fn from(v: ForeignPtr<()>) -> u64 {
         v.val.try_into().unwrap()
     }
 }
 
-impl std::fmt::Pointer for ForeignPtr {
+impl std::fmt::Pointer for ForeignPtr<()> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ptr = self.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
@@ -119,7 +135,7 @@ impl SysCallArgs {
 pub union SysCallReg {
     as_i64: i64,
     as_u64: u64,
-    as_ptr: ForeignPtr,
+    as_ptr: UntypedForeignPtr,
 }
 // SysCallReg and all of its fields must be transmutable with a 64 bit integer.
 // TODO: Store as a single `u64` and explicitly transmute in the conversion
@@ -238,14 +254,14 @@ impl TryFrom<SysCallReg> for i16 {
     }
 }
 
-impl From<ForeignPtr> for SysCallReg {
-    fn from(v: ForeignPtr) -> Self {
+impl From<ForeignPtr<()>> for SysCallReg {
+    fn from(v: ForeignPtr<()>) -> Self {
         Self { as_ptr: v }
     }
 }
 
-impl From<SysCallReg> for ForeignPtr {
-    fn from(v: SysCallReg) -> ForeignPtr {
+impl From<SysCallReg> for ForeignPtr<()> {
+    fn from(v: SysCallReg) -> ForeignPtr<()> {
         unsafe { v.as_ptr }
     }
 }

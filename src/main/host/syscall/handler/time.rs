@@ -25,7 +25,7 @@ impl SyscallHandler {
     pub fn getitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        curr_value_ptr: ForeignPtr,
+        curr_value_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
         let curr_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(curr_value_ptr, 1);
 
@@ -47,8 +47,8 @@ impl SyscallHandler {
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        new_value_ptr: ForeignPtr,
-        old_value_ptr: ForeignPtr,
+        new_value_ptr: ForeignPtr<()>,
+        old_value_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
         let new_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(new_value_ptr, 1);
         let old_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(old_value_ptr, 1);

@@ -105,8 +105,9 @@ static void _udp_dropPacket(LegacySocket* socket, const Host* host, Packet* pack
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-static gssize _udp_sendUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _udp_sendUserData(LegacySocket* socket, const Thread* thread,
+                                UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
+                                in_port_t port) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
@@ -172,8 +173,9 @@ static gssize _udp_sendUserData(LegacySocket* socket, const Thread* thread, Fore
 }
 
 /* Address and port must be in network byte order. */
-static gssize _udp_receiveUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
+static gssize _udp_receiveUserData(LegacySocket* socket, const Thread* thread,
+                                   UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
+                                   in_port_t* port) {
     UDP* udp = _udp_fromLegacyFile((LegacyFile*)socket);
     MAGIC_ASSERT(udp);
 
@@ -195,7 +197,7 @@ static gssize _udp_receiveUserData(LegacySocket* socket, const Thread* thread, F
     gsize copyLength = MIN(nBytes, packetLength);
     gssize bytesCopied = packet_copyPayload(nextPacket, thread, 0, buffer, copyLength);
     if (bytesCopied < 0) {
-        // Error writing to ForeignPtr
+        // Error writing to UntypedForeignPtr
         return bytesCopied;
     }
 

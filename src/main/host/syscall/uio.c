@@ -23,7 +23,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
+static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, UntypedForeignPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
                                              LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
@@ -59,7 +59,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Foreig
 
     /* Check that all of the buf pointers are valid. */
     for (unsigned long i = 0; i < iovlen; i++) {
-        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
+        UntypedForeignPtr bufPtr = (UntypedForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (!bufPtr.val && bufSize != 0) {
@@ -78,9 +78,10 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Foreig
     return 0;
 }
 
-static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
-                                                 unsigned long iovlen, unsigned long pos_l,
-                                                 unsigned long pos_h, int flags, bool doPreadv,
+static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
+                                                 UntypedForeignPtr iovPtr, unsigned long iovlen,
+                                                 unsigned long pos_l, unsigned long pos_h,
+                                                 int flags, bool doPreadv,
                                                  bool negativeOffsetDisables) {
     /* On Linux x86-64, an `unsigned long` is 64 bits, so we can ignore `pos_h`. */
     static_assert(sizeof(unsigned long) == sizeof(off_t), "Unexpected `unsigned long` size");
@@ -123,7 +124,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Fo
     size_t totalBytesWritten = 0;
 
     for (unsigned long i = 0; i < iovlen; i++) {
-        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
+        UntypedForeignPtr bufPtr = (UntypedForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (bufSize == 0) {
@@ -211,9 +212,10 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd, Fo
     return syscallreturn_makeDoneI64(result);
 }
 
-static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, ForeignPtr iovPtr,
-                                                  unsigned long iovlen, unsigned long pos_l,
-                                                  unsigned long pos_h, int flags, bool doPwritev,
+static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
+                                                  UntypedForeignPtr iovPtr, unsigned long iovlen,
+                                                  unsigned long pos_l, unsigned long pos_h,
+                                                  int flags, bool doPwritev,
                                                   bool negativeOffsetDisables) {
     /* On Linux x86-64, an `unsigned long` is 64 bits, so we can ignore `pos_h`. */
     static_assert(sizeof(unsigned long) == sizeof(off_t), "Unexpected `unsigned long` size");
@@ -256,7 +258,7 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd, F
     size_t totalBytesWritten = 0;
 
     for (unsigned long i = 0; i < iovlen; i++) {
-        ForeignPtr bufPtr = (ForeignPtr){.val = (uint64_t)iov[i].iov_base};
+        UntypedForeignPtr bufPtr = (UntypedForeignPtr){.val = (uint64_t)iov[i].iov_base};
         size_t bufSize = iov[i].iov_len;
 
         if (bufSize == 0) {

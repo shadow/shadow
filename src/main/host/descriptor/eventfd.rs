@@ -182,7 +182,7 @@ impl EventFd {
     pub fn ioctl(
         &mut self,
         request: u64,
-        _arg_ptr: ForeignPtr,
+        _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         log::warn!("We do not yet handle ioctl request {} on eventfds", request);

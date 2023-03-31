@@ -9,7 +9,7 @@ use crate::utility::pod;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
-    pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: ForeignPtr) -> SyscallResult {
+    pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: ForeignPtr<()>) -> SyscallResult {
         // Pointer to the plugin memory where we write the result.
         let info_ptr = TypedArrayForeignPtr::new::<libc::sysinfo>(info_ptr, 1);
 

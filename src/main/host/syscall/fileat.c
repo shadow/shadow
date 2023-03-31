@@ -57,7 +57,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
 }
 
 static int _syscallhandler_validateDirAndPathnameHelper(SysCallHandler* sys, int dirfd,
-                                                        ForeignPtr pathnamePtr,
+                                                        UntypedForeignPtr pathnamePtr,
                                                         RegularFile** dir_desc_out,
                                                         const char** pathname_out) {
     /* Validate the directory fd. */
@@ -73,8 +73,9 @@ static int _syscallhandler_validateDirAndPathnameHelper(SysCallHandler* sys, int
 }
 
 static SyscallReturn _syscallhandler_renameatHelper(SysCallHandler* sys, int olddirfd,
-                                                    ForeignPtr oldpathPtr, int newdirfd,
-                                                    ForeignPtr newpathPtr, unsigned int flags) {
+                                                    UntypedForeignPtr oldpathPtr, int newdirfd,
+                                                    UntypedForeignPtr newpathPtr,
+                                                    unsigned int flags) {
     /* Validate params. */
     RegularFile* olddir_desc = NULL;
     const char* oldpath;
@@ -106,7 +107,7 @@ static SyscallReturn _syscallhandler_renameatHelper(SysCallHandler* sys, int old
 
 SyscallReturn syscallhandler_openat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;
     mode_t mode = args->args[3].as_u64;
 
@@ -143,8 +144,8 @@ SyscallReturn syscallhandler_openat(SysCallHandler* sys, const SysCallArgs* args
 
 SyscallReturn syscallhandler_newfstatat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
-    ForeignPtr bufPtr = args->args[2].as_ptr;      // struct stat*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr bufPtr = args->args[2].as_ptr;      // struct stat*
     int flags = args->args[3].as_i64;
 
     /* Validate params. */
@@ -179,7 +180,7 @@ SyscallReturn syscallhandler_newfstatat(SysCallHandler* sys, const SysCallArgs* 
 
 SyscallReturn syscallhandler_fchownat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     uid_t owner = args->args[2].as_u64;
     gid_t group = args->args[3].as_u64;
     int flags = args->args[4].as_i64;
@@ -202,7 +203,7 @@ SyscallReturn syscallhandler_fchownat(SysCallHandler* sys, const SysCallArgs* ar
 
 SyscallReturn syscallhandler_fchmodat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     uid_t mode = args->args[2].as_u64;
     int flags = args->args[3].as_i64;
 
@@ -224,8 +225,8 @@ SyscallReturn syscallhandler_fchmodat(SysCallHandler* sys, const SysCallArgs* ar
 
 SyscallReturn syscallhandler_futimesat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
-    ForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timeval [2]
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timeval [2]
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
@@ -250,8 +251,8 @@ SyscallReturn syscallhandler_futimesat(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_utimensat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
-    ForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timespec [2]
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timespec [2]
     int flags = args->args[3].as_i64;
 
     /* Validate params. */
@@ -278,7 +279,7 @@ SyscallReturn syscallhandler_utimensat(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_faccessat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int mode = args->args[2].as_i64;
     int flags = args->args[3].as_i64;
 
@@ -300,7 +301,7 @@ SyscallReturn syscallhandler_faccessat(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_mkdirat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     mode_t mode = args->args[2].as_u64;
 
     /* Validate params. */
@@ -320,7 +321,7 @@ SyscallReturn syscallhandler_mkdirat(SysCallHandler* sys, const SysCallArgs* arg
 
 SyscallReturn syscallhandler_mknodat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     mode_t mode = args->args[2].as_u64;
     dev_t dev = args->args[3].as_u64;
 
@@ -342,9 +343,9 @@ SyscallReturn syscallhandler_mknodat(SysCallHandler* sys, const SysCallArgs* arg
 
 SyscallReturn syscallhandler_linkat(SysCallHandler* sys, const SysCallArgs* args) {
     int olddirfd = args->args[0].as_i64;
-    ForeignPtr oldpathPtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr oldpathPtr = args->args[1].as_ptr; // const char*
     int newdirfd = args->args[2].as_i64;
-    ForeignPtr newpathPtr = args->args[3].as_ptr; // const char*
+    UntypedForeignPtr newpathPtr = args->args[3].as_ptr; // const char*
     int flags = args->args[4].as_i64;
 
     /* Validate params. */
@@ -374,7 +375,7 @@ SyscallReturn syscallhandler_linkat(SysCallHandler* sys, const SysCallArgs* args
 
 SyscallReturn syscallhandler_unlinkat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;
 
     /* Validate params. */
@@ -393,9 +394,9 @@ SyscallReturn syscallhandler_unlinkat(SysCallHandler* sys, const SysCallArgs* ar
 }
 
 SyscallReturn syscallhandler_symlinkat(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr targetpathPtr = args->args[0].as_ptr; // const char*
+    UntypedForeignPtr targetpathPtr = args->args[0].as_ptr; // const char*
     int dirfd = args->args[1].as_i64;
-    ForeignPtr linkpathPtr = args->args[2].as_ptr; // const char*
+    UntypedForeignPtr linkpathPtr = args->args[2].as_ptr; // const char*
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
@@ -423,8 +424,8 @@ SyscallReturn syscallhandler_symlinkat(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_readlinkat(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
-    ForeignPtr bufPtr = args->args[2].as_ptr;      // char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr bufPtr = args->args[2].as_ptr;      // char*
     size_t bufSize = args->args[3].as_u64;
 
     /* Validate params. */
@@ -471,10 +472,10 @@ SyscallReturn syscallhandler_renameat2(SysCallHandler* sys, const SysCallArgs* a
 #ifdef SYS_statx
 SyscallReturn syscallhandler_statx(SysCallHandler* sys, const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
-    ForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;
     unsigned int mask = args->args[3].as_u64;
-    ForeignPtr statxbufPtr = args->args[4].as_ptr; // struct statx*
+    UntypedForeignPtr statxbufPtr = args->args[4].as_ptr; // struct statx*
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;

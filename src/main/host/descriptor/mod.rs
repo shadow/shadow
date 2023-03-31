@@ -422,7 +422,7 @@ impl FileRefMut<'_> {
         pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket;
-        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr, memory_manager: &mut MemoryManager) -> SyscallResult
+        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

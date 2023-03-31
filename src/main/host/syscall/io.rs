@@ -18,7 +18,7 @@ use crate::utility::{pod, NoTypeInference};
 pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
-    plugin_addr: ForeignPtr,
+    plugin_addr: ForeignPtr<()>,
     plugin_addr_len: TypedArrayForeignPtr<libc::socklen_t>,
 ) -> Result<(), SyscallError> {
     let addr = match addr {
@@ -66,7 +66,7 @@ pub fn write_sockaddr_and_len(
 pub fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: &SockaddrStorage,
-    plugin_addr: ForeignPtr,
+    plugin_addr: ForeignPtr<()>,
     plugin_addr_len: libc::socklen_t,
 ) -> Result<libc::socklen_t, SyscallError> {
     let from_addr_slice = addr.as_slice();
@@ -88,7 +88,7 @@ pub fn write_sockaddr(
 
 pub fn read_sockaddr(
     mem: &MemoryManager,
-    addr_ptr: ForeignPtr,
+    addr_ptr: ForeignPtr<()>,
     addr_len: libc::socklen_t,
 ) -> Result<Option<SockaddrStorage>, SyscallError> {
     if addr_ptr.is_null() {
@@ -134,7 +134,7 @@ pub fn read_sockaddr(
 pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
     mem: &mut MemoryManager,
     val: &T,
-    val_ptr: ForeignPtr,
+    val_ptr: ForeignPtr<()>,
     val_len: usize,
 ) -> Result<usize, SyscallError> {
     let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
@@ -149,10 +149,10 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
 
 /// Analogous to [`libc::msghdr`].
 pub struct MsgHdr {
-    pub name: ForeignPtr,
+    pub name: ForeignPtr<()>,
     pub name_len: libc::socklen_t,
     pub iovs: Vec<IoVec>,
-    pub control: ForeignPtr,
+    pub control: ForeignPtr<()>,
     pub control_len: libc::size_t,
     pub flags: libc::c_int,
 }
@@ -160,7 +160,7 @@ pub struct MsgHdr {
 /// Analogous to [`libc::iovec`].
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct IoVec {
-    pub base: ForeignPtr,
+    pub base: ForeignPtr<()>,
     pub len: libc::size_t,
 }
 
@@ -333,7 +333,7 @@ impl<'a, I: Iterator<Item = &'a IoVec>> std::io::Write for IoVecWriter<'a, I> {
 /// Read a plugin's array of [`libc::iovec`] into a [`Vec<IoVec>`].
 pub fn read_iovecs(
     mem: &MemoryManager,
-    iov_ptr: ForeignPtr,
+    iov_ptr: ForeignPtr<()>,
     count: usize,
 ) -> Result<Vec<IoVec>, Errno> {
     if count > libc::UIO_MAXIOV.try_into().unwrap() {
@@ -348,7 +348,7 @@ pub fn read_iovecs(
 
     for plugin_iov in plugin_iovs {
         iovs.push(IoVec {
-            base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base),
+            base: ForeignPtr::<()>::from_raw_ptr(plugin_iov.iov_base),
             len: plugin_iov.iov_len,
         });
     }
@@ -357,7 +357,7 @@ pub fn read_iovecs(
 }
 
 /// Read a plugin's [`libc::msghdr`] into a [`MsgHdr`].
-pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr) -> Result<MsgHdr, Errno> {
+pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr<()>) -> Result<MsgHdr, Errno> {
     let msg_ptr = TypedArrayForeignPtr::new::<libc::msghdr>(msg_ptr, 1);
     let mem_ref = mem.memory_ref(msg_ptr)?;
     let plugin_msg = mem_ref.deref()[0];
@@ -370,7 +370,7 @@ pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr) -> Result<MsgHdr, E
 /// `recvmsg()`.
 pub fn update_msghdr(
     mem: &mut MemoryManager,
-    msg_ptr: ForeignPtr,
+    msg_ptr: ForeignPtr<()>,
     msg: MsgHdr,
 ) -> Result<(), Errno> {
     let msg_ptr = TypedArrayForeignPtr::new::<libc::msghdr>(msg_ptr, 1);
@@ -391,14 +391,18 @@ pub fn update_msghdr(
 /// should have been copied from plugin memory, meaning any pointers in the struct are pointers to
 /// plugin memory, not local memory.
 fn msghdr_to_rust(msg: &libc::msghdr, mem: &MemoryManager) -> Result<MsgHdr, Errno> {
-    let iovs = read_iovecs(mem, ForeignPtr::from_raw_ptr(msg.msg_iov), msg.msg_iovlen)?;
+    let iovs = read_iovecs(
+        mem,
+        ForeignPtr::<()>::from_raw_ptr(msg.msg_iov),
+        msg.msg_iovlen,
+    )?;
     assert_eq!(iovs.len(), msg.msg_iovlen);
 
     Ok(MsgHdr {
-        name: ForeignPtr::from_raw_ptr(msg.msg_name),
+        name: ForeignPtr::<()>::from_raw_ptr(msg.msg_name),
         name_len: msg.msg_namelen,
         iovs,
-        control: ForeignPtr::from_raw_ptr(msg.msg_control),
+        control: ForeignPtr::<()>::from_raw_ptr(msg.msg_control),
         control_len: msg.msg_controllen,
         flags: msg.msg_flags,
     })

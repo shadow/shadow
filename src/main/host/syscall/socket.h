@@ -24,13 +24,14 @@ SYSCALL_HANDLER(socket);
 SYSCALL_HANDLER(socketpair);
 
 /* Protected helper to allow read(sockfd) to redirect here. */
-SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd, ForeignPtr bufPtr,
-                                             size_t bufSize, int flags, ForeignPtr srcAddrPtr,
-                                             ForeignPtr addrlenPtr);
+SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
+                                             UntypedForeignPtr bufPtr, size_t bufSize, int flags,
+                                             UntypedForeignPtr srcAddrPtr,
+                                             UntypedForeignPtr addrlenPtr);
 
 /* Protected helper to allow write(sockfd) to redirect here. */
-SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd, ForeignPtr bufPtr,
-                                           size_t bufSize, int flags, ForeignPtr destAddrPtr,
-                                           socklen_t addrlen);
+SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
+                                           UntypedForeignPtr bufPtr, size_t bufSize, int flags,
+                                           UntypedForeignPtr destAddrPtr, socklen_t addrlen);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_SOCKET_H_ */

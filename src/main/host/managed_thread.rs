@@ -294,9 +294,9 @@ impl ManagedThread {
         &self,
         ctx: &ThreadContext,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr,
-        ptid: ForeignPtr,
-        ctid: ForeignPtr,
+        child_stack: ForeignPtr<()>,
+        ptid: ForeignPtr<()>,
+        ctid: ForeignPtr<()>,
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, Errno> {
         let child_ipc_shmem =

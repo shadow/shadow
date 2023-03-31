@@ -13,11 +13,11 @@ use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 use crate::utility::NoTypeInference;
 
-/// Wrapper around a ForeignPtr that encapsulates its type, size, and current
+/// Wrapper around a ForeignPtr<()> that encapsulates its type, size, and current
 /// position.
 #[derive(Copy, Clone)]
 pub struct TypedArrayForeignPtr<T> {
-    base: ForeignPtr,
+    base: ForeignPtr<()>,
     count: usize,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -35,7 +35,7 @@ impl<T> std::fmt::Debug for TypedArrayForeignPtr<T> {
 impl<T> TypedArrayForeignPtr<T> {
     /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
     /// to be aligned for `T`.
-    pub fn new<U>(ptr: ForeignPtr, count: usize) -> Self
+    pub fn new<U>(ptr: ForeignPtr<()>, count: usize) -> Self
     where
         U: NoTypeInference<This = T>,
     {
@@ -63,7 +63,7 @@ impl<T> TypedArrayForeignPtr<T> {
     }
 
     /// Raw foreign pointer.
-    pub fn ptr(&self) -> ForeignPtr {
+    pub fn ptr(&self) -> ForeignPtr<()> {
         self.base
     }
 
@@ -116,7 +116,7 @@ impl<T> TypedArrayForeignPtr<T> {
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
         TypedArrayForeignPtr {
-            base: ForeignPtr::from(usize::from(self.base) + included_start * size_of::<T>()),
+            base: ForeignPtr::<()>::from(usize::from(self.base) + included_start * size_of::<T>()),
             count: excluded_end - included_start,
             _phantom: PhantomData,
         }
@@ -294,7 +294,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: ForeignPtr) -> SyscallReturn {
+    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: ForeignPtr<()>) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,

@@ -21,8 +21,9 @@
 ///////////////////////////////////////////////////////////
 
 static SyscallReturn _syscallhandler_select_helper(SysCallHandler* sys, int nfds,
-                                                   ForeignPtr readfds_ptr, ForeignPtr writefds_ptr,
-                                                   ForeignPtr exceptfds_ptr,
+                                                   UntypedForeignPtr readfds_ptr,
+                                                   UntypedForeignPtr writefds_ptr,
+                                                   UntypedForeignPtr exceptfds_ptr,
                                                    struct timespec* timeout) {
     // TODO: we could possibly reduce the max (i.e. the search space) further by checking the max fd
     // in the descriptor table.
@@ -179,10 +180,10 @@ static int _syscallhandler_check_timeout(const struct timespec* timeout) {
 
 SyscallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args) {
     int nfds = args->args[0].as_i64;
-    ForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
-    ForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
-    ForeignPtr exceptfds_ptr = args->args[3].as_ptr; // fd_set*
-    ForeignPtr timeout_ptr = args->args[4].as_ptr;   // struct timeval*
+    UntypedForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
+    UntypedForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
+    UntypedForeignPtr exceptfds_ptr = args->args[3].as_ptr; // fd_set*
+    UntypedForeignPtr timeout_ptr = args->args[4].as_ptr;   // struct timeval*
 
     trace("select was called with nfds=%i, readfds=%p, writefds=%p, exceptfds=%p, and timeout=%p",
           nfds, (void*)readfds_ptr.val, (void*)writefds_ptr.val, (void*)exceptfds_ptr.val,
@@ -223,10 +224,10 @@ SyscallReturn syscallhandler_select(SysCallHandler* sys, const SysCallArgs* args
 
 SyscallReturn syscallhandler_pselect6(SysCallHandler* sys, const SysCallArgs* args) {
     int nfds = args->args[0].as_i64;
-    ForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
-    ForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
-    ForeignPtr exceptfds_ptr = args->args[3].as_ptr; // fd_set*
-    ForeignPtr timeout_ptr = args->args[4].as_ptr;   // const struct timespec*
+    UntypedForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
+    UntypedForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
+    UntypedForeignPtr exceptfds_ptr = args->args[3].as_ptr; // fd_set*
+    UntypedForeignPtr timeout_ptr = args->args[4].as_ptr;   // const struct timespec*
     // TODO how do we handle the sigmask arg and behavior
 
     trace("select was called with nfds=%i, readfds=%p, writefds=%p, exceptfds=%p, and timeout=%p",

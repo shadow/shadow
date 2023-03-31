@@ -12,7 +12,7 @@ impl SyscallHandler {
                   /* flags */ libc::c_uint)]
     pub fn getrandom(
         ctx: &mut SyscallContext,
-        buf_ptr: ForeignPtr,
+        buf_ptr: ForeignPtr<()>,
         count: libc::size_t,
         _flags: libc::c_uint,
     ) -> SyscallResult {

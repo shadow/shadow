@@ -21,6 +21,16 @@ pub mod cshadow {
     include!(concat!(env!("OUT_DIR"), "/cshadow.rs"));
 }
 
+// check that the size and alignment of `CompatUntypedForeignPtr` and `ForeignPtr<()>` are the same`
+static_assertions::assert_eq_size!(
+    cshadow::CompatUntypedForeignPtr,
+    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
+);
+static_assertions::assert_eq_align!(
+    cshadow::CompatUntypedForeignPtr,
+    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
+);
+
 // modules with macros must be included before other modules
 #[macro_use]
 pub mod utility;

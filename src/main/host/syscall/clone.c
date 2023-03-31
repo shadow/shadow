@@ -20,9 +20,9 @@ SyscallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
     unsigned long flags = args->args[0].as_i64;
-    ForeignPtr child_stack = args->args[1].as_ptr;
-    ForeignPtr ptid = args->args[2].as_ptr;
-    ForeignPtr ctid = args->args[3].as_ptr;
+    UntypedForeignPtr child_stack = args->args[1].as_ptr;
+    UntypedForeignPtr ptid = args->args[2].as_ptr;
+    UntypedForeignPtr ctid = args->args[3].as_ptr;
     unsigned long newtls = args->args[4].as_i64;
 
     unsigned long required_flags =
@@ -38,8 +38,8 @@ SyscallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     unsigned long filtered_flags =
         flags & ~(CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
     pid_t child_tid = thread_clone(_syscallhandler_getThread(sys), filtered_flags, child_stack,
-                                   /*ptid*/ (ForeignPtr){.val = 0},
-                                   /*ctid*/ (ForeignPtr){.val = 0}, newtls);
+                                   /*ptid*/ (UntypedForeignPtr){.val = 0},
+                                   /*ctid*/ (UntypedForeignPtr){.val = 0}, newtls);
     if (child_tid < 0) {
         return syscallreturn_makeDoneI64(child_tid);
     }

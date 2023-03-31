@@ -27,10 +27,12 @@ typedef gint (*SocketConnectToPeerFunc)(LegacySocket* socket, const Host* host, 
 typedef void (*SocketProcessFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 typedef void (*SocketDropFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 
-typedef gssize (*SocketSendFunc)(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                 gsize nBytes, in_addr_t ip, in_port_t port);
-typedef gssize (*SocketReceiveFunc)(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                    gsize nBytes, in_addr_t* ip, in_port_t* port);
+typedef gssize (*SocketSendFunc)(LegacySocket* socket, const Thread* thread,
+                                 UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
+                                 in_port_t port);
+typedef gssize (*SocketReceiveFunc)(LegacySocket* socket, const Thread* thread,
+                                    UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
+                                    in_port_t* port);
 
 struct _SocketFunctionTable {
     LegacyFileCloseFunc close;
@@ -94,10 +96,12 @@ Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host);
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket);
 Packet* legacysocket_peekNextInPacket(const LegacySocket* socket);
 
-gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                 gsize nBytes, in_addr_t ip, in_port_t port);
-gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread, ForeignPtr buffer,
-                                    gsize nBytes, in_addr_t* ip, in_port_t* port);
+gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread,
+                                 UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
+                                 in_port_t port);
+gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
+                                    UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
+                                    in_port_t* port);
 
 gsize legacysocket_getInputBufferSize(LegacySocket* socket);
 void legacysocket_setInputBufferSize(LegacySocket* socket, gsize newSize);
