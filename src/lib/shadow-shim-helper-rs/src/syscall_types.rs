@@ -1,5 +1,7 @@
 use vasi::VirtualAddressSpaceIndependent;
 
+use crate::util::NoTypeInference;
+
 /// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
 /// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
 /// and this prevents us from accidentally accessing an "untyped" pointer.
@@ -21,27 +23,54 @@ pub struct ForeignPtr<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl ForeignPtr<()> {
+impl<T> ForeignPtr<T> {
+    fn new_with_type_inference(val: usize) -> Self {
+        Self {
+            val,
+            _phantom: Default::default(),
+        }
+    }
+
     pub fn null() -> Self {
-        0usize.into()
+        // this will be an invalid pointer so we don't really care what type rust will infer for
+        // this `ForeignPtr`
+        Self::new_with_type_inference(0)
+    }
+
+    /// Cast from `ForeignPtr<T>` to `ForeignPtr<K>`.
+    ///
+    /// This uses the [`NoTypeInference`] trait to prevent rust from inferring the target type of
+    /// the cast. This is a little awkward to use, but hopefully helps to prevent an invalid cast.
+    /// We can consider removing this restriction in the future if we don't think it's useful.
+    ///
+    /// This does not check pointer alignment.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// let ptr: ForeignPtr<u16> = ForeignPtr::null();
+    /// // cast to a u8 pointer
+    /// let ptr = ptr.cast::<u8, _>();
+    /// ```
+    pub fn cast<U: NoTypeInference<This = K>, K>(&self) -> ForeignPtr<K> {
+        ForeignPtr::new_with_type_inference(self.val)
     }
 
     pub fn is_null(&self) -> bool {
         self.val == 0
     }
 
-    /// Create a `ForeignPtr<()>` from a raw pointer to plugin memory.
-    pub fn from_raw_ptr<T>(ptr: *mut T) -> Self {
+    /// Create a `ForeignPtr` from a raw pointer to plugin memory.
+    pub fn from_raw_ptr(ptr: *mut T) -> Self {
         let val = ptr as usize;
-        ForeignPtr {
-            val,
-            _phantom: Default::default(),
-        }
+        // the type of this `ForeignPtr` will be inferred from the pointer type
+        Self::new_with_type_inference(val)
     }
 }
 
-impl From<ForeignPtr<()>> for usize {
-    fn from(v: ForeignPtr<()>) -> usize {
+impl<T> From<ForeignPtr<T>> for usize {
+    fn from(v: ForeignPtr<T>) -> Self {
         v.val
     }
 }
@@ -64,13 +93,13 @@ impl From<u64> for ForeignPtr<()> {
     }
 }
 
-impl From<ForeignPtr<()>> for u64 {
-    fn from(v: ForeignPtr<()>) -> u64 {
+impl<T> From<ForeignPtr<T>> for u64 {
+    fn from(v: ForeignPtr<T>) -> Self {
         v.val.try_into().unwrap()
     }
 }
 
-impl std::fmt::Pointer for ForeignPtr<()> {
+impl<T> std::fmt::Pointer for ForeignPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ptr = self.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
@@ -254,15 +283,22 @@ impl TryFrom<SysCallReg> for i16 {
     }
 }
 
-impl From<ForeignPtr<()>> for SysCallReg {
-    fn from(v: ForeignPtr<()>) -> Self {
-        Self { as_ptr: v }
+impl<T> From<ForeignPtr<T>> for SysCallReg {
+    fn from(v: ForeignPtr<T>) -> Self {
+        Self {
+            as_ptr: v.cast::<(), _>(),
+        }
     }
 }
 
-impl From<SysCallReg> for ForeignPtr<()> {
-    fn from(v: SysCallReg) -> ForeignPtr<()> {
-        unsafe { v.as_ptr }
+impl<T> From<SysCallReg> for ForeignPtr<T> {
+    fn from(v: SysCallReg) -> Self {
+        // This allows rust to infer the type for the cast. This isn't ideal since we generally want
+        // to require that the user be explicit about casts (for example we use the
+        // `NoTypeInference` trait on `ForeignPtr::cast`), but we need this type inference so that
+        // `SyscallHandlerFn` can convert the `SysCallReg` to the correct pointer type in syscall
+        // handler arguments.
+        (unsafe { v.as_ptr }).cast::<T, _>()
     }
 }
 

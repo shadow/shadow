@@ -150,9 +150,11 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
 
 /// Analogous to [`libc::msghdr`].
 pub struct MsgHdr {
+    // TODO: make this a `ForeignPtr<u8>`
     pub name: ForeignPtr<()>,
     pub name_len: libc::socklen_t,
     pub iovs: Vec<IoVec>,
+    // TODO: make this a `ForeignPtr<u8>`
     pub control: ForeignPtr<()>,
     pub control_len: libc::size_t,
     pub flags: libc::c_int,
@@ -161,6 +163,7 @@ pub struct MsgHdr {
 /// Analogous to [`libc::iovec`].
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct IoVec {
+    // TODO: make this a `ForeignPtr<u8>`
     pub base: ForeignPtr<()>,
     pub len: libc::size_t,
 }
@@ -349,7 +352,7 @@ pub fn read_iovecs(
 
     for plugin_iov in plugin_iovs {
         iovs.push(IoVec {
-            base: ForeignPtr::<()>::from_raw_ptr(plugin_iov.iov_base),
+            base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base).cast::<(), _>(),
             len: plugin_iov.iov_len,
         });
     }
@@ -394,16 +397,16 @@ pub fn update_msghdr(
 fn msghdr_to_rust(msg: &libc::msghdr, mem: &MemoryManager) -> Result<MsgHdr, Errno> {
     let iovs = read_iovecs(
         mem,
-        ForeignPtr::<()>::from_raw_ptr(msg.msg_iov),
+        ForeignPtr::from_raw_ptr(msg.msg_iov).cast::<(), _>(),
         msg.msg_iovlen,
     )?;
     assert_eq!(iovs.len(), msg.msg_iovlen);
 
     Ok(MsgHdr {
-        name: ForeignPtr::<()>::from_raw_ptr(msg.msg_name),
+        name: ForeignPtr::from_raw_ptr(msg.msg_name).cast::<(), _>(),
         name_len: msg.msg_namelen,
         iovs,
-        control: ForeignPtr::<()>::from_raw_ptr(msg.msg_control),
+        control: ForeignPtr::from_raw_ptr(msg.msg_control).cast::<(), _>(),
         control_len: msg.msg_controllen,
         flags: msg.msg_flags,
     })
