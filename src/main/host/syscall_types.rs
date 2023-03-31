@@ -6,12 +6,12 @@ use log::Level::Debug;
 use log::*;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
+use shadow_shim_helper_rs::util::NoTypeInference;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
-use crate::utility::NoTypeInference;
 
 /// Wrapper around a ForeignPtr<()> that encapsulates its type, size, and current
 /// position.
