@@ -51,14 +51,14 @@ struct Inner {
     pids: HashMap<Pid, PidData>,
     // event_fd used to notify watcher thread via epoll. Calling thread writes a
     // single byte, which the watcher thread reads to reset.
-    command_notifier: RawFd,
+    command_notifier: File,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Inner {
     fn send_command(&mut self, cmd: Command) {
         self.commands.push(cmd);
-        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
     }
 
     fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
@@ -106,13 +106,16 @@ impl ChildPidWatcher {
     /// when the object is dropped.
     pub fn new() -> Self {
         let epoll = epoll_create1(EpollCreateFlags::empty()).unwrap();
-        let command_notifier =
-            nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
+        let command_notifier = {
+            let raw =
+                nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
+            unsafe { File::from_raw_fd(raw) }
+        };
         let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
         epoll_ctl(
             epoll,
             EpollOp::EpollCtlAdd,
-            command_notifier,
+            command_notifier.as_raw_fd(),
             Some(&mut event),
         )
         .unwrap();
@@ -172,7 +175,7 @@ impl ChildPidWatcher {
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
             let mut buf = [0; 8];
-            let res = nix::unistd::read(inner.command_notifier, &mut buf);
+            let res = nix::unistd::read(inner.command_notifier.as_raw_fd(), &mut buf);
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
