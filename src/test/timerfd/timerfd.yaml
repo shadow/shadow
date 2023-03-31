@@ -7,5 +7,5 @@ hosts:
   testnode:
     network_node_id: 0
     processes:
-    - path: test-timerfd
+    - path: ./test-timerfd
       start_time: 1

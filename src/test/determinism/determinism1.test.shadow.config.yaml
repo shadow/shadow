@@ -25,5 +25,5 @@ hosts:
     network_node_id: 0
     quantity: 10
     processes:
-    - path: test-determinism
+    - path: ./test-determinism
       start_time: 1

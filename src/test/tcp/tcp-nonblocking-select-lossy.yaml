@@ -22,12 +22,12 @@ hosts:
   lossy.tcpserver.echo:
     network_node_id: 0
     processes:
-    - path: test-tcp
+    - path: ./test-tcp
       args: nonblocking-select server 0.0.0.0 1234
       start_time: 1
   lossy.tcpclient.echo:
     network_node_id: 0
     processes:
-    - path: test-tcp
+    - path: ./test-tcp
       args: nonblocking-select client lossy.tcpserver.echo 1234
       start_time: 2

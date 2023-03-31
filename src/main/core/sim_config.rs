@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
-use log::warn;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -339,38 +338,14 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
 
     // We currently use `which::which`, which searches the `PATH` similarly to a
     // shell.
-    let new_canonical_path: Result<PathBuf, anyhow::Error> = which::which(&expanded_path)
+    let canonical_path: PathBuf = which::which(&expanded_path)
         .map_err(anyhow::Error::from)
         // `which` returns an absolute path, but it may still contain
         // symbolic links, .., etc.
-        .and_then(|p| p.canonicalize().map_err(anyhow::Error::from));
-    // We previously used only `std::fs::canonicalize`, which doesn't search
-    // `PATH`, and *does* search the current directory.
-    let legacy_canonical_path: Result<PathBuf, anyhow::Error> =
-        expanded_path.canonicalize().map_err(anyhow::Error::from);
+        .and_then(|p| Ok(p.canonicalize()?))
+        .with_context(|| format!("Failed to resolve plugin path '{:?}'", expanded_path))?;
 
-    let canonical_path = if new_canonical_path.is_ok()
-        && legacy_canonical_path.is_ok()
-        && *new_canonical_path.as_ref().unwrap() != *legacy_canonical_path.as_ref().unwrap()
-    {
-        warn!("Ambiguous path: {:?} resolves to either {:?} or {:?}. Using {:?} for backards compatibility, but a future version of shadow will not implicitly search the current working directory. Consider making absolute or prefixing with './'",
-            expanded_path,
-            legacy_canonical_path.as_ref().unwrap(),
-            new_canonical_path.as_ref().unwrap(),
-            legacy_canonical_path.as_ref().unwrap());
-        legacy_canonical_path.as_ref().unwrap()
-    } else if let Ok(p) = new_canonical_path.as_ref() {
-        p
-    } else if let Ok(p) = legacy_canonical_path.as_ref() {
-        warn!("Expanded path {:?} only via legacy fallback search, which implicitly searched current working dir. Consider prefixing with './'", proc.path.to_str().unwrap());
-        p
-    } else {
-        return Err(new_canonical_path
-            .with_context(|| format!("Failed to resolve plugin path '{:?}'", expanded_path))
-            .unwrap_err());
-    };
-
-    verify_plugin_path(canonical_path)
+    verify_plugin_path(&canonical_path)
         .with_context(|| format!("Failed to verify plugin path '{:?}'", canonical_path))?;
     log::info!(
         "Resolved binary path {:?} to {:?}",
@@ -383,7 +358,7 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
 
     Ok(vec![
         ProcessInfo {
-            plugin: canonical_path.clone(),
+            plugin: canonical_path,
             start_time,
             stop_time,
             args,

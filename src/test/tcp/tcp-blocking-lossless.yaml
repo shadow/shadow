@@ -22,12 +22,12 @@ hosts:
   lossless.tcpserver.echo:
     network_node_id: 0
     processes:
-    - path: test-tcp
+    - path: ./test-tcp
       args: blocking server 0.0.0.0 1234
       start_time: 1
   lossless.tcpclient.echo:
     network_node_id: 0
     processes:
-    - path: test-tcp
+    - path: ./test-tcp
       args: blocking client lossless.tcpserver.echo 1234
       start_time: 2
