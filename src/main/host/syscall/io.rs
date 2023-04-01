@@ -177,7 +177,7 @@ impl From<IoVec> for ForeignArrayPtr<u8> {
 impl From<ForeignArrayPtr<u8>> for IoVec {
     fn from(ptr: ForeignArrayPtr<u8>) -> Self {
         IoVec {
-            base: ptr.ptr(),
+            base: ptr.ptr().cast::<(), _>(),
             len: ptr.len(),
         }
     }

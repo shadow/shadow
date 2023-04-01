@@ -63,8 +63,8 @@ impl<T> ForeignArrayPtr<T> {
     }
 
     /// Raw foreign pointer.
-    pub fn ptr(&self) -> ForeignPtr<()> {
-        self.base.cast::<(), _>()
+    pub fn ptr(&self) -> ForeignPtr<T> {
+        self.base
     }
 
     /// Number of items pointed to.

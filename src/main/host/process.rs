@@ -1721,7 +1721,7 @@ mod export {
             memory_manager
                 .do_mmap(
                     &ThreadContext::new(host, &process, thread),
-                    addr,
+                    addr.cast::<u8, _>(),
                     len,
                     prot,
                     flags,
@@ -1747,7 +1747,11 @@ mod export {
             let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_munmap(&ThreadContext::new(host, &process, thread), addr, len)
+                .handle_munmap(
+                    &ThreadContext::new(host, &process, thread),
+                    addr.cast::<u8, _>(),
+                    len,
+                )
                 .into()
         })
         .unwrap()
@@ -1771,11 +1775,11 @@ mod export {
             memory_manager
                 .handle_mremap(
                     &ThreadContext::new(host, &process, thread),
-                    old_addr,
+                    old_addr.cast::<u8, _>(),
                     old_size,
                     new_size,
                     flags,
-                    new_addr,
+                    new_addr.cast::<u8, _>(),
                 )
                 .into()
         })
@@ -1798,7 +1802,7 @@ mod export {
             memory_manager
                 .handle_mprotect(
                     &ThreadContext::new(host, &process, thread),
-                    addr,
+                    addr.cast::<u8, _>(),
                     size,
                     prot,
                 )
@@ -1820,7 +1824,10 @@ mod export {
             let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_brk(&ThreadContext::new(host, &process, thread), plugin_src)
+                .handle_brk(
+                    &ThreadContext::new(host, &process, thread),
+                    plugin_src.cast::<u8, _>(),
+                )
                 .into()
         })
         .unwrap()

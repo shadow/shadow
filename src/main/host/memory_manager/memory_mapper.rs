@@ -409,13 +409,17 @@ impl MemoryMapper {
             let shm_plugin_fd = thread
                 .native_open(
                     &ctx,
-                    path_buf_foreign_ptr.ptr(),
+                    path_buf_foreign_ptr.ptr().cast::<(), _>(),
                     libc::O_RDWR | libc::O_CLOEXEC,
                     0,
                 )
                 .unwrap();
             thread
-                .free_foreign_ptr(&ctx, path_buf_foreign_ptr.ptr(), path_buf_foreign_ptr.len())
+                .free_foreign_ptr(
+                    &ctx,
+                    path_buf_foreign_ptr.ptr().cast::<(), _>(),
+                    path_buf_foreign_ptr.len(),
+                )
                 .unwrap();
             shm_plugin_fd
         };
@@ -608,7 +612,7 @@ impl MemoryMapper {
     ///
     /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
     /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
-    pub fn handle_munmap_result(&mut self, addr: ForeignPtr<()>, length: usize) {
+    pub fn handle_munmap_result(&mut self, addr: ForeignPtr<u8>, length: usize) {
         trace!("handle_munmap_result({:?}, {})", addr, length);
         if length == 0 {
             return;
@@ -629,12 +633,15 @@ impl MemoryMapper {
     pub fn handle_mremap(
         &mut self,
         ctx: &ThreadContext,
-        old_address: ForeignPtr<()>,
+        old_address: ForeignPtr<u8>,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: ForeignPtr<()>,
+        new_address: ForeignPtr<u8>,
     ) -> SyscallResult {
+        let old_address = old_address.cast::<(), _>();
+        let new_address = new_address.cast::<(), _>();
+
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mremap(&ctx, old_address, old_size, new_size, flags, new_address)?
@@ -756,7 +763,7 @@ impl MemoryMapper {
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<()>) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<u8>) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -881,13 +888,13 @@ impl MemoryMapper {
     pub fn handle_mprotect(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
-        thread.native_mprotect(&ctx, addr, size, prot)?;
+        thread.native_mprotect(&ctx, addr.cast::<(), _>(), size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected

@@ -586,7 +586,7 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<()>) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<u8>) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(ctx, ptr),
             None => Err(SyscallError::Native),
@@ -596,13 +596,14 @@ impl MemoryManager {
     pub fn do_mmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         length: usize,
         prot: i32,
         flags: i32,
         fd: i32,
         offset: i64,
     ) -> SyscallResult {
+        let addr = addr.cast::<(), _>();
         let addr = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
@@ -622,7 +623,7 @@ impl MemoryManager {
     pub fn handle_munmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         length: usize,
     ) -> SyscallResult {
         if self.memory_mapper.is_some() {
@@ -640,11 +641,11 @@ impl MemoryManager {
     fn do_munmap(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         length: usize,
     ) -> nix::Result<()> {
         let (ctx, thread) = ctx.split_thread();
-        thread.native_munmap(&ctx, addr, length)?;
+        thread.native_munmap(&ctx, addr.cast::<(), _>(), length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
         }
@@ -654,11 +655,11 @@ impl MemoryManager {
     pub fn handle_mremap(
         &mut self,
         ctx: &ThreadContext,
-        old_address: ForeignPtr<()>,
+        old_address: ForeignPtr<u8>,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: ForeignPtr<()>,
+        new_address: ForeignPtr<u8>,
     ) -> SyscallResult {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address),
@@ -669,7 +670,7 @@ impl MemoryManager {
     pub fn handle_mprotect(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
@@ -731,7 +732,7 @@ where
             .memory_borrow_mut()
             .do_munmap(
                 ctx,
-                self.ptr.ptr(),
+                self.ptr.ptr().cast::<u8, _>(),
                 self.ptr.len() * std::mem::size_of::<T>(),
             )
             .unwrap();
@@ -805,7 +806,7 @@ mod export {
     pub unsafe extern "C" fn allocdmem_foreignPtr(
         allocd_mem: *const AllocdMem<u8>,
     ) -> ForeignPtr<()> {
-        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr() }
+        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().cast::<(), _>() }
     }
 
     #[no_mangle]
