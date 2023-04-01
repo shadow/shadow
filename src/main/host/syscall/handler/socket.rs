@@ -135,6 +135,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
+        let addr_ptr = addr_ptr.cast::<u8, _>();
         let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
         log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
@@ -190,12 +191,12 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
+        let addr = io::read_sockaddr(&mem, addr_ptr.cast::<u8, _>(), addr_len)?;
 
         log::trace!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
         let iov = IoVec {
-            base: buf_ptr,
+            base: buf_ptr.cast::<u8, _>(),
             len: buf_len,
         };
 
@@ -266,12 +267,12 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let msg = io::read_msghdr(&mem, msg_ptr)?;
+        let msg = io::read_msghdr(&mem, msg_ptr.cast::<libc::msghdr, _>())?;
 
         let args = SendmsgArgs {
             addr: io::read_sockaddr(&mem, msg.name, msg.name_len)?,
             iovs: &msg.iovs,
-            control_ptr: ForeignArrayPtr::new::<u8>(msg.control, msg.control_len),
+            control_ptr: ForeignArrayPtr::new::<u8>(msg.control.cast::<(), _>(), msg.control_len),
             // note: "the msg_flags field is ignored" for sendmsg; see send(2)
             flags,
         };
@@ -344,7 +345,7 @@ impl SyscallHandler {
         log::trace!("Attempting to recv {} bytes", buf_len);
 
         let iov = IoVec {
-            base: buf_ptr,
+            base: buf_ptr.cast::<u8, _>(),
             len: buf_len,
         };
 
@@ -375,6 +376,7 @@ impl SyscallHandler {
         } = result?;
 
         if !addr_ptr.is_null() {
+            let addr_ptr = addr_ptr.cast::<u8, _>();
             io::write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 
@@ -423,11 +425,11 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let mut msg = io::read_msghdr(&mem, msg_ptr)?;
+        let mut msg = io::read_msghdr(&mem, msg_ptr.cast::<libc::msghdr, _>())?;
 
         let args = RecvmsgArgs {
             iovs: &msg.iovs,
-            control_ptr: ForeignArrayPtr::new::<u8>(msg.control, msg.control_len),
+            control_ptr: ForeignArrayPtr::new::<u8>(msg.control.cast::<(), _>(), msg.control_len),
             flags,
         };
 
@@ -461,7 +463,7 @@ impl SyscallHandler {
         msg.flags = result.msg_flags;
 
         // write msg back to the plugin
-        io::update_msghdr(&mut mem, msg_ptr, msg)?;
+        io::update_msghdr(&mut mem, msg_ptr.cast::<libc::msghdr, _>(), msg)?;
 
         Ok(result.bytes_read)
     }
@@ -507,7 +509,7 @@ impl SyscallHandler {
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
-            addr_ptr,
+            addr_ptr.cast::<u8, _>(),
             addr_len_ptr,
         )?;
 
@@ -557,7 +559,7 @@ impl SyscallHandler {
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
-            addr_ptr,
+            addr_ptr.cast::<u8, _>(),
             addr_len_ptr,
         )?;
 
@@ -744,7 +746,7 @@ impl SyscallHandler {
             io::write_sockaddr_and_len(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
-                addr_ptr,
+                addr_ptr.cast::<u8, _>(),
                 ForeignArrayPtr::new::<libc::socklen_t>(addr_len_ptr, 1),
             )?;
         }
@@ -810,6 +812,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
+        let addr_ptr = addr_ptr.cast::<u8, _>();
         let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
             .ok_or(Errno::EFAULT)?;
 

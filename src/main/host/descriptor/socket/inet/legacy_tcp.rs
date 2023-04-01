@@ -370,7 +370,15 @@ impl LegacyTcpSocket {
                 // SAFETY: We're passing an immutable pointer to the memory manager. We should not
                 // have any other mutable references to the memory manager at this point.
                 let rv = Worker::with_active_host(|host| unsafe {
-                    c::tcp_sendUserData(tcp, host, iov.base, iov.len.try_into().unwrap(), 0, 0, mem)
+                    c::tcp_sendUserData(
+                        tcp,
+                        host,
+                        iov.base.cast::<(), _>(),
+                        iov.len.try_into().unwrap(),
+                        0,
+                        0,
+                        mem,
+                    )
                 })
                 .unwrap();
 
@@ -465,7 +473,7 @@ impl LegacyTcpSocket {
                     c::tcp_receiveUserData(
                         tcp,
                         host,
-                        iov.base,
+                        iov.base.cast::<(), _>(),
                         iov.len.try_into().unwrap(),
                         std::ptr::null_mut(),
                         std::ptr::null_mut(),

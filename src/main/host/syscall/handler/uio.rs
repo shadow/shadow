@@ -49,7 +49,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -115,7 +115,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -190,7 +190,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -304,7 +304,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -371,7 +371,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -446,7 +446,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr, iov_count)?
+            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 

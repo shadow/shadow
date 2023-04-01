@@ -19,7 +19,7 @@ use crate::utility::sockaddr::SockaddrStorage;
 pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
-    plugin_addr: ForeignPtr<()>,
+    plugin_addr: ForeignPtr<u8>,
     plugin_addr_len: ForeignArrayPtr<libc::socklen_t>,
 ) -> Result<(), SyscallError> {
     let addr = match addr {
@@ -55,7 +55,8 @@ pub fn write_sockaddr_and_len(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = ForeignArrayPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
+    let plugin_addr =
+        ForeignArrayPtr::new::<MaybeUninit<u8>>(plugin_addr.cast::<(), _>(), len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
@@ -67,7 +68,7 @@ pub fn write_sockaddr_and_len(
 pub fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: &SockaddrStorage,
-    plugin_addr: ForeignPtr<()>,
+    plugin_addr: ForeignPtr<u8>,
     plugin_addr_len: libc::socklen_t,
 ) -> Result<libc::socklen_t, SyscallError> {
     let from_addr_slice = addr.as_slice();
@@ -81,7 +82,8 @@ pub fn write_sockaddr(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = ForeignArrayPtr::new::<MaybeUninit<u8>>(plugin_addr, len_to_copy);
+    let plugin_addr =
+        ForeignArrayPtr::new::<MaybeUninit<u8>>(plugin_addr.cast::<(), _>(), len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(from_len)
@@ -89,7 +91,7 @@ pub fn write_sockaddr(
 
 pub fn read_sockaddr(
     mem: &MemoryManager,
-    addr_ptr: ForeignPtr<()>,
+    addr_ptr: ForeignPtr<u8>,
     addr_len: libc::socklen_t,
 ) -> Result<Option<SockaddrStorage>, SyscallError> {
     if addr_ptr.is_null() {
@@ -116,7 +118,7 @@ pub fn read_sockaddr(
 
     mem.copy_from_ptr(
         addr_buf,
-        ForeignArrayPtr::new::<MaybeUninit<u8>>(addr_ptr, addr_len_usize),
+        ForeignArrayPtr::new::<MaybeUninit<u8>>(addr_ptr.cast::<(), _>(), addr_len_usize),
     )?;
 
     let addr = unsafe { SockaddrStorage::from_bytes(addr_buf).ok_or(Errno::EINVAL)? };
@@ -150,12 +152,10 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
 
 /// Analogous to [`libc::msghdr`].
 pub struct MsgHdr {
-    // TODO: make this a `ForeignPtr<u8>`
-    pub name: ForeignPtr<()>,
+    pub name: ForeignPtr<u8>,
     pub name_len: libc::socklen_t,
     pub iovs: Vec<IoVec>,
-    // TODO: make this a `ForeignPtr<u8>`
-    pub control: ForeignPtr<()>,
+    pub control: ForeignPtr<u8>,
     pub control_len: libc::size_t,
     pub flags: libc::c_int,
 }
@@ -163,21 +163,20 @@ pub struct MsgHdr {
 /// Analogous to [`libc::iovec`].
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct IoVec {
-    // TODO: make this a `ForeignPtr<u8>`
-    pub base: ForeignPtr<()>,
+    pub base: ForeignPtr<u8>,
     pub len: libc::size_t,
 }
 
 impl From<IoVec> for ForeignArrayPtr<u8> {
     fn from(iov: IoVec) -> Self {
-        Self::new::<u8>(iov.base, iov.len)
+        Self::new::<u8>(iov.base.cast::<(), _>(), iov.len)
     }
 }
 
 impl From<ForeignArrayPtr<u8>> for IoVec {
     fn from(ptr: ForeignArrayPtr<u8>) -> Self {
         IoVec {
-            base: ptr.ptr().cast::<(), _>(),
+            base: ptr.ptr(),
             len: ptr.len(),
         }
     }
@@ -337,7 +336,7 @@ impl<'a, I: Iterator<Item = &'a IoVec>> std::io::Write for IoVecWriter<'a, I> {
 /// Read a plugin's array of [`libc::iovec`] into a [`Vec<IoVec>`].
 pub fn read_iovecs(
     mem: &MemoryManager,
-    iov_ptr: ForeignPtr<()>,
+    iov_ptr: ForeignPtr<libc::iovec>,
     count: usize,
 ) -> Result<Vec<IoVec>, Errno> {
     if count > libc::UIO_MAXIOV.try_into().unwrap() {
@@ -346,13 +345,13 @@ pub fn read_iovecs(
 
     let mut iovs = Vec::with_capacity(count);
 
-    let iov_ptr = ForeignArrayPtr::new::<libc::iovec>(iov_ptr, count);
+    let iov_ptr = ForeignArrayPtr::new::<libc::iovec>(iov_ptr.cast::<(), _>(), count);
     let mem_ref = mem.memory_ref(iov_ptr)?;
     let plugin_iovs = mem_ref.deref();
 
     for plugin_iov in plugin_iovs {
         iovs.push(IoVec {
-            base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base).cast::<(), _>(),
+            base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base as *mut u8),
             len: plugin_iov.iov_len,
         });
     }
@@ -361,8 +360,11 @@ pub fn read_iovecs(
 }
 
 /// Read a plugin's [`libc::msghdr`] into a [`MsgHdr`].
-pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr<()>) -> Result<MsgHdr, Errno> {
-    let msg_ptr = ForeignArrayPtr::new::<libc::msghdr>(msg_ptr, 1);
+pub fn read_msghdr(
+    mem: &MemoryManager,
+    msg_ptr: ForeignPtr<libc::msghdr>,
+) -> Result<MsgHdr, Errno> {
+    let msg_ptr = ForeignArrayPtr::new::<libc::msghdr>(msg_ptr.cast::<(), _>(), 1);
     let mem_ref = mem.memory_ref(msg_ptr)?;
     let plugin_msg = mem_ref.deref()[0];
 
@@ -374,10 +376,10 @@ pub fn read_msghdr(mem: &MemoryManager, msg_ptr: ForeignPtr<()>) -> Result<MsgHd
 /// `recvmsg()`.
 pub fn update_msghdr(
     mem: &mut MemoryManager,
-    msg_ptr: ForeignPtr<()>,
+    msg_ptr: ForeignPtr<libc::msghdr>,
     msg: MsgHdr,
 ) -> Result<(), Errno> {
-    let msg_ptr = ForeignArrayPtr::new::<libc::msghdr>(msg_ptr, 1);
+    let msg_ptr = ForeignArrayPtr::new::<libc::msghdr>(msg_ptr.cast::<(), _>(), 1);
     let mut mem_ref = mem.memory_ref_mut(msg_ptr)?;
     let mut plugin_msg = &mut mem_ref.deref_mut()[0];
 
@@ -395,18 +397,14 @@ pub fn update_msghdr(
 /// should have been copied from plugin memory, meaning any pointers in the struct are pointers to
 /// plugin memory, not local memory.
 fn msghdr_to_rust(msg: &libc::msghdr, mem: &MemoryManager) -> Result<MsgHdr, Errno> {
-    let iovs = read_iovecs(
-        mem,
-        ForeignPtr::from_raw_ptr(msg.msg_iov).cast::<(), _>(),
-        msg.msg_iovlen,
-    )?;
+    let iovs = read_iovecs(mem, ForeignPtr::from_raw_ptr(msg.msg_iov), msg.msg_iovlen)?;
     assert_eq!(iovs.len(), msg.msg_iovlen);
 
     Ok(MsgHdr {
-        name: ForeignPtr::from_raw_ptr(msg.msg_name).cast::<(), _>(),
+        name: ForeignPtr::from_raw_ptr(msg.msg_name as *mut u8),
         name_len: msg.msg_namelen,
         iovs,
-        control: ForeignPtr::from_raw_ptr(msg.msg_control).cast::<(), _>(),
+        control: ForeignPtr::from_raw_ptr(msg.msg_control as *mut u8),
         control_len: msg.msg_controllen,
         flags: msg.msg_flags,
     })

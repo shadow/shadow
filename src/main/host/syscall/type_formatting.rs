@@ -297,7 +297,7 @@ fn fmt_msghdr(
     // read the socket address from `msg.msg_name`
     let addr = match read_sockaddr(
         mem,
-        ForeignPtr::from_raw_ptr(msg.msg_name).cast::<(), _>(),
+        ForeignPtr::from_raw_ptr(msg.msg_name as *mut u8),
         msg.msg_namelen,
     ) {
         Ok(Some(addr)) => Some(addr),

@@ -169,6 +169,7 @@ impl SyscallHandler {
             }
         };
 
+        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -218,6 +219,7 @@ impl SyscallHandler {
             }
         };
 
+        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -234,7 +236,7 @@ impl SyscallHandler {
     fn read_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -279,6 +281,7 @@ impl SyscallHandler {
             }
         };
 
+        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -329,6 +332,7 @@ impl SyscallHandler {
             }
         };
 
+        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result =
             Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
@@ -346,7 +350,7 @@ impl SyscallHandler {
     fn write_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: Option<libc::off_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
