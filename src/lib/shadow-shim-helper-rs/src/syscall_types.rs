@@ -67,6 +67,18 @@ impl<T> ForeignPtr<T> {
         // the type of this `ForeignPtr` will be inferred from the pointer type
         Self::new_with_type_inference(val)
     }
+
+    /// Add an offset to a pointer. `count` is in units of `T`.
+    pub fn add(&self, count: usize) -> Self {
+        let val = self.val;
+        Self::new_with_type_inference(val + count * std::mem::size_of::<T>())
+    }
+
+    /// Subtract an offset from a pointer. `count` is in units of `T`.
+    pub fn sub(&self, count: usize) -> Self {
+        let val = self.val;
+        Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
+    }
 }
 
 impl<T> From<ForeignPtr<T>> for usize {

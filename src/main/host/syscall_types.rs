@@ -13,11 +13,10 @@ use crate::host::descriptor::{File, FileState};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
 
-/// Wrapper around a ForeignPtr<()> that encapsulates its type, size, and current
-/// position.
+/// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
 #[derive(Copy, Clone)]
 pub struct ForeignArrayPtr<T> {
-    base: ForeignPtr<()>,
+    base: ForeignPtr<T>,
     count: usize,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -39,6 +38,8 @@ impl<T> ForeignArrayPtr<T> {
     where
         U: NoTypeInference<This = T>,
     {
+        let ptr = ptr.cast::<T, _>();
+
         if log_enabled!(Debug) && usize::from(ptr) % std::mem::align_of::<T>() != 0 {
             // Linux allows unaligned pointers from user-space, being careful to
             // avoid unaligned accesses that aren's supported by the CPU.
@@ -51,8 +52,7 @@ impl<T> ForeignArrayPtr<T> {
             // message here as a sign-post that this could be the root cause of
             // weirdness that happens afterwards.
             debug!(
-                "Creating unaligned pointer {:?}. This is legal, but could trigger latent bugs.",
-                ptr
+                "Creating unaligned pointer {ptr:?}. This is legal, but could trigger latent bugs."
             );
         }
         ForeignArrayPtr {
@@ -64,7 +64,7 @@ impl<T> ForeignArrayPtr<T> {
 
     /// Raw foreign pointer.
     pub fn ptr(&self) -> ForeignPtr<()> {
-        self.base
+        self.base.cast::<(), _>()
     }
 
     /// Number of items pointed to.
@@ -87,7 +87,7 @@ impl<T> ForeignArrayPtr<T> {
             return None;
         }
         Some(ForeignArrayPtr::new::<U>(
-            self.base,
+            self.base.cast::<(), _>(),
             count_bytes / size_of::<U>(),
         ))
     }
@@ -115,8 +115,9 @@ impl<T> ForeignArrayPtr<T> {
         // `<=` rather than `<`, to allow empty slice at end of ptr.
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
+
         ForeignArrayPtr {
-            base: ForeignPtr::<()>::from(usize::from(self.base) + included_start * size_of::<T>()),
+            base: self.base.add(included_start),
             count: excluded_end - included_start,
             _phantom: PhantomData,
         }
