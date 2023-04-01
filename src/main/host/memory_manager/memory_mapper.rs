@@ -234,11 +234,7 @@ fn get_heap(
     if heap_mapping.is_none() {
         let (ctx, thread) = ctx.split_thread();
         // There's no heap region allocated yet. Get the address where it will be and return.
-        let start = usize::from(
-            thread
-                .native_brk(&ctx, ForeignPtr::<()>::from(0usize))
-                .unwrap(),
-        );
+        let start = usize::from(thread.native_brk(&ctx, ForeignPtr::null()).unwrap());
         return start..start;
     }
     let (heap_interval, heap_region) = heap_mapping.unwrap();
@@ -805,7 +801,7 @@ impl MemoryMapper {
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
-                            /* new_addr: */ ForeignPtr::<()>::from(0usize),
+                            /* new_addr: */ ForeignPtr::null(),
                         )
                         .unwrap();
                     // mremap in shadow, allowing mapping to move if needed.
@@ -849,7 +845,7 @@ impl MemoryMapper {
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
-                    /* new_addr: */ ForeignPtr::<()>::from(0usize),
+                    /* new_addr: */ ForeignPtr::null(),
                 )
                 .unwrap();
             // mremap in shadow, assuming no need to move.

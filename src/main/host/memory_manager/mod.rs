@@ -705,7 +705,7 @@ where
                 .memory_borrow_mut()
                 .do_mmap(
                     ctx,
-                    ForeignPtr::<()>::from(0usize),
+                    ForeignPtr::null(),
                     len * std::mem::size_of::<T>(),
                     prot,
                     libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,

@@ -258,7 +258,7 @@ impl Thread {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             ctx,
-            ForeignPtr::from(0usize),
+            ForeignPtr::null(),
             size,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
@@ -296,7 +296,7 @@ impl Thread {
             id: thread_id,
             host_id: host.id(),
             process_id: process.id(),
-            tid_address: Cell::new(ForeignPtr::<()>::from(0usize)),
+            tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
                 thread_id.into(),
