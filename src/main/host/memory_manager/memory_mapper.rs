@@ -164,7 +164,10 @@ impl ShmFile {
         memory_manager
             .copy_from_ptr(
                 dst,
-                ForeignArrayPtr::new::<u8>(ForeignPtr::from(interval.start), interval.len()),
+                ForeignArrayPtr::new(
+                    ForeignPtr::from(interval.start).cast::<u8, _>(),
+                    interval.len(),
+                ),
             )
             .unwrap()
     }
@@ -399,11 +402,8 @@ impl MemoryMapper {
 
         let shm_plugin_fd = {
             let (ctx, thread) = ctx.split_thread();
-            let path_buf_foreign_ptr = ForeignArrayPtr::new::<u8>(
-                thread
-                    .malloc_foreign_ptr(&ctx, shm_path.len())
-                    .unwrap()
-                    .cast::<(), _>(),
+            let path_buf_foreign_ptr = ForeignArrayPtr::new(
+                thread.malloc_foreign_ptr(&ctx, shm_path.len()).unwrap(),
                 shm_path.len(),
             );
             memory_manager

@@ -93,8 +93,8 @@ macro_rules! deref_pointer_impl {
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                let ptr = ForeignPtr::<()>::from(self.reg);
-                match (options, mem.memory_ref(ForeignArrayPtr::new::<$type>(ptr, 1))) {
+                let ptr = ForeignPtr::<$type>::from(self.reg);
+                match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
@@ -145,8 +145,8 @@ macro_rules! deref_array_impl {
                 options: FmtOptions,
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
-                let ptr = ForeignPtr::<()>::from(self.reg);
-                match (options, mem.memory_ref(ForeignArrayPtr::new::<$type>(ptr, K))) {
+                let ptr = ForeignPtr::<$type>::from(self.reg);
+                match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
@@ -184,7 +184,7 @@ simple_debug_impl!(nix::sys::mman::MRemapFlags);
 
 fn fmt_buffer(
     f: &mut std::fmt::Formatter<'_>,
-    ptr: ForeignPtr<()>,
+    ptr: ForeignPtr<u8>,
     len: usize,
     options: FmtOptions,
     mem: &MemoryManager,
@@ -195,7 +195,7 @@ fn fmt_buffer(
         return write!(f, "<pointer>");
     }
 
-    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new::<u8>(ptr, len)) {
+    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
@@ -229,7 +229,7 @@ fn fmt_buffer(
 
 fn fmt_string(
     f: &mut std::fmt::Formatter<'_>,
-    ptr: ForeignPtr<()>,
+    ptr: ForeignPtr<u8>,
     len: Option<usize>,
     options: FmtOptions,
     mem: &MemoryManager,
@@ -250,7 +250,7 @@ fn fmt_string(
         DISPLAY_LEN + 1,
     );
 
-    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new::<u8>(ptr, len)) {
+    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return write!(f, "{ptr:p}"),
@@ -412,14 +412,14 @@ impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
         options: FmtOptions,
         mem: &MemoryManager,
     ) -> std::fmt::Result {
-        let ptr = self.reg.into();
+        let ptr: ForeignPtr<libc::msghdr> = self.reg.into();
 
         if options == FmtOptions::Deterministic {
             return write!(f, "<pointer>");
         }
 
         // read the msghdr
-        let ptr = ForeignArrayPtr::new::<libc::msghdr>(ptr, 1);
+        let ptr = ForeignArrayPtr::new(ptr, 1);
         let Ok(msg) = mem.memory_ref(ptr) else {
             // if we couldn't read the memory, just show the pointer instead
             return write!(f, "{:p}", ptr.ptr());

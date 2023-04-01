@@ -57,7 +57,7 @@ impl SyscallHandler {
 
         // all file types that shadow implements should support non-blocking operation
         if request == libc::FIONBIO {
-            let arg_ptr = ForeignArrayPtr::new::<libc::c_int>(arg_ptr, 1);
+            let arg_ptr = ForeignArrayPtr::new(arg_ptr.cast::<libc::c_int, _>(), 1);
             let arg = ctx
                 .objs
                 .process

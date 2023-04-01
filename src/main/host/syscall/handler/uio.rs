@@ -225,7 +225,7 @@ impl SyscallHandler {
 
             let args = RecvmsgArgs {
                 iovs,
-                control_ptr: ForeignArrayPtr::new::<u8>(ForeignPtr::null(), 0),
+                control_ptr: ForeignArrayPtr::new(ForeignPtr::null(), 0),
                 flags: 0,
             };
 
@@ -482,7 +482,7 @@ impl SyscallHandler {
             let args = SendmsgArgs {
                 addr: None,
                 iovs,
-                control_ptr: ForeignArrayPtr::new::<u8>(ForeignPtr::null(), 0),
+                control_ptr: ForeignArrayPtr::new(ForeignPtr::null(), 0),
                 flags: 0,
             };
 

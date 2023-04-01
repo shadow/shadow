@@ -6,7 +6,6 @@ use log::Level::Debug;
 use log::*;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
-use shadow_shim_helper_rs::util::NoTypeInference;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
@@ -34,12 +33,7 @@ impl<T> std::fmt::Debug for ForeignArrayPtr<T> {
 impl<T> ForeignArrayPtr<T> {
     /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
     /// to be aligned for `T`.
-    pub fn new<U>(ptr: ForeignPtr<()>, count: usize) -> Self
-    where
-        U: NoTypeInference<This = T>,
-    {
-        let ptr = ptr.cast::<T, _>();
-
+    pub fn new(ptr: ForeignPtr<T>, count: usize) -> Self {
         if log_enabled!(Debug) && usize::from(ptr) % std::mem::align_of::<T>() != 0 {
             // Linux allows unaligned pointers from user-space, being careful to
             // avoid unaligned accesses that aren's supported by the CPU.
@@ -86,8 +80,8 @@ impl<T> ForeignArrayPtr<T> {
         if count_bytes % size_of::<U>() != 0 {
             return None;
         }
-        Some(ForeignArrayPtr::new::<U>(
-            self.base.cast::<(), _>(),
+        Some(ForeignArrayPtr::new(
+            self.base.cast::<U, _>(),
             count_bytes / size_of::<U>(),
         ))
     }

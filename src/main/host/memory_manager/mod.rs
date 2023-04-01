@@ -608,13 +608,7 @@ impl MemoryManager {
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
         };
         if let Some(mm) = &mut self.memory_mapper {
-            mm.handle_mmap_result(
-                ctx,
-                ForeignArrayPtr::new::<u8>(addr.cast::<(), _>(), length),
-                prot,
-                flags,
-                fd,
-            );
+            mm.handle_mmap_result(ctx, ForeignArrayPtr::new(addr, length), prot, flags, fd);
         }
         Ok(addr.into())
     }
@@ -716,7 +710,7 @@ where
         );
 
         Self {
-            ptr: ForeignArrayPtr::new::<T>(ptr, len),
+            ptr: ForeignArrayPtr::new(ptr.cast::<T, _>(), len),
             freed: false,
         }
     }
@@ -878,7 +872,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
-        let src = ForeignArrayPtr::new::<u8>(src, n);
+        let src = ForeignArrayPtr::new(src.cast::<u8, _>(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         match mem.copy_from_ptr(dst, src) {
@@ -900,7 +894,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_mut() }.unwrap();
-        let dst = ForeignArrayPtr::new::<u8>(dst, n);
+        let dst = ForeignArrayPtr::new(dst.cast::<u8, _>(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match mem.copy_to_ptr(dst, src) {
             Ok(_) => 0,

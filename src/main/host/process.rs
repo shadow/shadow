@@ -942,7 +942,7 @@ impl Process {
             }
 
             let typed_clear_child_tid_pvp =
-                ForeignArrayPtr::new::<libc::pid_t>(clear_child_tid_pvp, 1);
+                ForeignArrayPtr::new(clear_child_tid_pvp.cast::<libc::pid_t, _>(), 1);
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
@@ -1523,7 +1523,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let src = ForeignArrayPtr::new::<u8>(src, n);
+        let src = ForeignArrayPtr::new(src.cast::<u8, _>(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         Worker::with_active_host(|h| {
@@ -1552,7 +1552,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let dst = ForeignArrayPtr::new::<u8>(dst, n);
+        let dst = ForeignArrayPtr::new(dst.cast::<u8, _>(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         Worker::with_active_host(|h| {
             match proc
@@ -1581,7 +1581,7 @@ mod export {
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = ForeignArrayPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8, _>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
@@ -1605,7 +1605,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = ForeignArrayPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8, _>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1627,7 +1627,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = ForeignArrayPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8, _>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1658,7 +1658,7 @@ mod export {
                 std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
             };
             let cstr = match memory_manager
-                .copy_str_from_ptr(buf, ForeignArrayPtr::new::<u8>(ptr, maxlen))
+                .copy_str_from_ptr(buf, ForeignArrayPtr::new(ptr.cast::<u8, _>(), maxlen))
             {
                 Ok(cstr) => cstr,
                 Err(e) => return -(e as libc::ssize_t),
@@ -1685,7 +1685,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let ptr = ForeignArrayPtr::new::<c_char>(plugin_src, n);
+            let ptr = ForeignArrayPtr::new(plugin_src.cast::<c_char, _>(), n);
             match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
                 Ok((str, strlen)) => {
                     assert!(!out_str.is_null());

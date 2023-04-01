@@ -33,7 +33,7 @@ impl SyscallHandler {
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<()>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = ForeignArrayPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr.cast::<u8, _>(), cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -65,7 +65,7 @@ impl SyscallHandler {
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<()>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = ForeignArrayPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr.cast::<u8, _>(), cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -104,7 +104,7 @@ impl SyscallHandler {
         flags: libc::c_int,
         sig: u32,
     ) -> Result<libc::c_int, SyscallError> {
-        let rseq_ptr = ForeignArrayPtr::new::<rseq>(rseq_ptr, 1);
+        let rseq_ptr = ForeignArrayPtr::new(rseq_ptr.cast::<rseq, _>(), 1);
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow

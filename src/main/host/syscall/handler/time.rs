@@ -27,7 +27,7 @@ impl SyscallHandler {
         which: libc::c_int,
         curr_value_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        let curr_value_ptr = ForeignArrayPtr::new::<libc::itimerval>(curr_value_ptr, 1);
+        let curr_value_ptr = ForeignArrayPtr::new(curr_value_ptr.cast::<libc::itimerval, _>(), 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
@@ -50,8 +50,8 @@ impl SyscallHandler {
         new_value_ptr: ForeignPtr<()>,
         old_value_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        let new_value_ptr = ForeignArrayPtr::new::<libc::itimerval>(new_value_ptr, 1);
-        let old_value_ptr = ForeignArrayPtr::new::<libc::itimerval>(old_value_ptr, 1);
+        let new_value_ptr = ForeignArrayPtr::new(new_value_ptr.cast::<libc::itimerval, _>(), 1);
+        let old_value_ptr = ForeignArrayPtr::new(old_value_ptr.cast::<libc::itimerval, _>(), 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);

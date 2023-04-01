@@ -446,11 +446,10 @@ impl SyscallHandler {
             i32::try_from(read_fd).unwrap(),
             i32::try_from(write_fd).unwrap(),
         ];
-        let write_res = ctx
-            .objs
-            .process
-            .memory_borrow_mut()
-            .copy_to_ptr(ForeignArrayPtr::new::<libc::c_int>(fd_ptr, 2), &fds);
+        let write_res = ctx.objs.process.memory_borrow_mut().copy_to_ptr(
+            ForeignArrayPtr::new(fd_ptr.cast::<libc::c_int, _>(), 2),
+            &fds,
+        );
 
         // clean up in case of error
         match write_res {
