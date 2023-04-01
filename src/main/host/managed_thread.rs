@@ -294,7 +294,7 @@ impl ManagedThread {
         &self,
         ctx: &ThreadContext,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr<()>,
+        child_stack: ForeignPtr<u8>,
         ptid: ForeignPtr<()>,
         ctid: ForeignPtr<()>,
         newtls: libc::c_ulong,

@@ -603,7 +603,6 @@ impl MemoryManager {
         fd: i32,
         offset: i64,
     ) -> SyscallResult {
-        let addr = addr.cast::<(), _>();
         let addr = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
@@ -611,7 +610,7 @@ impl MemoryManager {
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_mmap_result(
                 ctx,
-                ForeignArrayPtr::new::<u8>(addr, length),
+                ForeignArrayPtr::new::<u8>(addr.cast::<(), _>(), length),
                 prot,
                 flags,
                 fd,
@@ -645,7 +644,7 @@ impl MemoryManager {
         length: usize,
     ) -> nix::Result<()> {
         let (ctx, thread) = ctx.split_thread();
-        thread.native_munmap(&ctx, addr.cast::<(), _>(), length)?;
+        thread.native_munmap(&ctx, addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_munmap_result(addr, length);
         }

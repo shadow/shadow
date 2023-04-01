@@ -174,7 +174,7 @@ impl ShmFile {
         ctx.thread
             .native_mmap(
                 &ProcessContext::new(ctx.host, ctx.process),
-                ForeignPtr::<()>::from(interval.start),
+                ForeignPtr::from(interval.start).cast::<u8, _>(),
                 interval.len(),
                 prot,
                 libc::MAP_SHARED | libc::MAP_FIXED,
@@ -400,7 +400,10 @@ impl MemoryMapper {
         let shm_plugin_fd = {
             let (ctx, thread) = ctx.split_thread();
             let path_buf_foreign_ptr = ForeignArrayPtr::new::<u8>(
-                thread.malloc_foreign_ptr(&ctx, shm_path.len()).unwrap(),
+                thread
+                    .malloc_foreign_ptr(&ctx, shm_path.len())
+                    .unwrap()
+                    .cast::<(), _>(),
                 shm_path.len(),
             );
             memory_manager
@@ -409,17 +412,13 @@ impl MemoryMapper {
             let shm_plugin_fd = thread
                 .native_open(
                     &ctx,
-                    path_buf_foreign_ptr.ptr().cast::<(), _>(),
+                    path_buf_foreign_ptr.ptr(),
                     libc::O_RDWR | libc::O_CLOEXEC,
                     0,
                 )
                 .unwrap();
             thread
-                .free_foreign_ptr(
-                    &ctx,
-                    path_buf_foreign_ptr.ptr().cast::<(), _>(),
-                    path_buf_foreign_ptr.len(),
-                )
+                .free_foreign_ptr(&ctx, path_buf_foreign_ptr.ptr(), path_buf_foreign_ptr.len())
                 .unwrap();
             shm_plugin_fd
         };
@@ -639,9 +638,6 @@ impl MemoryMapper {
         flags: i32,
         new_address: ForeignPtr<u8>,
     ) -> SyscallResult {
-        let old_address = old_address.cast::<(), _>();
-        let new_address = new_address.cast::<(), _>();
-
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mremap(&ctx, old_address, old_size, new_size, flags, new_address)?
@@ -804,7 +800,8 @@ impl MemoryMapper {
                     thread
                         .native_mremap(
                             &ctx,
-                            /* old_addr: */ ForeignPtr::<()>::from(self.heap.start),
+                            /* old_addr: */
+                            ForeignPtr::from(self.heap.start).cast::<u8, _>(),
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
@@ -848,7 +845,7 @@ impl MemoryMapper {
             thread
                 .native_mremap(
                     &ctx,
-                    /* old_addr: */ ForeignPtr::<()>::from(self.heap.start),
+                    /* old_addr: */ ForeignPtr::from(self.heap.start).cast::<u8, _>(),
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
@@ -894,7 +891,7 @@ impl MemoryMapper {
     ) -> SyscallResult {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
-        thread.native_mprotect(&ctx, addr.cast::<(), _>(), size, prot)?;
+        thread.native_mprotect(&ctx, addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected

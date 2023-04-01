@@ -133,7 +133,7 @@ impl Thread {
     pub fn native_munmap(
         &self,
         ctx: &ProcessContext,
-        ptr: ForeignPtr<()>,
+        ptr: ForeignPtr<u8>,
         size: usize,
     ) -> nix::Result<()> {
         self.native_syscall(ctx, libc::SYS_munmap, &[ptr.into(), size.into()])?;
@@ -144,13 +144,13 @@ impl Thread {
     pub fn native_mmap(
         &self,
         ctx: &ProcessContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         len: usize,
         prot: i32,
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> nix::Result<ForeignPtr<()>> {
+    ) -> nix::Result<ForeignPtr<u8>> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -171,12 +171,12 @@ impl Thread {
     pub fn native_mremap(
         &self,
         ctx: &ProcessContext,
-        old_addr: ForeignPtr<()>,
+        old_addr: ForeignPtr<u8>,
         old_len: usize,
         new_len: usize,
         flags: i32,
-        new_addr: ForeignPtr<()>,
-    ) -> nix::Result<ForeignPtr<()>> {
+        new_addr: ForeignPtr<u8>,
+    ) -> nix::Result<ForeignPtr<u8>> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -196,7 +196,7 @@ impl Thread {
     pub fn native_mprotect(
         &self,
         ctx: &ProcessContext,
-        addr: ForeignPtr<()>,
+        addr: ForeignPtr<u8>,
         len: usize,
         prot: i32,
     ) -> nix::Result<()> {
@@ -216,7 +216,7 @@ impl Thread {
     pub fn native_open(
         &self,
         ctx: &ProcessContext,
-        pathname: ForeignPtr<()>,
+        pathname: ForeignPtr<u8>,
         flags: i32,
         mode: i32,
     ) -> nix::Result<i32> {
@@ -242,8 +242,8 @@ impl Thread {
     pub fn native_brk(
         &self,
         ctx: &ProcessContext,
-        addr: ForeignPtr<()>,
-    ) -> nix::Result<ForeignPtr<()>> {
+        addr: ForeignPtr<u8>,
+    ) -> nix::Result<ForeignPtr<u8>> {
         let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
@@ -254,7 +254,7 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         size: usize,
-    ) -> nix::Result<ForeignPtr<()>> {
+    ) -> nix::Result<ForeignPtr<u8>> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             ctx,
@@ -271,7 +271,7 @@ impl Thread {
     pub fn free_foreign_ptr(
         &self,
         ctx: &ProcessContext,
-        ptr: ForeignPtr<()>,
+        ptr: ForeignPtr<u8>,
         size: usize,
     ) -> nix::Result<()> {
         self.native_munmap(ctx, ptr, size)?;
@@ -310,7 +310,7 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr<()>,
+        child_stack: ForeignPtr<u8>,
         ptid: ForeignPtr<()>,
         ctid: ForeignPtr<()>,
         newtls: libc::c_ulong,
@@ -574,7 +574,7 @@ mod export {
                     .handle_clone_syscall(
                         &ProcessContext::new(host, process),
                         flags,
-                        child_stack,
+                        child_stack.cast::<u8, _>(),
                         ptid,
                         ctid,
                         newtls,
