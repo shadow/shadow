@@ -111,7 +111,7 @@ impl SyscallHandler {
     pub fn bind(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         let file = {
@@ -135,7 +135,6 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_ptr = addr_ptr.cast::<u8, _>();
         let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
         log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
@@ -153,10 +152,10 @@ impl SyscallHandler {
     pub fn sendto(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_len: libc::size_t,
         flags: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -191,12 +190,12 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let addr = io::read_sockaddr(&mem, addr_ptr.cast::<u8, _>(), addr_len)?;
+        let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
 
         log::trace!("Attempting to send {} bytes to {:?}", buf_len, addr);
 
         let iov = IoVec {
-            base: buf_ptr.cast::<u8, _>(),
+            base: buf_ptr,
             len: buf_len,
         };
 
@@ -230,7 +229,7 @@ impl SyscallHandler {
     pub fn sendmsg(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        msg_ptr: ForeignPtr<()>,
+        msg_ptr: ForeignPtr<libc::msghdr>,
         flags: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -267,7 +266,7 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let msg = io::read_msghdr(&mem, msg_ptr.cast::<libc::msghdr, _>())?;
+        let msg = io::read_msghdr(&mem, msg_ptr)?;
 
         let args = SendmsgArgs {
             addr: io::read_sockaddr(&mem, msg.name, msg.name_len)?,
@@ -301,11 +300,11 @@ impl SyscallHandler {
     pub fn recvfrom(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_len: libc::size_t,
         flags: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -338,14 +337,14 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr.cast::<libc::socklen_t, _>(), 1);
+        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         log::trace!("Attempting to recv {} bytes", buf_len);
 
         let iov = IoVec {
-            base: buf_ptr.cast::<u8, _>(),
+            base: buf_ptr,
             len: buf_len,
         };
 
@@ -376,7 +375,7 @@ impl SyscallHandler {
         } = result?;
 
         if !addr_ptr.is_null() {
-            let addr_ptr = addr_ptr.cast::<u8, _>();
+            let addr_ptr = addr_ptr;
             io::write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 
@@ -388,7 +387,7 @@ impl SyscallHandler {
     pub fn recvmsg(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        msg_ptr: ForeignPtr<()>,
+        msg_ptr: ForeignPtr<libc::msghdr>,
         flags: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -425,7 +424,7 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let mut msg = io::read_msghdr(&mem, msg_ptr.cast::<libc::msghdr, _>())?;
+        let mut msg = io::read_msghdr(&mem, msg_ptr)?;
 
         let args = RecvmsgArgs {
             iovs: &msg.iovs,
@@ -463,7 +462,7 @@ impl SyscallHandler {
         msg.flags = result.msg_flags;
 
         // write msg back to the plugin
-        io::update_msghdr(&mut mem, msg_ptr.cast::<libc::msghdr, _>(), msg)?;
+        io::update_msghdr(&mut mem, msg_ptr, msg)?;
 
         Ok(result.bytes_read)
     }
@@ -473,10 +472,10 @@ impl SyscallHandler {
     pub fn getsockname(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr.cast::<libc::socklen_t, _>(), 1);
+        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
 
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
@@ -509,7 +508,7 @@ impl SyscallHandler {
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
-            addr_ptr.cast::<u8, _>(),
+            addr_ptr,
             addr_len_ptr,
         )?;
 
@@ -521,10 +520,10 @@ impl SyscallHandler {
     pub fn getpeername(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr.cast::<libc::socklen_t, _>(), 1);
+        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
 
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
@@ -559,7 +558,7 @@ impl SyscallHandler {
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
-            addr_ptr.cast::<u8, _>(),
+            addr_ptr,
             addr_len_ptr,
         )?;
 
@@ -607,8 +606,8 @@ impl SyscallHandler {
     pub fn accept(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -653,8 +652,8 @@ impl SyscallHandler {
     pub fn accept4(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
         flags: libc::c_int,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -698,8 +697,8 @@ impl SyscallHandler {
     fn accept_helper(
         ctx: &mut SyscallContext,
         file: &File,
-        addr_ptr: ForeignPtr<()>,
-        addr_len_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
+        addr_len_ptr: ForeignPtr<libc::socklen_t>,
         flags: libc::c_int,
     ) -> SyscallResult {
         let File::Socket(ref socket) = file else {
@@ -746,8 +745,8 @@ impl SyscallHandler {
             io::write_sockaddr_and_len(
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
-                addr_ptr.cast::<u8, _>(),
-                ForeignArrayPtr::new(addr_len_ptr.cast::<libc::socklen_t, _>(), 1),
+                addr_ptr,
+                ForeignArrayPtr::new(addr_len_ptr, 1),
             )?;
         }
 
@@ -779,7 +778,7 @@ impl SyscallHandler {
     pub fn connect(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        addr_ptr: ForeignPtr<()>,
+        addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -812,7 +811,6 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_ptr = addr_ptr.cast::<u8, _>();
         let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?
             .ok_or(Errno::EFAULT)?;
 
@@ -878,7 +876,7 @@ impl SyscallHandler {
         domain: libc::c_int,
         socket_type: libc::c_int,
         protocol: libc::c_int,
-        fd_ptr: ForeignPtr<()>,
+        fd_ptr: ForeignPtr<libc::c_int>,
     ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
@@ -948,10 +946,11 @@ impl SyscallHandler {
 
         // try to write them to the caller
         let fds = [i32::from(fd_1), i32::from(fd_2)];
-        let write_res = ctx.objs.process.memory_borrow_mut().copy_to_ptr(
-            ForeignArrayPtr::new(fd_ptr.cast::<libc::c_int, _>(), 2),
-            &fds,
-        );
+        let write_res = ctx
+            .objs
+            .process
+            .memory_borrow_mut()
+            .copy_to_ptr(ForeignArrayPtr::new(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {
@@ -980,7 +979,7 @@ impl SyscallHandler {
         level: libc::c_int,
         optname: libc::c_int,
         optval_ptr: ForeignPtr<()>,
-        optlen_ptr: ForeignPtr<()>,
+        optlen_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -1002,7 +1001,7 @@ impl SyscallHandler {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         // get the provided optlen
-        let optlen_ptr = ForeignArrayPtr::new(optlen_ptr.cast::<libc::socklen_t, _>(), 1);
+        let optlen_ptr = ForeignArrayPtr::new(optlen_ptr, 1);
         let optlen = mem.read_vals::<_, 1>(optlen_ptr)?[0];
 
         let mut optlen_new = socket

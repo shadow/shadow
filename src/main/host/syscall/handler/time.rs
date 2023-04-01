@@ -25,9 +25,9 @@ impl SyscallHandler {
     pub fn getitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        curr_value_ptr: ForeignPtr<()>,
+        curr_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let curr_value_ptr = ForeignArrayPtr::new(curr_value_ptr.cast::<libc::itimerval, _>(), 1);
+        let curr_value_ptr = ForeignArrayPtr::new(curr_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
@@ -47,11 +47,11 @@ impl SyscallHandler {
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        new_value_ptr: ForeignPtr<()>,
-        old_value_ptr: ForeignPtr<()>,
+        new_value_ptr: ForeignPtr<libc::itimerval>,
+        old_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let new_value_ptr = ForeignArrayPtr::new(new_value_ptr.cast::<libc::itimerval, _>(), 1);
-        let old_value_ptr = ForeignArrayPtr::new(old_value_ptr.cast::<libc::itimerval, _>(), 1);
+        let new_value_ptr = ForeignArrayPtr::new(new_value_ptr, 1);
+        let old_value_ptr = ForeignArrayPtr::new(old_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);

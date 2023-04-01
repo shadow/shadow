@@ -140,7 +140,7 @@ impl SyscallHandler {
     pub fn read(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -169,7 +169,6 @@ impl SyscallHandler {
             }
         };
 
-        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -188,7 +187,7 @@ impl SyscallHandler {
     pub fn pread64(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -219,7 +218,6 @@ impl SyscallHandler {
             }
         };
 
-        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -252,7 +250,7 @@ impl SyscallHandler {
     pub fn write(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -281,7 +279,6 @@ impl SyscallHandler {
             }
         };
 
-        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -301,7 +298,7 @@ impl SyscallHandler {
     pub fn pwrite64(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        buf_ptr: ForeignPtr<()>,
+        buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: libc::off_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -332,7 +329,6 @@ impl SyscallHandler {
             }
         };
 
-        let buf_ptr = buf_ptr.cast::<u8, _>();
         let mut result =
             Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
@@ -362,7 +358,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<()>) -> SyscallResult {
+    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<libc::c_int>) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
@@ -370,13 +366,17 @@ impl SyscallHandler {
                   /* flags */ nix::fcntl::OFlag)]
     pub fn pipe2(
         ctx: &mut SyscallContext,
-        fd_ptr: ForeignPtr<()>,
+        fd_ptr: ForeignPtr<libc::c_int>,
         flags: libc::c_int,
     ) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
-    fn pipe_helper(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<()>, flags: i32) -> SyscallResult {
+    fn pipe_helper(
+        ctx: &mut SyscallContext,
+        fd_ptr: ForeignPtr<libc::c_int>,
+        flags: i32,
+    ) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
             return Err(nix::errno::Errno::EFAULT.into());
@@ -446,10 +446,11 @@ impl SyscallHandler {
             i32::try_from(read_fd).unwrap(),
             i32::try_from(write_fd).unwrap(),
         ];
-        let write_res = ctx.objs.process.memory_borrow_mut().copy_to_ptr(
-            ForeignArrayPtr::new(fd_ptr.cast::<libc::c_int, _>(), 2),
-            &fds,
-        );
+        let write_res = ctx
+            .objs
+            .process
+            .memory_borrow_mut()
+            .copy_to_ptr(ForeignArrayPtr::new(fd_ptr, 2), &fds);
 
         // clean up in case of error
         match write_res {

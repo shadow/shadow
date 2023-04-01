@@ -16,7 +16,7 @@ impl SyscallHandler {
     pub fn readv(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -49,7 +49,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -71,7 +71,7 @@ impl SyscallHandler {
     pub fn preadv(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -115,7 +115,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -138,7 +138,7 @@ impl SyscallHandler {
     pub fn preadv2(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -190,7 +190,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -271,7 +271,7 @@ impl SyscallHandler {
     pub fn writev(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
@@ -304,7 +304,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -326,7 +326,7 @@ impl SyscallHandler {
     pub fn pwritev(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -371,7 +371,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
@@ -394,7 +394,7 @@ impl SyscallHandler {
     pub fn pwritev2(
         ctx: &mut SyscallContext,
         fd: libc::c_int,
-        iov_ptr: ForeignPtr<()>,
+        iov_ptr: ForeignPtr<libc::iovec>,
         iov_count: libc::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
@@ -446,7 +446,7 @@ impl SyscallHandler {
 
         let iovs = {
             let mem = ctx.objs.process.memory_borrow_mut();
-            io::read_iovecs(&mem, iov_ptr.cast::<libc::iovec, _>(), iov_count)?
+            io::read_iovecs(&mem, iov_ptr, iov_count)?
         };
         assert_eq!(iovs.len(), iov_count);
 
