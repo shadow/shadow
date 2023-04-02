@@ -130,14 +130,18 @@ pub fn read_sockaddr(
 /// The generic type must be given explicitly to prevent accidentally writing the wrong type.
 ///
 /// ```ignore
-/// let bytes_written = write_partial::<i32, _>(mem, foo(), ptr, len)?;
+/// let bytes_written = write_partial::<i32>(mem, foo(), ptr, len)?;
 /// ```
-pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
+pub fn write_partial<T>(
     mem: &mut MemoryManager,
-    val: &T,
+    val: &T::This,
     val_ptr: ForeignPtr<u8>,
     val_len: usize,
-) -> Result<usize, SyscallError> {
+) -> Result<usize, SyscallError>
+where
+    T: NoTypeInference,
+    <T as NoTypeInference>::This: pod::Pod,
+{
     let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
 
     let val = &pod::as_u8_slice(val)[..val_len];

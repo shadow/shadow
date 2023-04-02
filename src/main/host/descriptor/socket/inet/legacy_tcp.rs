@@ -920,7 +920,7 @@ impl LegacyTcpSocket {
                 let mut info = pod::zeroed();
                 unsafe { c::tcp_getInfo(self.as_legacy_tcp(), &mut info) };
 
-                let bytes_written = write_partial::<crate::cshadow::tcp_info, _>(
+                let bytes_written = write_partial::<crate::cshadow::tcp_info>(
                     memory_manager,
                     &info,
                     optval_ptr.cast::<u8>(),
@@ -934,7 +934,7 @@ impl LegacyTcpSocket {
                 // TCP_NODELAY is enabled
                 let val = 1;
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &val,
                     optval_ptr.cast::<u8>(),
@@ -977,7 +977,7 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &sndbuf_size,
                     optval_ptr.cast::<u8>(),
@@ -992,7 +992,7 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &rcvbuf_size,
                     optval_ptr.cast::<u8>(),
@@ -1012,7 +1012,7 @@ impl LegacyTcpSocket {
                     0
                 };
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &error,
                     optval_ptr.cast::<u8>(),
@@ -1035,7 +1035,7 @@ impl LegacyTcpSocket {
                     _ => unimplemented!(),
                 };
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &sock_type,
                     optval_ptr.cast::<u8>(),
