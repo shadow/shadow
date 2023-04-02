@@ -923,7 +923,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<crate::cshadow::tcp_info, _>(
                     memory_manager,
                     &info,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -937,7 +937,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<libc::c_int, _>(
                     memory_manager,
                     &val,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -980,7 +980,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<libc::c_int, _>(
                     memory_manager,
                     &sndbuf_size,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -995,7 +995,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<libc::c_int, _>(
                     memory_manager,
                     &rcvbuf_size,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -1015,7 +1015,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<libc::c_int, _>(
                     memory_manager,
                     &error,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -1038,7 +1038,7 @@ impl LegacyTcpSocket {
                 let bytes_written = write_partial::<libc::c_int, _>(
                     memory_manager,
                     &sock_type,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 

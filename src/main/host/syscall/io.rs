@@ -135,7 +135,7 @@ pub fn read_sockaddr(
 pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
     mem: &mut MemoryManager,
     val: &T,
-    val_ptr: ForeignPtr<()>,
+    val_ptr: ForeignPtr<u8>,
     val_len: usize,
 ) -> Result<usize, SyscallError> {
     let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
