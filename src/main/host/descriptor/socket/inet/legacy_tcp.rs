@@ -373,7 +373,7 @@ impl LegacyTcpSocket {
                     c::tcp_sendUserData(
                         tcp,
                         host,
-                        iov.base.cast::<(), _>(),
+                        iov.base.cast::<()>(),
                         iov.len.try_into().unwrap(),
                         0,
                         0,
@@ -473,7 +473,7 @@ impl LegacyTcpSocket {
                     c::tcp_receiveUserData(
                         tcp,
                         host,
-                        iov.base.cast::<(), _>(),
+                        iov.base.cast::<()>(),
                         iov.len.try_into().unwrap(),
                         std::ptr::null_mut(),
                         std::ptr::null_mut(),
@@ -533,7 +533,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = arg_ptr.cast::<libc::c_int, _>();
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
                 let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
@@ -545,7 +545,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = arg_ptr.cast::<libc::c_int, _>();
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
                 let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
@@ -556,7 +556,7 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = arg_ptr.cast::<libc::c_int, _>();
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
                 let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
@@ -963,7 +963,7 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let name = &name[..bytes_to_copy];
-                let optval_ptr = optval_ptr.cast::<u8, _>();
+                let optval_ptr = optval_ptr.cast::<u8>();
                 let optval_ptr = ForeignArrayPtr::new(optval_ptr, bytes_to_copy);
 
                 memory_manager.copy_to_ptr(optval_ptr, name)?;
@@ -1072,7 +1072,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = optval_ptr.cast::<OptType, _>();
+                let optval_ptr = optval_ptr.cast::<OptType>();
                 let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let enable = memory_manager.read_vals::<_, 1>(optval_ptr)?[0];
 
@@ -1094,7 +1094,7 @@ impl LegacyTcpSocket {
                 let optlen = std::cmp::min(optlen as usize, CONG_NAME_MAX);
                 let name = &mut name[..optlen];
 
-                let optval_ptr = optval_ptr.cast::<u8, _>();
+                let optval_ptr = optval_ptr.cast::<u8>();
                 let optval_ptr = ForeignArrayPtr::new(optval_ptr, optlen);
                 memory_manager.copy_from_ptr(name, optval_ptr)?;
 
@@ -1122,7 +1122,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = optval_ptr.cast::<OptType, _>();
+                let optval_ptr = optval_ptr.cast::<OptType>();
                 let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()
@@ -1151,7 +1151,7 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = optval_ptr.cast::<OptType, _>();
+                let optval_ptr = optval_ptr.cast::<OptType>();
                 let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()

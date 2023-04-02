@@ -33,7 +33,7 @@ impl SyscallHandler {
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<libc::c_ulong>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = mask_ptr.cast::<u8, _>();
+        let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
@@ -66,7 +66,7 @@ impl SyscallHandler {
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<libc::c_ulong>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = mask_ptr.cast::<u8, _>();
+        let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;

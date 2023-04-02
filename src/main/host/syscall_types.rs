@@ -81,7 +81,7 @@ impl<T> ForeignArrayPtr<T> {
             return None;
         }
         Some(ForeignArrayPtr::new(
-            self.base.cast::<U, _>(),
+            self.base.cast::<U>(),
             count_bytes / size_of::<U>(),
         ))
     }

@@ -165,7 +165,7 @@ impl ShmFile {
             .copy_from_ptr(
                 dst,
                 ForeignArrayPtr::new(
-                    ForeignPtr::from(interval.start).cast::<u8, _>(),
+                    ForeignPtr::from(interval.start).cast::<u8>(),
                     interval.len(),
                 ),
             )
@@ -177,7 +177,7 @@ impl ShmFile {
         ctx.thread
             .native_mmap(
                 &ProcessContext::new(ctx.host, ctx.process),
-                ForeignPtr::from(interval.start).cast::<u8, _>(),
+                ForeignPtr::from(interval.start).cast::<u8>(),
                 interval.len(),
                 prot,
                 libc::MAP_SHARED | libc::MAP_FIXED,
@@ -801,7 +801,7 @@ impl MemoryMapper {
                         .native_mremap(
                             &ctx,
                             /* old_addr: */
-                            ForeignPtr::from(self.heap.start).cast::<u8, _>(),
+                            ForeignPtr::from(self.heap.start).cast::<u8>(),
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
@@ -845,7 +845,7 @@ impl MemoryMapper {
             thread
                 .native_mremap(
                     &ctx,
-                    /* old_addr: */ ForeignPtr::from(self.heap.start).cast::<u8, _>(),
+                    /* old_addr: */ ForeignPtr::from(self.heap.start).cast::<u8>(),
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
                     /* flags: */ 0,

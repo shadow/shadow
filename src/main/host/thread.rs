@@ -574,7 +574,7 @@ mod export {
                     .handle_clone_syscall(
                         &ProcessContext::new(host, process),
                         flags,
-                        child_stack.cast::<u8, _>(),
+                        child_stack.cast::<u8>(),
                         ptid,
                         ctid,
                         newtls,

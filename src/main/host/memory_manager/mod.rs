@@ -710,7 +710,7 @@ where
         );
 
         Self {
-            ptr: ForeignArrayPtr::new(ptr.cast::<T, _>(), len),
+            ptr: ForeignArrayPtr::new(ptr.cast::<T>(), len),
             freed: false,
         }
     }
@@ -725,7 +725,7 @@ where
             .memory_borrow_mut()
             .do_munmap(
                 ctx,
-                self.ptr.ptr().cast::<u8, _>(),
+                self.ptr.ptr().cast::<u8>(),
                 self.ptr.len() * std::mem::size_of::<T>(),
             )
             .unwrap();
@@ -799,7 +799,7 @@ mod export {
     pub unsafe extern "C" fn allocdmem_foreignPtr(
         allocd_mem: *const AllocdMem<u8>,
     ) -> ForeignPtr<()> {
-        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().cast::<(), _>() }
+        unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().cast::<()>() }
     }
 
     #[no_mangle]
@@ -872,7 +872,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
-        let src = ForeignArrayPtr::new(src.cast::<u8, _>(), n);
+        let src = ForeignArrayPtr::new(src.cast::<u8>(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         match mem.copy_from_ptr(dst, src) {
@@ -894,7 +894,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_mut() }.unwrap();
-        let dst = ForeignArrayPtr::new(dst.cast::<u8, _>(), n);
+        let dst = ForeignArrayPtr::new(dst.cast::<u8>(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match mem.copy_to_ptr(dst, src) {
             Ok(_) => 0,

@@ -37,11 +37,10 @@ impl<T> ForeignPtr<T> {
         Self::new_with_type_inference(0)
     }
 
-    /// Cast from `ForeignPtr<T>` to `ForeignPtr<K>`.
+    /// Cast from `ForeignPtr<T>` to `ForeignPtr<U>`.
     ///
     /// This uses the [`NoTypeInference`] trait to prevent rust from inferring the target type of
-    /// the cast. This is a little awkward to use, but hopefully helps to prevent an invalid cast.
-    /// We can consider removing this restriction in the future if we don't think it's useful.
+    /// the cast, which will hopefully help prevent accidental invalid casts.
     ///
     /// This does not check pointer alignment.
     ///
@@ -51,9 +50,18 @@ impl<T> ForeignPtr<T> {
     /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
     /// let ptr: ForeignPtr<u16> = ForeignPtr::null();
     /// // cast to a u8 pointer
-    /// let ptr = ptr.cast::<u8, _>();
+    /// let ptr = ptr.cast::<u8>();
     /// ```
-    pub fn cast<U: NoTypeInference<This = K>, K>(&self) -> ForeignPtr<K> {
+    ///
+    /// If the generic argument is omitted, it will fail to compile:
+    ///
+    /// ```compile_fail
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// let ptr: ForeignPtr<u16> = ForeignPtr::null();
+    /// // cast to a u8 pointer
+    /// let ptr: ForeignPtr<u8> = ptr.cast();
+    /// ```
+    pub fn cast<U: NoTypeInference>(&self) -> ForeignPtr<U::This> {
         ForeignPtr::new_with_type_inference(self.val)
     }
 
@@ -314,7 +322,7 @@ impl TryFrom<SysCallReg> for i16 {
 impl<T> From<ForeignPtr<T>> for SysCallReg {
     fn from(v: ForeignPtr<T>) -> Self {
         Self {
-            as_ptr: v.cast::<(), _>(),
+            as_ptr: v.cast::<()>(),
         }
     }
 }
@@ -326,7 +334,7 @@ impl<T> From<SysCallReg> for ForeignPtr<T> {
         // `NoTypeInference` trait on `ForeignPtr::cast`), but we need this type inference so that
         // `SyscallHandlerFn` can convert the `SysCallReg` to the correct pointer type in syscall
         // handler arguments.
-        (unsafe { v.as_ptr }).cast::<T, _>()
+        (unsafe { v.as_ptr }).cast::<T>()
     }
 }
 

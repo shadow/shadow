@@ -55,7 +55,7 @@ pub fn write_sockaddr_and_len(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = ForeignArrayPtr::new(plugin_addr.cast::<MaybeUninit<u8>, _>(), len_to_copy);
+    let plugin_addr = ForeignArrayPtr::new(plugin_addr.cast::<MaybeUninit<u8>>(), len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(())
@@ -81,7 +81,7 @@ pub fn write_sockaddr(
     // the minimum of the given address buffer length and the real address length
     let len_to_copy = std::cmp::min(from_len, plugin_addr_len).try_into().unwrap();
 
-    let plugin_addr = ForeignArrayPtr::new(plugin_addr.cast::<MaybeUninit<u8>, _>(), len_to_copy);
+    let plugin_addr = ForeignArrayPtr::new(plugin_addr.cast::<MaybeUninit<u8>>(), len_to_copy);
     mem.copy_to_ptr(plugin_addr, &from_addr_slice[..len_to_copy])?;
 
     Ok(from_len)
@@ -116,7 +116,7 @@ pub fn read_sockaddr(
 
     mem.copy_from_ptr(
         addr_buf,
-        ForeignArrayPtr::new(addr_ptr.cast::<MaybeUninit<u8>, _>(), addr_len_usize),
+        ForeignArrayPtr::new(addr_ptr.cast::<MaybeUninit<u8>>(), addr_len_usize),
     )?;
 
     let addr = unsafe { SockaddrStorage::from_bytes(addr_buf).ok_or(Errno::EINVAL)? };
@@ -141,7 +141,7 @@ pub fn write_partial<U: NoTypeInference<This = T>, T: pod::Pod>(
     let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
 
     let val = &pod::as_u8_slice(val)[..val_len];
-    let val_ptr = ForeignArrayPtr::new(val_ptr.cast::<MaybeUninit<u8>, _>(), val_len);
+    let val_ptr = ForeignArrayPtr::new(val_ptr.cast::<MaybeUninit<u8>>(), val_len);
 
     mem.copy_to_ptr(val_ptr, val)?;
 
