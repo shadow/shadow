@@ -75,12 +75,8 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     }
     .into();
 
-    // this option is weird since it's a configuration option but we need to read it before merging
-    // with the configuration file
-    let use_extended_yaml = options.experimental.use_extended_yaml.unwrap_or_default();
-
     // load the configuration yaml
-    let config_file = load_config_file(&config_filename, use_extended_yaml)
+    let config_file = load_config_file(&config_filename, true)
         .with_context(|| format!("Failed to load configuration file {}", config_filename))?;
 
     // generate the final shadow configuration from the config file and cli options
