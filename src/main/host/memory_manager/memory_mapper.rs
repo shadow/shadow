@@ -766,7 +766,7 @@ impl MemoryMapper {
         // handle is trying to set the end of heap before the start. In practice this case is
         // generally triggered with a NULL argument to get the current brk value.
         if requested_brk < self.heap.start {
-            return Ok(ForeignPtr::<()>::from(self.heap.end).into());
+            return Ok(ForeignPtr::from(self.heap.end).into());
         }
 
         // Unclear how to handle a non-page-size increment. panic for now.
@@ -868,7 +868,7 @@ impl MemoryMapper {
         }
         self.heap = new_heap;
 
-        Ok(ForeignPtr::<()>::from(requested_brk).into())
+        Ok(ForeignPtr::from(requested_brk).into())
     }
 
     /// Shadow should delegate a plugin's call to mprotect to this method.
