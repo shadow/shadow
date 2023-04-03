@@ -189,9 +189,6 @@ jobs:
       - build_shadow
       - build_tgen
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
     runs-on: ubuntu-20.04
 
     container:
@@ -329,9 +326,6 @@ jobs:
       - build_shadow
       - build_tgen
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
     runs-on: ubuntu-20.04
 
     container:
@@ -413,9 +407,6 @@ jobs:
     needs:
       - build_shadow
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
     runs-on: ubuntu-20.04
 
     container:
