@@ -14,17 +14,19 @@
 
 typedef struct _Payload Payload;
 
-Payload* payload_new(const Thread* thread, ForeignPtr data, gsize dataLength);
-Payload* payload_newWithMemoryManager(ForeignPtr data, gsize dataLength, const MemoryManager* mem);
+Payload* payload_new(const Thread* thread, UntypedForeignPtr data, gsize dataLength);
+Payload* payload_newWithMemoryManager(UntypedForeignPtr data, gsize dataLength,
+                                      const MemoryManager* mem);
 
 void payload_ref(Payload* payload);
 void payload_unref(Payload* payload);
 
 gsize payload_getLength(Payload* payload);
-gssize payload_getData(Payload* payload, const Thread* thread, gsize offset, ForeignPtr destBuffer,
-                       gsize destBufferLength);
-gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset, ForeignPtr destBuffer,
-                                        gsize destBufferLength, MemoryManager* mem);
+gssize payload_getData(Payload* payload, const Thread* thread, gsize offset,
+                       UntypedForeignPtr destBuffer, gsize destBufferLength);
+gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset,
+                                        UntypedForeignPtr destBuffer, gsize destBufferLength,
+                                        MemoryManager* mem);
 
 gsize payload_getDataShadow(Payload* payload, gsize offset, void* destBuffer,
                             gsize destBufferLength);

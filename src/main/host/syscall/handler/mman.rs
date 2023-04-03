@@ -7,7 +7,7 @@ use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* addr */ *const libc::c_void)]
-    pub fn brk(ctx: &mut SyscallContext, _addr: ForeignPtr) -> SyscallResult {
+    pub fn brk(ctx: &mut SyscallContext, _addr: ForeignPtr<()>) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_brk, ctx)
     }
 
@@ -17,7 +17,7 @@ impl SyscallHandler {
                   /* offset */ libc::off_t)]
     pub fn mmap(
         ctx: &mut SyscallContext,
-        _addr: ForeignPtr,
+        _addr: ForeignPtr<()>,
         _len: libc::size_t,
         _prot: libc::c_int,
         _flags: libc::c_int,
@@ -32,11 +32,11 @@ impl SyscallHandler {
                   /* flags */ nix::sys::mman::MRemapFlags, /* new_address */ *const libc::c_void)]
     pub fn mremap(
         ctx: &mut SyscallContext,
-        _old_addr: ForeignPtr,
+        _old_addr: ForeignPtr<()>,
         _old_size: libc::size_t,
         _new_size: libc::size_t,
         _flags: libc::c_int,
-        _new_addr: ForeignPtr,
+        _new_addr: ForeignPtr<()>,
     ) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_mremap, ctx)
     }
@@ -44,7 +44,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* addr */ *const libc::c_void, /* length */ libc::size_t)]
     pub fn munmap(
         ctx: &mut SyscallContext,
-        _addr: ForeignPtr,
+        _addr: ForeignPtr<()>,
         _len: libc::size_t,
     ) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_munmap, ctx)
@@ -54,7 +54,7 @@ impl SyscallHandler {
                   /* prot */ libc::c_int)]
     pub fn mprotect(
         ctx: &mut SyscallContext,
-        _addr: ForeignPtr,
+        _addr: ForeignPtr<()>,
         _len: libc::size_t,
         _prot: libc::c_int,
     ) -> SyscallResult {

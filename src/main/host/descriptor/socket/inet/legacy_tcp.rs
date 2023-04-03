@@ -17,7 +17,7 @@ use crate::host::descriptor::{
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{write_partial, IoVec};
-use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::Packet;
@@ -370,7 +370,15 @@ impl LegacyTcpSocket {
                 // SAFETY: We're passing an immutable pointer to the memory manager. We should not
                 // have any other mutable references to the memory manager at this point.
                 let rv = Worker::with_active_host(|host| unsafe {
-                    c::tcp_sendUserData(tcp, host, iov.base, iov.len.try_into().unwrap(), 0, 0, mem)
+                    c::tcp_sendUserData(
+                        tcp,
+                        host,
+                        iov.base.cast::<()>(),
+                        iov.len.try_into().unwrap(),
+                        0,
+                        0,
+                        mem,
+                    )
                 })
                 .unwrap();
 
@@ -465,7 +473,7 @@ impl LegacyTcpSocket {
                     c::tcp_receiveUserData(
                         tcp,
                         host,
-                        iov.base,
+                        iov.base.cast::<()>(),
                         iov.len.try_into().unwrap(),
                         std::ptr::null_mut(),
                         std::ptr::null_mut(),
@@ -515,7 +523,7 @@ impl LegacyTcpSocket {
     pub fn ioctl(
         &mut self,
         request: u64,
-        arg_ptr: ForeignPtr,
+        arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match request {
@@ -525,7 +533,8 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
+                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -536,7 +545,8 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
+                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -546,7 +556,8 @@ impl LegacyTcpSocket {
                     .try_into()
                     .unwrap();
 
-                let arg_ptr = TypedArrayForeignPtr::new::<libc::c_int>(arg_ptr, 1);
+                let arg_ptr = arg_ptr.cast::<libc::c_int>();
+                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
                 memory_manager.copy_to_ptr(arg_ptr, &[len])?;
 
                 Ok(0.into())
@@ -900,7 +911,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: ForeignPtr,
+        optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         memory_manager: &mut MemoryManager,
     ) -> Result<libc::socklen_t, SyscallError> {
@@ -909,10 +920,10 @@ impl LegacyTcpSocket {
                 let mut info = pod::zeroed();
                 unsafe { c::tcp_getInfo(self.as_legacy_tcp(), &mut info) };
 
-                let bytes_written = write_partial::<crate::cshadow::tcp_info, _>(
+                let bytes_written = write_partial::<crate::cshadow::tcp_info>(
                     memory_manager,
                     &info,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -923,10 +934,10 @@ impl LegacyTcpSocket {
                 // TCP_NODELAY is enabled
                 let val = 1;
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &val,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -952,7 +963,8 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let name = &name[..bytes_to_copy];
-                let optval_ptr = TypedArrayForeignPtr::new::<u8>(optval_ptr, bytes_to_copy);
+                let optval_ptr = optval_ptr.cast::<u8>();
+                let optval_ptr = ForeignArrayPtr::new(optval_ptr, bytes_to_copy);
 
                 memory_manager.copy_to_ptr(optval_ptr, name)?;
 
@@ -965,10 +977,10 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &sndbuf_size,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -980,10 +992,10 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &rcvbuf_size,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -1000,10 +1012,10 @@ impl LegacyTcpSocket {
                     0
                 };
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &error,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -1023,10 +1035,10 @@ impl LegacyTcpSocket {
                     _ => unimplemented!(),
                 };
 
-                let bytes_written = write_partial::<libc::c_int, _>(
+                let bytes_written = write_partial::<libc::c_int>(
                     memory_manager,
                     &sock_type,
-                    optval_ptr,
+                    optval_ptr.cast::<u8>(),
                     optlen as usize,
                 )?;
 
@@ -1043,7 +1055,7 @@ impl LegacyTcpSocket {
         &self,
         level: libc::c_int,
         optname: libc::c_int,
-        optval_ptr: ForeignPtr,
+        optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {
@@ -1060,7 +1072,8 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = optval_ptr.cast::<OptType>();
+                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let enable = memory_manager.read_vals::<_, 1>(optval_ptr)?[0];
 
                 if enable != 0 {
@@ -1081,7 +1094,8 @@ impl LegacyTcpSocket {
                 let optlen = std::cmp::min(optlen as usize, CONG_NAME_MAX);
                 let name = &mut name[..optlen];
 
-                let optval_ptr = TypedArrayForeignPtr::new::<u8>(optval_ptr, optlen);
+                let optval_ptr = optval_ptr.cast::<u8>();
+                let optval_ptr = ForeignArrayPtr::new(optval_ptr, optlen);
                 memory_manager.copy_from_ptr(name, optval_ptr)?;
 
                 // truncate the name at the first NUL character if there is one, but don't include
@@ -1108,7 +1122,8 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = optval_ptr.cast::<OptType>();
+                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()
                     .or(Err(Errno::EINVAL))?;
@@ -1136,7 +1151,8 @@ impl LegacyTcpSocket {
                     return Err(Errno::EINVAL.into());
                 }
 
-                let optval_ptr = TypedArrayForeignPtr::new::<OptType>(optval_ptr, 1);
+                let optval_ptr = optval_ptr.cast::<OptType>();
+                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
                 let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
                     .try_into()
                     .or(Err(Errno::EINVAL))?;

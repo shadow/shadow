@@ -83,9 +83,9 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
 
-gssize tcp_sendUserData(TCP* tcp, const Host* host, ForeignPtr buffer, gsize nBytes, in_addr_t ip,
-                        in_port_t port, const MemoryManager* mem);
-gssize tcp_receiveUserData(TCP* tcp, const Host* host, ForeignPtr buffer, gsize nBytes,
+gssize tcp_sendUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
+                        in_addr_t ip, in_port_t port, const MemoryManager* mem);
+gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
                            in_addr_t* ip, in_port_t* port, MemoryManager* mem);
 
 gint tcp_shutdown(TCP* tcp, const Host* host, gint how);

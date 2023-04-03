@@ -18,7 +18,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{SyscallResult, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
@@ -164,7 +164,10 @@ impl ShmFile {
         memory_manager
             .copy_from_ptr(
                 dst,
-                TypedArrayForeignPtr::new::<u8>(ForeignPtr::from(interval.start), interval.len()),
+                ForeignArrayPtr::new(
+                    ForeignPtr::from(interval.start).cast::<u8>(),
+                    interval.len(),
+                ),
             )
             .unwrap()
     }
@@ -174,7 +177,7 @@ impl ShmFile {
         ctx.thread
             .native_mmap(
                 &ProcessContext::new(ctx.host, ctx.process),
-                ForeignPtr::from(interval.start),
+                ForeignPtr::from(interval.start).cast::<u8>(),
                 interval.len(),
                 prot,
                 libc::MAP_SHARED | libc::MAP_FIXED,
@@ -234,7 +237,7 @@ fn get_heap(
     if heap_mapping.is_none() {
         let (ctx, thread) = ctx.split_thread();
         // There's no heap region allocated yet. Get the address where it will be and return.
-        let start = usize::from(thread.native_brk(&ctx, ForeignPtr::from(0usize)).unwrap());
+        let start = usize::from(thread.native_brk(&ctx, ForeignPtr::null()).unwrap());
         return start..start;
     }
     let (heap_interval, heap_region) = heap_mapping.unwrap();
@@ -399,7 +402,7 @@ impl MemoryMapper {
 
         let shm_plugin_fd = {
             let (ctx, thread) = ctx.split_thread();
-            let path_buf_foreign_ptr = TypedArrayForeignPtr::new::<u8>(
+            let path_buf_foreign_ptr = ForeignArrayPtr::new(
                 thread.malloc_foreign_ptr(&ctx, shm_path.len()).unwrap(),
                 shm_path.len(),
             );
@@ -541,7 +544,7 @@ impl MemoryMapper {
     pub fn handle_mmap_result(
         &mut self,
         ctx: &ThreadContext,
-        ptr: TypedArrayForeignPtr<u8>,
+        ptr: ForeignArrayPtr<u8>,
         prot: i32,
         flags: i32,
         fd: i32,
@@ -608,7 +611,7 @@ impl MemoryMapper {
     ///
     /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
     /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
-    pub fn handle_munmap_result(&mut self, addr: ForeignPtr, length: usize) {
+    pub fn handle_munmap_result(&mut self, addr: ForeignPtr<u8>, length: usize) {
         trace!("handle_munmap_result({:?}, {})", addr, length);
         if length == 0 {
             return;
@@ -629,11 +632,11 @@ impl MemoryMapper {
     pub fn handle_mremap(
         &mut self,
         ctx: &ThreadContext,
-        old_address: ForeignPtr,
+        old_address: ForeignPtr<u8>,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_address: ForeignPtr,
+        new_address: ForeignPtr<u8>,
     ) -> SyscallResult {
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
@@ -756,7 +759,7 @@ impl MemoryMapper {
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr) -> SyscallResult {
+    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<u8>) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -797,11 +800,12 @@ impl MemoryMapper {
                     thread
                         .native_mremap(
                             &ctx,
-                            /* old_addr: */ ForeignPtr::from(self.heap.start),
+                            /* old_addr: */
+                            ForeignPtr::from(self.heap.start).cast::<u8>(),
                             /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
-                            /* new_addr: */ ForeignPtr::from(0usize),
+                            /* new_addr: */ ForeignPtr::null(),
                         )
                         .unwrap();
                     // mremap in shadow, allowing mapping to move if needed.
@@ -841,11 +845,11 @@ impl MemoryMapper {
             thread
                 .native_mremap(
                     &ctx,
-                    /* old_addr: */ ForeignPtr::from(self.heap.start),
+                    /* old_addr: */ ForeignPtr::from(self.heap.start).cast::<u8>(),
                     /* old_len: */ self.heap.len(),
                     /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
-                    /* new_addr: */ ForeignPtr::from(0usize),
+                    /* new_addr: */ ForeignPtr::null(),
                 )
                 .unwrap();
             // mremap in shadow, assuming no need to move.
@@ -881,7 +885,7 @@ impl MemoryMapper {
     pub fn handle_mprotect(
         &mut self,
         ctx: &ThreadContext,
-        addr: ForeignPtr,
+        addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
     ) -> SyscallResult {
@@ -1006,7 +1010,7 @@ impl MemoryMapper {
 
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
     // Panics if called with zero-length `src`.
-    fn get_mapped_ptr<T: Pod + Debug>(&self, src: TypedArrayForeignPtr<T>) -> Option<*mut T> {
+    fn get_mapped_ptr<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         assert!(!src.is_empty());
 
         if usize::from(src.ptr()) % std::mem::align_of::<T>() != 0 {
@@ -1050,10 +1054,7 @@ impl MemoryMapper {
         Some(ptr)
     }
 
-    fn get_mapped_ptr_and_count<T: Pod + Debug>(
-        &self,
-        src: TypedArrayForeignPtr<T>,
-    ) -> Option<*mut T> {
+    fn get_mapped_ptr_and_count<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         let res = self.get_mapped_ptr(src);
         if res.is_none() {
             self.inc_misses(src);
@@ -1061,7 +1062,7 @@ impl MemoryMapper {
         res
     }
 
-    pub unsafe fn get_ref<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) -> Option<&[T]> {
+    pub unsafe fn get_ref<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&[T]> {
         if src.is_empty() {
             return Some(&[]);
         }
@@ -1069,7 +1070,7 @@ impl MemoryMapper {
         Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
-    pub unsafe fn get_mut<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) -> Option<&mut [T]> {
+    pub unsafe fn get_mut<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         if src.is_empty() {
             return Some(&mut []);
         }
@@ -1078,7 +1079,7 @@ impl MemoryMapper {
     }
 
     /// Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses<T: Debug + Pod>(&self, src: TypedArrayForeignPtr<T>) {
+    fn inc_misses<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) {
         let key = match self.regions.get(usize::from(src.ptr())) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),

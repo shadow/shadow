@@ -5,7 +5,7 @@ use nix::{errno::Errno, unistd::Pid};
 
 use crate::core::worker::Worker;
 use crate::host::memory_manager::page_size;
-use crate::host::syscall_types::TypedArrayForeignPtr;
+use crate::host::syscall_types::ForeignArrayPtr;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
 
@@ -25,7 +25,7 @@ impl MemoryCopier {
     #[allow(clippy::uninit_vec)]
     pub unsafe fn clone_mem<T: Pod + Debug>(
         &self,
-        ptr: TypedArrayForeignPtr<T>,
+        ptr: ForeignArrayPtr<T>,
     ) -> Result<Vec<T>, Errno> {
         let mut v = Vec::with_capacity(ptr.len());
         unsafe { v.set_len(v.capacity()) };
@@ -38,7 +38,7 @@ impl MemoryCopier {
     #[allow(clippy::uninit_vec)]
     pub unsafe fn clone_mem_prefix<T: Pod + Debug>(
         &self,
-        ptr: TypedArrayForeignPtr<T>,
+        ptr: ForeignArrayPtr<T>,
     ) -> Result<Vec<T>, Errno> {
         let mut v = Vec::with_capacity(ptr.len());
         unsafe { v.set_len(v.capacity()) };
@@ -52,7 +52,7 @@ impl MemoryCopier {
     pub unsafe fn copy_prefix_from_ptr<T>(
         &self,
         dst: &mut [T],
-        src: TypedArrayForeignPtr<T>,
+        src: ForeignArrayPtr<T>,
     ) -> Result<usize, Errno>
     where
         T: Pod + Debug,
@@ -101,7 +101,7 @@ impl MemoryCopier {
     pub unsafe fn copy_from_ptr<T: Pod + Debug>(
         &self,
         dst: &mut [T],
-        src: TypedArrayForeignPtr<T>,
+        src: ForeignArrayPtr<T>,
     ) -> Result<(), Errno> {
         assert_eq!(dst.len(), src.len());
         // SAFETY: We do not write uninitialized data into `buf`.
@@ -132,7 +132,7 @@ impl MemoryCopier {
     unsafe fn readv_ptrs(
         &self,
         dsts: &mut [&mut [u8]],
-        srcs: &[TypedArrayForeignPtr<u8>],
+        srcs: &[ForeignArrayPtr<u8>],
     ) -> Result<usize, Errno> {
         let srcs: Vec<_> = srcs
             .iter()
@@ -192,7 +192,7 @@ impl MemoryCopier {
     /// SAFETY: A reference to the process memory must not exist.
     pub unsafe fn copy_to_ptr<T: Pod + Debug>(
         &self,
-        dst: TypedArrayForeignPtr<T>,
+        dst: ForeignArrayPtr<T>,
         src: &[T],
     ) -> Result<(), Errno> {
         let dst = dst.cast_u8();

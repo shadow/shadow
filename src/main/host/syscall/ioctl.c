@@ -25,7 +25,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* file, int fd,
-                                           unsigned long request, ForeignPtr argPtr) {
+                                           unsigned long request, UntypedForeignPtr argPtr) {
     int result = 0;
 
     // TODO: we should call regularfile_ioctl() here, but depending on the request we may need to
@@ -58,7 +58,7 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* fil
 }
 
 static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
-                                          unsigned long request, ForeignPtr argPtr) {
+                                          unsigned long request, UntypedForeignPtr argPtr) {
     int result = -EINVAL;
 
     switch (request) {
@@ -144,7 +144,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 SyscallReturn syscallhandler_ioctl(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long request = args->args[1].as_i64;
-    ForeignPtr argPtr = args->args[2].as_ptr; // type depends on request
+    UntypedForeignPtr argPtr = args->args[2].as_ptr; // type depends on request
 
     trace("ioctl called on fd %d for request %ld", fd, request);
 

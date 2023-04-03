@@ -29,7 +29,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, ForeignPtr bufPtr,
+SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,
                                          size_t bufSize, off_t offset, bool doPread) {
     trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
@@ -51,7 +51,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, ForeignPtr
     /* Divert io on sockets to socket handler to pick up special checks. */
     if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
         return _syscallhandler_recvfromHelper(
-            sys, fd, bufPtr, bufSize, 0, (ForeignPtr){0}, (ForeignPtr){0});
+            sys, fd, bufPtr, bufSize, 0, (UntypedForeignPtr){0}, (UntypedForeignPtr){0});
     }
 
     /* Now it's an error if the descriptor is closed. */
@@ -123,7 +123,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, ForeignPtr
     return syscallreturn_makeDoneI64(result);
 }
 
-SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, ForeignPtr bufPtr,
+SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,
                                           size_t bufSize, off_t offset, bool doPwrite) {
     trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
@@ -144,7 +144,7 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, ForeignPt
 
     /* Divert io on sockets to socket handler to pick up special checks. */
     if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        return _syscallhandler_sendtoHelper(sys, fd, bufPtr, bufSize, 0, (ForeignPtr){0}, 0);
+        return _syscallhandler_sendtoHelper(sys, fd, bufPtr, bufSize, 0, (UntypedForeignPtr){0}, 0);
     }
 
     /* Now it's an error if the descriptor is closed. */
@@ -249,7 +249,7 @@ SyscallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* arg
 }
 
 SyscallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr tidptr = args->args[0].as_ptr; // int*
+    UntypedForeignPtr tidptr = args->args[0].as_ptr; // int*
     thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);
     return syscallreturn_makeDoneI64(sys->threadId);
 }

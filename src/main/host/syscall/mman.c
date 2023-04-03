@@ -136,7 +136,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
 
     /* Get some memory in the plugin to write the path of the file to open. */
     AllocdMem_u8* allocdMem = allocdmem_new(_syscallhandler_getThread(sys), maplen);
-    ForeignPtr foreignBufPtr = allocdmem_foreignPtr(allocdMem);
+    UntypedForeignPtr foreignBufPtr = allocdmem_foreignPtr(allocdMem);
 
     /* Get a writeable pointer that can be flushed to the plugin. */
     char* pluginBuf =
@@ -183,7 +183,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, int fd, RegularFi
     }
 
 out:
-    /* Release the ForeignPtr memory. */
+    /* Release the UntypedForeignPtr memory. */
     allocdmem_free(_syscallhandler_getThread(sys), allocdMem);
     free(mmap_path);
 
@@ -202,8 +202,8 @@ static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     }
 }
 
-static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, ForeignPtr addrPtr, size_t len,
-                                          int prot, int flags, int fd, int64_t offset) {
+static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, UntypedForeignPtr addrPtr,
+                                          size_t len, int prot, int flags, int fd, int64_t offset) {
     trace("mmap called on fd %d for %zu bytes", fd, len);
 
     /* First check the input args to see if we can avoid doing the less
@@ -253,7 +253,7 @@ static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, ForeignPtr addrPt
 ///////////////////////////////////////////////////////////
 
 SyscallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr newBrk = args->args[0].as_ptr;
+    UntypedForeignPtr newBrk = args->args[0].as_ptr;
 
     // Delegate to the memoryManager.
     return process_handleBrk(
@@ -261,7 +261,7 @@ SyscallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
 }
 
 SyscallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr addrPtr = args->args[0].as_ptr; // void*
+    UntypedForeignPtr addrPtr = args->args[0].as_ptr; // void*
     size_t len = args->args[1].as_u64;
     int prot = args->args[2].as_i64;
     int flags = args->args[3].as_i64;
@@ -271,11 +271,11 @@ SyscallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) 
 }
 
 SyscallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr old_addr = args->args[0].as_ptr;
+    UntypedForeignPtr old_addr = args->args[0].as_ptr;
     uint64_t old_size = args->args[1].as_u64;
     uint64_t new_size = args->args[2].as_u64;
     int flags = args->args[3].as_i64;
-    ForeignPtr new_addr = args->args[4].as_ptr;
+    UntypedForeignPtr new_addr = args->args[4].as_ptr;
 
     // Delegate to the memoryManager.
     return process_handleMremap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys),
@@ -283,7 +283,7 @@ SyscallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
 }
 
 SyscallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr addr = args->args[0].as_ptr;
+    UntypedForeignPtr addr = args->args[0].as_ptr;
     uint64_t len = args->args[1].as_u64;
 
     // Delegate to the memoryManager.
@@ -292,7 +292,7 @@ SyscallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
 }
 
 SyscallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr addr = args->args[0].as_ptr;
+    UntypedForeignPtr addr = args->args[0].as_ptr;
     size_t len = args->args[1].as_u64;
     int prot = args->args[2].as_i64;
 

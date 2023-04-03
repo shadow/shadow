@@ -47,7 +47,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     return 0;
 }
 
-static SyscallReturn _syscallhandler_openHelper(SysCallHandler* sys, ForeignPtr pathnamePtr,
+static SyscallReturn _syscallhandler_openHelper(SysCallHandler* sys, UntypedForeignPtr pathnamePtr,
                                                 int flags, mode_t mode) {
     trace("Trying to open file with path name at plugin addr %p",
           (void*)pathnamePtr.val);
@@ -106,7 +106,7 @@ SyscallReturn syscallhandler_open(SysCallHandler* sys, const SysCallArgs* args) 
 
 SyscallReturn syscallhandler_fstat(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr bufPtr = args->args[1].as_ptr; // struct stat*
+    UntypedForeignPtr bufPtr = args->args[1].as_ptr; // struct stat*
 
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
@@ -127,7 +127,7 @@ SyscallReturn syscallhandler_fstat(SysCallHandler* sys, const SysCallArgs* args)
 
 SyscallReturn syscallhandler_fstatfs(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr bufPtr = args->args[1].as_ptr; // struct statfs*
+    UntypedForeignPtr bufPtr = args->args[1].as_ptr; // struct statfs*
 
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
@@ -241,8 +241,8 @@ SyscallReturn syscallhandler_flock(SysCallHandler* sys, const SysCallArgs* args)
 
 SyscallReturn syscallhandler_fsetxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr namePtr = args->args[1].as_ptr;  // const char*
-    ForeignPtr valuePtr = args->args[2].as_ptr; // const void*
+    UntypedForeignPtr namePtr = args->args[1].as_ptr;  // const char*
+    UntypedForeignPtr valuePtr = args->args[2].as_ptr; // const void*
     size_t size = args->args[3].as_u64;
     int flags = args->args[4].as_i64;
 
@@ -271,8 +271,8 @@ SyscallReturn syscallhandler_fsetxattr(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_fgetxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr namePtr = args->args[1].as_ptr;  // const char*
-    ForeignPtr valuePtr = args->args[2].as_ptr; // void*
+    UntypedForeignPtr namePtr = args->args[1].as_ptr;  // const char*
+    UntypedForeignPtr valuePtr = args->args[2].as_ptr; // void*
     size_t size = args->args[3].as_u64;
 
     /* Get and validate the file descriptor. */
@@ -299,7 +299,7 @@ SyscallReturn syscallhandler_fgetxattr(SysCallHandler* sys, const SysCallArgs* a
 
 SyscallReturn syscallhandler_flistxattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr listPtr = args->args[1].as_ptr; // char*
+    UntypedForeignPtr listPtr = args->args[1].as_ptr; // char*
     size_t size = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
@@ -318,7 +318,7 @@ SyscallReturn syscallhandler_flistxattr(SysCallHandler* sys, const SysCallArgs* 
 
 SyscallReturn syscallhandler_fremovexattr(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr namePtr = args->args[1].as_ptr; // const char*
+    UntypedForeignPtr namePtr = args->args[1].as_ptr; // const char*
 
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
@@ -386,7 +386,7 @@ SyscallReturn syscallhandler_lseek(SysCallHandler* sys, const SysCallArgs* args)
 
 SyscallReturn syscallhandler_getdents(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
+    UntypedForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
     unsigned int count = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */
@@ -408,7 +408,7 @@ SyscallReturn syscallhandler_getdents(SysCallHandler* sys, const SysCallArgs* ar
 
 SyscallReturn syscallhandler_getdents64(SysCallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
-    ForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
+    UntypedForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
     unsigned int count = args->args[2].as_u64;
 
     /* Get and validate the file descriptor. */

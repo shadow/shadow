@@ -34,7 +34,7 @@ use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::TypedArrayForeignPtr;
+use super::syscall_types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 use crate::core::work::task::TaskRef;
@@ -845,7 +845,7 @@ impl Process {
         }
     }
 
-    pub fn physical_address(&self, vptr: ForeignPtr) -> ManagedPhysicalMemoryAddr {
+    pub fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
         // We currently don't keep a true system-wide virtual <-> physical address
         // mapping. Instead we simply assume that no shadow processes map the same
         // underlying physical memory, and that therefore (pid, virtual address)
@@ -942,7 +942,7 @@ impl Process {
             }
 
             let typed_clear_child_tid_pvp =
-                TypedArrayForeignPtr::new::<libc::pid_t>(clear_child_tid_pvp, 1);
+                ForeignArrayPtr::new(clear_child_tid_pvp.cast::<libc::pid_t>(), 1);
             self.memory_borrow_mut()
                 .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
                 .unwrap();
@@ -1204,7 +1204,7 @@ impl UnsafeBorrow {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn readable_ptr(
         process: &Process,
-        ptr: TypedArrayForeignPtr<u8>,
+        ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
         let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
@@ -1233,7 +1233,7 @@ impl UnsafeBorrow {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn readable_string(
         process: &Process,
-        ptr: TypedArrayForeignPtr<c_char>,
+        ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
         let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
@@ -1288,7 +1288,7 @@ impl UnsafeBorrowMut {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn writable_ptr(
         process: &Process,
-        ptr: TypedArrayForeignPtr<u8>,
+        ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
         let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
             mm.as_mut().unwrap()
@@ -1324,7 +1324,7 @@ impl UnsafeBorrowMut {
     /// The pointer is invalidated when one of the Process memory flush methods is called.
     unsafe fn mutable_ptr(
         process: &Process,
-        ptr: TypedArrayForeignPtr<u8>,
+        ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
         let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
             mm.as_mut().unwrap()
@@ -1394,7 +1394,7 @@ mod export {
     use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
-    use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
 
     use super::*;
     use crate::core::worker::Worker;
@@ -1402,7 +1402,7 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::File;
-    use crate::host::syscall_types::{SyscallReturn, TypedArrayForeignPtr};
+    use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
     use crate::host::thread::Thread;
 
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
@@ -1519,11 +1519,11 @@ mod export {
     pub extern "C" fn process_readPtr(
         proc: *const ProcessRefCell,
         dst: *mut c_void,
-        src: ForeignPtr,
+        src: UntypedForeignPtr,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let src = TypedArrayForeignPtr::new::<u8>(src, n);
+        let src = ForeignArrayPtr::new(src.cast::<u8>(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
         Worker::with_active_host(|h| {
@@ -1547,12 +1547,12 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
         proc: *const ProcessRefCell,
-        dst: ForeignPtr,
+        dst: UntypedForeignPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let dst = TypedArrayForeignPtr::new::<u8>(dst, n);
+        let dst = ForeignArrayPtr::new(dst.cast::<u8>(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         Worker::with_active_host(|h| {
             match proc
@@ -1577,11 +1577,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: ForeignPtr,
+        plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
@@ -1601,11 +1601,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: ForeignPtr,
+        plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1623,11 +1623,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
         proc: *const ProcessRefCell,
-        plugin_src: ForeignPtr,
+        plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
-        let plugin_src = TypedArrayForeignPtr::new::<u8>(plugin_src, n);
+        let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
             unsafe {
@@ -1647,7 +1647,7 @@ mod export {
     pub unsafe extern "C" fn process_readString(
         proc: *const ProcessRefCell,
         strbuf: *mut libc::c_char,
-        ptr: ForeignPtr,
+        ptr: UntypedForeignPtr,
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1658,7 +1658,7 @@ mod export {
                 std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
             };
             let cstr = match memory_manager
-                .copy_str_from_ptr(buf, TypedArrayForeignPtr::new::<u8>(ptr, maxlen))
+                .copy_str_from_ptr(buf, ForeignArrayPtr::new(ptr.cast::<u8>(), maxlen))
             {
                 Ok(cstr) => cstr,
                 Err(e) => return -(e as libc::ssize_t),
@@ -1677,7 +1677,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
         proc: *const ProcessRefCell,
-        plugin_src: ForeignPtr,
+        plugin_src: UntypedForeignPtr,
         n: usize,
         out_str: *mut *const c_char,
         out_strlen: *mut size_t,
@@ -1685,7 +1685,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|h| {
             let proc = proc.borrow(h.root());
-            let ptr = TypedArrayForeignPtr::new::<c_char>(plugin_src, n);
+            let ptr = ForeignArrayPtr::new(plugin_src.cast::<c_char>(), n);
             match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
                 Ok((str, strlen)) => {
                     assert!(!out_str.is_null());
@@ -1706,7 +1706,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: ForeignPtr,
+        addr: UntypedForeignPtr,
         len: usize,
         prot: i32,
         flags: i32,
@@ -1721,7 +1721,7 @@ mod export {
             memory_manager
                 .do_mmap(
                     &ThreadContext::new(host, &process, thread),
-                    addr,
+                    addr.cast::<u8>(),
                     len,
                     prot,
                     flags,
@@ -1738,7 +1738,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMunmap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: ForeignPtr,
+        addr: UntypedForeignPtr,
         len: usize,
     ) -> SyscallReturn {
         let process = unsafe { proc.as_ref().unwrap() };
@@ -1747,7 +1747,11 @@ mod export {
             let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_munmap(&ThreadContext::new(host, &process, thread), addr, len)
+                .handle_munmap(
+                    &ThreadContext::new(host, &process, thread),
+                    addr.cast::<u8>(),
+                    len,
+                )
                 .into()
         })
         .unwrap()
@@ -1757,11 +1761,11 @@ mod export {
     pub unsafe extern "C" fn process_handleMremap(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        old_addr: ForeignPtr,
+        old_addr: UntypedForeignPtr,
         old_size: usize,
         new_size: usize,
         flags: i32,
-        new_addr: ForeignPtr,
+        new_addr: UntypedForeignPtr,
     ) -> SyscallReturn {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1771,11 +1775,11 @@ mod export {
             memory_manager
                 .handle_mremap(
                     &ThreadContext::new(host, &process, thread),
-                    old_addr,
+                    old_addr.cast::<u8>(),
                     old_size,
                     new_size,
                     flags,
-                    new_addr,
+                    new_addr.cast::<u8>(),
                 )
                 .into()
         })
@@ -1786,7 +1790,7 @@ mod export {
     pub unsafe extern "C" fn process_handleMprotect(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        addr: ForeignPtr,
+        addr: UntypedForeignPtr,
         size: usize,
         prot: i32,
     ) -> SyscallReturn {
@@ -1798,7 +1802,7 @@ mod export {
             memory_manager
                 .handle_mprotect(
                     &ThreadContext::new(host, &process, thread),
-                    addr,
+                    addr.cast::<u8>(),
                     size,
                     prot,
                 )
@@ -1812,7 +1816,7 @@ mod export {
     pub unsafe extern "C" fn process_handleBrk(
         proc: *const ProcessRefCell,
         thread: *const Thread,
-        plugin_src: ForeignPtr,
+        plugin_src: UntypedForeignPtr,
     ) -> SyscallReturn {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -1820,7 +1824,10 @@ mod export {
             let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
-                .handle_brk(&ThreadContext::new(host, &process, thread), plugin_src)
+                .handle_brk(
+                    &ThreadContext::new(host, &process, thread),
+                    plugin_src.cast::<u8>(),
+                )
                 .into()
         })
         .unwrap()
@@ -2043,7 +2050,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
         proc: *const ProcessRefCell,
-        vptr: ForeignPtr,
+        vptr: UntypedForeignPtr,
     ) -> ManagedPhysicalMemoryAddr {
         let proc = unsafe { proc.as_ref().unwrap() };
 

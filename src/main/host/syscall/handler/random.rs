@@ -5,14 +5,14 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SyscallResult, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const libc::c_void, /* count */ libc::size_t,
                   /* flags */ libc::c_uint)]
     pub fn getrandom(
         ctx: &mut SyscallContext,
-        buf_ptr: ForeignPtr,
+        buf_ptr: ForeignPtr<u8>,
         count: libc::size_t,
         _flags: libc::c_uint,
     ) -> SyscallResult {
@@ -22,7 +22,7 @@ impl SyscallHandler {
         trace!("Trying to read {} random bytes.", count);
 
         // Get a native-process mem buffer where we can copy the random bytes.
-        let dst_ptr = TypedArrayForeignPtr::new::<u8>(buf_ptr, count);
+        let dst_ptr = ForeignArrayPtr::new(buf_ptr, count);
         let mut memory = ctx.objs.process.memory_borrow_mut();
         let mut mem_ref = match memory.memory_ref_mut_uninit(dst_ptr) {
             Ok(m) => m,

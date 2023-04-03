@@ -6,7 +6,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SyscallResult, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 use crate::host::timer::Timer;
 
 fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
@@ -25,9 +25,9 @@ impl SyscallHandler {
     pub fn getitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        curr_value_ptr: ForeignPtr,
+        curr_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let curr_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(curr_value_ptr, 1);
+        let curr_value_ptr = ForeignArrayPtr::new(curr_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
@@ -47,11 +47,11 @@ impl SyscallHandler {
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: libc::c_int,
-        new_value_ptr: ForeignPtr,
-        old_value_ptr: ForeignPtr,
+        new_value_ptr: ForeignPtr<libc::itimerval>,
+        old_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let new_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(new_value_ptr, 1);
-        let old_value_ptr = TypedArrayForeignPtr::new::<libc::itimerval>(old_value_ptr, 1);
+        let new_value_ptr = ForeignArrayPtr::new(new_value_ptr, 1);
+        let old_value_ptr = ForeignArrayPtr::new(old_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);

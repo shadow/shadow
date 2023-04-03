@@ -23,8 +23,9 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, ForeignPtr futexVPtr,
-                                                     int expectedVal, ForeignPtr timeoutVPtr,
+static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
+                                                     UntypedForeignPtr futexVPtr, int expectedVal,
+                                                     UntypedForeignPtr timeoutVPtr,
                                                      TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
     // Check if a timeout was given in the syscall args.
@@ -120,8 +121,8 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Foreig
     return syscallreturn_makeBlocked(cond, true);
 }
 
-static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, ForeignPtr futexVPtr,
-                                                     int numWakeups) {
+static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys,
+                                                     UntypedForeignPtr futexVPtr, int numWakeups) {
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
     ManagedPhysicalMemoryAddr futexPPtr =
         process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
@@ -153,11 +154,11 @@ static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Foreig
 SyscallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
-    ForeignPtr uaddrptr = args->args[0].as_ptr; // int*
+    UntypedForeignPtr uaddrptr = args->args[0].as_ptr; // int*
     int futex_op = args->args[1].as_i64;
     int val = args->args[2].as_i64;
-    ForeignPtr timeoutptr = args->args[3].as_ptr; // const struct timespec*, or uint32_t
-    ForeignPtr uaddr2ptr = args->args[4].as_ptr;  // int*
+    UntypedForeignPtr timeoutptr = args->args[3].as_ptr; // const struct timespec*, or uint32_t
+    UntypedForeignPtr uaddr2ptr = args->args[4].as_ptr;  // int*
     int val3 = args->args[5].as_i64;
 
     const int possible_options = FUTEX_PRIVATE_FLAG | FUTEX_CLOCK_REALTIME;

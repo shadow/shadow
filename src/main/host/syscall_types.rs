@@ -11,20 +11,18 @@ use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 use crate::host::syscall::Trigger;
 use crate::host::syscall_condition::SysCallCondition;
-use crate::utility::NoTypeInference;
 
-/// Wrapper around a ForeignPtr that encapsulates its type, size, and current
-/// position.
+/// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
 #[derive(Copy, Clone)]
-pub struct TypedArrayForeignPtr<T> {
-    base: ForeignPtr,
+pub struct ForeignArrayPtr<T> {
+    base: ForeignPtr<T>,
     count: usize,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T> std::fmt::Debug for TypedArrayForeignPtr<T> {
+impl<T> std::fmt::Debug for ForeignArrayPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TypedArrayForeignPtr")
+        f.debug_struct("ForeignArrayPtr")
             .field("base", &self.base)
             .field("count", &self.count)
             .field("size_of::<T>", &size_of::<T>())
@@ -32,13 +30,10 @@ impl<T> std::fmt::Debug for TypedArrayForeignPtr<T> {
     }
 }
 
-impl<T> TypedArrayForeignPtr<T> {
+impl<T> ForeignArrayPtr<T> {
     /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
     /// to be aligned for `T`.
-    pub fn new<U>(ptr: ForeignPtr, count: usize) -> Self
-    where
-        U: NoTypeInference<This = T>,
-    {
+    pub fn new(ptr: ForeignPtr<T>, count: usize) -> Self {
         if log_enabled!(Debug) && usize::from(ptr) % std::mem::align_of::<T>() != 0 {
             // Linux allows unaligned pointers from user-space, being careful to
             // avoid unaligned accesses that aren's supported by the CPU.
@@ -51,11 +46,10 @@ impl<T> TypedArrayForeignPtr<T> {
             // message here as a sign-post that this could be the root cause of
             // weirdness that happens afterwards.
             debug!(
-                "Creating unaligned pointer {:?}. This is legal, but could trigger latent bugs.",
-                ptr
+                "Creating unaligned pointer {ptr:?}. This is legal, but could trigger latent bugs."
             );
         }
-        TypedArrayForeignPtr {
+        ForeignArrayPtr {
             base: ptr,
             count,
             _phantom: PhantomData,
@@ -63,7 +57,7 @@ impl<T> TypedArrayForeignPtr<T> {
     }
 
     /// Raw foreign pointer.
-    pub fn ptr(&self) -> ForeignPtr {
+    pub fn ptr(&self) -> ForeignPtr<T> {
         self.base
     }
 
@@ -81,24 +75,24 @@ impl<T> TypedArrayForeignPtr<T> {
     }
 
     /// Cast to type `U`. Fails if the total size isn't a multiple of `sizeof<U>`.
-    pub fn cast<U>(&self) -> Option<TypedArrayForeignPtr<U>> {
+    pub fn cast<U>(&self) -> Option<ForeignArrayPtr<U>> {
         let count_bytes = self.count * size_of::<T>();
         if count_bytes % size_of::<U>() != 0 {
             return None;
         }
-        Some(TypedArrayForeignPtr::new::<U>(
-            self.base,
+        Some(ForeignArrayPtr::new(
+            self.base.cast::<U>(),
             count_bytes / size_of::<U>(),
         ))
     }
 
     /// Cast to u8. Infallible since `size_of<u8>` is 1.
-    pub fn cast_u8(&self) -> TypedArrayForeignPtr<u8> {
+    pub fn cast_u8(&self) -> ForeignArrayPtr<u8> {
         self.cast::<u8>().unwrap()
     }
 
     /// Return a slice of this pointer.
-    pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> TypedArrayForeignPtr<T> {
+    pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> ForeignArrayPtr<T> {
         use std::ops::Bound;
         let excluded_end = match range.end_bound() {
             Bound::Included(e) => e + 1,
@@ -115,8 +109,9 @@ impl<T> TypedArrayForeignPtr<T> {
         // `<=` rather than `<`, to allow empty slice at end of ptr.
         // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
         assert!(included_start <= self.count);
-        TypedArrayForeignPtr {
-            base: ForeignPtr::from(usize::from(self.base) + included_start * size_of::<T>()),
+
+        ForeignArrayPtr {
+            base: self.base.add(included_start),
             count: excluded_end - included_start,
             _phantom: PhantomData,
         }
@@ -267,6 +262,8 @@ pub enum SyscallReturn {
 }
 
 mod export {
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
+
     use super::*;
 
     #[no_mangle]
@@ -294,7 +291,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: ForeignPtr) -> SyscallReturn {
+    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: UntypedForeignPtr) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,

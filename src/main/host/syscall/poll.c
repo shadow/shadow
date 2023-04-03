@@ -173,9 +173,10 @@ done:
     return syscallreturn_makeDoneI64(num_ready);
 }
 
-static SyscallReturn _syscallhandler_pollHelperForeignPtr(SysCallHandler* sys, ForeignPtr fds_ptr,
-                                                          nfds_t nfds,
-                                                          const struct timespec* timeout) {
+static SyscallReturn _syscallhandler_pollHelperUntypedForeignPtr(SysCallHandler* sys,
+                                                                 UntypedForeignPtr fds_ptr,
+                                                                 nfds_t nfds,
+                                                                 const struct timespec* timeout) {
     // Get the pollfd struct in our memory so we can read from and write to it.
     struct pollfd* fds = NULL;
     if (nfds > 0) {
@@ -188,7 +189,7 @@ static SyscallReturn _syscallhandler_pollHelperForeignPtr(SysCallHandler* sys, F
     return _syscallhandler_pollHelper(sys, fds, nfds, timeout);
 }
 
-static int _syscallhandler_checkPollArgs(ForeignPtr fds_ptr, nfds_t nfds) {
+static int _syscallhandler_checkPollArgs(UntypedForeignPtr fds_ptr, nfds_t nfds) {
     if (nfds > INT_MAX) {
         trace("nfds was out of range [0, INT_MAX], returning EINVAL");
         return -EINVAL;
@@ -202,7 +203,7 @@ static int _syscallhandler_checkPollArgs(ForeignPtr fds_ptr, nfds_t nfds) {
 ///////////////////////////////////////////////////////////
 
 SyscallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
+    UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     int timeout_millis = args->args[2].as_i64;
 
@@ -215,14 +216,14 @@ SyscallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
         struct timespec timeout =
             (struct timespec){.tv_sec = timeout_millis / MILLIS_PER_SEC,
                               .tv_nsec = (timeout_millis % MILLIS_PER_SEC) * NANOS_PER_MILLISEC};
-        return _syscallhandler_pollHelperForeignPtr(sys, fds_ptr, nfds, &timeout);
+        return _syscallhandler_pollHelperUntypedForeignPtr(sys, fds_ptr, nfds, &timeout);
     }
 }
 
 SyscallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args) {
-    ForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
+    UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
-    ForeignPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
+    UntypedForeignPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
 
     trace("ppoll was called with nfds=%lu and timeout_ptr=%p", nfds, (void*)ts_timeout_ptr.val);
 
@@ -250,6 +251,6 @@ SyscallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
         }
     }
 
-    return _syscallhandler_pollHelperForeignPtr(
+    return _syscallhandler_pollHelperUntypedForeignPtr(
         sys, fds_ptr, nfds, ts_timeout_ptr.val ? &ts_timeout_val : NULL);
 }

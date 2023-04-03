@@ -4,7 +4,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SyscallError, TypedArrayForeignPtr};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::utility::pod::Pod;
 
@@ -15,7 +15,7 @@ const RSEQ_FLAG_UNREGISTER: i32 = 1;
 
 #[repr(C, align(32))]
 #[derive(Debug, Copy, Clone)]
-struct rseq {
+pub struct rseq {
     cpu_id_start: i32,
     cpu_id: i32,
     // Actually a pointer, but guaranteed to be 64 bits even on 32 bit platforms
@@ -31,9 +31,10 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr,
+        mask_ptr: ForeignPtr<libc::c_ulong>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = mask_ptr.cast::<u8>();
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -63,9 +64,10 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: libc::pid_t,
         cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr,
+        mask_ptr: ForeignPtr<libc::c_ulong>,
     ) -> Result<libc::c_int, SyscallError> {
-        let mask_ptr = TypedArrayForeignPtr::new::<u8>(mask_ptr, cpusetsize);
+        let mask_ptr = mask_ptr.cast::<u8>();
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
@@ -99,12 +101,12 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
     pub fn rseq(
         ctx: &mut SyscallContext,
-        rseq_ptr: ForeignPtr,
+        rseq_ptr: ForeignPtr<rseq>,
         rseq_len: u32,
         flags: libc::c_int,
         sig: u32,
     ) -> Result<libc::c_int, SyscallError> {
-        let rseq_ptr = TypedArrayForeignPtr::new::<rseq>(rseq_ptr, 1);
+        let rseq_ptr = ForeignArrayPtr::new(rseq_ptr, 1);
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
@@ -121,7 +123,7 @@ impl SyscallHandler {
 
     fn rseq_impl(
         ctx: &mut SyscallContext,
-        rseq_ptr: TypedArrayForeignPtr<rseq>,
+        rseq_ptr: ForeignArrayPtr<rseq>,
         flags: i32,
         _sig: u32,
     ) -> Result<libc::c_int, SyscallError> {

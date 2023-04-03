@@ -124,7 +124,7 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
 }
 
 static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* saddr, size_t slen,
-                                         ForeignPtr addrPtr, ForeignPtr addrlenPtr) {
+                                         UntypedForeignPtr addrPtr, UntypedForeignPtr addrlenPtr) {
     socklen_t addrlen;
     if (process_readPtr(_syscallhandler_getProcess(sys), &addrlen, addrlenPtr, sizeof(addrlen)) !=
         0) {
@@ -154,8 +154,8 @@ static int _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* s
 }
 
 static SyscallReturn _syscallhandler_acceptHelper(SysCallHandler* sys, int sockfd,
-                                                  ForeignPtr addrPtr, ForeignPtr addrlenPtr,
-                                                  int flags) {
+                                                  UntypedForeignPtr addrPtr,
+                                                  UntypedForeignPtr addrlenPtr, int flags) {
     trace("trying to accept on socket %i", sockfd);
 
     /* Check that non-valid flags are not given. */
@@ -314,7 +314,7 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, LegacySocket*
 }
 
 static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket* sock, int optname,
-                                              ForeignPtr optvalPtr, socklen_t optlen) {
+                                              UntypedForeignPtr optvalPtr, socklen_t optlen) {
     if (optlen < sizeof(int)) {
         return -EINVAL;
     }
@@ -403,9 +403,10 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, LegacySocket*
 // Protected helpers
 ///////////////////////////////////////////////////////////
 
-SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd, ForeignPtr bufPtr,
-                                             size_t bufSize, int flags, ForeignPtr srcAddrPtr,
-                                             ForeignPtr addrlenPtr) {
+SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
+                                             UntypedForeignPtr bufPtr, size_t bufSize, int flags,
+                                             UntypedForeignPtr srcAddrPtr,
+                                             UntypedForeignPtr addrlenPtr) {
     trace("trying to recv %zu bytes on socket %i", bufSize, sockfd);
 
     /* Get and validate the socket. */
@@ -485,9 +486,9 @@ SyscallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd, Fo
     return syscallreturn_makeDoneI64(retval);
 }
 
-SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd, ForeignPtr bufPtr,
-                                           size_t bufSize, int flags, ForeignPtr destAddrPtr,
-                                           socklen_t addrlen) {
+SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
+                                           UntypedForeignPtr bufPtr, size_t bufSize, int flags,
+                                           UntypedForeignPtr destAddrPtr, socklen_t addrlen) {
     trace("trying to send %zu bytes on socket %i", bufSize, sockfd);
 
     /* Get and validate the socket. */
@@ -635,7 +636,7 @@ SyscallReturn syscallhandler_accept4(SysCallHandler* sys, const SysCallArgs* arg
 
 SyscallReturn syscallhandler_bind(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = (int)args->args[0].as_i64;
-    ForeignPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
+    UntypedForeignPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
     socklen_t addrlen = (socklen_t)args->args[2].as_u64;
 
     trace("trying to bind on socket %i", sockfd);
@@ -689,7 +690,7 @@ SyscallReturn syscallhandler_bind(SysCallHandler* sys, const SysCallArgs* args) 
 
 SyscallReturn syscallhandler_connect(SysCallHandler* sys, const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
-    ForeignPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
+    UntypedForeignPtr addrPtr = args->args[1].as_ptr; // const struct sockaddr*
     socklen_t addrlen = args->args[2].as_u64;
 
     trace("trying to connect on socket %i", sockfd);
@@ -902,8 +903,8 @@ SyscallReturn syscallhandler_getsockopt(SysCallHandler* sys, const SysCallArgs* 
     int sockfd = args->args[0].as_i64;
     int level = args->args[1].as_i64;
     int optname = args->args[2].as_i64;
-    ForeignPtr optvalPtr = args->args[3].as_ptr; // void*
-    ForeignPtr optlenPtr = args->args[4].as_ptr; // socklen_t*
+    UntypedForeignPtr optvalPtr = args->args[3].as_ptr; // void*
+    UntypedForeignPtr optlenPtr = args->args[4].as_ptr; // socklen_t*
 
     trace("trying to getsockopt on socket %i at level %i for opt %i", sockfd,
           level, optname);
@@ -1009,7 +1010,7 @@ SyscallReturn syscallhandler_setsockopt(SysCallHandler* sys, const SysCallArgs* 
     int sockfd = args->args[0].as_i64;
     int level = args->args[1].as_i64;
     int optname = args->args[2].as_i64;
-    ForeignPtr optvalPtr = args->args[3].as_ptr; // const void*
+    UntypedForeignPtr optvalPtr = args->args[3].as_ptr; // const void*
     socklen_t optlen = args->args[4].as_u64;
 
     trace("trying to setsockopt on socket %i at level %i for opt %i", sockfd,

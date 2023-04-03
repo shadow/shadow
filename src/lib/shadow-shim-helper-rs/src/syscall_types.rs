@@ -1,20 +1,71 @@
 use vasi::VirtualAddressSpaceIndependent;
 
-/// Represents a pointer to a virtual address in plugin memory.
+use crate::util::NoTypeInference;
+
+/// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
+/// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
+/// and this prevents us from accidentally accessing an "untyped" pointer.
+pub type UntypedForeignPtr = ForeignPtr<()>;
+
+/// Represents a pointer to a virtual address in plugin memory. The pointer is not guaranteed to be
+/// valid or aligned.
+///
+/// When passing a `ForeignPtr` to/from C you should use [`UntypedForeignPtr`], which is mapped to
+/// the untyped instance `ForeignPtr<()>` in both Rust and C.
 ///
 /// This type derives the `VirtualAddressSpaceIndependent` trait, since it is
 /// specifically meant to transfer pointers between processes. However it is of
 /// course unsafe to turn its inner value back into a pointer and dereference
 /// from a different virtual address space than where the pointer originated.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, VirtualAddressSpaceIndependent)]
+// do not change the definition of `ForeignPtr` without changing the C definition of
+// `UntypedForeignPtr` in the build script
+#[derive(Eq, PartialEq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct ForeignPtr {
+pub struct ForeignPtr<T> {
     val: usize,
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl ForeignPtr {
+impl<T> ForeignPtr<T> {
+    fn new_with_type_inference(val: usize) -> Self {
+        Self {
+            val,
+            _phantom: Default::default(),
+        }
+    }
+
     pub fn null() -> Self {
-        0usize.into()
+        // this will be an invalid pointer so we don't really care what type rust will infer for
+        // this `ForeignPtr`
+        Self::new_with_type_inference(0)
+    }
+
+    /// Cast from `ForeignPtr<T>` to `ForeignPtr<U>`.
+    ///
+    /// This uses the [`NoTypeInference`] trait to prevent rust from inferring the target type of
+    /// the cast, which will hopefully help prevent accidental invalid casts.
+    ///
+    /// This does not check pointer alignment.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// let ptr: ForeignPtr<u16> = ForeignPtr::null();
+    /// // cast to a u8 pointer
+    /// let ptr = ptr.cast::<u8>();
+    /// ```
+    ///
+    /// If the generic argument is omitted, it will fail to compile:
+    ///
+    /// ```compile_fail
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// let ptr: ForeignPtr<u16> = ForeignPtr::null();
+    /// // cast to a u8 pointer
+    /// let ptr: ForeignPtr<u8> = ptr.cast();
+    /// ```
+    pub fn cast<U: NoTypeInference>(&self) -> ForeignPtr<U::This> {
+        ForeignPtr::new_with_type_inference(self.val)
     }
 
     pub fn is_null(&self) -> bool {
@@ -22,39 +73,73 @@ impl ForeignPtr {
     }
 
     /// Create a `ForeignPtr` from a raw pointer to plugin memory.
-    pub fn from_raw_ptr<T>(ptr: *mut T) -> Self {
+    pub fn from_raw_ptr(ptr: *mut T) -> Self {
         let val = ptr as usize;
-        ForeignPtr { val }
+        // the type of this `ForeignPtr` will be inferred from the pointer type
+        Self::new_with_type_inference(val)
+    }
+
+    /// Add an offset to a pointer. `count` is in units of `T`.
+    pub fn add(&self, count: usize) -> Self {
+        let val = self.val;
+        Self::new_with_type_inference(val + count * std::mem::size_of::<T>())
+    }
+
+    /// Subtract an offset from a pointer. `count` is in units of `T`.
+    pub fn sub(&self, count: usize) -> Self {
+        let val = self.val;
+        Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
     }
 }
 
-impl From<ForeignPtr> for usize {
-    fn from(v: ForeignPtr) -> usize {
+impl<T> From<ForeignPtr<T>> for usize {
+    fn from(v: ForeignPtr<T>) -> Self {
         v.val
     }
 }
 
-impl From<usize> for ForeignPtr {
-    fn from(v: usize) -> ForeignPtr {
-        ForeignPtr { val: v }
-    }
-}
-
-impl From<u64> for ForeignPtr {
-    fn from(v: u64) -> ForeignPtr {
+impl From<usize> for ForeignPtr<()> {
+    fn from(v: usize) -> ForeignPtr<()> {
         ForeignPtr {
-            val: v.try_into().unwrap(),
+            val: v,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl From<ForeignPtr> for u64 {
-    fn from(v: ForeignPtr) -> u64 {
+impl From<u64> for ForeignPtr<()> {
+    fn from(v: u64) -> ForeignPtr<()> {
+        ForeignPtr {
+            val: v.try_into().unwrap(),
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T> From<ForeignPtr<T>> for u64 {
+    fn from(v: ForeignPtr<T>) -> Self {
         v.val.try_into().unwrap()
     }
 }
 
-impl std::fmt::Pointer for ForeignPtr {
+impl<T> Copy for ForeignPtr<T> {}
+
+impl<T> Clone for ForeignPtr<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> std::fmt::Debug for ForeignPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // this will also show the generic type
+        f.debug_struct(std::any::type_name::<Self>())
+            .field("val", &self.val)
+            .finish()
+    }
+}
+
+impl<T> std::fmt::Pointer for ForeignPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ptr = self.val as *const libc::c_void;
         std::fmt::Pointer::fmt(&ptr, f)
@@ -119,7 +204,7 @@ impl SysCallArgs {
 pub union SysCallReg {
     as_i64: i64,
     as_u64: u64,
-    as_ptr: ForeignPtr,
+    as_ptr: UntypedForeignPtr,
 }
 // SysCallReg and all of its fields must be transmutable with a 64 bit integer.
 // TODO: Store as a single `u64` and explicitly transmute in the conversion
@@ -238,15 +323,22 @@ impl TryFrom<SysCallReg> for i16 {
     }
 }
 
-impl From<ForeignPtr> for SysCallReg {
-    fn from(v: ForeignPtr) -> Self {
-        Self { as_ptr: v }
+impl<T> From<ForeignPtr<T>> for SysCallReg {
+    fn from(v: ForeignPtr<T>) -> Self {
+        Self {
+            as_ptr: v.cast::<()>(),
+        }
     }
 }
 
-impl From<SysCallReg> for ForeignPtr {
-    fn from(v: SysCallReg) -> ForeignPtr {
-        unsafe { v.as_ptr }
+impl<T> From<SysCallReg> for ForeignPtr<T> {
+    fn from(v: SysCallReg) -> Self {
+        // This allows rust to infer the type for the cast. This isn't ideal since we generally want
+        // to require that the user be explicit about casts (for example we use the
+        // `NoTypeInference` trait on `ForeignPtr::cast`), but we need this type inference so that
+        // `SyscallHandlerFn` can convert the `SysCallReg` to the correct pointer type in syscall
+        // handler arguments.
+        (unsafe { v.as_ptr }).cast::<T>()
     }
 }
 

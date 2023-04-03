@@ -215,8 +215,8 @@ SyscallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
     return ret;
 }
 
-static SyscallReturn _rt_sigaction(SysCallHandler* sys, int signum, ForeignPtr actPtr,
-                                   ForeignPtr oldActPtr, size_t masksize) {
+static SyscallReturn _rt_sigaction(SysCallHandler* sys, int signum, UntypedForeignPtr actPtr,
+                                   UntypedForeignPtr oldActPtr, size_t masksize) {
     utility_debugAssert(sys);
 
     if (signum < 1 || signum > 64) {
@@ -268,8 +268,8 @@ SyscallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs
 
 SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
-    ForeignPtr ss_ptr = args->args[0].as_ptr;
-    ForeignPtr old_ss_ptr = args->args[1].as_ptr;
+    UntypedForeignPtr ss_ptr = args->args[0].as_ptr;
+    UntypedForeignPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
 
     stack_t old_ss = shimshmem_getSigAltStack(host_getShimShmemLock(_syscallhandler_getHost(sys)),
@@ -312,8 +312,8 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     return syscallreturn_makeDoneI64(0);
 }
 
-static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, ForeignPtr setPtr,
-                                     ForeignPtr oldSetPtr, size_t sigsetsize) {
+static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, UntypedForeignPtr setPtr,
+                                     UntypedForeignPtr oldSetPtr, size_t sigsetsize) {
     utility_debugAssert(sys);
 
     // From sigprocmask(2): This argument is currently required to have a fixed architecture
