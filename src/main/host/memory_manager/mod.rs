@@ -228,7 +228,7 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
             CopiedOrMappedMut::Copied(copier, ptr, v) => {
                 trace!(
                     "Flushing {} bytes to {:x}",
-                    ptr.len(),
+                    ptr.len() * std::mem::size_of::<T>(),
                     usize::from(ptr.ptr())
                 );
                 unsafe { copier.copy_to_ptr(*ptr, v)? };
@@ -729,7 +729,11 @@ where
     pub fn free(mut self, ctx: &mut ThreadContext) {
         ctx.process
             .memory_borrow_mut()
-            .do_munmap(ctx, self.ptr.ptr(), self.ptr.len())
+            .do_munmap(
+                ctx,
+                self.ptr.ptr(),
+                self.ptr.len() * std::mem::size_of::<T>(),
+            )
             .unwrap();
         self.freed = true;
     }
