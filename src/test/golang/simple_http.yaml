@@ -9,7 +9,7 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: test_simple_http
+    - path: ./test_simple_http
       start_time: 3s
   client:
     network_node_id: 0

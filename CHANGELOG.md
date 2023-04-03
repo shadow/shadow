@@ -9,6 +9,10 @@ affect a process that created and terminated many threads over its lifetime.
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
 and topologies.
 
+* Shadow no longer implicitly searches its working directory for executables
+to be run under the simulation. If you wish to specify a path relative to
+Shadow's working directory, prefix that path with `./`.
+
 Raw changes since v2.5.0:
 
 * [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2023-03-23T18%3A20-0400)

@@ -23,7 +23,7 @@ hosts:
     network_node_id: 0
     quantity: 10
     processes:
-    - path: test-phold
+    - path: ./test-phold
       args: loglevel=info basename=peer quantity=10 msgload=1 cpuload=1 size=1
         weightsfilepath=../../../weights.txt runtime=5
       start_time: 1

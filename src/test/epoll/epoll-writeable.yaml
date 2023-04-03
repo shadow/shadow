@@ -7,12 +7,12 @@ hosts:
   server:
     network_node_id: 0
     processes:
-    - path: test-epoll-writeable
+    - path: ./test-epoll-writeable
       args: server_mode
       start_time: 1
   client:
     network_node_id: 0
     processes:
-    - path: test-epoll-writeable
+    - path: ./test-epoll-writeable
       args: client_mode
       start_time: 10

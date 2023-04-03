@@ -22,9 +22,9 @@ hosts:
   tcptestnode:
     network_node_id: 0
     processes:
-    - path: test-tcp
+    - path: ./test-tcp
       args: nonblocking-epoll server localhost 1234
       start_time: 1
-    - path: test-tcp
+    - path: ./test-tcp
       args: nonblocking-epoll client localhost 1234
       start_time: 2

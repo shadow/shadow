@@ -8,5 +8,5 @@ hosts:
     network_node_id: 0
     quantity: 3
     processes:
-    - path: test-signal
+    - path: ./test-signal
       start_time: 1
