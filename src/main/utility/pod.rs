@@ -104,6 +104,7 @@ unsafe impl Pod for usize {}
 // impl !Pod for char {}
 
 unsafe impl<T> Pod for std::mem::MaybeUninit<T> where T: Pod {}
+unsafe impl<T, const N: usize> Pod for [T; N] where T: Pod {}
 
 // libc types
 unsafe impl Pod for libc::Dl_info {}

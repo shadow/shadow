@@ -1073,8 +1073,7 @@ impl LegacyTcpSocket {
                 }
 
                 let optval_ptr = optval_ptr.cast::<OptType>();
-                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
-                let enable = memory_manager.read_vals::<_, 1>(optval_ptr)?[0];
+                let enable = memory_manager.read(optval_ptr)?;
 
                 if enable != 0 {
                     // wants to enable TCP_NODELAY
@@ -1123,8 +1122,8 @@ impl LegacyTcpSocket {
                 }
 
                 let optval_ptr = optval_ptr.cast::<OptType>();
-                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
-                let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
+                let val: u64 = memory_manager
+                    .read(optval_ptr)?
                     .try_into()
                     .or(Err(Errno::EINVAL))?;
 
@@ -1152,8 +1151,8 @@ impl LegacyTcpSocket {
                 }
 
                 let optval_ptr = optval_ptr.cast::<OptType>();
-                let optval_ptr = ForeignArrayPtr::new(optval_ptr, 1);
-                let val: u64 = memory_manager.read_vals::<_, 1>(optval_ptr)?[0]
+                let val: u64 = memory_manager
+                    .read(optval_ptr)?
                     .try_into()
                     .or(Err(Errno::EINVAL))?;
 

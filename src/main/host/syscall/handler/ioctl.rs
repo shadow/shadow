@@ -4,7 +4,7 @@ use syscall_logger::log_syscall;
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, DescriptorFlags, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
@@ -57,12 +57,8 @@ impl SyscallHandler {
 
         // all file types that shadow implements should support non-blocking operation
         if request == libc::FIONBIO {
-            let arg_ptr = ForeignArrayPtr::new(arg_ptr.cast::<libc::c_int>(), 1);
-            let arg = ctx
-                .objs
-                .process
-                .memory_borrow_mut()
-                .read_vals::<_, 1>(arg_ptr)?[0];
+            let arg_ptr = arg_ptr.cast::<libc::c_int>();
+            let arg = ctx.objs.process.memory_borrow_mut().read(arg_ptr)?;
 
             let mut status = file.get_status();
             status.set(FileStatus::NONBLOCK, arg != 0);

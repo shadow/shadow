@@ -1001,8 +1001,7 @@ impl SyscallHandler {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         // get the provided optlen
-        let optlen_ptr = ForeignArrayPtr::new(optlen_ptr, 1);
-        let optlen = mem.read_vals::<_, 1>(optlen_ptr)?[0];
+        let optlen = mem.read(optlen_ptr)?;
 
         let mut optlen_new = socket
             .borrow()
@@ -1019,6 +1018,7 @@ impl SyscallHandler {
         }
 
         // write the new optlen back to the plugin
+        let optlen_ptr = ForeignArrayPtr::new(optlen_ptr, 1);
         mem.copy_to_ptr(optlen_ptr, &[optlen_new])?;
 
         Ok(0.into())

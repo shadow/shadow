@@ -50,7 +50,6 @@ impl SyscallHandler {
         new_value_ptr: ForeignPtr<libc::itimerval>,
         old_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let new_value_ptr = ForeignArrayPtr::new(new_value_ptr, 1);
         let old_value_ptr = ForeignArrayPtr::new(old_value_ptr, 1);
 
         if which != libc::ITIMER_REAL {
@@ -66,11 +65,7 @@ impl SyscallHandler {
                 .copy_to_ptr(old_value_ptr, &[itimerval])?;
         }
 
-        let new_value = ctx
-            .objs
-            .process
-            .memory_borrow()
-            .read_vals::<_, 1>(new_value_ptr)?[0];
+        let new_value = ctx.objs.process.memory_borrow().read(new_value_ptr)?;
         let new_value_value =
             SimulationTime::try_from(new_value.it_value).map_err(|_| Errno::EINVAL)?;
         let new_value_interval =
