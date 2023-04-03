@@ -410,22 +410,28 @@ impl MemoryManager {
     /// efficient, but this is useful to avoid borrowing from the MemoryManager;
     /// e.g. when we still want to be able to access the data while also writing
     /// to process memory.
-    pub fn read_vals<T: Pod + Debug, const N: usize>(
-        &self,
-        ptr: ForeignArrayPtr<T>,
-    ) -> Result<[T; N], Errno> {
-        assert_eq!(ptr.len(), N);
+    ///
+    /// Examples:
+    ///
+    /// ```ignore
+    /// let ptr: ForeignPtr<u32> = todo!();
+    /// let val: u32 = memory_manager.read(ptr)?;
+    /// ```
+    ///
+    /// ```ignore
+    /// let ptr: ForeignPtr<[u32; 2]> = todo!();
+    /// let val: [u32; 2] = memory_manager.read(ptr)?;
+    /// ```
+    pub fn read<T: Pod + Debug>(&self, ptr: ForeignPtr<T>) -> Result<T, Errno> {
+        let ptr = ptr.cast::<MaybeUninit<T>>();
+        let mut res: MaybeUninit<T> = MaybeUninit::uninit();
 
-        // SAFETY: any values are valid for Pod.
-        // see https://github.com/shadow/shadow/issues/2555
-        #[allow(clippy::uninit_assumed_init)]
-        let mut res: [T; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        self.copy_from_ptr(&mut res, ptr)?;
-        Ok(res)
+        self.copy_from_ptr(std::slice::from_mut(&mut res), ForeignArrayPtr::new(ptr, 1))?;
+        // SAFETY: any values are valid for Pod
+        Ok(unsafe { res.assume_init() })
     }
 
-    /// Similar to `read_vals`, but saves a copy if you already have a `dst` to
-    /// copy the data into.
+    /// Similar to `read`, but saves a copy if you already have a `dst` to copy the data into.
     pub fn copy_from_ptr<T: Debug + Pod>(
         &self,
         dst: &mut [T],
