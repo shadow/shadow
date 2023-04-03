@@ -942,13 +942,16 @@ impl Process {
             }
 
             self.memory_borrow_mut()
-                .write(clear_child_tid_pvp.cast::<libc::pid_t>(), &0)
+                .write(clear_child_tid_pvp, &0)
                 .unwrap();
 
             // Wake the corresponding futex.
             let mut futexes = host.futextable_borrow_mut();
             let futex = unsafe {
-                cshadow::futextable_get(&mut *futexes, self.physical_address(clear_child_tid_pvp))
+                cshadow::futextable_get(
+                    &mut *futexes,
+                    self.physical_address(clear_child_tid_pvp.cast::<()>()),
+                )
             };
             if !futex.is_null() {
                 unsafe { cshadow::futex_wake(futex, 1) };
