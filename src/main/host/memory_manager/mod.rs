@@ -749,6 +749,7 @@ where
 
 mod export {
     use shadow_shim_helper_rs::notnull::*;
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
 
     use super::*;
     use crate::{core::worker::Worker, host::context::ThreadContextObjs};
@@ -798,7 +799,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_foreignPtr(
         allocd_mem: *const AllocdMem<u8>,
-    ) -> ForeignPtr<()> {
+    ) -> UntypedForeignPtr {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().cast::<()>() }
     }
 
@@ -868,7 +869,7 @@ mod export {
     pub extern "C" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
-        src: ForeignPtr<()>,
+        src: UntypedForeignPtr,
         n: usize,
     ) -> i32 {
         let mem = unsafe { mem.as_ref() }.unwrap();
@@ -889,7 +890,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
-        dst: ForeignPtr<()>,
+        dst: UntypedForeignPtr,
         src: *const c_void,
         n: usize,
     ) -> i32 {

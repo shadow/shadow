@@ -504,6 +504,7 @@ impl std::fmt::Display for ThreadId {
 
 mod export {
     use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemThread};
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
     use shadow_shmem::allocator::ShMemBlockSerialized;
 
     use super::*;
@@ -562,9 +563,9 @@ mod export {
     pub unsafe extern "C" fn thread_clone(
         thread: *const Thread,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr<()>,
-        ptid: ForeignPtr<()>,
-        ctid: ForeignPtr<()>,
+        child_stack: UntypedForeignPtr,
+        ptid: UntypedForeignPtr,
+        ctid: UntypedForeignPtr,
         newtls: libc::c_ulong,
     ) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -590,14 +591,14 @@ mod export {
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
     /// will perform a futex-wake operation on the given address on termination.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: ForeignPtr<()>) {
+    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: UntypedForeignPtr) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.set_tid_address(addr);
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> ForeignPtr<()> {
+    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> UntypedForeignPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.get_tid_address()
     }

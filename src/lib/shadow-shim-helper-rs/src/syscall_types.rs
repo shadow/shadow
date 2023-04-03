@@ -10,6 +10,9 @@ pub type UntypedForeignPtr = ForeignPtr<()>;
 /// Represents a pointer to a virtual address in plugin memory. The pointer is not guaranteed to be
 /// valid or aligned.
 ///
+/// When passing a `ForeignPtr` to/from C you should use [`UntypedForeignPtr`], which is mapped to
+/// the untyped instance `ForeignPtr<()>` in both Rust and C.
+///
 /// This type derives the `VirtualAddressSpaceIndependent` trait, since it is
 /// specifically meant to transfer pointers between processes. However it is of
 /// course unsafe to turn its inner value back into a pointer and dereference

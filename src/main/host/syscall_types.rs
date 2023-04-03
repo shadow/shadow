@@ -262,6 +262,8 @@ pub enum SyscallReturn {
 }
 
 mod export {
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
+
     use super::*;
 
     #[no_mangle]
@@ -289,7 +291,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: ForeignPtr<()>) -> SyscallReturn {
+    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: UntypedForeignPtr) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,

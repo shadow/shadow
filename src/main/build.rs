@@ -86,16 +86,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                     cbindgen::ItemType::Functions,
                     cbindgen::ItemType::OpaqueItems,
                 ],
-                // Rename `ForeignPtr` from the rust code with `UntypedForeignPtr` in the C code.
-                // Normally cbindgen would copy the generic type over to the C code, which would
-                // fail to compile (for example `ForeignPtr<c_int>` in rust would become
-                // `UntypedForeignPtr<int>` in C, which isn't valid C), but cbindgen seems to
-                // special-case generics containing the unit type, so `ForeignPtr<()>` in rust
-                // becomes just `UntypedForeignPtr` in C. This is good since we only want to expose
-                // `ForeignPtr<()>` to C and not other types like `ForeignPtr<c_int>`.
-                rename: [("ForeignPtr".into(), "UntypedForeignPtr".into())]
-                    .into_iter()
-                    .collect(),
                 ..base_config.export.clone()
             },
             ..base_config.clone()
