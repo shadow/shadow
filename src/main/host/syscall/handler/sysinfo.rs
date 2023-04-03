@@ -4,15 +4,12 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall_types::SyscallResult;
 use crate::utility::pod;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
     pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: ForeignPtr<libc::sysinfo>) -> SyscallResult {
-        // Pointer to the plugin memory where we write the result.
-        let info_ptr = ForeignArrayPtr::new(info_ptr, 1);
-
         // Seconds are needed for uptime.
         let seconds = Worker::current_time()
             .unwrap()
@@ -45,7 +42,7 @@ impl SyscallHandler {
         ctx.objs
             .process
             .memory_borrow_mut()
-            .copy_to_ptr(info_ptr, &[info])?;
+            .write(info_ptr, &info)?;
         Ok(0.into())
     }
 }

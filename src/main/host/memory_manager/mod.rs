@@ -431,6 +431,19 @@ impl MemoryManager {
         Ok(unsafe { res.assume_init() })
     }
 
+    /// Writes a local value `val` into the memory at `ptr`.
+    ///
+    /// ```ignore
+    /// let ptr: ForeignPtr<u32> = todo!();
+    /// let val = 5;
+    /// memory_manager.write(ptr, &val)?;
+    /// ```
+    // take a `&T` rather than a `T` since all `Pod` types are `Copy`, and it's probably more
+    // performant to accept a reference than copying the type here if `T` is large
+    pub fn write<T: Pod + Debug>(&mut self, ptr: ForeignPtr<T>, val: &T) -> Result<(), Errno> {
+        self.copy_to_ptr(ForeignArrayPtr::new(ptr, 1), std::slice::from_ref(val))
+    }
+
     /// Similar to `read`, but saves a copy if you already have a `dst` to copy the data into.
     pub fn copy_from_ptr<T: Debug + Pod>(
         &self,

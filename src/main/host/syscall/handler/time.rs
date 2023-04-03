@@ -6,7 +6,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall_types::SyscallResult;
 use crate::host::timer::Timer;
 
 fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
@@ -27,8 +27,6 @@ impl SyscallHandler {
         which: libc::c_int,
         curr_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let curr_value_ptr = ForeignArrayPtr::new(curr_value_ptr, 1);
-
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
             return Err(Errno::ENOSYS.into());
@@ -38,7 +36,7 @@ impl SyscallHandler {
         ctx.objs
             .process
             .memory_borrow_mut()
-            .copy_to_ptr(curr_value_ptr, &[itimerval])?;
+            .write(curr_value_ptr, &itimerval)?;
 
         Ok(0.into())
     }
@@ -50,8 +48,6 @@ impl SyscallHandler {
         new_value_ptr: ForeignPtr<libc::itimerval>,
         old_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
-        let old_value_ptr = ForeignArrayPtr::new(old_value_ptr, 1);
-
         if which != libc::ITIMER_REAL {
             error!("Timer type {} unsupported", which);
             return Err(Errno::ENOSYS.into());
@@ -62,7 +58,7 @@ impl SyscallHandler {
             ctx.objs
                 .process
                 .memory_borrow_mut()
-                .copy_to_ptr(old_value_ptr, &[itimerval])?;
+                .write(old_value_ptr, &itimerval)?;
         }
 
         let new_value = ctx.objs.process.memory_borrow().read(new_value_ptr)?;

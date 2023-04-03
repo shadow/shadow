@@ -534,8 +534,7 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
-                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
-                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+                memory_manager.write(arg_ptr, &len)?;
 
                 Ok(0.into())
             }
@@ -546,8 +545,7 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
-                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
-                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+                memory_manager.write(arg_ptr, &len)?;
 
                 Ok(0.into())
             }
@@ -557,8 +555,7 @@ impl LegacyTcpSocket {
                     .unwrap();
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
-                let arg_ptr = ForeignArrayPtr::new(arg_ptr, 1);
-                memory_manager.copy_to_ptr(arg_ptr, &[len])?;
+                memory_manager.write(arg_ptr, &len)?;
 
                 Ok(0.into())
             }
