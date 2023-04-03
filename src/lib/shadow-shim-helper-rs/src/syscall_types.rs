@@ -132,7 +132,8 @@ impl<T> Clone for ForeignPtr<T> {
 
 impl<T> std::fmt::Debug for ForeignPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ForeignPtr")
+        // this will also show the generic type
+        f.debug_struct(std::any::type_name::<Self>())
             .field("val", &self.val)
             .finish()
     }
