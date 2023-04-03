@@ -27,7 +27,7 @@ pub struct Thread {
     process_id: ProcessId,
     // If non-NULL, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
-    tid_address: Cell<ForeignPtr<()>>,
+    tid_address: Cell<ForeignPtr<libc::pid_t>>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
     // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
@@ -429,11 +429,11 @@ impl Thread {
         self.mthread.borrow().is_running()
     }
 
-    pub fn get_tid_address(&self) -> ForeignPtr<()> {
+    pub fn get_tid_address(&self) -> ForeignPtr<libc::pid_t> {
         self.tid_address.get()
     }
 
-    pub fn set_tid_address(&self, ptr: ForeignPtr<()>) {
+    pub fn set_tid_address(&self, ptr: ForeignPtr<libc::pid_t>) {
         self.tid_address.set(ptr)
     }
 
@@ -593,14 +593,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: UntypedForeignPtr) {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.set_tid_address(addr);
+        thread.set_tid_address(addr.cast::<libc::pid_t>());
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
     pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> UntypedForeignPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
-        thread.get_tid_address()
+        thread.get_tid_address().cast::<()>()
     }
 
     /// Writes the serialized shared memory block handle to `out`
