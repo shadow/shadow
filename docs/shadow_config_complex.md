@@ -52,13 +52,9 @@ hosts:
     - path: *ServerPath
 ```
 
-We can also enable shadow's experimental
-[extended yaml](./shadow_config_spec.md#experimentaluse_extended_yaml)
-support, allowing us to use [merge keys](https://yaml.org/type/merge.html)
-and [extension
-fields](https://docs.docker.com/compose/compose-file/#extension)).
-
-We can use extension fields to move our constants into one place:
+We can use [extension
+fields](https://docs.docker.com/compose/compose-file/#extension) to move our
+constants into one place:
 
 ```yaml
 x-constants:
@@ -99,7 +95,8 @@ hosts:
     - path: *ServerPath
 ```
 
-We can combine this with merge-keys to make extendable templates for fast and slow hosts:
+We can also use [merge keys](https://yaml.org/type/merge.html) to make
+extendable templates for fast and slow hosts:
 
 ```yaml
 x-constants:

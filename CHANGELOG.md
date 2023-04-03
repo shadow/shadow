@@ -9,6 +9,11 @@ and topologies.
 to be run under the simulation. If you wish to specify a path relative to
 Shadow's working directory, prefix that path with `./`.
 
+* Shadow now always enables support for YAML [merge keys](https://yaml.org/type/merge.html)
+and [extension fields](https://docs.docker.com/compose/compose-file/#extension).
+The experimental configuration option that previously enabled this support,
+`use_extended_yaml`, has been removed.
+
 MINOR changes (backwards-compatible):
 
 *

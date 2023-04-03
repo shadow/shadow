@@ -1,9 +1,13 @@
 # Shadow Configuration Specification
 
 Shadow uses the standard [YAML 1.2](https://yaml.org/spec/1.2.2/) format to
-accept configuration options. The following describes Shadow's YAML
-format and all of the options that Shadow supports that can be used to customize
-a simulation.
+accept configuration options, with the following extensions:
+
+* [merge keys](https://yaml.org/type/merge.html)
+* [extension fields](https://docs.docker.com/compose/compose-file/#extension))
+
+The following describes Shadow's YAML format and all of the options that Shadow
+supports that can be used to customize a simulation.
 
 Example:
 
@@ -453,16 +457,6 @@ Default: false
 Type: Bool
 
 Update the minimum runahead dynamically throughout the simulation.
-
-#### `experimental.use_extended_yaml`
-
-Default: false  
-Type: Bool
-
-Enable extended YAML conventions ([merge keys](https://yaml.org/type/merge.html)
-and [extension
-fields](https://docs.docker.com/compose/compose-file/#extension)). Can only be
-enabled on the command line (enabling in the configuration file is a no-op).
 
 #### `experimental.use_legacy_working_dir`
 

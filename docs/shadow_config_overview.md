@@ -77,12 +77,10 @@ Acceptable unit *prefixes* are:
 
 Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbytes`
 
-## YAML Extensions (Experimental)
+## YAML Extensions
 
-Shadow has experimental support for extended YAML conventions. When these are
-enabled using the [`--use-extended-yaml true`](./shadow_config_spec.md#experimentaluse_extended_yaml) command line option, Shadow
-supports [merge keys](https://yaml.org/type/merge.html)
-and [extension
+Shadow supports the extended YAML conventions for [merge
+keys](https://yaml.org/type/merge.html) and [extension
 fields](https://docs.docker.com/compose/compose-file/#extension)).
 
 For examples, see [Managing Complex Configurations](./shadow_config_complex.md).
