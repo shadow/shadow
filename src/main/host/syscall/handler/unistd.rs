@@ -15,7 +15,6 @@ use crate::host::descriptor::{
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::type_formatting::SyscallBufferArg;
-use crate::host::syscall_types::ForeignArrayPtr;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -358,7 +357,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<libc::c_int>) -> SyscallResult {
+    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<[libc::c_int; 2]>) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
@@ -366,7 +365,7 @@ impl SyscallHandler {
                   /* flags */ nix::fcntl::OFlag)]
     pub fn pipe2(
         ctx: &mut SyscallContext,
-        fd_ptr: ForeignPtr<libc::c_int>,
+        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
         flags: libc::c_int,
     ) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, flags)
@@ -374,7 +373,7 @@ impl SyscallHandler {
 
     fn pipe_helper(
         ctx: &mut SyscallContext,
-        fd_ptr: ForeignPtr<libc::c_int>,
+        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
         flags: i32,
     ) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
@@ -446,11 +445,7 @@ impl SyscallHandler {
             i32::try_from(read_fd).unwrap(),
             i32::try_from(write_fd).unwrap(),
         ];
-        let write_res = ctx
-            .objs
-            .process
-            .memory_borrow_mut()
-            .copy_to_ptr(ForeignArrayPtr::new(fd_ptr, 2), &fds);
+        let write_res = ctx.objs.process.memory_borrow_mut().write(fd_ptr, &fds);
 
         // clean up in case of error
         match write_res {

@@ -337,8 +337,6 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
-
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         log::trace!("Attempting to recv {} bytes", buf_len);
@@ -475,8 +473,6 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
-
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -523,8 +519,6 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
-        let addr_len_ptr = ForeignArrayPtr::new(addr_len_ptr, 1);
-
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -746,7 +740,7 @@ impl SyscallHandler {
                 &mut ctx.objs.process.memory_borrow_mut(),
                 from_addr.as_ref(),
                 addr_ptr,
-                ForeignArrayPtr::new(addr_len_ptr, 1),
+                addr_len_ptr,
             )?;
         }
 
@@ -876,7 +870,7 @@ impl SyscallHandler {
         domain: libc::c_int,
         socket_type: libc::c_int,
         protocol: libc::c_int,
-        fd_ptr: ForeignPtr<libc::c_int>,
+        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
     ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
@@ -946,11 +940,7 @@ impl SyscallHandler {
 
         // try to write them to the caller
         let fds = [i32::from(fd_1), i32::from(fd_2)];
-        let write_res = ctx
-            .objs
-            .process
-            .memory_borrow_mut()
-            .copy_to_ptr(ForeignArrayPtr::new(fd_ptr, 2), &fds);
+        let write_res = ctx.objs.process.memory_borrow_mut().write(fd_ptr, &fds);
 
         // clean up in case of error
         match write_res {
@@ -1018,8 +1008,7 @@ impl SyscallHandler {
         }
 
         // write the new optlen back to the plugin
-        let optlen_ptr = ForeignArrayPtr::new(optlen_ptr, 1);
-        mem.copy_to_ptr(optlen_ptr, &[optlen_new])?;
+        mem.write(optlen_ptr, &optlen_new)?;
 
         Ok(0.into())
     }

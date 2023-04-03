@@ -20,12 +20,12 @@ pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
     plugin_addr: ForeignPtr<u8>,
-    plugin_addr_len: ForeignArrayPtr<libc::socklen_t>,
+    plugin_addr_len: ForeignPtr<libc::socklen_t>,
 ) -> Result<(), SyscallError> {
     let addr = match addr {
         Some(x) => x,
         None => {
-            mem.copy_to_ptr(plugin_addr_len, &[0])?;
+            mem.write(plugin_addr_len, &0)?;
             return Ok(());
         }
     };
@@ -35,7 +35,7 @@ pub fn write_sockaddr_and_len(
 
     // get the provided address buffer length, and overwrite it with the real address length
     let plugin_addr_len = {
-        let mut plugin_addr_len = mem.memory_ref_mut(plugin_addr_len)?;
+        let mut plugin_addr_len = mem.memory_ref_mut(ForeignArrayPtr::new(plugin_addr_len, 1))?;
         let plugin_addr_len_value = plugin_addr_len.get_mut(0).unwrap();
 
         // keep a copy before we change it

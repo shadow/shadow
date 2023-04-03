@@ -941,10 +941,8 @@ impl Process {
                 // Check again
             }
 
-            let typed_clear_child_tid_pvp =
-                ForeignArrayPtr::new(clear_child_tid_pvp.cast::<libc::pid_t>(), 1);
             self.memory_borrow_mut()
-                .copy_to_ptr(typed_clear_child_tid_pvp, &[0])
+                .write(clear_child_tid_pvp.cast::<libc::pid_t>(), &0)
                 .unwrap();
 
             // Wake the corresponding futex.

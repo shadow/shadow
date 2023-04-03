@@ -413,14 +413,28 @@ impl MemoryManager {
     ///
     /// Examples:
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// # use shadow_rs::host::memory_manager::MemoryManager;
+    /// # use nix::errno::Errno;
+    /// # fn foo() -> Result<(), Errno> {
+    /// # let memory_manager: MemoryManager = todo!();
     /// let ptr: ForeignPtr<u32> = todo!();
     /// let val: u32 = memory_manager.read(ptr)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// # use shadow_rs::host::memory_manager::MemoryManager;
+    /// # use nix::errno::Errno;
+    /// # fn foo() -> Result<(), Errno> {
+    /// # let memory_manager: MemoryManager = todo!();
     /// let ptr: ForeignPtr<[u32; 2]> = todo!();
     /// let val: [u32; 2] = memory_manager.read(ptr)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn read<T: Pod + Debug>(&self, ptr: ForeignPtr<T>) -> Result<T, Errno> {
         let ptr = ptr.cast::<MaybeUninit<T>>();
@@ -429,6 +443,26 @@ impl MemoryManager {
         self.copy_from_ptr(std::slice::from_mut(&mut res), ForeignArrayPtr::new(ptr, 1))?;
         // SAFETY: any values are valid for Pod
         Ok(unsafe { res.assume_init() })
+    }
+
+    /// Writes a local value `val` into the memory at `ptr`.
+    ///
+    /// ```no_run
+    /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+    /// # use shadow_rs::host::memory_manager::MemoryManager;
+    /// # use nix::errno::Errno;
+    /// # fn foo() -> Result<(), Errno> {
+    /// # let mut memory_manager: MemoryManager = todo!();
+    /// let ptr: ForeignPtr<u32> = todo!();
+    /// let val = 5;
+    /// memory_manager.write(ptr, &val)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    // take a `&T` rather than a `T` since all `Pod` types are `Copy`, and it's probably more
+    // performant to accept a reference than copying the type here if `T` is large
+    pub fn write<T: Pod + Debug>(&mut self, ptr: ForeignPtr<T>, val: &T) -> Result<(), Errno> {
+        self.copy_to_ptr(ForeignArrayPtr::new(ptr, 1), std::slice::from_ref(val))
     }
 
     /// Similar to `read`, but saves a copy if you already have a `dst` to copy the data into.
