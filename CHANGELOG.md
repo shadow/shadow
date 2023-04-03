@@ -1,10 +1,6 @@
-A list of user-facing changes since the latest Shadow release.
+A list of changes since the latest Shadow release.
 
-* Fixed a memory leak of about 16 bytes per thread due to
-failing to unregister exited threads with a watchdog thread. This is unlikely to
-have been noticeable effect in typical simulations. In particular the per-thread
-data was already getting freed when the whole process exited, so it would only
-affect a process that created and terminated many threads over its lifetime.
+MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
 and topologies.
@@ -12,6 +8,18 @@ and topologies.
 * Shadow no longer implicitly searches its working directory for executables
 to be run under the simulation. If you wish to specify a path relative to
 Shadow's working directory, prefix that path with `./`.
+
+MINOR changes (backwards-compatible):
+
+*
+
+PATCH changes (bugfixes):
+
+* Fixed a memory leak of about 16 bytes per thread due to
+failing to unregister exited threads with a watchdog thread. This is unlikely to
+have been noticeable effect in typical simulations. In particular the per-thread
+data was already getting freed when the whole process exited, so it would only
+affect a process that created and terminated many threads over its lifetime.
 
 Raw changes since v2.5.0:
 
