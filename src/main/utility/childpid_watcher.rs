@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::os::unix::io::RawFd;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,7 +18,7 @@ use nix::unistd::Pid;
 #[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
-    epoll: std::os::unix::io::RawFd,
+    epoll: Arc<File>,
 }
 
 pub type WatchHandle = u64;
@@ -51,17 +50,17 @@ struct Inner {
     pids: HashMap<Pid, PidData>,
     // event_fd used to notify watcher thread via epoll. Calling thread writes a
     // single byte, which the watcher thread reads to reset.
-    command_notifier: RawFd,
+    command_notifier: File,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Inner {
     fn send_command(&mut self, cmd: Command) {
         self.commands.push(cmd);
-        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
     }
 
-    fn unwatch_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn unwatch_pid(&mut self, epoll: &File, pid: Pid) {
         let Some(piddata) = self.pids.get_mut(&pid) else {
             // Already unregistered the pid
             return;
@@ -70,14 +69,20 @@ impl Inner {
             // Already unwatched the pid
             return;
         };
-        epoll_ctl(epoll, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).unwrap();
+        epoll_ctl(
+            epoll.as_raw_fd(),
+            EpollOp::EpollCtlDel,
+            fd.as_raw_fd(),
+            None,
+        )
+        .unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
         self.pids.get(&pid).unwrap().fd.is_none()
     }
 
-    fn remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn remove_pid(&mut self, epoll: &File, pid: Pid) {
         debug_assert!(self.should_remove_pid(pid));
         self.unwatch_pid(epoll, pid);
         self.pids.remove(&pid);
@@ -94,7 +99,7 @@ impl Inner {
         pid_data.callbacks.is_empty() && pid_data.unregistered
     }
 
-    fn maybe_remove_pid(&mut self, epoll: RawFd, pid: Pid) {
+    fn maybe_remove_pid(&mut self, epoll: &File, pid: Pid) {
         if self.should_remove_pid(pid) {
             self.remove_pid(epoll, pid)
         }
@@ -105,14 +110,20 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = epoll_create1(EpollCreateFlags::empty()).unwrap();
-        let command_notifier =
-            nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
+        let epoll = {
+            let raw = epoll_create1(EpollCreateFlags::empty()).unwrap();
+            Arc::new(unsafe { File::from_raw_fd(raw) })
+        };
+        let command_notifier = {
+            let raw =
+                nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
+            unsafe { File::from_raw_fd(raw) }
+        };
         let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
         epoll_ctl(
-            epoll,
+            epoll.as_raw_fd(),
             EpollOp::EpollCtlAdd,
-            command_notifier,
+            command_notifier.as_raw_fd(),
             Some(&mut event),
         )
         .unwrap();
@@ -128,22 +139,22 @@ impl ChildPidWatcher {
         };
         let thread_handle = {
             let inner = Arc::clone(&watcher.inner);
-            let epoll = watcher.epoll;
+            let epoll = watcher.epoll.clone();
             thread::Builder::new()
                 .name("child-pid-watcher".into())
-                .spawn(move || ChildPidWatcher::thread_loop(&inner, epoll))
+                .spawn(move || ChildPidWatcher::thread_loop(&inner, &epoll))
                 .unwrap()
         };
         watcher.inner.lock().unwrap().thread_handle = Some(thread_handle);
         watcher
     }
 
-    fn thread_loop(inner: &Mutex<Inner>, epoll: RawFd) {
+    fn thread_loop(inner: &Mutex<Inner>, epoll: &File) {
         let mut events = [EpollEvent::empty(); 10];
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = match epoll_wait(epoll, &mut events, -1) {
+            let nevents = match epoll_wait(epoll.as_raw_fd(), &mut events, -1) {
                 Ok(n) => n,
                 Err(Errno::EINTR) => {
                     // Just try again.
@@ -153,7 +164,7 @@ impl ChildPidWatcher {
             };
 
             // We hold the lock the whole time we're processing events. While it'd
-            // be nice to avoid holding it while executing callbacks (and therefor
+            // be nice to avoid holding it while executing callbacks (and therefore
             // not require that callbacks don't call ChildPidWatcher APIs), that'd
             // make it difficult to guarantee a callback *won't* be run if the
             // caller unregisters it.
@@ -172,7 +183,7 @@ impl ChildPidWatcher {
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
             let mut buf = [0; 8];
-            let res = nix::unistd::read(inner.command_notifier, &mut buf);
+            let res = nix::unistd::read(inner.command_notifier.as_raw_fd(), &mut buf);
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
@@ -281,7 +292,7 @@ impl ChildPidWatcher {
         assert!(prev.is_none());
         let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
         epoll_ctl(
-            self.epoll,
+            self.epoll.as_raw_fd(),
             EpollOp::EpollCtlAdd,
             raw_read_fd,
             Some(&mut event),
@@ -300,9 +311,9 @@ impl ChildPidWatcher {
     ///
     /// Safe to call multiple times.
     pub fn unregister_pid(&self, pid: Pid) {
-        // Let the worker handle the actual unregistration; otherwise we'd need
-        // to be extra careful to avoid races with e.g. simultaneous epoll
-        // events.
+        // Let the worker handle the actual unregistration. This avoids a race
+        // where we unregister a pid at the same time as the worker thread
+        // receives an epoll event for it.
         let mut inner = self.inner.lock().unwrap();
         inner.send_command(Command::UnregisterPid(pid));
     }
@@ -341,7 +352,7 @@ impl ChildPidWatcher {
         let mut inner = self.inner.lock().unwrap();
         if let Some(pid_data) = inner.pids.get_mut(&pid) {
             pid_data.callbacks.remove(&handle);
-            inner.maybe_remove_pid(self.epoll, pid);
+            inner.maybe_remove_pid(&self.epoll, pid);
         }
     }
 }
@@ -360,7 +371,6 @@ impl Drop for ChildPidWatcher {
             inner.thread_handle.take().unwrap()
         };
         handle.join().unwrap();
-        nix::unistd::close(self.epoll).unwrap();
     }
 }
 
