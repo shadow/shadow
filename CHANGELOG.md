@@ -14,6 +14,11 @@ and [extension fields](https://docs.docker.com/compose/compose-file/#extension).
 The experimental configuration option that previously enabled this support,
 `use_extended_yaml`, has been removed.
 
+* A host's data files (files in `<data-dir>/hosts/<hostname>/`) are no longer
+prefixed with the hostname. For example a file that was previously named
+`shadow.data/hosts/server/server.curl.1000.stdout` is now named
+`shadow.data/hosts/server/curl.1000.stdout`.
+
 MINOR changes (backwards-compatible):
 
 *

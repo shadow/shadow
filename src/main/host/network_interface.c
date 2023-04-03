@@ -411,8 +411,7 @@ NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
             g_string_append(filename, "/");
         }
 
-        g_string_append_printf(filename, "%s-%s.pcap", address_toHostName(interface->address),
-                               address_toHostIPString(interface->address));
+        g_string_append_printf(filename, "%s.pcap", address_toHostIPString(interface->address));
 
         interface->pcap = pcapwriter_new(filename->str, pcapCaptureSize);
         g_string_free(filename, TRUE);
