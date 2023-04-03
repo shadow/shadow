@@ -62,7 +62,8 @@ jobs:
           - container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'debug'
-    runs-on: ubuntu-20.04
+    # Tests are all run in containers; just use the latest base image.
+    runs-on: ubuntu-latest
 
     env:
       # Assign these to env variables rather than using directly inline, to help
