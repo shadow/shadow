@@ -310,9 +310,9 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         flags: libc::c_ulong,
-        child_stack: ForeignPtr<u8>,
-        ptid: ForeignPtr<()>,
-        ctid: ForeignPtr<()>,
+        child_stack: ForeignPtr<()>,
+        ptid: ForeignPtr<libc::pid_t>,
+        ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
     ) -> Result<ThreadId, Errno> {
         let child_tid = ThreadId::from(ctx.host.get_new_process_id());
@@ -575,9 +575,9 @@ mod export {
                     .handle_clone_syscall(
                         &ProcessContext::new(host, process),
                         flags,
-                        child_stack.cast::<u8>(),
-                        ptid,
-                        ctid,
+                        child_stack,
+                        ptid.cast::<libc::pid_t>(),
+                        ctid.cast::<libc::pid_t>(),
                         newtls,
                     )
                     .map(libc::pid_t::from)
