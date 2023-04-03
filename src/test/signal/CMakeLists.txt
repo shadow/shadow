@@ -14,7 +14,7 @@ add_shadow_tests(BASENAME signals-extra)
 add_shadow_tests(
     BASENAME signals-multiprocess
     # `sleep` should die with signal SIGINT (2), giving exitcode 128+2=130
-    POST_CMD "test `cat hosts/*/*.sleep.*.exitcode` -eq 130"
+    POST_CMD "test `cat hosts/*/sleep.*.exitcode` -eq 130"
     # Shadow should return failure
     EXPECT_ERROR TRUE
     CHECK_RETVAL FALSE)

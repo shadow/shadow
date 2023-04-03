@@ -10,7 +10,7 @@ client=$2
 
 # make sure all of the fixed-size transfers were successful
 expected_count="$(echo ${client} | cut -d'_' -f3 | cut -d'x' -f1)"
-actual_count="$(grep -r --include="client.tgen.*.stdout" "stream-success" | wc -l)"
+actual_count="$(grep -r --include="tgen.*.stdout" "stream-success" ./hosts/client/ | wc -l)"
 
 printf "Successful tgen stream count: ${actual_count}/${expected_count}\n"
 

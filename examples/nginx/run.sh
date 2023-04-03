@@ -8,5 +8,5 @@ fi
 
 # ANCHOR: body
 rm -rf shadow.data; shadow shadow.yaml > shadow.log
-cat shadow.data/hosts/client1/client1.curl.1000.stdout
+cat shadow.data/hosts/client1/curl.1000.stdout
 # ANCHOR_END: body

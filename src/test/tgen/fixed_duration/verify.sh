@@ -11,14 +11,14 @@ client=$2
 # read speed of server is the effective write speed of client
 # read speed of client is the effective write speed of server
 # tail -1 gets the fastest speed reached
-server_Bps_read="$(grep -r --include="server.tgen.*.stdout" "driver-heartbeat" \
+server_Bps_read="$(grep -r --include="tgen.*.stdout" "driver-heartbeat" ./hosts/server/ \
     | cut -d' ' -f8 \
     | cut -d'[' -f2 \
     | cut -d',' -f1 \
     | cut -d'=' -f2 \
     | sort -n \
     | tail -1)"
-client_Bps_read="$(grep -r --include="client.tgen.*.stdout" "driver-heartbeat" \
+client_Bps_read="$(grep -r --include="tgen.*.stdout" "driver-heartbeat" ./hosts/client/ \
     | cut -d' ' -f8 \
     | cut -d'[' -f2 \
     | cut -d',' -f1 \
