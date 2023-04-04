@@ -1,7 +1,7 @@
 general:
   stop_time: 5
 host_defaults:
-  pcap_directory: '.'
+  pcap_enabled: true
 network:
   graph:
     type: gml

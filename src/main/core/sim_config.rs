@@ -171,8 +171,7 @@ pub struct HostInfo {
     pub bandwidth_up_bits: Option<u64>,
     pub ip_addr: Option<std::net::IpAddr>,
     pub log_level: Option<LogLevel>,
-    pub pcap_dir: Option<PathBuf>,
-    pub pcap_capture_size: u64,
+    pub pcap_config: Option<PcapConfig>,
     pub heartbeat_log_level: Option<LogLevel>,
     pub heartbeat_log_info: HashSet<LogInfoFlag>,
     pub heartbeat_interval: Option<SimulationTime>,
@@ -196,6 +195,11 @@ pub struct ProcessInfo {
 pub struct Bandwidth {
     pub up_bytes: u64,
     pub down_bytes: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PcapConfig {
+    pub capture_size: u64,
 }
 
 /// For a host entry in the configuration options, build a list of `HostInfo` objects.
@@ -262,18 +266,15 @@ fn build_host(
 
             ip_addr: host.ip_addr.map(|x| x.into()),
             log_level: host.options.log_level.flatten(),
-            pcap_dir: host
-                .options
-                .pcap_directory
-                .flatten_ref()
-                .map(|x| tilde_expansion(x)),
-            pcap_capture_size: host
-                .options
-                .pcap_capture_size
-                .unwrap()
-                .convert(units::SiPrefixUpper::Base)
-                .unwrap()
-                .value(),
+            pcap_config: host.options.pcap_enabled.unwrap().then_some(PcapConfig {
+                capture_size: host
+                    .options
+                    .pcap_capture_size
+                    .unwrap()
+                    .convert(units::SiPrefixUpper::Base)
+                    .unwrap()
+                    .value(),
+            }),
 
             // some options come from the config options and not the host options
             heartbeat_log_level: config.experimental.host_heartbeat_log_level,

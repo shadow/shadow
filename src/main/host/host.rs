@@ -25,6 +25,7 @@ use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
 use vasi_sync::scmutex::SelfContainedMutexGuard;
 
+use crate::core::sim_config::PcapConfig;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::work::event::{Event, EventData};
 use crate::core::work::event_queue::EventQueue;
@@ -61,9 +62,7 @@ pub struct HostParameters {
     pub heartbeat_log_level: LogLevel,
     pub heartbeat_log_info: cshadow::LogInfoFlags,
     pub log_level: LogLevel,
-    // TODO: change to PathBuf when we don't need C compatibility
-    pub pcap_dir: Option<CString>,
-    pub pcap_capture_size: u32,
+    pub pcap_config: Option<PcapConfig>,
     pub qdisc: QDiscMode,
     pub init_sock_recv_buf_size: u64,
     pub autotune_recv_buf: bool,
@@ -257,12 +256,17 @@ impl Host {
             .map(|x| (*x).try_into().unwrap())
             .collect();
 
+        let pcap_options = params.pcap_config.as_ref().map(|x| PcapOptions {
+            path: data_dir_path.clone(),
+            capture_size_bytes: x.capture_size.try_into().unwrap(),
+        });
+
         let net_ns = unsafe {
             NetworkNamespace::new(
                 params.id,
                 hostname,
                 public_ip,
-                Self::pcap_options(&params, &data_dir_path),
+                pcap_options,
                 params.qdisc,
                 dns,
             )
@@ -359,22 +363,6 @@ impl Host {
 
     pub fn data_dir_path(&self) -> &Path {
         &self.data_dir_path
-    }
-
-    fn pcap_options(params: &HostParameters, data_dir_path: &Path) -> Option<PcapOptions> {
-        let Some(pcap_dir) = &params.pcap_dir else {
-            return None;
-        };
-        let path_string: OsString = { OsString::from_vec(pcap_dir.to_bytes().to_vec()) };
-
-        let mut path = data_dir_path.to_path_buf();
-        // If relative it will append, if absolute it will replace.
-        path.push(PathBuf::from(path_string));
-
-        Some(PcapOptions {
-            path: path.canonicalize().unwrap(),
-            capture_size_bytes: params.pcap_capture_size,
-        })
     }
 
     pub fn add_application(
