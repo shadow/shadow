@@ -1308,18 +1308,4 @@ mod export {
         let config = unsafe { &*config };
         config.experimental.use_memory_manager.unwrap()
     }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseShimSyscallHandler(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.use_shim_syscall_handler()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.use_legacy_working_dir()
-    }
 }
