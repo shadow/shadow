@@ -18,3 +18,9 @@ Shadow itself can.
 intentionally has the ability to make non-interposed system calls (which it uses
 to communicate with the Shadow process), and makes no effort to protect itself
 from the managed code running in the same process.
+
+## Reporting security issues
+
+Security issues can be reported to
+unique\_halberd\_0m@icloud.com
+.
