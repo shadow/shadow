@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use shadow_shim_helper_rs::util::NoTypeInference;
 
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::ForeignArrayPtr;
@@ -124,32 +123,39 @@ pub fn read_sockaddr(
     Ok(Some(addr))
 }
 
-/// Writes `val` to `val_ptr`, but will only write a partial value if `val_len` is smaller than the
-/// size of `val`. Returns the number of bytes written.
+/// Writes `val` to `val_ptr`, but will only write a partial value if `val_len_bytes` is smaller
+/// than the size of `val`. Returns the number of bytes written.
 ///
-/// The generic type must be given explicitly to prevent accidentally writing the wrong type.
-///
-/// ```ignore
-/// let bytes_written = write_partial::<i32>(mem, foo(), ptr, len)?;
+/// ```no_run
+/// # use shadow_rs::host::memory_manager::MemoryManager;
+/// # use shadow_rs::host::syscall::io::write_partial;
+/// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+/// # fn foo() -> anyhow::Result<()> {
+/// # let memory_manager: &mut MemoryManager = todo!();
+/// let ptr: ForeignPtr<u32> = todo!();
+/// let val: u32 = 0xAABBCCDD;
+/// // write a single byte of `val` (0xDD on little-endian) to `ptr`
+/// let bytes_written = write_partial(memory_manager, &val, ptr, 1)?;
+/// assert_eq!(bytes_written, 1);
+/// # Ok(())
+/// # }
 /// ```
-pub fn write_partial<T>(
+pub fn write_partial<T: pod::Pod>(
     mem: &mut MemoryManager,
-    val: &T::This,
-    val_ptr: ForeignPtr<u8>,
-    val_len: usize,
-) -> Result<usize, Errno>
-where
-    T: NoTypeInference,
-    <T as NoTypeInference>::This: pod::Pod,
-{
-    let val_len = std::cmp::min(val_len, std::mem::size_of_val(val));
+    val: &T,
+    val_ptr: ForeignPtr<T>,
+    val_len_bytes: usize,
+) -> Result<usize, Errno> {
+    let val_len_bytes = std::cmp::min(val_len_bytes, std::mem::size_of_val(val));
 
-    let val = &pod::as_u8_slice(val)[..val_len];
-    let val_ptr = ForeignArrayPtr::new(val_ptr.cast::<MaybeUninit<u8>>(), val_len);
+    let val = &pod::as_u8_slice(val)[..val_len_bytes];
+
+    let val_ptr = val_ptr.cast::<MaybeUninit<u8>>();
+    let val_ptr = ForeignArrayPtr::new(val_ptr, val_len_bytes);
 
     mem.copy_to_ptr(val_ptr, val)?;
 
-    Ok(val_len)
+    Ok(val_len_bytes)
 }
 
 /// Analogous to [`libc::msghdr`].

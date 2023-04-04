@@ -917,12 +917,9 @@ impl LegacyTcpSocket {
                 let mut info = pod::zeroed();
                 unsafe { c::tcp_getInfo(self.as_legacy_tcp(), &mut info) };
 
-                let bytes_written = write_partial::<crate::cshadow::tcp_info>(
-                    memory_manager,
-                    &info,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<crate::cshadow::tcp_info>();
+                let bytes_written =
+                    write_partial(memory_manager, &info, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
@@ -931,12 +928,9 @@ impl LegacyTcpSocket {
                 // TCP_NODELAY is enabled
                 let val = 1;
 
-                let bytes_written = write_partial::<libc::c_int>(
-                    memory_manager,
-                    &val,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &val, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
@@ -974,12 +968,9 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int>(
-                    memory_manager,
-                    &sndbuf_size,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &sndbuf_size, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
@@ -989,12 +980,9 @@ impl LegacyTcpSocket {
                         .try_into()
                         .unwrap();
 
-                let bytes_written = write_partial::<libc::c_int>(
-                    memory_manager,
-                    &rcvbuf_size,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &rcvbuf_size, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
@@ -1009,12 +997,9 @@ impl LegacyTcpSocket {
                     0
                 };
 
-                let bytes_written = write_partial::<libc::c_int>(
-                    memory_manager,
-                    &error,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &error, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
@@ -1032,12 +1017,9 @@ impl LegacyTcpSocket {
                     _ => unimplemented!(),
                 };
 
-                let bytes_written = write_partial::<libc::c_int>(
-                    memory_manager,
-                    &sock_type,
-                    optval_ptr.cast::<u8>(),
-                    optlen as usize,
-                )?;
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &sock_type, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
