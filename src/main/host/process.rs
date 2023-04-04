@@ -888,6 +888,8 @@ impl Process {
         let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
         let thread = threadrc.borrow(host.root());
 
+        assert!(!thread.is_running());
+
         // If the `clear_child_tid` attribute on the thread is set, and there are
         // any other threads left alive in the process, perform a futex wake on
         // that address. This mechanism is typically used in `pthread_join` etc.
@@ -897,50 +899,6 @@ impl Process {
             && self.threads.borrow().len() > 0
             && !self.is_exiting.get()
         {
-            // Wait until the thread is really dead. It might not be dead yet if we
-            // marked the thread dead after seeing the `exit` syscall - the managed
-            // process might not have finished executing the native syscall yet.
-            // TODO: Move this into the `exit` syscall handling and/or use the native
-            // tidaddress mechanism to be notified when a thread has actually terminated.
-            let native_pid = thread.native_pid();
-            let native_tid = thread.native_tid();
-            loop {
-                match tgkill(native_pid, native_tid, None) {
-                    Err(Errno::ESRCH) => {
-                        trace!("Thread is done exiting; proceeding with cleanup");
-                        break;
-                    }
-                    Err(e) => {
-                        error!("Unexpected tgkill error: {:?}", e);
-                        break;
-                    }
-                    Ok(()) if native_pid == native_tid => {
-                        // Thread leader could be in a zombie state waiting for
-                        // the other threads to exit.
-                        let filename = format!("/proc/{native_pid}/stat");
-                        let stat = match std::fs::read_to_string(filename) {
-                            Err(e) => {
-                                assert!(e.kind() == std::io::ErrorKind::NotFound);
-                                trace!("tgl {native_pid} is fully dead");
-                                break;
-                            }
-                            Ok(s) => s,
-                        };
-                        if stat.contains(") Z") {
-                            trace!("tgl {native_pid} is a zombie");
-                            break;
-                        }
-                        // Still alive and in a non-zombie state; continue
-                    }
-                    Ok(()) => {
-                        // Thread is still alive; continue.
-                    }
-                };
-                debug!("{native_pid}.{native_tid} still running; waiting for it to exit");
-                std::thread::yield_now();
-                // Check again
-            }
-
             self.memory_borrow_mut()
                 .write(clear_child_tid_pvp, &0)
                 .unwrap();
@@ -1372,19 +1330,6 @@ impl UnsafeBorrowMut {
 // This is admittedly hand-wavy and making some assumptions about the implementation of
 // RefCell, but this whole type is temporary scaffolding to support legacy C code.
 unsafe impl Send for UnsafeBorrowMut {}
-
-fn tgkill(pid: Pid, tid: Pid, signo: Option<Signal>) -> nix::Result<()> {
-    let pid = pid.as_raw();
-    let tid = tid.as_raw();
-    let signo = match signo {
-        Some(s) => s as i32,
-        None => 0,
-    };
-    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
-    Errno::result(res).map(|i: i64| {
-        assert_eq!(i, 0);
-    })
-}
 
 mod export {
     use std::ffi::c_char;

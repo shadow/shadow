@@ -4,7 +4,7 @@ use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
 use std::sync::{atomic, Arc};
 
-use log::{debug, info, log_enabled, trace, Level};
+use log::{debug, error, info, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
@@ -92,7 +92,7 @@ impl ManagedThread {
             Err(SelfContainedChannelError::WriterIsClosed) => {
                 trace!("Plugin exited while executing native syscall {n}");
                 ctx.process.mark_as_exiting();
-                self.cleanup();
+                self.cleanup_after_exit_initiated();
                 SysCallReg::from(-(Errno::ESRCH as i64))
             }
             other => {
@@ -183,7 +183,7 @@ impl ManagedThread {
                     // The native threads are all dead or zombies. Nothing to do but
                     // clean up.
                     ctx.process.mark_as_exiting();
-                    self.cleanup();
+                    self.cleanup_after_exit_initiated();
                     return None;
                 }
                 ShimEvent::Syscall(syscall) => {
@@ -205,7 +205,7 @@ impl ManagedThread {
                         // aren't going to get a message back to know when it'd be
                         // safe to take it again.
                         self.ipc_shmem.to_plugin().send(ShimEvent::SyscallDoNative);
-                        self.cleanup();
+                        self.cleanup_after_exit_initiated();
                         return None;
                     }
 
@@ -266,11 +266,7 @@ impl ManagedThread {
             .child_pid_watcher()
             .unregister_pid(self.native_pid());
 
-        if !self.is_running() {
-            return;
-        }
-
-        self.cleanup();
+        self.cleanup_after_exit_initiated();
     }
 
     pub fn return_code(&self) -> Option<i32> {
@@ -392,9 +388,68 @@ impl ManagedThread {
         event
     }
 
-    fn cleanup(&self) {
+    /// To be called after we expect the native thread to have exited, or to
+    /// exit imminently.
+    fn cleanup_after_exit_initiated(&self) {
+        if !self.is_running.get() {
+            return;
+        }
+        self.wait_for_native_exit();
         trace!("child {:?} exited", self.native_tid());
         self.is_running.set(false);
+    }
+
+    /// Wait until the managed thread is no longer running.
+    fn wait_for_native_exit(&self) {
+        let native_pid = self.native_pid();
+        let native_tid = self.native_tid();
+
+        // We use `tgkill` and `/proc/x/stat` to detect whether the thread is still running,
+        // looping until it doesn't.
+        //
+        // Alternatively we could use `set_tid_address` or `set_robust_list` to
+        // be notified on a futex. Those are a bit underdocumented and fragile,
+        // though. In practice this shouldn't have to loop significantly.
+        loop {
+            if self.ipc_shmem.from_plugin().writer_is_closed() {
+                // This indicates that the whole process has stopped executing;
+                // no need to poll the individual thread.
+                break;
+            }
+            match tgkill(native_pid, native_tid, None) {
+                Err(Errno::ESRCH) => {
+                    trace!("Thread is done exiting; proceeding with cleanup");
+                    break;
+                }
+                Err(e) => {
+                    error!("Unexpected tgkill error: {:?}", e);
+                    break;
+                }
+                Ok(()) if native_pid == native_tid => {
+                    // Thread leader could be in a zombie state waiting for
+                    // the other threads to exit.
+                    let filename = format!("/proc/{native_pid}/stat");
+                    let stat = match std::fs::read_to_string(filename) {
+                        Err(e) => {
+                            assert!(e.kind() == std::io::ErrorKind::NotFound);
+                            trace!("tgl {native_pid} is fully dead");
+                            break;
+                        }
+                        Ok(s) => s,
+                    };
+                    if stat.contains(") Z") {
+                        trace!("tgl {native_pid} is a zombie");
+                        break;
+                    }
+                    // Still alive and in a non-zombie state; continue
+                }
+                Ok(()) => {
+                    // Thread is still alive; continue.
+                }
+            };
+            debug!("{native_pid}.{native_tid} still running; waiting for it to exit");
+            std::thread::yield_now();
+        }
     }
 
     fn sync_affinity_with_worker(&self) {
@@ -598,4 +653,32 @@ impl ManagedThread {
 
         child_pid
     }
+}
+
+impl Drop for ManagedThread {
+    fn drop(&mut self) {
+        // Dropping while the thread is running is unsound because the running
+        // thread still has access to shared memory regions that will be
+        // deallocated, and potentially reallocated for another purpose. The
+        // running thread accessing a deallocated or repurposed memory region
+        // can cause numerous problems.
+        assert!(!self.is_running());
+    }
+}
+
+fn tgkill(
+    pid: nix::unistd::Pid,
+    tid: nix::unistd::Pid,
+    signo: Option<nix::sys::signal::Signal>,
+) -> nix::Result<()> {
+    let pid = pid.as_raw();
+    let tid = tid.as_raw();
+    let signo = match signo {
+        Some(s) => s as i32,
+        None => 0,
+    };
+    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
+    Errno::result(res).map(|i: i64| {
+        assert_eq!(i, 0);
+    })
 }
