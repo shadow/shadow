@@ -6,7 +6,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use shadow_shim_helper_rs::util::NoTypeInference;
 
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall_types::ForeignArrayPtr;
 use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 
@@ -21,7 +21,7 @@ pub fn write_sockaddr_and_len(
     addr: Option<&SockaddrStorage>,
     plugin_addr: ForeignPtr<u8>,
     plugin_addr_len: ForeignPtr<libc::socklen_t>,
-) -> Result<(), SyscallError> {
+) -> Result<(), Errno> {
     let addr = match addr {
         Some(x) => x,
         None => {
@@ -69,7 +69,7 @@ pub fn write_sockaddr(
     addr: &SockaddrStorage,
     plugin_addr: ForeignPtr<u8>,
     plugin_addr_len: libc::socklen_t,
-) -> Result<libc::socklen_t, SyscallError> {
+) -> Result<libc::socklen_t, Errno> {
     let from_addr_slice = addr.as_slice();
     let from_len: u32 = from_addr_slice.len().try_into().unwrap();
 
@@ -91,7 +91,7 @@ pub fn read_sockaddr(
     mem: &MemoryManager,
     addr_ptr: ForeignPtr<u8>,
     addr_len: libc::socklen_t,
-) -> Result<Option<SockaddrStorage>, SyscallError> {
+) -> Result<Option<SockaddrStorage>, Errno> {
     if addr_ptr.is_null() {
         return Ok(None);
     }
@@ -109,7 +109,7 @@ pub fn read_sockaddr(
             addr_len,
             std::mem::size_of_val(&addr_buf),
         );
-        return Err(Errno::EINVAL.into());
+        return Err(Errno::EINVAL);
     }
 
     let addr_buf = &mut addr_buf[..addr_len_usize];
@@ -137,7 +137,7 @@ pub fn write_partial<T>(
     val: &T::This,
     val_ptr: ForeignPtr<u8>,
     val_len: usize,
-) -> Result<usize, SyscallError>
+) -> Result<usize, Errno>
 where
     T: NoTypeInference,
     <T as NoTypeInference>::This: pod::Pod,
