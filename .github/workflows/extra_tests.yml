@@ -36,7 +36,8 @@ jobs:
       SCCACHE_CACHE_SIZE: 2G
       SCCACHE_DIR: /home/runner/.cache/sccache
       # SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
-    runs-on: ubuntu-20.04
+    # runs in a container; just use the latest base image.
+    runs-on: ubuntu-latest
     container:
       # Should match env.CONTAINER.
       image: ubuntu:22.04
@@ -127,7 +128,8 @@ jobs:
           retention-days: 1
 
   build_tgen:
-    runs-on: ubuntu-20.04
+    # runs in a container; just use the latest base image.
+    runs-on: ubuntu-latest
     container:
       # Should match env.CONTAINER.
       image: 'ubuntu:22.04'
@@ -189,10 +191,8 @@ jobs:
       - build_shadow
       - build_tgen
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
-    runs-on: ubuntu-20.04
+    # runs in a container; just use the latest base image.
+    runs-on: ubuntu-latest
 
     container:
       # Should match env.CONTAINER.
@@ -329,10 +329,8 @@ jobs:
       - build_shadow
       - build_tgen
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
-    runs-on: ubuntu-20.04
+    # runs in a container; just use the latest base image.
+    runs-on: ubuntu-latest
 
     container:
       # Should match env.CONTAINER.
@@ -413,10 +411,8 @@ jobs:
     needs:
       - build_shadow
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
-    runs-on: ubuntu-20.04
+    # runs in a container; just use the latest base image.
+    runs-on: ubuntu-latest
 
     container:
       # Should match env.CONTAINER.
