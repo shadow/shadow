@@ -32,6 +32,9 @@ https://github.com/shadow/shadow/pull/2841
 * Support the `TIMER_ABSTIME` flag for `clock_nanosleep`.
 https://github.com/shadow/shadow/pull/2854
 
+* The experimental config option `use_shim_syscall_handler` has been removed.
+This optimization is now always enabled.
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to

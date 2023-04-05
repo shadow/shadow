@@ -204,11 +204,10 @@ impl Process {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        mut envv: Vec<CString>,
+        envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
-        use_shim_syscall_handler: bool,
         strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
@@ -263,10 +262,6 @@ impl Process {
         } else {
             std::fs::canonicalize(host.data_dir_path()).unwrap()
         });
-
-        if !use_shim_syscall_handler {
-            envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
-        }
 
         #[cfg(feature = "perf_timers")]
         let cpu_delay_timer = {
