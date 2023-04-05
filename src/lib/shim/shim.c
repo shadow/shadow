@@ -287,13 +287,8 @@ static void _shim_parent_init_death_signal() {
 }
 
 static void _shim_parent_init_host_shm() {
-    const char* shm_blk_buf = getenv("SHADOW_SHM_HOST_BLK");
-    assert(shm_blk_buf);
-
-    bool err = false;
-    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
-
-    *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(
+        shimshmem_getProcessHostShmem(shim_processSharedMem()));
     assert(shim_hostSharedMem());
 }
 
@@ -457,9 +452,9 @@ static void _shim_parent_init_preload() {
 
     shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
-    _shim_parent_init_host_shm();
-    _shim_parent_init_process_shm();
     _shim_parent_init_thread_shm();
+    _shim_parent_init_process_shm();
+    _shim_parent_init_host_shm();
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
     _shim_parent_init_ipc();

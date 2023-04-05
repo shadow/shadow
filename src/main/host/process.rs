@@ -251,6 +251,7 @@ impl Process {
 
         let shim_shared_mem = ProcessShmem::new(
             &host.shim_shmem_lock_borrow().unwrap().root,
+            host.shim_shmem().serialize(),
             host.id(),
             strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
         );

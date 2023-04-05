@@ -1,5 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use nix::sys::signal::Signal;
+use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
@@ -131,15 +132,23 @@ pub struct HostShmemProtected {
 pub struct ProcessShmem {
     host_id: HostId,
 
+    /// Handle to shared memory for the Host
+    pub host_shmem: ShMemBlockSerialized,
     pub strace_fd: FfiOption<libc::c_int>,
 
     pub protected: RootedRefCell<ProcessShmemProtected>,
 }
 
 impl ProcessShmem {
-    pub fn new(host_root: &Root, host_id: HostId, strace_fd: Option<libc::c_int>) -> Self {
+    pub fn new(
+        host_root: &Root,
+        host_shmem: ShMemBlockSerialized,
+        host_id: HostId,
+        strace_fd: Option<libc::c_int>,
+    ) -> Self {
         Self {
             host_id,
+            host_shmem,
             strace_fd: strace_fd.into(),
             protected: RootedRefCell::new(
                 host_root,
@@ -559,6 +568,18 @@ pub mod export {
     ) -> libc::c_int {
         let process_mem = unsafe { process.as_ref().unwrap() };
         process_mem.strace_fd.unwrap_or(-1)
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable. The returned pointer is
+    /// borrowed from `process`.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getProcessHostShmem(
+        process: *const ShimShmemProcess,
+    ) -> *const ShMemBlockSerialized {
+        let process_mem = unsafe { process.as_ref().unwrap() };
+        &process_mem.host_shmem
     }
 
     /// Get the process's pending signal set.

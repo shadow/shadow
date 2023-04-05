@@ -371,19 +371,10 @@ impl Host {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        mut envv: Vec<CString>,
+        envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
     ) {
-        {
-            // SAFETY: We're not touching the data inside the block, only
-            // using its metadata to create a serialized pointer to it.
-            let block = unsafe { &*self.shim_shmem.get() };
-            let mut envvar = String::from("SHADOW_SHM_HOST_BLK=");
-            envvar.push_str(&block.serialize().encode_to_string());
-            envv.push(CString::new(envvar).unwrap());
-        }
-
         let process_id = self.get_new_process_id();
 
         let process = Process::new(
@@ -705,7 +696,7 @@ impl Host {
     /// Do not try to take the lock of [`HostShmem::protected`] directly.
     /// Instead use [`Host::lock_shmem`], [`Host::shim_shmem_lock_borrow`], and
     /// [`Host::shim_shmem_lock_borrow_mut`].
-    pub fn shim_shmem(&self) -> &HostShmem {
+    pub fn shim_shmem(&self) -> &ShMemBlock<'static, HostShmem> {
         unsafe { &*self.shim_shmem.get() }
     }
 
