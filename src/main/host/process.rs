@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
@@ -107,6 +107,9 @@ pub struct Process {
 
     // unique id of the program that this process should run
     name: CString,
+
+    // The basename (directory + file stem) for files that should be stored in the data directory.
+    file_basename: PathBuf,
 
     // the name and path to the executable that we will exec
     plugin_name: CString,
@@ -217,6 +220,7 @@ impl Process {
         }));
         let plugin_name = plugin_name.to_owned();
         let plugin_path = plugin_path.to_owned();
+
         let name = CString::new(format!(
             "{host_name}.{exe_name}.{id}",
             host_name = host.name(),
@@ -225,10 +229,18 @@ impl Process {
         ))
         .unwrap();
 
+        let mut file_basename = PathBuf::new();
+        file_basename.push(host.data_dir_path());
+        file_basename.push(format!(
+            "{exe_name}.{id}",
+            exe_name = plugin_name.to_str().unwrap(),
+            id = u32::from(process_id)
+        ));
+
         let strace_logging = strace_logging_options.map(|options| {
             let oflag = { OFlag::O_CREAT | OFlag::O_TRUNC | OFlag::O_WRONLY | OFlag::O_CLOEXEC };
             let mode = { Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH };
-            let filename = Self::static_output_file_name(name.to_str().unwrap(), host, "strace");
+            let filename = Self::static_output_file_name(&file_basename, "strace");
             let fd = nix::fcntl::open(&filename, oflag, mode).unwrap();
 
             StraceLogging {
@@ -289,6 +301,7 @@ impl Process {
                     start_time: EmulatedTime::SIMULATION_START + start_time,
                     stop_time: stop_time.map(|t| EmulatedTime::SIMULATION_START + t),
                     name,
+                    file_basename,
                     plugin_name,
                     plugin_path,
                     strace_logging,
@@ -416,14 +429,14 @@ impl Process {
             OFlag::O_RDONLY,
         );
 
-        let name = self.output_file_name(host, "stdout");
+        let name = self.output_file_name("stdout");
         self.open_stdio_file_helper(
             libc::STDOUT_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
-        let name = self.output_file_name(host, "stderr");
+        let name = self.output_file_name("stderr");
         self.open_stdio_file_helper(
             libc::STDERR_FILENO.try_into().unwrap(),
             name,
@@ -448,12 +461,8 @@ impl Process {
 
         Process::set_shared_time(host);
 
-        let shimlog_path = CString::new(
-            Self::static_output_file_name(self.name(), host, "shimlog")
-                .as_os_str()
-                .as_bytes(),
-        )
-        .unwrap();
+        let shimlog_path =
+            CString::new(self.output_file_name("shimlog").as_os_str().as_bytes()).unwrap();
 
         main_thread.run(
             &ProcessContext::new(host, self),
@@ -717,16 +726,16 @@ impl Process {
         stdfile
     }
 
-    fn output_file_name(&self, host: &Host, basename: &str) -> PathBuf {
-        Self::static_output_file_name(self.name(), host, basename)
+    fn output_file_name(&self, extension: &str) -> PathBuf {
+        Self::static_output_file_name(&self.file_basename, extension)
     }
 
     // Needed during early init, before `Self` is created.
-    fn static_output_file_name(name: &str, host: &Host, basename: &str) -> PathBuf {
-        let mut dirname = host.data_dir_path().to_owned();
-        let basename = format!("{}.{}", name, basename);
-        dirname.push(basename);
-        dirname
+    fn static_output_file_name(file_basename: &Path, extension: &str) -> PathBuf {
+        let mut path = file_basename.to_owned().into_os_string();
+        path.push(".");
+        path.push(extension);
+        path.into()
     }
 
     pub fn name(&self) -> &str {
@@ -977,7 +986,7 @@ impl Process {
         self.handle_process_exit(host);
     }
 
-    fn get_and_log_return_code(&self, host: &Host) {
+    fn get_and_log_return_code(&self) {
         if self.return_code.get().is_some() {
             return;
         }
@@ -1005,7 +1014,7 @@ impl Process {
         };
         self.return_code.set(Some(return_code));
 
-        let exitcode_path = self.output_file_name(host, "exitcode");
+        let exitcode_path = self.output_file_name("exitcode");
         let exitcode_contents = if self.killed_by_shadow.get() {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
@@ -1053,7 +1062,7 @@ impl Process {
             "process '{}' has completed or is otherwise no longer running",
             self.name()
         );
-        self.get_and_log_return_code(host);
+        self.get_and_log_return_code();
 
         #[cfg(feature = "perf_timers")]
         info!(

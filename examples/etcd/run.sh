@@ -8,5 +8,5 @@ fi
 
 # ANCHOR: body
 rm -rf shadow.data; shadow shadow.yaml > shadow.log
-cat shadow.data/hosts/*/*.etcdctl.*.stdout
+cat shadow.data/hosts/*/etcdctl.*.stdout
 # ANCHOR_END: body

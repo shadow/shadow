@@ -13,20 +13,20 @@ macro(EXEC_DIFF_CHECK FILE1 FILE2)
 endmacro()
 foreach(LOOPIDX RANGE 1 10)
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.test-determinism.1000.stdout
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.test-determinism.1000.stdout
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/test-determinism.1000.stdout
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/test-determinism.1000.stdout
     )
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.test-determinism.1000.strace
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.test-determinism.1000.strace
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/test-determinism.1000.strace
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/test-determinism.1000.strace
     )
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}-127.0.0.1.pcap
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}-127.0.0.1.pcap
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/127.0.0.1.pcap
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/127.0.0.1.pcap
     )
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}-11.0.0.${LOOPIDX}.pcap
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/11.0.0.${LOOPIDX}.pcap
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/11.0.0.${LOOPIDX}.pcap
     )
 endforeach(LOOPIDX)
 

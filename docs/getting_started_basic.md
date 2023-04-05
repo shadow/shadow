@@ -79,12 +79,12 @@ For example:
 
 ```bash
 $ ls -l shadow.data/hosts/client1/
--rw-rw-r-- 1 user user   1 Jun  2 16:54 client1.curl.1000.exitcode
--rw-rw-r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.shimlog
--rw-r--r-- 1 user user   0 Jun  2 16:54 client1.curl.1000.stderr
--rw-r--r-- 1 user user 542 Jun  2 16:54 client1.curl.1000.stdout
+-rw-rw-r-- 1 user user   1 Jun  2 16:54 curl.1000.exitcode
+-rw-rw-r-- 1 user user   0 Jun  2 16:54 curl.1000.shimlog
+-rw-r--r-- 1 user user   0 Jun  2 16:54 curl.1000.stderr
+-rw-r--r-- 1 user user 542 Jun  2 16:54 curl.1000.stdout
 
-$ cat shadow.data/hosts/client1/client1.curl.1000.stdout
+$ cat shadow.data/hosts/client1/curl.1000.stdout
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
 <head>

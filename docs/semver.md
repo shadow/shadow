@@ -29,4 +29,4 @@ The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 - New files may be added in Shadow's data directory
   ([`general.data_directory`](shadow_config_spec.md#generaldata_directory)).
 	- If new files are added in Shadow's host-data directories, they will begin
-	  with the prefix `<hostname>.<process name>.<pid>`.
+	  with the prefix `<process name>.<pid>`.

@@ -29,8 +29,8 @@ directories, you could run something like the following bash script:
 found_difference=0
 
 for SUFFIX in \
-    hosts/fileserver/fileserver.tgen.1000.strace \
-    hosts/client/client.tgen.1000.strace
+    hosts/fileserver/tgen.1000.strace \
+    hosts/client/tgen.1000.strace
 do
     diff --brief shadow.data.1/${SUFFIX} shadow.data.2/${SUFFIX}
     exit_code=$?
@@ -60,8 +60,8 @@ run something like the following bash script:
 found_difference=0
 
 for SUFFIX in \
-    hosts/fileserver/fileserver.tgen.1000.stdout \
-    hosts/client/client.tgen.1000.stdout
+    hosts/fileserver/tgen.1000.stdout \
+    hosts/client/tgen.1000.stdout
 do
     ## ignore memory addresses in log file with `sed 's/0x[0-9a-f]*/HEX/g' FILENAME`
     sed -i 's/0x[0-9a-f]*/HEX/g' shadow.data.1/${SUFFIX}

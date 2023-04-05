@@ -405,7 +405,7 @@ the "deterministic" mode will avoid logging memory addresses or potentially
 uninitialized memory.
 
 The logs will be stored at
-`shadow.data/hosts/<hostname>/<hostname>.<procname>.<pid>.strace`.
+`shadow.data/hosts/<hostname>/<procname>.<pid>.strace`.
 
 Limitations:
 
@@ -566,7 +566,7 @@ Should Shadow generate pcap files?
 
 Logs all network input and output for this host in PCAP format (for viewing in
 e.g. wireshark). The pcap files will be stored in the host's data directory,
-for example `shadow.data/hosts/myhost/myhost-11.0.0.1.pcap`.
+for example `shadow.data/hosts/myhost/11.0.0.1.pcap`.
 
 #### `hosts`
 
