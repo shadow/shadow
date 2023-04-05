@@ -1498,7 +1498,7 @@ impl Protocol for ConnOrientedConnected {
         self.refresh_file_state(common, cb_queue);
 
         Ok(RecvmsgReturn {
-            bytes_read: rv.try_into().unwrap(),
+            return_val: rv.try_into().unwrap(),
             addr: self.peer_addr.map(Into::into),
             msg_flags: 0,
             control_len: 0,
@@ -1706,7 +1706,7 @@ impl Protocol for ConnLessInitial {
         self.refresh_file_state(common, cb_queue);
 
         Ok(RecvmsgReturn {
-            bytes_read: rv.try_into().unwrap(),
+            return_val: rv.try_into().unwrap(),
             addr: byte_data.from_addr.map(Into::into),
             msg_flags: 0,
             control_len: 0,

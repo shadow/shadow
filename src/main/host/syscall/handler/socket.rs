@@ -367,7 +367,7 @@ impl SyscallHandler {
         }
 
         let RecvmsgReturn {
-            bytes_read: bytes_received,
+            return_val,
             addr: from_addr,
             ..
         } = result?;
@@ -377,7 +377,7 @@ impl SyscallHandler {
             io::write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 
-        Ok(bytes_received)
+        Ok(return_val)
     }
 
     #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* msg */ *const libc::msghdr,
@@ -462,7 +462,7 @@ impl SyscallHandler {
         // write msg back to the plugin
         io::update_msghdr(&mut mem, msg_ptr, msg)?;
 
-        Ok(result.bytes_read)
+        Ok(result.return_val)
     }
 
     #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,

@@ -499,7 +499,7 @@ impl LegacyTcpSocket {
             }
 
             Ok(RecvmsgReturn {
-                bytes_read: bytes_read.try_into().unwrap(),
+                return_val: bytes_read.try_into().unwrap(),
                 addr: None,
                 msg_flags: 0,
                 control_len: 0,

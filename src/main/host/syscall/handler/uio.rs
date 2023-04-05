@@ -230,14 +230,14 @@ impl SyscallHandler {
             };
 
             // call the socket's recvmsg(), and run any resulting events
-            let RecvmsgReturn { bytes_read, .. } =
+            let RecvmsgReturn { return_val, .. } =
                 crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
                     CallbackQueue::queue_and_run(|cb_queue| {
                         Socket::recvmsg(socket, args, &mut mem, cb_queue)
                     })
                 })?;
 
-            return Ok(bytes_read);
+            return Ok(return_val);
         }
 
         let file_status = file.borrow().get_status();
