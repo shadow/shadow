@@ -236,6 +236,8 @@ impl ProcessShmemProtected {
 #[repr(C)]
 pub struct ThreadShmem {
     pub host_id: HostId,
+    /// Handle to shared memory for the Process
+    pub process_shmem: ShMemBlockSerialized,
     tid: libc::pid_t,
 
     pub protected: RootedRefCell<ThreadShmemProtected>,
@@ -243,9 +245,14 @@ pub struct ThreadShmem {
 assert_shmem_safe!(ThreadShmem, _test_threadshmem_fn);
 
 impl ThreadShmem {
-    pub fn new(host: &HostShmemProtected, tid: libc::pid_t) -> Self {
+    pub fn new(
+        host: &HostShmemProtected,
+        process_shmem: ShMemBlockSerialized,
+        tid: libc::pid_t,
+    ) -> Self {
         Self {
             host_id: host.host_id,
+            process_shmem,
             tid,
             protected: RootedRefCell::new(
                 &host.root,
@@ -939,5 +946,17 @@ pub mod export {
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
         SimulationTime::to_c_simtime(Some(host.unblocked_vdso_latency))
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable. The returned pointer is
+    /// borrowed from `process`.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getProcessShmem(
+        thread: *const ShimShmemThread,
+    ) -> *const ShMemBlockSerialized {
+        let thread_mem = unsafe { thread.as_ref().unwrap() };
+        &thread_mem.process_shmem
     }
 }

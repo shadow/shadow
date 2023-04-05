@@ -293,13 +293,8 @@ static void _shim_parent_init_host_shm() {
 }
 
 static void _shim_parent_init_process_shm() {
-    const char* shm_blk_buf = getenv("SHADOW_SHM_PROCESS_BLK");
-    assert(shm_blk_buf);
-
-    bool err = false;
-    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
-
-    *_shim_process_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    *_shim_process_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(shimshmem_getProcessShmem(shim_threadSharedMem()));
     assert(shim_processSharedMem());
 }
 

@@ -264,14 +264,6 @@ impl Process {
             std::fs::canonicalize(host.data_dir_path()).unwrap()
         });
 
-        // TODO: ensure no duplicate env vars.
-        envv.push(
-            CString::new(format!(
-                "SHADOW_SHM_PROCESS_BLK={}",
-                shim_shared_mem_block.serialize().encode_to_string()
-            ))
-            .unwrap(),
-        );
         if !use_shim_syscall_handler {
             envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
         }
@@ -1139,7 +1131,7 @@ impl Process {
     }
 
     /// Shared memory for this process.
-    pub fn shmem(&self) -> &ProcessShmem {
+    pub fn shmem(&self) -> &ShMemBlock<'static, ProcessShmem> {
         &self.shim_shared_mem_block
     }
 }

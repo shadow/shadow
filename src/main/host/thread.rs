@@ -299,6 +299,7 @@ impl Thread {
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
+                process.shmem().serialize(),
                 thread_id.into(),
             )),
         };
@@ -340,6 +341,7 @@ impl Thread {
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &ctx.host.shim_shmem_lock_borrow().unwrap(),
+                ctx.process.shmem().serialize(),
                 child_tid.into(),
             )),
         };
