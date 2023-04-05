@@ -1482,7 +1482,7 @@ impl Protocol for ConnOrientedConnected {
             return Err(Errno::EINVAL.into());
         }
 
-        let (num_copied, num_removed_from_buf) =
+        let (rv, num_removed_from_buf) =
             common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
@@ -1498,7 +1498,7 @@ impl Protocol for ConnOrientedConnected {
         self.refresh_file_state(common, cb_queue);
 
         Ok(RecvmsgReturn {
-            bytes_read: num_copied.try_into().unwrap(),
+            bytes_read: rv.try_into().unwrap(),
             addr: self.peer_addr.map(Into::into),
             msg_flags: 0,
             control_len: 0,
@@ -1688,7 +1688,7 @@ impl Protocol for ConnLessInitial {
             return Err(Errno::EINVAL.into());
         }
 
-        let (num_copied, num_removed_from_buf) =
+        let (rv, num_removed_from_buf) =
             common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
@@ -1706,7 +1706,7 @@ impl Protocol for ConnLessInitial {
         self.refresh_file_state(common, cb_queue);
 
         Ok(RecvmsgReturn {
-            bytes_read: num_copied.try_into().unwrap(),
+            bytes_read: rv.try_into().unwrap(),
             addr: byte_data.from_addr.map(Into::into),
             msg_flags: 0,
             control_len: 0,
@@ -1973,7 +1973,8 @@ impl UnixSocketCommon {
         // TODO: Once we've implemented generating a SIGPIPE when the peer on a
         // stream-oriented socket has closed the connection, MSG_NOSIGNAL should
         // disable it.
-        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_NOSIGNAL;
+        // Ignore the MSG_TRUNC flag since it doesn't do anything when sending.
+        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_NOSIGNAL | MsgFlags::MSG_TRUNC;
 
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
@@ -2083,7 +2084,7 @@ impl UnixSocketCommon {
         mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(usize, usize), SyscallError> {
-        let supported_flags = MsgFlags::MSG_DONTWAIT;
+        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_TRUNC;
 
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
@@ -2121,7 +2122,17 @@ impl UnixSocketCommon {
                 .read(writer, cb_queue)
                 .map_err(|e| e.try_into().unwrap())?;
 
-            Ok((num_copied, num_removed_from_buf))
+            if flags.contains(MsgFlags::MSG_TRUNC)
+                && [UnixSocketType::Dgram, UnixSocketType::SeqPacket].contains(&self.socket_type)
+            {
+                // we're a message-based socket and MSG_TRUNC is set, so return the total size of
+                // the message, not the number of bytes we read
+                Ok((num_removed_from_buf, num_removed_from_buf))
+            } else {
+                // We're a stream-based socket. Unlike TCP sockets, unix stream sockets ignore the
+                // MSG_TRUNC flag.
+                Ok((num_copied, num_removed_from_buf))
+            }
         })();
 
         // if the syscall would block and we don't have the MSG_DONTWAIT flag
