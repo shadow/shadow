@@ -288,6 +288,20 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             move || test_recv_addr(sys_method, init_method, sock_type, flag, true),
                             passing.clone(),
                         ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_recv_flag_trunc"),
+                            move || test_recv_flag_trunc(sys_method, init_method, sock_type, flag),
+                            match init_method.domain() {
+                                // TODO: enable if shadow supports MSG_TRUNC for inet sockets
+                                libc::AF_INET => set![TestEnv::Libc],
+                                _ => set![TestEnv::Libc, TestEnv::Shadow],
+                            },
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_send_flag_trunc"),
+                            move || test_send_flag_trunc(sys_method, init_method, sock_type, flag),
+                            passing.clone(),
+                        ),
                     ]);
 
                     // if sendto()/recvfrom()
@@ -1162,6 +1176,111 @@ fn test_recv_addr(
                 )?;
             }
         }
+
+        Ok(())
+    })
+}
+
+fn test_recv_flag_trunc(
+    sys_method: SendRecvMethod,
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // If the socket is non-blocking, make sure that recv with MSG_TRUNC on an empty socket
+        // returns EAGAIN and not 0. Blocking sockets should block instead, but we don't test that.
+        if (flag & libc::SOCK_NONBLOCK) != 0 {
+            let mut buf = vec![0u8; 10];
+            let mut args = RecvfromArguments {
+                fd: fd_server,
+                len: buf.len(),
+                buf: Some(&mut buf),
+                flags: libc::MSG_TRUNC,
+                ..Default::default()
+            };
+
+            check_recv_call(&mut args, sys_method, &[libc::EAGAIN], false)?;
+        }
+
+        simple_sendto_helper(sys_method, fd_client, &vec![1u8; 500], &[], true)?;
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let mut buf = vec![0u8; 200];
+        let mut args = RecvfromArguments {
+            fd: fd_server,
+            len: buf.len(),
+            buf: Some(&mut buf),
+            flags: libc::MSG_TRUNC,
+            ..Default::default()
+        };
+
+        let rv = check_recv_call(&mut args, sys_method, &[], false)?;
+
+        if sock_type == libc::SOCK_STREAM {
+            test_utils::result_assert_eq(rv, 200, "Expected to read the buffer size")?;
+            if init_method.domain() == libc::AF_INET {
+                test_utils::result_assert(
+                    buf.iter().all(|&x| x == 0),
+                    "Expected the buffer to be unchanged",
+                )?;
+            } else {
+                // unix stream sockets don't support MSG_TRUNC, so the buffer should be changed
+                test_utils::result_assert(
+                    buf.iter().all(|&x| x == 1),
+                    "Expected the buffer to be changed",
+                )?;
+            }
+        } else {
+            test_utils::result_assert_eq(rv, 500, "Expected to read the original msg size")?;
+            test_utils::result_assert(
+                buf.iter().all(|&x| x == 1),
+                "Expected the buffer to be changed",
+            )?;
+        }
+
+        Ok(())
+    })
+}
+
+fn test_send_flag_trunc(
+    sys_method: SendRecvMethod,
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        let buf_send = vec![1u8; 200];
+        let args = SendtoArguments {
+            fd: fd_client,
+            len: buf_send.len(),
+            buf: Some(&buf_send),
+            flags: libc::MSG_TRUNC,
+            ..Default::default()
+        };
+
+        // we expect the MSG_TRUNC flag to be ignored
+        check_send_call(&args, sys_method, &[], true)?;
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let mut buf_recv = [0u8; 500];
+        let rv = simple_recvfrom_helper(sys_method, fd_server, &mut buf_recv, &[], false)?;
+        test_utils::result_assert_eq(rv, 200, "Expected to read the original msg size")?;
+        test_utils::result_assert_eq(
+            &buf_send[..],
+            &buf_recv[..(rv as usize)],
+            "Expected the buffers to be equal",
+        )?;
 
         Ok(())
     })

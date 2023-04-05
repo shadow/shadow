@@ -24,7 +24,8 @@ prefixed with the hostname. For example a file that was previously named
 
 MINOR changes (backwards-compatible):
 
-*
+* Support the `MSG_TRUNC` flag for unix sockets.
+https://github.com/shadow/shadow/pull/2841
 
 PATCH changes (bugfixes):
 

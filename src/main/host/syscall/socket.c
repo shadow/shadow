@@ -521,7 +521,8 @@ SyscallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    if (flags & ~MSG_DONTWAIT) {
+    // MSG_TRUNC is ignored when sending
+    if (flags & ~(MSG_DONTWAIT | MSG_TRUNC)) {
         warning("Unsupported send flag(s): %d", flags);
     }
 
