@@ -319,6 +319,13 @@ impl<T> SelfContainedChannel<T> {
             sync::futex_wake(&self.state.0).unwrap();
         }
     }
+
+    /// Whether the write-end of the channel has been closed (via `close_writer`).
+    pub fn writer_is_closed(&self) -> bool {
+        self.state
+            .load(sync::atomic::Ordering::Relaxed)
+            .writer_closed
+    }
 }
 
 unsafe impl<T> Send for SelfContainedChannel<T> where T: Send {}
