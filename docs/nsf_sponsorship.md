@@ -2,7 +2,7 @@
 
 **Project Title:** Expanding Research Frontiers with a Next-Generation Anonymous Communication Experimentation (ACE) Framework
 
-**Project Period:** October 1, 2019 - September 30, 2022
+**Project Period:** October 1, 2019 - September 30, ~~2022~~ 2023 (extended)
 
 **Abstract:** [NSF Award Abstract #1925497](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1925497)
 
