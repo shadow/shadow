@@ -352,8 +352,9 @@ pub struct RecvmsgArgs<'a> {
 
 /// Return values for [`Socket::recvmsg()`].
 pub struct RecvmsgReturn {
-    /// The number of message bytes read.
-    pub bytes_read: libc::ssize_t,
+    /// The return value for the syscall. Typically is the number of message bytes read, but is
+    /// modifiable by the syscall flag.
+    pub return_val: libc::ssize_t,
     /// The socket address of the received message.
     pub addr: Option<SockaddrStorage>,
     /// Message flags.
