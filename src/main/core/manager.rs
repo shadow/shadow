@@ -540,10 +540,6 @@ impl<'a> Manager<'a> {
         dns: *mut c::DNS,
     ) -> anyhow::Result<Box<Host>> {
         let hostname = CString::new(&*host_info.name).unwrap();
-        let pcap_dir = host_info
-            .pcap_dir
-            .as_ref()
-            .map(|x| CString::new(x.to_str().unwrap()).unwrap());
 
         // scope used to enforce drop order for pointers
         let host = {
@@ -580,8 +576,7 @@ impl<'a> Manager<'a> {
                     .log_level
                     .map(|x| x.to_c_loglevel())
                     .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                pcap_dir,
-                pcap_capture_size: host_info.pcap_capture_size.try_into().unwrap(),
+                pcap_config: host_info.pcap_config,
                 qdisc: host_info.qdisc,
                 init_sock_recv_buf_size: host_info.recv_buf_size,
                 autotune_recv_buf: host_info.autotune_recv_buf,

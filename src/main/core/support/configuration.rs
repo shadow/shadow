@@ -528,10 +528,10 @@ pub struct HostDefaultOptions {
     #[clap(help = HOST_HELP.get("log_level").unwrap().as_str())]
     pub log_level: Option<NullableOption<LogLevel>>,
 
-    /// Where to save the pcap files (relative to the host directory)
-    #[clap(long, value_name = "path")]
-    #[clap(help = HOST_HELP.get("pcap_directory").unwrap().as_str())]
-    pub pcap_directory: Option<NullableOption<String>>,
+    /// Should shadow generate pcap files?
+    #[clap(long, value_name = "bool")]
+    #[clap(help = HOST_HELP.get("pcap_enabled").unwrap().as_str())]
+    pub pcap_enabled: Option<bool>,
 
     /// How much data to capture per packet (header and payload) if pcap logging is enabled
     #[clap(long, value_name = "bytes")]
@@ -543,7 +543,7 @@ impl HostDefaultOptions {
     pub fn new_empty() -> Self {
         Self {
             log_level: None,
-            pcap_directory: None,
+            pcap_enabled: None,
             pcap_capture_size: None,
         }
     }
@@ -559,7 +559,7 @@ impl Default for HostDefaultOptions {
     fn default() -> Self {
         Self {
             log_level: None,
-            pcap_directory: None,
+            pcap_enabled: Some(false),
             // From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
             // capture all the data available from the packet". The maximum length of an IP packet
             // (including the header) is 65535 bytes.
@@ -1307,19 +1307,5 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_memory_manager.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseShimSyscallHandler(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.use_shim_syscall_handler()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.use_legacy_working_dir()
     }
 }

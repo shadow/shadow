@@ -99,7 +99,7 @@ hosts:
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.log_level`](#host_defaultslog_level)
 - [`host_defaults.pcap_capture_size`](#host_defaultspcap_capture_size)
-- [`host_defaults.pcap_directory`](#host_defaultspcap_directory)
+- [`host_defaults.pcap_enabled`](#host_defaultspcap_enabled)
 - [`hosts`](#hosts)
 - [`hosts.<hostname>.bandwidth_down`](#hostshostnamebandwidth_down)
 - [`hosts.<hostname>.bandwidth_up`](#hostshostnamebandwidth_up)
@@ -557,18 +557,16 @@ enabled.
 
 The default of 65535 bytes is the maximum length of an IP packet.
 
-#### `host_defaults.pcap_directory`
+#### `host_defaults.pcap_enabled`
 
-Default: null  
-Type: String OR null
+Default: false  
+Type: Bool
 
-Where to save the pcap files (relative to the host directory).
+Should Shadow generate pcap files?
 
 Logs all network input and output for this host in PCAP format (for viewing in
-e.g. wireshark). The directory must already exist and be relative to the host
-directory, although absolute paths are also allowed. Example:
-`pcap_directory: '.'` will generate pcap files such as
-`shadow.data/hosts/myhost/myhost-11.0.0.1.pcap`.
+e.g. wireshark). The pcap files will be stored in the host's data directory,
+for example `shadow.data/hosts/myhost/myhost-11.0.0.1.pcap`.
 
 #### `hosts`
 
