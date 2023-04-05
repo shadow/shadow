@@ -1,0 +1,15 @@
+general:
+  stop_time: 10 seconds
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args: '-c "import threading, time; threading.Thread(target=lambda: time.sleep(10)).start(); time.sleep(10)"'
+      start_time: 3
+    - path: kill
+      args: "-KILL 1000"
+      start_time: 5
