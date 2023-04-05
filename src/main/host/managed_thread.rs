@@ -410,6 +410,7 @@ impl ManagedThread {
         // Alternatively we could use `set_tid_address` or `set_robust_list` to
         // be notified on a futex. Those are a bit underdocumented and fragile,
         // though. In practice this shouldn't have to loop significantly.
+        trace!("Waiting for native thread {native_pid}.{native_tid} to exit");
         loop {
             if self.ipc_shmem.from_plugin().writer_is_closed() {
                 // This indicates that the whole process has stopped executing;
@@ -447,7 +448,6 @@ impl ManagedThread {
                     // Thread is still alive; continue.
                 }
             };
-            debug!("{native_pid}.{native_tid} still running; waiting for it to exit");
             std::thread::yield_now();
         }
     }
