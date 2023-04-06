@@ -169,6 +169,10 @@ path = "itimer/test_itimer_scheduled_after_exit.rs"
 name = "test_stdio"
 path = "stdio/test_stdio.rs"
 
+[[bin]]
+name = "test_regression_1341"
+path = "regression/1341/test_regression_1341.rs"
+
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 libc = "0.2"
