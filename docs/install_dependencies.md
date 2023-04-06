@@ -1,7 +1,7 @@
 # Installing Dependencies
 
 ### Required:
-  + gcc, gcc-c++ (or clang, clang++)
+  + gcc, gcc-c++
   + python (version >= 3.6)
   + glib (version >= 2.32.0)
   + cmake (version >= 3.2)
@@ -11,9 +11,6 @@
   + lscpu
   + cargo, rustc (version \~ latest)
   + libclang (version >= 9)
-
-Notice: Clang 13.0.0 is unsupported as it has a miscompilation bug that affects
-        Shadow (see [issue #1741](https://github.com/shadow/shadow/issues/1741)).
 
 ## APT (Debian/Ubuntu):
 
@@ -42,7 +39,7 @@ On older versions of Debian or Ubuntu, the default version of libclang is too
 old, which may cause bindgen to have errors finding system header files,
 particularly when compiling with gcc. In this case you will need to explicitly
 install a newer-than-default version of libclang. e.g. on `debian-10` install
-`libclang-13-dev`, and on `ubuntu-18.04` install `libclang-9-dev`.
+`libclang-13-dev`.
 
 ## YUM (Fedora/CentOS):
 
