@@ -19,10 +19,6 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-/* make sure we return the 'emulated' time, and not the actual simulation clock
- */
-static CEmulatedTime _syscallhandler_getEmulatedTime() { return worker_getCurrentEmulatedTime(); }
-
 static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
                                                       int flags, UntypedForeignPtr request,
                                                       UntypedForeignPtr remainder) {
@@ -118,58 +114,3 @@ SyscallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallA
     return _syscallhandler_nanosleep_helper(sys, clock_id, flags, req, rem);
 }
 
-SyscallReturn syscallhandler_clock_gettime(SysCallHandler* sys, const SysCallArgs* args) {
-    clockid_t clk_id = args->args[0].as_i64;
-    trace("syscallhandler_clock_gettime with %d %p", clk_id,
-          GUINT_TO_POINTER(args->args[1].as_ptr.val));
-
-    if (clk_id == CLOCK_PROCESS_CPUTIME_ID || clk_id == CLOCK_THREAD_CPUTIME_ID) {
-        warning("Unsupported clock ID %d during gettime", clk_id);
-        return syscallreturn_makeDoneErrno(ENOSYS);
-    }
-
-    CEmulatedTime now = _syscallhandler_getEmulatedTime();
-    struct timespec res_timespec = {
-        .tv_sec = now / SIMTIME_ONE_SECOND,
-        .tv_nsec = now % SIMTIME_ONE_SECOND,
-    };
-
-    int res = process_writePtr(
-        _syscallhandler_getProcess(sys), args->args[1].as_ptr, &res_timespec, sizeof(res_timespec));
-    if (res) {
-        return syscallreturn_makeDoneErrno(-res);
-    }
-
-    return syscallreturn_makeDoneI64(0);
-}
-
-SyscallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr tlocPtr = args->args[0].as_ptr; // time_t*
-
-    time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
-
-    if (tlocPtr.val) {
-        time_t* tloc =
-            process_getWriteablePtr(_syscallhandler_getProcess(sys), tlocPtr, sizeof(*tloc));
-        if (!tloc) {
-            return syscallreturn_makeDoneErrno(EFAULT);
-        }
-        *tloc = seconds;
-    }
-
-    return syscallreturn_makeDoneU64(seconds);
-}
-
-SyscallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr tvPtr = args->args[0].as_ptr; // struct timeval*
-
-    if (tvPtr.val) {
-        CEmulatedTime now = _syscallhandler_getEmulatedTime();
-        struct timeval* tv =
-            process_getWriteablePtr(_syscallhandler_getProcess(sys), tvPtr, sizeof(*tv));
-        tv->tv_sec = now / SIMTIME_ONE_SECOND;
-        tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
-    }
-
-    return syscallreturn_makeDoneI64(0);
-}

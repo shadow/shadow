@@ -8,10 +8,7 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(clock_gettime);
 SYSCALL_HANDLER(clock_nanosleep);
-SYSCALL_HANDLER(gettimeofday);
 SYSCALL_HANDLER(nanosleep);
-SYSCALL_HANDLER(time);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_TIME_H_ */
