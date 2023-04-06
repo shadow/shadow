@@ -440,9 +440,8 @@ static void _shim_parent_init_rdtsc_emu() {
 // of the process.
 //
 // TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
-// which was added in glibc 2.29. We should be able to do so once we've dropped
-// support for some platforms, as planned for the shadow 3.0 release.
-// https://github.com/shadow/shadow/discussions/2496
+// which was added in glibc 2.29. Currently this is blocked on debian-10, which
+// uses glibc 2.28.
 static void _shim_parent_set_working_dir() {
     const char* path = getenv("SHADOW_WORKING_DIR");
     if (!path) {
