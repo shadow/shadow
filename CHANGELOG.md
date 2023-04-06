@@ -29,6 +29,9 @@ MINOR changes (backwards-compatible):
 * Support the `MSG_TRUNC` flag for unix sockets.
 https://github.com/shadow/shadow/pull/2841
 
+* Support the `TIMER_ABSTIME` flag for `clock_nanosleep`.
+https://github.com/shadow/shadow/pull/2854
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to
