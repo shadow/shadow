@@ -19,7 +19,9 @@ versions:
   ([`general.data_directory`](shadow_config_spec.md#generaldata_directory))
   will not change.
 - The PID numbering (the values and their order) will not change.
-- Any [supported platforms](supported_platforms.md) will not be dropped.
+- Support for any of Shadow's [supported platforms](supported_platforms.md)
+  will not be dropped, unless those platforms no longer receive free updates
+  and support from the distribution's developer.
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 
