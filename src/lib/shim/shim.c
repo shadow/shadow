@@ -123,13 +123,6 @@ bool shim_interpositionEnabled() {
     return !*_shim_allowNativeSyscallsFlag();
 }
 
-static bool _running_in_shadow = false;
-
-// Whether we're running in Shadow. When this is false the shim mostly
-// does nothing. This can be useful e.g. for programs that are Shadow-aware
-// and link against the shim so that they can call Shadow APIs.
-static void _shim_setRunningInShadow() { _running_in_shadow = getenv("SHADOW_SPAWNED") != NULL; }
-
 static void** _shim_signal_stack() {
     static ShimTlsVar stack_var = {0};
     void** stack = shimtlsvar_ptr(&stack_var, sizeof(*stack));
@@ -310,8 +303,6 @@ static void _shim_child_init_thread_shm() {
 }
 
 static void _shim_parent_init_ipc() {
-    assert(_running_in_shadow);
-
     const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
     assert(ipc_blk_buf);
     bool err = false;
@@ -369,13 +360,10 @@ static void _shim_parent_init_memory_manager() {
 }
 
 static void _shim_preload_only_child_init_ipc() {
-    assert(_running_in_shadow);
-
     *_shim_ipcDataBlk() = _startThread.childIpcBlk;
 }
 
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
-    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
@@ -395,7 +383,6 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 }
 
 static void _shim_ipc_wait_for_start_event() {
-    assert(_running_in_shadow);
     assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
@@ -471,12 +458,6 @@ __attribute__((constructor)) void _shim_load() {
 
         // Avoid logging until we've set up the shim logger.
         logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
-
-        _shim_setRunningInShadow();
-    }
-
-    if (!_running_in_shadow) {
-        return;
     }
 
     // Now we can use thread-local storage.
