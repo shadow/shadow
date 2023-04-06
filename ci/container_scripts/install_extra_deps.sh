@@ -10,9 +10,6 @@ install_packages () {
         ubuntu:*|debian:*)
             DEBIAN_FRONTEND=noninteractive apt-get install -y $@
             ;;
-        *centos:*)
-            dnf install -y $@
-            ;;
         fedora:*)
             dnf install --best -y $@
             ;;
