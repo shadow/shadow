@@ -95,9 +95,6 @@ case "$CONTAINER" in
     fedora:*)
         dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
         ;;
-    *centos:stream8)
-        dnf install -y ${RPM_PACKAGES} ${RPM_CI_PACKAGES}
-        ;;
     *)
         echo "Unhandled container $CONTAINER"
         exit 1

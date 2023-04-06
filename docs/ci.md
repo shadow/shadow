@@ -47,7 +47,7 @@ run an interactive shell in a container built from that image.
 e.g.:
 
 ```{.bash}
-docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:centos-8-clang-debug /bin/bash
+docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:ubuntu-22.04-clang-debug /bin/bash
 ```
 
 If the failure happened in the middle of building the Docker image, you can do
@@ -55,7 +55,7 @@ the same with the last intermediate layer that was built successfully. e.g.
 given the output:
 
 ```{.bash}
-$ ci/run.sh -i -c centos:8 -C clang -b debug
+$ ci/run.sh -i -c ubuntu:22.04 -C clang -b debug
 <snip>
 Step 13/13 : RUN . ci/container_scripts/build_and_install.sh
  ---> Running in a11c4a554ef8

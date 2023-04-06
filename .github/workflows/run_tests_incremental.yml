@@ -27,23 +27,16 @@ jobs:
     strategy:
       matrix:
         container:
-          # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:18.04'
           # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
           - 'ubuntu:20.04'
           # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
           - 'ubuntu:22.04'
-          # EOL ~August 2022 https://wiki.debian.org/DebianReleases
+          # EOL ~August 2024 https://wiki.debian.org/LTS
           - 'debian:10-slim'
+          # EOL ~June 2026 https://wiki.debian.org/LTS
           - 'debian:11-slim'
-          # EOL June 7 2022 https://endoflife.date/fedora
-          - 'fedora:34'
-          - 'fedora:35'
-          - 'fedora:36'
           # EOL Dec 15 2023 https://endoflife.date/fedora
           - 'fedora:37'
-          # EOL May 2024 https://www.centos.org/centos-stream/
-          - 'quay.io/centos/centos:stream8'
         cc: ['gcc']
         buildtype: ['release']
         include:
