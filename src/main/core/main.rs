@@ -315,9 +315,7 @@ fn log_environment(args: Vec<&OsStr>) {
 
     for (key, value) in std::env::vars_os() {
         let level = match key.to_string_lossy().borrow() {
-            "LD_PRELOAD" | "SHADOW_SPAWNED" | "LD_STATIC_TLS_EXTRA" | "G_DEBUG" | "G_SLICE" => {
-                log::Level::Info
-            }
+            "LD_PRELOAD" | "LD_STATIC_TLS_EXTRA" | "G_DEBUG" | "G_SLICE" => log::Level::Info,
             _ => log::Level::Trace,
         };
         log::log!(level, "env: {:?}={:?}", key, value);
