@@ -22,6 +22,8 @@ prefixed with the hostname. For example a file that was previously named
 `shadow.data/hosts/server/server.curl.1000.stdout` is now named
 `shadow.data/hosts/server/curl.1000.stdout`.
 
+* The `clang` C compiler is no longer supported.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
