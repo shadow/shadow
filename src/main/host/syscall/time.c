@@ -28,12 +28,12 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
                                                       UntypedForeignPtr remainder) {
     if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
         warning("Unsupported clock ID %d during nanosleep", clock_id);
-        return syscallreturn_makeDoneErrno(ENOSYS);
+        return syscallreturn_makeDoneErrno(ENOTSUP);
     }
 
     if ((flags & (~TIMER_ABSTIME)) != 0) {
         warning("Unsupported flag %d during nanosleep", flags);
-        return syscallreturn_makeDoneErrno(ENOSYS);
+        return syscallreturn_makeDoneErrno(ENOTSUP);
     }
 
     /* Grab the arg from the syscall register. */
