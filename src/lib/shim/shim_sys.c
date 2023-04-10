@@ -22,9 +22,9 @@
 static CEmulatedTime _shim_sys_get_time() {
     ShimShmemHost* mem = shim_hostSharedMem();
 
-    // If that's unavailable, fail. This can happen during early init.
+    // If that's unavailable, fail. This shouldn't happen.
     if (mem == NULL) {
-        return 0;
+        panic("mem uninitialized");
     }
 
     return shimshmem_getEmulatedTime(mem);
@@ -66,10 +66,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             syscallName = "clock_gettime";
 
             CEmulatedTime emulated_time = _shim_sys_get_time();
-            if (emulated_time == 0) {
-                // Not initialized yet.
-                return false;
-            }
 
             trace("servicing syscall %ld:clock_gettime from the shim", syscall_num);
 
@@ -95,10 +91,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             syscallName = "time";
 
             CEmulatedTime emulated_time = _shim_sys_get_time();
-            if (emulated_time == 0) {
-                // Not initialized yet.
-                return false;
-            }
             time_t now = emulated_time / SIMTIME_ONE_SECOND;
 
             trace("servicing syscall %ld:time from the shim", syscall_num);
@@ -118,10 +110,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             syscallName = "gettimeofday";
 
             CEmulatedTime emulated_time = _shim_sys_get_time();
-            if (emulated_time == 0) {
-                // Not initialized yet.
-                return false;
-            }
             uint64_t micros = emulated_time / SIMTIME_ONE_MICROSECOND;
 
             trace("servicing syscall %ld:gettimeofday from the shim", syscall_num);

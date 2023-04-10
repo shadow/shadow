@@ -19,9 +19,6 @@ bool shim_swapAllowNativeSyscalls(bool new);
 // Whether syscall interposition is currently enabled.
 bool shim_interpositionEnabled();
 
-// Whether we are using the shim-side syscall handler.
-bool shim_use_syscall_handler();
-
 // Returns the shmem block used for IPC, which may be uninitialized.
 struct IPCData* shim_thisThreadEventIPC();
 

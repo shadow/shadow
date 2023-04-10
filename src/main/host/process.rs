@@ -204,11 +204,10 @@ impl Process {
         stop_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
-        mut envv: Vec<CString>,
+        envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
         use_legacy_working_dir: bool,
-        use_shim_syscall_handler: bool,
         strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
@@ -251,6 +250,7 @@ impl Process {
 
         let shim_shared_mem = ProcessShmem::new(
             &host.shim_shmem_lock_borrow().unwrap().root,
+            host.shim_shmem().serialize(),
             host.id(),
             strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
         );
@@ -262,18 +262,6 @@ impl Process {
         } else {
             std::fs::canonicalize(host.data_dir_path()).unwrap()
         });
-
-        // TODO: ensure no duplicate env vars.
-        envv.push(
-            CString::new(format!(
-                "SHADOW_SHM_PROCESS_BLK={}",
-                shim_shared_mem_block.serialize().encode_to_string()
-            ))
-            .unwrap(),
-        );
-        if !use_shim_syscall_handler {
-            envv.push(CString::new("SHADOW_DISABLE_SHIM_SYSCALL=TRUE").unwrap());
-        }
 
         #[cfg(feature = "perf_timers")]
         let cpu_delay_timer = {
@@ -1138,7 +1126,7 @@ impl Process {
     }
 
     /// Shared memory for this process.
-    pub fn shmem(&self) -> &ProcessShmem {
+    pub fn shmem(&self) -> &ShMemBlock<'static, ProcessShmem> {
         &self.shim_shared_mem_block
     }
 }

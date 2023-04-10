@@ -32,9 +32,6 @@
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
-// Whether Shadow is using the shim-side syscall handler optimization.
-static bool _using_shim_syscall_handler = true;
-
 // This thread's IPC block, for communication with Shadow.
 static ShMemBlock* _shim_ipcDataBlk() {
     static ShimTlsVar v = {0};
@@ -126,23 +123,12 @@ bool shim_interpositionEnabled() {
     return !*_shim_allowNativeSyscallsFlag();
 }
 
-bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
-
 static bool _running_in_shadow = false;
 
 // Whether we're running in Shadow. When this is false the shim mostly
 // does nothing. This can be useful e.g. for programs that are Shadow-aware
 // and link against the shim so that they can call Shadow APIs.
 static void _shim_setRunningInShadow() { _running_in_shadow = getenv("SHADOW_SPAWNED") != NULL; }
-
-static void _set_use_shim_syscall_handler() {
-    const char* shim_syscall_str = getenv("SHADOW_DISABLE_SHIM_SYSCALL");
-    if (shim_syscall_str && !strcmp(shim_syscall_str, "TRUE")) {
-        _using_shim_syscall_handler = false;
-    } else {
-        _using_shim_syscall_handler = true;
-    }
-}
 
 static void** _shim_signal_stack() {
     static ShimTlsVar stack_var = {0};
@@ -287,24 +273,14 @@ static void _shim_parent_init_death_signal() {
 }
 
 static void _shim_parent_init_host_shm() {
-    const char* shm_blk_buf = getenv("SHADOW_SHM_HOST_BLK");
-    assert(shm_blk_buf);
-
-    bool err = false;
-    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
-
-    *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(
+        shimshmem_getProcessHostShmem(shim_processSharedMem()));
     assert(shim_hostSharedMem());
 }
 
 static void _shim_parent_init_process_shm() {
-    const char* shm_blk_buf = getenv("SHADOW_SHM_PROCESS_BLK");
-    assert(shm_blk_buf);
-
-    bool err = false;
-    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
-
-    *_shim_process_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    *_shim_process_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(shimshmem_getProcessShmem(shim_threadSharedMem()));
     assert(shim_processSharedMem());
 }
 
@@ -457,9 +433,9 @@ static void _shim_parent_init_preload() {
 
     shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
-    _shim_parent_init_host_shm();
-    _shim_parent_init_process_shm();
     _shim_parent_init_thread_shm();
+    _shim_parent_init_process_shm();
+    _shim_parent_init_host_shm();
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
     _shim_parent_init_ipc();
@@ -497,7 +473,6 @@ __attribute__((constructor)) void _shim_load() {
         logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
 
         _shim_setRunningInShadow();
-        _set_use_shim_syscall_handler();
     }
 
     if (!_running_in_shadow) {

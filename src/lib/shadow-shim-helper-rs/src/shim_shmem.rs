@@ -1,5 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use nix::sys::signal::Signal;
+use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
@@ -81,6 +82,7 @@ pub struct HostShmem {
     // Current simulation time.
     pub sim_time: AtomicEmulatedTime,
 }
+assert_shmem_safe!(HostShmem, _hostshmem_test_fn);
 
 impl HostShmem {
     pub fn new(
@@ -131,15 +133,24 @@ pub struct HostShmemProtected {
 pub struct ProcessShmem {
     host_id: HostId,
 
+    /// Handle to shared memory for the Host
+    pub host_shmem: ShMemBlockSerialized,
     pub strace_fd: FfiOption<libc::c_int>,
 
     pub protected: RootedRefCell<ProcessShmemProtected>,
 }
+assert_shmem_safe!(ProcessShmem, _test_processshmem_fn);
 
 impl ProcessShmem {
-    pub fn new(host_root: &Root, host_id: HostId, strace_fd: Option<libc::c_int>) -> Self {
+    pub fn new(
+        host_root: &Root,
+        host_shmem: ShMemBlockSerialized,
+        host_id: HostId,
+        strace_fd: Option<libc::c_int>,
+    ) -> Self {
         Self {
             host_id,
+            host_shmem,
             strace_fd: strace_fd.into(),
             protected: RootedRefCell::new(
                 host_root,
@@ -225,15 +236,23 @@ impl ProcessShmemProtected {
 #[repr(C)]
 pub struct ThreadShmem {
     pub host_id: HostId,
+    /// Handle to shared memory for the Process
+    pub process_shmem: ShMemBlockSerialized,
     tid: libc::pid_t,
 
     pub protected: RootedRefCell<ThreadShmemProtected>,
 }
+assert_shmem_safe!(ThreadShmem, _test_threadshmem_fn);
 
 impl ThreadShmem {
-    pub fn new(host: &HostShmemProtected, tid: libc::pid_t) -> Self {
+    pub fn new(
+        host: &HostShmemProtected,
+        process_shmem: ShMemBlockSerialized,
+        tid: libc::pid_t,
+    ) -> Self {
         Self {
             host_id: host.host_id,
+            process_shmem,
             tid,
             protected: RootedRefCell::new(
                 &host.root,
@@ -437,30 +456,6 @@ pub mod export {
 
     /// # Safety
     ///
-    /// `host_mem` must be valid
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmemhost_init(
-        host_mem: *mut ShimShmemHost,
-        host_id: HostId,
-        model_unblocked_syscall_latency: bool,
-        max_unapplied_cpu_latency: CSimulationTime,
-        unblocked_syscall_latency: CSimulationTime,
-        unblocked_vdso_latency: CSimulationTime,
-    ) {
-        let h = HostShmem::new(
-            host_id,
-            model_unblocked_syscall_latency,
-            SimulationTime::from_c_simtime(max_unapplied_cpu_latency).unwrap(),
-            SimulationTime::from_c_simtime(unblocked_syscall_latency).unwrap(),
-            SimulationTime::from_c_simtime(unblocked_vdso_latency).unwrap(),
-        );
-        assert_shmem_safe!(HostShmem, _test_host_shmem);
-        let host_mem = host_mem;
-        unsafe { host_mem.write(h) };
-    }
-
-    /// # Safety
-    ///
     /// `host_mem` must be valid, and no references to `host_mem` may exist.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmemhost_destroy(host_mem: *mut ShimShmemHost) {
@@ -559,6 +554,18 @@ pub mod export {
     ) -> libc::c_int {
         let process_mem = unsafe { process.as_ref().unwrap() };
         process_mem.strace_fd.unwrap_or(-1)
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable. The returned pointer is
+    /// borrowed from `process`.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getProcessHostShmem(
+        process: *const ShimShmemProcess,
+    ) -> *const ShMemBlockSerialized {
+        let process_mem = unsafe { process.as_ref().unwrap() };
+        &process_mem.host_shmem
     }
 
     /// Get the process's pending signal set.
@@ -672,21 +679,6 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn shimshmemthread_size() -> usize {
         std::mem::size_of::<ThreadShmem>()
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmemthread_init(
-        thread_mem: *mut ShimShmemThread,
-        lock: *const ShimShmemHostLock,
-        tid: libc::pid_t,
-    ) {
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let t = ThreadShmem::new(lock, tid);
-        assert_shmem_safe!(ThreadShmem, _test_thread_shmem);
-        unsafe { thread_mem.write(t) }
     }
 
     /// # Safety
@@ -954,5 +946,17 @@ pub mod export {
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
         SimulationTime::to_c_simtime(Some(host.unblocked_vdso_latency))
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable. The returned pointer is
+    /// borrowed from `process`.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getProcessShmem(
+        thread: *const ShimShmemThread,
+    ) -> *const ShMemBlockSerialized {
+        let thread_mem = unsafe { thread.as_ref().unwrap() };
+        &thread_mem.process_shmem
     }
 }

@@ -588,7 +588,6 @@ impl<'a> Manager<'a> {
                 unblocked_syscall_latency: self.config.unblocked_syscall_latency(),
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
                 use_legacy_working_dir: self.config.use_legacy_working_dir(),
-                use_shim_syscall_handler: self.config.use_shim_syscall_handler(),
                 strace_logging_options: self.config.strace_logging_mode(),
             };
 

@@ -94,7 +94,6 @@ hosts:
 - [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
-- [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.log_level`](#host_defaultslog_level)
@@ -519,13 +518,6 @@ Type: Bool
 Use the `SCHED_FIFO` scheduler. Requires `CAP_SYS_NICE`. See sched(7),
 capabilities(7).
 
-#### `experimental.use_shim_syscall_handler`
-
-Default: true  
-Type: Bool
-
-Use shim-side syscall handler to force hot-path syscalls to be handled via an
-inter-process syscall with Shadow.
 
 #### `experimental.use_syscall_counters`
 

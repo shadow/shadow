@@ -154,10 +154,6 @@ impl ConfigOptions {
         self.experimental.use_legacy_working_dir.unwrap()
     }
 
-    pub fn use_shim_syscall_handler(&self) -> bool {
-        self.experimental.use_shim_syscall_handler.unwrap()
-    }
-
     pub fn strace_logging_mode(&self) -> Option<FmtOptions> {
         match self.experimental.strace_logging_mode.as_ref().unwrap() {
             StraceLoggingMode::Standard => Some(FmtOptions::Standard),
@@ -342,12 +338,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_memory_manager").unwrap().as_str())]
     pub use_memory_manager: Option<bool>,
 
-    /// Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_shim_syscall_handler").unwrap().as_str())]
-    pub use_shim_syscall_handler: Option<bool>,
-
     /// Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
@@ -487,7 +477,6 @@ impl Default for ExperimentalOptions {
             // Default to the lower end to minimize effect in simualations without busy loops.
             unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
-            use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             runahead: Some(NullableOption::Value(units::Time::new(
                 1,

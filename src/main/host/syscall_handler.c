@@ -225,6 +225,11 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
+#define SHIM_ONLY(s)                                                                               \
+    case SYS_##s:                                                                                  \
+        panic("syscall " #s " (#%ld) should have been handled in the shim", args->number);         \
+        break
+
 #define HANDLE_C(s)                                                                                \
     case SYS_##s:                                                                                  \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
@@ -296,7 +301,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(accept4);
             HANDLE_RUST(bind);
             HANDLE_RUST(brk);
-            HANDLE_C(clock_gettime);
+            SHIM_ONLY(clock_gettime);
             HANDLE_C(clock_nanosleep);
             HANDLE_C(clone);
             HANDLE_RUST(close);
@@ -359,7 +364,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(get_robust_list);
             HANDLE_RUST(getsockname);
             HANDLE_RUST(getsockopt);
-            HANDLE_C(gettimeofday);
+            SHIM_ONLY(gettimeofday);
             HANDLE_RUST(ioctl);
             HANDLE_C(kill);
             HANDLE_C(linkat);
@@ -408,7 +413,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(rseq);
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
-            HANDLE_RUST(sched_yield);
+            SHIM_ONLY(sched_yield);
             HANDLE_C(shadow_get_shm_blk);
             HANDLE_C(shadow_hostname_to_addr_ipv4);
             HANDLE_C(shadow_init_memory_manager);
@@ -446,7 +451,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(syncfs);
             HANDLE_RUST(sysinfo);
             HANDLE_C(tgkill);
-            HANDLE_C(time);
+            SHIM_ONLY(time);
             HANDLE_C(timerfd_create);
             HANDLE_C(timerfd_gettime);
             HANDLE_C(timerfd_settime);
