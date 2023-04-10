@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # first argument is the path to shadow
 if [ "$#" -ge 1 ]; then
