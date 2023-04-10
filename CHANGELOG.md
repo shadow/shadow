@@ -24,6 +24,10 @@ prefixed with the hostname. For example a file that was previously named
 
 * The `clang` C compiler is no longer supported.
 
+* Host names are restricted to the patterns documented in
+[hostname(7)](https://man7.org/linux/man-pages/man7/hostname.7.html).
+https://github.com/shadow/shadow/pull/2856
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

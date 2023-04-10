@@ -566,7 +566,9 @@ for example `shadow.data/hosts/myhost/11.0.0.1.pcap`.
 Type: Object
 
 The simulated hosts which execute processes. Each field corresponds to a host
-configuration, with the field name being used as the network hostname.
+configuration, with the field name being used as the network hostname. A
+hostname must follow the character requirements of
+[hostname(7)](https://man7.org/linux/man-pages/man7/hostname.7.html).
 
 Shadow assigns each host to a network node in the [network graph](network_graph_overview.md).
 
