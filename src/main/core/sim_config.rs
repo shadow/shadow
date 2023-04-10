@@ -3,6 +3,7 @@ use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -187,6 +188,7 @@ pub struct ProcessInfo {
     pub plugin: PathBuf,
     pub start_time: SimulationTime,
     pub shutdown_time: Option<SimulationTime>,
+    pub shutdown_signal: nix::sys::signal::Signal,
     pub args: Vec<OsString>,
     pub env: String,
 }
@@ -311,6 +313,14 @@ fn build_host(
     Ok(hosts)
 }
 
+fn parse_signal(s: &str) -> anyhow::Result<nix::sys::signal::Signal> {
+    if let Ok(i) = i32::from_str(s) {
+        nix::sys::signal::Signal::try_from(i).map_err(anyhow::Error::from)
+    } else {
+        nix::sys::signal::Signal::from_str(s).map_err(anyhow::Error::from)
+    }
+}
+
 /// For a process entry in the configuration options, build a list of `ProcessInfo` objects.
 fn build_process(
     proc: &ProcessOptions,
@@ -320,6 +330,8 @@ fn build_process(
     let shutdown_time = proc
         .shutdown_time
         .map(|x| Duration::from(x).try_into().unwrap());
+    let shutdown_signal = parse_signal(&proc.shutdown_signal)
+        .with_context(|| format!("Parsing shutdown_signal: {}", proc.shutdown_signal))?;
     let sim_stop_time =
         SimulationTime::try_from(Duration::from(config.general.stop_time.unwrap())).unwrap();
 
@@ -382,6 +394,7 @@ fn build_process(
             plugin: canonical_path,
             start_time,
             shutdown_time,
+            shutdown_signal,
             args,
             env: proc.environment.clone(),
         };

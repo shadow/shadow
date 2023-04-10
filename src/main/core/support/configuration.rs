@@ -568,9 +568,13 @@ pub struct ProcessOptions {
     #[serde(default)]
     pub start_time: units::Time<units::TimePrefixUpper>,
 
-    /// The simulated time at which to send a `SIGTERM` signal to the process
+    /// The simulated time at which to send a `shutdown_signal` signal to the process
     #[serde(default)]
     pub shutdown_time: Option<units::Time<units::TimePrefixUpper>>,
+
+    /// The signal that will be sent to the process at `shutdown_time`
+    #[serde(default = "default_shutdown_signal")]
+    pub shutdown_signal: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1053,6 +1057,11 @@ impl<T> Flatten<T> for Option<NullableOption<T>> {
 /// Helper function for serde default `ProcessArgs::Str("")` values.
 fn default_args_empty() -> ProcessArgs {
     ProcessArgs::Str("".to_string())
+}
+
+/// Helper function for serde default `shutdown_signal`.
+fn default_shutdown_signal() -> String {
+    "SIGTERM".into()
 }
 
 /// Helper function for serde default `Some(0)` values.

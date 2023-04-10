@@ -109,6 +109,7 @@ hosts:
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
 - [`hosts.<hostname>.processes[*].path`](#hostshostnameprocessespath)
 - [`hosts.<hostname>.processes[*].quantity`](#hostshostnameprocessesquantity)
+- [`hosts.<hostname>.processes[*].shutdown_signal`](#hostshostnameprocessesshutdown_signal)
 - [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time)
 - [`hosts.<hostname>.processes[*].start_time`](#hostshostnameprocessesstart_time)
 
@@ -633,9 +634,7 @@ produce hosts with hostnames `host1` and `host2`.
 Type: Array
 
 Virtual software processes that the host will run. PIDs are assigned from 1000
-on each host, in the order that they appear in this process list. e.g. this
-property can be used to cleanly shut down a process by scheduling a `/bin/kill`
-process to send a shutdown signal (e.g. `SIGTERM` or `SIGINT`) at the desired time.
+on each host, in the order that they appear in this process list.
 
 #### `hosts.<hostname>.processes[*].args`
 
@@ -686,6 +685,23 @@ Type: Integer
 
 The number of replicas of this process to execute.
 
+#### `hosts.<hostname>.processes[*].shutdown_signal`
+
+Default: "SIGTERM"  
+Type: String OR Integer
+
+The signal that will be sent to the process at
+[`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time).
+
+#### `hosts.<hostname>.processes[*].shutdown_time`
+
+Default: null  
+Type: String OR Integer OR null
+
+The simulated time at which to send
+[`hosts.<hostname>.processes[*].shutdown_signal`](#hostshostnameprocessesshutdown_signal)
+to the process. This must be before [`general.stop_time`](#generalstop_time).
+
 #### `hosts.<hostname>.processes[*].start_time`
 
 Default: "0 sec"  
@@ -693,11 +709,3 @@ Type: String OR Integer
 
 The simulated time at which to execute the process. This must be before
 [`general.stop_time`](#generalstop_time).
-
-#### `hosts.<hostname>.processes[*].shutdown_time`
-
-Default: null  
-Type: String OR Integer OR null
-
-The simulated time at which to send a `SIGTERM` signal to the process.
-This must be before [`general.stop_time`](#generalstop_time).

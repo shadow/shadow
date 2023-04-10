@@ -130,6 +130,7 @@ pub struct Process {
     // process boot and shutdown variables
     start_time: EmulatedTime,
     shutdown_time: Option<EmulatedTime>,
+    shutdown_signal: Signal,
 
     strace_logging: Option<StraceLogging>,
 
@@ -202,6 +203,7 @@ impl Process {
         process_id: ProcessId,
         start_time: SimulationTime,
         shutdown_time: Option<SimulationTime>,
+        shutdown_signal: Signal,
         plugin_name: &CStr,
         plugin_path: &CStr,
         envv: Vec<CString>,
@@ -285,6 +287,7 @@ impl Process {
                     itimer_real,
                     start_time: EmulatedTime::SIMULATION_START + start_time,
                     shutdown_time: shutdown_time.map(|t| EmulatedTime::SIMULATION_START + t),
+                    shutdown_signal,
                     name,
                     file_basename,
                     plugin_name,
@@ -393,7 +396,7 @@ impl Process {
                 let process = host.process_borrow(id).unwrap();
                 let process = process.borrow(host.root());
                 let mut siginfo: libc::siginfo_t = pod::zeroed();
-                siginfo.si_signo = Signal::SIGTERM as i32;
+                siginfo.si_signo = process.shutdown_signal as i32;
                 process.signal(host, None, &siginfo);
             });
             host.schedule_task_at_emulated_time(task, shutdown_time);

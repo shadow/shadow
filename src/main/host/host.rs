@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use atomic_refcell::AtomicRefCell;
 use log::{debug, info, trace};
 use logger::LogLevel;
+use nix::sys::signal::Signal;
 use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -367,6 +368,7 @@ impl Host {
         &self,
         start_time: SimulationTime,
         shutdown_time: Option<SimulationTime>,
+        shutdown_signal: Signal,
         plugin_name: &CStr,
         plugin_path: &CStr,
         envv: Vec<CString>,
@@ -380,6 +382,7 @@ impl Host {
             process_id,
             start_time,
             shutdown_time,
+            shutdown_signal,
             plugin_name,
             plugin_path,
             envv,

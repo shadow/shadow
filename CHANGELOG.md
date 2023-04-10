@@ -29,6 +29,10 @@ prefixed with the hostname. For example a file that was previously named
 https://github.com/shadow/shadow/pull/2856
 
 * The per-process option `stop_time` has been replaced with `shutdown_time`.
+When set, the signal specified by `shutdown_signal` (a new option) will be sent
+to the process at the specified time. While shadow previously sent `SIGKILL` at
+a process's `stop_time`, the default `shutdown_signal` is `SIGTERM` to better
+support graceful shutdown.
 
 MINOR changes (backwards-compatible):
 
