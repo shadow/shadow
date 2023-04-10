@@ -86,7 +86,7 @@ pub struct ConfigFileOptions {
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
     // since shadow parses to a serde_yaml::Value initially, we don't need to worry about duplicate
     // hostnames here
-    pub hosts: BTreeMap<String, HostOptions>,
+    pub hosts: BTreeMap<HostName, HostOptions>,
 }
 
 /// Shadow configuration options after processing command-line and configuration file options.
@@ -99,7 +99,7 @@ pub struct ConfigOptions {
     pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
-    pub hosts: BTreeMap<String, HostOptions>,
+    pub hosts: BTreeMap<HostName, HostOptions>,
 }
 
 impl ConfigOptions {
@@ -651,6 +651,87 @@ impl From<LogLevel> for log::Level {
             LogLevel::Debug => log::Level::Debug,
             LogLevel::Trace => log::Level::Trace,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct HostName(String);
+
+impl<'de> serde::Deserialize<'de> for HostName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct HostNameVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for HostNameVisitor {
+            type Value = HostName;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                // hostname(7): "Valid characters for hostnames are ASCII(7) letters from a to z,
+                // the digits from 0 to 9, and the hyphen (-)."
+                fn is_allowed(c: char) -> bool {
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.'
+                }
+                if let Some(invalid_char) = v.chars().find(|x| !is_allowed(*x)) {
+                    return Err(E::custom(format!(
+                        "invalid hostname character: '{invalid_char}'"
+                    )));
+                }
+
+                if v.is_empty() {
+                    return Err(E::custom("empty hostname"));
+                }
+
+                // hostname(7): "A hostname may not start with a hyphen."
+                if v.starts_with('-') {
+                    return Err(E::custom("hostname begins with a '-' character"));
+                }
+
+                // hostname(7): "Each element of the hostname must be from 1 to 63 characters long
+                // and the entire hostname, including the dots, can be at most 253 characters long."
+                if v.len() > 253 {
+                    return Err(E::custom("hostname exceeds 253 characters"));
+                }
+
+                Ok(HostName(v))
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                // serde::de::Visitor: "It is never correct to implement `visit_string` without
+                // implementing `visit_str`. Implement neither, both, or just `visit_str`.'
+                self.visit_string(v.to_string())
+            }
+        }
+
+        deserializer.deserialize_string(HostNameVisitor)
+    }
+}
+
+impl std::ops::Deref for HostName {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<HostName> for String {
+    fn from(name: HostName) -> Self {
+        name.0
+    }
+}
+
+impl std::fmt::Display for HostName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
