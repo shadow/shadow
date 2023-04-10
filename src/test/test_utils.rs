@@ -264,10 +264,10 @@ macro_rules! set {
 
 pub fn running_in_shadow() -> bool {
     // There is the same function in the C tests common code
-    match std::env::var("SHADOW_SPAWNED") {
-        Ok(val) => !val.is_empty(),
-        _ => false,
-    }
+    let Ok(ld_preload) = std::env::var("LD_PRELOAD") else {
+        return false;
+    };
+    ld_preload.contains("libshadow_injector.so")
 }
 
 /// Returns `true` if the `POLLIN` flag is set.

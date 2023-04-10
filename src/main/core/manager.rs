@@ -643,8 +643,6 @@ impl<'a> Manager<'a> {
     fn generate_env_vars(&self, user_env: &str, shim_log_level: LogLevel) -> Vec<OsString> {
         let mut env: HashMap<OsString, Option<OsString>> = HashMap::new();
 
-        env.insert("SHADOW_SPAWNED".into(), Some("TRUE".into()));
-
         // pass the (real) start time to the plugin, so that shim-side logging can log real time
         // from the correct offset.
         env.insert(
