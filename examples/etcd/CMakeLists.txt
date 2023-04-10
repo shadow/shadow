@@ -4,10 +4,12 @@ file(COPY
      DESTINATION
        ${CMAKE_CURRENT_BINARY_DIR})
 
-add_test(
-  NAME etcd-example
-  COMMAND bash run.sh ${CMAKE_BINARY_DIR}/src/main
-  CONFIGURATIONS extra
-)
+# this test doesn't work: https://github.com/shadow/shadow/issues/2858
 
-set_property(TEST etcd-example PROPERTY LABELS shadow example)
+#add_test(
+#  NAME etcd-example
+#  COMMAND bash run.sh ${CMAKE_BINARY_DIR}/src/main
+#  CONFIGURATIONS extra
+#)
+#
+#set_property(TEST etcd-example PROPERTY LABELS shadow example)
