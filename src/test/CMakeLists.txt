@@ -168,9 +168,6 @@ macro(add_shadow_tests)
    endif()
 
    set_property(TEST ${SHADOW_TEST_NAME} APPEND PROPERTY LABELS shadow)
-
-   set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
-   list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})
 endmacro()
 ## === end test helper macros ===
 
@@ -213,7 +210,3 @@ add_subdirectory(timerfd)
 add_subdirectory(tor)
 add_subdirectory(udp)
 add_subdirectory(unistd)
-
-list(LENGTH ALL_SHADOW_TESTS ALL_SHADOW_TESTS_LENGTH)
-message(STATUS "Configured to build ${ALL_SHADOW_TESTS_LENGTH} Shadow tests.")
-message(STATUS "ALL_SHADOW_TESTS = ${ALL_SHADOW_TESTS}")
