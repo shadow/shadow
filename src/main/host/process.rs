@@ -43,10 +43,10 @@ use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
-use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
+use crate::utility::{self, pod};
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -392,7 +392,9 @@ impl Process {
             let task = TaskRef::new(move |host| {
                 let process = host.process_borrow(id).unwrap();
                 let process = process.borrow(host.root());
-                process.stop(host);
+                let mut siginfo: libc::siginfo_t = pod::zeroed();
+                siginfo.si_signo = Signal::SIGTERM as i32;
+                process.signal(host, None, &siginfo);
             });
             host.schedule_task_at_emulated_time(task, stop_time);
         }
