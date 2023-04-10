@@ -366,7 +366,7 @@ impl Host {
     pub fn add_application(
         &self,
         start_time: SimulationTime,
-        stop_time: Option<SimulationTime>,
+        shutdown_time: Option<SimulationTime>,
         plugin_name: &CStr,
         plugin_path: &CStr,
         envv: Vec<CString>,
@@ -379,7 +379,7 @@ impl Host {
             self,
             process_id,
             start_time,
-            stop_time,
+            shutdown_time,
             plugin_name,
             plugin_path,
             envv,

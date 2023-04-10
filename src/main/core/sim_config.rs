@@ -186,7 +186,7 @@ pub struct HostInfo {
 pub struct ProcessInfo {
     pub plugin: PathBuf,
     pub start_time: SimulationTime,
-    pub stop_time: Option<SimulationTime>,
+    pub shutdown_time: Option<SimulationTime>,
     pub args: Vec<OsString>,
     pub env: String,
 }
@@ -317,8 +317,8 @@ fn build_process(
     config: &ConfigOptions,
 ) -> anyhow::Result<Vec<ProcessInfo>> {
     let start_time = Duration::from(proc.start_time).try_into().unwrap();
-    let stop_time = proc
-        .stop_time
+    let shutdown_time = proc
+        .shutdown_time
         .map(|x| Duration::from(x).try_into().unwrap());
     let sim_stop_time =
         SimulationTime::try_from(Duration::from(config.general.stop_time.unwrap())).unwrap();
@@ -331,18 +331,18 @@ fn build_process(
         ));
     }
 
-    if let Some(stop_time) = stop_time {
-        if start_time >= stop_time {
+    if let Some(shutdown_time) = shutdown_time {
+        if start_time >= shutdown_time {
             return Err(anyhow::anyhow!(
-                "Process start time '{}' must be earlier than its stop time '{}'",
+                "Process start time '{}' must be earlier than its shutdown_time time '{}'",
                 proc.start_time,
-                proc.stop_time.unwrap(),
+                proc.shutdown_time.unwrap(),
             ));
         }
-        if stop_time >= sim_stop_time {
+        if shutdown_time >= sim_stop_time {
             return Err(anyhow::anyhow!(
-                "Process stop time '{}' must be earlier than the simulation stop time '{}'",
-                proc.stop_time.unwrap(),
+                "Process shutdown_time '{}' must be earlier than the simulation stop time '{}'",
+                proc.shutdown_time.unwrap(),
                 config.general.stop_time.unwrap(),
             ));
         }
@@ -381,7 +381,7 @@ fn build_process(
         ProcessInfo {
             plugin: canonical_path,
             start_time,
-            stop_time,
+            shutdown_time,
             args,
             env: proc.environment.clone(),
         };

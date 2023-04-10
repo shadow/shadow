@@ -28,6 +28,8 @@ prefixed with the hostname. For example a file that was previously named
 [hostname(7)](https://man7.org/linux/man-pages/man7/hostname.7.html).
 https://github.com/shadow/shadow/pull/2856
 
+* The per-process option `stop_time` has been replaced with `shutdown_time`.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

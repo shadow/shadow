@@ -568,9 +568,9 @@ pub struct ProcessOptions {
     #[serde(default)]
     pub start_time: units::Time<units::TimePrefixUpper>,
 
-    /// The simulated time at which to send a SIGKILL signal to the process
+    /// The simulated time at which to send a `SIGTERM` signal to the process
     #[serde(default)]
-    pub stop_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub shutdown_time: Option<units::Time<units::TimePrefixUpper>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

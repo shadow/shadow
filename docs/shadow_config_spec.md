@@ -109,8 +109,8 @@ hosts:
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
 - [`hosts.<hostname>.processes[*].path`](#hostshostnameprocessespath)
 - [`hosts.<hostname>.processes[*].quantity`](#hostshostnameprocessesquantity)
+- [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time)
 - [`hosts.<hostname>.processes[*].start_time`](#hostshostnameprocessesstart_time)
-- [`hosts.<hostname>.processes[*].stop_time`](#hostshostnameprocessesstop_time)
 
 #### `general`
 
@@ -694,10 +694,10 @@ Type: String OR Integer
 The simulated time at which to execute the process. This must be before
 [`general.stop_time`](#generalstop_time).
 
-#### `hosts.<hostname>.processes[*].stop_time`
+#### `hosts.<hostname>.processes[*].shutdown_time`
 
 Default: null  
 Type: String OR Integer OR null
 
-The simulated time at which to send a SIGKILL signal to the process.
+The simulated time at which to send a `SIGTERM` signal to the process.
 This must be before [`general.stop_time`](#generalstop_time).

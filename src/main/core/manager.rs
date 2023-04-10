@@ -621,7 +621,7 @@ impl<'a> Manager<'a> {
 
             host.add_application(
                 proc.start_time,
-                proc.stop_time,
+                proc.shutdown_time,
                 &plugin_name,
                 &plugin_path,
                 envv,
