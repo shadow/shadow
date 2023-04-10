@@ -28,12 +28,12 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
                                                       UntypedForeignPtr remainder) {
     if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
         warning("Unsupported clock ID %d during nanosleep", clock_id);
-        return syscallreturn_makeDoneErrno(ENOSYS);
+        return syscallreturn_makeDoneErrno(ENOTSUP);
     }
 
-    if (flags != 0) {
+    if ((flags & (~TIMER_ABSTIME)) != 0) {
         warning("Unsupported flag %d during nanosleep", flags);
-        return syscallreturn_makeDoneErrno(ENOSYS);
+        return syscallreturn_makeDoneErrno(ENOTSUP);
     }
 
     /* Grab the arg from the syscall register. */
@@ -47,8 +47,15 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
+    CEmulatedTime reqEmuTime = SIMTIME_INVALID;
+    if ((flags & TIMER_ABSTIME) == 0) {
+        reqEmuTime = reqSimTime + worker_getCurrentEmulatedTime();
+    } else {
+        reqEmuTime = reqSimTime;
+    }
+
     /* Does the timeout request require us to block? */
-    if (reqSimTime == 0) {
+    if (reqEmuTime <= worker_getCurrentEmulatedTime()) {
         return syscallreturn_makeDoneI64(0);
     }
 
@@ -57,8 +64,7 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
 
     if (!wasBlocked) {
         SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(
-            cond, _syscallhandler_getHost(sys), worker_getCurrentEmulatedTime() + reqSimTime);
+        syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys), reqEmuTime);
 
         /* Block the thread, unblock when the timer expires. */
         return syscallreturn_makeBlocked(cond, false);

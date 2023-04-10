@@ -29,6 +29,9 @@ MINOR changes (backwards-compatible):
 * Support the `MSG_TRUNC` flag for unix sockets.
 https://github.com/shadow/shadow/pull/2841
 
+* Support the `TIMER_ABSTIME` flag for `clock_nanosleep`.
+https://github.com/shadow/shadow/pull/2854
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to
@@ -40,6 +43,9 @@ affect a process that created and terminated many threads over its lifetime.
 * Fixed a potential race condition when exiting managed threads that did not
 have the `clear_child_tid` attribute set. This is unlikely to have affected most
 software running under Shadow, since most thread APIs use this attribute.
+
+* Changed an error value in `clock_nanosleep` and `nanosleep` from `ENOSYS` to
+`ENOTSUP`.
 
 Raw changes since v2.5.0:
 

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use nix::unistd;
 
 type SleepFn = (fn(u32) -> Option<Duration>, &'static str);
-type TimeFn = (fn() -> Duration, &'static str);
+type TimeFn = (fn(libc::clockid_t) -> Duration, &'static str);
 
 const SLEEP_FNS: [SleepFn; 4] = [
     (sleep, "sleep"),
@@ -32,6 +32,8 @@ fn duration_abs_diff(t1: Duration, t0: Duration) -> Duration {
 fn main() {
     sleep_and_test();
     sleep_and_signal_test();
+    clock_nanosleep_with_abstime();
+    clock_nanosleep_with_past_abstime();
     println!("Success.");
 }
 
@@ -42,9 +44,9 @@ fn sleep_and_test() {
     println!("*** Basic sleep tests ***");
     for (sleep_fn, sleep_name) in SLEEP_FNS.iter() {
         for (time_fn, time_name) in TIME_FNS.iter() {
-            let start_time = time_fn();
+            let start_time = time_fn(libc::CLOCK_MONOTONIC);
             assert_eq!(sleep_fn(sleep_duration.as_secs().try_into().unwrap()), None);
-            let end_time = call_clock_gettime();
+            let end_time = call_clock_gettime(libc::CLOCK_MONOTONIC);
 
             let duration = end_time - start_time;
             println!(
@@ -84,9 +86,9 @@ fn sleep_and_signal_test() {
         let sleeper: std::thread::JoinHandle<_> = std::thread::spawn(move || {
             sender.send(unistd::gettid()).unwrap();
 
-            let start_time = call_clock_gettime();
+            let start_time = call_clock_gettime(libc::CLOCK_MONOTONIC);
             let rem = sleep_fn(sleeper_sleep_duration.as_secs().try_into().unwrap());
-            let end_time = call_clock_gettime();
+            let end_time = call_clock_gettime(libc::CLOCK_MONOTONIC);
 
             let duration = end_time - start_time;
             println!(
@@ -121,6 +123,65 @@ fn sleep_and_signal_test() {
 
         sleeper.join().unwrap();
     }
+}
+
+fn clock_nanosleep_with_abstime() {
+    let clock = libc::CLOCK_MONOTONIC;
+
+    // get time time before sleeping
+    let before = call_clock_gettime(clock);
+
+    // sleep until the current absolute time + 500 ms
+    let sleep_duration = Duration::from_millis(500);
+    let stop = before + sleep_duration;
+    let stop = libc::timespec {
+        tv_sec: stop.as_secs().try_into().unwrap(),
+        tv_nsec: stop.subsec_nanos().try_into().unwrap(),
+    };
+    let mut rem = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    assert_eq!(0, unsafe {
+        libc::clock_nanosleep(clock, libc::TIMER_ABSTIME, &stop, &mut rem)
+    });
+
+    // get time after sleeping
+    let after = call_clock_gettime(clock);
+
+    let tolerance = Duration::from_millis(30);
+    let duration = after - before;
+    assert!(duration_abs_diff(sleep_duration, duration) < tolerance);
+}
+
+fn clock_nanosleep_with_past_abstime() {
+    let clock = libc::CLOCK_MONOTONIC;
+
+    // get time time before sleeping
+    let before = call_clock_gettime(clock);
+
+    // sleep until the current absolute time - 500 ms
+    let stop = before - Duration::from_millis(500);
+    let stop = libc::timespec {
+        tv_sec: stop.as_secs().try_into().unwrap(),
+        tv_nsec: stop.subsec_nanos().try_into().unwrap(),
+    };
+    let mut rem = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    assert_eq!(0, unsafe {
+        libc::clock_nanosleep(clock, libc::TIMER_ABSTIME, &stop, &mut rem)
+    });
+
+    // get time after sleeping
+    let after = call_clock_gettime(clock);
+
+    // should have returned immediately, but the syscall itself may have taken a small amount of
+    // time
+    let tolerance = Duration::from_micros(500);
+    let duration = after - before;
+    assert!(duration_abs_diff(Duration::ZERO, duration) < tolerance);
 }
 
 fn sleep(seconds: u32) -> Option<Duration> {
@@ -206,29 +267,23 @@ fn clock_nanosleep(seconds: u32) -> Option<Duration> {
     }
 }
 
-fn call_clock_gettime() -> Duration {
+fn call_clock_gettime(clock: libc::clockid_t) -> Duration {
     let mut ts = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
     };
-    let rv;
-    unsafe {
-        rv = libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts);
-    }
+    let rv = unsafe { libc::clock_gettime(clock, &mut ts) };
     assert!(rv >= 0);
     // valid tv_nsec values are [0, 999999999], which fit in a u32
     Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
 }
 
-fn syscall_clock_gettime() -> Duration {
+fn syscall_clock_gettime(clock: libc::clockid_t) -> Duration {
     let mut ts = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
     };
-    let rv;
-    unsafe {
-        rv = libc::syscall(libc::SYS_clock_gettime, libc::CLOCK_MONOTONIC, &mut ts);
-    }
+    let rv = unsafe { libc::syscall(libc::SYS_clock_gettime, clock, &mut ts) };
     assert!(rv >= 0);
     // valid tv_nsec values are [0, 999999999], which fit in a u32
     Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
