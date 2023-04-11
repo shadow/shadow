@@ -28,6 +28,12 @@ prefixed with the hostname. For example a file that was previously named
 [hostname(7)](https://man7.org/linux/man-pages/man7/hostname.7.html).
 https://github.com/shadow/shadow/pull/2856
 
+* The per-process option `stop_time` has been replaced with `shutdown_time`.
+When set, the signal specified by `shutdown_signal` (a new option) will be sent
+to the process at the specified time. While shadow previously sent `SIGKILL` at
+a process's `stop_time`, the default `shutdown_signal` is `SIGTERM` to better
+support graceful shutdown.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

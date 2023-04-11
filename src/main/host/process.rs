@@ -43,10 +43,10 @@ use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
-use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
+use crate::utility::{self, pod};
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -129,7 +129,8 @@ pub struct Process {
 
     // process boot and shutdown variables
     start_time: EmulatedTime,
-    stop_time: Option<EmulatedTime>,
+    shutdown_time: Option<EmulatedTime>,
+    shutdown_signal: Signal,
 
     strace_logging: Option<StraceLogging>,
 
@@ -201,7 +202,8 @@ impl Process {
         host: &Host,
         process_id: ProcessId,
         start_time: SimulationTime,
-        stop_time: Option<SimulationTime>,
+        shutdown_time: Option<SimulationTime>,
+        shutdown_signal: Signal,
         plugin_name: &CStr,
         plugin_path: &CStr,
         envv: Vec<CString>,
@@ -209,7 +211,7 @@ impl Process {
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Self>> {
-        debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
+        debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
 
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = Box::new(RefCell::new(None));
@@ -284,7 +286,8 @@ impl Process {
                     desc_table,
                     itimer_real,
                     start_time: EmulatedTime::SIMULATION_START + start_time,
-                    stop_time: stop_time.map(|t| EmulatedTime::SIMULATION_START + t),
+                    shutdown_time: shutdown_time.map(|t| EmulatedTime::SIMULATION_START + t),
+                    shutdown_signal,
                     name,
                     file_basename,
                     plugin_name,
@@ -370,7 +373,7 @@ impl Process {
 
     pub fn schedule(&self, host: &Host) {
         let id = self.id();
-        match self.stop_time {
+        match self.shutdown_time {
             Some(t) if self.start_time >= t => {
                 info!(
                     "Not scheduling process with start:{:?} after stop:{:?}",
@@ -388,13 +391,15 @@ impl Process {
         });
         host.schedule_task_at_emulated_time(task, self.start_time);
 
-        if let Some(stop_time) = self.stop_time {
+        if let Some(shutdown_time) = self.shutdown_time {
             let task = TaskRef::new(move |host| {
                 let process = host.process_borrow(id).unwrap();
                 let process = process.borrow(host.root());
-                process.stop(host);
+                let mut siginfo: libc::siginfo_t = pod::zeroed();
+                siginfo.si_signo = process.shutdown_signal as i32;
+                process.signal(host, None, &siginfo);
             });
-            host.schedule_task_at_emulated_time(task, stop_time);
+            host.schedule_task_at_emulated_time(task, shutdown_time);
         }
     }
 
