@@ -517,7 +517,6 @@ Type: Bool
 Use the `SCHED_FIFO` scheduler. Requires `CAP_SYS_NICE`. See sched(7),
 capabilities(7).
 
-
 #### `experimental.use_syscall_counters`
 
 Default: true  
@@ -705,7 +704,6 @@ Type: String OR Integer
 
 The simulated time at which to execute the process. This must be before
 [`general.stop_time`](#generalstop_time).
-
 
 #### `hosts.<hostname>.processes[*].stop_time`
 
