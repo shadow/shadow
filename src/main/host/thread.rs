@@ -357,7 +357,6 @@ impl Thread {
 
     pub fn run(
         &self,
-        ctx: &ProcessContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -373,15 +372,9 @@ impl Thread {
             .unwrap(),
         );
 
-        self.mthread.borrow_mut().run(
-            &ctx.with_thread(self),
-            plugin_path,
-            argv,
-            envv,
-            working_dir,
-            strace_fd,
-            log_path,
-        );
+        self.mthread
+            .borrow_mut()
+            .run(plugin_path, argv, envv, working_dir, strace_fd, log_path);
     }
 
     pub fn resume(&self, ctx: &ProcessContext) {

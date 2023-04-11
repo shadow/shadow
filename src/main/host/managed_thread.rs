@@ -102,7 +102,6 @@ impl ManagedThread {
 
     pub fn run(
         &mut self,
-        _ctx: &ThreadContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
