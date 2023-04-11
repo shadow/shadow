@@ -110,26 +110,16 @@ pub struct Process {
     // The basename (directory + file stem) for files that should be stored in the data directory.
     file_basename: PathBuf,
 
-    // the name and path to the executable that we will exec
+    // the name of the executable as provided in shadow's config, for logging purposes
     plugin_name: CString,
-    plugin_path: CString,
 
     // absolute path to the process's working directory
     working_dir: CString,
-
-    // environment variables to pass to exec
-    envv: Vec<CString>,
-
-    // argument strings to pass to exec
-    argv: Vec<CString>,
 
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
     strace_logging: Option<StraceLogging>,
-
-    // Pause shadow after launching this process, to give the user time to attach gdb
-    pause_for_debugging: bool,
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
@@ -210,7 +200,6 @@ impl Process {
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
-        let plugin_path = plugin_path.to_owned();
 
         let name = CString::new(format!(
             "{host_name}.{exe_name}.{id}",
@@ -269,8 +258,6 @@ impl Process {
                     host_id: host.id(),
                     // We set this below.
                     weak_rc: None,
-                    argv,
-                    envv,
                     working_dir,
                     shim_shared_mem_block,
                     memory_manager,
@@ -279,9 +266,7 @@ impl Process {
                     name,
                     file_basename,
                     plugin_name,
-                    plugin_path,
                     strace_logging,
-                    pause_for_debugging,
                     dumpable: Cell::new(cshadow::SUID_DUMP_USER),
                     is_exiting: Cell::new(false),
                     return_code: Cell::new(None),
@@ -302,7 +287,7 @@ impl Process {
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
         process
             .borrow(host.root())
-            .create_and_exec_thread_group_leader(host);
+            .create_and_exec_thread_group_leader(host, pause_for_debugging, plugin_path, envv, argv);
         process
     }
 
@@ -368,7 +353,14 @@ impl Process {
 
     /// Creates the thread group leader. After return, the thread group leader
     /// will be in `self.threads` and is ready to be run with `self.resume`.
-    fn create_and_exec_thread_group_leader(&self, host: &Host) {
+    fn create_and_exec_thread_group_leader(
+        &self,
+        host: &Host,
+        pause_for_debugging: bool,
+        plugin_path: &CStr,
+        envv: Vec<CString>,
+        argv: Vec<CString>,
+    ) {
         assert!(!self.is_running());
 
         self.open_stdio_file_helper(
@@ -413,9 +405,9 @@ impl Process {
             CString::new(self.output_file_name("shimlog").as_os_str().as_bytes()).unwrap();
 
         main_thread.run(
-            &self.plugin_path,
-            self.argv.clone(),
-            self.envv.clone(),
+            plugin_path,
+            argv,
+            envv,
             &self.working_dir,
             self.strace_logging
                 .as_ref()
@@ -438,7 +430,7 @@ impl Process {
         Worker::clear_active_thread();
         Worker::clear_active_process();
 
-        if self.pause_for_debugging {
+        if pause_for_debugging {
             // will block until logger output has been flushed
             // there is a race condition where other threads may log between the
             // `eprintln` and `raise` below, but it should be rare
@@ -691,10 +683,6 @@ impl Process {
 
     pub fn plugin_name(&self) -> &str {
         self.plugin_name.to_str().unwrap()
-    }
-
-    pub fn plugin_path(&self) -> &str {
-        self.plugin_path.to_str().unwrap()
     }
 
     #[track_caller]
