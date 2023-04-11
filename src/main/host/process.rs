@@ -19,7 +19,6 @@ use nix::sys::signal as nixsignal;
 use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::{RootedRc, RootedRcWeak};
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -43,10 +42,10 @@ use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, pod};
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -127,11 +126,6 @@ pub struct Process {
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
-    // process boot and shutdown variables
-    start_time: EmulatedTime,
-    shutdown_time: Option<EmulatedTime>,
-    shutdown_signal: Signal,
-
     strace_logging: Option<StraceLogging>,
 
     // Pause shadow after launching this process, to give the user time to attach gdb
@@ -194,31 +188,28 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 }
 
 impl Process {
+    /// Spawn a new process. The process will be runnable via [`Self::resume`]
+    /// once it has been added to the `Host`'s process list.
+    ///
     /// The returned object shouldn't be moved out of its enclosing RootedRc.
     /// Doing so breaks an internal weak reference to that RootedRc, which we
     /// use to access the enclosing RootedRc and RootedRefCell when interacting
     /// with C APIs.
-    pub fn new(
+    pub fn spawn(
         host: &Host,
         process_id: ProcessId,
-        start_time: SimulationTime,
-        shutdown_time: Option<SimulationTime>,
-        shutdown_signal: Signal,
-        plugin_name: &CStr,
+        plugin_name: CString,
         plugin_path: &CStr,
         envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
-    ) -> RootedRc<RootedRefCell<Self>> {
-        debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
-
+    ) -> RootedRc<RootedRefCell<Process>> {
         let desc_table = RefCell::new(DescriptorTable::new());
         let memory_manager = Box::new(RefCell::new(None));
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
-        let plugin_name = plugin_name.to_owned();
         let plugin_path = plugin_path.to_owned();
 
         let name = CString::new(format!(
@@ -285,9 +276,6 @@ impl Process {
                     memory_manager,
                     desc_table,
                     itimer_real,
-                    start_time: EmulatedTime::SIMULATION_START + start_time,
-                    shutdown_time: shutdown_time.map(|t| EmulatedTime::SIMULATION_START + t),
-                    shutdown_signal,
                     name,
                     file_basename,
                     plugin_name,
@@ -312,7 +300,9 @@ impl Process {
 
         let weak_rc = RootedRc::downgrade(&process, host.root());
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
-
+        process
+            .borrow(host.root())
+            .create_and_exec_thread_group_leader(host);
         process
     }
 
@@ -371,45 +361,13 @@ impl Process {
         delta
     }
 
-    pub fn schedule(&self, host: &Host) {
-        let id = self.id();
-        match self.shutdown_time {
-            Some(t) if self.start_time >= t => {
-                info!(
-                    "Not scheduling process with start:{:?} after stop:{:?}",
-                    self.start_time, t
-                );
-                return;
-            }
-            _ => (),
-        };
-        let task = TaskRef::new(move |host| {
-            let process = host.process_borrow(id).unwrap();
-            let process = process.borrow(host.root());
-            process.create_and_exec_thread_group_leader(host);
-            process.resume(host, process.thread_group_leader_id());
-        });
-        host.schedule_task_at_emulated_time(task, self.start_time);
-
-        if let Some(shutdown_time) = self.shutdown_time {
-            let task = TaskRef::new(move |host| {
-                let process = host.process_borrow(id).unwrap();
-                let process = process.borrow(host.root());
-                let mut siginfo: libc::siginfo_t = pod::zeroed();
-                siginfo.si_signo = process.shutdown_signal as i32;
-                process.signal(host, None, &siginfo);
-            });
-            host.schedule_task_at_emulated_time(task, shutdown_time);
-        }
-    }
-
-    fn thread_group_leader_id(&self) -> ThreadId {
+    pub fn thread_group_leader_id(&self) -> ThreadId {
         // tid of the thread group leader is equal to the pid.
         ThreadId::from(self.id())
     }
 
-    // Creates the thread group leader. After return, the thread group leader
-    // will be in `self.threads` and is ready to be run with `self.resume`.
+    /// Creates the thread group leader. After return, the thread group leader
+    /// will be in `self.threads` and is ready to be run with `self.resume`.
     fn create_and_exec_thread_group_leader(&self, host: &Host) {
         assert!(!self.is_running());
 
@@ -981,8 +939,7 @@ impl Process {
         }
 
         let Some(native_pid) = self.native_pid() else {
-            error!("Process {name} with a start time of {start_time:?} did not start",
-            name=self.name(), start_time=(self.start_time - EmulatedTime::SIMULATION_START));
+            error!("Process {name} did not start", name=self.name());
             return;
         };
 

@@ -43,7 +43,7 @@ use crate::network::router::Router;
 use crate::network::PacketDevice;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, SyncSendPointer};
+use crate::utility::{self, pod, SyncSendPointer};
 
 pub struct HostParameters {
     pub id: HostId,
@@ -371,31 +371,63 @@ impl Host {
         start_time: SimulationTime,
         shutdown_time: Option<SimulationTime>,
         shutdown_signal: Signal,
-        plugin_name: &CStr,
-        plugin_path: &CStr,
+        plugin_name: CString,
+        plugin_path: CString,
         envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
     ) {
+        debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
+
+        // We assign process IDs synchronously, to fulfill shadow's documented
+        // promise that they are assigned in the order they appear in shadow's config;
+        // *not* the order in which they are actually started.
+        // TODO: Change/remove this guarantee?
         let process_id = self.get_new_process_id();
 
-        let process = Process::new(
-            self,
-            process_id,
-            start_time,
-            shutdown_time,
-            shutdown_signal,
-            plugin_name,
-            plugin_path,
-            envv,
-            argv,
-            pause_for_debugging,
-            self.params.strace_logging_options,
-        );
+        // Schedule spawning the process.
+        let task = TaskRef::new(move |host| {
+            // We can't move out of these captured variables, since TaskRef takes
+            // a Fn, not a FnOnce.
+            // TODO: Add support for FnOnce?
+            let envv = envv.clone();
+            let argv = argv.clone();
+            let plugin_name = plugin_name.clone();
 
-        process.borrow(self.root()).schedule(self);
+            let process = Process::spawn(
+                host,
+                process_id,
+                plugin_name,
+                &plugin_path,
+                envv,
+                argv,
+                pause_for_debugging,
+                host.params.strace_logging_options,
+            );
+            host.processes
+                .borrow_mut()
+                .insert(process_id, process.clone(host.root()));
+            {
+                let process = process.borrow(host.root());
+                process.resume(host, process.thread_group_leader_id());
+            }
+            process.safely_drop(host.root());
+        });
+        self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
 
-        self.processes.borrow_mut().insert(process_id, process);
+        if let Some(shutdown_time) = shutdown_time {
+            let task = TaskRef::new(move |host| {
+                let process = host.process_borrow(process_id).unwrap();
+                let process = process.borrow(host.root());
+                let mut siginfo: libc::siginfo_t = pod::zeroed();
+                siginfo.si_signo = shutdown_signal as i32;
+                process.signal(host, None, &siginfo);
+            });
+            self.schedule_task_at_emulated_time(
+                task,
+                EmulatedTime::SIMULATION_START + shutdown_time,
+            );
+        }
     }
 
     #[track_caller]
