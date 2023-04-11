@@ -455,7 +455,6 @@ impl Process {
             CString::new(self.output_file_name("shimlog").as_os_str().as_bytes()).unwrap();
 
         main_thread.run(
-            &ProcessContext::new(host, self),
             &self.plugin_path,
             self.argv.clone(),
             self.envv.clone(),

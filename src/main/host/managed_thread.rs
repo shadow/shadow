@@ -8,7 +8,6 @@ use log::{debug, error, info, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
-use nix::unistd::getpid;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEvent, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
@@ -103,7 +102,6 @@ impl ManagedThread {
 
     pub fn run(
         &mut self,
-        ctx: &ThreadContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -118,11 +116,6 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        envv.push(CString::new(format!("SHADOW_PID={}", getpid().as_raw())).unwrap());
-        envv.push(
-            CString::new(format!("SHADOW_TSC_HZ={}", ctx.host.tsc().cyclesPerSecond)).unwrap(),
-        );
-
         info!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
