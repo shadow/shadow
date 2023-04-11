@@ -8,7 +8,6 @@ use log::{debug, error, info, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
-use nix::unistd::getpid;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEvent, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
@@ -118,7 +117,6 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        envv.push(CString::new(format!("SHADOW_PID={}", getpid().as_raw())).unwrap());
         envv.push(
             CString::new(format!("SHADOW_TSC_HZ={}", ctx.host.tsc().cyclesPerSecond)).unwrap(),
         );

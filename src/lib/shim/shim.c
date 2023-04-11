@@ -228,41 +228,25 @@ static void _shim_parent_init_logging() {
     }
 }
 
-/*
- * If we can parse it from the env, check that Shadow's PID is my parent and
- * exit otherwise.
- */
-static void _verify_parent_pid_or_exit() {
-    unsigned long long shadow_pid = 0;
-    bool valid_parse_pid = false;
-    const char* shadow_pid_str = getenv("SHADOW_PID");
-    if (!shadow_pid_str) {
-        panic("SHADOW_PID not set");
-    }
-
-    if (sscanf(shadow_pid_str, "%llu", &shadow_pid) != 1) {
-        panic("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
-    }
-
-    if (getppid() != shadow_pid) { // Validate that Shadow is still alive.
-        error("Shadow exited.");
-        exit(EXIT_FAILURE);
-    }
-
-    trace("Plugin verified Shadow is still running as parent.");
-}
-
 static void _shim_parent_init_death_signal() {
-    // Ensure that the child process exits when Shadow does.  Shadow
-    // ought to have already tried to terminate the child via SIGTERM
-    // before shutting down (though see
-    // https://github.com/shadow/shadow/issues/903), so now we jump all
-    // the way to SIGKILL.
+    // Ensure that the child process exits when Shadow does. This is to avoid
+    // confusing behavior or a "stalled out" process in the case that Shadow
+    // exits abnormally. Shadow normally ensures all managed processes have
+    // exited before exiting itself.
+    //
+    // TODO: This would be better to do in between (v)fork and exec, e.g. in
+    // case the shim is never initialized properly, but isn't currently an
+    // operation supported by posix_spawn.
     if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
         warning("prctl: %s", strerror(errno));
     }
 
-    _verify_parent_pid_or_exit();
+    // Exit now if Shadow has already exited before we made the above `prctl`
+    // call.
+    if (getppid() != shimshmem_getShadowPid(shim_hostSharedMem())) {
+        error("Shadow exited.");
+        exit(EXIT_FAILURE);
+    }
 }
 
 static void _shim_parent_init_host_shm() {

@@ -79,6 +79,9 @@ pub struct HostShmem {
     // per-process option.
     pub unblocked_vdso_latency: SimulationTime,
 
+    // Native pid of the Shadow simulator process.
+    pub shadow_pid: libc::pid_t,
+
     // Current simulation time.
     pub sim_time: AtomicEmulatedTime,
 }
@@ -91,6 +94,7 @@ impl HostShmem {
         max_unapplied_cpu_latency: SimulationTime,
         unblocked_syscall_latency: SimulationTime,
         unblocked_vdso_latency: SimulationTime,
+        shadow_pid: libc::pid_t,
     ) -> Self {
         Self {
             host_id,
@@ -104,6 +108,7 @@ impl HostShmem {
             max_unapplied_cpu_latency,
             unblocked_syscall_latency,
             unblocked_vdso_latency,
+            shadow_pid,
             sim_time: AtomicEmulatedTime::new(EmulatedTime::MIN),
         }
     }
@@ -495,6 +500,15 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn shimshmemprocess_size() -> usize {
         std::mem::size_of::<ProcessShmem>()
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getShadowPid(host_mem: *const ShimShmemHost) -> libc::pid_t {
+        let host_mem = unsafe { host_mem.as_ref().unwrap() };
+        host_mem.shadow_pid
     }
 
     /// # Safety

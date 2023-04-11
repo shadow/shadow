@@ -228,6 +228,7 @@ impl Host {
             params.max_unapplied_cpu_latency,
             params.unblocked_syscall_latency,
             params.unblocked_vdso_latency,
+            nix::unistd::getpid().as_raw(),
         );
         let shim_shmem =
             UnsafeCell::new(shadow_shmem::allocator::Allocator::global().alloc(host_shmem));
