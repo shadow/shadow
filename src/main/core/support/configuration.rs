@@ -150,10 +150,6 @@ impl ConfigOptions {
         SimulationTime::from_nanos(nanos)
     }
 
-    pub fn use_legacy_working_dir(&self) -> bool {
-        self.experimental.use_legacy_working_dir.unwrap()
-    }
-
     pub fn strace_logging_mode(&self) -> Option<FmtOptions> {
         match self.experimental.strace_logging_mode.as_ref().unwrap() {
             StraceLoggingMode::Standard => Some(FmtOptions::Standard),
@@ -386,12 +382,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("interface_qdisc").unwrap().as_str())]
     pub interface_qdisc: Option<QDiscMode>,
 
-    /// Don't adjust the working directories of the plugins
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_legacy_working_dir").unwrap().as_str())]
-    pub use_legacy_working_dir: Option<bool>,
-
     /// Log level at which to print host statistics
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "level")]
@@ -488,7 +478,6 @@ impl Default for ExperimentalOptions {
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
             socket_recv_autotune: Some(true),
             interface_qdisc: Some(QDiscMode::Fifo),
-            use_legacy_working_dir: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: Some(NullableOption::Value(units::Time::new(
