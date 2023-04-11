@@ -703,7 +703,9 @@ The number of replicas of this process to execute.
 Default: "0 sec"  
 Type: String OR Integer
 
-The simulated time at which to execute the process.
+The simulated time at which to execute the process. This must be before
+[`general.stop_time`](#generalstop_time).
+
 
 #### `hosts.<hostname>.processes[*].stop_time`
 
@@ -711,3 +713,4 @@ Default: null
 Type: String OR Integer OR null
 
 The simulated time at which to send a SIGKILL signal to the process.
+This must be before [`general.stop_time`](#generalstop_time).

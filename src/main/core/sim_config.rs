@@ -240,7 +240,7 @@ fn build_host(
 
         let mut processes = vec![];
         for proc in &host.processes {
-            let mut new_processes = build_process(proc).with_context(|| {
+            let mut new_processes = build_process(proc, config).with_context(|| {
                 format!("Failed to configure process '{}'", proc.path.display())
             })?;
             processes.append(&mut new_processes);
@@ -312,18 +312,38 @@ fn build_host(
 }
 
 /// For a process entry in the configuration options, build a list of `ProcessInfo` objects.
-fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
+fn build_process(
+    proc: &ProcessOptions,
+    config: &ConfigOptions,
+) -> anyhow::Result<Vec<ProcessInfo>> {
     let start_time = Duration::from(proc.start_time).try_into().unwrap();
     let stop_time = proc
         .stop_time
         .map(|x| Duration::from(x).try_into().unwrap());
+    let sim_stop_time =
+        SimulationTime::try_from(Duration::from(config.general.stop_time.unwrap())).unwrap();
+
+    if start_time >= sim_stop_time {
+        return Err(anyhow::anyhow!(
+            "Process start time '{}' must be earlier than the simulation stop time '{}'",
+            proc.start_time,
+            config.general.stop_time.unwrap(),
+        ));
+    }
 
     if let Some(stop_time) = stop_time {
         if start_time >= stop_time {
             return Err(anyhow::anyhow!(
-                "Process has a start time '{}' greater than the stop time '{}'",
+                "Process start time '{}' must be earlier than its stop time '{}'",
                 proc.start_time,
                 proc.stop_time.unwrap(),
+            ));
+        }
+        if stop_time >= sim_stop_time {
+            return Err(anyhow::anyhow!(
+                "Process stop time '{}' must be earlier than the simulation stop time '{}'",
+                proc.stop_time.unwrap(),
+                config.general.stop_time.unwrap(),
             ));
         }
     }

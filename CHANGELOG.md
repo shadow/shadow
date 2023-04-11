@@ -39,6 +39,9 @@ https://github.com/shadow/shadow/pull/2854
 * The experimental config option `use_shim_syscall_handler` has been removed.
 This optimization is now always enabled.
 
+* It is now an error to set a process's `stop_time` or `start_time` to be after
+the simulation's `stop_time`.
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to

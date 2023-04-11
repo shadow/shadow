@@ -1,6 +1,10 @@
 add_shadow_tests(BASENAME signal_resched)
 add_shadow_tests(BASENAME exit_after_signal_sched)
-add_shadow_tests(BASENAME small_stop_time CHECK_RETVAL FALSE)
+
+# Regression test for https://github.com/shadow/shadow/issues/1868.
+# Shadow should explicitly fail when a process start time is after
+# the simulation end time.
+add_shadow_tests(BASENAME small_stop_time EXPECT_ERROR TRUE CHECK_RETVAL FALSE)
 
 # Regression test for https://github.com/shadow/shadow/issues/2152
 add_shadow_tests(
