@@ -6,7 +6,7 @@ use nix::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
+use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
@@ -280,26 +280,27 @@ impl Thread {
 
     pub fn new(
         host: &Host,
-        process: &Process,
+        process_id: ProcessId,
         thread_id: ThreadId,
+        process_shmem: &ShMemBlock<ProcessShmem>,
     ) -> RootedRc<RootedRefCell<Self>> {
         let thread = Self {
             mthread: RefCell::new(ManagedThread::new()),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
                     host.id(),
-                    process.id().into(),
+                    process_id.into(),
                     thread_id.into(),
                 ))
             },
             cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
             id: thread_id,
             host_id: host.id(),
-            process_id: process.id(),
+            process_id,
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
-                process.shmem().serialize(),
+                process_shmem.serialize(),
                 thread_id.into(),
             )),
         };

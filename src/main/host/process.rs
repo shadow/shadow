@@ -287,7 +287,13 @@ impl Process {
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
         process
             .borrow(host.root())
-            .create_and_exec_thread_group_leader(host, pause_for_debugging, plugin_path, envv, argv);
+            .create_and_exec_thread_group_leader(
+                host,
+                pause_for_debugging,
+                plugin_path,
+                envv,
+                argv,
+            );
         process
     }
 
@@ -385,9 +391,10 @@ impl Process {
 
         // Create the main thread and add it to our thread list.
         let tid = self.thread_group_leader_id();
-        self.threads
-            .borrow_mut()
-            .insert(tid, Thread::new(host, self, tid));
+        self.threads.borrow_mut().insert(
+            tid,
+            Thread::new(host, self.id(), tid, &self.shim_shared_mem_block),
+        );
 
         let main_thread = self.thread_borrow(tid).unwrap();
         let main_thread = main_thread.borrow(host.root());
