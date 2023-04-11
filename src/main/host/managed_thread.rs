@@ -102,7 +102,7 @@ impl ManagedThread {
 
     pub fn run(
         &mut self,
-        ctx: &ThreadContext,
+        _ctx: &ThreadContext,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -117,10 +117,6 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        envv.push(
-            CString::new(format!("SHADOW_TSC_HZ={}", ctx.host.tsc().cyclesPerSecond)).unwrap(),
-        );
-
         info!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(

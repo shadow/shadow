@@ -82,6 +82,9 @@ pub struct HostShmem {
     // Native pid of the Shadow simulator process.
     pub shadow_pid: libc::pid_t,
 
+    // Emulated CPU TSC clock rate, for rdtsc emulation.
+    pub tsc_hz: u64,
+
     // Current simulation time.
     pub sim_time: AtomicEmulatedTime,
 }
@@ -95,6 +98,7 @@ impl HostShmem {
         unblocked_syscall_latency: SimulationTime,
         unblocked_vdso_latency: SimulationTime,
         shadow_pid: libc::pid_t,
+        tsc_hz: u64,
     ) -> Self {
         Self {
             host_id,
@@ -109,6 +113,7 @@ impl HostShmem {
             unblocked_syscall_latency,
             unblocked_vdso_latency,
             shadow_pid,
+            tsc_hz,
             sim_time: AtomicEmulatedTime::new(EmulatedTime::MIN),
         }
     }
@@ -509,6 +514,15 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getShadowPid(host_mem: *const ShimShmemHost) -> libc::pid_t {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
         host_mem.shadow_pid
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getTscHz(host_mem: *const ShimShmemHost) -> u64 {
+        let host_mem = unsafe { host_mem.as_ref().unwrap() };
+        host_mem.tsc_hz
     }
 
     /// # Safety

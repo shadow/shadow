@@ -47,13 +47,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
     static Tsc tsc;
     if (!tsc_initd) {
         trace("Initializing tsc");
-        uint64_t hz;
-        // TODO: We should move this to host shared memory and avoid parsing
-        // here.
-        if (sscanf(getenv("SHADOW_TSC_HZ"), "%" PRIu64, &hz) != 1) {
-            panic("Couldn't parse SHADOW_TSC_HZ %s", getenv("SHADOW_TSC_HZ"));
-        }
-        tsc = Tsc_create(hz);
+        tsc = Tsc_create(shimshmem_getTscHz(shim_hostSharedMem()));
         tsc_initd = true;
     }
 
