@@ -86,7 +86,6 @@ hosts:
 - [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
-- [`experimental.use_extended_yaml`](#experimentaluse_extended_yaml)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
