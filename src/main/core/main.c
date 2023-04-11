@@ -19,14 +19,9 @@
 #include "shd-config.h"
 
 int main_checkGlibVersion() {
-    /* check the compiled GLib version */
-    if (!GLIB_CHECK_VERSION(2, 32, 0)) {
-        g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against "
-                   "version %u.%u.%u\n",
-                   (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-        return -1;
-    }
-
+    /* Technically redundant, since our minimum glib version enforced by cmake is already
+     * larger than this version. Still, doesn't hurt to keep this check for posterity in
+     * case we ever try to go back to supporting older versions.*/
     if (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION == 40) {
         g_printerr("** You compiled against GLib version %u.%u.%u, which has bugs known to break "
                    "Shadow. Please update to a newer version of GLib.\n",
