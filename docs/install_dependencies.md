@@ -4,7 +4,7 @@
   + gcc, gcc-c++
   + python (version >= 3.6)
   + glib (version >= 2.32.0)
-  + cmake (version >= 3.12)
+  + cmake (version >= 3.13.4)
   + make
   + pkg-config
   + xz-utils

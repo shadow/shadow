@@ -17,7 +17,10 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
 ## ensure cmake version. Setting the upper bound equal to the lower bound
 ## requests that we don't get new behaviors introduced since that lowest version.
-cmake_minimum_required(VERSION 3.12...3.12 FATAL_ERROR)
+##
+## We use the oldest version provided in our supported platforms, which
+## is currently 3.13.4 on debian 10.
+cmake_minimum_required(VERSION 3.13.4...3.13.4 FATAL_ERROR)
 
 ## building with support for C11 on platforms that default to C99 or C89
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
