@@ -207,7 +207,6 @@ impl Process {
         envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
-        use_legacy_working_dir: bool,
         strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Self>> {
         debug_assert!(stop_time.is_none() || stop_time.unwrap() > start_time);
@@ -257,11 +256,9 @@ impl Process {
         let shim_shared_mem_block =
             shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
 
-        let working_dir = utility::pathbuf_to_nul_term_cstring(if use_legacy_working_dir {
-            nix::unistd::getcwd().unwrap()
-        } else {
-            std::fs::canonicalize(host.data_dir_path()).unwrap()
-        });
+        let working_dir = utility::pathbuf_to_nul_term_cstring(
+            std::fs::canonicalize(host.data_dir_path()).unwrap(),
+        );
 
         #[cfg(feature = "perf_timers")]
         let cpu_delay_timer = {
