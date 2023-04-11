@@ -9,12 +9,8 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::utility::synchronization::count_down_latch::{
-    build_count_down_latch, LatchCounter, LatchWaiter,
-};
-use crate::utility::synchronization::thread_parking::{
-    ThreadParker, ThreadUnparker, ThreadUnparkerUnassigned,
-};
+use crate::utility::synchronization::count_down_latch::{self, build_count_down_latch};
+use crate::utility::synchronization::simple_latch;
 
 // If making substantial changes to this scheduler, you should verify the compilation error message
 // for each test at the end of this file to make sure that they correctly cause the expected
@@ -32,12 +28,13 @@ impl<T> TaskFn for T where T: Fn(usize) + Send + Sync {}
 pub struct UnboundedThreadPool {
     /// Handles for joining threads when they've exited.
     thread_handles: Vec<std::thread::JoinHandle<()>>,
-    /// Used to unpark threads that are waiting for a new task.
-    thread_unparkers: Vec<ThreadUnparker>,
     /// State shared between all threads.
     shared_state: Arc<SharedState>,
+    /// A latch that is opened when the task is set. Indicates to the threads that they should start
+    /// running the task.
+    task_start_latch: simple_latch::Latch,
     /// The main thread uses this to wait for the threads to finish running the task.
-    task_end_waiter: LatchWaiter,
+    task_end_waiter: count_down_latch::LatchWaiter,
 }
 
 pub struct SharedState {
@@ -55,32 +52,34 @@ impl UnboundedThreadPool {
         });
 
         let (task_end_counter, task_end_waiter) = build_count_down_latch();
+        let mut task_start_latch = simple_latch::Latch::new();
 
         let mut thread_handles = Vec::new();
-        let mut thread_unparkers = Vec::new();
 
         for i in 0..num_threads {
             let shared_state_clone = Arc::clone(&shared_state);
+            let task_start_waiter = task_start_latch.waiter();
             let task_end_counter_clone = task_end_counter.clone();
-
-            let thread_unparker = ThreadUnparkerUnassigned::new();
-            let thread_parker = thread_unparker.parker();
 
             let handle = std::thread::Builder::new()
                 .name(thread_name.to_string())
                 .spawn(move || {
-                    work_loop(i, shared_state_clone, thread_parker, task_end_counter_clone)
+                    work_loop(
+                        i,
+                        shared_state_clone,
+                        task_start_waiter,
+                        task_end_counter_clone,
+                    )
                 })
                 .unwrap();
 
-            thread_unparkers.push(thread_unparker.assign(handle.thread().clone()));
             thread_handles.push(handle);
         }
 
         Self {
             thread_handles,
-            thread_unparkers,
             shared_state,
+            task_start_latch,
             task_end_waiter,
         }
     }
@@ -101,9 +100,7 @@ impl UnboundedThreadPool {
             .load(Ordering::Relaxed);
 
         // start the threads
-        for unparker in &self.thread_unparkers {
-            unparker.unpark();
-        }
+        self.task_start_latch.open();
 
         for handle in self.thread_handles.drain(..) {
             let result = handle.join();
@@ -214,18 +211,16 @@ impl<'a, 'scope> TaskRunner<'a, 'scope> {
 
         *self.scope.pool.shared_state.task.borrow_mut() = Some(f);
 
-        // start the threads
-        for unparker in &self.scope.pool.thread_unparkers {
-            unparker.unpark();
-        }
+        // we've set the task, so start the threads
+        self.scope.pool.task_start_latch.open();
     }
 }
 
 fn work_loop(
     thread_index: usize,
     shared_state: Arc<SharedState>,
-    thread_parker: ThreadParker,
-    mut end_counter: LatchCounter,
+    mut start_waiter: simple_latch::LatchWaiter,
+    mut end_counter: count_down_latch::LatchCounter,
 ) {
     // we don't use `catch_unwind` here for two main reasons:
     //
@@ -261,7 +256,7 @@ fn work_loop(
 
     loop {
         // wait for a new task
-        thread_parker.park();
+        start_waiter.wait();
 
         // scope used to make sure we drop the task before counting down
         {
