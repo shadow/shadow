@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::utility::synchronization::count_down_latch::{
-    build_count_down_latch, LatchCounter, LatchWaiter,
-};
+use crate::utility::synchronization::count_down_latch::{self, build_count_down_latch};
 use crate::utility::synchronization::thread_parking::{
     ThreadParker, ThreadUnparker, ThreadUnparkerUnassigned,
 };
@@ -37,7 +35,7 @@ pub struct UnboundedThreadPool {
     /// State shared between all threads.
     shared_state: Arc<SharedState>,
     /// The main thread uses this to wait for the threads to finish running the task.
-    task_end_waiter: LatchWaiter,
+    task_end_waiter: count_down_latch::LatchWaiter,
 }
 
 pub struct SharedState {
@@ -225,7 +223,7 @@ fn work_loop(
     thread_index: usize,
     shared_state: Arc<SharedState>,
     thread_parker: ThreadParker,
-    mut end_counter: LatchCounter,
+    mut end_counter: count_down_latch::LatchCounter,
 ) {
     // we don't use `catch_unwind` here for two main reasons:
     //
