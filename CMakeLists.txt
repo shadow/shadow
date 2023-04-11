@@ -95,7 +95,7 @@ compile_test(HAVE_STRUCT_LINUX_DIRENT64
             ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
 include(FindPkgConfig)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.32)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.58)
 
 include(CheckSymbolExists)
 list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDE_DIRS})

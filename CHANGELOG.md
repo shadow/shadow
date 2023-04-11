@@ -36,6 +36,8 @@ support graceful shutdown.
 
 * The minimum version of `cmake` has been bumped from 3.2 to 3.13.4.
 
+* The minimum version of `glib` has been bumped from 2.32 to 2.58.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
