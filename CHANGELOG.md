@@ -34,6 +34,8 @@ to the process at the specified time. While shadow previously sent `SIGKILL` at
 a process's `stop_time`, the default `shutdown_signal` is `SIGTERM` to better
 support graceful shutdown.
 
+* The minimum version of `cmake` has been bumped from 3.2 to 3.13.4.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
