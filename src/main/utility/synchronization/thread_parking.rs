@@ -107,10 +107,19 @@ impl ThreadUnparker {
 
     /// Unpark the assigned thread.
     pub fn unpark(&self) {
-        // rust guarantees that everything that happens before the `unpark()` is visible on the
-        // other thread after returning from `park()`, so the `ready_flag` should always be visible
-        // as true after the other thread returns from `park()` (the store should not be reordered
-        // after the `unpark()`):
+        // TODO: Rust does not guarantee any synchronization between the thread that parks and the
+        // thread that unparks:
+        //
+        // https://doc.rust-lang.org/nightly/std/thread/fn.park.html#park-and-unpark
+        //
+        // > Notice that being unblocked does not imply any synchronization with someone that
+        // > unparked this thread, it could also be spurious. For example, it would be a valid, but
+        // > inefficient, implementation to make both park and unpark return immediately without doing
+        // > anything.
+        //
+        // There is no guarentee that the change to `ready_flag` will be visible after the parked
+        // thread resumes, which may lead to a deadlock. In practice, rust currently does use an
+        // atomic with release-acquire ordering, but this might be relaxed in the future.
         // https://github.com/rust-lang/rust/blob/21b246587c2687935bd6004ffa5dcc4f4dd6600d/library/std/src/sys_common/thread_parker/futex.rs#L21-L27
         self.ready_flag.store(true, Ordering::Release);
         self.thread.unpark();
