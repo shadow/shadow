@@ -153,7 +153,7 @@ impl ThreadParker {
     pub fn park(&self) {
         while self
             .ready_flag
-            .compare_exchange(true, false, Ordering::Release, Ordering::Relaxed)
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
             // verify that we're parking from the proper thread (only in debug builds since this is
