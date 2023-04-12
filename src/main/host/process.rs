@@ -196,7 +196,6 @@ impl Process {
         strace_logging_options: Option<FmtOptions>,
     ) -> RootedRc<RootedRefCell<Process>> {
         let desc_table = RefCell::new(DescriptorTable::new());
-        let memory_manager = Box::new(RefCell::new(None));
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
@@ -249,6 +248,32 @@ impl Process {
             RefCell::new(t)
         };
 
+        // TODO: measure execution time of creating the main_thread with
+        // cpu_delay_timer? We previously did, but it's a little complex to do so,
+        // and it shouldn't matter much.
+
+        let main_thread = Self::create_and_exec_thread_group_leader(
+            host,
+            process_id,
+            pause_for_debugging,
+            plugin_name.to_str().unwrap(),
+            plugin_path,
+            &mut desc_table.borrow_mut(),
+            &strace_logging,
+            &file_basename,
+            &shim_shared_mem_block,
+            &working_dir,
+            envv,
+            argv,
+        );
+
+        let (main_thread_id, native_pid) = {
+            let main_thread = main_thread.borrow(host.root());
+            (main_thread.id(), main_thread.native_pid())
+        };
+        let memory_manager = unsafe { MemoryManager::new(native_pid) };
+        let threads = RefCell::new(BTreeMap::from([(main_thread_id, main_thread)]));
+
         let process = RootedRc::new(
             host.root(),
             RootedRefCell::new(
@@ -260,7 +285,7 @@ impl Process {
                     weak_rc: None,
                     working_dir,
                     shim_shared_mem_block,
-                    memory_manager,
+                    memory_manager: Box::new(RefCell::new(Some(memory_manager))),
                     desc_table,
                     itimer_real,
                     name,
@@ -275,25 +300,16 @@ impl Process {
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
                     total_run_time: Cell::new(Duration::ZERO),
-                    native_pid: Cell::new(None),
+                    native_pid: Cell::new(Some(native_pid)),
                     unsafe_borrow_mut: RefCell::new(None),
                     unsafe_borrows: RefCell::new(Vec::new()),
-                    threads: RefCell::new(BTreeMap::new()),
+                    threads,
                 },
             ),
         );
 
         let weak_rc = RootedRc::downgrade(&process, host.root());
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
-        process
-            .borrow(host.root())
-            .create_and_exec_thread_group_leader(
-                host,
-                pause_for_debugging,
-                plugin_path,
-                envv,
-                argv,
-            );
         process
     }
 
@@ -360,87 +376,71 @@ impl Process {
     /// Creates the thread group leader. After return, the thread group leader
     /// will be in `self.threads` and is ready to be run with `self.resume`.
     fn create_and_exec_thread_group_leader(
-        &self,
         host: &Host,
+        process_id: ProcessId,
         pause_for_debugging: bool,
+        plugin_name: &str,
         plugin_path: &CStr,
+        descriptor_table: &mut DescriptorTable,
+        strace_logging: &Option<StraceLogging>,
+        file_basename: &Path,
+        process_shmem: &ShMemBlock<ProcessShmem>,
+        working_dir: &CString,
         envv: Vec<CString>,
         argv: Vec<CString>,
-    ) {
-        assert!(!self.is_running());
-
-        let mut descriptor_table = self.descriptor_table_borrow_mut();
-
+    ) -> RootedRc<RootedRefCell<Thread>> {
         Self::open_stdio_file_helper(
-            &mut descriptor_table,
+            descriptor_table,
             libc::STDIN_FILENO.try_into().unwrap(),
             "/dev/null".into(),
             OFlag::O_RDONLY,
         );
 
-        let name = self.output_file_name("stdout");
+        let name = Self::static_output_file_name(file_basename, "stdout");
         Self::open_stdio_file_helper(
-            &mut descriptor_table,
+            descriptor_table,
             libc::STDOUT_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
-        let name = self.output_file_name("stderr");
+        let name = Self::static_output_file_name(file_basename, "stderr");
         Self::open_stdio_file_helper(
-            &mut descriptor_table,
+            descriptor_table,
             libc::STDERR_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
         // Create the main thread and add it to our thread list.
-        let tid = self.thread_group_leader_id();
-        self.threads.borrow_mut().insert(
-            tid,
-            Thread::new(host, self.id(), tid, &self.shim_shared_mem_block),
-        );
+        let tid = ThreadId::from(process_id);
+        let main_thread = Thread::new(host, process_id, tid, process_shmem);
+        let native_pid = {
+            let main_thread = main_thread.borrow(host.root());
 
-        let main_thread = self.thread_borrow(tid).unwrap();
-        let main_thread = main_thread.borrow(host.root());
+            info!("starting process '{}'", plugin_name);
 
-        info!("starting process '{}'", self.name());
-        Worker::set_active_process(self);
-        Worker::set_active_thread(&main_thread);
+            Process::set_shared_time(host);
 
-        #[cfg(feature = "perf_timers")]
-        self.start_cpu_delay_timer();
+            let shimlog_path = CString::new(
+                Self::static_output_file_name(file_basename, "shimlog")
+                    .as_os_str()
+                    .as_bytes(),
+            )
+            .unwrap();
 
-        Process::set_shared_time(host);
+            main_thread.run(
+                plugin_path,
+                argv,
+                envv,
+                working_dir,
+                strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
+                &shimlog_path,
+            );
+            main_thread.native_pid()
+        };
 
-        let shimlog_path =
-            CString::new(self.output_file_name("shimlog").as_os_str().as_bytes()).unwrap();
-
-        main_thread.run(
-            plugin_path,
-            argv,
-            envv,
-            &self.working_dir,
-            self.strace_logging
-                .as_ref()
-                .map(|s| s.file.borrow().as_raw_fd()),
-            &shimlog_path,
-        );
-
-        let native_pid = main_thread.native_pid();
-        self.native_pid.set(Some(native_pid));
-        *self.memory_manager.borrow_mut() = Some(unsafe { MemoryManager::new(native_pid) });
-
-        #[cfg(feature = "perf_timers")]
-        {
-            let elapsed = self.stop_cpu_delay_timer(host);
-            info!("process '{}' started in {:?}", self.name(), elapsed);
-        }
-        #[cfg(not(feature = "perf_timers"))]
-        info!("process '{}' started", self.name());
-
-        Worker::clear_active_thread();
-        Worker::clear_active_process();
+        info!("process '{}' started", plugin_name);
 
         if pause_for_debugging {
             // will block until logger output has been flushed
@@ -457,17 +457,18 @@ impl Process {
             let msg = format!(
                 "\
               \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
-              \n** '{name}' (pid {native_pid}).\
+              \n** '{plugin_name}' (pid {native_pid}).\
               \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
               \n** this task, and then typing \"fg\".\
               \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
-                name = self.name(),
                 native_pid = i32::from(native_pid)
             );
             eprintln!("{}", msg);
 
             nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
         }
+
+        main_thread
     }
 
     /// Resume execution of `tid` (if it exists).
