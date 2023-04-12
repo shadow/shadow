@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
@@ -131,7 +131,7 @@ pub struct Process {
     return_code: Cell<Option<i32>>,
     killed_by_shadow: Cell<bool>,
 
-    native_pid: Cell<Option<Pid>>,
+    native_pid: Pid,
 
     // timer that tracks the amount of CPU time we spend on plugin execution and processing
     #[cfg(feature = "perf_timers")]
@@ -300,7 +300,7 @@ impl Process {
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
                     total_run_time: Cell::new(Duration::ZERO),
-                    native_pid: Cell::new(Some(native_pid)),
+                    native_pid,
                     unsafe_borrow_mut: RefCell::new(None),
                     unsafe_borrows: RefCell::new(Vec::new()),
                     threads,
@@ -731,8 +731,8 @@ impl Process {
         self.desc_table.borrow_mut()
     }
 
-    pub fn native_pid(&self) -> Option<Pid> {
-        self.native_pid.get()
+    pub fn native_pid(&self) -> Pid {
+        self.native_pid
     }
 
     #[track_caller]
@@ -874,10 +874,6 @@ impl Process {
         threadrc.safely_drop(host.root());
     }
 
-    fn has_started(&self) -> bool {
-        self.native_pid.get().is_some()
-    }
-
     pub fn is_running(&self) -> bool {
         !self.is_exiting.get() && self.threads.borrow().len() > 0
     }
@@ -911,11 +907,6 @@ impl Process {
     }
 
     fn terminate(&self, host: &Host) {
-        let Some(native_pid) = self.native_pid() else {
-            trace!("Never started");
-            return;
-        };
-
         if !self.is_running() {
             trace!("Already dead");
             assert!(self.return_code.get().is_some());
@@ -923,7 +914,7 @@ impl Process {
 
         trace!("Terminating");
         self.killed_by_shadow.set(true);
-        if let Err(err) = nix::sys::signal::kill(native_pid, Signal::SIGKILL) {
+        if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
             warn!("kill: {:?}", err);
         }
 
@@ -936,13 +927,8 @@ impl Process {
             return;
         }
 
-        let Some(native_pid) = self.native_pid() else {
-            error!("Process {name} did not start", name=self.name());
-            return;
-        };
-
         use nix::sys::wait::WaitStatus;
-        let return_code = match nix::sys::wait::waitpid(native_pid, None) {
+        let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
             Ok(WaitStatus::Exited(_pid, code)) => code,
             Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => {
                 utility::return_code_for_signal(signal)
@@ -998,7 +984,7 @@ impl Process {
     }
 
     fn check(&self, host: &Host) {
-        if self.is_running() || !self.has_started() {
+        if self.is_running() {
             return;
         }
 
@@ -1854,14 +1840,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getNativePid(proc: *const ProcessRefCell) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().unwrap().as_raw())
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_hasStarted(proc: *const ProcessRefCell) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).has_started()).unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().as_raw()).unwrap()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin

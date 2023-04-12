@@ -260,7 +260,7 @@ impl Worker {
     }
 
     pub fn active_process_native_pid() -> Option<nix::unistd::Pid> {
-        Worker::with_active_process(|p| p.native_pid()).flatten()
+        Worker::with_active_process(|p| p.native_pid())
     }
 
     pub fn active_process_id() -> Option<ProcessId> {
