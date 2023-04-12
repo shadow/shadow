@@ -25,8 +25,8 @@ use crate::utility::{syscall, IsSend, SendPointer};
 pub enum ResumeResult {
     /// Blocked on a syscall.
     Blocked,
-    /// The thread has exited.
-    ExitedThread,
+    /// The thread has exited with the given code.
+    ExitedThread(i32),
     /// The process has exited.
     ExitedProcess,
 }
@@ -426,7 +426,7 @@ impl Thread {
                 }
                 ResumeResult::Blocked
             }
-            managed_thread::ResumeResult::ExitedThread => ResumeResult::ExitedThread,
+            managed_thread::ResumeResult::ExitedThread(c) => ResumeResult::ExitedThread(c),
             managed_thread::ResumeResult::ExitedProcess => ResumeResult::ExitedProcess,
         }
     }

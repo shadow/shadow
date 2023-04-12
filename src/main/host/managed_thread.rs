@@ -31,8 +31,8 @@ use crate::utility::{childpid_watcher, pod, syscall};
 pub enum ResumeResult {
     /// Blocked on a SysCallCondition.
     Blocked(SysCallCondition),
-    /// The native thread has exited.
-    ExitedThread,
+    /// The native thread has exited with the given code.
+    ExitedThread(i32),
     /// The thread's process has exited.
     ExitedProcess,
 }
@@ -202,8 +202,8 @@ impl ManagedThread {
                     // `set_tid_address`, to block here until the thread has
                     // actually exited.
                     if syscall.syscall_args.number == libc::SYS_exit {
-                        self.return_code
-                            .set(Some(syscall.syscall_args.args[0].into()));
+                        let return_code = syscall.syscall_args.args[0].into();
+                        self.return_code.set(Some(return_code));
                         // Tell mthread to go ahead and make the exit syscall itself.
                         // We *don't* call `_managedthread_continuePlugin` here,
                         // since that'd release the ShimSharedMemHostLock, and we
@@ -211,7 +211,7 @@ impl ManagedThread {
                         // safe to take it again.
                         self.ipc_shmem.to_plugin().send(ShimEvent::SyscallDoNative);
                         self.cleanup_after_exit_initiated();
-                        return ResumeResult::ExitedThread;
+                        return ResumeResult::ExitedThread(return_code);
                     }
 
                     let scr = unsafe {

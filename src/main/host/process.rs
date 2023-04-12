@@ -508,7 +508,7 @@ impl Process {
             .unapplied_cpu_latency = SimulationTime::ZERO;
 
         let ctx = ProcessContext::new(host, self);
-        thread.resume(&ctx);
+        let res = thread.resume(&ctx);
         drop(thread);
         threadrc.safely_drop(host.root());
 
@@ -520,11 +520,25 @@ impl Process {
         #[cfg(not(feature = "perf_timers"))]
         debug!("process '{}' done continuing", self.name());
 
-        if self.is_exiting.get() {
-            self.handle_process_exit(host);
-        } else {
-            self.check_thread(host, tid);
-        }
+        match res {
+            crate::host::thread::ResumeResult::Blocked => {
+                debug!(
+                    "thread {tid} in process '{}' still running, but blocked",
+                    self.name()
+                );
+            }
+            crate::host::thread::ResumeResult::ExitedThread(return_code) => {
+                debug!(
+                    "thread {tid} in process '{}' exited with code {return_code}",
+                    self.name(),
+                );
+                self.reap_thread(host, tid);
+                self.check(host);
+            }
+            crate::host::thread::ResumeResult::ExitedProcess => {
+                self.handle_process_exit(host);
+            }
+        };
 
         Worker::clear_active_thread();
         Worker::clear_active_process();
@@ -1009,30 +1023,6 @@ impl Process {
                 desc.close(host, cb_queue);
             }
         });
-    }
-
-    fn check_thread(&self, host: &Host, tid: ThreadId) {
-        {
-            let threads = self.threads.borrow();
-            let thread = threads.get(&tid).unwrap();
-            let thread = thread.borrow(host.root());
-            if thread.is_running() {
-                debug!(
-                    "thread {} in process '{}' still running, but blocked",
-                    thread.id(),
-                    self.name()
-                );
-                return;
-            }
-            let return_code = thread.return_code();
-            debug!(
-                "thread {} in process '{}' exited with code {return_code:?}",
-                thread.id(),
-                self.name(),
-            );
-        }
-        self.reap_thread(host, tid);
-        self.check(host);
     }
 
     /// Adds a new thread to the process and schedules it to run.
