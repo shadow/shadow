@@ -159,7 +159,7 @@ pub struct Process {
 
     // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
     // Boxed to avoid invalidating those if Self is moved.
-    memory_manager: Box<RefCell<Option<MemoryManager>>>,
+    memory_manager: Box<RefCell<MemoryManager>>,
 }
 
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
@@ -285,7 +285,7 @@ impl Process {
                     weak_rc: None,
                     working_dir,
                     shim_shared_mem_block,
-                    memory_manager: Box::new(RefCell::new(Some(memory_manager))),
+                    memory_manager: Box::new(RefCell::new(memory_manager)),
                     desc_table,
                     itimer_real,
                     name,
@@ -697,12 +697,12 @@ impl Process {
 
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
-        RefMut::map(self.memory_manager.borrow_mut(), |mm| mm.as_mut().unwrap())
+        self.memory_manager.borrow_mut()
     }
 
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
-        Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
+        self.memory_manager.borrow()
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
@@ -1118,7 +1118,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
-        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        let manager = process.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1147,7 +1147,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
-        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        let manager = process.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1202,9 +1202,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
-            mm.as_mut().unwrap()
-        });
+        let manager = process.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1238,9 +1236,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
-            mm.as_mut().unwrap()
-        });
+        let manager = process.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1747,15 +1743,6 @@ mod export {
             if !memory_manager.has_mapper() {
                 memory_manager.init_mapper(&ThreadContext::new(host, &process, thread))
             }
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_resetMemoryManager(proc: *const ProcessRefCell) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            drop(proc.borrow(h.root()).memory_manager.borrow_mut().take());
         })
         .unwrap()
     }
