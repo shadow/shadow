@@ -25,6 +25,18 @@ use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
 use crate::utility::{childpid_watcher, pod, syscall};
 
+/// The ManagedThread's state after having been allowed to execute some code.
+#[derive(Debug)]
+#[must_use]
+pub enum ResumeResult {
+    /// Blocked on a SysCallCondition.
+    Blocked(SysCallCondition),
+    /// The native thread has exited.
+    ExitedThread,
+    /// The thread's process has exited.
+    ExitedProcess,
+}
+
 pub struct ManagedThread {
     ipc_shmem: Arc<ShMemBlock<'static, IPCData>>,
     is_running: Cell<bool>,
@@ -154,7 +166,7 @@ impl ManagedThread {
         self.is_running.set(true);
     }
 
-    pub fn resume(&self, ctx: &ThreadContext) -> Option<SysCallCondition> {
+    pub fn resume(&self, ctx: &ThreadContext) -> ResumeResult {
         debug_assert!(self.is_running());
 
         self.sync_affinity_with_worker();
@@ -177,7 +189,7 @@ impl ManagedThread {
                     // clean up.
                     ctx.process.mark_as_exiting();
                     self.cleanup_after_exit_initiated();
-                    return None;
+                    return ResumeResult::ExitedProcess;
                 }
                 ShimEvent::Syscall(syscall) => {
                     // Emulate the given syscall.
@@ -199,7 +211,7 @@ impl ManagedThread {
                         // safe to take it again.
                         self.ipc_shmem.to_plugin().send(ShimEvent::SyscallDoNative);
                         self.cleanup_after_exit_initiated();
-                        return None;
+                        return ResumeResult::ExitedThread;
                     }
 
                     let scr = unsafe {
@@ -212,9 +224,7 @@ impl ManagedThread {
                     // remove the mthread's old syscall condition since it's no longer needed
                     ctx.thread.cleanup_syscall_condition();
 
-                    if !self.is_running() {
-                        return None;
-                    }
+                    assert!(self.is_running());
 
                     // Flush any writes that legacy C syscallhandlers may have
                     // made.
@@ -222,7 +232,9 @@ impl ManagedThread {
 
                     match scr {
                         SyscallReturn::Block(b) => {
-                            return Some(unsafe { SysCallCondition::consume_from_c(b.cond) })
+                            return ResumeResult::Blocked(unsafe {
+                                SysCallCondition::consume_from_c(b.cond)
+                            })
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(
                             ctx.host,
