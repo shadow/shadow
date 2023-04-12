@@ -67,10 +67,12 @@ impl Latch {
         static_assertions::assert_eq_size!(AtomicI32, i32);
         static_assertions::assert_eq_align!(AtomicI32, i32);
 
+        let futex_word: &AtomicI32 = self.latch_gen.as_ref();
+
         let rv = unsafe {
             libc::syscall(
                 libc::SYS_futex,
-                &self.latch_gen,
+                futex_word as *const AtomicI32 as *const i32,
                 libc::FUTEX_WAKE,
                 i32::MAX,
                 std::ptr::null() as *const libc::timespec,
@@ -103,10 +105,12 @@ impl LatchWaiter {
                 _ => panic!("Latch has been opened multiple times without us waiting"),
             }
 
+            let futex_word: &AtomicI32 = self.latch_gen.as_ref();
+
             let rv = Errno::result(unsafe {
                 libc::syscall(
                     libc::SYS_futex,
-                    &self.latch_gen,
+                    futex_word as *const AtomicI32 as *const i32,
                     libc::FUTEX_WAIT,
                     latch_gen,
                     std::ptr::null() as *const libc::timespec,
