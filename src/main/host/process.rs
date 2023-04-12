@@ -369,21 +369,26 @@ impl Process {
     ) {
         assert!(!self.is_running());
 
-        self.open_stdio_file_helper(
+        let mut descriptor_table = self.descriptor_table_borrow_mut();
+
+        Self::open_stdio_file_helper(
+            &mut descriptor_table,
             libc::STDIN_FILENO.try_into().unwrap(),
             "/dev/null".into(),
             OFlag::O_RDONLY,
         );
 
         let name = self.output_file_name("stdout");
-        self.open_stdio_file_helper(
+        Self::open_stdio_file_helper(
+            &mut descriptor_table,
             libc::STDOUT_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
         let name = self.output_file_name("stderr");
-        self.open_stdio_file_helper(
+        Self::open_stdio_file_helper(
+            &mut descriptor_table,
             libc::STDERR_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
@@ -632,11 +637,11 @@ impl Process {
     }
 
     fn open_stdio_file_helper(
-        &self,
+        descriptor_table: &mut DescriptorTable,
         fd: DescriptorHandle,
         path: PathBuf,
         access_mode: OFlag,
-    ) -> *mut cshadow::RegularFile {
+    ) {
         let stdfile = unsafe { cshadow::regularfile_new() };
         let cwd = nix::unistd::getcwd().unwrap();
         let path = utility::pathbuf_to_nul_term_cstring(path);
@@ -660,16 +665,13 @@ impl Process {
         let desc = unsafe {
             Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
         };
-        let prev = self
-            .descriptor_table_borrow_mut()
-            .register_descriptor_with_fd(desc, fd);
+        let prev = descriptor_table.register_descriptor_with_fd(desc, fd);
         assert!(prev.is_none());
         trace!(
             "Successfully opened fd {} at {}",
             fd,
             path.to_str().unwrap()
         );
-        stdfile
     }
 
     fn output_file_name(&self, extension: &str) -> PathBuf {
