@@ -1790,12 +1790,6 @@ mod export {
         .unwrap()
     }
 
-    #[no_mangle]
-    pub unsafe extern "C" fn process_isExiting(proc: *const ProcessRefCell) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).is_exiting.get()).unwrap()
-    }
-
     /// Get process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
