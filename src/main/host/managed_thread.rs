@@ -85,6 +85,10 @@ impl ManagedThread {
         self.native_tid.unwrap()
     }
 
+    /// Make the specified syscall on the native thread.
+    ///
+    /// Panics if the native thread is dead or dies during the syscall,
+    /// including if the syscall itself is SYS_exit or SYS_exit_group.
     pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
         {
             let mut syscall_args = SysCallArgs {
@@ -101,10 +105,14 @@ impl ManagedThread {
         match self.wait_for_next_event(ctx.host) {
             Ok(ShimEvent::SyscallComplete(res)) => res.retval,
             Err(SelfContainedChannelError::WriterIsClosed) => {
-                trace!("Plugin exited while executing native syscall {n}");
-                ctx.process.mark_as_exiting();
-                self.cleanup_after_exit_initiated();
-                SysCallReg::from(-(Errno::ESRCH as i64))
+                // This should only happen if the syscall was SYS_exit or
+                // SYS_exit_group, or if the process was killed externally, e.g.
+                // by sending a signal from outside of shadow. These cases would be
+                // tricky to support, and we shouldn't need to.
+                // TODO: would be nice to report the exit status, but this is
+                // currently the job of the Process, making it tricky to do from
+                // here in a nice way.
+                panic!("Plugin exited while executing native syscall {n}");
             }
             other => {
                 panic!("Unexpected response from plugin: {other:?}");
@@ -187,7 +195,6 @@ impl ManagedThread {
                 ShimEvent::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but
                     // clean up.
-                    ctx.process.mark_as_exiting();
                     self.cleanup_after_exit_initiated();
                     return ResumeResult::ExitedProcess;
                 }

@@ -897,12 +897,13 @@ impl Process {
     /// without trying to run them again, since otherwise the OS may kill the other
     /// thread tasks while we're in the middle of trying to execute them, which can
     /// be difficult to recover from cleanly.
-    pub fn mark_as_exiting(&self) {
+    fn mark_as_exiting(&self) {
         self.is_exiting.set(true);
         trace!("Process {:?} marked as exiting", self.id());
     }
 
     fn handle_process_exit(&self, host: &Host) {
+        self.mark_as_exiting();
         loop {
             let (tid, threadrc) = {
                 let threads = self.threads.borrow();
@@ -1793,21 +1794,6 @@ mod export {
     pub unsafe extern "C" fn process_isExiting(proc: *const ProcessRefCell) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| proc.borrow(host.root()).is_exiting.get()).unwrap()
-    }
-
-    /// In some cases a running thread processes an action that will bring down the
-    /// entire process. Calling this tells the Process to clean up other threads
-    /// without trying to run them again, since otherwise the OS may kill the other
-    /// thread tasks while we're in the middle of trying to execute them, which can
-    /// be difficult to recover from cleanly.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_markAsExiting(proc: *const ProcessRefCell) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.mark_as_exiting()
-        })
-        .unwrap();
     }
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations
