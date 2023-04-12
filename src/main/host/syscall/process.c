@@ -150,12 +150,3 @@ SyscallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
     trace("prlimit called on pid %i for resource %i", pid, resource);
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
-
-SyscallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
-    // The MemoryManager's state is no longer valid after an exec.
-    // Destroy it, to be recreated on the next syscall.
-    process_resetMemoryManager(_syscallhandler_getProcess(sys));
-
-    // Have the plugin execute it natively.
-    return syscallreturn_makeNative();
-}

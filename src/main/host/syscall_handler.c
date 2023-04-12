@@ -254,8 +254,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
         scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(process, straceLoggingMode, thread_getID(sys->thread), #s, "...",    \
-                              &args->args, scr);                                                   \
+            scr = log_syscall(                                                                     \
+                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
@@ -317,7 +317,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(epoll_wait);
             HANDLE_RUST(eventfd);
             HANDLE_RUST(eventfd2);
-            HANDLE_C(execve);
+            UNSUPPORTED(execve);
             HANDLE_C(exit_group);
             HANDLE_C(faccessat);
             HANDLE_C(fadvise64);

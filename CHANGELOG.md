@@ -67,6 +67,10 @@ software running under Shadow, since most thread APIs use this attribute.
 * Changed an error value in `clock_nanosleep` and `nanosleep` from `ENOSYS` to
 `ENOTSUP`.
 
+* A managed process that tries to call the `execve` syscall will now get an
+error instead of escaping the Shadow simulation.
+https://github.com/shadow/shadow/issues/2718
+
 Raw changes since v2.5.0:
 
 * [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2023-03-23T18%3A20-0400)
