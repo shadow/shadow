@@ -51,7 +51,7 @@ impl SimConfig {
         // build the host list
         let mut hosts = vec![];
         for (name, host_options) in &config.hosts {
-            let mut new_hosts = build_host(
+            let new_host = build_host(
                 config,
                 host_options,
                 name,
@@ -59,7 +59,7 @@ impl SimConfig {
                 hosts_to_debug,
             )
             .with_context(|| format!("Failed to configure host '{name}'"))?;
-            hosts.append(&mut new_hosts);
+            hosts.push(new_host);
         }
         if hosts.is_empty() {
             return Err(anyhow::anyhow!(
@@ -204,113 +204,92 @@ pub struct PcapConfig {
     pub capture_size: u64,
 }
 
-/// For a host entry in the configuration options, build a list of `HostInfo` objects.
+/// For a host entry in the configuration options, build `HostInfo` object.
 fn build_host(
     config: &ConfigOptions,
     host: &HostOptions,
     hostname: &str,
     randomness_for_seed_calc: u64,
     hosts_to_debug: &HashSet<String>,
-) -> anyhow::Result<Vec<HostInfo>> {
-    let quantity = *host.quantity;
+) -> anyhow::Result<HostInfo> {
+    let hostname = hostname.to_string();
 
-    // make sure we're not trying to set a single address for multiple hosts
-    // this should be caught later anyways, but the check here gives a useful error message
-    if host.ip_addr.is_some() && quantity > 1 {
-        return Err(anyhow::anyhow!(
-            "Host has an IP address set and a quantity {quantity} greater than 1",
-        ));
+    // hostname hash is used as part of the host's seed
+    let hostname_hash = {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        hostname.hash(&mut hasher);
+        hasher.finish()
+    };
+
+    let pause_for_debugging = hosts_to_debug.contains(&hostname);
+
+    let mut processes = vec![];
+    for proc in &host.processes {
+        let mut new_processes = build_process(proc, config)
+            .with_context(|| format!("Failed to configure process '{}'", proc.path.display()))?;
+        processes.append(&mut new_processes);
     }
 
-    let mut hosts = Vec::with_capacity(quantity.try_into().unwrap());
+    Ok(HostInfo {
+        name: hostname,
+        processes,
 
-    for host_index in 0..quantity {
-        let hostname = if quantity > 1 {
-            format!("{}{}", hostname, host_index + 1)
-        } else {
-            hostname.to_string()
-        };
+        seed: randomness_for_seed_calc ^ hostname_hash,
+        network_node_id: host.network_node_id,
+        pause_for_debugging,
 
-        // hostname hash is used as part of the host's seed
-        let hostname_hash = {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            hostname.hash(&mut hasher);
-            hasher.finish()
-        };
+        cpu_threshold: None,
+        cpu_precision: Some(SimulationTime::from_nanos(200)),
 
-        let pause_for_debugging = hosts_to_debug.contains(&hostname);
+        bandwidth_down_bits: host
+            .bandwidth_down
+            .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
+        bandwidth_up_bits: host
+            .bandwidth_down
+            .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
 
-        let mut processes = vec![];
-        for proc in &host.processes {
-            let mut new_processes = build_process(proc, config).with_context(|| {
-                format!("Failed to configure process '{}'", proc.path.display())
-            })?;
-            processes.append(&mut new_processes);
-        }
-
-        hosts.push(HostInfo {
-            name: hostname,
-            processes,
-
-            seed: randomness_for_seed_calc ^ hostname_hash,
-            network_node_id: host.network_node_id,
-            pause_for_debugging,
-
-            cpu_threshold: None,
-            cpu_precision: Some(SimulationTime::from_nanos(200)),
-
-            bandwidth_down_bits: host
-                .bandwidth_down
-                .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
-            bandwidth_up_bits: host
-                .bandwidth_down
-                .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
-
-            ip_addr: host.ip_addr.map(|x| x.into()),
-            log_level: host.options.log_level.flatten(),
-            pcap_config: host.options.pcap_enabled.unwrap().then_some(PcapConfig {
-                capture_size: host
-                    .options
-                    .pcap_capture_size
-                    .unwrap()
-                    .convert(units::SiPrefixUpper::Base)
-                    .unwrap()
-                    .value(),
-            }),
-
-            // some options come from the config options and not the host options
-            heartbeat_log_level: config.experimental.host_heartbeat_log_level,
-            heartbeat_log_info: config
-                .experimental
-                .host_heartbeat_log_info
-                .clone()
-                .unwrap_or_default(),
-            heartbeat_interval: config
-                .experimental
-                .host_heartbeat_interval
-                .flatten()
-                .map(|x| Duration::from(x).try_into().unwrap()),
-            send_buf_size: config
-                .experimental
-                .socket_send_buffer
+        ip_addr: host.ip_addr.map(|x| x.into()),
+        log_level: host.options.log_level.flatten(),
+        pcap_config: host.options.pcap_enabled.unwrap().then_some(PcapConfig {
+            capture_size: host
+                .options
+                .pcap_capture_size
                 .unwrap()
                 .convert(units::SiPrefixUpper::Base)
                 .unwrap()
                 .value(),
-            recv_buf_size: config
-                .experimental
-                .socket_recv_buffer
-                .unwrap()
-                .convert(units::SiPrefixUpper::Base)
-                .unwrap()
-                .value(),
-            autotune_send_buf: config.experimental.socket_send_autotune.unwrap(),
-            autotune_recv_buf: config.experimental.socket_recv_autotune.unwrap(),
-            qdisc: config.experimental.interface_qdisc.unwrap(),
-        });
-    }
+        }),
 
-    Ok(hosts)
+        // some options come from the config options and not the host options
+        heartbeat_log_level: config.experimental.host_heartbeat_log_level,
+        heartbeat_log_info: config
+            .experimental
+            .host_heartbeat_log_info
+            .clone()
+            .unwrap_or_default(),
+        heartbeat_interval: config
+            .experimental
+            .host_heartbeat_interval
+            .flatten()
+            .map(|x| Duration::from(x).try_into().unwrap()),
+        send_buf_size: config
+            .experimental
+            .socket_send_buffer
+            .unwrap()
+            .convert(units::SiPrefixUpper::Base)
+            .unwrap()
+            .value(),
+        recv_buf_size: config
+            .experimental
+            .socket_recv_buffer
+            .unwrap()
+            .convert(units::SiPrefixUpper::Base)
+            .unwrap()
+            .value(),
+        autotune_send_buf: config.experimental.socket_send_autotune.unwrap(),
+        autotune_recv_buf: config.experimental.socket_recv_autotune.unwrap(),
+        qdisc: config.experimental.interface_qdisc.unwrap(),
+    })
 }
 
 fn parse_signal(s: &str) -> anyhow::Result<nix::sys::signal::Signal> {

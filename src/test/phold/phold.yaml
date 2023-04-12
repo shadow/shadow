@@ -19,11 +19,19 @@ network:
         ]
       ]
 hosts:
-  peer:
+  peer1: &host
     network_node_id: 0
-    quantity: 10
     processes:
     - path: ./test-phold
       args: loglevel=info basename=peer quantity=10 msgload=1 cpuload=1 size=1
         weightsfilepath=../../../weights.txt runtime=5
       start_time: 1
+  peer2: *host
+  peer3: *host
+  peer4: *host
+  peer5: *host
+  peer6: *host
+  peer7: *host
+  peer8: *host
+  peer9: *host
+  peer10: *host

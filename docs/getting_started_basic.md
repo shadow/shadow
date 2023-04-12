@@ -38,14 +38,16 @@ hosts:
     - path: /usr/bin/python3
       args: -m http.server 80
       start_time: 3s
-  # three hosts with hostnames 'client1', 'client2', and 'client3'
-  client:
+  # three hosts with hostnames 'client1', 'client2', and 'client3' using a yaml
+  # anchor to avoid duplicating the options for each host
+  client1: &client_host
     network_node_id: 0
-    quantity: 3
     processes:
     - path: /usr/bin/curl
       args: -s server
       start_time: 5s
+  client2: *client_host
+  client3: *client_host
 ```
 
 ## Running the Simulation

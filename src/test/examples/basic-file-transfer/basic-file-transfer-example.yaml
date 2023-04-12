@@ -25,10 +25,11 @@ hosts:
       args: -SIGINT '1000'
       start_time: 9s
   # three hosts with hostnames 'client1', 'client2', and 'client3'
-  client:
+  client1: &client_host
     network_node_id: 0
-    quantity: 3
     processes:
     - path: /usr/bin/curl
       args: -s server
       start_time: 5s
+  client2: *client_host
+  client3: *client_host

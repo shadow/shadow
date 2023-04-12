@@ -589,10 +589,6 @@ pub struct HostOptions {
     #[serde(default)]
     pub ip_addr: Option<std::net::Ipv4Addr>,
 
-    /// Number of hosts to start
-    #[serde(default)]
-    pub quantity: Quantity,
-
     /// Downstream bandwidth capacity of the host
     #[serde(default)]
     pub bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,

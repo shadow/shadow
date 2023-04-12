@@ -21,9 +21,38 @@ network:
         ]
       ]
 hosts:
-  testnode:
+  testnode1: &host
     network_node_id: 0
-    quantity: 10
+    # use explicit IP addresses since the comparison script (determinism1_compare.cmake)
+    # depends on these, and otherwise shadow would assign 11.0.0.2 to peer10
+    ip_addr: 11.0.0.1
     processes:
     - path: ./test-determinism
       start_time: 1
+  testnode2:
+    <<: *host
+    ip_addr: 11.0.0.2
+  testnode3:
+    <<: *host
+    ip_addr: 11.0.0.3
+  testnode4:
+    <<: *host
+    ip_addr: 11.0.0.4
+  testnode5:
+    <<: *host
+    ip_addr: 11.0.0.5
+  testnode6:
+    <<: *host
+    ip_addr: 11.0.0.6
+  testnode7:
+    <<: *host
+    ip_addr: 11.0.0.7
+  testnode8:
+    <<: *host
+    ip_addr: 11.0.0.8
+  testnode9:
+    <<: *host
+    ip_addr: 11.0.0.9
+  testnode10:
+    <<: *host
+    ip_addr: 11.0.0.10
