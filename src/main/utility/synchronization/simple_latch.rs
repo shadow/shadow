@@ -73,7 +73,7 @@ impl Latch {
             libc::syscall(
                 libc::SYS_futex,
                 futex_word as *const AtomicU32 as *const u32,
-                libc::FUTEX_WAKE,
+                libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
                 // the man page says to use INT_MAX, even though this is a uint32_t
                 i32::MAX,
                 std::ptr::null() as *const libc::timespec,
@@ -112,7 +112,7 @@ impl LatchWaiter {
                 libc::syscall(
                     libc::SYS_futex,
                     futex_word as *const AtomicU32 as *const u32,
-                    libc::FUTEX_WAIT,
+                    libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
                     latch_gen,
                     std::ptr::null() as *const libc::timespec,
                     std::ptr::null_mut() as *mut u32,
