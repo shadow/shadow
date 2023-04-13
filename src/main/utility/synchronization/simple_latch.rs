@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use nix::errno::Errno;
@@ -20,7 +20,7 @@ use nix::errno::Errno;
 #[derive(Debug)]
 pub struct Latch {
     /// The generation of the latch.
-    latch_gen: Arc<AtomicI32>,
+    latch_gen: Arc<AtomicU32>,
 }
 
 /// A waiter that waits for the latch to open. A waiter for a latch can be created with
@@ -29,16 +29,16 @@ pub struct Latch {
 #[derive(Debug, Clone)]
 pub struct LatchWaiter {
     /// The generation of this waiter.
-    gen: i32,
+    gen: u32,
     /// The read-only generation of the latch.
-    latch_gen: Arc<AtomicI32>,
+    latch_gen: Arc<AtomicU32>,
 }
 
 impl Latch {
     /// Create a new latch.
     pub fn new() -> Self {
         Self {
-            latch_gen: Arc::new(AtomicI32::new(0)),
+            latch_gen: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -59,21 +59,22 @@ impl Latch {
         // the addition is wrapping
         let _prev = self.latch_gen.fetch_add(1, Ordering::Release);
 
-        // This is safe since `AtomicI32` "has the same in-memory representation as the underlying
-        // integer type, i32": https://doc.rust-lang.org/std/sync/atomic/struct.AtomicI32.html.
+        // This is safe since `AtomicU32` "has the same in-memory representation as the underlying
+        // integer type, u32": https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html.
         //
         // TODO: Consider using `as_mut_ptr` here once it's stabilized.
-        // https://doc.rust-lang.org/std/sync/atomic/struct.AtomicI32.html#method.as_mut_ptr
-        static_assertions::assert_eq_size!(AtomicI32, i32);
-        static_assertions::assert_eq_align!(AtomicI32, i32);
+        // https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html#method.as_mut_ptr
+        static_assertions::assert_eq_size!(AtomicU32, u32);
+        static_assertions::assert_eq_align!(AtomicU32, u32);
 
-        let futex_word: &AtomicI32 = self.latch_gen.as_ref();
+        let futex_word: &AtomicU32 = self.latch_gen.as_ref();
 
         let rv = unsafe {
             libc::syscall(
                 libc::SYS_futex,
-                futex_word as *const AtomicI32 as *const i32,
-                libc::FUTEX_WAKE,
+                futex_word as *const AtomicU32 as *const u32,
+                libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
+                // the man page says to use INT_MAX, even though this is a uint32_t
                 i32::MAX,
                 std::ptr::null() as *const libc::timespec,
                 std::ptr::null_mut() as *mut u32,
@@ -105,13 +106,13 @@ impl LatchWaiter {
                 _ => panic!("Latch has been opened multiple times without us waiting"),
             }
 
-            let futex_word: &AtomicI32 = self.latch_gen.as_ref();
+            let futex_word: &AtomicU32 = self.latch_gen.as_ref();
 
             let rv = Errno::result(unsafe {
                 libc::syscall(
                     libc::SYS_futex,
-                    futex_word as *const AtomicI32 as *const i32,
-                    libc::FUTEX_WAIT,
+                    futex_word as *const AtomicU32 as *const u32,
+                    libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
                     latch_gen,
                     std::ptr::null() as *const libc::timespec,
                     std::ptr::null_mut() as *mut u32,
