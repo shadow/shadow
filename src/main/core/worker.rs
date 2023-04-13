@@ -663,7 +663,7 @@ mod export {
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     use super::*;
-    use crate::host::process::ProcessRefCell;
+    use crate::host::process::Process;
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
@@ -788,14 +788,10 @@ mod export {
     /// Returns a pointer to the current running process. The returned pointer is
     /// invalidated the next time the worker switches processes.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentProcess() -> *const ProcessRefCell {
+    pub extern "C" fn worker_getCurrentProcess() -> *const Process {
         // We can't use `with_active_process` here since that returns the &Process instead
-        // of the enclosing &ProcessRefCell.
-        Worker::with_active_process_rc(|process| {
-            let process: &ProcessRefCell = process;
-            process as *const _
-        })
-        .unwrap()
+        // of the enclosing &Process.
+        Worker::with_active_process(|process| process as *const _).unwrap()
     }
 
     /// Returns a pointer to the current running thread. The returned pointer is

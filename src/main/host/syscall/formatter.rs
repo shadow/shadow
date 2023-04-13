@@ -271,12 +271,12 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::host::process::ProcessRefCell;
+    use crate::host::process::Process;
     use crate::host::syscall_types::SyscallReturn;
 
     #[no_mangle]
     pub extern "C" fn log_syscall(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         logging_mode: StraceFmtMode,
         tid: libc::pid_t,
         name: *const libc::c_char,
@@ -298,27 +298,23 @@ mod export {
             return result.into()
         };
 
-        Worker::with_active_host(|host| {
-            let proc = unsafe { proc.as_ref().unwrap() };
-            let proc = proc.borrow(host.root());
+        let proc = unsafe { proc.as_ref().unwrap() };
 
-            // we don't know the type, so just show it as an int
-            let memory = proc.memory_borrow();
-            let rv = SyscallResultFmt::<libc::c_long>::new(&result, *args, logging_mode, &memory);
+        // we don't know the type, so just show it as an int
+        let memory = proc.memory_borrow();
+        let rv = SyscallResultFmt::<libc::c_long>::new(&result, *args, logging_mode, &memory);
 
-            if let Some(ref rv) = rv {
-                proc.with_strace_file(|file| {
-                    let time = Worker::current_time();
+        if let Some(ref rv) = rv {
+            proc.with_strace_file(|file| {
+                let time = Worker::current_time();
 
-                    if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
-                        write_syscall(file, &time, tid, name, args_str, rv).unwrap();
-                    } else {
-                        log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
-                    }
-                });
-            }
-        })
-        .unwrap();
+                if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
+                    write_syscall(file, &time, tid, name, args_str, rv).unwrap();
+                } else {
+                    log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
+                }
+            });
+        }
 
         // need to return the result, otherwise the drop impl will free the condition pointer
         result.into()

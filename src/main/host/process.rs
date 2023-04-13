@@ -94,9 +94,6 @@ struct StraceLogging {
     options: FmtOptions,
 }
 
-/// Used for C interop.
-pub type ProcessRefCell = RootedRefCell<Process>;
-
 pub struct Process {
     // Occasionally we need to get to the enclosing RootedRc. Mostly for C compatibility.
     weak_rc: Option<RootedRcWeak<RootedRefCell<Process>>>,
@@ -305,20 +302,6 @@ impl Process {
         let weak_rc = RootedRc::downgrade(&process, host.root());
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
         process
-    }
-
-    /// # Safety
-    ///
-    /// The returned pointer is invalidated when all clones of the original
-    /// `RootedRc` returned from `Self::new` are destroyed.
-    pub unsafe fn cprocess(&self, host: &Host) -> *const ProcessRefCell {
-        let Some(rc) = self.weak_rc.as_ref().unwrap().upgrade(host.root()) else {
-            panic!("Couldn't get outer Arc");
-        };
-        let process: &ProcessRefCell = &rc;
-        let rv = process as *const _;
-        rc.safely_drop(host.root());
-        rv
     }
 
     pub fn weak_rc(&self) -> &RootedRcWeak<RootedRefCell<Self>> {
@@ -1253,26 +1236,22 @@ mod export {
     /// after.
     #[no_mangle]
     pub extern "C" fn process_registerDescriptor(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         desc: *mut Descriptor,
     ) -> libc::c_int {
         let proc = unsafe { proc.as_ref().unwrap() };
         let desc = Descriptor::from_raw(desc).unwrap();
 
-        let fd = Worker::with_active_host(|h| {
-            proc.borrow(h.root())
-                .descriptor_table_borrow_mut()
-                .register_descriptor(*desc)
-                .unwrap()
-        })
-        .unwrap();
-        fd.into()
+        proc.descriptor_table_borrow_mut()
+            .register_descriptor(*desc)
+            .unwrap()
+            .into()
     }
 
     /// Get a temporary reference to a descriptor.
     #[no_mangle]
     pub extern "C" fn process_getRegisteredDescriptor(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         handle: libc::c_int,
     ) -> *const Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1285,19 +1264,16 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| {
-            match proc.borrow(h.root()).descriptor_table_borrow().get(handle) {
-                Some(d) => d as *const Descriptor,
-                None => std::ptr::null(),
-            }
-        })
-        .unwrap()
+        match proc.descriptor_table_borrow().get(handle) {
+            Some(d) => d as *const Descriptor,
+            None => std::ptr::null(),
+        }
     }
 
     /// Get a temporary mutable reference to a descriptor.
     #[no_mangle]
     pub extern "C" fn process_getRegisteredDescriptorMut(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         handle: libc::c_int,
     ) -> *mut Descriptor {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1310,23 +1286,16 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| {
-            match proc
-                .borrow(h.root())
-                .descriptor_table_borrow_mut()
-                .get_mut(handle)
-            {
-                Some(d) => d as *mut Descriptor,
-                None => std::ptr::null_mut(),
-            }
-        })
-        .unwrap()
+        match proc.descriptor_table_borrow_mut().get_mut(handle) {
+            Some(d) => d as *mut Descriptor,
+            None => std::ptr::null_mut(),
+        }
     }
 
     /// Get a temporary reference to a legacy file.
     #[no_mangle]
     pub unsafe extern "C" fn process_getRegisteredLegacyFile(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         handle: libc::c_int,
     ) -> *mut cshadow::LegacyFile {
         let proc = unsafe { proc.as_ref().unwrap() };
@@ -1339,7 +1308,7 @@ mod export {
             }
         };
 
-        Worker::with_active_host(|h| match proc.borrow(h.root()).descriptor_table_borrow().get(handle).map(|x| x.file()) {
+        match proc.descriptor_table_borrow().get(handle).map(|x| x.file()) {
             Some(CompatFile::Legacy(file)) => file.ptr(),
             Some(CompatFile::New(file)) => {
                 // we have a special case for the legacy C TCP objects
@@ -1354,14 +1323,14 @@ mod export {
                 }
             }
             None => std::ptr::null_mut(),
-        }).unwrap()
+        }
     }
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
     pub extern "C" fn process_readPtr(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         dst: *mut c_void,
         src: UntypedForeignPtr,
         n: usize,
@@ -1370,27 +1339,20 @@ mod export {
         let src = ForeignArrayPtr::new(src.cast::<u8>(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
 
-        Worker::with_active_host(|h| {
-            match proc
-                .borrow(h.root())
-                .memory_borrow()
-                .copy_from_ptr(dst, src)
-            {
-                Ok(_) => 0,
-                Err(e) => {
-                    trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
-                    -(e as i32)
-                }
+        match proc.memory_borrow().copy_from_ptr(dst, src) {
+            Ok(_) => 0,
+            Err(e) => {
+                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                -(e as i32)
             }
-        })
-        .unwrap()
+        }
     }
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
     /// the specified range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         dst: UntypedForeignPtr,
         src: *const c_void,
         n: usize,
@@ -1398,20 +1360,13 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         let dst = ForeignArrayPtr::new(dst.cast::<u8>(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
-        Worker::with_active_host(|h| {
-            match proc
-                .borrow(h.root())
-                .memory_borrow_mut()
-                .copy_to_ptr(dst, src)
-            {
-                Ok(_) => 0,
-                Err(e) => {
-                    trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
-                    -(e as i32)
-                }
+        match proc.memory_borrow_mut().copy_to_ptr(dst, src) {
+            Ok(_) => 0,
+            Err(e) => {
+                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                -(e as i32)
             }
-        })
-        .unwrap()
+        }
     }
 
     /// Make the data at plugin_src available in shadow's address space.
@@ -1420,17 +1375,13 @@ mod export {
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadablePtr(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *const c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
         let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            unsafe { UnsafeBorrow::readable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null()) }
-        })
-        .unwrap()
+        unsafe { UnsafeBorrow::readable_ptr(proc, plugin_src).unwrap_or(std::ptr::null()) }
     }
 
     /// Returns a writable pointer corresponding to the named region. The
@@ -1444,19 +1395,13 @@ mod export {
     /// unspecified contents may be written back into process memory.
     #[no_mangle]
     pub unsafe extern "C" fn process_getWriteablePtr(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
         let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            unsafe {
-                UnsafeBorrowMut::writable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null_mut())
-            }
-        })
-        .unwrap()
+        unsafe { UnsafeBorrowMut::writable_ptr(proc, plugin_src).unwrap_or(std::ptr::null_mut()) }
     }
 
     /// Returns a writeable pointer corresponding to the specified src. Use when
@@ -1466,19 +1411,13 @@ mod export {
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
     pub unsafe extern "C" fn process_getMutablePtr(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
     ) -> *mut c_void {
         let proc = unsafe { proc.as_ref().unwrap() };
         let plugin_src = ForeignArrayPtr::new(plugin_src.cast::<u8>(), n);
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            unsafe {
-                UnsafeBorrowMut::mutable_ptr(&proc, plugin_src).unwrap_or(std::ptr::null_mut())
-            }
-        })
-        .unwrap()
+        unsafe { UnsafeBorrowMut::mutable_ptr(proc, plugin_src).unwrap_or(std::ptr::null_mut()) }
     }
 
     /// Reads up to `n` bytes into `str`.
@@ -1489,27 +1428,22 @@ mod export {
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
     pub unsafe extern "C" fn process_readString(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         strbuf: *mut libc::c_char,
         ptr: UntypedForeignPtr,
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let memory_manager = proc.memory_borrow();
-            let buf = unsafe {
-                std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen)
-            };
-            let cstr = match memory_manager
-                .copy_str_from_ptr(buf, ForeignArrayPtr::new(ptr.cast::<u8>(), maxlen))
-            {
-                Ok(cstr) => cstr,
-                Err(e) => return -(e as libc::ssize_t),
-            };
-            cstr.to_bytes().len().try_into().unwrap()
-        })
-        .unwrap()
+        let memory_manager = proc.memory_borrow();
+        let buf =
+            unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen) };
+        let cstr = match memory_manager
+            .copy_str_from_ptr(buf, ForeignArrayPtr::new(ptr.cast::<u8>(), maxlen))
+        {
+            Ok(cstr) => cstr,
+            Err(e) => return -(e as libc::ssize_t),
+        };
+        cstr.to_bytes().len().try_into().unwrap()
     }
 
     /// Reads up to `n` bytes into `str`.
@@ -1520,35 +1454,31 @@ mod export {
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
     pub unsafe extern "C" fn process_getReadableString(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
         out_str: *mut *const c_char,
         out_strlen: *mut size_t,
     ) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            let proc = proc.borrow(h.root());
-            let ptr = ForeignArrayPtr::new(plugin_src.cast::<c_char>(), n);
-            match unsafe { UnsafeBorrow::readable_string(&proc, ptr) } {
-                Ok((str, strlen)) => {
-                    assert!(!out_str.is_null());
-                    unsafe { out_str.write(str) };
-                    if !out_strlen.is_null() {
-                        unsafe { out_strlen.write(strlen) };
-                    }
-                    0
+        let ptr = ForeignArrayPtr::new(plugin_src.cast::<c_char>(), n);
+        match unsafe { UnsafeBorrow::readable_string(proc, ptr) } {
+            Ok((str, strlen)) => {
+                assert!(!out_str.is_null());
+                unsafe { out_str.write(str) };
+                if !out_strlen.is_null() {
+                    unsafe { out_strlen.write(strlen) };
                 }
-                Err(e) => -(e as i32),
+                0
             }
-        })
-        .unwrap()
+            Err(e) => -(e as i32),
+        }
     }
 
     /// Fully handles the `mmap` syscall
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMmap(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
         len: usize,
@@ -1560,11 +1490,10 @@ mod export {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
                 .do_mmap(
-                    &ThreadContext::new(host, &process, thread),
+                    &ThreadContext::new(host, process, thread),
                     addr.cast::<u8>(),
                     len,
                     prot,
@@ -1580,7 +1509,7 @@ mod export {
     /// Fully handles the `munmap` syscall
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMunmap(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
         len: usize,
@@ -1588,11 +1517,10 @@ mod export {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
                 .handle_munmap(
-                    &ThreadContext::new(host, &process, thread),
+                    &ThreadContext::new(host, process, thread),
                     addr.cast::<u8>(),
                     len,
                 )
@@ -1603,7 +1531,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMremap(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
         old_addr: UntypedForeignPtr,
         old_size: usize,
@@ -1614,11 +1542,10 @@ mod export {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
                 .handle_mremap(
-                    &ThreadContext::new(host, &process, thread),
+                    &ThreadContext::new(host, process, thread),
                     old_addr.cast::<u8>(),
                     old_size,
                     new_size,
@@ -1632,7 +1559,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_handleMprotect(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
         size: usize,
@@ -1641,11 +1568,10 @@ mod export {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
                 .handle_mprotect(
-                    &ThreadContext::new(host, &process, thread),
+                    &ThreadContext::new(host, process, thread),
                     addr.cast::<u8>(),
                     size,
                     prot,
@@ -1658,18 +1584,17 @@ mod export {
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
     #[no_mangle]
     pub unsafe extern "C" fn process_handleBrk(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
         plugin_src: UntypedForeignPtr,
     ) -> SyscallReturn {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             memory_manager
                 .handle_brk(
-                    &ThreadContext::new(host, &process, thread),
+                    &ThreadContext::new(host, process, thread),
                     plugin_src.cast::<u8>(),
                 )
                 .into()
@@ -1681,16 +1606,15 @@ mod export {
     /// be running and ready to make native syscalls.
     #[no_mangle]
     pub unsafe extern "C" fn process_initMapperIfNeeded(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         thread: *const Thread,
     ) {
         let process = unsafe { proc.as_ref().unwrap() };
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let process = process.borrow(host.root());
             let mut memory_manager = process.memory_borrow_mut();
             if !memory_manager.has_mapper() {
-                memory_manager.init_mapper(&ThreadContext::new(host, &process, thread))
+                memory_manager.init_mapper(&ThreadContext::new(host, process, thread))
             }
         })
         .unwrap()
@@ -1698,27 +1622,27 @@ mod export {
 
     /// Returns the processID that was assigned to us in process_new
     #[no_mangle]
-    pub unsafe extern "C" fn process_getProcessID(proc: *const ProcessRefCell) -> libc::pid_t {
+    pub unsafe extern "C" fn process_getProcessID(proc: *const Process) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| proc.borrow(h.root()).id().try_into().unwrap()).unwrap()
+        proc.id().into()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getHostId(proc: *const ProcessRefCell) -> HostId {
+    pub unsafe extern "C" fn process_getHostId(proc: *const Process) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).host_id()).unwrap()
+        proc.host_id()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getName(proc: *const ProcessRefCell) -> *const c_char {
+    pub unsafe extern "C" fn process_getName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).name.as_ptr()).unwrap()
+        proc.name.as_ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getPluginName(proc: *const ProcessRefCell) -> *const c_char {
+    pub unsafe extern "C" fn process_getPluginName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).plugin_name.as_ptr()).unwrap()
+        proc.plugin_name.as_ptr()
     }
 
     /// Safety:
@@ -1726,63 +1650,53 @@ mod export {
     /// The returned pointer is invalidated when the host shmem lock is released, e.g. via
     /// Host::unlock_shmem.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getSharedMem(
-        proc: *const ProcessRefCell,
-    ) -> *const ShimShmemProcess {
+    pub unsafe extern "C" fn process_getSharedMem(proc: *const Process) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            proc.borrow(host.root()).shim_shared_mem_block.deref() as *const _
-        })
-        .unwrap()
+        proc.shim_shared_mem_block.deref() as *const _
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getWorkingDir(proc: *const ProcessRefCell) -> *const c_char {
+    pub unsafe extern "C" fn process_getWorkingDir(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).working_dir.as_ptr()).unwrap()
+        proc.working_dir.as_ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_straceLoggingMode(
-        proc: *const ProcessRefCell,
-    ) -> StraceFmtMode {
+    pub unsafe extern "C" fn process_straceLoggingMode(proc: *const Process) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).strace_logging_options())
-            .unwrap()
-            .into()
+        proc.strace_logging_options().into()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_straceFd(proc: *const ProcessRefCell) -> RawFd {
+    pub unsafe extern "C" fn process_straceFd(proc: *const Process) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| match &proc.borrow(host.root()).strace_logging {
+        match &proc.strace_logging {
             Some(x) => x.file.borrow().as_raw_fd(),
             None => -1,
-        })
-        .unwrap()
+        }
     }
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getDumpable(proc: *const ProcessRefCell) -> u32 {
+    pub unsafe extern "C" fn process_getDumpable(proc: *const Process) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.get()).unwrap()
+        proc.dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_setDumpable(proc: *const ProcessRefCell, val: u32) {
+    pub unsafe extern "C" fn process_setDumpable(proc: *const Process, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).dumpable.set(val)).unwrap()
+        proc.dumpable.set(val)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getNativePid(proc: *const ProcessRefCell) -> libc::pid_t {
+    pub unsafe extern "C" fn process_getNativePid(proc: *const Process) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().as_raw()).unwrap()
+        proc.native_pid().as_raw()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin
@@ -1792,16 +1706,12 @@ mod export {
     ///
     /// Returns 0 on success or a negative errno on failure.
     #[no_mangle]
-    pub unsafe extern "C" fn process_flushPtrs(proc: *const ProcessRefCell) -> i32 {
+    pub unsafe extern "C" fn process_flushPtrs(proc: *const Process) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            match proc.free_unsafe_borrows_flush() {
-                Ok(_) => 0,
-                Err(e) => -(e as i32),
-            }
-        })
-        .unwrap()
+        match proc.free_unsafe_borrows_flush() {
+            Ok(_) => 0,
+            Err(e) => -(e as i32),
+        }
     }
 
     /// Frees all readable/writable foreign pointers. Unlike process_flushPtrs, any
@@ -1810,23 +1720,18 @@ mod export {
     /// and we end up not wanting to write anything after all (in particular, don't
     /// write back whatever garbage data was in the uninialized bueffer).
     #[no_mangle]
-    pub unsafe extern "C" fn process_freePtrsWithoutFlushing(proc: *const ProcessRefCell) {
+    pub unsafe extern "C" fn process_freePtrsWithoutFlushing(proc: *const Process) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.free_unsafe_borrows_noflush();
-        })
-        .unwrap();
+        proc.free_unsafe_borrows_noflush();
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getThread(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         tid: libc::pid_t,
     ) -> *const Thread {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
             let tid = ThreadId::try_from(tid).unwrap();
             let Some(thread) = proc.thread_borrow(tid) else {
                 return std::ptr::null();
@@ -1838,13 +1743,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_isRunning(proc: *const ProcessRefCell) -> bool {
+    pub unsafe extern "C" fn process_isRunning(proc: *const Process) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.is_running()
-        })
-        .unwrap()
+        proc.is_running()
     }
 
     // FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -1856,43 +1757,24 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getPhysicalAddress(
-        proc: *const ProcessRefCell,
+        proc: *const Process,
         vptr: UntypedForeignPtr,
     ) -> ManagedPhysicalMemoryAddr {
         let proc = unsafe { proc.as_ref().unwrap() };
-
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.physical_address(vptr)
-        })
-        .unwrap()
+        proc.physical_address(vptr)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_terminate(proc: *const ProcessRefCell) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.terminate(host)
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_continue(proc: *const ProcessRefCell, thread_id: libc::pid_t) {
+    pub unsafe extern "C" fn process_continue(proc: *const Process, thread_id: libc::pid_t) {
         let proc = unsafe { proc.as_ref().unwrap() };
         let tid = ThreadId::try_from(thread_id).unwrap();
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.resume(host, tid)
-        })
-        .unwrap()
+        Worker::with_active_host(|host| proc.resume(host, tid)).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_stop(proc: *const ProcessRefCell) {
+    pub unsafe extern "C" fn process_stop(proc: *const Process) {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).stop(host)).unwrap()
+        Worker::with_active_host(|host| proc.stop(host)).unwrap()
     }
 
     /// Send the signal described in `siginfo` to `process`. `currentRunningThread`
@@ -1900,17 +1782,14 @@ mod export {
     /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
     #[no_mangle]
     pub unsafe extern "C" fn process_signal(
-        target_proc: *const ProcessRefCell,
+        target_proc: *const Process,
         current_running_thread: *const Thread,
         siginfo: *const libc::siginfo_t,
     ) {
         let target_proc = unsafe { target_proc.as_ref().unwrap() };
         let current_running_thread = unsafe { current_running_thread.as_ref() };
         let siginfo = unsafe { siginfo.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let target_proc = target_proc.borrow(host.root());
-            target_proc.signal(host, current_running_thread, siginfo)
-        })
-        .unwrap()
+        Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo))
+            .unwrap()
     }
 }

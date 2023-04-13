@@ -32,8 +32,8 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys,
-                                                   const ProcessRefCell* process, int sig) {
+static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Process* process,
+                                                   int sig) {
     if (sig < 0 || sig > SHD_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
@@ -71,7 +71,7 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
         return syscallreturn_makeDoneI64(0);
     }
 
-    const ProcessRefCell* process = thread_getProcess(thread);
+    const Process* process = thread_getProcess(thread);
     struct shd_kernel_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), process_getSharedMem(process), sig);
     if (action.u.ksa_handler == SIG_IGN ||
@@ -167,7 +167,7 @@ SyscallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
         pid = -pid;
     }
 
-    const ProcessRefCell* process = host_getProcess(_syscallhandler_getHost(sys), pid);
+    const Process* process = host_getProcess(_syscallhandler_getHost(sys), pid);
     if (process == NULL) {
         debug("Process %d not found", pid);
         return syscallreturn_makeDoneErrno(ESRCH);
@@ -190,7 +190,7 @@ SyscallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
         return syscallreturn_makeDoneErrno(ESRCH);
     }
 
-    const ProcessRefCell* process = thread_getProcess(thread);
+    const Process* process = thread_getProcess(thread);
 
     if (process_getProcessID(process) != tgid) {
         return syscallreturn_makeDoneErrno(ESRCH);

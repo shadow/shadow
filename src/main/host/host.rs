@@ -885,7 +885,7 @@ mod export {
     use super::*;
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::{process::ProcessRefCell, thread::Thread},
+        host::{process::Process, thread::Thread},
         network::router::Router,
     };
 
@@ -1157,11 +1157,11 @@ mod export {
     pub unsafe extern "C" fn host_getProcess(
         host: *const Host,
         virtual_pid: libc::pid_t,
-    ) -> *const ProcessRefCell {
+    ) -> *const Process {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
         host.process_borrow(virtual_pid)
-            .map(|x| unsafe { x.borrow(host.root()).cprocess(host) })
+            .map(|x| &*x.borrow(host.root()) as *const _)
             .unwrap_or(std::ptr::null_mut())
     }
 

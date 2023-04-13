@@ -415,14 +415,7 @@ impl Thread {
                 let cond = cond.into_inner();
                 self.cond.set(unsafe { SendPointer::new(cond) });
                 if let Some(cond) = unsafe { cond.as_mut() } {
-                    unsafe {
-                        c::syscallcondition_waitNonblock(
-                            cond,
-                            ctx.host,
-                            ctx.process.cprocess(ctx.host),
-                            self,
-                        )
-                    }
+                    unsafe { c::syscallcondition_waitNonblock(cond, ctx.host, ctx.process, self) }
                 }
                 ResumeResult::Blocked
             }
@@ -525,7 +518,7 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::host::host::Host;
-    use crate::host::process::ProcessRefCell;
+    use crate::host::process::Process;
 
     /// Make the requested syscall from within the plugin.
     ///
@@ -638,12 +631,12 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getProcess(thread: *const Thread) -> *const ProcessRefCell {
+    pub unsafe extern "C" fn thread_getProcess(thread: *const Thread) -> *const Process {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let process = host.process_borrow(thread.process_id).unwrap();
-            let process: &ProcessRefCell = &process;
-            process as *const _
+            let p: &Process = &process.borrow(host.root());
+            p as *const _
         })
         .unwrap()
     }
