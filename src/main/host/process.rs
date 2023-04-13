@@ -530,6 +530,9 @@ impl Process {
         Worker::clear_active_thread();
     }
 
+    /// Terminate the Process.
+    ///
+    /// Should only be called from [`Host::free_all_applications`].
     pub fn stop(&self, host: &Host) {
         if !self.is_running() {
             debug!("process {} has already stopped", self.name());
@@ -537,8 +540,6 @@ impl Process {
         }
 
         info!("terminating process {}", self.name());
-
-        Worker::set_active_process(self);
 
         #[cfg(feature = "perf_timers")]
         self.start_cpu_delay_timer();
@@ -552,8 +553,6 @@ impl Process {
         }
         #[cfg(not(feature = "perf_timers"))]
         info!("process '{}' stopped", self.name());
-
-        Worker::clear_active_process();
     }
 
     /// Send the signal described in `siginfo` to `process`. `current_thread`

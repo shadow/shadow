@@ -662,9 +662,15 @@ impl Host {
     pub fn free_all_applications(&self) {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
-        for (_id, process) in processes.into_iter() {
-            process.borrow(self.root()).stop(self);
-            process.safely_drop(self.root());
+        for (_id, processrc) in processes.into_iter() {
+            {
+                let process = processrc.borrow(self.root());
+                Worker::set_active_process(&process);
+                process.stop(self);
+                Worker::clear_active_process();
+            }
+
+            processrc.safely_drop(self.root());
         }
         trace!("done freeing application for host '{}'", self.name());
     }
