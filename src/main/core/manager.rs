@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -261,16 +261,6 @@ impl<'a> Manager<'a> {
 
         // shuffle the list of hosts to make sure that they are randomly assigned by the scheduler
         hosts.shuffle(&mut manager_config.random);
-
-        // the configuration file's yaml format generally prevents duplicate hostnames, but using
-        // the `quantity` field can lead to hosts with the same name
-        let duplicate_hostnames = find_duplicates(hosts.iter().map(|x| x.name()));
-        if !duplicate_hostnames.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Duplicate hostnames: {:?}",
-                duplicate_hostnames
-            ));
-        }
 
         let use_cpu_pinning = self.config.experimental.use_cpu_pinning.unwrap();
 
@@ -903,23 +893,4 @@ fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
     );
 
     Ok(libpath)
-}
-
-/// Find duplicates in an iterator. This is not meant to have good performance.
-fn find_duplicates<I>(a: I) -> HashSet<<I as Iterator>::Item>
-where
-    I: Iterator,
-    <I as Iterator>::Item: std::cmp::Eq + std::hash::Hash + Copy,
-{
-    let mut seen = HashSet::new();
-    let mut duplicates = HashSet::new();
-
-    for name in a {
-        let new = seen.insert(name);
-        if !new {
-            duplicates.insert(name);
-        }
-    }
-
-    duplicates
 }

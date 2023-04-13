@@ -71,16 +71,19 @@ hosts:
       # See notes below explaining Shadow's directory structure.
       args: ../../../tgen.server.graphml.xml
       start_time: 1s
-  client:
+  client1: &client_host
     network_node_id: 0
-    quantity: 10
     processes:
     - path: tgen
       args: ../../../tgen.client.graphml.xml
       start_time: 2s
+  client2: *client_host
+  client3: *client_host
+  client4: *client_host
+  client5: *client_host
 ```
 
-We can see that Shadow will be running 11 processes in total, and that those
+We can see that Shadow will be running 6 processes in total, and that those
 processes are configured using `graphml.xml` files (the configuration file
 format for TGen) as arguments.
 
@@ -181,7 +184,7 @@ host has its own directory under `shadow.data/hosts/`.
 
 In the TGen process output, lines containing `stream-success` represent
 completed downloads and contain useful timing statistics. From these lines we
-should see that clients have completed a total of **100** streams:
+should see that clients have completed a total of **50** streams:
 
 ```bash
 for d in shadow.data/hosts/client*; do grep "stream-success" ${d}/*.stdout ; done | wc -l

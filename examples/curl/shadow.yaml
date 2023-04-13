@@ -13,10 +13,11 @@ hosts:
     - path: python3
       args: -m http.server 80
       start_time: 0s
-  client:
+  client1: &client_host
     network_node_id: 0
-    quantity: 3
     processes:
     - path: curl
       args: -s server
       start_time: 2s
+  client2: *client_host
+  client3: *client_host

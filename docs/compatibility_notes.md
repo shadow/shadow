@@ -225,13 +225,16 @@ hosts:
     - path: ctorrent
       args: example.torrent
       start_time: 12s
-  downloader:
+  downloader1: &downloader_host
     network_node_id: 0
-    quantity: 10
     processes:
     - path: ctorrent
       args: ../uploader/example.torrent
       start_time: 30s
+  downloader2: *downloader_host
+  downloader3: *downloader_host
+  downloader4: *downloader_host
+  downloader5: *downloader_host
 ```
 
 ```bash

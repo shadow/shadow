@@ -38,15 +38,16 @@ hosts:
     - path: /usr/sbin/nginx
       args: -c ../../../nginx.conf -p .
       start_time: 1
-  client:
+  client1: &client_host
     network_node_id: 0
-    quantity: 20
     options:
       log_level: debug
     processes:
     - path: /usr/bin/curl
       args: server --silent
       start_time: 5
+  client2: *client_host
+  client3: *client_host
 ```
 
 ## Contents:
@@ -103,7 +104,6 @@ hosts:
 - [`hosts.<hostname>.ip_addr`](#hostshostnameip_addr)
 - [`hosts.<hostname>.network_node_id`](#hostshostnamenetwork_node_id)
 - [`hosts.<hostname>.options`](#hostshostnameoptions)
-- [`hosts.<hostname>.quantity`](#hostshostnamequantity)
 - [`hosts.<hostname>.processes`](#hostshostnameprocesses)
 - [`hosts.<hostname>.processes[*].args`](#hostshostnameprocessesargs)
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
@@ -593,8 +593,7 @@ Type: String OR null
 IP address to assign to the host.
 
 This IP address must not conflict with the address of any other host (two hosts
-must not have the same IP address). If this option is set,
-[`hosts.<hostname>.quantity`](#hostshostnamequantity) must be set to 1.
+must not have the same IP address).
 
 #### `hosts.<hostname>.network_node_id`
 
@@ -616,17 +615,6 @@ hosts:
     options:
       log_level: debug
 ```
-
-#### `hosts.<hostname>.quantity`
-
-Default: 1  
-Type: Integer
-
-Number of hosts to start.
-
-If quantity is greater than 1, each host's hostname will be suffixed with a
-counter. For example, a host with an id of `host` and quantity of 2 would
-produce hosts with hostnames `host1` and `host2`.
 
 #### `hosts.<hostname>.processes`
 
