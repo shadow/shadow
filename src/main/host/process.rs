@@ -469,7 +469,7 @@ impl Process {
         };
         let thread = threadrc.borrow(host.root());
 
-        Worker::set_active_thread(&thread);
+        Worker::set_active_thread(&threadrc);
 
         #[cfg(feature = "perf_timers")]
         self.start_cpu_delay_timer();
