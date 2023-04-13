@@ -19,7 +19,7 @@ use nix::sys::signal as nixsignal;
 use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::rootedcell::rc::{RootedRc, RootedRcWeak};
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
@@ -95,9 +95,6 @@ struct StraceLogging {
 }
 
 pub struct Process {
-    // Occasionally we need to get to the enclosing RootedRc. Mostly for C compatibility.
-    weak_rc: Option<RootedRcWeak<RootedRefCell<Process>>>,
-
     id: ProcessId,
     host_id: HostId,
 
@@ -267,15 +264,13 @@ impl Process {
         let memory_manager = unsafe { MemoryManager::new(native_pid) };
         let threads = RefCell::new(BTreeMap::from([(main_thread_id, main_thread)]));
 
-        let process = RootedRc::new(
+        RootedRc::new(
             host.root(),
             RootedRefCell::new(
                 host.root(),
                 Self {
                     id: process_id,
                     host_id: host.id(),
-                    // We set this below.
-                    weak_rc: None,
                     working_dir,
                     shim_shared_mem_block,
                     memory_manager: Box::new(RefCell::new(memory_manager)),
@@ -297,15 +292,7 @@ impl Process {
                     threads,
                 },
             ),
-        );
-
-        let weak_rc = RootedRc::downgrade(&process, host.root());
-        process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
-        process
-    }
-
-    pub fn weak_rc(&self) -> &RootedRcWeak<RootedRefCell<Self>> {
-        self.weak_rc.as_ref().unwrap()
+        )
     }
 
     pub fn id(&self) -> ProcessId {
@@ -1013,12 +1000,6 @@ impl Process {
 
 impl Drop for Process {
     fn drop(&mut self) {
-        // TODO: is there a better way to handle this?
-        // Adding `safely_drop` to Process itself is awkward; it'd need to take
-        // the RootedRc and determine whether the Process itself was being
-        // dropped or not.
-        Worker::with_active_host(|host| self.weak_rc.take().unwrap().safely_drop(host.root()))
-            .unwrap();
         self.free_unsafe_borrows_noflush();
     }
 }
