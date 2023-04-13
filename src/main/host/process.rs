@@ -528,14 +528,19 @@ impl Process {
                     "thread {tid} in process '{}' exited with code {return_code}",
                     self.name(),
                 );
-                let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
+                let (threadrc, last_thread) = {
+                    let mut threads = self.threads.borrow_mut();
+                    let threadrc = threads.remove(&tid).unwrap();
+                    (threadrc, threads.is_empty())
+                };
                 self.reap_thread(host, threadrc);
-                self.check(host);
+                if last_thread {
+                    self.handle_process_exit(host);
+                }
             }
             crate::host::thread::ResumeResult::ExitedProcess => {
                 debug!("Process {} exited while running thread {tid}", self.name(),);
                 self.handle_process_exit(host);
-                self.check(host);
             }
         };
 
@@ -567,8 +572,6 @@ impl Process {
         info!("process '{}' stopped", self.name());
 
         Worker::clear_active_process();
-
-        self.check(host);
     }
 
     /// Send the signal described in `siginfo` to `process`. `current_thread`
@@ -893,13 +896,34 @@ impl Process {
     }
 
     fn handle_process_exit(&self, host: &Host) {
+        info!(
+            "process '{}' has completed or is otherwise no longer running",
+            self.name()
+        );
         // Take all of the threads.
         let threads = std::mem::take(&mut *self.threads.borrow_mut());
         for (_tid, threadrc) in threads.into_iter() {
             threadrc.borrow(host.root()).handle_process_exit();
             self.reap_thread(host, threadrc);
         }
-        self.check(host);
+
+        self.get_and_log_return_code();
+
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "total runtime for process '{}' was {:?}",
+            self.name(),
+            self.total_run_time.get()
+        );
+
+        let mut descriptor_table = self.descriptor_table_borrow_mut();
+        descriptor_table.shutdown_helper();
+        let descriptors = descriptor_table.remove_all();
+        CallbackQueue::queue_and_run(|cb_queue| {
+            for desc in descriptors {
+                desc.close(host, cb_queue);
+            }
+        });
     }
 
     fn terminate(&self, host: &Host) {
@@ -976,34 +1000,6 @@ impl Process {
             warn!("{}", main_result_string);
             Worker::increment_plugin_error_count();
         }
-    }
-
-    fn check(&self, host: &Host) {
-        if !self.threads.borrow().is_empty() {
-            return;
-        }
-
-        info!(
-            "process '{}' has completed or is otherwise no longer running",
-            self.name()
-        );
-        self.get_and_log_return_code();
-
-        #[cfg(feature = "perf_timers")]
-        info!(
-            "total runtime for process '{}' was {:?}",
-            self.name(),
-            self.total_run_time.get()
-        );
-
-        let mut descriptor_table = self.descriptor_table_borrow_mut();
-        descriptor_table.shutdown_helper();
-        let descriptors = descriptor_table.remove_all();
-        CallbackQueue::queue_and_run(|cb_queue| {
-            for desc in descriptors {
-                desc.close(host, cb_queue);
-            }
-        });
     }
 
     /// Adds a new thread to the process and schedules it to run.
