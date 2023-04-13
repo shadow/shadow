@@ -64,7 +64,7 @@ void syscallcondition_ref(SysCallCondition* cond);
 void syscallcondition_unref(SysCallCondition* cond);
 
 /* Activate the condition by registering the process and thread that will
- * be notified via process_continue() when the condition occurs. After
+ * be notified via host_continue() when the condition occurs. After
  * this call, the condition object will begin listening on the status of
  * the timeout and descriptor given in new(). */
 void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, const Process* proc,

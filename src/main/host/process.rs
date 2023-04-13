@@ -449,6 +449,7 @@ impl Process {
     }
 
     /// Resume execution of `tid` (if it exists).
+    /// Should only be called from `Host::resume`.
     pub fn resume(&self, host: &Host, tid: ThreadId) {
         trace!("Continuing thread {} in process {}", tid, self.id());
 
@@ -468,7 +469,6 @@ impl Process {
         };
         let thread = threadrc.borrow(host.root());
 
-        Worker::set_active_process(self);
         Worker::set_active_thread(&thread);
 
         #[cfg(feature = "perf_timers")]
@@ -528,7 +528,6 @@ impl Process {
         };
 
         Worker::clear_active_thread();
-        Worker::clear_active_process();
     }
 
     pub fn stop(&self, host: &Host) {
@@ -992,13 +991,7 @@ impl Process {
         // to the TaskRef here, which is why we don't increment its ref count to
         // create the TaskRef, but do decrement it on cleanup.
         let task = TaskRef::new(move |host| {
-            let Some(process) = host.process_borrow(pid) else {
-                // This might happen if a thread calls `clone` and then `exit_group`
-                debug!("Process {:?} no longer exists. Can't start its thread {}.", pid, tid);
-                return;
-            };
-            let process = process.borrow(host.root());
-            process.resume(host, tid);
+            host.resume(pid, tid);
         });
         host.schedule_task_with_delay(task, SimulationTime::ZERO);
     }
@@ -1762,13 +1755,6 @@ mod export {
     ) -> ManagedPhysicalMemoryAddr {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.physical_address(vptr)
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_continue(proc: *const Process, thread_id: libc::pid_t) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let tid = ThreadId::try_from(thread_id).unwrap();
-        Worker::with_active_host(|host| proc.resume(host, tid)).unwrap()
     }
 
     /// Send the signal described in `siginfo` to `process`. `currentRunningThread`

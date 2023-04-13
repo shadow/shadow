@@ -404,14 +404,9 @@ impl Host {
                 pause_for_debugging,
                 host.params.strace_logging_options,
             );
-            host.processes
-                .borrow_mut()
-                .insert(process_id, process.clone(host.root()));
-            {
-                let process = process.borrow(host.root());
-                process.resume(host, process.thread_group_leader_id());
-            }
-            process.safely_drop(host.root());
+            let thread_id = process.borrow(host.root()).thread_group_leader_id();
+            host.processes.borrow_mut().insert(process_id, process);
+            host.resume(process_id, thread_id);
         });
         self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
 
@@ -428,6 +423,17 @@ impl Host {
                 EmulatedTime::SIMULATION_START + shutdown_time,
             );
         }
+    }
+
+    pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
+        let Some(processrc) = self.process_borrow(pid) else {
+            trace!("{pid:?} doesn't exist");
+            return;
+        };
+        let process = processrc.borrow(self.root());
+        Worker::set_active_process(&process);
+        process.resume(self, tid);
+        Worker::clear_active_process();
     }
 
     #[track_caller]
@@ -1348,5 +1354,11 @@ mod export {
         let host = unsafe { hostrc.as_ref().unwrap() };
         let addr = u32::from_be(addr).into();
         host.notify_socket_has_packets(addr, socket);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_continue(host: *const Host, pid: libc::pid_t, tid: libc::pid_t) {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.resume(pid.try_into().unwrap(), tid.try_into().unwrap())
     }
 }
