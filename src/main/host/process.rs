@@ -126,7 +126,6 @@ pub struct Process {
     dumpable: Cell<u32>,
 
     return_code: Cell<Option<i32>>,
-    killed_by_shadow: Cell<bool>,
 
     native_pid: Pid,
 
@@ -291,7 +290,6 @@ impl Process {
                     strace_logging,
                     dumpable: Cell::new(cshadow::SUID_DUMP_USER),
                     return_code: Cell::new(None),
-                    killed_by_shadow: Cell::new(false),
                     #[cfg(feature = "perf_timers")]
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
@@ -536,11 +534,13 @@ impl Process {
                 self.reap_thread(host, threadrc);
                 if last_thread {
                     self.handle_process_exit(host);
+                    self.get_and_log_return_code(false);
                 }
             }
             crate::host::thread::ResumeResult::ExitedProcess => {
                 debug!("Process {} exited while running thread {tid}", self.name(),);
                 self.handle_process_exit(host);
+                self.get_and_log_return_code(false);
             }
         };
 
@@ -907,8 +907,6 @@ impl Process {
             self.reap_thread(host, threadrc);
         }
 
-        self.get_and_log_return_code();
-
         #[cfg(feature = "perf_timers")]
         info!(
             "total runtime for process '{}' was {:?}",
@@ -933,18 +931,16 @@ impl Process {
         }
 
         trace!("Terminating");
-        self.killed_by_shadow.set(true);
         if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
             warn!("kill: {:?}", err);
         }
 
         self.handle_process_exit(host);
+        self.get_and_log_return_code(true);
     }
 
-    fn get_and_log_return_code(&self) {
-        if self.return_code.get().is_some() {
-            return;
-        }
+    fn get_and_log_return_code(&self, killed_by_shadow: bool) {
+        assert!(self.return_code.get().is_none());
 
         use nix::sys::wait::WaitStatus;
         let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
@@ -964,7 +960,7 @@ impl Process {
         self.return_code.set(Some(return_code));
 
         let exitcode_path = self.output_file_name("exitcode");
-        let exitcode_contents = if self.killed_by_shadow.get() {
+        let exitcode_contents = if killed_by_shadow {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
             // Write out an empty exitcode file.
@@ -978,7 +974,7 @@ impl Process {
 
         let main_result_string = {
             let mut s = format!("process '{name}'", name = self.name());
-            if self.killed_by_shadow.get() {
+            if killed_by_shadow {
                 write!(s, " killed by Shadow").unwrap();
             } else {
                 write!(s, " exited with code {return_code}").unwrap();
@@ -994,7 +990,7 @@ impl Process {
         // if there was no error or was intentionally killed
         // TODO: once we've implemented clean shutdown via SIGTERM,
         //       consider treating death by SIGKILL as a plugin error
-        if return_code == 0 || self.killed_by_shadow.get() {
+        if return_code == 0 || killed_by_shadow {
             info!("{}", main_result_string);
         } else {
             warn!("{}", main_result_string);
