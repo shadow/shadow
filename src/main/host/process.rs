@@ -1771,12 +1771,6 @@ mod export {
         Worker::with_active_host(|host| proc.resume(host, tid)).unwrap()
     }
 
-    #[no_mangle]
-    pub unsafe extern "C" fn process_stop(proc: *const Process) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.stop(host)).unwrap()
-    }
-
     /// Send the signal described in `siginfo` to `process`. `currentRunningThread`
     /// should be set if there is one (e.g. if this is being called from a syscall
     /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
