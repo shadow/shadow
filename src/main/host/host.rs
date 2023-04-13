@@ -430,8 +430,8 @@ impl Host {
             trace!("{pid:?} doesn't exist");
             return;
         };
+        Worker::set_active_process(&processrc);
         let process = processrc.borrow(self.root());
-        Worker::set_active_process(&process);
         process.resume(self, tid);
         Worker::clear_active_process();
     }
@@ -664,8 +664,8 @@ impl Host {
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, processrc) in processes.into_iter() {
             {
+                Worker::set_active_process(&processrc);
                 let process = processrc.borrow(self.root());
-                Worker::set_active_process(&process);
                 process.stop(self);
                 Worker::clear_active_process();
             }

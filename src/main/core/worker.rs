@@ -198,12 +198,9 @@ impl Worker {
     }
 
     /// Set the currently-active Process.
-    pub fn set_active_process(process: &Process) {
+    pub fn set_active_process(process: &RootedRc<RootedRefCell<Process>>) {
         Worker::with(|w| {
-            let process = process
-                .weak_rc()
-                .upgrade(w.active_host.borrow().as_ref().unwrap().root())
-                .unwrap();
+            let process = process.clone(w.active_host.borrow().as_ref().unwrap().root());
             let old = w.active_process.borrow_mut().replace(process);
             debug_assert!(old.is_none());
         })
