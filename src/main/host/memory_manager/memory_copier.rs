@@ -173,7 +173,7 @@ impl MemoryCopier {
         let tid = Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
                 // Don't access another process's memory.
-                assert_eq!(process.native_pid().unwrap(), self.pid);
+                assert_eq!(process.native_pid(), self.pid);
                 let thread = process.first_live_thread_borrow(host.root()).unwrap();
                 let thread = thread.borrow(host.root());
                 thread.native_tid()

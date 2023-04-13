@@ -12,14 +12,13 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::{RootedRc, RootedRcWeak};
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -43,10 +42,10 @@ use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, pod};
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -111,31 +110,16 @@ pub struct Process {
     // The basename (directory + file stem) for files that should be stored in the data directory.
     file_basename: PathBuf,
 
-    // the name and path to the executable that we will exec
+    // the name of the executable as provided in shadow's config, for logging purposes
     plugin_name: CString,
-    plugin_path: CString,
 
     // absolute path to the process's working directory
     working_dir: CString,
 
-    // environment variables to pass to exec
-    envv: Vec<CString>,
-
-    // argument strings to pass to exec
-    argv: Vec<CString>,
-
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
-    // process boot and shutdown variables
-    start_time: EmulatedTime,
-    shutdown_time: Option<EmulatedTime>,
-    shutdown_signal: Signal,
-
     strace_logging: Option<StraceLogging>,
-
-    // Pause shadow after launching this process, to give the user time to attach gdb
-    pause_for_debugging: bool,
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
@@ -147,7 +131,7 @@ pub struct Process {
     return_code: Cell<Option<i32>>,
     killed_by_shadow: Cell<bool>,
 
-    native_pid: Cell<Option<Pid>>,
+    native_pid: Pid,
 
     // timer that tracks the amount of CPU time we spend on plugin execution and processing
     #[cfg(feature = "perf_timers")]
@@ -175,7 +159,7 @@ pub struct Process {
 
     // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
     // Boxed to avoid invalidating those if Self is moved.
-    memory_manager: Box<RefCell<Option<MemoryManager>>>,
+    memory_manager: Box<RefCell<MemoryManager>>,
 }
 
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
@@ -194,32 +178,27 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 }
 
 impl Process {
+    /// Spawn a new process. The process will be runnable via [`Self::resume`]
+    /// once it has been added to the `Host`'s process list.
+    ///
     /// The returned object shouldn't be moved out of its enclosing RootedRc.
     /// Doing so breaks an internal weak reference to that RootedRc, which we
     /// use to access the enclosing RootedRc and RootedRefCell when interacting
     /// with C APIs.
-    pub fn new(
+    pub fn spawn(
         host: &Host,
         process_id: ProcessId,
-        start_time: SimulationTime,
-        shutdown_time: Option<SimulationTime>,
-        shutdown_signal: Signal,
-        plugin_name: &CStr,
+        plugin_name: CString,
         plugin_path: &CStr,
         envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
-    ) -> RootedRc<RootedRefCell<Self>> {
-        debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
-
+    ) -> RootedRc<RootedRefCell<Process>> {
         let desc_table = RefCell::new(DescriptorTable::new());
-        let memory_manager = Box::new(RefCell::new(None));
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
-        let plugin_name = plugin_name.to_owned();
-        let plugin_path = plugin_path.to_owned();
 
         let name = CString::new(format!(
             "{host_name}.{exe_name}.{id}",
@@ -269,6 +248,32 @@ impl Process {
             RefCell::new(t)
         };
 
+        // TODO: measure execution time of creating the main_thread with
+        // cpu_delay_timer? We previously did, but it's a little complex to do so,
+        // and it shouldn't matter much.
+
+        let main_thread = Self::create_and_exec_thread_group_leader(
+            host,
+            process_id,
+            pause_for_debugging,
+            plugin_name.to_str().unwrap(),
+            plugin_path,
+            &mut desc_table.borrow_mut(),
+            &strace_logging,
+            &file_basename,
+            &shim_shared_mem_block,
+            &working_dir,
+            envv,
+            argv,
+        );
+
+        let (main_thread_id, native_pid) = {
+            let main_thread = main_thread.borrow(host.root());
+            (main_thread.id(), main_thread.native_pid())
+        };
+        let memory_manager = unsafe { MemoryManager::new(native_pid) };
+        let threads = RefCell::new(BTreeMap::from([(main_thread_id, main_thread)]));
+
         let process = RootedRc::new(
             host.root(),
             RootedRefCell::new(
@@ -278,22 +283,15 @@ impl Process {
                     host_id: host.id(),
                     // We set this below.
                     weak_rc: None,
-                    argv,
-                    envv,
                     working_dir,
                     shim_shared_mem_block,
-                    memory_manager,
+                    memory_manager: Box::new(RefCell::new(memory_manager)),
                     desc_table,
                     itimer_real,
-                    start_time: EmulatedTime::SIMULATION_START + start_time,
-                    shutdown_time: shutdown_time.map(|t| EmulatedTime::SIMULATION_START + t),
-                    shutdown_signal,
                     name,
                     file_basename,
                     plugin_name,
-                    plugin_path,
                     strace_logging,
-                    pause_for_debugging,
                     dumpable: Cell::new(cshadow::SUID_DUMP_USER),
                     is_exiting: Cell::new(false),
                     return_code: Cell::new(None),
@@ -302,17 +300,16 @@ impl Process {
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
                     total_run_time: Cell::new(Duration::ZERO),
-                    native_pid: Cell::new(None),
+                    native_pid,
                     unsafe_borrow_mut: RefCell::new(None),
                     unsafe_borrows: RefCell::new(Vec::new()),
-                    threads: RefCell::new(BTreeMap::new()),
+                    threads,
                 },
             ),
         );
 
         let weak_rc = RootedRc::downgrade(&process, host.root());
         process.borrow_mut(host.root()).weak_rc = Some(weak_rc);
-
         process
     }
 
@@ -371,116 +368,81 @@ impl Process {
         delta
     }
 
-    pub fn schedule(&self, host: &Host) {
-        let id = self.id();
-        match self.shutdown_time {
-            Some(t) if self.start_time >= t => {
-                info!(
-                    "Not scheduling process with start:{:?} after stop:{:?}",
-                    self.start_time, t
-                );
-                return;
-            }
-            _ => (),
-        };
-        let task = TaskRef::new(move |host| {
-            let process = host.process_borrow(id).unwrap();
-            let process = process.borrow(host.root());
-            process.create_and_exec_thread_group_leader(host);
-            process.resume(host, process.thread_group_leader_id());
-        });
-        host.schedule_task_at_emulated_time(task, self.start_time);
-
-        if let Some(shutdown_time) = self.shutdown_time {
-            let task = TaskRef::new(move |host| {
-                let process = host.process_borrow(id).unwrap();
-                let process = process.borrow(host.root());
-                let mut siginfo: libc::siginfo_t = pod::zeroed();
-                siginfo.si_signo = process.shutdown_signal as i32;
-                process.signal(host, None, &siginfo);
-            });
-            host.schedule_task_at_emulated_time(task, shutdown_time);
-        }
-    }
-
-    fn thread_group_leader_id(&self) -> ThreadId {
+    pub fn thread_group_leader_id(&self) -> ThreadId {
         // tid of the thread group leader is equal to the pid.
         ThreadId::from(self.id())
     }
 
-    // Creates the thread group leader. After return, the thread group leader
-    // will be in `self.threads` and is ready to be run with `self.resume`.
-    fn create_and_exec_thread_group_leader(&self, host: &Host) {
-        assert!(!self.is_running());
-
-        self.open_stdio_file_helper(
+    /// Creates the thread group leader. After return, the thread group leader
+    /// will be in `self.threads` and is ready to be run with `self.resume`.
+    fn create_and_exec_thread_group_leader(
+        host: &Host,
+        process_id: ProcessId,
+        pause_for_debugging: bool,
+        plugin_name: &str,
+        plugin_path: &CStr,
+        descriptor_table: &mut DescriptorTable,
+        strace_logging: &Option<StraceLogging>,
+        file_basename: &Path,
+        process_shmem: &ShMemBlock<ProcessShmem>,
+        working_dir: &CString,
+        envv: Vec<CString>,
+        argv: Vec<CString>,
+    ) -> RootedRc<RootedRefCell<Thread>> {
+        Self::open_stdio_file_helper(
+            descriptor_table,
             libc::STDIN_FILENO.try_into().unwrap(),
             "/dev/null".into(),
             OFlag::O_RDONLY,
         );
 
-        let name = self.output_file_name("stdout");
-        self.open_stdio_file_helper(
+        let name = Self::static_output_file_name(file_basename, "stdout");
+        Self::open_stdio_file_helper(
+            descriptor_table,
             libc::STDOUT_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
-        let name = self.output_file_name("stderr");
-        self.open_stdio_file_helper(
+        let name = Self::static_output_file_name(file_basename, "stderr");
+        Self::open_stdio_file_helper(
+            descriptor_table,
             libc::STDERR_FILENO.try_into().unwrap(),
             name,
             OFlag::O_WRONLY,
         );
 
         // Create the main thread and add it to our thread list.
-        let tid = self.thread_group_leader_id();
-        self.threads
-            .borrow_mut()
-            .insert(tid, Thread::new(host, self, tid));
+        let tid = ThreadId::from(process_id);
+        let main_thread = Thread::new(host, process_id, tid, process_shmem);
+        let native_pid = {
+            let main_thread = main_thread.borrow(host.root());
 
-        let main_thread = self.thread_borrow(tid).unwrap();
-        let main_thread = main_thread.borrow(host.root());
+            info!("starting process '{}'", plugin_name);
 
-        info!("starting process '{}'", self.name());
-        Worker::set_active_process(self);
-        Worker::set_active_thread(&main_thread);
+            Process::set_shared_time(host);
 
-        #[cfg(feature = "perf_timers")]
-        self.start_cpu_delay_timer();
+            let shimlog_path = CString::new(
+                Self::static_output_file_name(file_basename, "shimlog")
+                    .as_os_str()
+                    .as_bytes(),
+            )
+            .unwrap();
 
-        Process::set_shared_time(host);
+            main_thread.run(
+                plugin_path,
+                argv,
+                envv,
+                working_dir,
+                strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
+                &shimlog_path,
+            );
+            main_thread.native_pid()
+        };
 
-        let shimlog_path =
-            CString::new(self.output_file_name("shimlog").as_os_str().as_bytes()).unwrap();
+        info!("process '{}' started", plugin_name);
 
-        main_thread.run(
-            &self.plugin_path,
-            self.argv.clone(),
-            self.envv.clone(),
-            &self.working_dir,
-            self.strace_logging
-                .as_ref()
-                .map(|s| s.file.borrow().as_raw_fd()),
-            &shimlog_path,
-        );
-
-        let native_pid = main_thread.native_pid();
-        self.native_pid.set(Some(native_pid));
-        *self.memory_manager.borrow_mut() = Some(unsafe { MemoryManager::new(native_pid) });
-
-        #[cfg(feature = "perf_timers")]
-        {
-            let elapsed = self.stop_cpu_delay_timer(host);
-            info!("process '{}' started in {:?}", self.name(), elapsed);
-        }
-        #[cfg(not(feature = "perf_timers"))]
-        info!("process '{}' started", self.name());
-
-        Worker::clear_active_thread();
-        Worker::clear_active_process();
-
-        if self.pause_for_debugging {
+        if pause_for_debugging {
             // will block until logger output has been flushed
             // there is a race condition where other threads may log between the
             // `eprintln` and `raise` below, but it should be rare
@@ -495,17 +457,18 @@ impl Process {
             let msg = format!(
                 "\
               \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
-              \n** '{name}' (pid {native_pid}).\
+              \n** '{plugin_name}' (pid {native_pid}).\
               \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
               \n** this task, and then typing \"fg\".\
               \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
-                name = self.name(),
                 native_pid = i32::from(native_pid)
             );
             eprintln!("{}", msg);
 
             nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
         }
+
+        main_thread
     }
 
     /// Resume execution of `tid` (if it exists).
@@ -675,11 +638,11 @@ impl Process {
     }
 
     fn open_stdio_file_helper(
-        &self,
+        descriptor_table: &mut DescriptorTable,
         fd: DescriptorHandle,
         path: PathBuf,
         access_mode: OFlag,
-    ) -> *mut cshadow::RegularFile {
+    ) {
         let stdfile = unsafe { cshadow::regularfile_new() };
         let cwd = nix::unistd::getcwd().unwrap();
         let path = utility::pathbuf_to_nul_term_cstring(path);
@@ -703,16 +666,13 @@ impl Process {
         let desc = unsafe {
             Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
         };
-        let prev = self
-            .descriptor_table_borrow_mut()
-            .register_descriptor_with_fd(desc, fd);
+        let prev = descriptor_table.register_descriptor_with_fd(desc, fd);
         assert!(prev.is_none());
         trace!(
             "Successfully opened fd {} at {}",
             fd,
             path.to_str().unwrap()
         );
-        stdfile
     }
 
     fn output_file_name(&self, extension: &str) -> PathBuf {
@@ -735,18 +695,14 @@ impl Process {
         self.plugin_name.to_str().unwrap()
     }
 
-    pub fn plugin_path(&self) -> &str {
-        self.plugin_path.to_str().unwrap()
-    }
-
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
-        RefMut::map(self.memory_manager.borrow_mut(), |mm| mm.as_mut().unwrap())
+        self.memory_manager.borrow_mut()
     }
 
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
-        Ref::map(self.memory_manager.borrow(), |mm| mm.as_ref().unwrap())
+        self.memory_manager.borrow()
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
@@ -775,8 +731,8 @@ impl Process {
         self.desc_table.borrow_mut()
     }
 
-    pub fn native_pid(&self) -> Option<Pid> {
-        self.native_pid.get()
+    pub fn native_pid(&self) -> Pid {
+        self.native_pid
     }
 
     #[track_caller]
@@ -918,10 +874,6 @@ impl Process {
         threadrc.safely_drop(host.root());
     }
 
-    fn has_started(&self) -> bool {
-        self.native_pid.get().is_some()
-    }
-
     pub fn is_running(&self) -> bool {
         !self.is_exiting.get() && self.threads.borrow().len() > 0
     }
@@ -955,11 +907,6 @@ impl Process {
     }
 
     fn terminate(&self, host: &Host) {
-        let Some(native_pid) = self.native_pid() else {
-            trace!("Never started");
-            return;
-        };
-
         if !self.is_running() {
             trace!("Already dead");
             assert!(self.return_code.get().is_some());
@@ -967,7 +914,7 @@ impl Process {
 
         trace!("Terminating");
         self.killed_by_shadow.set(true);
-        if let Err(err) = nix::sys::signal::kill(native_pid, Signal::SIGKILL) {
+        if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
             warn!("kill: {:?}", err);
         }
 
@@ -980,14 +927,8 @@ impl Process {
             return;
         }
 
-        let Some(native_pid) = self.native_pid() else {
-            error!("Process {name} with a start time of {start_time:?} did not start",
-            name=self.name(), start_time=(self.start_time - EmulatedTime::SIMULATION_START));
-            return;
-        };
-
         use nix::sys::wait::WaitStatus;
-        let return_code = match nix::sys::wait::waitpid(native_pid, None) {
+        let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
             Ok(WaitStatus::Exited(_pid, code)) => code,
             Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => {
                 utility::return_code_for_signal(signal)
@@ -1043,7 +984,7 @@ impl Process {
     }
 
     fn check(&self, host: &Host) {
-        if self.is_running() || !self.has_started() {
+        if self.is_running() {
             return;
         }
 
@@ -1163,7 +1104,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
-        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        let manager = process.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1192,7 +1133,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
-        let manager = Ref::map(process.memory_manager.borrow(), |mm| mm.as_ref().unwrap());
+        let manager = process.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1247,9 +1188,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
-            mm.as_mut().unwrap()
-        });
+        let manager = process.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1283,9 +1222,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = RefMut::map(process.memory_manager.borrow_mut(), |mm| {
-            mm.as_mut().unwrap()
-        });
+        let manager = process.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1796,15 +1733,6 @@ mod export {
         .unwrap()
     }
 
-    #[no_mangle]
-    pub unsafe extern "C" fn process_resetMemoryManager(proc: *const ProcessRefCell) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|h| {
-            drop(proc.borrow(h.root()).memory_manager.borrow_mut().take());
-        })
-        .unwrap()
-    }
-
     /// Returns the processID that was assigned to us in process_new
     #[no_mangle]
     pub unsafe extern "C" fn process_getProcessID(proc: *const ProcessRefCell) -> libc::pid_t {
@@ -1912,14 +1840,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getNativePid(proc: *const ProcessRefCell) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().unwrap().as_raw())
-            .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_hasStarted(proc: *const ProcessRefCell) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).has_started()).unwrap()
+        Worker::with_active_host(|host| proc.borrow(host.root()).native_pid().as_raw()).unwrap()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin
