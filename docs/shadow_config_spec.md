@@ -646,10 +646,21 @@ args: ['--user-agent', 'Mozilla/5.0 (compatible; ...)', 'http://myserver:8080']
 #### `hosts.<hostname>.processes[*].environment`
 
 Default: ""  
-Type: String
+Type: Object
 
-Environment variables passed when executing this process. Multiple variables can
-be specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`).
+Environment variables passed when executing this process.
+
+Examples:
+
+```yaml
+environment:
+  ENV_A: "1"
+  ENV_B: foo
+```
+
+```yaml
+environment: { ENV_A: "1", ENV_B: foo }
+```
 
 #### `hosts.<hostname>.processes[*].path`
 

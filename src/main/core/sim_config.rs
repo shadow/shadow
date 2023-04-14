@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::os::unix::fs::MetadataExt;
@@ -13,7 +13,7 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::core::support::configuration::Flatten;
 use crate::core::support::configuration::{
-    parse_string_as_args, ConfigOptions, HostOptions, LogInfoFlag, LogLevel, ProcessArgs,
+    parse_string_as_args, ConfigOptions, EnvName, HostOptions, LogInfoFlag, LogLevel, ProcessArgs,
     ProcessOptions, QDiscMode,
 };
 use crate::core::support::units::{self, Unit};
@@ -190,7 +190,7 @@ pub struct ProcessInfo {
     pub shutdown_time: Option<SimulationTime>,
     pub shutdown_signal: nix::sys::signal::Signal,
     pub args: Vec<OsString>,
-    pub env: String,
+    pub env: BTreeMap<EnvName, String>,
 }
 
 #[derive(Debug, Clone)]

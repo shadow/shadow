@@ -25,7 +25,7 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
   hiddenserver:
@@ -33,7 +33,7 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
     - path: tor
@@ -81,7 +81,7 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.client.graphml.xml
       start_time: 600
   torclient:
@@ -93,7 +93,7 @@ hosts:
       start_time: 900
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torbridgeclient:
@@ -106,7 +106,7 @@ hosts:
       start_time: 900
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torhiddenclient:
@@ -118,6 +118,6 @@ hosts:
       start_time: 900
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torhiddenclient.graphml.xml
       start_time: 1500

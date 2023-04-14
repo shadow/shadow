@@ -558,7 +558,7 @@ pub struct ProcessOptions {
     /// Environment variables passed when executing this process. Multiple variables can be
     /// specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`)
     #[serde(default)]
-    pub environment: String,
+    pub environment: BTreeMap<EnvName, String>,
 
     /// The number of replicas of this process to execute
     #[serde(default)]
@@ -719,6 +719,79 @@ impl From<HostName> for String {
 }
 
 impl std::fmt::Display for HostName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct EnvName(String);
+
+impl EnvName {
+    pub fn new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+
+        // an environment variable name cannot contain a '=' character
+        if name.contains('=') {
+            return None;
+        }
+
+        Some(Self(name))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for EnvName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct EnvNameVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for EnvNameVisitor {
+            type Value = EnvName;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let Some(name) = EnvName::new(v) else {
+                    let e = "environment variable name contains a '=' character";
+                    return Err(E::custom(e));
+                };
+
+                Ok(name)
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                // serde::de::Visitor: "It is never correct to implement `visit_string` without
+                // implementing `visit_str`. Implement neither, both, or just `visit_str`.'
+                self.visit_string(v.to_string())
+            }
+        }
+
+        deserializer.deserialize_string(EnvNameVisitor)
+    }
+}
+
+impl std::ops::Deref for EnvName {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<EnvName> for String {
+    fn from(name: EnvName) -> Self {
+        name.0
+    }
+}
+
+impl std::fmt::Display for EnvName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.0.fmt(f)
     }
