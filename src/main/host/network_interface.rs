@@ -1,4 +1,6 @@
+use std::ffi::{CString, OsStr};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use shadow_shim_helper_rs::HostId;
@@ -34,6 +36,7 @@ impl NetworkInterface {
     pub unsafe fn new(
         host_id: HostId,
         addr: *mut c::Address,
+        name: &OsStr,
         pcap_options: Option<PcapOptions>,
         qdisc: QDiscMode,
     ) -> NetworkInterface {
@@ -49,8 +52,13 @@ impl NetworkInterface {
             .map(|x| x.capture_size_bytes)
             .unwrap_or(0);
 
-        let c_ptr =
-            unsafe { c::networkinterface_new(addr, pcap_dir_cptr, pcap_capture_size, qdisc) };
+        let mut name = name.as_bytes().to_vec();
+        name.push(0);
+        let name = CString::from_vec_with_nul(name).unwrap();
+
+        let c_ptr = unsafe {
+            c::networkinterface_new(addr, name.as_ptr(), pcap_dir_cptr, pcap_capture_size, qdisc)
+        };
 
         let ipv4_addr: Ipv4Addr = {
             let addr = unsafe { c::address_toNetworkIP(addr) };
