@@ -560,10 +560,6 @@ pub struct ProcessOptions {
     #[serde(default)]
     pub environment: BTreeMap<EnvName, String>,
 
-    /// The number of replicas of this process to execute
-    #[serde(default)]
-    pub quantity: Quantity,
-
     /// The simulated time at which to execute the process
     #[serde(default)]
     pub start_time: units::Time<units::TimePrefixUpper>,
@@ -906,23 +902,6 @@ pub enum GraphOptions {
     Gml(GraphSource),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Quantity(u32);
-
-impl Default for Quantity {
-    fn default() -> Self {
-        Self(1)
-    }
-}
-
-impl std::ops::Deref for Quantity {
-    type Target = u32;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
