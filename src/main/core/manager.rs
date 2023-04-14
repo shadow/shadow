@@ -741,8 +741,7 @@ impl<'a> Manager<'a> {
             ru_utime={:.03} minutes, \
             ru_stime={:.03} minutes, \
             ru_nvcsw={}, \
-            ru_nivcsw={}, \
-            _manager_heartbeat", // this is required for tornettools
+            ru_nivcsw={}",
             (now - EmulatedTime::SIMULATION_START).as_nanos(),
             max_memory,
             user_time_minutes,
