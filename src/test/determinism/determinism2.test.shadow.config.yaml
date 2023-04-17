@@ -23,37 +23,16 @@ network:
 hosts:
   peer1: &host
     network_node_id: 0
-    # use explicit IP addresses since the comparison script (determinism2_compare.cmake)
-    # depends on these, and otherwise shadow would assign 11.0.0.2 to peer10
-    ip_addr: 11.0.0.1
     processes:
     - path: ../phold/test-phold
       args: loglevel=debug basename=peer quantity=10 msgload=1 size=1 cpuload=1 weightsfilepath=../../../weights.txt runtime=5
       start_time: 1
-  peer2:
-    <<: *host
-    ip_addr: 11.0.0.2
-  peer3:
-    <<: *host
-    ip_addr: 11.0.0.3
-  peer4:
-    <<: *host
-    ip_addr: 11.0.0.4
-  peer5:
-    <<: *host
-    ip_addr: 11.0.0.5
-  peer6:
-    <<: *host
-    ip_addr: 11.0.0.6
-  peer7:
-    <<: *host
-    ip_addr: 11.0.0.7
-  peer8:
-    <<: *host
-    ip_addr: 11.0.0.8
-  peer9:
-    <<: *host
-    ip_addr: 11.0.0.9
-  peer10:
-    <<: *host
-    ip_addr: 11.0.0.10
+  peer2: *host
+  peer3: *host
+  peer4: *host
+  peer5: *host
+  peer6: *host
+  peer7: *host
+  peer8: *host
+  peer9: *host
+  peer10: *host

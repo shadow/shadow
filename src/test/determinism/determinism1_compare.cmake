@@ -21,12 +21,12 @@ foreach(LOOPIDX RANGE 1 10)
         ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/test-determinism.1000.strace
     )
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/127.0.0.1.pcap
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/127.0.0.1.pcap
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/lo.pcap
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/lo.pcap
     )
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/11.0.0.${LOOPIDX}.pcap
-        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/11.0.0.${LOOPIDX}.pcap
+        ${CMAKE_BINARY_DIR}/determinism1a-shadow.data/hosts/testnode${LOOPIDX}/eth0.pcap
+        ${CMAKE_BINARY_DIR}/determinism1b-shadow.data/hosts/testnode${LOOPIDX}/eth0.pcap
     )
 endforeach(LOOPIDX)
 

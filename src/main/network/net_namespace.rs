@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::CString;
+use std::ffi::{CString, OsStr};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::NonZeroU8;
 use std::ops::{Deref, DerefMut};
@@ -51,6 +51,7 @@ impl NetworkNamespace {
     ) -> Self {
         let (localhost, local_addr) = unsafe {
             Self::setup_net_interface(
+                OsStr::new("lo"),
                 &InterfaceOptions {
                     host_id,
                     hostname: hostname.clone(),
@@ -66,6 +67,7 @@ impl NetworkNamespace {
 
         let (internet, public_addr) = unsafe {
             Self::setup_net_interface(
+                OsStr::new("eth0"),
                 &InterfaceOptions {
                     host_id,
                     hostname,
@@ -89,6 +91,7 @@ impl NetworkNamespace {
 
     /// Must free the returned `*mut cshadow::Address` using [`cshadow::address_unref`].
     unsafe fn setup_net_interface(
+        name: &OsStr,
         options: &InterfaceOptions,
         dns: *mut cshadow::DNS,
     ) -> (NetworkInterface, *mut cshadow::Address) {
@@ -103,7 +106,13 @@ impl NetworkNamespace {
         assert!(!addr.is_null());
 
         let interface = unsafe {
-            NetworkInterface::new(options.host_id, addr, options.pcap.clone(), options.qdisc)
+            NetworkInterface::new(
+                options.host_id,
+                addr,
+                name,
+                options.pcap.clone(),
+                options.qdisc,
+            )
         };
 
         (interface, addr)

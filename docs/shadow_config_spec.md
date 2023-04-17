@@ -546,7 +546,7 @@ Should Shadow generate pcap files?
 
 Logs all network input and output for this host in PCAP format (for viewing in
 e.g. wireshark). The pcap files will be stored in the host's data directory,
-for example `shadow.data/hosts/myhost/11.0.0.1.pcap`.
+for example `shadow.data/hosts/myhost/eth0.pcap`.
 
 #### `hosts`
 

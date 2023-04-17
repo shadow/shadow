@@ -383,7 +383,7 @@ void networkinterface_removeAllSockets(NetworkInterface* interface) {
     g_hash_table_remove_all(interface->boundSockets);
 }
 
-NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
+NetworkInterface* networkinterface_new(Address* address, const char* name, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
@@ -411,14 +411,14 @@ NetworkInterface* networkinterface_new(Address* address, const gchar* pcapDir,
             g_string_append(filename, "/");
         }
 
-        g_string_append_printf(filename, "%s.pcap", address_toHostIPString(interface->address));
+        g_string_append_printf(filename, "%s.pcap", name);
 
         interface->pcap = pcapwriter_new(filename->str, pcapCaptureSize);
         g_string_free(filename, TRUE);
     }
 
-    debug("bringing up network interface '%s' at '%s' using queuing discipline %s",
-          address_toHostName(interface->address), address_toHostIPString(interface->address),
+    debug("bringing up network interface '%s' for host '%s' at '%s' using queuing discipline %s",
+          name, address_toHostName(interface->address), address_toHostIPString(interface->address),
           interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);

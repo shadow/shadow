@@ -38,6 +38,10 @@ support graceful shutdown.
 
 * The minimum version of `glib` has been bumped from 2.32 to 2.58.
 
+* Generated pcap files are now named using their interface name instead of
+their IP address. For example "lo.pcap" and "eth0.pcap" instead of
+"127.0.0.1.pcap" and "11.0.0.1.pcap".
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
