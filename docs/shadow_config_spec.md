@@ -108,7 +108,6 @@ hosts:
 - [`hosts.<hostname>.processes[*].args`](#hostshostnameprocessesargs)
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
 - [`hosts.<hostname>.processes[*].path`](#hostshostnameprocessespath)
-- [`hosts.<hostname>.processes[*].quantity`](#hostshostnameprocessesquantity)
 - [`hosts.<hostname>.processes[*].shutdown_signal`](#hostshostnameprocessesshutdown_signal)
 - [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time)
 - [`hosts.<hostname>.processes[*].start_time`](#hostshostnameprocessesstart_time)
@@ -676,13 +675,6 @@ that path is also found relative to shadow's working directory, *that* binary
 will be used instead. This behavior is expected to be dropped in *the next major
 Shadow release; users should disambiguate by prefixing with `./` or using an
 absolute path as appropriate.
-
-#### `hosts.<hostname>.processes[*].quantity`
-
-Default: 1  
-Type: Integer
-
-The number of replicas of this process to execute.
 
 #### `hosts.<hostname>.processes[*].shutdown_signal`
 

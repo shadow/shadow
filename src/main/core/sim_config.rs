@@ -223,12 +223,14 @@ fn build_host(
 
     let pause_for_debugging = hosts_to_debug.contains(&hostname);
 
-    let mut processes = vec![];
-    for proc in &host.processes {
-        let mut new_processes = build_process(proc, config)
-            .with_context(|| format!("Failed to configure process '{}'", proc.path.display()))?;
-        processes.append(&mut new_processes);
-    }
+    let processes: Vec<_> = host
+        .processes
+        .iter()
+        .map(|proc| {
+            build_process(proc, config)
+                .with_context(|| format!("Failed to configure process '{}'", proc.path.display()))
+        })
+        .collect::<anyhow::Result<_>>()?;
 
     Ok(HostInfo {
         name: hostname,
@@ -300,11 +302,8 @@ fn parse_signal(s: &str) -> anyhow::Result<nix::sys::signal::Signal> {
     }
 }
 
-/// For a process entry in the configuration options, build a list of `ProcessInfo` objects.
-fn build_process(
-    proc: &ProcessOptions,
-    config: &ConfigOptions,
-) -> anyhow::Result<Vec<ProcessInfo>> {
+/// For a process entry in the configuration options, build a `ProcessInfo` object.
+fn build_process(proc: &ProcessOptions, config: &ConfigOptions) -> anyhow::Result<ProcessInfo> {
     let start_time = Duration::from(proc.start_time).try_into().unwrap();
     let shutdown_time = proc
         .shutdown_time
@@ -368,17 +367,14 @@ fn build_process(
     // set argv[0] as the user-provided expanded string, not the canonicalized version
     args.insert(0, expanded_path.into());
 
-    Ok(vec![
-        ProcessInfo {
-            plugin: canonical_path,
-            start_time,
-            shutdown_time,
-            shutdown_signal,
-            args,
-            env: proc.environment.clone(),
-        };
-        (*proc.quantity).try_into().unwrap()
-    ])
+    Ok(ProcessInfo {
+        plugin: canonical_path,
+        start_time,
+        shutdown_time,
+        shutdown_signal,
+        args,
+        env: proc.environment.clone(),
+    })
 }
 
 /// Generate an IP assignment map using hosts' configured IP addresses and graph node IDs. For hosts
