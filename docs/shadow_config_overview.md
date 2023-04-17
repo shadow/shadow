@@ -26,9 +26,7 @@ can be pluralized (for example `5 Mbits`). Units are case-sensitive.
 ### Time
 
 Time values are expressed as either sub-second units, seconds, minutes, or
-hours. Not all options will accept sub-second units. For example
-[`general.stop_time`](shadow_config_spec.md#generalstop_time) must be
-expressed in units of seconds or larger.
+hours.
 
 Acceptable units are:
 
