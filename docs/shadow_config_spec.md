@@ -683,6 +683,8 @@ Type: String OR Integer
 
 The signal that will be sent to the process at
 [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time).
+Signals specified by name should be all-caps and include the SIG prefix; e.g.
+"SIGTERM".
 
 #### `hosts.<hostname>.processes[*].shutdown_time`
 

@@ -570,7 +570,7 @@ pub struct ProcessOptions {
 
     /// The signal that will be sent to the process at `shutdown_time`
     #[serde(default = "default_shutdown_signal")]
-    pub shutdown_signal: String,
+    pub shutdown_signal: Signal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -953,6 +953,88 @@ impl<'de> serde::Deserialize<'de> for ProcessArgs {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct Signal(nix::sys::signal::Signal);
+
+impl serde::Serialize for Signal {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.0.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Signal {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct SignalVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SignalVisitor {
+            type Value = Signal;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a signal string (e.g. \"SIGINT\") or integer")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                nix::sys::signal::Signal::from_str(v)
+                    .map(Signal)
+                    .map_err(|_e| E::custom(format!("Invalid signal string: {v}")))
+            }
+
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let v = i32::try_from(v)
+                    .map_err(|_e| E::custom(format!("Invalid signal number: {v}")))?;
+                nix::sys::signal::Signal::try_from(v)
+                    .map(Signal)
+                    .map_err(|_e| E::custom(format!("Invalid signal number: {v}")))
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let v = i64::try_from(v)
+                    .map_err(|_e| E::custom(format!("Invalid signal number: {v}")))?;
+                self.visit_i64(v)
+            }
+        }
+
+        deserializer.deserialize_any(SignalVisitor)
+    }
+}
+
+impl JsonSchema for Signal {
+    fn schema_name() -> String {
+        String::from("Signal")
+    }
+
+    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        // Use the "anything" schema. The Deserialize implementation does the
+        // actual parsing and error handling.
+        // TODO: Ideally we'd only accept strings or integers here. The
+        // documentation isn't very clear about how to construct such a schema
+        // though, and we currently only use the schemas for command-line-option
+        // help strings. Since we don't currently take Signals in
+        // command-line-options, it doesn't matter.
+        schemars::schema::Schema::Bool(true)
+    }
+}
+
+impl std::ops::Deref for Signal {
+    type Target = nix::sys::signal::Signal;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum StraceLoggingMode {
@@ -1108,8 +1190,8 @@ fn default_args_empty() -> ProcessArgs {
 }
 
 /// Helper function for serde default `shutdown_signal`.
-fn default_shutdown_signal() -> String {
-    "SIGTERM".into()
+fn default_shutdown_signal() -> Signal {
+    Signal(nix::sys::signal::Signal::SIGTERM)
 }
 
 /// Helper function for serde default `Some(0)` values.
