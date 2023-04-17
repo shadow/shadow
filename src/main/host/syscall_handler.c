@@ -60,14 +60,14 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys) {
     return host;
 }
 
-const ProcessRefCell* _syscallhandler_getProcess(const SysCallHandler* sys) {
-    const ProcessRefCell* process = worker_getCurrentProcess();
+const Process* _syscallhandler_getProcess(const SysCallHandler* sys) {
+    const Process* process = worker_getCurrentProcess();
     utility_debugAssert(process_getProcessID(process) == sys->processId);
     return process;
 }
 
 const char* _syscallhandler_getProcessName(const SysCallHandler* sys) {
-    const ProcessRefCell* process = worker_getCurrentProcess();
+    const Process* process = worker_getCurrentProcess();
     utility_debugAssert(process_getProcessID(process) == sys->processId);
     return process_getPluginName(process);
 }
@@ -273,7 +273,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 
     StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
     const Host* host = _syscallhandler_getHost(sys);
-    const ProcessRefCell* process = _syscallhandler_getProcess(sys);
+    const Process* process = _syscallhandler_getProcess(sys);
     const Thread* thread = _syscallhandler_getThread(sys);
 
     SyscallReturn scr;

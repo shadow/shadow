@@ -16,7 +16,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
-        c.add_opaque_types(&["ProcessRefCell"]);
         c.add_opaque_types(&["RootedRefCell_StateEventSource"]);
         c
     };
@@ -255,6 +254,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("Controller")
         .blocklist_type("Counter")
         .blocklist_type("Descriptor")
+        .blocklist_type("Process")
         .blocklist_type("HostId")
         .blocklist_type("TaskRef")
         .allowlist_type("WorkerC")
@@ -283,7 +283,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::memory_manager::MemoryManager;")
-        .raw_line("use crate::host::process::ProcessRefCell;")
+        .raw_line("use crate::host::process::Process;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::syscall_types::SyscallReturn;")
         .raw_line("use crate::host::thread::Thread;")

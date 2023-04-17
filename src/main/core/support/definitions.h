@@ -7,7 +7,7 @@
 #define SHD_DEFINITIONS_H_
 
 // TODO put into a shd-types.h file
-typedef struct ProcessRefCell ProcessRefCell;
+typedef struct Process Process;
 typedef struct Host Host;
 
 /**

@@ -2047,7 +2047,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                  * whichever process eventually calls accept() on the parent socket, but this is
                  * difficult to fix and isn't an issue until we support fork().
                  * See: https://github.com/shadow/shadow/issues/1780 */
-                const ProcessRefCell* registerInProcess =
+                const Process* registerInProcess =
                     host_getProcess(host, tcp->server->processForChildren);
                 if (!registerInProcess) {
                     debug("Listening process no longer exists");

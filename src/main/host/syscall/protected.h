@@ -92,7 +92,7 @@ bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
 const Host* _syscallhandler_getHost(const SysCallHandler* sys);
-const ProcessRefCell* _syscallhandler_getProcess(const SysCallHandler* sys);
+const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
 const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
 

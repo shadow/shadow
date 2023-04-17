@@ -404,14 +404,9 @@ impl Host {
                 pause_for_debugging,
                 host.params.strace_logging_options,
             );
-            host.processes
-                .borrow_mut()
-                .insert(process_id, process.clone(host.root()));
-            {
-                let process = process.borrow(host.root());
-                process.resume(host, process.thread_group_leader_id());
-            }
-            process.safely_drop(host.root());
+            let thread_id = process.borrow(host.root()).thread_group_leader_id();
+            host.processes.borrow_mut().insert(process_id, process);
+            host.resume(process_id, thread_id);
         });
         self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
 
@@ -428,6 +423,17 @@ impl Host {
                 EmulatedTime::SIMULATION_START + shutdown_time,
             );
         }
+    }
+
+    pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
+        let Some(processrc) = self.process_borrow(pid) else {
+            trace!("{pid:?} doesn't exist");
+            return;
+        };
+        Worker::set_active_process(&processrc);
+        let process = processrc.borrow(self.root());
+        process.resume(self, tid);
+        Worker::clear_active_process();
     }
 
     #[track_caller]
@@ -656,9 +662,15 @@ impl Host {
     pub fn free_all_applications(&self) {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
-        for (_id, process) in processes.into_iter() {
-            process.borrow(self.root()).stop(self);
-            process.safely_drop(self.root());
+        for (_id, processrc) in processes.into_iter() {
+            {
+                Worker::set_active_process(&processrc);
+                let process = processrc.borrow(self.root());
+                process.stop(self);
+                Worker::clear_active_process();
+            }
+
+            processrc.safely_drop(self.root());
         }
         trace!("done freeing application for host '{}'", self.name());
     }
@@ -885,7 +897,7 @@ mod export {
     use super::*;
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::{process::ProcessRefCell, thread::Thread},
+        host::{process::Process, thread::Thread},
         network::router::Router,
     };
 
@@ -1157,11 +1169,11 @@ mod export {
     pub unsafe extern "C" fn host_getProcess(
         host: *const Host,
         virtual_pid: libc::pid_t,
-    ) -> *const ProcessRefCell {
+    ) -> *const Process {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
         host.process_borrow(virtual_pid)
-            .map(|x| unsafe { x.borrow(host.root()).cprocess(host) })
+            .map(|x| &*x.borrow(host.root()) as *const _)
             .unwrap_or(std::ptr::null_mut())
     }
 
@@ -1348,5 +1360,11 @@ mod export {
         let host = unsafe { hostrc.as_ref().unwrap() };
         let addr = u32::from_be(addr).into();
         host.notify_socket_has_packets(addr, socket);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn host_continue(host: *const Host, pid: libc::pid_t, tid: libc::pid_t) {
+        let host = unsafe { host.as_ref().unwrap() };
+        host.resume(pid.try_into().unwrap(), tid.try_into().unwrap())
     }
 }

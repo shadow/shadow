@@ -198,12 +198,9 @@ impl Worker {
     }
 
     /// Set the currently-active Process.
-    pub fn set_active_process(process: &Process) {
+    pub fn set_active_process(process: &RootedRc<RootedRefCell<Process>>) {
         Worker::with(|w| {
-            let process = process
-                .weak_rc()
-                .upgrade(w.active_host.borrow().as_ref().unwrap().root())
-                .unwrap();
+            let process = process.clone(w.active_host.borrow().as_ref().unwrap().root());
             let old = w.active_process.borrow_mut().replace(process);
             debug_assert!(old.is_none());
         })
@@ -220,21 +217,10 @@ impl Worker {
     }
 
     /// Set the currently-active Thread.
-    pub fn set_active_thread(thread: &Thread) {
+    pub fn set_active_thread(thread: &RootedRc<RootedRefCell<Thread>>) {
         Worker::with(|w| {
-            // We don't currently have a direct way to get the enclosing RootedRc from the `thread`,
-            // so we need to fetch it from the current process.
-            // TODO: store a `WeakRootedRc` in the `Thread` so that we can skip this lookup.
-            let threadrc = {
-                let host = w.active_host.borrow();
-                let host = host.as_ref().unwrap();
-                let process = w.active_process.borrow();
-                let process = process.as_ref().unwrap();
-                let process = process.borrow(host.root());
-                let threadrc = process.thread_borrow(thread.id()).unwrap();
-                threadrc.clone(host.root())
-            };
-            let old = w.active_thread.borrow_mut().replace(threadrc);
+            let thread = thread.clone(w.active_host.borrow().as_ref().unwrap().root());
+            let old = w.active_thread.borrow_mut().replace(thread);
             debug_assert!(old.is_none());
         })
         .unwrap();
@@ -663,7 +649,7 @@ mod export {
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     use super::*;
-    use crate::host::process::ProcessRefCell;
+    use crate::host::process::Process;
 
     #[no_mangle]
     pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
@@ -788,14 +774,10 @@ mod export {
     /// Returns a pointer to the current running process. The returned pointer is
     /// invalidated the next time the worker switches processes.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentProcess() -> *const ProcessRefCell {
+    pub extern "C" fn worker_getCurrentProcess() -> *const Process {
         // We can't use `with_active_process` here since that returns the &Process instead
-        // of the enclosing &ProcessRefCell.
-        Worker::with_active_process_rc(|process| {
-            let process: &ProcessRefCell = process;
-            process as *const _
-        })
-        .unwrap()
+        // of the enclosing &Process.
+        Worker::with_active_process(|process| process as *const _).unwrap()
     }
 
     /// Returns a pointer to the current running thread. The returned pointer is
