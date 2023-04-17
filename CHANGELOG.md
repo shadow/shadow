@@ -42,6 +42,9 @@ support graceful shutdown.
 their IP address. For example "lo.pcap" and "eth0.pcap" instead of
 "127.0.0.1.pcap" and "11.0.0.1.pcap".
 
+* The process `environment` configuration option now takes a map instead of a
+semicolon-delimited string.
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

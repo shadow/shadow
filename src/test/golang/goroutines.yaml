@@ -11,4 +11,4 @@ hosts:
     processes:
     - path: ./test_goroutines
       start_time: 1s
-      environment: GOMAXPROCS=2
+      environment: { GOMAXPROCS: "2" }

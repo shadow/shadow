@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
-use crate::core::support::configuration::{self, ConfigOptions, Flatten, LogLevel};
+use crate::core::support::configuration::{self, ConfigOptions, EnvName, Flatten, LogLevel};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
@@ -601,7 +601,7 @@ impl<'a> Manager<'a> {
                 .log_level
                 .unwrap_or_else(|| self.config.general.log_level.unwrap());
 
-            let envv = self.generate_env_vars(&proc.env, shim_log_level);
+            let envv = self.generate_env_vars(proc.env.clone(), shim_log_level);
             let envv: Vec<CString> = envv
                 .iter()
                 .map(|x| CString::new(x.as_bytes()).unwrap())
@@ -630,23 +630,26 @@ impl<'a> Manager<'a> {
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
     // much less painful
-    fn generate_env_vars(&self, user_env: &str, shim_log_level: LogLevel) -> Vec<OsString> {
-        let mut env: HashMap<OsString, Option<OsString>> = HashMap::new();
+    fn generate_env_vars(
+        &self,
+        env: BTreeMap<EnvName, String>,
+        shim_log_level: LogLevel,
+    ) -> Vec<OsString> {
+        let mut env: BTreeMap<EnvName, OsString> =
+            env.into_iter().map(|(k, v)| (k, v.into())).collect();
 
         // pass the (real) start time to the plugin, so that shim-side logging can log real time
         // from the correct offset.
         env.insert(
-            "SHADOW_LOG_START_TIME".into(),
-            Some(
-                unsafe { c::logger_get_global_start_time_micros() }
-                    .to_string()
-                    .into(),
-            ),
+            EnvName::new("SHADOW_LOG_START_TIME").unwrap(),
+            unsafe { c::logger_get_global_start_time_micros() }
+                .to_string()
+                .into(),
         );
 
         env.insert(
-            "SHADOW_LOG_LEVEL".into(),
-            Some(shim_log_level.to_c_loglevel().to_string().into()),
+            EnvName::new("SHADOW_LOG_LEVEL").unwrap(),
+            shim_log_level.to_c_loglevel().to_string().into(),
         );
 
         // also insert the plugin preload entries
@@ -659,48 +662,28 @@ impl<'a> Manager<'a> {
 
         let mut preload = vec![];
 
-        preload.push(self.preload_injector_path.clone().into_os_string());
+        preload.push(self.preload_injector_path.clone());
 
         if let Some(ref path) = self.preload_libc_path {
-            preload.push(path.clone().into_os_string());
+            preload.push(path.clone());
         }
 
         if let Some(ref path) = self.preload_openssl_rng_path {
-            preload.push(path.clone().into_os_string());
+            preload.push(path.clone());
         }
 
         if let Some(ref path) = self.preload_openssl_crypto_path {
-            preload.push(path.clone().into_os_string());
+            preload.push(path.clone());
         }
 
-        // scan the other env variables that were given in the shadow config file
-        for entry in user_env.split(';') {
-            let (name, value) = entry
-                .split_once('=')
-                .map(|(name, value)| (name, Some(value)))
-                .unwrap_or((entry, None));
-
-            // if it's not LD_PRELOAD, insert if there's no existing entry
-            if name != "LD_PRELOAD" {
-                env.entry(name.into())
-                    .or_insert_with(|| value.map(|x| x.into()));
-                continue;
-            }
-
-            // it's LD_PRELOAD, so skip if there's no value
-            let Some(value) = value else {
-                continue;
-            };
-
-            // both ':' and ' ' are valid LD_PRELOAD separators
-            for path in value.split(&[':', ' '][..]) {
-                let path = utility::tilde_expansion(path);
-
-                // user-provided paths are added to the list after shadow's paths
-                preload.push(path.into());
-            }
+        for path in &preload {
+            let path = path.as_os_str().as_bytes();
+            // these two characters separate paths and aren't valid in a preload path
+            assert!(!path.contains(&b':'));
+            assert!(!path.contains(&b' '));
         }
 
+        // combine the LD_PRELOAD paths into a string
         let preload = {
             let mut preload_string = OsString::new();
             for (x, path) in preload.iter().enumerate() {
@@ -712,17 +695,26 @@ impl<'a> Manager<'a> {
             preload_string
         };
 
-        env.insert("LD_PRELOAD".into(), Some(preload));
+        // merge our LD_PRELOAD entries with the config entries
+        let preload_env = env.entry(EnvName::new("LD_PRELOAD").unwrap()).or_default();
+        *preload_env = {
+            let mut s = OsString::new();
+            s.push(preload);
+            // user-provided paths are added to the list after shadow's paths
+            if !preload_env.is_empty() {
+                // we could alternatively have used " " here instead
+                s.push(":");
+                s.push(&preload_env);
+            }
+            s
+        };
 
         env.into_iter()
-            .map(|(mut x, y)| {
-                if let Some(y) = y {
-                    x.push("=");
-                    x.push(y);
-                    x
-                } else {
-                    x
-                }
+            .map(|(x, y)| {
+                let mut x: OsString = String::from(x).into();
+                x.push("=");
+                x.push(y);
+                x
             })
             .collect()
     }

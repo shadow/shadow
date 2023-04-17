@@ -11,4 +11,4 @@ hosts:
     processes:
     - path: ./test_gc
       start_time: 1s
-      environment: GOMAXPROCS=1
+      environment: { GOMAXPROCS: "1" }

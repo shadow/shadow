@@ -8,5 +8,11 @@ hosts:
     network_node_id: 0
     processes:
     - path: ../../target/debug/test_env
-      environment: "TESTING_ENV_VAR_1=HELLO WORLD;LD_PRELOAD=/my/custom/ld/preload/path.so;TESTING_ENV_VAR_2=SOMETHING"
+      environment:
+        TESTING_ENV_VAR_1: HELLO WORLD
+        LD_PRELOAD: /my/custom/ld/preload/path.so
+        TESTING_ENV_VAR_2: SOMETHING
+        TESTING_ENV_VAR_3: ""
+        TESTING_ENV_VAR_4: X=Y
+        TESTING_ENV_VAR_5: X;Y
       start_time: 1

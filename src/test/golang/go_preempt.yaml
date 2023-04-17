@@ -11,4 +11,4 @@ hosts:
     network_node_id: 0
     processes:
     - path: ./test_go_preempt
-      environment: GOMAXPROCS=1
+      environment: { GOMAXPROCS: "1" }

@@ -25,7 +25,7 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../server.graphml
       start_time: 1
   client:
@@ -33,6 +33,6 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: OPENBLAS_NUM_THREADS=1
+      environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../XXXCLIENTCONFXXX
       start_time: 1
