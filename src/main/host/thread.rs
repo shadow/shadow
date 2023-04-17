@@ -13,11 +13,23 @@ use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
 use super::context::ProcessContext;
 use super::host::Host;
-use super::managed_thread::ManagedThread;
+use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::{syscall, IsSend, SendPointer};
+
+/// The thread's state after having been allowed to execute some code.
+#[derive(Debug)]
+#[must_use]
+pub enum ResumeResult {
+    /// Blocked on a syscall.
+    Blocked,
+    /// The thread has exited with the given code.
+    ExitedThread(i32),
+    /// The process has exited.
+    ExitedProcess,
+}
 
 /// A virtual Thread in Shadow. Currently a thin wrapper around the C Thread,
 /// which this object owns, and frees on Drop.
@@ -378,14 +390,14 @@ impl Thread {
             .run(plugin_path, argv, envv, working_dir, strace_fd, log_path);
     }
 
-    pub fn resume(&self, ctx: &ProcessContext) {
+    pub fn resume(&self, ctx: &ProcessContext) -> ResumeResult {
         // Ensure the condition isn't triggered again, but don't clear it yet.
         // Syscall handler can still access.
         if let Some(c) = unsafe { self.cond.get().ptr().as_mut() } {
             unsafe { c::syscallcondition_cancel(c) };
         }
 
-        let cond = self.mthread.borrow().resume(&ctx.with_thread(self));
+        let res = self.mthread.borrow().resume(&ctx.with_thread(self));
 
         // Now we're done with old condition.
         if let Some(c) = unsafe {
@@ -397,18 +409,25 @@ impl Thread {
             unsafe { c::syscallcondition_unref(c) };
         }
 
-        // Wait on new condition.
-        let cond = cond.map(|c| c.into_inner()).unwrap_or(std::ptr::null_mut());
-        self.cond.set(unsafe { SendPointer::new(cond) });
-        if let Some(cond) = unsafe { cond.as_mut() } {
-            unsafe {
-                c::syscallcondition_waitNonblock(
-                    cond,
-                    ctx.host,
-                    ctx.process.cprocess(ctx.host),
-                    self,
-                )
+        match res {
+            managed_thread::ResumeResult::Blocked(cond) => {
+                // Wait on new condition.
+                let cond = cond.into_inner();
+                self.cond.set(unsafe { SendPointer::new(cond) });
+                if let Some(cond) = unsafe { cond.as_mut() } {
+                    unsafe {
+                        c::syscallcondition_waitNonblock(
+                            cond,
+                            ctx.host,
+                            ctx.process.cprocess(ctx.host),
+                            self,
+                        )
+                    }
+                }
+                ResumeResult::Blocked
             }
+            managed_thread::ResumeResult::ExitedThread(c) => ResumeResult::ExitedThread(c),
+            managed_thread::ResumeResult::ExitedProcess => ResumeResult::ExitedProcess,
         }
     }
 

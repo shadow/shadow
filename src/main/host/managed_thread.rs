@@ -25,6 +25,18 @@ use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
 use crate::utility::{childpid_watcher, pod, syscall};
 
+/// The ManagedThread's state after having been allowed to execute some code.
+#[derive(Debug)]
+#[must_use]
+pub enum ResumeResult {
+    /// Blocked on a SysCallCondition.
+    Blocked(SysCallCondition),
+    /// The native thread has exited with the given code.
+    ExitedThread(i32),
+    /// The thread's process has exited.
+    ExitedProcess,
+}
+
 pub struct ManagedThread {
     ipc_shmem: Arc<ShMemBlock<'static, IPCData>>,
     is_running: Cell<bool>,
@@ -73,6 +85,10 @@ impl ManagedThread {
         self.native_tid.unwrap()
     }
 
+    /// Make the specified syscall on the native thread.
+    ///
+    /// Panics if the native thread is dead or dies during the syscall,
+    /// including if the syscall itself is SYS_exit or SYS_exit_group.
     pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
         {
             let mut syscall_args = SysCallArgs {
@@ -89,10 +105,14 @@ impl ManagedThread {
         match self.wait_for_next_event(ctx.host) {
             Ok(ShimEvent::SyscallComplete(res)) => res.retval,
             Err(SelfContainedChannelError::WriterIsClosed) => {
-                trace!("Plugin exited while executing native syscall {n}");
-                ctx.process.mark_as_exiting();
-                self.cleanup_after_exit_initiated();
-                SysCallReg::from(-(Errno::ESRCH as i64))
+                // This should only happen if the syscall was SYS_exit or
+                // SYS_exit_group, or if the process was killed externally, e.g.
+                // by sending a signal from outside of shadow. These cases would be
+                // tricky to support, and we shouldn't need to.
+                // TODO: would be nice to report the exit status, but this is
+                // currently the job of the Process, making it tricky to do from
+                // here in a nice way.
+                panic!("Plugin exited while executing native syscall {n}");
             }
             other => {
                 panic!("Unexpected response from plugin: {other:?}");
@@ -154,7 +174,7 @@ impl ManagedThread {
         self.is_running.set(true);
     }
 
-    pub fn resume(&self, ctx: &ThreadContext) -> Option<SysCallCondition> {
+    pub fn resume(&self, ctx: &ThreadContext) -> ResumeResult {
         debug_assert!(self.is_running());
 
         self.sync_affinity_with_worker();
@@ -175,9 +195,8 @@ impl ManagedThread {
                 ShimEvent::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but
                     // clean up.
-                    ctx.process.mark_as_exiting();
                     self.cleanup_after_exit_initiated();
-                    return None;
+                    return ResumeResult::ExitedProcess;
                 }
                 ShimEvent::Syscall(syscall) => {
                     // Emulate the given syscall.
@@ -190,8 +209,8 @@ impl ManagedThread {
                     // `set_tid_address`, to block here until the thread has
                     // actually exited.
                     if syscall.syscall_args.number == libc::SYS_exit {
-                        self.return_code
-                            .set(Some(syscall.syscall_args.args[0].into()));
+                        let return_code = syscall.syscall_args.args[0].into();
+                        self.return_code.set(Some(return_code));
                         // Tell mthread to go ahead and make the exit syscall itself.
                         // We *don't* call `_managedthread_continuePlugin` here,
                         // since that'd release the ShimSharedMemHostLock, and we
@@ -199,7 +218,7 @@ impl ManagedThread {
                         // safe to take it again.
                         self.ipc_shmem.to_plugin().send(ShimEvent::SyscallDoNative);
                         self.cleanup_after_exit_initiated();
-                        return None;
+                        return ResumeResult::ExitedThread(return_code);
                     }
 
                     let scr = unsafe {
@@ -212,9 +231,7 @@ impl ManagedThread {
                     // remove the mthread's old syscall condition since it's no longer needed
                     ctx.thread.cleanup_syscall_condition();
 
-                    if !self.is_running() {
-                        return None;
-                    }
+                    assert!(self.is_running());
 
                     // Flush any writes that legacy C syscallhandlers may have
                     // made.
@@ -222,7 +239,9 @@ impl ManagedThread {
 
                     match scr {
                         SyscallReturn::Block(b) => {
-                            return Some(unsafe { SysCallCondition::consume_from_c(b.cond) })
+                            return ResumeResult::Blocked(unsafe {
+                                SysCallCondition::consume_from_c(b.cond)
+                            })
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(
                             ctx.host,

@@ -125,11 +125,7 @@ pub struct Process {
     // and PR_GET_DUMPABLE.
     dumpable: Cell<u32>,
 
-    // When true, threads are no longer runnable and should just be cleaned up.
-    is_exiting: Cell<bool>,
-
     return_code: Cell<Option<i32>>,
-    killed_by_shadow: Cell<bool>,
 
     native_pid: Pid,
 
@@ -293,9 +289,7 @@ impl Process {
                     plugin_name,
                     strace_logging,
                     dumpable: Cell::new(cshadow::SUID_DUMP_USER),
-                    is_exiting: Cell::new(false),
                     return_code: Cell::new(None),
-                    killed_by_shadow: Cell::new(false),
                     #[cfg(feature = "perf_timers")]
                     cpu_delay_timer,
                     #[cfg(feature = "perf_timers")]
@@ -508,7 +502,7 @@ impl Process {
             .unapplied_cpu_latency = SimulationTime::ZERO;
 
         let ctx = ProcessContext::new(host, self);
-        thread.resume(&ctx);
+        let res = thread.resume(&ctx);
         drop(thread);
         threadrc.safely_drop(host.root());
 
@@ -520,17 +514,46 @@ impl Process {
         #[cfg(not(feature = "perf_timers"))]
         debug!("process '{}' done continuing", self.name());
 
-        if self.is_exiting.get() {
-            self.handle_process_exit(host);
-        } else {
-            self.check_thread(host, tid);
-        }
+        match res {
+            crate::host::thread::ResumeResult::Blocked => {
+                debug!(
+                    "thread {tid} in process '{}' still running, but blocked",
+                    self.name()
+                );
+            }
+            crate::host::thread::ResumeResult::ExitedThread(return_code) => {
+                debug!(
+                    "thread {tid} in process '{}' exited with code {return_code}",
+                    self.name(),
+                );
+                let (threadrc, last_thread) = {
+                    let mut threads = self.threads.borrow_mut();
+                    let threadrc = threads.remove(&tid).unwrap();
+                    (threadrc, threads.is_empty())
+                };
+                self.reap_thread(host, threadrc);
+                if last_thread {
+                    self.handle_process_exit(host);
+                    self.get_and_log_return_code(false);
+                }
+            }
+            crate::host::thread::ResumeResult::ExitedProcess => {
+                debug!("Process {} exited while running thread {tid}", self.name(),);
+                self.handle_process_exit(host);
+                self.get_and_log_return_code(false);
+            }
+        };
 
         Worker::clear_active_thread();
         Worker::clear_active_process();
     }
 
     pub fn stop(&self, host: &Host) {
+        if !self.is_running() {
+            debug!("process {} has already stopped", self.name());
+            return;
+        }
+
         info!("terminating process {}", self.name());
 
         Worker::set_active_process(self);
@@ -549,8 +572,6 @@ impl Process {
         info!("process '{}' stopped", self.name());
 
         Worker::clear_active_process();
-
-        self.check(host);
     }
 
     /// Send the signal described in `siginfo` to `process`. `current_thread`
@@ -838,8 +859,7 @@ impl Process {
     }
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
-    fn reap_thread(&self, host: &Host, tid: ThreadId) {
-        let threadrc = self.threads.borrow_mut().remove(&tid).unwrap();
+    fn reap_thread(&self, host: &Host, threadrc: RootedRc<RootedRefCell<Thread>>) {
         let thread = threadrc.borrow(host.root());
 
         assert!(!thread.is_running());
@@ -849,10 +869,7 @@ impl Process {
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
         let clear_child_tid_pvp = thread.get_tid_address();
-        if !clear_child_tid_pvp.is_null()
-            && self.threads.borrow().len() > 0
-            && !self.is_exiting.get()
-        {
+        if !clear_child_tid_pvp.is_null() && self.threads.borrow().len() > 0 {
             self.memory_borrow_mut()
                 .write(clear_child_tid_pvp, &0)
                 .unwrap();
@@ -875,35 +892,36 @@ impl Process {
     }
 
     pub fn is_running(&self) -> bool {
-        !self.is_exiting.get() && self.threads.borrow().len() > 0
-    }
-
-    /// In some cases a running thread processes an action that will bring down the
-    /// entire process. Calling this tells the Process to clean up other threads
-    /// without trying to run them again, since otherwise the OS may kill the other
-    /// thread tasks while we're in the middle of trying to execute them, which can
-    /// be difficult to recover from cleanly.
-    pub fn mark_as_exiting(&self) {
-        self.is_exiting.set(true);
-        trace!("Process {:?} marked as exiting", self.id());
+        self.return_code.get().is_none()
     }
 
     fn handle_process_exit(&self, host: &Host) {
-        loop {
-            let (tid, threadrc) = {
-                let threads = self.threads.borrow();
-                let Some((tid, thread)) = threads.iter().next() else {
-                    break;
-                };
-                // Conservatively leaving in the thread list, and cloning
-                // the reference so that we don't hold a borrow over the list.
-                (*tid, thread.clone(host.root()))
-            };
+        info!(
+            "process '{}' has completed or is otherwise no longer running",
+            self.name()
+        );
+        // Take all of the threads.
+        let threads = std::mem::take(&mut *self.threads.borrow_mut());
+        for (_tid, threadrc) in threads.into_iter() {
             threadrc.borrow(host.root()).handle_process_exit();
-            self.reap_thread(host, tid);
-            threadrc.safely_drop(host.root());
+            self.reap_thread(host, threadrc);
         }
-        self.check(host);
+
+        #[cfg(feature = "perf_timers")]
+        info!(
+            "total runtime for process '{}' was {:?}",
+            self.name(),
+            self.total_run_time.get()
+        );
+
+        let mut descriptor_table = self.descriptor_table_borrow_mut();
+        descriptor_table.shutdown_helper();
+        let descriptors = descriptor_table.remove_all();
+        CallbackQueue::queue_and_run(|cb_queue| {
+            for desc in descriptors {
+                desc.close(host, cb_queue);
+            }
+        });
     }
 
     fn terminate(&self, host: &Host) {
@@ -913,19 +931,16 @@ impl Process {
         }
 
         trace!("Terminating");
-        self.killed_by_shadow.set(true);
         if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
             warn!("kill: {:?}", err);
         }
 
-        self.mark_as_exiting();
         self.handle_process_exit(host);
+        self.get_and_log_return_code(true);
     }
 
-    fn get_and_log_return_code(&self) {
-        if self.return_code.get().is_some() {
-            return;
-        }
+    fn get_and_log_return_code(&self, killed_by_shadow: bool) {
+        assert!(self.return_code.get().is_none());
 
         use nix::sys::wait::WaitStatus;
         let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
@@ -945,7 +960,7 @@ impl Process {
         self.return_code.set(Some(return_code));
 
         let exitcode_path = self.output_file_name("exitcode");
-        let exitcode_contents = if self.killed_by_shadow.get() {
+        let exitcode_contents = if killed_by_shadow {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
             // Write out an empty exitcode file.
@@ -959,7 +974,7 @@ impl Process {
 
         let main_result_string = {
             let mut s = format!("process '{name}'", name = self.name());
-            if self.killed_by_shadow.get() {
+            if killed_by_shadow {
                 write!(s, " killed by Shadow").unwrap();
             } else {
                 write!(s, " exited with code {return_code}").unwrap();
@@ -975,64 +990,12 @@ impl Process {
         // if there was no error or was intentionally killed
         // TODO: once we've implemented clean shutdown via SIGTERM,
         //       consider treating death by SIGKILL as a plugin error
-        if return_code == 0 || self.killed_by_shadow.get() {
+        if return_code == 0 || killed_by_shadow {
             info!("{}", main_result_string);
         } else {
             warn!("{}", main_result_string);
             Worker::increment_plugin_error_count();
         }
-    }
-
-    fn check(&self, host: &Host) {
-        if self.is_running() {
-            return;
-        }
-
-        info!(
-            "process '{}' has completed or is otherwise no longer running",
-            self.name()
-        );
-        self.get_and_log_return_code();
-
-        #[cfg(feature = "perf_timers")]
-        info!(
-            "total runtime for process '{}' was {:?}",
-            self.name(),
-            self.total_run_time.get()
-        );
-
-        let mut descriptor_table = self.descriptor_table_borrow_mut();
-        descriptor_table.shutdown_helper();
-        let descriptors = descriptor_table.remove_all();
-        CallbackQueue::queue_and_run(|cb_queue| {
-            for desc in descriptors {
-                desc.close(host, cb_queue);
-            }
-        });
-    }
-
-    fn check_thread(&self, host: &Host, tid: ThreadId) {
-        {
-            let threads = self.threads.borrow();
-            let thread = threads.get(&tid).unwrap();
-            let thread = thread.borrow(host.root());
-            if thread.is_running() {
-                debug!(
-                    "thread {} in process '{}' still running, but blocked",
-                    thread.id(),
-                    self.name()
-                );
-                return;
-            }
-            let return_code = thread.return_code();
-            debug!(
-                "thread {} in process '{}' exited with code {return_code:?}",
-                thread.id(),
-                self.name(),
-            );
-        }
-        self.reap_thread(host, tid);
-        self.check(host);
     }
 
     /// Adds a new thread to the process and schedules it to run.
@@ -1797,27 +1760,6 @@ mod export {
             None => -1,
         })
         .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_isExiting(proc: *const ProcessRefCell) -> bool {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| proc.borrow(host.root()).is_exiting.get()).unwrap()
-    }
-
-    /// In some cases a running thread processes an action that will bring down the
-    /// entire process. Calling this tells the Process to clean up other threads
-    /// without trying to run them again, since otherwise the OS may kill the other
-    /// thread tasks while we're in the middle of trying to execute them, which can
-    /// be difficult to recover from cleanly.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_markAsExiting(proc: *const ProcessRefCell) {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let proc = proc.borrow(host.root());
-            proc.mark_as_exiting()
-        })
-        .unwrap();
     }
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations
