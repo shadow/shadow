@@ -1365,6 +1365,7 @@ dependencies = [
  "shadow_tsc",
  "signal-hook",
  "static_assertions",
+ "std-util",
  "syscall-logger",
  "system-deps",
  "tempfile",

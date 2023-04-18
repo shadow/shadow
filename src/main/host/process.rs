@@ -94,7 +94,9 @@ struct StraceLogging {
     options: FmtOptions,
 }
 
-pub struct Process {
+/// Parts of the process that are present in all states.
+/// FIXME: Move most fields out to [`RunnableProcess`] or [`ZombieProcess`].
+struct Common {
     id: ProcessId,
     host_id: HostId,
 
@@ -152,13 +154,60 @@ pub struct Process {
     memory_manager: Box<RefCell<MemoryManager>>,
 }
 
+/// A process that is currently runnable.
+struct RunnableProcess {
+    common: Common,
+}
+
+/// A process that has exited.
+struct ZombieProcess {
+    common: Common,
+}
+
+/// Inner implementation of a simulated process.
+enum ProcessState {
+    Runnable(RunnableProcess),
+    Zombie(ZombieProcess),
+}
+
+impl ProcessState {
+    fn common(&self) -> &Common {
+        match self {
+            ProcessState::Runnable(r) => &r.common,
+            ProcessState::Zombie(z) => &z.common,
+        }
+    }
+
+    fn runnable(&self) -> Option<&RunnableProcess> {
+        match self {
+            ProcessState::Runnable(r) => Some(r),
+            ProcessState::Zombie(_) => None,
+        }
+    }
+
+    fn zombie(&self) -> Option<&ZombieProcess> {
+        match self {
+            ProcessState::Runnable(_) => None,
+            ProcessState::Zombie(z) => Some(z),
+        }
+    }
+}
+
+/// A simulated process.
+pub struct Process {
+    // Most of the implementation should be in [`ProcessState`].
+    // This wrapper allows us to change the state.
+    state: RefCell<Option<ProcessState>>,
+}
+
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     let Some(process) = host.process_borrow(pid) else {
         debug!("Process {:?} no longer exists", pid);
         return;
     };
     let process = process.borrow(host.root());
-    let timer = process.itimer_real.borrow();
+    let common = process.common();
+    let timer = common.itimer_real.borrow();
     let mut siginfo: libc::siginfo_t = unsafe { std::mem::zeroed() };
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
@@ -168,6 +217,26 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 }
 
 impl Process {
+    fn common(&self) -> Ref<Common> {
+        Ref::map(self.state.borrow(), |state| {
+            state.as_ref().unwrap().common()
+        })
+    }
+
+    fn runnable(&self) -> Option<Ref<RunnableProcess>> {
+        Ref::filter_map(self.state.borrow(), |state| {
+            state.as_ref().unwrap().runnable()
+        })
+        .ok()
+    }
+
+    fn zombie(&self) -> Option<Ref<ZombieProcess>> {
+        Ref::filter_map(self.state.borrow(), |state| {
+            state.as_ref().unwrap().zombie()
+        })
+        .ok()
+    }
+
     /// Spawn a new process. The process will be runnable via [`Self::resume`]
     /// once it has been added to the `Host`'s process list.
     pub fn spawn(
@@ -259,60 +328,63 @@ impl Process {
         let memory_manager = unsafe { MemoryManager::new(native_pid) };
         let threads = RefCell::new(BTreeMap::from([(main_thread_id, main_thread)]));
 
+        let common = Common {
+            id: process_id,
+            host_id: host.id(),
+            working_dir,
+            shim_shared_mem_block,
+            memory_manager: Box::new(RefCell::new(memory_manager)),
+            desc_table,
+            itimer_real,
+            name,
+            file_basename,
+            plugin_name,
+            strace_logging,
+            dumpable: Cell::new(cshadow::SUID_DUMP_USER),
+            return_code: Cell::new(None),
+            #[cfg(feature = "perf_timers")]
+            cpu_delay_timer,
+            #[cfg(feature = "perf_timers")]
+            total_run_time: Cell::new(Duration::ZERO),
+            native_pid,
+            unsafe_borrow_mut: RefCell::new(None),
+            unsafe_borrows: RefCell::new(Vec::new()),
+            threads,
+        };
         RootedRc::new(
             host.root(),
             RootedRefCell::new(
                 host.root(),
                 Self {
-                    id: process_id,
-                    host_id: host.id(),
-                    working_dir,
-                    shim_shared_mem_block,
-                    memory_manager: Box::new(RefCell::new(memory_manager)),
-                    desc_table,
-                    itimer_real,
-                    name,
-                    file_basename,
-                    plugin_name,
-                    strace_logging,
-                    dumpable: Cell::new(cshadow::SUID_DUMP_USER),
-                    return_code: Cell::new(None),
-                    #[cfg(feature = "perf_timers")]
-                    cpu_delay_timer,
-                    #[cfg(feature = "perf_timers")]
-                    total_run_time: Cell::new(Duration::ZERO),
-                    native_pid,
-                    unsafe_borrow_mut: RefCell::new(None),
-                    unsafe_borrows: RefCell::new(Vec::new()),
-                    threads,
+                    state: RefCell::new(Some(ProcessState::Runnable(RunnableProcess { common }))),
                 },
             ),
         )
     }
 
     pub fn id(&self) -> ProcessId {
-        self.id
+        self.common().id
     }
 
     pub fn host_id(&self) -> HostId {
-        self.host_id
+        self.common().host_id
     }
 
     /// Starts the CPU delay timer.
     /// Panics if the timer is already running.
     #[cfg(feature = "perf_timers")]
     pub fn start_cpu_delay_timer(&self) {
-        self.cpu_delay_timer.borrow_mut().start()
+        self.common().cpu_delay_timer.borrow_mut().start()
     }
 
     /// Stop the timer and return the most recent (not cumulative) duration.
     /// Panics if the timer was not already running.
     #[cfg(feature = "perf_timers")]
     pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
-        let mut timer = self.cpu_delay_timer.borrow_mut();
+        let mut timer = self.common().cpu_delay_timer.borrow_mut();
         timer.stop();
         let total_elapsed = timer.elapsed();
-        let prev_total = self.total_run_time.replace(total_elapsed);
+        let prev_total = self.common().total_run_time.replace(total_elapsed);
         let delta = total_elapsed - prev_total;
 
         if let Some(mut tracker) = host.tracker_borrow_mut() {
@@ -440,7 +512,8 @@ impl Process {
         }
 
         let threadrc = {
-            let threads = self.threads.borrow();
+            let common = self.common();
+            let threads = common.threads.borrow();
             let Some(thread) = threads.get(&tid) else {
                 debug!("Thread {} no longer exists", tid);
                 return;
@@ -474,25 +547,26 @@ impl Process {
         #[cfg(feature = "perf_timers")]
         {
             let delay = self.stop_cpu_delay_timer(host);
-            info!("process '{}' ran for {:?}", self.name(), delay);
+            info!("process '{}' ran for {:?}", &*self.name(), delay);
         }
         #[cfg(not(feature = "perf_timers"))]
-        debug!("process '{}' done continuing", self.name());
+        debug!("process '{}' done continuing", &*self.name());
 
         match res {
             crate::host::thread::ResumeResult::Blocked => {
                 debug!(
                     "thread {tid} in process '{}' still running, but blocked",
-                    self.name()
+                    &*self.name()
                 );
             }
             crate::host::thread::ResumeResult::ExitedThread(return_code) => {
                 debug!(
                     "thread {tid} in process '{}' exited with code {return_code}",
-                    self.name(),
+                    &*self.name(),
                 );
                 let (threadrc, last_thread) = {
-                    let mut threads = self.threads.borrow_mut();
+                    let common = self.common();
+                    let mut threads = common.threads.borrow_mut();
                     let threadrc = threads.remove(&tid).unwrap();
                     (threadrc, threads.is_empty())
                 };
@@ -503,7 +577,10 @@ impl Process {
                 }
             }
             crate::host::thread::ResumeResult::ExitedProcess => {
-                debug!("Process {} exited while running thread {tid}", self.name(),);
+                debug!(
+                    "Process {} exited while running thread {tid}",
+                    &*self.name(),
+                );
                 self.handle_process_exit(host);
                 self.get_and_log_return_code(false);
             }
@@ -517,11 +594,11 @@ impl Process {
     /// Should only be called from [`Host::free_all_applications`].
     pub fn stop(&self, host: &Host) {
         if !self.is_running() {
-            debug!("process {} has already stopped", self.name());
+            debug!("process {} has already stopped", &*self.name());
             return;
         }
 
-        info!("terminating process {}", self.name());
+        info!("terminating process {}", &*self.name());
 
         #[cfg(feature = "perf_timers")]
         self.start_cpu_delay_timer();
@@ -534,7 +611,7 @@ impl Process {
             info!("process '{}' stopped in {:?}", self.name(), delay);
         }
         #[cfg(not(feature = "perf_timers"))]
-        info!("process '{}' stopped", self.name());
+        info!("process '{}' stopped", &*self.name());
     }
 
     /// Send the signal described in `siginfo` to `process`. `current_thread`
@@ -553,7 +630,8 @@ impl Process {
 
         {
             let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-            let mut process_shmem_protected = self
+            let common = self.common();
+            let mut process_shmem_protected = common
                 .shim_shared_mem_block
                 .protected
                 .borrow_mut(&host_shmem.root);
@@ -595,7 +673,8 @@ impl Process {
     }
 
     fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
-        let threads = self.threads.borrow();
+        let common = self.common();
+        let threads = common.threads.borrow();
         for thread in threads.values() {
             let thread = thread.borrow(host.root());
             {
@@ -660,7 +739,7 @@ impl Process {
     }
 
     fn output_file_name(&self, extension: &str) -> PathBuf {
-        Self::static_output_file_name(&self.file_basename, extension)
+        Self::static_output_file_name(&self.common().file_basename, extension)
     }
 
     // Needed during early init, before `Self` is created.
@@ -671,31 +750,33 @@ impl Process {
         path.into()
     }
 
-    pub fn name(&self) -> &str {
-        self.name.to_str().unwrap()
+    pub fn name(&self) -> impl Deref<Target = str> + '_ {
+        Ref::map(self.common(), |c| c.name.to_str().unwrap())
     }
 
-    pub fn plugin_name(&self) -> &str {
-        self.plugin_name.to_str().unwrap()
+    pub fn plugin_name(&self) -> impl Deref<Target = str> + '_ {
+        Ref::map(self.common(), |c| c.plugin_name.to_str().unwrap())
     }
 
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
-        self.memory_manager.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
+            common.memory_manager.borrow_mut()
+        })
     }
 
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
-        self.memory_manager.borrow()
+        std_util::nested_ref::NestedRef::map(self.common(), |common| common.memory_manager.borrow())
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.strace_logging.as_ref().map(|x| x.options)
+        self.common().strace_logging.as_ref().map(|x| x.options)
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        let Some(ref strace_logging) = self.strace_logging else {
+        let Some(ref strace_logging) = self.common().strace_logging else {
             return None;
         };
 
@@ -705,28 +786,32 @@ impl Process {
 
     #[track_caller]
     pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
-        self.desc_table.borrow()
+        std_util::nested_ref::NestedRef::map(self.common(), |common| common.desc_table.borrow())
     }
 
     #[track_caller]
     pub fn descriptor_table_borrow_mut(
         &self,
     ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
-        self.desc_table.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
+            common.desc_table.borrow_mut()
+        })
     }
 
     pub fn native_pid(&self) -> Pid {
-        self.native_pid
+        self.common().native_pid
     }
 
     #[track_caller]
     pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
-        self.itimer_real.borrow()
+        std_util::nested_ref::NestedRef::map(self.common(), |common| common.itimer_real.borrow())
     }
 
     #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
-        self.itimer_real.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
+            common.itimer_real.borrow_mut()
+        })
     }
 
     /// Returns a dynamically borrowed reference to the first live thread.
@@ -736,22 +821,25 @@ impl Process {
         &self,
         root: &Root,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        Ref::filter_map(self.threads.borrow(), |threads| {
-            let thread = threads.values().next().map(|thread| {
-                // There shouldn't be any non-running threads in the table.
-                assert!(thread.borrow(root).is_running());
-                thread
-            });
-            thread
+        std_util::nested_ref::NestedRef::filter_map(self.common(), |common| {
+            Ref::filter_map(common.threads.borrow(), |threads| {
+                threads.values().next().map(|thread| {
+                    // There shouldn't be any non-running threads in the table.
+                    assert!(thread.borrow(root).is_running());
+                    thread
+                })
+            })
+            .ok()
         })
-        .ok()
     }
 
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
+        std_util::nested_ref::NestedRef::filter_map(self.common(), |common| {
+            Ref::filter_map(common.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
+        })
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -760,9 +848,11 @@ impl Process {
     /// Writes the leftover mutable ref to memory (if any), and frees
     /// all memory refs.
     pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
-        self.unsafe_borrows.borrow_mut().clear();
+        let common = self.common();
 
-        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        common.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = common.unsafe_borrow_mut.borrow_mut().take();
         if let Some(borrow) = unsafe_borrow_mut {
             borrow.flush()
         } else {
@@ -775,9 +865,11 @@ impl Process {
     ///
     /// Frees all memory refs without writing back to memory.
     pub fn free_unsafe_borrows_noflush(&self) {
-        self.unsafe_borrows.borrow_mut().clear();
+        let common = self.common();
 
-        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        common.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = common.unsafe_borrow_mut.borrow_mut().take();
         if let Some(borrow) = unsafe_borrow_mut {
             borrow.noflush();
         }
@@ -832,7 +924,7 @@ impl Process {
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
         let clear_child_tid_pvp = thread.get_tid_address();
-        if !clear_child_tid_pvp.is_null() && self.threads.borrow().len() > 0 {
+        if !clear_child_tid_pvp.is_null() && self.common().threads.borrow().len() > 0 {
             self.memory_borrow_mut()
                 .write(clear_child_tid_pvp, &0)
                 .unwrap();
@@ -855,16 +947,17 @@ impl Process {
     }
 
     pub fn is_running(&self) -> bool {
-        self.return_code.get().is_none()
+        self.common().return_code.get().is_none()
     }
 
     fn handle_process_exit(&self, host: &Host) {
         info!(
             "process '{}' has completed or is otherwise no longer running",
-            self.name()
+            &*self.name()
         );
         // Take all of the threads.
-        let threads = std::mem::take(&mut *self.threads.borrow_mut());
+        let common = self.common();
+        let threads = std::mem::take(&mut *common.threads.borrow_mut());
         for (_tid, threadrc) in threads.into_iter() {
             threadrc.borrow(host.root()).handle_process_exit();
             self.reap_thread(host, threadrc);
@@ -890,7 +983,7 @@ impl Process {
     fn terminate(&self, host: &Host) {
         if !self.is_running() {
             trace!("Already dead");
-            assert!(self.return_code.get().is_some());
+            assert!(self.common().return_code.get().is_some());
         }
 
         trace!("Terminating");
@@ -903,7 +996,7 @@ impl Process {
     }
 
     fn get_and_log_return_code(&self, killed_by_shadow: bool) {
-        assert!(self.return_code.get().is_none());
+        assert!(self.common().return_code.get().is_none());
 
         use nix::sys::wait::WaitStatus;
         let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
@@ -920,7 +1013,7 @@ impl Process {
                 libc::EXIT_FAILURE
             }
         };
-        self.return_code.set(Some(return_code));
+        self.common().return_code.set(Some(return_code));
 
         let exitcode_path = self.output_file_name("exitcode");
         let exitcode_contents = if killed_by_shadow {
@@ -936,7 +1029,7 @@ impl Process {
         }
 
         let main_result_string = {
-            let mut s = format!("process '{name}'", name = self.name());
+            let mut s = format!("process '{name}'", name = &*self.name());
             if killed_by_shadow {
                 write!(s, " killed by Shadow").unwrap();
             } else {
@@ -966,7 +1059,8 @@ impl Process {
     pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
         let pid = self.id();
         let tid = thread.borrow(host.root()).id();
-        self.threads.borrow_mut().insert(tid, thread);
+        let common = self.common();
+        common.threads.borrow_mut().insert(tid, thread);
 
         // Schedule thread to start. We're giving the caller's reference to thread
         // to the TaskRef here, which is why we don't increment its ref count to
@@ -988,8 +1082,8 @@ impl Process {
     }
 
     /// Shared memory for this process.
-    pub fn shmem(&self) -> &ShMemBlock<'static, ProcessShmem> {
-        &self.shim_shared_mem_block
+    pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
+        Ref::map(self.common(), |c| &c.shim_shared_mem_block)
     }
 }
 
@@ -1018,7 +1112,8 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
-        let manager = process.memory_manager.borrow();
+        let common = process.common();
+        let manager = common.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1030,7 +1125,7 @@ impl UnsafeBorrow {
             std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(memory)
         };
         let vptr = memory.as_ptr() as *mut c_void;
-        process.unsafe_borrows.borrow_mut().push(Self {
+        common.unsafe_borrows.borrow_mut().push(Self {
             _manager: manager,
             _memory: memory,
         });
@@ -1047,7 +1142,8 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
-        let manager = process.memory_manager.borrow();
+        let common = process.common();
+        let manager = common.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1065,7 +1161,7 @@ impl UnsafeBorrow {
         assert_eq!(std::mem::size_of::<c_char>(), std::mem::size_of::<u8>());
         let ptr = memory.as_ptr() as *const c_char;
         let len = memory.len();
-        process.unsafe_borrows.borrow_mut().push(Self {
+        common.unsafe_borrows.borrow_mut().push(Self {
             _manager: manager,
             _memory: memory,
         });
@@ -1102,7 +1198,8 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = process.memory_manager.borrow_mut();
+        let common = process.common();
+        let manager = common.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1118,7 +1215,7 @@ impl UnsafeBorrowMut {
             )
         };
         let vptr = memory.as_mut_ptr() as *mut c_void;
-        let prev = process.unsafe_borrow_mut.borrow_mut().replace(Self {
+        let prev = common.unsafe_borrow_mut.borrow_mut().replace(Self {
             _manager: manager,
             memory: Some(memory),
         });
@@ -1136,7 +1233,8 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let manager = process.memory_manager.borrow_mut();
+        let common = process.common();
+        let manager = common.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1152,7 +1250,7 @@ impl UnsafeBorrowMut {
             )
         };
         let vptr = memory.as_mut_ptr() as *mut c_void;
-        let prev = process.unsafe_borrow_mut.borrow_mut().replace(Self {
+        let prev = common.unsafe_borrow_mut.borrow_mut().replace(Self {
             _manager: manager,
             memory: Some(memory),
         });
@@ -1604,13 +1702,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.name.as_ptr()
+        proc.common().name.as_ptr()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getPluginName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.plugin_name.as_ptr()
+        proc.common().plugin_name.as_ptr()
     }
 
     /// Safety:
@@ -1620,13 +1718,13 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getSharedMem(proc: *const Process) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.shim_shared_mem_block.deref() as *const _
+        proc.common().shim_shared_mem_block.deref() as *const _
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn process_getWorkingDir(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.working_dir.as_ptr()
+        proc.common().working_dir.as_ptr()
     }
 
     #[no_mangle]
@@ -1638,7 +1736,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_straceFd(proc: *const Process) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
-        match &proc.strace_logging {
+        match &proc.common().strace_logging {
             Some(x) => x.file.borrow().as_raw_fd(),
             None => -1,
         }
@@ -1649,7 +1747,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getDumpable(proc: *const Process) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.dumpable.get()
+        proc.common().dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations
@@ -1658,7 +1756,7 @@ mod export {
     pub unsafe extern "C" fn process_setDumpable(proc: *const Process, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.dumpable.set(val)
+        proc.common().dumpable.set(val)
     }
 
     #[no_mangle]
