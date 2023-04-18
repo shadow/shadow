@@ -572,8 +572,7 @@ impl Process {
                 };
                 self.reap_thread(host, threadrc);
                 if last_thread {
-                    self.handle_process_exit(host);
-                    self.get_and_log_return_code(false);
+                    self.handle_process_exit(host, false);
                 }
             }
             crate::host::thread::ResumeResult::ExitedProcess => {
@@ -581,8 +580,7 @@ impl Process {
                     "Process {} exited while running thread {tid}",
                     &*self.name(),
                 );
-                self.handle_process_exit(host);
-                self.get_and_log_return_code(false);
+                self.handle_process_exit(host, false);
             }
         };
 
@@ -950,7 +948,7 @@ impl Process {
         self.common().return_code.get().is_none()
     }
 
-    fn handle_process_exit(&self, host: &Host) {
+    fn handle_process_exit(&self, host: &Host, killed_by_shadow: bool) {
         info!(
             "process '{}' has completed or is otherwise no longer running",
             &*self.name()
@@ -978,24 +976,7 @@ impl Process {
                 desc.close(host, cb_queue);
             }
         });
-    }
 
-    fn terminate(&self, host: &Host) {
-        if !self.is_running() {
-            trace!("Already dead");
-            assert!(self.common().return_code.get().is_some());
-        }
-
-        trace!("Terminating");
-        if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
-            warn!("kill: {:?}", err);
-        }
-
-        self.handle_process_exit(host);
-        self.get_and_log_return_code(true);
-    }
-
-    fn get_and_log_return_code(&self, killed_by_shadow: bool) {
         assert!(self.common().return_code.get().is_none());
 
         use nix::sys::wait::WaitStatus;
@@ -1052,6 +1033,20 @@ impl Process {
             warn!("{}", main_result_string);
             Worker::increment_plugin_error_count();
         }
+    }
+
+    fn terminate(&self, host: &Host) {
+        if !self.is_running() {
+            trace!("Already dead");
+            assert!(self.common().return_code.get().is_some());
+        }
+
+        trace!("Terminating");
+        if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
+            warn!("kill: {:?}", err);
+        }
+
+        self.handle_process_exit(host, true);
     }
 
     /// Adds a new thread to the process and schedules it to run.
