@@ -1,8 +1,5 @@
 include(ExternalProject)
 
-# Fake target to build all golang tests
-add_custom_target(golang_tests)
-
 macro(add_golang_test_exe)
     cmake_parse_arguments(AGTE "" "BASENAME" "" ${ARGN})
     ExternalProject_Add(
@@ -23,7 +20,7 @@ macro(add_golang_test_exe)
           ${CMAKE_CURRENT_SOURCE_DIR}/${AGTE_BASENAME}.go
     )
     set_property(TARGET ${AGTE_BASENAME} PROPERTY EXCLUDE_FROM_ALL true)
-    add_dependencies(golang_tests ${AGTE_BASENAME})
+    add_dependencies(extra_tests ${AGTE_BASENAME})
 
     # Horrible hack to force golang targets to build serially.  Seeing if it
     # helps with https://github.com/shadow/shadow/issues/2341.  Using job pools

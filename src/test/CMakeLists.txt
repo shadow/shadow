@@ -20,6 +20,9 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 ## ensure that the Host LLVM plugin is built first
 #get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
+# Fake target to build all extra tests
+add_custom_target(extra_tests)
+
 ## a helper program for tests needing multiple processes
 add_executable(shadow-test-launcher test_launcher.c test_launcher_common.c)
 add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_common.c)

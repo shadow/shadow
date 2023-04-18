@@ -279,7 +279,7 @@ def build(args, remaining):
         return retcode
 
     if args.do_extra_test:
-        make += " golang_tests"
+        make += " extra_tests"
         logging.info("calling " + make)
         retcode = subprocess.call(shlex.split(make), cwd=builddir)
         logging.debug("make returned " + str(retcode))
