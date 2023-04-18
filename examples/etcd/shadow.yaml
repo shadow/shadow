@@ -40,6 +40,9 @@ hosts:
     network_node_id: 0
     processes:
     - path: etcd
+      # each etcd peer must have a different start time
+      # https://github.com/shadow/shadow/issues/2858
+      start_time: 1ms
       args:
         --name server2
         --log-output=stdout
@@ -56,6 +59,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: etcd
+      start_time: 2ms
       args:
         --name server3
         --log-output=stdout
