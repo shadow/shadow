@@ -62,6 +62,9 @@ This optimization is now always enabled.
 * It is now an error to set a process's `stop_time` or `start_time` to be after
 the simulation's `stop_time`.
 
+* Sub-second configuration values are now allowed for all time-related options,
+including `start_time`, `stop_time`, etc.
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to

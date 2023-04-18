@@ -174,7 +174,7 @@ pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
     #[clap(long, value_name = "seconds")]
     #[clap(help = GENERAL_HELP.get("stop_time").unwrap().as_str())]
-    pub stop_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub stop_time: Option<units::Time<units::TimePrefix>>,
 
     /// Initialize randomness using seed N
     #[clap(long, value_name = "N")]
@@ -194,7 +194,7 @@ pub struct GeneralOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = GENERAL_HELP.get("bootstrap_end_time").unwrap().as_str())]
     #[serde(default = "default_some_time_0")]
-    pub bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub bootstrap_end_time: Option<units::Time<units::TimePrefix>>,
 
     /// Log level of output written on stdout. If Shadow was built in release mode, then log
     /// messages at level 'trace' will always be dropped
@@ -207,7 +207,7 @@ pub struct GeneralOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = GENERAL_HELP.get("heartbeat_interval").unwrap().as_str())]
     #[serde(default = "default_some_nullable_time_1")]
-    pub heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefixUpper>>>,
+    pub heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefix>>>,
 
     /// Path to store simulation output
     #[clap(long, short = 'd', value_name = "path")]
@@ -399,7 +399,7 @@ pub struct ExperimentalOptions {
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
-    pub host_heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefixUpper>>>,
+    pub host_heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefix>>>,
 
     /// Log the syscalls for each process to individual "strace" files
     #[clap(hide_short_help = true)]
@@ -482,7 +482,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: Some(NullableOption::Value(units::Time::new(
                 1,
-                units::TimePrefixUpper::Sec,
+                units::TimePrefix::Sec,
             ))),
             strace_logging_mode: Some(StraceLoggingMode::Off),
             scheduler: Some(Scheduler::ThreadPerCore),
@@ -562,11 +562,11 @@ pub struct ProcessOptions {
 
     /// The simulated time at which to execute the process
     #[serde(default)]
-    pub start_time: units::Time<units::TimePrefixUpper>,
+    pub start_time: units::Time<units::TimePrefix>,
 
     /// The simulated time at which to send a `shutdown_signal` signal to the process
     #[serde(default)]
-    pub shutdown_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub shutdown_time: Option<units::Time<units::TimePrefix>>,
 
     /// The signal that will be sent to the process at `shutdown_time`
     #[serde(default = "default_shutdown_signal")]
@@ -1195,8 +1195,8 @@ fn default_shutdown_signal() -> Signal {
 }
 
 /// Helper function for serde default `Some(0)` values.
-fn default_some_time_0() -> Option<units::Time<units::TimePrefixUpper>> {
-    Some(units::Time::new(0, units::TimePrefixUpper::Sec))
+fn default_some_time_0() -> Option<units::Time<units::TimePrefix>> {
+    Some(units::Time::new(0, units::TimePrefix::Sec))
 }
 
 /// Helper function for serde default `Some(true)` values.
@@ -1220,8 +1220,8 @@ fn default_some_nz_1() -> Option<NonZeroU32> {
 }
 
 /// Helper function for serde default `Some(NullableOption::Value(1 sec))` values.
-fn default_some_nullable_time_1() -> Option<NullableOption<units::Time<units::TimePrefixUpper>>> {
-    let time = units::Time::new(1, units::TimePrefixUpper::Sec);
+fn default_some_nullable_time_1() -> Option<NullableOption<units::Time<units::TimePrefix>>> {
+    let time = units::Time::new(1, units::TimePrefix::Sec);
     Some(NullableOption::Value(time))
 }
 
@@ -1383,8 +1383,8 @@ mod tests {
             )
         };
 
-        let time_1_sec = units::Time::new(1, units::TimePrefixUpper::Sec);
-        let time_5_sec = units::Time::new(5, units::TimePrefixUpper::Sec);
+        let time_1_sec = units::Time::new(1, units::TimePrefix::Sec);
+        let time_5_sec = units::Time::new(5, units::TimePrefix::Sec);
 
         // "heartbeat_interval: null" with no cli option => None
         let yaml = yaml_fmt_fn("heartbeat_interval: null");
