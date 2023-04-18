@@ -3,9 +3,11 @@ use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
+use std::sync::RwLock;
 use std::time::Duration;
 
 use anyhow::Context;
+use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -447,6 +449,41 @@ fn verify_plugin_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
     let mask = libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH;
     if (metadata.mode() & mask) == 0 {
         return Err(anyhow::anyhow!("The path is not executable"));
+    }
+
+    // a cache so we don't check the same path multiple times (assuming the user doesn't move any
+    // binaries while shadow is running)
+    static CHECKED_DYNAMIC_BINS: Lazy<RwLock<HashSet<PathBuf>>> =
+        Lazy::new(|| RwLock::new(HashSet::new()));
+
+    let is_known_dynamic = CHECKED_DYNAMIC_BINS.read().unwrap().contains(path);
+
+    // check if the binary is dynamically linked
+    if !is_known_dynamic {
+        let ld_path = "/lib64/ld-linux-x86-64.so.2";
+        let ld_output = std::process::Command::new(ld_path)
+            .arg("--verify")
+            .arg(path)
+            .output()
+            .with_context(|| format!("Unable to run '{ld_path}'"))?;
+
+        if ld_output.status.success() {
+            CHECKED_DYNAMIC_BINS
+                .write()
+                .unwrap()
+                .insert(path.to_path_buf());
+        } else {
+            // technically ld-linux could return errors for other reasons, but this is the most
+            // likely reason given that we already checked that the file exists
+            let err_msg = "The path is not dynamically linked";
+
+            return if ld_output.stderr.is_empty() {
+                Err(anyhow::anyhow!(err_msg))
+            } else {
+                let stderr = String::from_utf8_lossy(&ld_output.stderr).into_owned();
+                Err(anyhow::anyhow!(stderr).context(err_msg))
+            };
+        }
     }
 
     Ok(())
