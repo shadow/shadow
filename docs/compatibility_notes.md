@@ -191,10 +191,15 @@ Example for etcd version 3.3.x.
 
 ### Notes
 
-1. The etcd binary [must not be statically linked](limitations.md#statically-linked-executables). You can build a dynamically
-linked version by replacing `CGO_ENABLED=0` with `CGO_ENABLED=1` in etcd's
-`build.sh` script. The etcd packages included in the Debian and Ubuntu APT
-repositories are dynamically linked, so they can be used directly.
+1. The etcd binary [must not be statically
+linked](limitations.md#statically-linked-executables). You can build a
+dynamically linked version by replacing `CGO_ENABLED=0` with `CGO_ENABLED=1` in
+etcd's `build.sh` script. The etcd packages included in the Debian and Ubuntu
+APT repositories are dynamically linked, so they can be used directly.
+
+2. Each etcd peer must be started at a different time since etcd uses the
+current time as an RNG seed. See [issue
+#2858](https://github.com/shadow/shadow/issues/2858) for details.
 
 ## CTorrent and opentracker
 
