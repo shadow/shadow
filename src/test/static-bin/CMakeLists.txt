@@ -1,0 +1,4 @@
+add_custom_target(nop ALL COMMAND rustc -C "target-feature=+crt-static" "${CMAKE_CURRENT_SOURCE_DIR}/nop.rs")
+
+# cmake will ignore the exit code and only search for the regex
+add_shadow_tests(BASENAME static-bin PROPERTIES PASS_REGULAR_EXPRESSION "path is not dynamically linked")
