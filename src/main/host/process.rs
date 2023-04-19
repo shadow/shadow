@@ -95,7 +95,6 @@ struct StraceLogging {
 }
 
 /// Parts of the process that are present in all states.
-/// FIXME: Move most fields out to [`RunnableProcess`] or [`ZombieProcess`].
 struct Common {
     id: ProcessId,
     host_id: HostId,
@@ -111,6 +110,63 @@ struct Common {
 
     // absolute path to the process's working directory
     working_dir: CString,
+}
+
+impl Common {
+    pub fn id(&self) -> ProcessId {
+        self.id
+    }
+
+    pub fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
+        // We currently don't keep a true system-wide virtual <-> physical address
+        // mapping. Instead we simply assume that no shadow processes map the same
+        // underlying physical memory, and that therefore (pid, virtual address)
+        // uniquely defines a physical address.
+        //
+        // If we ever want to support futexes in memory shared between processes,
+        // we'll need to change this.  The most foolproof way to do so is probably
+        // to change ManagedPhysicalMemoryAddr to be a bigger struct that identifies where
+        // the mapped region came from (e.g. what file), and the offset into that
+        // region. Such "fat" physical pointers might make memory management a
+        // little more cumbersome though, e.g. when using them as keys in the futex
+        // table.
+        //
+        // Alternatively we could hash the region+offset to a 64-bit value, but
+        // then we'd need to deal with potential collisions. On average we'd expect
+        // a collision after 2**32 physical addresses; i.e. they *probably*
+        // wouldn't happen in practice for realistic simulations.
+
+        // Linux uses the bottom 48-bits for user-space virtual addresses, giving
+        // us 16 bits for the pid.
+        const PADDR_BITS: i32 = 64;
+        const VADDR_BITS: i32 = 48;
+        const PID_BITS: i32 = 16;
+        assert_eq!(PADDR_BITS, PID_BITS + VADDR_BITS);
+
+        let high_part: u64 = u64::from(u32::from(self.id())) << VADDR_BITS;
+        assert_eq!(
+            ProcessId::try_from((high_part >> VADDR_BITS) as u32),
+            Ok(self.id())
+        );
+
+        let low_part = u64::from(vptr);
+        assert_eq!(low_part >> VADDR_BITS, 0);
+
+        ManagedPhysicalMemoryAddr::from(high_part | low_part)
+    }
+
+    fn output_file_name(&self, extension: &str) -> PathBuf {
+        Process::static_output_file_name(&self.file_basename, extension)
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.to_str().unwrap()
+    }
+}
+
+/// A process that is currently runnable.
+struct RunnableProcess {
+    common: Common,
 
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
@@ -120,8 +176,6 @@ struct Common {
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
     dumpable: Cell<u32>,
-
-    return_code: Cell<Option<i32>>,
 
     native_pid: Pid,
 
@@ -154,14 +208,87 @@ struct Common {
     memory_manager: Box<RefCell<MemoryManager>>,
 }
 
-/// A process that is currently runnable.
-struct RunnableProcess {
-    common: Common,
+impl RunnableProcess {
+    /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
+    fn reap_thread(&self, host: &Host, threadrc: RootedRc<RootedRefCell<Thread>>) {
+        let thread = threadrc.borrow(host.root());
+
+        assert!(!thread.is_running());
+
+        // If the `clear_child_tid` attribute on the thread is set, and there are
+        // any other threads left alive in the process, perform a futex wake on
+        // that address. This mechanism is typically used in `pthread_join` etc.
+        // See `set_tid_address(2)`.
+        let clear_child_tid_pvp = thread.get_tid_address();
+        if !clear_child_tid_pvp.is_null() && self.threads.borrow().len() > 0 {
+            self.memory_manager
+                .borrow_mut()
+                .write(clear_child_tid_pvp, &0)
+                .unwrap();
+
+            // Wake the corresponding futex.
+            let mut futexes = host.futextable_borrow_mut();
+            let futex = unsafe {
+                cshadow::futextable_get(
+                    &mut *futexes,
+                    self.common
+                        .physical_address(clear_child_tid_pvp.cast::<()>()),
+                )
+            };
+            if !futex.is_null() {
+                unsafe { cshadow::futex_wake(futex, 1) };
+            }
+        }
+
+        drop(thread);
+        threadrc.safely_drop(host.root());
+    }
+
+    /// This cleans up memory references left over from legacy C code; usually
+    /// a syscall handler.
+    ///
+    /// Writes the leftover mutable ref to memory (if any), and frees
+    /// all memory refs.
+    pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
+        self.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        if let Some(borrow) = unsafe_borrow_mut {
+            borrow.flush()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// This cleans up memory references left over from legacy C code; usually
+    /// a syscall handler.
+    ///
+    /// Frees all memory refs without writing back to memory.
+    pub fn free_unsafe_borrows_noflush(&self) {
+        self.unsafe_borrows.borrow_mut().clear();
+
+        let unsafe_borrow_mut = self.unsafe_borrow_mut.borrow_mut().take();
+        if let Some(borrow) = unsafe_borrow_mut {
+            borrow.noflush();
+        }
+    }
+
+    pub fn into_common(self) -> Common {
+        // There shouldn't be any outstanding unsafe borrows when changing
+        // states, since that would indicate C code might still have a pointer
+        // to memory.
+        assert!(self.unsafe_borrow_mut.take().is_none());
+        assert!(self.unsafe_borrows.take().is_empty());
+
+        self.common
+    }
 }
 
 /// A process that has exited.
 struct ZombieProcess {
     common: Common,
+
+    return_code: i32,
 }
 
 /// Inner implementation of a simulated process.
@@ -191,6 +318,10 @@ impl ProcessState {
             ProcessState::Zombie(z) => Some(z),
         }
     }
+
+    pub fn name(&self) -> &str {
+        self.common().name()
+    }
 }
 
 /// A simulated process.
@@ -206,8 +337,11 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
         return;
     };
     let process = process.borrow(host.root());
-    let common = process.common();
-    let timer = common.itimer_real.borrow();
+    let Some(runnable) = process.runnable() else {
+        debug!("Process {:?} no longer running", &*process.name());
+        return;
+    };
+    let timer = runnable.itimer_real.borrow();
     let mut siginfo: libc::siginfo_t = unsafe { std::mem::zeroed() };
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
@@ -332,31 +466,32 @@ impl Process {
             id: process_id,
             host_id: host.id(),
             working_dir,
-            shim_shared_mem_block,
-            memory_manager: Box::new(RefCell::new(memory_manager)),
-            desc_table,
-            itimer_real,
             name,
             file_basename,
             plugin_name,
-            strace_logging,
-            dumpable: Cell::new(cshadow::SUID_DUMP_USER),
-            return_code: Cell::new(None),
-            #[cfg(feature = "perf_timers")]
-            cpu_delay_timer,
-            #[cfg(feature = "perf_timers")]
-            total_run_time: Cell::new(Duration::ZERO),
-            native_pid,
-            unsafe_borrow_mut: RefCell::new(None),
-            unsafe_borrows: RefCell::new(Vec::new()),
-            threads,
         };
         RootedRc::new(
             host.root(),
             RootedRefCell::new(
                 host.root(),
                 Self {
-                    state: RefCell::new(Some(ProcessState::Runnable(RunnableProcess { common }))),
+                    state: RefCell::new(Some(ProcessState::Runnable(RunnableProcess {
+                        common,
+                        shim_shared_mem_block,
+                        memory_manager: Box::new(RefCell::new(memory_manager)),
+                        desc_table,
+                        itimer_real,
+                        strace_logging,
+                        dumpable: Cell::new(cshadow::SUID_DUMP_USER),
+                        native_pid,
+                        unsafe_borrow_mut: RefCell::new(None),
+                        unsafe_borrows: RefCell::new(Vec::new()),
+                        threads,
+                        #[cfg(feature = "perf_timers")]
+                        cpu_delay_timer,
+                        #[cfg(feature = "perf_timers")]
+                        total_run_time: Cell::new(Duration::ZERO),
+                    }))),
                 },
             ),
         )
@@ -374,17 +509,22 @@ impl Process {
     /// Panics if the timer is already running.
     #[cfg(feature = "perf_timers")]
     pub fn start_cpu_delay_timer(&self) {
-        self.common().cpu_delay_timer.borrow_mut().start()
+        self.runnable()
+            .unwrap()
+            .cpu_delay_timer
+            .borrow_mut()
+            .start()
     }
 
     /// Stop the timer and return the most recent (not cumulative) duration.
     /// Panics if the timer was not already running.
     #[cfg(feature = "perf_timers")]
     pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
-        let mut timer = self.common().cpu_delay_timer.borrow_mut();
+        let runnable = self.runnable().unwrap();
+        let mut timer = runnable.cpu_delay_timer.borrow_mut();
         timer.stop();
         let total_elapsed = timer.elapsed();
-        let prev_total = self.common().total_run_time.replace(total_elapsed);
+        let prev_total = runnable.total_run_time.replace(total_elapsed);
         let delta = total_elapsed - prev_total;
 
         if let Some(mut tracker) = host.tracker_borrow_mut() {
@@ -507,13 +647,12 @@ impl Process {
     pub fn resume(&self, host: &Host, tid: ThreadId) {
         trace!("Continuing thread {} in process {}", tid, self.id());
 
-        if !self.is_running() {
-            return;
-        }
-
         let threadrc = {
-            let common = self.common();
-            let threads = common.threads.borrow();
+            let Some(runnable) = self.runnable() else {
+                debug!("Process {} is no longer running", &*self.name());
+                return;
+            };
+            let threads = runnable.threads.borrow();
             let Some(thread) = threads.get(&tid) else {
                 debug!("Thread {} no longer exists", tid);
                 return;
@@ -565,12 +704,12 @@ impl Process {
                     &*self.name(),
                 );
                 let (threadrc, last_thread) = {
-                    let common = self.common();
-                    let mut threads = common.threads.borrow_mut();
+                    let runnable = self.runnable().unwrap();
+                    let mut threads = runnable.threads.borrow_mut();
                     let threadrc = threads.remove(&tid).unwrap();
                     (threadrc, threads.is_empty())
                 };
-                self.reap_thread(host, threadrc);
+                self.runnable().unwrap().reap_thread(host, threadrc);
                 if last_thread {
                     self.handle_process_exit(host, false);
                 }
@@ -606,7 +745,7 @@ impl Process {
         #[cfg(feature = "perf_timers")]
         {
             let delay = self.stop_cpu_delay_timer(host);
-            info!("process '{}' stopped in {:?}", self.name(), delay);
+            info!("process '{}' stopped in {:?}", &*self.name(), delay);
         }
         #[cfg(not(feature = "perf_timers"))]
         info!("process '{}' stopped", &*self.name());
@@ -628,8 +767,11 @@ impl Process {
 
         {
             let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-            let common = self.common();
-            let mut process_shmem_protected = common
+            let Some(runnable) = self.runnable() else {
+                debug!("Process {} no longer running", &*self.name());
+                return;
+            };
+            let mut process_shmem_protected = runnable
                 .shim_shared_mem_block
                 .protected
                 .borrow_mut(&host_shmem.root);
@@ -671,8 +813,8 @@ impl Process {
     }
 
     fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
-        let common = self.common();
-        let threads = common.threads.borrow();
+        let runnable = self.runnable().unwrap();
+        let threads = runnable.threads.borrow();
         for thread in threads.values() {
             let thread = thread.borrow(host.root());
             {
@@ -736,10 +878,6 @@ impl Process {
         );
     }
 
-    fn output_file_name(&self, extension: &str) -> PathBuf {
-        Self::static_output_file_name(&self.common().file_basename, extension)
-    }
-
     // Needed during early init, before `Self` is created.
     fn static_output_file_name(file_basename: &Path, extension: &str) -> PathBuf {
         let mut path = file_basename.to_owned().into_os_string();
@@ -758,23 +896,29 @@ impl Process {
 
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
-            common.memory_manager.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
+            runnable.memory_manager.borrow_mut()
         })
     }
 
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
-        std_util::nested_ref::NestedRef::map(self.common(), |common| common.memory_manager.borrow())
+        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
+            runnable.memory_manager.borrow()
+        })
     }
 
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.common().strace_logging.as_ref().map(|x| x.options)
+        self.runnable()
+            .unwrap()
+            .strace_logging
+            .as_ref()
+            .map(|x| x.options)
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        let Some(ref strace_logging) = self.common().strace_logging else {
+        let Some(ref strace_logging) = self.runnable().unwrap().strace_logging else {
             return None;
         };
 
@@ -784,31 +928,35 @@ impl Process {
 
     #[track_caller]
     pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
-        std_util::nested_ref::NestedRef::map(self.common(), |common| common.desc_table.borrow())
+        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
+            runnable.desc_table.borrow()
+        })
     }
 
     #[track_caller]
     pub fn descriptor_table_borrow_mut(
         &self,
     ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
-            common.desc_table.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
+            runnable.desc_table.borrow_mut()
         })
     }
 
     pub fn native_pid(&self) -> Pid {
-        self.common().native_pid
+        self.runnable().unwrap().native_pid
     }
 
     #[track_caller]
     pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
-        std_util::nested_ref::NestedRef::map(self.common(), |common| common.itimer_real.borrow())
+        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
+            runnable.itimer_real.borrow()
+        })
     }
 
     #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.common(), |common| {
-            common.itimer_real.borrow_mut()
+        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
+            runnable.itimer_real.borrow_mut()
         })
     }
 
@@ -819,8 +967,8 @@ impl Process {
         &self,
         root: &Root,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        std_util::nested_ref::NestedRef::filter_map(self.common(), |common| {
-            Ref::filter_map(common.threads.borrow(), |threads| {
+        std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
+            Ref::filter_map(runnable.threads.borrow(), |threads| {
                 threads.values().next().map(|thread| {
                     // There shouldn't be any non-running threads in the table.
                     assert!(thread.borrow(root).is_running());
@@ -835,8 +983,11 @@ impl Process {
         &self,
         virtual_tid: ThreadId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        std_util::nested_ref::NestedRef::filter_map(self.common(), |common| {
-            Ref::filter_map(common.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
+        std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
+            Ref::filter_map(runnable.threads.borrow(), |threads| {
+                threads.get(&virtual_tid)
+            })
+            .ok()
         })
     }
 
@@ -846,16 +997,7 @@ impl Process {
     /// Writes the leftover mutable ref to memory (if any), and frees
     /// all memory refs.
     pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
-        let common = self.common();
-
-        common.unsafe_borrows.borrow_mut().clear();
-
-        let unsafe_borrow_mut = common.unsafe_borrow_mut.borrow_mut().take();
-        if let Some(borrow) = unsafe_borrow_mut {
-            borrow.flush()
-        } else {
-            Ok(())
-        }
+        self.runnable().unwrap().free_unsafe_borrows_flush()
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -863,112 +1005,54 @@ impl Process {
     ///
     /// Frees all memory refs without writing back to memory.
     pub fn free_unsafe_borrows_noflush(&self) {
-        let common = self.common();
-
-        common.unsafe_borrows.borrow_mut().clear();
-
-        let unsafe_borrow_mut = common.unsafe_borrow_mut.borrow_mut().take();
-        if let Some(borrow) = unsafe_borrow_mut {
-            borrow.noflush();
-        }
+        self.runnable().unwrap().free_unsafe_borrows_noflush()
     }
 
     pub fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
-        // We currently don't keep a true system-wide virtual <-> physical address
-        // mapping. Instead we simply assume that no shadow processes map the same
-        // underlying physical memory, and that therefore (pid, virtual address)
-        // uniquely defines a physical address.
-        //
-        // If we ever want to support futexes in memory shared between processes,
-        // we'll need to change this.  The most foolproof way to do so is probably
-        // to change ManagedPhysicalMemoryAddr to be a bigger struct that identifies where
-        // the mapped region came from (e.g. what file), and the offset into that
-        // region. Such "fat" physical pointers might make memory management a
-        // little more cumbersome though, e.g. when using them as keys in the futex
-        // table.
-        //
-        // Alternatively we could hash the region+offset to a 64-bit value, but
-        // then we'd need to deal with potential collisions. On average we'd expect
-        // a collision after 2**32 physical addresses; i.e. they *probably*
-        // wouldn't happen in practice for realistic simulations.
-
-        // Linux uses the bottom 48-bits for user-space virtual addresses, giving
-        // us 16 bits for the pid.
-        const PADDR_BITS: i32 = 64;
-        const VADDR_BITS: i32 = 48;
-        const PID_BITS: i32 = 16;
-        assert_eq!(PADDR_BITS, PID_BITS + VADDR_BITS);
-
-        let high_part: u64 = u64::from(u32::from(self.id())) << VADDR_BITS;
-        assert_eq!(
-            ProcessId::try_from((high_part >> VADDR_BITS) as u32),
-            Ok(self.id())
-        );
-
-        let low_part = u64::from(vptr);
-        assert_eq!(low_part >> VADDR_BITS, 0);
-
-        ManagedPhysicalMemoryAddr::from(high_part | low_part)
-    }
-
-    /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
-    fn reap_thread(&self, host: &Host, threadrc: RootedRc<RootedRefCell<Thread>>) {
-        let thread = threadrc.borrow(host.root());
-
-        assert!(!thread.is_running());
-
-        // If the `clear_child_tid` attribute on the thread is set, and there are
-        // any other threads left alive in the process, perform a futex wake on
-        // that address. This mechanism is typically used in `pthread_join` etc.
-        // See `set_tid_address(2)`.
-        let clear_child_tid_pvp = thread.get_tid_address();
-        if !clear_child_tid_pvp.is_null() && self.common().threads.borrow().len() > 0 {
-            self.memory_borrow_mut()
-                .write(clear_child_tid_pvp, &0)
-                .unwrap();
-
-            // Wake the corresponding futex.
-            let mut futexes = host.futextable_borrow_mut();
-            let futex = unsafe {
-                cshadow::futextable_get(
-                    &mut *futexes,
-                    self.physical_address(clear_child_tid_pvp.cast::<()>()),
-                )
-            };
-            if !futex.is_null() {
-                unsafe { cshadow::futex_wake(futex, 1) };
-            }
-        }
-
-        drop(thread);
-        threadrc.safely_drop(host.root());
+        self.common().physical_address(vptr)
     }
 
     pub fn is_running(&self) -> bool {
-        self.common().return_code.get().is_none()
+        self.runnable().is_some()
     }
 
+    /// Transitions `self` from a `RunnableProcess` to a `ZombieProcess`.
     fn handle_process_exit(&self, host: &Host, killed_by_shadow: bool) {
         info!(
             "process '{}' has completed or is otherwise no longer running",
             &*self.name()
         );
-        // Take all of the threads.
-        let common = self.common();
-        let threads = std::mem::take(&mut *common.threads.borrow_mut());
-        for (_tid, threadrc) in threads.into_iter() {
-            threadrc.borrow(host.root()).handle_process_exit();
-            self.reap_thread(host, threadrc);
+
+        // Take and dispose of all of the threads.
+        // TODO: consider doing this while the `self.state` mutable reference is held
+        // as with the other cleanup below. Right now this breaks some C code that expects
+        // to be able to lookup the thread's process name.
+        {
+            let runnable = self.runnable().unwrap();
+            let threads = std::mem::take(&mut *runnable.threads.borrow_mut());
+            for (_tid, threadrc) in threads.into_iter() {
+                threadrc.borrow(host.root()).handle_process_exit();
+                runnable.reap_thread(host, threadrc);
+            }
         }
+
+        // Intentionally hold the borrow on self.state to ensure the state
+        // transition is "atomic".
+        let mut opt_state = self.state.borrow_mut();
+
+        let state = opt_state.take().unwrap();
+        let ProcessState::Runnable(runnable) = state else {
+            unreachable!("Tried to handle process exit of non-running process");
+        };
 
         #[cfg(feature = "perf_timers")]
         info!(
             "total runtime for process '{}' was {:?}",
-            self.name(),
-            self.total_run_time.get()
+            runnable.common.name(),
+            runnable.total_run_time.get()
         );
 
-        let mut descriptor_table = self.descriptor_table_borrow_mut();
+        let mut descriptor_table = runnable.desc_table.borrow_mut();
         descriptor_table.shutdown_helper();
         let descriptors = descriptor_table.remove_all();
         CallbackQueue::queue_and_run(|cb_queue| {
@@ -977,10 +1061,8 @@ impl Process {
             }
         });
 
-        assert!(self.common().return_code.get().is_none());
-
         use nix::sys::wait::WaitStatus;
-        let return_code = match nix::sys::wait::waitpid(self.native_pid(), None) {
+        let return_code = match nix::sys::wait::waitpid(runnable.native_pid, None) {
             Ok(WaitStatus::Exited(_pid, code)) => code,
             Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => {
                 utility::return_code_for_signal(signal)
@@ -994,9 +1076,7 @@ impl Process {
                 libc::EXIT_FAILURE
             }
         };
-        self.common().return_code.set(Some(return_code));
-
-        let exitcode_path = self.output_file_name("exitcode");
+        let exitcode_path = runnable.common.output_file_name("exitcode");
         let exitcode_contents = if killed_by_shadow {
             // Process never died during the simulation; shadow chose to kill it;
             // typically because the simulation end time was reached.
@@ -1010,7 +1090,7 @@ impl Process {
         }
 
         let main_result_string = {
-            let mut s = format!("process '{name}'", name = &*self.name());
+            let mut s = format!("process '{name}'", name = runnable.common.name());
             if killed_by_shadow {
                 write!(s, " killed by Shadow").unwrap();
             } else {
@@ -1033,12 +1113,17 @@ impl Process {
             warn!("{}", main_result_string);
             Worker::increment_plugin_error_count();
         }
+
+        drop(descriptor_table);
+        *opt_state = Some(ProcessState::Zombie(ZombieProcess {
+            common: runnable.into_common(),
+            return_code,
+        }))
     }
 
     fn terminate(&self, host: &Host) {
         if !self.is_running() {
             trace!("Already dead");
-            assert!(self.common().return_code.get().is_some());
         }
 
         trace!("Terminating");
@@ -1054,8 +1139,8 @@ impl Process {
     pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
         let pid = self.id();
         let tid = thread.borrow(host.root()).id();
-        let common = self.common();
-        common.threads.borrow_mut().insert(tid, thread);
+        let runnable = self.runnable().unwrap();
+        runnable.threads.borrow_mut().insert(tid, thread);
 
         // Schedule thread to start. We're giving the caller's reference to thread
         // to the TaskRef here, which is why we don't increment its ref count to
@@ -1078,13 +1163,7 @@ impl Process {
 
     /// Shared memory for this process.
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
-        Ref::map(self.common(), |c| &c.shim_shared_mem_block)
-    }
-}
-
-impl Drop for Process {
-    fn drop(&mut self) {
-        self.free_unsafe_borrows_noflush();
+        Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
 }
 
@@ -1107,8 +1186,8 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
-        let common = process.common();
-        let manager = common.memory_manager.borrow();
+        let runnable = process.runnable().unwrap();
+        let manager = runnable.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1120,7 +1199,7 @@ impl UnsafeBorrow {
             std::mem::transmute::<ProcessMemoryRef<'_, u8>, ProcessMemoryRef<'static, u8>>(memory)
         };
         let vptr = memory.as_ptr() as *mut c_void;
-        common.unsafe_borrows.borrow_mut().push(Self {
+        runnable.unsafe_borrows.borrow_mut().push(Self {
             _manager: manager,
             _memory: memory,
         });
@@ -1137,8 +1216,8 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
-        let common = process.common();
-        let manager = common.memory_manager.borrow();
+        let runnable = process.runnable().unwrap();
+        let manager = runnable.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1156,7 +1235,7 @@ impl UnsafeBorrow {
         assert_eq!(std::mem::size_of::<c_char>(), std::mem::size_of::<u8>());
         let ptr = memory.as_ptr() as *const c_char;
         let len = memory.len();
-        common.unsafe_borrows.borrow_mut().push(Self {
+        runnable.unsafe_borrows.borrow_mut().push(Self {
             _manager: manager,
             _memory: memory,
         });
@@ -1193,8 +1272,8 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let common = process.common();
-        let manager = common.memory_manager.borrow_mut();
+        let runnable = process.runnable().unwrap();
+        let manager = runnable.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1210,7 +1289,7 @@ impl UnsafeBorrowMut {
             )
         };
         let vptr = memory.as_mut_ptr() as *mut c_void;
-        let prev = common.unsafe_borrow_mut.borrow_mut().replace(Self {
+        let prev = runnable.unsafe_borrow_mut.borrow_mut().replace(Self {
             _manager: manager,
             memory: Some(memory),
         });
@@ -1228,8 +1307,8 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let common = process.common();
-        let manager = common.memory_manager.borrow_mut();
+        let runnable = process.runnable().unwrap();
+        let manager = runnable.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
         // `MemoryManager` can be moved, freed, etc.
@@ -1245,7 +1324,7 @@ impl UnsafeBorrowMut {
             )
         };
         let vptr = memory.as_mut_ptr() as *mut c_void;
-        let prev = common.unsafe_borrow_mut.borrow_mut().replace(Self {
+        let prev = runnable.unsafe_borrow_mut.borrow_mut().replace(Self {
             _manager: manager,
             memory: Some(memory),
         });
@@ -1713,7 +1792,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getSharedMem(proc: *const Process) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.common().shim_shared_mem_block.deref() as *const _
+        proc.runnable().unwrap().shim_shared_mem_block.deref() as *const _
     }
 
     #[no_mangle]
@@ -1731,7 +1810,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_straceFd(proc: *const Process) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
-        match &proc.common().strace_logging {
+        match &proc.runnable().unwrap().strace_logging {
             Some(x) => x.file.borrow().as_raw_fd(),
             None => -1,
         }
@@ -1742,7 +1821,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getDumpable(proc: *const Process) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.common().dumpable.get()
+        proc.runnable().unwrap().dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations
@@ -1751,7 +1830,7 @@ mod export {
     pub unsafe extern "C" fn process_setDumpable(proc: *const Process, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.common().dumpable.set(val)
+        proc.runnable().unwrap().dumpable.set(val)
     }
 
     #[no_mangle]
