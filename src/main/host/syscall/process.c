@@ -68,8 +68,6 @@ SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
         case PR_GET_NO_NEW_PRIVS:
         case PR_SET_MM:
         case PR_SET_PTRACER:
-        case PR_SET_SECCOMP:
-        case PR_GET_SECCOMP:
         case PR_SET_SECUREBITS:
         case PR_GET_SECUREBITS:
         case PR_GET_SPECULATION_CTRL:
@@ -84,6 +82,10 @@ SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
         case PR_GET_UNALIGN:
             trace("prctl %i executing natively", option);
             return syscallreturn_makeNative();
+        case PR_SET_SECCOMP:
+        case PR_GET_SECCOMP:
+            warning("Not allowing seccomp prctl %d", option);
+            return syscallreturn_makeDoneErrno(EINVAL);
         // Needs emulation to have the desired effect, but also N/A on x86_64.
         case PR_SET_UNALIGN:
         // Executing natively could interfere with shadow's interception of
