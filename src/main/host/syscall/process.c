@@ -100,7 +100,7 @@ SyscallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
         // managed processes to live on after shadow exits.
         case PR_SET_PDEATHSIG:
             warning("Not allowing unimplemented prctl %d", option);
-            return syscallreturn_makeDoneErrno(ENOSYS);
+            return syscallreturn_makeDoneErrno(EINVAL);
         case PR_GET_TID_ADDRESS: {
             UntypedForeignPtr tid_addr = thread_getTidAddress(_syscallhandler_getThread(sys));
 
