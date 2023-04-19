@@ -426,14 +426,22 @@ impl Host {
     }
 
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
-        let Some(processrc) = self.process_borrow(pid) else {
-            trace!("{pid:?} doesn't exist");
-            return;
+        let remove_process = {
+            let Some(processrc) = self.process_borrow(pid) else {
+                trace!("{pid:?} doesn't exist");
+                return;
+            };
+            Worker::set_active_process(&processrc);
+            let process = processrc.borrow(self.root());
+            process.resume(self, tid);
+            Worker::clear_active_process();
+            process.borrow_zombie().is_some() && process.ppid().is_none()
         };
-        Worker::set_active_process(&processrc);
-        let process = processrc.borrow(self.root());
-        process.resume(self, tid);
-        Worker::clear_active_process();
+        if remove_process {
+            trace!("Dropping orphan zombie process {pid:?}");
+            let process = self.processes.borrow_mut().remove(&pid).unwrap();
+            RootedRc::safely_drop(process, self.root());
+        }
     }
 
     #[track_caller]

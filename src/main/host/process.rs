@@ -1255,6 +1255,12 @@ impl Process {
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
+
+    /// The parent of this process.
+    pub fn ppid(&self) -> Option<ProcessId> {
+        // We don't yet support child processes, so there is never a ppid.
+        None
+    }
 }
 
 /// Tracks a memory reference made by a legacy C memory-read API.

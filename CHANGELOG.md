@@ -96,6 +96,12 @@ returning `-1` instead of `NULL` on errors.
 
 * A call to `epoll_ctl` with an unknown operation will return `EINVAL`.
 
+* Simulated Processes are now reaped and deallocated after the exit, reducing
+run-time memory usage when processes exit over the course of the simulation.
+This was unlikely to have affected most users, since Shadow currently doesn't
+support `fork`, so any simulation has a fixed number of processes, all of which
+are explicitly specified in shadow's config.
+
 Raw changes since v2.5.0:
 
 * [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2023-03-23T18%3A20-0400)
