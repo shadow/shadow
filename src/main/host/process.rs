@@ -88,6 +88,28 @@ impl From<ProcessId> for libc::pid_t {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ExitStatus {
+    Normal(i32),
+    Signaled(nix::sys::signal::Signal),
+    // We don't expect to ever get this state, but having it gives us an out in
+    // case of an unexpected problem retrieving it.  Having this state seems a
+    // little clearer than wrapper the ExitStatus in an Option, since we want to
+    // indicate that the process exited with unknown state vs the process hasn't
+    // exited.
+    Unknown,
+}
+
+impl From<ExitStatus> for i32 {
+    fn from(value: ExitStatus) -> Self {
+        match value {
+            ExitStatus::Normal(n) => n,
+            ExitStatus::Signaled(s) => utility::return_code_for_signal(s),
+            ExitStatus::Unknown => -1,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct StraceLogging {
     file: RefCell<std::fs::File>,
@@ -500,12 +522,12 @@ impl RunnableProcess {
 pub struct ZombieProcess {
     common: Common,
 
-    return_code: i32,
+    exit_status: ExitStatus,
 }
 
 impl ZombieProcess {
-    pub fn return_code(&self) -> i32 {
-        self.return_code
+    pub fn exit_status(&self) -> ExitStatus {
+        self.exit_status
     }
 }
 
@@ -1180,18 +1202,16 @@ impl Process {
         }
 
         use nix::sys::wait::WaitStatus;
-        let return_code = match nix::sys::wait::waitpid(runnable.native_pid, None) {
-            Ok(WaitStatus::Exited(_pid, code)) => code,
-            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => {
-                utility::return_code_for_signal(signal)
-            }
+        let exit_status = match nix::sys::wait::waitpid(runnable.native_pid, None) {
+            Ok(WaitStatus::Exited(_pid, code)) => ExitStatus::Normal(code),
+            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => ExitStatus::Signaled(signal),
             Ok(status) => {
                 warn!("Unexpected status: {status:?}");
-                libc::EXIT_FAILURE
+                ExitStatus::Unknown
             }
             Err(e) => {
                 warn!("waitpid: {e:?}");
-                libc::EXIT_FAILURE
+                ExitStatus::Unknown
             }
         };
         let exitcode_path = runnable.common.output_file_name("exitcode");
@@ -1201,7 +1221,7 @@ impl Process {
             // Write out an empty exitcode file.
             String::new()
         } else {
-            format!("{return_code}")
+            format!("{}", i32::from(exit_status))
         };
         if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
             warn!("Couldn't write exitcode file: {e:?}");
@@ -1212,8 +1232,8 @@ impl Process {
             if killed_by_shadow {
                 write!(s, " killed by Shadow").unwrap();
             } else {
-                write!(s, " exited with code {return_code}").unwrap();
-                if return_code == 0 {
+                write!(s, " exited with status {exit_status:?}").unwrap();
+                if exit_status == ExitStatus::Normal(libc::EXIT_SUCCESS) {
                     write!(s, " (success)").unwrap();
                 } else {
                     write!(s, " (error)").unwrap();
@@ -1223,7 +1243,7 @@ impl Process {
         };
 
         // if there was no error or was intentionally killed
-        if return_code == 0 || killed_by_shadow {
+        if exit_status == ExitStatus::Normal(libc::EXIT_SUCCESS) || killed_by_shadow {
             info!("{}", main_result_string);
         } else {
             warn!("{}", main_result_string);
@@ -1232,7 +1252,7 @@ impl Process {
 
         *opt_state = Some(ProcessState::Zombie(ZombieProcess {
             common: runnable.into_common(),
-            return_code,
+            exit_status,
         }))
     }
 
