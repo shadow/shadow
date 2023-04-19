@@ -40,7 +40,7 @@ hosts:
       start_time: 1
   client1: &client_host
     network_node_id: 0
-    options:
+    host_options:
       log_level: debug
     processes:
     - path: /usr/bin/curl
@@ -94,16 +94,16 @@ hosts:
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
-- [`host_defaults`](#host_defaults)
-- [`host_defaults.log_level`](#host_defaultslog_level)
-- [`host_defaults.pcap_capture_size`](#host_defaultspcap_capture_size)
-- [`host_defaults.pcap_enabled`](#host_defaultspcap_enabled)
+- [`host_option_defaults`](#host_option_defaults)
+- [`host_option_defaults.log_level`](#host_option_defaultslog_level)
+- [`host_option_defaults.pcap_capture_size`](#host_option_defaultspcap_capture_size)
+- [`host_option_defaults.pcap_enabled`](#host_option_defaultspcap_enabled)
 - [`hosts`](#hosts)
 - [`hosts.<hostname>.bandwidth_down`](#hostshostnamebandwidth_down)
 - [`hosts.<hostname>.bandwidth_up`](#hostshostnamebandwidth_up)
 - [`hosts.<hostname>.ip_addr`](#hostshostnameip_addr)
 - [`hosts.<hostname>.network_node_id`](#hostshostnamenetwork_node_id)
-- [`hosts.<hostname>.options`](#hostshostnameoptions)
+- [`hosts.<hostname>.host_options`](#hostshostnamehost_options)
 - [`hosts.<hostname>.processes`](#hostshostnameprocesses)
 - [`hosts.<hostname>.processes[*].args`](#hostshostnameprocessesargs)
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
@@ -513,20 +513,20 @@ Type: Bool
 
 Count the number of occurrences for individual syscalls.
 
-#### `host_defaults`
+#### `host_option_defaults`
 
 Default options for all hosts. These options can also be overridden for each
-host individually in the host's [`hosts.<hostname>.options`](#hostshostnameoptions)
+host individually in the host's [`hosts.<hostname>.host_options`](#hostshostnamehost_options)
 section.
 
-#### `host_defaults.log_level`
+#### `host_option_defaults.log_level`
 
 Default: null  
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace" OR null
 
 Log level at which to print host log messages.
 
-#### `host_defaults.pcap_capture_size`
+#### `host_option_defaults.pcap_capture_size`
 
 Default: "65535 B"  
 Type: String OR Integer
@@ -536,7 +536,7 @@ enabled.
 
 The default of 65535 bytes is the maximum length of an IP packet.
 
-#### `host_defaults.pcap_enabled`
+#### `host_option_defaults.pcap_enabled`
 
 Default: false  
 Type: Bool
@@ -601,9 +601,9 @@ Type: Integer
 
 Network graph node ID to assign the host to.
 
-#### `hosts.<hostname>.options`
+#### `hosts.<hostname>.host_options`
 
-See [`host_defaults`](#host_defaults) for supported fields.
+See [`host_option_defaults`](#host_option_defaults) for supported fields.
 
 Example:
 
@@ -611,7 +611,7 @@ Example:
 hosts:
   client:
     ...
-    options:
+    host_options:
       log_level: debug
 ```
 
