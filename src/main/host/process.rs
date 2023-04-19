@@ -113,11 +113,11 @@ struct Common {
 }
 
 impl Common {
-    pub fn id(&self) -> ProcessId {
+    fn id(&self) -> ProcessId {
         self.id
     }
 
-    pub fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
+    fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
         // We currently don't keep a true system-wide virtual <-> physical address
         // mapping. Instead we simply assume that no shadow processes map the same
         // underlying physical memory, and that therefore (pid, virtual address)
@@ -159,13 +159,13 @@ impl Common {
         Process::static_output_file_name(&self.file_basename, extension)
     }
 
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         self.name.to_str().unwrap()
     }
 }
 
 /// A process that is currently runnable.
-struct RunnableProcess {
+pub struct RunnableProcess {
     common: Common,
 
     // Shared memory allocation for shared state with shim.
@@ -273,7 +273,84 @@ impl RunnableProcess {
         }
     }
 
-    pub fn into_common(self) -> Common {
+    #[track_caller]
+    pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
+        self.memory_manager.borrow()
+    }
+
+    #[track_caller]
+    pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
+        self.memory_manager.borrow_mut()
+    }
+
+    pub fn strace_logging_options(&self) -> Option<FmtOptions> {
+        self.strace_logging.as_ref().map(|x| x.options)
+    }
+
+    /// If strace logging is disabled, this function will do nothing and return `None`.
+    pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
+        let Some(ref strace_logging) = self.strace_logging else {
+            return None;
+        };
+
+        let mut file = strace_logging.file.borrow_mut();
+        Some(f(&mut file))
+    }
+
+    #[track_caller]
+    pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
+        self.desc_table.borrow()
+    }
+
+    #[track_caller]
+    pub fn descriptor_table_borrow_mut(
+        &self,
+    ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
+        self.desc_table.borrow_mut()
+    }
+
+    pub fn native_pid(&self) -> Pid {
+        self.native_pid
+    }
+
+    #[track_caller]
+    fn first_live_thread(&self, root: &Root) -> Option<Ref<RootedRc<RootedRefCell<Thread>>>> {
+        Ref::filter_map(self.threads.borrow(), |threads| {
+            threads.values().next().map(|thread| {
+                // There shouldn't be any non-running threads in the table.
+                assert!(thread.borrow(root).is_running());
+                thread
+            })
+        })
+        .ok()
+    }
+
+    /// Returns a dynamically borrowed reference to the first live thread.
+    /// This is meant primarily for the MemoryManager.
+    #[track_caller]
+    pub fn first_live_thread_borrow(
+        &self,
+        root: &Root,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
+        self.first_live_thread(root)
+    }
+
+    #[track_caller]
+    fn thread(&self, virtual_tid: ThreadId) -> Option<Ref<RootedRc<RootedRefCell<Thread>>>> {
+        Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
+    }
+
+    #[track_caller]
+    pub fn thread_borrow(
+        &self,
+        virtual_tid: ThreadId,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
+        self.thread(virtual_tid)
+    }
+
+    // Disposes of `self`, returning the internal `Common` for reuse.
+    // Used internally when changing states.
+    fn into_common(self) -> Common {
         // There shouldn't be any outstanding unsafe borrows when changing
         // states, since that would indicate C code might still have a pointer
         // to memory.
@@ -282,13 +359,154 @@ impl RunnableProcess {
 
         self.common
     }
+
+    /// Starts the CPU delay timer.
+    /// Panics if the timer is already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn start_cpu_delay_timer(&self) {
+        self.cpu_delay_timer.borrow_mut().start()
+    }
+
+    /// Stop the timer and return the most recent (not cumulative) duration.
+    /// Panics if the timer was not already running.
+    #[cfg(feature = "perf_timers")]
+    pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
+        let mut timer = self.cpu_delay_timer.borrow_mut();
+        timer.stop();
+        let total_elapsed = timer.elapsed();
+        let prev_total = self.total_run_time.replace(total_elapsed);
+        let delta = total_elapsed - prev_total;
+
+        if let Some(mut tracker) = host.tracker_borrow_mut() {
+            unsafe {
+                cshadow::tracker_addProcessingTimeNanos(
+                    &mut *tracker,
+                    delta.as_nanos().try_into().unwrap(),
+                )
+            };
+            host.cpu_borrow_mut().add_delay(delta);
+        }
+        delta
+    }
+
+    fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
+        let threads = self.threads.borrow();
+        for thread in threads.values() {
+            let thread = thread.borrow(host.root());
+            {
+                let thread_shmem = thread.shmem();
+                let host_lock = host.shim_shmem_lock_borrow().unwrap();
+                let thread_shmem_protected = thread_shmem.protected.borrow(&host_lock.root);
+                let blocked_signals = thread_shmem_protected.blocked_signals;
+                if blocked_signals.has(signal) {
+                    continue;
+                }
+            }
+            let Some(mut cond) = thread.syscall_condition_mut() else {
+                // Defensively handle this gracefully, but it probably shouldn't happen.
+                // The only thread in the process not blocked on a syscall should be
+                // the current-running thread (if any), but the caller should have
+                // delivered the signal synchronously instead of using this function
+                // in that case.
+                warn!("thread {:?} has no syscall_condition. How?", thread.id());
+                continue;
+            };
+            cond.wakeup_for_signal(host, signal);
+            break;
+        }
+    }
+
+    /// Send the signal described in `siginfo` to `process`. `current_thread`
+    /// should be set if there is one (e.g. if this is being called from a syscall
+    /// handler), and `None` otherwise (e.g. when called from a timer expiration event).
+    ///
+    /// An event will be scheduled to deliver the signal unless `current_thread`
+    /// is set, and belongs to the process `self`, and doesn't have the signal
+    /// blocked.  In that the signal will be processed synchronously when
+    /// returning from the current syscall.
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
+        if siginfo.si_signo == 0 {
+            return;
+        }
+        let signal = Signal::try_from(siginfo.si_signo).unwrap();
+
+        // Scope for `process_shmem_protected`
+        {
+            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+            let mut process_shmem_protected = self
+                .shim_shared_mem_block
+                .protected
+                .borrow_mut(&host_shmem.root);
+            // SAFETY: We don't try to call any of the function pointers.
+            let action = unsafe { process_shmem_protected.signal_action(signal) };
+            let handler = action.handler();
+            if handler == nixsignal::SigHandler::SigIgn
+                || (handler == nixsignal::SigHandler::SigDfl
+                    && defaultaction(signal) == ShdKernelDefaultAction::IGN)
+            {
+                return;
+            }
+
+            if process_shmem_protected.pending_signals.has(signal) {
+                // Signal is already pending. From signal(7):In the case where a
+                // standard signal is already pending, the siginfo_t structure (see
+                // sigaction(2)) associated with that signal is not overwritten on
+                // arrival of subsequent instances of the same signal.
+                return;
+            }
+            process_shmem_protected.pending_signals.add(signal);
+            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo);
+        }
+
+        if let Some(thread) = current_thread {
+            if thread.process_id() == self.common.id() {
+                let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+                let threadmem = thread.shmem();
+                let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
+                if !threadprotmem.blocked_signals.has(signal) {
+                    // Target process is this process, and current thread hasn't blocked
+                    // the signal.  It will be delivered to this thread when it resumes.
+                    return;
+                }
+            }
+        }
+
+        self.interrupt_with_signal(host, signal);
+    }
+
+    /// Adds a new thread to the process and schedules it to run.
+    /// Intended for use by `clone`.
+    pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
+        let pid = self.common.id();
+        let tid = thread.borrow(host.root()).id();
+        self.threads.borrow_mut().insert(tid, thread);
+
+        // Schedule thread to start. We're giving the caller's reference to thread
+        // to the TaskRef here, which is why we don't increment its ref count to
+        // create the TaskRef, but do decrement it on cleanup.
+        let task = TaskRef::new(move |host| {
+            host.resume(pid, tid);
+        });
+        host.schedule_task_with_delay(task, SimulationTime::ZERO);
+    }
+
+    /// Shared memory for this process.
+    pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
+        &self.shim_shared_mem_block
+    }
 }
 
 /// A process that has exited.
-struct ZombieProcess {
+pub struct ZombieProcess {
     common: Common,
 
     return_code: i32,
+}
+
+impl ZombieProcess {
+    pub fn return_code(&self) -> i32 {
+        self.return_code
+    }
 }
 
 /// Inner implementation of a simulated process.
@@ -317,10 +535,6 @@ impl ProcessState {
             ProcessState::Runnable(_) => None,
             ProcessState::Zombie(z) => Some(z),
         }
-    }
-
-    pub fn name(&self) -> &str {
-        self.common().name()
     }
 }
 
@@ -364,11 +578,21 @@ impl Process {
         .ok()
     }
 
+    /// Borrows a reference to the internal [`RunnableProcess`] if `self` is runnable.
+    pub fn borrow_runnable(&self) -> Option<impl Deref<Target = RunnableProcess> + '_> {
+        self.runnable()
+    }
+
     fn zombie(&self) -> Option<Ref<ZombieProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
             state.as_ref().unwrap().zombie()
         })
         .ok()
+    }
+
+    /// Borrows a reference to the internal [`ZombieProcess`] if `self` is a zombie.
+    pub fn borrow_zombie(&self) -> Option<impl Deref<Target = ZombieProcess> + '_> {
+        self.zombie()
     }
 
     /// Spawn a new process. The process will be runnable via [`Self::resume`]
@@ -505,38 +729,16 @@ impl Process {
         self.common().host_id
     }
 
-    /// Starts the CPU delay timer.
-    /// Panics if the timer is already running.
+    /// Deprecated wrapper for `RunnableProcess::start_cpu_delay_timer`
     #[cfg(feature = "perf_timers")]
     pub fn start_cpu_delay_timer(&self) {
-        self.runnable()
-            .unwrap()
-            .cpu_delay_timer
-            .borrow_mut()
-            .start()
+        self.runnable().unwrap().start_cpu_delay_timer()
     }
 
-    /// Stop the timer and return the most recent (not cumulative) duration.
-    /// Panics if the timer was not already running.
+    /// Deprecated wrapper for `RunnableProcess::stop_cpu_delay_timer`
     #[cfg(feature = "perf_timers")]
     pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
-        let runnable = self.runnable().unwrap();
-        let mut timer = runnable.cpu_delay_timer.borrow_mut();
-        timer.stop();
-        let total_elapsed = timer.elapsed();
-        let prev_total = runnable.total_run_time.replace(total_elapsed);
-        let delta = total_elapsed - prev_total;
-
-        if let Some(mut tracker) = host.tracker_borrow_mut() {
-            unsafe {
-                cshadow::tracker_addProcessingTimeNanos(
-                    &mut *tracker,
-                    delta.as_nanos().try_into().unwrap(),
-                )
-            };
-            host.cpu_borrow_mut().add_delay(delta);
-        }
-        delta
+        self.runnable().unwrap().stop_cpu_delay_timer(host)
     }
 
     pub fn thread_group_leader_id(&self) -> ThreadId {
@@ -545,7 +747,7 @@ impl Process {
     }
 
     /// Creates the thread group leader. After return, the thread group leader
-    /// will be in `self.threads` and is ready to be run with `self.resume`.
+    /// is ready to be run.
     fn create_and_exec_thread_group_leader(
         host: &Host,
         process_id: ProcessId,
@@ -730,113 +932,45 @@ impl Process {
     ///
     /// Should only be called from [`Host::free_all_applications`].
     pub fn stop(&self, host: &Host) {
-        if !self.is_running() {
-            debug!("process {} has already stopped", &*self.name());
-            return;
-        }
-
-        info!("terminating process {}", &*self.name());
-
-        #[cfg(feature = "perf_timers")]
-        self.start_cpu_delay_timer();
-
-        self.terminate(host);
-
-        #[cfg(feature = "perf_timers")]
+        // Scope for `runnable`
         {
-            let delay = self.stop_cpu_delay_timer(host);
-            info!("process '{}' stopped in {:?}", &*self.name(), delay);
-        }
-        #[cfg(not(feature = "perf_timers"))]
-        info!("process '{}' stopped", &*self.name());
-    }
-
-    /// Send the signal described in `siginfo` to `process`. `current_thread`
-    /// should be set if there is one (e.g. if this is being called from a syscall
-    /// handler), and `None` otherwise (e.g. when called from a timer expiration event).
-    ///
-    /// An event will be scheduled to deliver the signal unless `current_thread`
-    /// is set, and belongs to the process `self`, and doesn't have the signal
-    /// blocked.  In that the signal will be processed synchronously when
-    /// returning from the current syscall.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
-        if siginfo.si_signo == 0 {
-            return;
-        }
-        let signal = Signal::try_from(siginfo.si_signo).unwrap();
-
-        {
-            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
             let Some(runnable) = self.runnable() else {
-                debug!("Process {} no longer running", &*self.name());
+                debug!("process {} has already stopped", &*self.name());
                 return;
             };
-            let mut process_shmem_protected = runnable
-                .shim_shared_mem_block
-                .protected
-                .borrow_mut(&host_shmem.root);
-            // SAFETY: We don't try to call any of the function pointers.
-            let action = unsafe { process_shmem_protected.signal_action(signal) };
-            let handler = action.handler();
-            if handler == nixsignal::SigHandler::SigIgn
-                || (handler == nixsignal::SigHandler::SigDfl
-                    && defaultaction(signal) == ShdKernelDefaultAction::IGN)
+            info!("terminating process {}", &*self.name());
+
+            #[cfg(feature = "perf_timers")]
+            runnable.start_cpu_delay_timer();
+
+            if let Err(err) = nix::sys::signal::kill(runnable.native_pid(), Signal::SIGKILL) {
+                warn!("kill: {:?}", err);
+            }
+
+            #[cfg(feature = "perf_timers")]
             {
-                return;
+                let delay = runnable.stop_cpu_delay_timer(host);
+                info!("process '{}' stopped in {:?}", &*self.name(), delay);
             }
-
-            if process_shmem_protected.pending_signals.has(signal) {
-                // Signal is already pending. From signal(7):In the case where a
-                // standard signal is already pending, the siginfo_t structure (see
-                // sigaction(2)) associated with that signal is not overwritten on
-                // arrival of subsequent instances of the same signal.
-                return;
-            }
-            process_shmem_protected.pending_signals.add(signal);
-            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo);
+            #[cfg(not(feature = "perf_timers"))]
+            info!("process '{}' stopped", &*self.name());
         }
 
-        if let Some(thread) = current_thread {
-            if thread.process_id() == self.id() {
-                let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-                let threadmem = thread.shmem();
-                let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
-                if !threadprotmem.blocked_signals.has(signal) {
-                    // Target process is this process, and current thread hasn't blocked
-                    // the signal.  It will be delivered to this thread when it resumes.
-                    return;
-                }
-            }
-        }
-
-        self.interrupt_with_signal(host, signal);
+        // Mutates `self.state`, so we need to have dropped `runnable`.
+        self.handle_process_exit(host, true);
     }
 
-    fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
-        let runnable = self.runnable().unwrap();
-        let threads = runnable.threads.borrow();
-        for thread in threads.values() {
-            let thread = thread.borrow(host.root());
-            {
-                let thread_shmem = thread.shmem();
-                let host_lock = host.shim_shmem_lock_borrow().unwrap();
-                let thread_shmem_protected = thread_shmem.protected.borrow(&host_lock.root);
-                let blocked_signals = thread_shmem_protected.blocked_signals;
-                if blocked_signals.has(signal) {
-                    continue;
-                }
+    /// See `RunnableProcess::signal`.
+    ///
+    /// No-op if the `self` is a `ZombieProcess`.
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
+        // Using full-match here to force update if we add more states later.
+        match self.state.borrow().as_ref().unwrap() {
+            ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo),
+            ProcessState::Zombie(_) => {
+                // Sending a signal to a zombie process is a no-op.
+                debug!("Process {} no longer running", &*self.name());
             }
-            let Some(mut cond) = thread.syscall_condition_mut() else {
-                // Defensively handle this gracefully, but it probably shouldn't happen.
-                // The only thread in the process not blocked on a syscall should be
-                // the current-running thread (if any), but the caller should have
-                // delivered the signal synchronously instead of using this function
-                // in that case.
-                warn!("thread {:?} has no syscall_condition. How?", thread.id());
-                continue;
-            };
-            cond.wakeup_for_signal(host, signal);
-            break;
         }
     }
 
@@ -894,6 +1028,7 @@ impl Process {
         Ref::map(self.common(), |c| c.plugin_name.to_str().unwrap())
     }
 
+    /// Deprecated wrapper for `RunnableProcess::memory_borrow_mut`
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
         std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
@@ -901,6 +1036,7 @@ impl Process {
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::memory_borrow`
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
         std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
@@ -908,24 +1044,17 @@ impl Process {
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::strace_logging_options`
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.runnable()
-            .unwrap()
-            .strace_logging
-            .as_ref()
-            .map(|x| x.options)
+        self.runnable().unwrap().strace_logging_options()
     }
 
-    /// If strace logging is disabled, this function will do nothing and return `None`.
+    /// Deprecated wrapper for `RunnableProcess::with_strace_file`
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        let Some(ref strace_logging) = self.runnable().unwrap().strace_logging else {
-            return None;
-        };
-
-        let mut file = strace_logging.file.borrow_mut();
-        Some(f(&mut file))
+        self.runnable().unwrap().with_strace_file(f)
     }
 
+    /// Deprecated wrapper for `RunnableProcess::descriptor_table_borrow`
     #[track_caller]
     pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
         std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
@@ -933,6 +1062,7 @@ impl Process {
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::descriptor_table_borrow_mut`
     #[track_caller]
     pub fn descriptor_table_borrow_mut(
         &self,
@@ -942,10 +1072,12 @@ impl Process {
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::native_pid`
     pub fn native_pid(&self) -> Pid {
         self.runnable().unwrap().native_pid
     }
 
+    /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow`
     #[track_caller]
     pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
         std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
@@ -953,6 +1085,7 @@ impl Process {
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow_mut`
     #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
         std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
@@ -960,50 +1093,33 @@ impl Process {
         })
     }
 
-    /// Returns a dynamically borrowed reference to the first live thread.
-    /// This is meant primarily for the MemoryManager.
+    /// Deprecated wrapper for `RunnableProcess::first_live_thread_borrow`
     #[track_caller]
     pub fn first_live_thread_borrow(
         &self,
         root: &Root,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
         std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
-            Ref::filter_map(runnable.threads.borrow(), |threads| {
-                threads.values().next().map(|thread| {
-                    // There shouldn't be any non-running threads in the table.
-                    assert!(thread.borrow(root).is_running());
-                    thread
-                })
-            })
-            .ok()
+            runnable.first_live_thread(root)
         })
     }
 
+    /// Deprecated wrapper for `RunnableProcess::thread_borrow`
     pub fn thread_borrow(
         &self,
         virtual_tid: ThreadId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
         std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
-            Ref::filter_map(runnable.threads.borrow(), |threads| {
-                threads.get(&virtual_tid)
-            })
-            .ok()
+            runnable.thread(virtual_tid)
         })
     }
 
-    /// This cleans up memory references left over from legacy C code; usually
-    /// a syscall handler.
-    ///
-    /// Writes the leftover mutable ref to memory (if any), and frees
-    /// all memory refs.
+    /// Deprecated wrapper for [`RunnableProcess::free_unsafe_borrows_flush`].
     pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
         self.runnable().unwrap().free_unsafe_borrows_flush()
     }
 
-    /// This cleans up memory references left over from legacy C code; usually
-    /// a syscall handler.
-    ///
-    /// Frees all memory refs without writing back to memory.
+    /// Deprecated wrapper for [`RunnableProcess::free_unsafe_borrows_noflush`].
     pub fn free_unsafe_borrows_noflush(&self) {
         self.runnable().unwrap().free_unsafe_borrows_noflush()
     }
@@ -1052,14 +1168,16 @@ impl Process {
             runnable.total_run_time.get()
         );
 
-        let mut descriptor_table = runnable.desc_table.borrow_mut();
-        descriptor_table.shutdown_helper();
-        let descriptors = descriptor_table.remove_all();
-        CallbackQueue::queue_and_run(|cb_queue| {
-            for desc in descriptors {
-                desc.close(host, cb_queue);
-            }
-        });
+        {
+            let mut descriptor_table = runnable.desc_table.borrow_mut();
+            descriptor_table.shutdown_helper();
+            let descriptors = descriptor_table.remove_all();
+            CallbackQueue::queue_and_run(|cb_queue| {
+                for desc in descriptors {
+                    desc.close(host, cb_queue);
+                }
+            });
+        }
 
         use nix::sys::wait::WaitStatus;
         let return_code = match nix::sys::wait::waitpid(runnable.native_pid, None) {
@@ -1105,8 +1223,6 @@ impl Process {
         };
 
         // if there was no error or was intentionally killed
-        // TODO: once we've implemented clean shutdown via SIGTERM,
-        //       consider treating death by SIGKILL as a plugin error
         if return_code == 0 || killed_by_shadow {
             info!("{}", main_result_string);
         } else {
@@ -1114,41 +1230,15 @@ impl Process {
             Worker::increment_plugin_error_count();
         }
 
-        drop(descriptor_table);
         *opt_state = Some(ProcessState::Zombie(ZombieProcess {
             common: runnable.into_common(),
             return_code,
         }))
     }
 
-    fn terminate(&self, host: &Host) {
-        if !self.is_running() {
-            trace!("Already dead");
-        }
-
-        trace!("Terminating");
-        if let Err(err) = nix::sys::signal::kill(self.native_pid(), Signal::SIGKILL) {
-            warn!("kill: {:?}", err);
-        }
-
-        self.handle_process_exit(host, true);
-    }
-
-    /// Adds a new thread to the process and schedules it to run.
-    /// Intended for use by `clone`.
+    /// Deprecated wrapper for `RunnableProcess::add_thread`
     pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
-        let pid = self.id();
-        let tid = thread.borrow(host.root()).id();
-        let runnable = self.runnable().unwrap();
-        runnable.threads.borrow_mut().insert(tid, thread);
-
-        // Schedule thread to start. We're giving the caller's reference to thread
-        // to the TaskRef here, which is why we don't increment its ref count to
-        // create the TaskRef, but do decrement it on cleanup.
-        let task = TaskRef::new(move |host| {
-            host.resume(pid, tid);
-        });
-        host.schedule_task_with_delay(task, SimulationTime::ZERO);
+        self.runnable().unwrap().add_thread(host, thread)
     }
 
     /// FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -1161,7 +1251,7 @@ impl Process {
             .store(Worker::current_time().unwrap(), Ordering::Relaxed);
     }
 
-    /// Shared memory for this process.
+    /// Deprecated wrapper for `RunnableProcess::shmem`
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
