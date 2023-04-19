@@ -14,8 +14,8 @@ and [extension fields](https://docs.docker.com/compose/compose-file/#extension).
 The experimental configuration option that previously enabled this support,
 `use_extended_yaml`, has been removed.
 
-* Removed the `host_defaults.pcap_directory` configuration option and replaced
-it with a new `host_defaults.pcap_enabled` option.
+* Removed the host `pcap_directory` configuration option and replaced
+it with a new `pcap_enabled` option.
 
 * A host's data files (files in `<data-dir>/hosts/<hostname>/`) are no longer
 prefixed with the hostname. For example a file that was previously named
@@ -47,6 +47,9 @@ semicolon-delimited string.
 
 * Removed the `quantity` options for hosts and processes. It's now recommended
 to use YAML anchors and merge keys instead.
+
+* Renamed the `host_defaults` configuration field to `host_option_defaults` and
+renamed the host's `options` field to `host_options`.
 
 MINOR changes (backwards-compatible):
 

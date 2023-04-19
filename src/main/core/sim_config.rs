@@ -252,16 +252,20 @@ fn build_host(
             .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
 
         ip_addr: host.ip_addr.map(|x| x.into()),
-        log_level: host.options.log_level.flatten(),
-        pcap_config: host.options.pcap_enabled.unwrap().then_some(PcapConfig {
-            capture_size: host
-                .options
-                .pcap_capture_size
-                .unwrap()
-                .convert(units::SiPrefixUpper::Base)
-                .unwrap()
-                .value(),
-        }),
+        log_level: host.host_options.log_level.flatten(),
+        pcap_config: host
+            .host_options
+            .pcap_enabled
+            .unwrap()
+            .then_some(PcapConfig {
+                capture_size: host
+                    .host_options
+                    .pcap_capture_size
+                    .unwrap()
+                    .convert(units::SiPrefixUpper::Base)
+                    .unwrap()
+                    .value(),
+            }),
 
         // some options come from the config options and not the host options
         heartbeat_log_level: config.experimental.host_heartbeat_log_level,
