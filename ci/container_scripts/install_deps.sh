@@ -62,6 +62,7 @@ RPM_PACKAGES="
   yum-utils
   diffutils
   util-linux
+  glibc-static
   "
 
 # packages that are only required for our CI environment
