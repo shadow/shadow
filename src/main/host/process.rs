@@ -170,11 +170,6 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 impl Process {
     /// Spawn a new process. The process will be runnable via [`Self::resume`]
     /// once it has been added to the `Host`'s process list.
-    ///
-    /// The returned object shouldn't be moved out of its enclosing RootedRc.
-    /// Doing so breaks an internal weak reference to that RootedRc, which we
-    /// use to access the enclosing RootedRc and RootedRefCell when interacting
-    /// with C APIs.
     pub fn spawn(
         host: &Host,
         process_id: ProcessId,
