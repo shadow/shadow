@@ -94,6 +94,7 @@ hosts:
 - [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
+- [`experimental.use_worker_spinning`](#experimentaluse_worker_spinning)
 - [`host_option_defaults`](#host_option_defaults)
 - [`host_option_defaults.log_level`](#host_option_defaultslog_level)
 - [`host_option_defaults.pcap_capture_size`](#host_option_defaultspcap_capture_size)
@@ -512,6 +513,16 @@ Default: true
 Type: Bool
 
 Count the number of occurrences for individual syscalls.
+
+#### `experimental.use_worker_spinning`
+
+Default: false  
+Type: Bool
+
+Each worker thread will spin in a `sched_yield` loop while waiting for a new task. This is ignored
+if not using the thread-per-core scheduler.
+
+This may improve runtime performance in some environments.
 
 #### `host_option_defaults`
 

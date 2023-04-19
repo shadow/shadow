@@ -317,7 +317,11 @@ impl<'a> Manager<'a> {
                     Scheduler::ThreadPerHost(ThreadPerHostSched::new(&cpus, hosts))
                 }
                 configuration::Scheduler::ThreadPerCore => {
-                    Scheduler::ThreadPerCore(ThreadPerCoreSched::new(&cpus, hosts))
+                    Scheduler::ThreadPerCore(ThreadPerCoreSched::new(
+                        &cpus,
+                        hosts,
+                        self.config.experimental.use_worker_spinning.unwrap(),
+                    ))
                 }
             };
 

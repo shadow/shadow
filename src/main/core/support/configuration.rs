@@ -340,6 +340,13 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_cpu_pinning").unwrap().as_str())]
     pub use_cpu_pinning: Option<bool>,
 
+    /// Each worker thread will spin in a `sched_yield` loop while waiting for a new task. This is
+    /// ignored if not using the thread-per-core scheduler.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_worker_spinning").unwrap().as_str())]
+    pub use_worker_spinning: Option<bool>,
+
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
@@ -468,6 +475,7 @@ impl Default for ExperimentalOptions {
             unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
             use_cpu_pinning: Some(true),
+            use_worker_spinning: Some(false),
             runahead: Some(NullableOption::Value(units::Time::new(
                 1,
                 units::TimePrefix::Milli,

@@ -32,6 +32,8 @@ pub struct LatchWaiter {
     gen: u32,
     /// The read-only generation of the latch.
     latch_gen: Arc<AtomicU32>,
+    /// Should we sched_yield in a spinloop indefinitely rather than futex-wait?
+    spin_yield: bool,
 }
 
 impl Latch {
@@ -45,12 +47,17 @@ impl Latch {
     /// Get a new waiter for this latch. The new waiter will have the same generation as the latch,
     /// meaning that a single [`wait()`](LatchWaiter::wait) will block the waiter until the next
     /// latch [`open()`](Self::open).
-    pub fn waiter(&mut self) -> LatchWaiter {
+    ///
+    /// If `spin_yield` is `true`, the waiter will `sched_yield` in a spinloop indefinitely. If
+    /// `spin_yield` is `false`, the waiter will futex-wait. Setting to `true` may improve
+    /// performance in some workloads.
+    pub fn waiter(&mut self, spin_yield: bool) -> LatchWaiter {
         LatchWaiter {
             // we're the only one who can mutate the atomic,
             // so there's no race condition here
             gen: self.latch_gen.load(Ordering::Relaxed),
             latch_gen: Arc::clone(&self.latch_gen),
+            spin_yield,
         }
     }
 
@@ -106,26 +113,38 @@ impl LatchWaiter {
                 _ => panic!("Latch has been opened multiple times without us waiting"),
             }
 
-            let futex_word: &AtomicU32 = self.latch_gen.as_ref();
+            if !self.spin_yield {
+                let futex_word: &AtomicU32 = self.latch_gen.as_ref();
 
-            let rv = Errno::result(unsafe {
-                libc::syscall(
-                    libc::SYS_futex,
-                    futex_word as *const AtomicU32 as *const u32,
-                    libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
-                    latch_gen,
-                    std::ptr::null() as *const libc::timespec,
-                    std::ptr::null_mut() as *mut u32,
-                    0u32,
-                )
-            });
-            assert!(
-                rv.is_ok() || rv == Err(Errno::EAGAIN) || rv == Err(Errno::EINTR),
-                "FUTEX_WAIT failed with {rv:?}"
-            );
+                let rv = Errno::result(unsafe {
+                    libc::syscall(
+                        libc::SYS_futex,
+                        futex_word as *const AtomicU32 as *const u32,
+                        libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
+                        latch_gen,
+                        std::ptr::null() as *const libc::timespec,
+                        std::ptr::null_mut() as *mut u32,
+                        0u32,
+                    )
+                });
+                assert!(
+                    rv.is_ok() || rv == Err(Errno::EAGAIN) || rv == Err(Errno::EINTR),
+                    "FUTEX_WAIT failed with {rv:?}"
+                );
+            } else {
+                // we don't know if a pause instruction is beneficial or not here, but it doesn't
+                // seem to hurt performance
+                // https://www.intel.com/content/www/us/en/docs/cpp-compiler/developer-guide-reference/2021-9/pause-intrinsic.html
+                std::hint::spin_loop();
+                std::thread::yield_now();
+            }
         }
 
         self.gen = self.gen.wrapping_add(1);
+    }
+
+    pub fn enable_spinning(&mut self, value: bool) {
+        self.spin_yield = value;
     }
 }
 
@@ -141,7 +160,7 @@ mod tests {
     #[test]
     fn test_simple() {
         let mut latch = Latch::new();
-        let mut waiter = latch.waiter();
+        let mut waiter = latch.waiter(false);
 
         latch.open();
         waiter.wait();
@@ -155,7 +174,7 @@ mod tests {
     #[should_panic]
     fn test_multiple_open() {
         let mut latch = Latch::new();
-        let mut waiter = latch.waiter();
+        let mut waiter = latch.waiter(false);
 
         latch.open();
         waiter.wait();
@@ -169,7 +188,7 @@ mod tests {
     #[test]
     fn test_blocking() {
         let mut latch = Latch::new();
-        let mut waiter = latch.waiter();
+        let mut waiter = latch.waiter(false);
 
         let t = std::thread::spawn(move || {
             let start = Instant::now();
@@ -191,7 +210,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let mut latch = Latch::new();
-        let mut waiter = latch.waiter();
+        let mut waiter = latch.waiter(false);
 
         latch.open();
         waiter.wait();
@@ -210,8 +229,8 @@ mod tests {
     fn test_ping_pong() {
         let mut latch_1 = Latch::new();
         let mut latch_2 = Latch::new();
-        let mut waiter_1 = latch_1.waiter();
-        let mut waiter_2 = latch_2.waiter();
+        let mut waiter_1 = latch_1.waiter(true);
+        let mut waiter_2 = latch_2.waiter(false);
 
         let counter = Arc::new(AtomicRefCell::new(0));
         let counter_clone = Arc::clone(&counter);
