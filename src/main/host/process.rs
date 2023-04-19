@@ -36,6 +36,7 @@ use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
+use crate::core::support::configuration::ProcessFinalState;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
@@ -92,22 +93,15 @@ impl From<ProcessId> for libc::pid_t {
 pub enum ExitStatus {
     Normal(i32),
     Signaled(nix::sys::signal::Signal),
-    // We don't expect to ever get this state, but having it gives us an out in
-    // case of an unexpected problem retrieving it.  Having this state seems a
-    // little clearer than wrapper the ExitStatus in an Option, since we want to
-    // indicate that the process exited with unknown state vs the process hasn't
-    // exited.
-    Unknown,
-}
-
-impl From<ExitStatus> for i32 {
-    fn from(value: ExitStatus) -> Self {
-        match value {
-            ExitStatus::Normal(n) => n,
-            ExitStatus::Signaled(s) => utility::return_code_for_signal(s),
-            ExitStatus::Unknown => -1,
-        }
-    }
+    /// The process was killed by Shadow rather than exiting "naturally" as part
+    /// of the simulation. Currently this only happens when the process is still
+    /// running when the simulation stop_time is reached.
+    ///
+    /// A signal delivered via `shutdown_signal` does not result in this status;
+    /// e.g. if the process is killed directly by the signal the ExitStatus will
+    /// be `Signaled`; if the process handles the signal and exits by calling
+    /// `exit`, the status will be `Normal`.
+    StoppedByShadow,
 }
 
 #[derive(Debug)]
@@ -189,6 +183,14 @@ impl Common {
 /// A process that is currently runnable.
 pub struct RunnableProcess {
     common: Common,
+
+    // Expected end state, if any. We'll report an error if this is present and
+    // doesn't match the actual exit status.
+    //
+    // This will be None e.g. for processes created via `fork` instead of
+    // spawned directly from Shadow's config file. In those cases it's the
+    // parent's responsibility to reap and interpret the exit status.
+    expected_final_state: Option<ProcessFinalState>,
 
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
@@ -628,6 +630,7 @@ impl Process {
         argv: Vec<CString>,
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
+        expected_final_state: ProcessFinalState,
     ) -> RootedRc<RootedRefCell<Process>> {
         let desc_table = RefCell::new(DescriptorTable::new());
         let itimer_real = RefCell::new(Timer::new(move |host| {
@@ -723,6 +726,7 @@ impl Process {
                 Self {
                     state: RefCell::new(Some(ProcessState::Runnable(RunnableProcess {
                         common,
+                        expected_final_state: Some(expected_final_state),
                         shim_shared_mem_block,
                         memory_manager: Box::new(RefCell::new(memory_manager)),
                         desc_table,
@@ -1202,53 +1206,61 @@ impl Process {
         }
 
         use nix::sys::wait::WaitStatus;
-        let exit_status = match nix::sys::wait::waitpid(runnable.native_pid, None) {
-            Ok(WaitStatus::Exited(_pid, code)) => ExitStatus::Normal(code),
-            Ok(WaitStatus::Signaled(_pid, signal, _core_dump)) => ExitStatus::Signaled(signal),
-            Ok(status) => {
-                warn!("Unexpected status: {status:?}");
-                ExitStatus::Unknown
+        let exit_status = match (
+            killed_by_shadow,
+            nix::sys::wait::waitpid(runnable.native_pid, None),
+        ) {
+            (true, Ok(WaitStatus::Signaled(_pid, Signal::SIGKILL, _core_dump))) => {
+                ExitStatus::StoppedByShadow
             }
-            Err(e) => {
-                warn!("waitpid: {e:?}");
-                ExitStatus::Unknown
+            (true, waitstatus) => {
+                warn!("Unexpected waitstatus after killed by shadow: {waitstatus:?}");
+                ExitStatus::StoppedByShadow
+            }
+            (false, Ok(WaitStatus::Exited(_pid, code))) => ExitStatus::Normal(code),
+            (false, Ok(WaitStatus::Signaled(_pid, signal, _core_dump))) => {
+                ExitStatus::Signaled(signal)
+            }
+            (false, Ok(status)) => {
+                panic!("Unexpected status: {status:?}");
+            }
+            (false, Err(e)) => {
+                panic!("waitpid: {e:?}");
             }
         };
         let exitcode_path = runnable.common.output_file_name("exitcode");
-        let exitcode_contents = if killed_by_shadow {
-            // Process never died during the simulation; shadow chose to kill it;
-            // typically because the simulation end time was reached.
-            // Write out an empty exitcode file.
-            String::new()
-        } else {
-            format!("{}", i32::from(exit_status))
+        let exitcode_contents = match exit_status {
+            ExitStatus::StoppedByShadow => String::new(),
+            ExitStatus::Normal(n) => format!("{n}"),
+            ExitStatus::Signaled(s) => format!("{}", utility::return_code_for_signal(s)),
         };
         if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
             warn!("Couldn't write exitcode file: {e:?}");
         }
 
-        let main_result_string = {
-            let mut s = format!("process '{name}'", name = runnable.common.name());
-            if killed_by_shadow {
-                write!(s, " killed by Shadow").unwrap();
-            } else {
-                write!(s, " exited with status {exit_status:?}").unwrap();
-                if exit_status == ExitStatus::Normal(libc::EXIT_SUCCESS) {
-                    write!(s, " (success)").unwrap();
+        let (main_result_string, log_level) = {
+            let mut s = format!(
+                "process '{name}' exited with status {exit_status:?}",
+                name = runnable.common.name()
+            );
+            if let Some(expected_final_state) = runnable.expected_final_state {
+                let actual_final_state = match exit_status {
+                    ExitStatus::Normal(i) => ProcessFinalState::Exited(i),
+                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled(s.into()),
+                    ExitStatus::StoppedByShadow => ProcessFinalState::Running,
+                };
+                if expected_final_state == actual_final_state {
+                    (s, log::Level::Info)
                 } else {
-                    write!(s, " (error)").unwrap();
+                    Worker::increment_plugin_error_count();
+                    write!(s, "; expected end state was {expected_final_state} but was {actual_final_state}").unwrap();
+                    (s, log::Level::Error)
                 }
+            } else {
+                (s, log::Level::Info)
             }
-            s
         };
-
-        // if there was no error or was intentionally killed
-        if exit_status == ExitStatus::Normal(libc::EXIT_SUCCESS) || killed_by_shadow {
-            info!("{}", main_result_string);
-        } else {
-            warn!("{}", main_result_string);
-            Worker::increment_plugin_error_count();
-        }
+        log::log!(log_level, "{}", main_result_string);
 
         *opt_state = Some(ProcessState::Zombie(ZombieProcess {
             common: runnable.into_common(),

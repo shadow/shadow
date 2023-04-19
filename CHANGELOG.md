@@ -51,6 +51,10 @@ to use YAML anchors and merge keys instead.
 * Renamed the `host_defaults` configuration field to `host_option_defaults` and
 renamed the host's `options` field to `host_options`.
 
+* Shadow now interprets a process still running at the end of the simulation as
+an error by default. This can be overridden by the new per-process option
+`expected_final_state`. https://github.com/shadow/shadow/pull/2886
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

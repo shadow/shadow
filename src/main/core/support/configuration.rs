@@ -554,6 +554,36 @@ impl Default for HostDefaultOptions {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcessFinalState {
+    Exited(i32),
+    Signaled(Signal),
+    Running,
+}
+
+impl Default for ProcessFinalState {
+    fn default() -> Self {
+        Self::Exited(0)
+    }
+}
+
+impl std::fmt::Display for ProcessFinalState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // We use the yaml serialization here so that when reporting that an
+        // expected state didn't match the actual state, it's clear how to set
+        // the expected state in the config file to match the actual state if
+        // desired.
+        //
+        // The current enum works OK for this since there are no internal
+        // newlines in the serialization; if there are some later we might wand
+        // to serialize to json instead, which can always be put on a single
+        // line and should also be valid yaml.
+        let s = serde_yaml::to_string(self).or(Err(std::fmt::Error))?;
+        write!(f, "{}", s.trim())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProcessOptions {
@@ -579,6 +609,11 @@ pub struct ProcessOptions {
     /// The signal that will be sent to the process at `shutdown_time`
     #[serde(default = "default_shutdown_signal")]
     pub shutdown_signal: Signal,
+
+    /// The expected final state of the process. Shadow will report an error
+    /// if the actual state doesn't match.
+    #[serde(default)]
+    pub expected_final_state: ProcessFinalState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -961,8 +996,14 @@ impl<'de> serde::Deserialize<'de> for ProcessArgs {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Signal(nix::sys::signal::Signal);
+
+impl From<nix::sys::signal::Signal> for Signal {
+    fn from(value: nix::sys::signal::Signal) -> Self {
+        Self(value)
+    }
+}
 
 impl serde::Serialize for Signal {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1015,6 +1056,12 @@ impl<'de> serde::Deserialize<'de> for Signal {
         }
 
         deserializer.deserialize_any(SignalVisitor)
+    }
+}
+
+impl std::fmt::Display for Signal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

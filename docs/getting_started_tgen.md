@@ -71,6 +71,9 @@ hosts:
       # See notes below explaining Shadow's directory structure.
       args: ../../../tgen.server.graphml.xml
       start_time: 1s
+      # Tell shadow to expect this process to still be running at the end of the
+      # simulation.
+      expected_final_state: !running
   client1: &client_host
     network_node_id: 0
     processes:

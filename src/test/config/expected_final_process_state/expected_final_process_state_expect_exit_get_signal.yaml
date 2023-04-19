@@ -1,0 +1,16 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  mytesthost:
+    network_node_id: 0
+    processes:
+    - path: sleep
+      args: '10'
+      start_time: 1
+      shutdown_time: 2
+      shutdown_signal: SIGINT
+      # Intentionally incorrect; testing that Shadow correctly fails.
+      expected_final_state: !exited 0

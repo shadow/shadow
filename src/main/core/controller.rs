@@ -67,7 +67,7 @@ impl<'a> Controller<'a> {
 
         if num_plugin_errors > 0 {
             return Err(anyhow::anyhow!(
-                "{num_plugin_errors} managed processes exited with a non-zero error code"
+                "{num_plugin_errors} managed processes in unexpected final state"
             ));
         }
 
