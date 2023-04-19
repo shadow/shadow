@@ -1283,6 +1283,17 @@ impl Process {
     }
 }
 
+impl Drop for Process {
+    fn drop(&mut self) {
+        // Should only be dropped in the zombie state.
+        debug_assert!(self.zombie().is_some());
+        // Shouldn't be dropped while a parent exists.
+        // Assuming for now that once we implement parent processes, we'll clear
+        // the parent id after the child has been reaped or the parent exits.
+        debug_assert!(self.ppid().is_none());
+    }
+}
+
 /// Tracks a memory reference made by a legacy C memory-read API.
 struct UnsafeBorrow {
     // Must come before `manager`, so that it's dropped first, since it's
