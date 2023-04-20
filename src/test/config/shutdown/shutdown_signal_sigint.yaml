@@ -12,3 +12,4 @@ hosts:
       start_time: 1
       shutdown_time: 2
       shutdown_signal: SIGINT
+      expected_final_state: !signaled SIGINT

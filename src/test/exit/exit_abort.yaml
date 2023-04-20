@@ -8,3 +8,4 @@ hosts:
     network_node_id: 0
     processes:
     - path: ./test_exit_abort
+      expected_final_state: !signaled SIGABRT

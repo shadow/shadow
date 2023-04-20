@@ -36,7 +36,6 @@ endmacro()
 add_golang_test_exe(BASENAME test_simple_http)
 add_shadow_tests(
     BASENAME simple_http
-    CHECK_RETVAL false
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)
