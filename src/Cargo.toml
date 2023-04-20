@@ -8,6 +8,7 @@ members = [
     "lib/logger",
     "lib/shmem",
     "lib/shadow-shim-helper-rs",
+    "lib/std-util",
     "lib/syscall-logger",
     "lib/tsc",
     "lib/vasi",

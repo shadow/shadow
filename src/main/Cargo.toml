@@ -46,6 +46,7 @@ shadow_shmem = { path = "../lib/shmem" }
 shadow_tsc = { path = "../lib/tsc" }
 signal-hook = "0.3.15"
 static_assertions = "1.1.0"
+std-util = { path = "../lib/std-util" }
 syscall-logger = { path = "../lib/syscall-logger" }
 tempfile = "3.5"
 vasi-sync = { path = "../lib/vasi-sync" }

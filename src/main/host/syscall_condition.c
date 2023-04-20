@@ -326,6 +326,13 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
         return;
     }
 
+    if (!process_isRunning(proc)) {
+#ifdef DEBUG
+        _syscallcondition_logListeningState(cond, proc, "ignored (process no longer running)");
+#endif
+        return;
+    }
+
     const Thread* thread = process_getThread(proc, cond->threadId);
     if (!thread) {
 #ifdef DEBUG
