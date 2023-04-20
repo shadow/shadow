@@ -4,7 +4,7 @@ Shadow uses the standard [YAML 1.2](https://yaml.org/spec/1.2.2/) format to
 accept configuration options, with the following extensions:
 
 * [merge keys](https://yaml.org/type/merge.html)
-* [extension fields](https://docs.docker.com/compose/compose-file/#extension))
+* [extension fields](https://docs.docker.com/compose/compose-file/compose-file-v3/#extension-fields)
 
 The following describes Shadow's YAML format and all of the options that Shadow
 supports that can be used to customize a simulation.

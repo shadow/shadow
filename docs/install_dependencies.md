@@ -41,7 +41,7 @@ particularly when compiling with gcc. In this case you will need to explicitly
 install a newer-than-default version of libclang. e.g. on `debian-10` install
 `libclang-13-dev`.
 
-## YUM (Fedora/CentOS):
+## DNF (Fedora):
 
 **Warning:** `dnf` often installs 32-bit (`i686`) versions of
 libraries. You may want to use the `--best` option to make sure you're
