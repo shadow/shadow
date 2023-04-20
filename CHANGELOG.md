@@ -87,6 +87,9 @@ software running under Shadow, since most thread APIs use this attribute.
 error instead of escaping the Shadow simulation.
 https://github.com/shadow/shadow/issues/2718
 
+* Stopped overriding libc's `getcwd` with an incorrect wrapper that was
+returning `-1` instead of `NULL` on errors.
+
 Raw changes since v2.5.0:
 
 * [Merged PRs](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A%3E2023-03-23T18%3A20-0400)

@@ -248,9 +248,7 @@ INTERPOSE(get_robust_list);
 #ifdef SYS_getcpu // kernel entry: num=309 func=sys_getcpu
 INTERPOSE(getcpu);
 #endif
-#ifdef SYS_getcwd // kernel entry: num=79 func=sys_getcwd
-INTERPOSE(getcwd);
-#endif
+// Skipping SYS_getcwd
 #ifdef SYS_getdents // kernel entry: num=78 func=sys_getdents
 INTERPOSE(getdents);
 #endif

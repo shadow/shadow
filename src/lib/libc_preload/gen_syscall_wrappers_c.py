@@ -33,6 +33,9 @@ skip.add('exit')
 skip.add('open')
 skip.add('openat')
 
+# Returns NULL instead of -1 on error
+skip.add('getcwd')
+
 # syscall wrappers that return errors directly instead of through errno.
 direct_errors = set()
 direct_errors.add('clock_nanosleep')
