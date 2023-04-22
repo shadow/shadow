@@ -164,6 +164,11 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=HELP_STR)
 
+    # provide help by default
+    if len(sys.argv) == 1:
+        parser_main.print_help(sys.stderr)
+        sys.exit(1)
+
     # parse arguments after '--' separately
     argv = sys.argv[1:]
     remaining = []
