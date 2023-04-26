@@ -68,6 +68,8 @@ the simulation's `stop_time`.
 * Sub-second configuration values are now allowed for all time-related options,
 including `start_time`, `stop_time`, etc.
 
+* Removed the `--profile`, `--include`, and `--library` setup script options.
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to
