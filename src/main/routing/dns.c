@@ -283,6 +283,9 @@ gchar* dns_getHostsFilePath(DNS* dns) {
 
     g_mutex_unlock(&dns->lock);
 
+    // TODO: there's a race condition here where another thread could clean up
+    // and invalidate this hosts file path before the calling code can use this
+    // path
     return path;
 }
 
