@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
@@ -30,11 +31,7 @@ struct _DNS {
     GHashTable* addressByIP;
     GHashTable* addressByName;
 
-    struct {
-        int filenum;
-        char* path;
-        bool isStale;
-    } hosts;
+    int hosts_file_fd;
 
     MAGIC_DECLARE;
 };
@@ -150,7 +147,10 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
     }
 
     /* Any existing hosts file needs to be (lazily) updated. */
-    dns->hosts.isStale = true;
+    if (dns->hosts_file_fd >= 0) {
+        close(dns->hosts_file_fd);
+        dns->hosts_file_fd = -1;
+    }
 
     g_mutex_unlock(&dns->lock);
 
@@ -167,7 +167,10 @@ void dns_deregister(DNS* dns, Address* address) {
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
 
         /* Any existing hosts file needs to be (lazily) updated. */
-        dns->hosts.isStale = true;
+        if (dns->hosts_file_fd >= 0) {
+            close(dns->hosts_file_fd);
+            dns->hosts_file_fd = -1;
+        }
 
         g_mutex_unlock(&dns->lock);
     }
@@ -194,33 +197,6 @@ Address* dns_resolveNameToAddress(DNS* dns, const gchar* name) {
     return result;
 }
 
-static void _dns_cleanupHostsFile(DNS* dns) {
-    MAGIC_ASSERT(dns);
-
-    if(dns->hosts.filenum > 0) {
-        close(dns->hosts.filenum);
-        dns->hosts.filenum = 0;
-    }
-
-    if(dns->hosts.path) {
-        if (unlink(dns->hosts.path) < 0) {
-            debug("unlink unable to remove hosts file at '%s', error %i: %s", dns->hosts.path,
-                  errno, strerror(errno));
-        }
-        free(dns->hosts.path);
-        dns->hosts.path = NULL;
-    }
-}
-
-static char* _dns_getHostsPath(DNS* dns) {
-    char* abspath = NULL;
-    if (asprintf(&abspath, "/tmp/shadow-%i-hosts-XXXXXX", (int)getpid()) < 0) {
-        utility_panic("asprintf could not allocate string for hosts file");
-        abort();
-    }
-    return abspath;
-}
-
 static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
     const gchar* name = key;
     const Address* address = value;
@@ -230,12 +206,12 @@ static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
 
 static bool _dns_writeNewHostsFile(DNS* dns) {
     MAGIC_ASSERT(dns);
-    utility_debugAssert(!dns->hosts.path);
+    utility_debugAssert(dns->hosts_file_fd < 0);
 
-    dns->hosts.path = _dns_getHostsPath(dns);
-    dns->hosts.filenum = mkstemp(dns->hosts.path);
-    if(dns->hosts.filenum < 0) {
-        warning("Unable create temp hosts file, mkstemp() error %i: %s", errno, strerror(errno));
+    dns->hosts_file_fd = memfd_create("shadow hosts file", MFD_CLOEXEC);
+    if (dns->hosts_file_fd < 0) {
+        warning(
+            "Unable create temp hosts file, memfd_create() error %i: %s", errno, strerror(errno));
         return false;
     }
 
@@ -246,18 +222,18 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
 
     size_t amt = 0;
     while(amt < buf->len) {
-        ssize_t ret = write(dns->hosts.filenum, &buf->str[amt], buf->len-amt);
+        ssize_t ret = write(dns->hosts_file_fd, &buf->str[amt], buf->len-amt);
         if(ret < 0 && errno != EAGAIN) {
             warning("Unable to write to temp hosts file, write() error %i: %s", errno, strerror(errno));
             g_string_free(buf, TRUE);
+            close(dns->hosts_file_fd);
+            dns->hosts_file_fd = -1;
             return false;
         } else if(ret >= 0) {
             amt += (size_t)ret;
         }
     }
 
-    info("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
-    dns->hosts.isStale = false;
     g_string_free(buf, TRUE);
     return true;
 }
@@ -265,24 +241,27 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
 gchar* dns_getHostsFilePath(DNS* dns) {
     MAGIC_ASSERT(dns);
 
-    char* path = NULL;
-
     g_mutex_lock(&dns->lock);
 
-    if(dns->hosts.isStale || !dns->hosts.path) {
-        _dns_cleanupHostsFile(dns);
+    if(dns->hosts_file_fd < 0) {
         if(!_dns_writeNewHostsFile(dns)) {
             warning("Unable to create hosts file; expect networking errors.");
-            _dns_cleanupHostsFile(dns);
+            return NULL;
         }
     }
 
-    if(dns->hosts.path) {
-        path = strdup(dns->hosts.path);
-    }
+    int fd = dns->hosts_file_fd;
 
     g_mutex_unlock(&dns->lock);
 
+    char* path = NULL;
+    if (asprintf(&path, "/proc/%ld/fd/%i", (long)getpid(), fd) < 0) {
+        utility_panic("asprintf could not allocate string for hosts file path");
+        abort();
+    }
+
+    // TODO: there's a race condition here where another thread could close and
+    // invalidate this hosts file before the calling code can use this path
     return path;
 }
 
@@ -298,13 +277,18 @@ DNS* dns_new() {
     /* 11.0.0.0 -- 100.0.0.0 is the longest available unrestricted range */
     dns->ipAddressCounter = ntohl(address_stringToIP("11.0.0.0"));
 
+    dns->hosts_file_fd = -1;
+
     return dns;
 }
 
 void dns_free(DNS* dns) {
     MAGIC_ASSERT(dns);
 
-    _dns_cleanupHostsFile(dns);
+    if (dns->hosts_file_fd >= 0) {
+        close(dns->hosts_file_fd);
+        dns->hosts_file_fd = -1;
+    }
 
     g_hash_table_destroy(dns->addressByIP);
     g_hash_table_destroy(dns->addressByName);
