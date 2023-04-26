@@ -75,7 +75,7 @@ def main():
         action="store_true", dest="do_debug",
         default=False)
 
-    parser_build.add_argument('-C', '--coverage',
+    parser_build.add_argument('--coverage',
         help="Enable profiling data for code coverage reporting.",
         action="store_true", dest="do_coverage",
         default=False)
