@@ -20,6 +20,90 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
+static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint epfd,
+                                                     UntypedForeignPtr eventsPtr, gint maxevents,
+                                                     gint timeout_ms) {
+    /* Check input args. */
+    if (maxevents <= 0) {
+        trace("Maxevents %i is not greater than 0.", maxevents);
+        return syscallreturn_makeDoneErrno(EINVAL);
+    }
+
+    /* Get and check the epoll descriptor. */
+    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
+    gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_EPOLL);
+
+    if (errorCode) {
+        trace("Error when trying to validate epoll %i", epfd);
+        return syscallreturn_makeDoneErrno(-errorCode);
+    }
+    utility_debugAssert(desc);
+
+    /* It's now safe to cast. */
+    Epoll* epoll = (Epoll*)desc;
+    utility_debugAssert(epoll);
+
+    /* figure out how many events we actually have so we can request
+     * less memory than maxevents if possible. */
+    guint numReadyEvents = epoll_getNumReadyEvents(epoll);
+
+    trace("Epoll %i says %u events are ready.", epfd, numReadyEvents);
+
+    /* If no events are ready, our behavior depends on timeout. */
+    if (numReadyEvents == 0) {
+        /* Return immediately if timeout is 0 or we were already
+         * blocked for a while and still have no events. */
+        if (timeout_ms == 0 || _syscallhandler_didListenTimeoutExpire(sys)) {
+            trace("No events are ready on epoll %i and we need to return now",
+                  epfd);
+
+            /* Return 0; no events are ready. */
+            return syscallreturn_makeDoneI64(0);
+        } else if (thread_unblockedSignalPending(
+                       _syscallhandler_getThread(sys),
+                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+            return syscallreturn_makeInterrupted(false);
+        } else {
+            trace("No events are ready on epoll %i and we need to block", epfd);
+
+            /* Block on epoll status. An epoll descriptor is readable when it
+             * has events. */
+            Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
+                                        .object = (LegacyFile*)epoll,
+                                        .status = STATUS_FILE_READABLE};
+            SysCallCondition* cond = syscallcondition_new(trigger);
+
+            /* Set timeout, if provided. */
+            if (timeout_ms > 0) {
+                syscallcondition_setTimeout(
+                    cond, _syscallhandler_getHost(sys),
+                    worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+            }
+
+            return syscallreturn_makeBlocked(cond, false);
+        }
+    }
+
+    /* We have events. Get a pointer where we should write the result. */
+    guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
+    size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
+    struct epoll_event* events =
+        process_getWriteablePtr(_syscallhandler_getProcess(sys), eventsPtr, sizeNeeded);
+    if (!events) {
+        return syscallreturn_makeDoneErrno(EFAULT);
+    }
+
+    /* Retrieve the events. */
+    gint nEvents = 0;
+    gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
+    utility_debugAssert(result == 0);
+
+    trace("Found %i ready events on epoll %i.", nEvents, epfd);
+
+    /* Return the number of events that are ready. */
+    return syscallreturn_makeDoneI64(nEvents);
+}
+
 static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
                                              int64_t flags) {
     /* `man 2 epoll_create`: the size argument is ignored, but must be greater
@@ -132,88 +216,14 @@ SyscallReturn syscallhandler_epoll_wait(SysCallHandler* sys, const SysCallArgs* 
     gint maxevents = args->args[2].as_i64;
     gint timeout_ms = args->args[3].as_i64;
 
-    /* Check input args. */
-    if (maxevents <= 0) {
-        trace("Maxevents %i is not greater than 0.", maxevents);
-        return syscallreturn_makeDoneErrno(EINVAL);
-    }
-
-    /* Get and check the epoll descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
-    gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_EPOLL);
-
-    if (errorCode) {
-        trace("Error when trying to validate epoll %i", epfd);
-        return syscallreturn_makeDoneErrno(-errorCode);
-    }
-    utility_debugAssert(desc);
-
-    /* It's now safe to cast. */
-    Epoll* epoll = (Epoll*)desc;
-    utility_debugAssert(epoll);
-
-    /* figure out how many events we actually have so we can request
-     * less memory than maxevents if possible. */
-    guint numReadyEvents = epoll_getNumReadyEvents(epoll);
-
-    trace("Epoll %i says %u events are ready.", epfd, numReadyEvents);
-
-    /* If no events are ready, our behavior depends on timeout. */
-    if (numReadyEvents == 0) {
-        /* Return immediately if timeout is 0 or we were already
-         * blocked for a while and still have no events. */
-        if (timeout_ms == 0 || _syscallhandler_didListenTimeoutExpire(sys)) {
-            trace("No events are ready on epoll %i and we need to return now",
-                  epfd);
-
-            /* Return 0; no events are ready. */
-            return syscallreturn_makeDoneI64(0);
-        } else if (thread_unblockedSignalPending(
-                       _syscallhandler_getThread(sys),
-                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
-            return syscallreturn_makeInterrupted(false);
-        } else {
-            trace("No events are ready on epoll %i and we need to block", epfd);
-
-            /* Block on epoll status. An epoll descriptor is readable when it
-             * has events. */
-            Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (LegacyFile*)epoll,
-                                        .status = STATUS_FILE_READABLE};
-            SysCallCondition* cond = syscallcondition_new(trigger);
-
-            /* Set timeout, if provided. */
-            if (timeout_ms > 0) {
-                syscallcondition_setTimeout(
-                    cond, _syscallhandler_getHost(sys),
-                    worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
-            }
-
-            return syscallreturn_makeBlocked(cond, false);
-        }
-    }
-
-    /* We have events. Get a pointer where we should write the result. */
-    guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
-    size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
-    struct epoll_event* events =
-        process_getWriteablePtr(_syscallhandler_getProcess(sys), eventsPtr, sizeNeeded);
-    if (!events) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    /* Retrieve the events. */
-    gint nEvents = 0;
-    gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
-    utility_debugAssert(result == 0);
-
-    trace("Found %i ready events on epoll %i.", nEvents, epfd);
-
-    /* Return the number of events that are ready. */
-    return syscallreturn_makeDoneI64(nEvents);
+    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ms);
 }
 
 SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
+    gint epfd = args->args[0].as_i64;
+    UntypedForeignPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
+    gint maxevents = args->args[2].as_i64;
+    gint timeout_ms = args->args[3].as_i64;
     UntypedForeignPtr sigmask = args->args[4].as_ptr;
 
     if (sigmask.val != 0) {
@@ -222,5 +232,5 @@ SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs*
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    return syscallhandler_epoll_wait(sys, args);
+    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ms);
 }
