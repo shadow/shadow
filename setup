@@ -45,18 +45,6 @@ def main():
         action="store", dest="prefix",
         default=INSTALL_PREFIX)
 
-    parser_build.add_argument('-i', '--include',
-        help="Deprecated. Use --search instead",
-        metavar="PATH",
-        action="append", dest="extra_includes",
-        default=[])
-
-    parser_build.add_argument('-l', '--library',
-        help="Deprecated. Use --search instead",
-        metavar="PATH",
-        action="append", dest="extra_libraries",
-        default=[])
-
     parser_build.add_argument('-s', '--search',
         # Ultimately sets CMAKE_PREFIX_PATH
         # https://cmake.org/cmake/help/latest/variable/CMAKE_PREFIX_PATH.html#variable:CMAKE_PREFIX_PATH
@@ -75,7 +63,7 @@ def main():
         action="store_true", dest="do_debug",
         default=False)
 
-    parser_build.add_argument('-C', '--coverage',
+    parser_build.add_argument('--coverage',
         help="Enable profiling data for code coverage reporting.",
         action="store_true", dest="do_coverage",
         default=False)
@@ -95,11 +83,6 @@ def main():
         metavar="N", type=int,
         action="store", dest="njobs",
         default=multiprocessing.cpu_count())
-
-    parser_build.add_argument('-o', '--profile',
-        help="Build in gprof profiling information when running Shadow.",
-        action="store_true", dest="do_profile",
-        default=False)
 
     parser_build.add_argument('-t', '--test',
         help="Build tests.",
@@ -219,7 +202,6 @@ def build(args, remaining):
     cmake_cmd += " -DCMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")
     if args.do_verbose: os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
-    if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
     if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
 
@@ -232,20 +214,10 @@ def build(args, remaining):
     # we will run from build directory
     calledDirectory = os.getcwd()
 
-    if len(args.extra_includes) > 0:
-        logging.warning("--include is deprecated. Use --search instead.")
-
-    if len(args.extra_libraries) > 0:
-        logging.warning("--library is deprecated. Use --search instead.")
-
-    # add extra library and include directories as absolution paths
-    make_paths_absolute(args.extra_includes)
-    make_paths_absolute(args.extra_libraries)
+    # add extra search directories as absolution paths
     make_paths_absolute(args.search_prefix)
 
     # make sure we can access them from cmake
-    cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
-    cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
     cmake_cmd += " -DCMAKE_PREFIX_PATH=" + ';'.join(args.search_prefix)
 
     # look for the clang/clang++ compilers

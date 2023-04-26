@@ -37,13 +37,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
-## additional user-defined include directories
-foreach(include ${CMAKE_EXTRA_INCLUDES})
-    include_directories(${include})
-    set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
-endforeach(include)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
-
 message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
 
 ## Mismatched C and C++ compilers can result in confusing errors at link time.
@@ -58,10 +52,6 @@ if((CMAKE_C_COMPILER MATCHES "[/^]clang") AND (CMAKE_C_COMPILER_VERSION VERSION_
 	message(FATAL_ERROR "Clang 13.0.0 is not supported (see https://github.com/shadow/shadow/issues/1741)")
 endif()
 
-## additional user-defined library directories
-foreach(library ${CMAKE_EXTRA_LIBRARIES})
-    link_directories(${library})
-endforeach(library)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 ## use the installed shim path only when shadow is installed
@@ -137,7 +127,6 @@ endif()
 message(STATUS "Building Shadow ${SHADOW_VERSION_STRING_CONF}")
 
 ## setup shadow options
-option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
@@ -147,7 +136,6 @@ option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of va
 MESSAGE(STATUS)
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
-MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_WERROR=${SHADOW_WERROR}")
 MESSAGE(STATUS "SHADOW_COVERAGE=${SHADOW_COVERAGE}")
@@ -200,13 +188,6 @@ endif()
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)
 endif()
-
-if(SHADOW_PROFILE STREQUAL ON)
-    message(STATUS "Building Shadow core with profiling support using '-pg'")
-    add_cflags(-pg)
-    add_definitions(-DDEBUG)
-    ## see src/main/CMakeLists.txt, where we add the -pg flags
-endif(SHADOW_PROFILE STREQUAL ON)
 
 #if(POLICY  CMP0026)
 #    cmake_policy(SET  CMP0026  OLD)
