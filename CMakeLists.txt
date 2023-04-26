@@ -37,13 +37,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
-## additional user-defined include directories
-foreach(include ${CMAKE_EXTRA_INCLUDES})
-    include_directories(${include})
-    set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
-endforeach(include)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
-
 message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
 
 ## Mismatched C and C++ compilers can result in confusing errors at link time.
@@ -58,10 +52,6 @@ if((CMAKE_C_COMPILER MATCHES "[/^]clang") AND (CMAKE_C_COMPILER_VERSION VERSION_
 	message(FATAL_ERROR "Clang 13.0.0 is not supported (see https://github.com/shadow/shadow/issues/1741)")
 endif()
 
-## additional user-defined library directories
-foreach(library ${CMAKE_EXTRA_LIBRARIES})
-    link_directories(${library})
-endforeach(library)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 ## use the installed shim path only when shadow is installed

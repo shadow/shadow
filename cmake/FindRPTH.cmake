@@ -10,25 +10,15 @@
 ## Check for the header files
 
 find_path (RPTH_INCLUDES rpth.h
-  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
+  PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/
   )
-if(NOT RPTH_INCLUDES)
-    find_path (RPTH_INCLUDES rpth.h
-      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ ${CMAKE_EXTRA_INCLUDES}
-      )
-endif(NOT RPTH_INCLUDES)
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
 find_library (RPTH_LIBRARIES NAMES rpth
-  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
+  PATHS /usr/local/lib /usr/lib /lib /sw/lib
   )
-if(NOT RPTH_LIBRARIES)
-    find_library (RPTH_LIBRARIES NAMES rpth
-      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES}
-      )
-endif(NOT RPTH_LIBRARIES)
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
