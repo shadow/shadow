@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
@@ -196,15 +197,6 @@ Address* dns_resolveNameToAddress(DNS* dns, const gchar* name) {
     return result;
 }
 
-static char* _dns_getHostsPath(DNS* dns) {
-    char* abspath = NULL;
-    if (asprintf(&abspath, "/tmp/shadow-%i-hosts-XXXXXX", (int)getpid()) < 0) {
-        utility_panic("asprintf could not allocate string for hosts file");
-        abort();
-    }
-    return abspath;
-}
-
 static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
     const gchar* name = key;
     const Address* address = value;
@@ -216,16 +208,11 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
     MAGIC_ASSERT(dns);
     utility_debugAssert(dns->hosts_file_fd < 0);
 
-    char* path = _dns_getHostsPath(dns);
-    dns->hosts_file_fd = mkstemp(path);
-    if(dns->hosts_file_fd < 0) {
-        warning("Unable create temp hosts file, mkstemp() error %i: %s", errno, strerror(errno));
+    dns->hosts_file_fd = memfd_create("shadow hosts file", MFD_CLOEXEC);
+    if (dns->hosts_file_fd < 0) {
+        warning(
+            "Unable create temp hosts file, memfd_create() error %i: %s", errno, strerror(errno));
         return false;
-    }
-
-    if (unlink(path) < 0) {
-        debug("unlink unable to remove hosts file at '%s', error %i: %s", path, errno,
-              strerror(errno));
     }
 
     GString* buf = g_string_new("127.0.0.1 localhost\n");
@@ -247,7 +234,6 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
         }
     }
 
-    info("Wrote new hosts file of size %zu bytes at path '%s'", amt, path);
     g_string_free(buf, TRUE);
     return true;
 }
