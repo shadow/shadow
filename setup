@@ -96,11 +96,6 @@ def main():
         action="store", dest="njobs",
         default=multiprocessing.cpu_count())
 
-    parser_build.add_argument('-o', '--profile',
-        help="Build in gprof profiling information when running Shadow.",
-        action="store_true", dest="do_profile",
-        default=False)
-
     parser_build.add_argument('-t', '--test',
         help="Build tests.",
         action="store_true", dest="do_test",
@@ -219,7 +214,6 @@ def build(args, remaining):
     cmake_cmd += " -DCMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")
     if args.do_verbose: os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
-    if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
     if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
 
