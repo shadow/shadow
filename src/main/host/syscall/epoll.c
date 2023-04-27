@@ -34,6 +34,16 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
         }
     }
 
+    /* A value of EMUTIME_INVALID will indicate an indefinite timeout. */
+    CEmulatedTime timeout_emutime = EMUTIME_INVALID;
+    if (timeout_simtime != SIMTIME_INVALID) {
+        timeout_emutime = emutime_add_simtime(worker_getCurrentEmulatedTime(), timeout_simtime);
+        if (timeout_emutime == EMUTIME_INVALID) {
+            trace("Epoll wait with invalid timespec (timeout is too large)");
+            return syscallreturn_makeDoneErrno(EINVAL);
+        }
+    }
+
     /* Check input args. */
     if (maxevents <= 0) {
         trace("Maxevents %i is not greater than 0.", maxevents);
@@ -84,9 +94,8 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
             SysCallCondition* cond = syscallcondition_new(trigger);
 
             /* Set timeout, if provided. */
-            if (timeout_simtime != SIMTIME_INVALID) {
-                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys),
-                                            worker_getCurrentEmulatedTime() + timeout_simtime);
+            if (timeout_emutime != EMUTIME_INVALID) {
+                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys), timeout_emutime);
             }
 
             return syscallreturn_makeBlocked(cond, false);
