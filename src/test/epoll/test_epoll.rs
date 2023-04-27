@@ -48,80 +48,84 @@ fn test_threads_edge() -> anyhow::Result<()> {
     let (readfd, writefd) = unistd::pipe()?;
     let epollfd = epoll::epoll_create()?;
 
-    let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
-    epoll::epoll_ctl(
-        epollfd,
-        epoll::EpollOp::EpollCtlAdd,
-        readfd,
-        Some(&mut event),
-    )?;
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            readfd,
+            Some(&mut event),
+        )?;
 
-    let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(100);
 
-    let threads = [
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-    ];
+        let threads = [
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+        ];
 
-    // Wait for readers to block.
-    std::thread::sleep(timeout / 2);
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 2);
 
-    // Make the read-end readable.
-    unistd::write(writefd, &[0])?;
+        // Make the read-end readable.
+        unistd::write(writefd, &[0])?;
 
-    let mut results = threads.map(|t| t.join().unwrap());
+        let mut results = threads.map(|t| t.join().unwrap());
 
-    // One of the threads should have gotten an event, but we don't know which one.
-    // Sort results by number of events received.
-    results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        // One of the threads should have gotten an event, but we don't know which one.
+        // Sort results by number of events received.
+        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
 
-    // One thread should have timed out with no events received.
-    ensure_ord!(results[0].epoll_res, ==, Ok(0));
-    ensure_ord!(results[0].duration, >=, timeout);
+        // One thread should have timed out with no events received.
+        ensure_ord!(results[0].epoll_res, ==, Ok(0));
+        ensure_ord!(results[0].duration, >=, timeout);
 
-    // The other should have gotten a single event.
-    ensure_ord!(results[1].epoll_res, ==, Ok(1));
-    ensure_ord!(results[1].duration, <, timeout);
-    ensure_ord!(results[1].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        // The other should have gotten a single event.
+        ensure_ord!(results[1].epoll_res, ==, Ok(1));
+        ensure_ord!(results[1].duration, <, timeout);
+        ensure_ord!(results[1].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
 
-    Ok(())
+        Ok(())
+    })
 }
 
 fn test_threads_level() -> anyhow::Result<()> {
     let (readfd, writefd) = unistd::pipe()?;
     let epollfd = epoll::epoll_create()?;
 
-    let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0);
-    epoll::epoll_ctl(
-        epollfd,
-        epoll::EpollOp::EpollCtlAdd,
-        readfd,
-        Some(&mut event),
-    )?;
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            readfd,
+            Some(&mut event),
+        )?;
 
-    let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(100);
 
-    let threads = [
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-    ];
+        let threads = [
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+        ];
 
-    // Wait for readers to block.
-    std::thread::sleep(timeout / 2);
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 2);
 
-    // Make the read-end readable.
-    unistd::write(writefd, &[0])?;
+        // Make the read-end readable.
+        unistd::write(writefd, &[0])?;
 
-    let results = threads.map(|t| t.join().unwrap());
+        let results = threads.map(|t| t.join().unwrap());
 
-    // Both waiters should have received the event
-    for res in results {
-        ensure_ord!(res.epoll_res, ==, Ok(1));
-        ensure_ord!(res.duration, <, timeout);
-        ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
-    }
+        // Both waiters should have received the event
+        for res in results {
+            ensure_ord!(res.epoll_res, ==, Ok(1));
+            ensure_ord!(res.duration, <, timeout);
+            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// This test has the threads read from the pipe immediately after returning from `epoll_wait`.
@@ -139,44 +143,45 @@ fn test_threads_level() -> anyhow::Result<()> {
 fn test_threads_level_with_late_read() -> anyhow::Result<()> {
     let (readfd, writefd) = unistd::pipe2(nix::fcntl::OFlag::O_NONBLOCK)?;
     let epollfd = epoll::epoll_create()?;
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, readfd as u64);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            readfd,
+            Some(&mut event),
+        )?;
 
-    let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, readfd as u64);
-    epoll::epoll_ctl(
-        epollfd,
-        epoll::EpollOp::EpollCtlAdd,
-        readfd,
-        Some(&mut event),
-    )?;
+        let timeout = Duration::from_millis(100);
 
-    let timeout = Duration::from_millis(100);
+        let threads = [
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ true)),
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ true)),
+        ];
 
-    let threads = [
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ true)),
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ true)),
-    ];
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 2);
 
-    // Wait for readers to block.
-    std::thread::sleep(timeout / 2);
+        // Make the read-end readable.
+        unistd::write(writefd, &[0])?;
 
-    // Make the read-end readable.
-    unistd::write(writefd, &[0])?;
+        let mut results = threads.map(|t| t.join().unwrap());
 
-    let mut results = threads.map(|t| t.join().unwrap());
+        // One of the threads should have gotten an event, but we don't know which one.
+        // Sort results by number of events received.
+        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
 
-    // One of the threads should have gotten an event, but we don't know which one.
-    // Sort results by number of events received.
-    results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        // One thread should have timed out with no events received.
+        ensure_ord!(results[0].epoll_res, ==, Ok(0));
+        ensure_ord!(results[0].duration, >=, timeout);
 
-    // One thread should have timed out with no events received.
-    ensure_ord!(results[0].epoll_res, ==, Ok(0));
-    ensure_ord!(results[0].duration, >=, timeout);
+        // The other should have gotten a single event.
+        ensure_ord!(results[1].epoll_res, ==, Ok(1));
+        ensure_ord!(results[1].duration, <, timeout);
+        ensure_ord!(results[1].events[0].events(), ==, EpollFlags::EPOLLIN);
 
-    // The other should have gotten a single event.
-    ensure_ord!(results[1].epoll_res, ==, Ok(1));
-    ensure_ord!(results[1].duration, <, timeout);
-    ensure_ord!(results[1].events[0].events(), ==, EpollFlags::EPOLLIN);
-
-    Ok(())
+        Ok(())
+    })
 }
 
 /// This test has the main thread immediately read from the pipe after writing to it.
@@ -195,39 +200,41 @@ fn test_threads_level_with_early_read() -> anyhow::Result<()> {
     let (readfd, writefd) = unistd::pipe2(nix::fcntl::OFlag::O_NONBLOCK)?;
     let epollfd = epoll::epoll_create()?;
 
-    let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, readfd as u64);
-    epoll::epoll_ctl(
-        epollfd,
-        epoll::EpollOp::EpollCtlAdd,
-        readfd,
-        Some(&mut event),
-    )?;
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLIN, readfd as u64);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            readfd,
+            Some(&mut event),
+        )?;
 
-    let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(100);
 
-    let threads = [
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-        std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-    ];
+        let threads = [
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+        ];
 
-    // Wait for readers to block.
-    std::thread::sleep(timeout / 2);
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 2);
 
-    // Make the read-end readable.
-    unistd::write(writefd, &[0])?;
+        // Make the read-end readable.
+        unistd::write(writefd, &[0])?;
 
-    // Immediately make the read-end not-readable.
-    unistd::read(readfd, &mut [0])?;
+        // Immediately make the read-end not-readable.
+        unistd::read(readfd, &mut [0])?;
 
-    let results = threads.map(|t| t.join().unwrap());
+        let results = threads.map(|t| t.join().unwrap());
 
-    // Neither waiter should have received the event
-    for res in results {
-        ensure_ord!(res.epoll_res, ==, Ok(0));
-        ensure_ord!(res.duration, >=, timeout);
-    }
+        // Neither waiter should have received the event
+        for res in results {
+            ensure_ord!(res.epoll_res, ==, Ok(0));
+            ensure_ord!(res.duration, >=, timeout);
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 fn main() -> anyhow::Result<()> {
