@@ -16,6 +16,7 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
+use crate::core::resource_usage;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
@@ -52,6 +53,8 @@ pub struct Manager<'a> {
 
     check_fd_usage: bool,
     check_mem_usage: bool,
+
+    meminfo_file: std::fs::File,
 }
 
 impl<'a> Manager<'a> {
@@ -189,6 +192,9 @@ impl<'a> Manager<'a> {
             )
         })?;
 
+        let meminfo_file =
+            std::fs::File::open("/proc/meminfo").context("Failed to open '/proc/meminfo'")?;
+
         Ok(Self {
             manager_config: Some(manager_config),
             controller,
@@ -204,6 +210,7 @@ impl<'a> Manager<'a> {
             preload_openssl_crypto_path,
             check_fd_usage: true,
             check_mem_usage: true,
+            meminfo_file,
         })
     }
 
@@ -723,13 +730,16 @@ impl<'a> Manager<'a> {
             .collect()
     }
 
-    fn log_heartbeat(&self, now: EmulatedTime) {
+    fn log_heartbeat(&mut self, now: EmulatedTime) {
         let mut resources: libc::rusage = unsafe { std::mem::zeroed() };
         if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut resources) } != 0 {
             let err = nix::errno::Errno::last();
             log::warn!("Unable to get shadow's resource usage: {}", err);
             return;
         }
+
+        // the sysinfo syscall also would give memory usage info, but it's less detailed
+        let mem_info = resource_usage::meminfo(&mut self.meminfo_file).unwrap();
 
         // the linux man page says this is in kilobytes, but it seems to be in kibibytes
         let max_memory = (resources.ru_maxrss as f64) / 1048576.0; // KiB->GiB
@@ -752,6 +762,15 @@ impl<'a> Manager<'a> {
             system_time_minutes,
             resources.ru_nvcsw,
             resources.ru_nivcsw,
+        );
+
+        // there are different ways of calculating system memory usage (for example 'free' will
+        // calculate used memory differently than 'htop'), so we'll log the values we think are
+        // useful, and something parsing the log can calculate whatever it wants
+        log::info!(
+            "System memory usage in bytes at simtime {} ns reported by /proc/meminfo: {}",
+            (now - EmulatedTime::SIMULATION_START).as_nanos(),
+            serde_json::to_string(&mem_info).unwrap(),
         );
     }
 
