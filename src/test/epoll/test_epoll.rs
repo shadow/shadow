@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use nix::{
-    sys::epoll::{self, EpollFlags},
-    unistd,
-};
+use nix::errno::Errno;
+use nix::sys::epoll::{self, EpollFlags};
+use nix::unistd;
+
 use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
 
 #[derive(Debug)]
@@ -250,6 +250,8 @@ fn test_wait_negative_timeout() -> anyhow::Result<()> {
             Some(&mut event),
         )?;
 
+        // first test epoll_wait and epoll_pwait
+
         // epoll_wait(2): "Specifying a timeout of -1 causes epoll_wait() to block indefinitely"
         // This seems to apply to all negative values, not just -1
         for timeout in [-1, -2] {
@@ -262,12 +264,48 @@ fn test_wait_negative_timeout() -> anyhow::Result<()> {
             events.resize(10, epoll::EpollEvent::empty());
 
             let res = epoll::epoll_wait(epoll_fd, &mut events, timeout)?;
-            assert_ne!(res, 0);
+            assert!(res > 0);
 
             assert_eq!(unistd::read(read_fd, &mut [0])?, 1);
 
             t.join().unwrap()?;
         }
+
+        // next test epoll_pwait2
+
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            unistd::write(write_fd, &[0])
+        });
+
+        let mut events = Vec::new();
+        events.resize(10, libc::epoll_event { events: 0, u64: 0 });
+
+        let timeout = libc::timespec {
+            tv_sec: -1,
+            tv_nsec: 0,
+        };
+
+        let res = Errno::result(unsafe {
+            epoll_pwait2(
+                epoll_fd,
+                events.as_mut_ptr(),
+                events.len() as libc::c_int,
+                &timeout,
+                std::ptr::null(),
+            )
+        });
+
+        // negative timeouts for epoll_pwait2 should not be allowed
+        // TODO: remove ENOSYS once all supported platforms use kernel >=5.11
+        assert!(
+            res == Err(Errno::EINVAL)
+                || (!test_utils::running_in_shadow() && res == Err(Errno::ENOSYS))
+        );
+
+        assert_eq!(unistd::read(read_fd, &mut [0])?, 1);
+
+        t.join().unwrap()?;
 
         Ok(())
     })
@@ -314,4 +352,21 @@ fn main() -> anyhow::Result<()> {
     println!("Success.");
 
     Ok(())
+}
+
+unsafe fn epoll_pwait2(
+    epfd: libc::c_int,
+    events: *mut libc::epoll_event,
+    maxevents: libc::c_int,
+    timeout: *const libc::timespec,
+    sigmask: *const libc::sigset_t,
+) -> libc::c_int {
+    libc::syscall(
+        libc::SYS_epoll_pwait2,
+        epfd,
+        events,
+        maxevents,
+        timeout,
+        sigmask,
+    ) as libc::c_int
 }

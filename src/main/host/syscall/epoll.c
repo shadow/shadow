@@ -278,3 +278,35 @@ SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs*
 
     return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ptr);
 }
+
+SyscallReturn syscallhandler_epoll_pwait2(SysCallHandler* sys, const SysCallArgs* args) {
+    gint epfd = args->args[0].as_i64;
+    UntypedForeignPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
+    gint maxevents = args->args[2].as_i64;
+    UntypedForeignPtr timeoutPtr = args->args[3].as_ptr; // struct timespec*
+    UntypedForeignPtr sigmask = args->args[4].as_ptr;
+
+    if (sigmask.val != 0) {
+        error("epoll_pwait2 called with non-null sigmask, which is not yet supported by shadow; "
+              "returning ENOSYS");
+        return syscallreturn_makeDoneErrno(ENOSYS);
+    }
+
+    struct timespec timeout = {0};
+    const struct timespec* timeout_ptr = NULL;
+
+    /* epoll_wait(2): "If timeout is NULL, then epoll_pwait2() can block indefinitely" */
+    if (timeoutPtr.val != 0) {
+        int rv =
+            process_readPtr(_syscallhandler_getProcess(sys), &timeout, timeoutPtr, sizeof(timeout));
+
+        if (rv != 0) {
+            utility_alwaysAssert(rv < 0);
+            return syscallreturn_makeDoneErrno(-rv);
+        }
+
+        timeout_ptr = &timeout;
+    }
+
+    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ptr);
+}
