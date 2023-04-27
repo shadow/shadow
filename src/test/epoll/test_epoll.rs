@@ -237,6 +237,42 @@ fn test_threads_level_with_early_read() -> anyhow::Result<()> {
     })
 }
 
+fn test_wait_negative_timeout() -> anyhow::Result<()> {
+    let (read_fd, write_fd) = unistd::pipe()?;
+    let epoll_fd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epoll_fd, read_fd, write_fd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
+        epoll::epoll_ctl(
+            epoll_fd,
+            epoll::EpollOp::EpollCtlAdd,
+            read_fd,
+            Some(&mut event),
+        )?;
+
+        // epoll_wait(2): "Specifying a timeout of -1 causes epoll_wait() to block indefinitely"
+        // This seems to apply to all negative values, not just -1
+        for timeout in [-1, -2] {
+            let t = std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(100));
+                unistd::write(write_fd, &[0])
+            });
+
+            let mut events = Vec::new();
+            events.resize(10, epoll::EpollEvent::empty());
+
+            let res = epoll::epoll_wait(epoll_fd, &mut events, timeout)?;
+            assert_ne!(res, 0);
+
+            assert_eq!(unistd::read(read_fd, &mut [0])?, 1);
+
+            t.join().unwrap()?;
+        }
+
+        Ok(())
+    })
+}
+
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -247,8 +283,8 @@ fn main() -> anyhow::Result<()> {
     let all_envs = set![TestEnvironment::Libc, TestEnvironment::Shadow];
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![
         ShadowTest::new("threads-edge", test_threads_edge, all_envs.clone()),
-        ShadowTest::new("threads-level", test_threads_level, all_envs),
-        // in Linux these tests have a race condition and don't always pass
+        ShadowTest::new("threads-level", test_threads_level, all_envs.clone()),
+        // in Linux these two tests have a race condition and don't always pass
         ShadowTest::new(
             "threads-level-with-late-read",
             test_threads_level_with_late_read,
@@ -258,6 +294,11 @@ fn main() -> anyhow::Result<()> {
             "threads-level-with-early-read",
             test_threads_level_with_early_read,
             set![TestEnvironment::Shadow],
+        ),
+        ShadowTest::new(
+            "test_wait_negative_timeout",
+            test_wait_negative_timeout,
+            all_envs,
         ),
     ];
 
