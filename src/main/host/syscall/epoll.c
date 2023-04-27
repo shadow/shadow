@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
@@ -22,7 +23,17 @@
 
 static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint epfd,
                                                      UntypedForeignPtr eventsPtr, gint maxevents,
-                                                     gint timeout_ms) {
+                                                     const struct timespec* timeout) {
+    /* A value of SIMTIME_INVALID (due to a NULL timeout) will indicate an indefinite timeout. */
+    CSimulationTime timeout_simtime = SIMTIME_INVALID;
+    if (timeout != NULL) {
+        timeout_simtime = simtime_from_timespec(*timeout);
+        if (timeout_simtime == SIMTIME_INVALID) {
+            trace("Epoll wait with invalid timespec");
+            return syscallreturn_makeDoneErrno(EINVAL);
+        }
+    }
+
     /* Check input args. */
     if (maxevents <= 0) {
         trace("Maxevents %i is not greater than 0.", maxevents);
@@ -53,9 +64,8 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
     if (numReadyEvents == 0) {
         /* Return immediately if timeout is 0 or we were already
          * blocked for a while and still have no events. */
-        if (timeout_ms == 0 || _syscallhandler_didListenTimeoutExpire(sys)) {
-            trace("No events are ready on epoll %i and we need to return now",
-                  epfd);
+        if (timeout_simtime == 0 || _syscallhandler_didListenTimeoutExpire(sys)) {
+            trace("No events are ready on epoll %i and we need to return now", epfd);
 
             /* Return 0; no events are ready. */
             return syscallreturn_makeDoneI64(0);
@@ -74,10 +84,9 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
             SysCallCondition* cond = syscallcondition_new(trigger);
 
             /* Set timeout, if provided. */
-            if (timeout_ms > 0) {
-                syscallcondition_setTimeout(
-                    cond, _syscallhandler_getHost(sys),
-                    worker_getCurrentEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+            if (timeout_simtime != SIMTIME_INVALID) {
+                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys),
+                                            worker_getCurrentEmulatedTime() + timeout_simtime);
             }
 
             return syscallreturn_makeBlocked(cond, false);
@@ -216,7 +225,20 @@ SyscallReturn syscallhandler_epoll_wait(SysCallHandler* sys, const SysCallArgs* 
     gint maxevents = args->args[2].as_i64;
     gint timeout_ms = args->args[3].as_i64;
 
-    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ms);
+    struct timespec timeout = {
+        .tv_sec = timeout_ms / 1000,
+        .tv_nsec = ((long)timeout_ms % 1000) * 1000 * 1000,
+    };
+
+    /* A NULL will indicate an indefinite timeout. */
+    const struct timespec* timeout_ptr = &timeout;
+
+    /* epoll_wait(2): "Specifying a timeout of -1 causes epoll_wait() to block indefinitely". */
+    if (timeout_ms < 0) {
+        timeout_ptr = NULL;
+    }
+
+    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ptr);
 }
 
 SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
@@ -232,5 +254,18 @@ SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs*
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ms);
+    struct timespec timeout = {
+        .tv_sec = timeout_ms / 1000,
+        .tv_nsec = ((long)timeout_ms % 1000) * 1000 * 1000,
+    };
+
+    /* A NULL will indicate an indefinite timeout. */
+    const struct timespec* timeout_ptr = &timeout;
+
+    /* epoll_wait(2): "Specifying a timeout of -1 causes epoll_wait() to block indefinitely". */
+    if (timeout_ms < 0) {
+        timeout_ptr = NULL;
+    }
+
+    return _syscallhandler_epollWaitHelper(sys, epfd, eventsPtr, maxevents, timeout_ptr);
 }
