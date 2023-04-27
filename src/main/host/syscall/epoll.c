@@ -259,8 +259,8 @@ SyscallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs*
 
     if (sigmask.val != 0) {
         error("epoll_pwait called with non-null sigmask, which is not yet supported by shadow; "
-              "returning ENOSYS");
-        return syscallreturn_makeDoneErrno(ENOSYS);
+              "returning EINVAL");
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     struct timespec timeout = {
@@ -288,8 +288,8 @@ SyscallReturn syscallhandler_epoll_pwait2(SysCallHandler* sys, const SysCallArgs
 
     if (sigmask.val != 0) {
         error("epoll_pwait2 called with non-null sigmask, which is not yet supported by shadow; "
-              "returning ENOSYS");
-        return syscallreturn_makeDoneErrno(ENOSYS);
+              "returning EINVAL");
+        return syscallreturn_makeDoneErrno(EINVAL);
     }
 
     struct timespec timeout = {0};
