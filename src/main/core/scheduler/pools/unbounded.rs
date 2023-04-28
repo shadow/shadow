@@ -45,7 +45,7 @@ pub struct SharedState {
 }
 
 impl UnboundedThreadPool {
-    pub fn new(num_threads: usize, thread_name: &str) -> Self {
+    pub fn new(num_threads: usize, thread_name: &str, yield_spin: bool) -> Self {
         let shared_state = Arc::new(SharedState {
             task: AtomicRefCell::new(None),
             has_thread_panicked: AtomicBool::new(false),
@@ -58,7 +58,11 @@ impl UnboundedThreadPool {
 
         for i in 0..num_threads {
             let shared_state_clone = Arc::clone(&shared_state);
-            let task_start_waiter = task_start_latch.waiter();
+
+            // enabling spinning on the threads may improve performance under some conditions
+            // (see https://github.com/shadow/shadow/issues/2877)
+            let task_start_waiter = task_start_latch.waiter(yield_spin);
+
             let task_end_counter_clone = task_end_counter.clone();
 
             let handle = std::thread::Builder::new()
@@ -286,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_scope() {
-        let mut pool = UnboundedThreadPool::new(4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker", false);
 
         let mut counter = 0u32;
         for _ in 0..3 {
@@ -300,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_run() {
-        let mut pool = UnboundedThreadPool::new(4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker", false);
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -316,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_large_num_threads() {
-        let mut pool = UnboundedThreadPool::new(100, "worker");
+        let mut pool = UnboundedThreadPool::new(100, "worker", false);
 
         let counter = AtomicU32::new(0);
         for _ in 0..3 {
@@ -332,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_scope_runner_order() {
-        let mut pool = UnboundedThreadPool::new(1, "worker");
+        let mut pool = UnboundedThreadPool::new(1, "worker", false);
 
         let flag = AtomicBool::new(false);
         pool.scope(|s| {
@@ -349,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_non_aliasing_borrows() {
-        let mut pool = UnboundedThreadPool::new(4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker", false);
 
         let mut counter = 0;
         pool.scope(|s| {
@@ -366,7 +370,7 @@ mod tests {
     /// ```compile_fail
     /// # use shadow_rs::core::scheduler::pools::unbounded::*;
     /// let x = 5;
-    /// let mut pool = UnboundedThreadPool::new(4, "worker");
+    /// let mut pool = UnboundedThreadPool::new(4, "worker", false);
     ///
     /// let mut counter = 0;
     /// pool.scope(|s| {
@@ -383,7 +387,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_panic_all() {
-        let mut pool = UnboundedThreadPool::new(4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker", false);
 
         pool.scope(|s| {
             s.run(|i| {
@@ -396,7 +400,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_panic_single() {
-        let mut pool = UnboundedThreadPool::new(4, "worker");
+        let mut pool = UnboundedThreadPool::new(4, "worker", false);
 
         pool.scope(|s| {
             s.run(|i| {
@@ -411,7 +415,7 @@ mod tests {
     // should not compile: "`x` does not live long enough"
     /// ```compile_fail
     /// # use shadow_rs::core::scheduler::pools::unbounded::*;
-    /// let mut pool = UnboundedThreadPool::new(4, "worker");
+    /// let mut pool = UnboundedThreadPool::new(4, "worker", false);
     ///
     /// let x = 5;
     /// pool.scope(|s| {
@@ -426,7 +430,7 @@ mod tests {
     // owned by the current function"
     /// ```compile_fail
     /// # use shadow_rs::core::scheduler::pools::unbounded::*;
-    /// let mut pool = UnboundedThreadPool::new(4, "worker");
+    /// let mut pool = UnboundedThreadPool::new(4, "worker", false);
     ///
     /// pool.scope(|s| {
     ///     // 'x' will be dropped when the closure is dropped, but 's' lives longer than that
@@ -441,7 +445,7 @@ mod tests {
     #[test]
     fn test_queues() {
         let num_threads = 4;
-        let mut pool = UnboundedThreadPool::new(num_threads, "worker");
+        let mut pool = UnboundedThreadPool::new(num_threads, "worker", false);
 
         // a non-copy usize wrapper
         struct Wrapper(usize);

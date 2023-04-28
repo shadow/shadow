@@ -20,7 +20,7 @@ pub struct ThreadPerCoreSched<HostType: Host> {
 impl<HostType: Host> ThreadPerCoreSched<HostType> {
     /// A new host scheduler with threads that are pinned to the provided OS processors. Each thread
     /// is assigned many hosts, and threads may steal hosts from other threads.
-    pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
+    pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T, yield_spin: bool) -> Self
     where
         T: IntoIterator<Item = HostType>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
@@ -28,7 +28,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
         let hosts = hosts.into_iter();
 
         let num_threads = cpu_ids.len();
-        let mut pool = UnboundedThreadPool::new(num_threads, "shadow-worker");
+        let mut pool = UnboundedThreadPool::new(num_threads, "shadow-worker", yield_spin);
 
         // set the affinity of each thread
         pool.scope(|s| {
@@ -217,7 +217,8 @@ mod tests {
     #[test]
     fn test_parallelism() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
 
         assert_eq!(sched.parallelism(), 2);
 
@@ -227,14 +228,16 @@ mod tests {
     #[test]
     fn test_no_join() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let _sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let _sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
     }
 
     #[test]
     #[should_panic]
     fn test_panic() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let mut sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
 
         sched.scope(|s| {
             s.run(|x| {
@@ -248,7 +251,8 @@ mod tests {
     #[test]
     fn test_run() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let mut sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
 
         let counter = AtomicU32::new(0);
 
@@ -268,7 +272,8 @@ mod tests {
     #[test]
     fn test_run_with_hosts() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let mut sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
 
         let counter = AtomicU32::new(0);
 
@@ -291,7 +296,8 @@ mod tests {
     #[test]
     fn test_run_with_data() {
         let hosts = [(); 5].map(|_| TestHost {});
-        let mut sched: ThreadPerCoreSched<TestHost> = ThreadPerCoreSched::new(&[None, None], hosts);
+        let mut sched: ThreadPerCoreSched<TestHost> =
+            ThreadPerCoreSched::new(&[None, None], hosts, false);
 
         let data = vec![0u32; sched.parallelism()];
         let data: Vec<_> = data.into_iter().map(std::sync::Mutex::new).collect();
