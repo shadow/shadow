@@ -146,14 +146,7 @@ impl<'a> ProcessMemoryRef<'a, u8> {
     /// Get a `cstr` from the reference. Fails with `ENAMETOOLONG` if there is no
     /// NULL byte.
     pub fn get_cstr(&self) -> Result<&std::ffi::CStr, Errno> {
-        let nullpos = self.iter().position(|c| *c == 0);
-        match nullpos {
-            // SAFETY: We just got the null position above.
-            Some(nullpos) => {
-                Ok(unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(&self[..=nullpos]) })
-            }
-            None => Err(Errno::ENAMETOOLONG),
-        }
+        std::ffi::CStr::from_bytes_until_nul(self).or(Err(Errno::ENAMETOOLONG))
     }
 }
 
@@ -509,11 +502,7 @@ impl MemoryManager {
     ) -> Result<&'a std::ffi::CStr, Errno> {
         let nread = self.copy_prefix_from_ptr(dst, src)?;
         let dst = &dst[..nread];
-        let nullpos = match dst.iter().position(|c| *c == 0) {
-            Some(i) => i,
-            None => return Err(Errno::ENAMETOOLONG),
-        };
-        Ok(unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(&dst[..=nullpos]) })
+        std::ffi::CStr::from_bytes_until_nul(dst).or(Err(Errno::ENAMETOOLONG))
     }
 
     /// Returns a mutable reference to the given memory. If the memory isn't
