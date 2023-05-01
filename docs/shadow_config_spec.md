@@ -677,7 +677,7 @@ environment: { ENV_A: "1", ENV_B: foo }
 #### `hosts.<hostname>.processes[*].expected_final_state`
 
 Default: !exited 0  
-Type: !exited \<Integer\> OR !signaled \<Signal String or Integer\> OR !running
+Type: !exited \<Integer\> OR !signaled [Unix Signal](./shadow_config_overview.md#unix-signals) OR !running
 
 The expected state of the process at the end of the simulation. If the process
 exits before the end of the simulation with an unexpected state, or is still running
@@ -719,7 +719,7 @@ absolute path as appropriate.
 #### `hosts.<hostname>.processes[*].shutdown_signal`
 
 Default: "SIGTERM"  
-Type: String OR Integer
+Type: [Unix Signal](./shadow_config_overview.md#unix-signals)
 
 The signal that will be sent to the process at
 [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time).

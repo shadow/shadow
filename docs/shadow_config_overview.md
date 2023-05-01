@@ -75,6 +75,14 @@ Acceptable unit *prefixes* are:
 
 Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbytes`
 
+## Unix Signals
+
+Several options allow the user to specify a Unix Signal. These can be specified
+either as a string signal name (e.g. `SIGKILL`), or an integer signal number (e.g. `9`).
+String signal names must be capitalized and include the `SIG` prefix.
+
+Realtime signals (signal numbers 32+) are not supported.
+
 ## YAML Extensions
 
 Shadow supports the extended YAML conventions for [merge
