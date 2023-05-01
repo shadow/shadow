@@ -201,7 +201,7 @@ Initialize randomness using seed N.
 *Required*  
 Type: String OR Integer
 
-The simulated time at which simulated processes are sent a SIGKILL signal.
+The simulated time at which the simulation ends.
 
 #### `general.template_directory`
 
