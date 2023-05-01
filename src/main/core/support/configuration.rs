@@ -554,17 +554,25 @@ impl Default for HostDefaultOptions {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ProcessFinalState {
-    Exited(i32),
-    Signaled(Signal),
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum RunningVal {
     Running,
+}
+
+/// The enum variants here have an extra level of indirection to get the
+/// serde serialization that we want.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum ProcessFinalState {
+    Exited { exited: i32 },
+    Signaled { signaled: Signal },
+    Running(RunningVal),
 }
 
 impl Default for ProcessFinalState {
     fn default() -> Self {
-        Self::Exited(0)
+        Self::Exited { exited: 0 }
     }
 }
 

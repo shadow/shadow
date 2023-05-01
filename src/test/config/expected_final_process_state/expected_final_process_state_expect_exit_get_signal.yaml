@@ -13,4 +13,4 @@ hosts:
       shutdown_time: 2
       shutdown_signal: SIGINT
       # Intentionally incorrect; testing that Shadow correctly fails.
-      expected_final_state: !exited 0
+      expected_final_state: {exited: 0}

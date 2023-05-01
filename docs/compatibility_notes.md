@@ -150,7 +150,7 @@ hosts:
       start_time: 0s
       # Tell shadow to expect this process to still be running at the end of the
       # simulation.
-      expected_final_state: !running
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:
@@ -223,7 +223,7 @@ hosts:
     - path: opentracker
       # Tell shadow to expect this process to still be running at the end of the
       # simulation.
-      expected_final_state: !running
+      expected_final_state: running
   uploader:
     network_node_id: 0
     processes:
@@ -238,7 +238,7 @@ hosts:
     - path: ctorrent
       args: example.torrent
       start_time: 12s
-      expected_final_state: !running
+      expected_final_state: running
   downloader1: &downloader_host
     network_node_id: 0
     processes:
@@ -246,7 +246,7 @@ hosts:
     - path: ctorrent
       args: ../uploader/example.torrent
       start_time: 30s
-      expected_final_state: !running
+      expected_final_state: running
   downloader2: *downloader_host
   downloader3: *downloader_host
   downloader4: *downloader_host

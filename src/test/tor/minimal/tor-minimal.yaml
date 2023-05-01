@@ -28,7 +28,7 @@ hosts:
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
-      expected_final_state: !running
+      expected_final_state: running
   hiddenserver:
     network_node_id: 0
     processes:
@@ -37,12 +37,12 @@ hosts:
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
-      expected_final_state: !running
+      expected_final_state: running
     - path: tor
       args: --Address hiddenserver --Nickname hiddenserver
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-      expected_final_state: !running
+      expected_final_state: running
   4uthority:
     network_node_id: 0
     ip_addr: 100.0.0.1
@@ -51,7 +51,7 @@ hosts:
       args: --Address 4uthority --Nickname 4uthority
             --defaults-torrc torrc-defaults -f torrc
       start_time: 1
-      expected_final_state: !running
+      expected_final_state: running
   exit1:
     network_node_id: 0
     processes:
@@ -59,7 +59,7 @@ hosts:
       args: --Address exit1 --Nickname exit1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
-      expected_final_state: !running
+      expected_final_state: running
   exit2:
     network_node_id: 0
     processes:
@@ -67,7 +67,7 @@ hosts:
       args: --Address exit2 --Nickname exit2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
-      expected_final_state: !running
+      expected_final_state: running
   relay1:
     network_node_id: 0
     processes:
@@ -75,7 +75,7 @@ hosts:
       args: --Address relay1 --Nickname relay1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
-      expected_final_state: !running
+      expected_final_state: running
   relay2:
     network_node_id: 0
     processes:
@@ -83,7 +83,7 @@ hosts:
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
-      expected_final_state: !running
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:
@@ -99,7 +99,7 @@ hosts:
       args: --Address torclient --Nickname torclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-      expected_final_state: !running
+      expected_final_state: running
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }
@@ -113,7 +113,7 @@ hosts:
             --UseBridges 1 --Bridge 100.0.0.1:9111
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-      expected_final_state: !running
+      expected_final_state: running
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }
@@ -126,7 +126,7 @@ hosts:
       args: --Address torhiddenclient --Nickname torhiddenclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
-      expected_final_state: !running
+      expected_final_state: running
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }

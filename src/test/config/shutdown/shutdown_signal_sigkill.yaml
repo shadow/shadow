@@ -12,4 +12,4 @@ hosts:
       start_time: 1
       shutdown_time: 2
       shutdown_signal: SIGKILL
-      expected_final_state: !signaled SIGKILL
+      expected_final_state: {signaled: SIGKILL}

@@ -36,7 +36,7 @@ use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
-use crate::core::support::configuration::ProcessFinalState;
+use crate::core::support::configuration::{ProcessFinalState, RunningVal};
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
@@ -1245,9 +1245,9 @@ impl Process {
             );
             if let Some(expected_final_state) = runnable.expected_final_state {
                 let actual_final_state = match exit_status {
-                    ExitStatus::Normal(i) => ProcessFinalState::Exited(i),
-                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled(s.into()),
-                    ExitStatus::StoppedByShadow => ProcessFinalState::Running,
+                    ExitStatus::Normal(i) => ProcessFinalState::Exited { exited: i },
+                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled { signaled: s.into() },
+                    ExitStatus::StoppedByShadow => ProcessFinalState::Running(RunningVal::Running),
                 };
                 if expected_final_state == actual_final_state {
                     (s, log::Level::Info)

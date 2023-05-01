@@ -33,7 +33,7 @@ hosts:
         --advertise-client-urls http://server1:2379
         --listen-peer-urls http://0.0.0.0:2380
         --initial-advertise-peer-urls http://server1:2380
-      expected_final_state: !running
+      expected_final_state: running
     - path: etcdctl
       args: set my-key my-value
       start_time: 10s
@@ -53,7 +53,7 @@ hosts:
         --advertise-client-urls http://server2:2379
         --listen-peer-urls http://0.0.0.0:2380
         --initial-advertise-peer-urls http://server2:2380
-      expected_final_state: !running
+      expected_final_state: running
     - path: etcdctl
       args: get my-key
       start_time: 12s
@@ -71,7 +71,7 @@ hosts:
         --advertise-client-urls http://server3:2379
         --listen-peer-urls http://0.0.0.0:2380
         --initial-advertise-peer-urls http://server3:2380
-      expected_final_state: !running
+      expected_final_state: running
     - path: etcdctl
       args: get my-key
       start_time: 12s

@@ -12,7 +12,7 @@ hosts:
     - path: sleep
       args: '10'
       start_time: 1
-      expected_final_state: !signaled SIGINT
+      expected_final_state: {signaled: SIGINT}
     - path: kill 
       args: -SIGINT '1000'
       start_time: 2

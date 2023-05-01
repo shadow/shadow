@@ -11,4 +11,4 @@ hosts:
       args: '100'
       start_time: 1
       # Intentionally incorrect; testing that Shadow correctly fails.
-      expected_final_state: !signaled SIGTERM
+      expected_final_state: {signaled: SIGTERM}

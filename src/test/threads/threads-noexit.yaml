@@ -10,4 +10,4 @@ hosts:
     processes:
     - path: ../../target/debug/test_threads_noexit
       start_time: 1
-      expected_final_state: !running
+      expected_final_state: running

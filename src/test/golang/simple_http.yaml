@@ -11,7 +11,7 @@ hosts:
     processes:
     - path: ./test_simple_http
       start_time: 3s
-      expected_final_state: !running
+      expected_final_state: running
 
   client1: &host
     network_node_id: 0

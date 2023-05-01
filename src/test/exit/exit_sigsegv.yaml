@@ -9,4 +9,4 @@ hosts:
     processes:
     - path: ./test_exit_sigsegv
       start_time: 1
-      expected_final_state: !signaled SIGSEGV
+      expected_final_state: {signaled: SIGSEGV}
