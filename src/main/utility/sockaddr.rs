@@ -295,9 +295,7 @@ where
 
         // For pathname socket addresses, the path is a C-style nul-terminated string which may be
         // shorter than the address length (`self.len`). Bytes after the nul are ignored.
-        let first_nul = path.iter().position(|&x| x == 0)?;
-
-        return Some(CStr::from_bytes_with_nul(&path[..(first_nul + 1)]).unwrap());
+        CStr::from_bytes_until_nul(path).ok()
     }
 
     /// If the socket address represents an abstract address, returns the bytes representing the
