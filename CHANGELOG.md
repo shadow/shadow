@@ -70,6 +70,8 @@ including `start_time`, `stop_time`, etc.
 
 * Removed the `--profile`, `--include`, and `--library` setup script options.
 
+* Added partial support for the `epoll_pwait2` syscall.
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to

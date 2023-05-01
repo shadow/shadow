@@ -50,6 +50,9 @@
 #ifndef SYS_rseq
 #define SYS_rseq 334
 #endif
+#ifndef SYS_epoll_pwait2
+#define SYS_epoll_pwait2 441
+#endif
 
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
@@ -314,6 +317,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(epoll_create1);
             HANDLE_C(epoll_ctl);
             HANDLE_C(epoll_pwait);
+            HANDLE_C(epoll_pwait2);
             HANDLE_C(epoll_wait);
             HANDLE_RUST(eventfd);
             HANDLE_RUST(eventfd2);

@@ -1556,7 +1556,7 @@ mod export {
         }
     }
 
-    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
     pub extern "C" fn process_readPtr(
@@ -1578,7 +1578,7 @@ mod export {
         }
     }
 
-    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
     pub unsafe extern "C" fn process_writePtr(
