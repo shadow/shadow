@@ -1,15 +1,17 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::fmt::Debug;
 use std::fs::File;
-use std::fs::OpenOptions;
 use std::num::NonZeroUsize;
+use std::os::fd::FromRawFd;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
 use log::*;
+use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
 use nix::{fcntl, sys};
 use shadow_shim_helper_rs::notnull::*;
@@ -375,29 +377,18 @@ fn coalesce_regions(regions: IntervalMap<Region>) -> IntervalMap<Region> {
 
 impl MemoryMapper {
     pub fn new(memory_manager: &mut MemoryManager, ctx: &ThreadContext) -> MemoryMapper {
-        let shm_path = format!(
-            "/dev/shm/shadow_memory_manager_{}_{:?}_{}",
+        let shm_name = CString::new(format!(
+            "shadow_memory_manager_{}_{:?}_{}",
             process::id(),
             ctx.thread.host_id(),
             u32::from(ctx.process.id())
-        );
-        let shm_file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(&shm_path)
-            .unwrap();
+        ))
+        .unwrap();
+        let raw_file =
+            nix::sys::memfd::memfd_create(&shm_name, MemFdCreateFlag::MFD_CLOEXEC).unwrap();
+        let shm_file = unsafe { File::from_raw_fd(raw_file) };
 
-        // We don't need the file anymore in the file system. Unlinking it now
-        // ensures that it will be removed when there are no more open file
-        // descriptors to it.
-        match std::fs::remove_file(&shm_path) {
-            Ok(_) => (),
-            Err(e) => warn!("removing '{}': {}", shm_path, e),
-        }
-
-        // The file can no longer be accessed by its original path, but *can*
-        // be accessed via the file-descriptor link in /proc.
+        // Other processes can open the file via /proc.
         let shm_path = format!("/proc/{}/fd/{}\0", process::id(), shm_file.as_raw_fd());
 
         let shm_plugin_fd = {
