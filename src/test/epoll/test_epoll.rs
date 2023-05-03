@@ -311,6 +311,24 @@ fn test_wait_negative_timeout() -> anyhow::Result<()> {
     })
 }
 
+fn test_ctl_invalid_op() -> anyhow::Result<()> {
+    let (read_fd, write_fd) = unistd::pipe()?;
+    let epoll_fd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epoll_fd, read_fd, write_fd], || {
+        let mut event = libc::epoll_event { events: 0, u64: 0 };
+
+        // assume this is not used by Linux
+        let operation = libc::c_int::MAX;
+
+        let rv =
+            Errno::result(unsafe { libc::epoll_ctl(epoll_fd, operation, read_fd, &mut event) });
+        assert_eq!(rv, Err(Errno::EINVAL));
+
+        Ok(())
+    })
+}
+
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -336,8 +354,9 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new(
             "test_wait_negative_timeout",
             test_wait_negative_timeout,
-            all_envs,
+            all_envs.clone(),
         ),
+        ShadowTest::new("test_ctl_invalid_op", test_ctl_invalid_op, all_envs),
     ];
 
     if filter_shadow_passing {

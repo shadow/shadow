@@ -590,6 +590,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
 
         default: {
             warning("ignoring unrecognized operation");
+            rv = -EINVAL;
             break;
         }
     }
