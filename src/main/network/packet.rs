@@ -1,9 +1,10 @@
 use std::io::Write;
 use std::net::Ipv4Addr;
 
+use shadow_shim_helper_rs::util::SyncSendPointer;
+
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
-use crate::utility::SyncSendPointer;
 
 pub enum PacketStatus {
     RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,

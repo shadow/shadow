@@ -8,6 +8,7 @@ use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
+use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
@@ -17,7 +18,7 @@ use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
-use crate::utility::{syscall, IsSend, SendPointer};
+use crate::utility::{syscall, IsSend};
 
 /// The thread's state after having been allowed to execute some code.
 #[derive(Debug)]

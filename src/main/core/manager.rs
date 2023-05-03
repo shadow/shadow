@@ -13,6 +13,7 @@ use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
@@ -27,9 +28,9 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
 use crate::network::graph::{IpAssignment, RoutingInfo};
+use crate::utility;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
-use crate::utility::{self, SyncSendPointer};
 
 pub struct Manager<'a> {
     manager_config: Option<ManagerConfig>,
