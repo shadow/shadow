@@ -51,6 +51,10 @@ to use YAML anchors and merge keys instead.
 * Renamed the `host_defaults` configuration field to `host_option_defaults` and
 renamed the host's `options` field to `host_options`.
 
+* Shadow now interprets a process still running at the end of the simulation as
+an error by default. This can be overridden by the new per-process option
+`expected_final_state`. https://github.com/shadow/shadow/pull/2886
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
@@ -95,6 +99,12 @@ https://github.com/shadow/shadow/issues/2718
 returning `-1` instead of `NULL` on errors.
 
 * A call to `epoll_ctl` with an unknown operation will return `EINVAL`.
+
+* Simulated Processes are now reaped and deallocated after the exit, reducing
+run-time memory usage when processes exit over the course of the simulation.
+This was unlikely to have affected most users, since Shadow currently doesn't
+support `fork`, so any simulation has a fixed number of processes, all of which
+are explicitly specified in shadow's config.
 
 Raw changes since v2.5.0:
 

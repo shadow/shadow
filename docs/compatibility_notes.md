@@ -148,6 +148,9 @@ hosts:
     - path: iperf3
       args: -s --bind 0.0.0.0
       start_time: 0s
+      # Tell shadow to expect this process to still be running at the end of the
+      # simulation.
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:
@@ -218,24 +221,32 @@ hosts:
     network_node_id: 0
     processes:
     - path: opentracker
+      # Tell shadow to expect this process to still be running at the end of the
+      # simulation.
+      expected_final_state: running
   uploader:
     network_node_id: 0
     processes:
     - path: cp
       args: ../../../foo .
       start_time: 10s
+    # Create the torrent file
     - path: ctorrent
       args: -t foo -s example.torrent -u http://tracker:6969/announce
       start_time: 11s
+    # Serve the torrent
     - path: ctorrent
       args: example.torrent
       start_time: 12s
+      expected_final_state: running
   downloader1: &downloader_host
     network_node_id: 0
     processes:
+    # Download and share the torrent
     - path: ctorrent
       args: ../uploader/example.torrent
       start_time: 30s
+      expected_final_state: running
   downloader2: *downloader_host
   downloader3: *downloader_host
   downloader4: *downloader_host

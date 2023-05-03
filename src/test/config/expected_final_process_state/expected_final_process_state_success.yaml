@@ -1,0 +1,25 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  mytesthost:
+    network_node_id: 0
+    processes:
+    - path: sleep
+      args: '10'
+      start_time: 1
+      shutdown_time: 2
+      shutdown_signal: SIGINT
+      expected_final_state: {signaled: SIGINT}
+    - path: sleep
+      args: '100'
+      start_time: 1
+      expected_final_state: running
+    - path: "true"
+      start_time: 1
+      expected_final_state: {exited: 0}
+    - path: "false"
+      start_time: 1
+      expected_final_state: {exited: 1}

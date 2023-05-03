@@ -12,9 +12,6 @@ add_custom_target(tor-minimal-shadow-data-template ALL
 
 add_shadow_tests(BASENAME tor-minimal
                  LOGLEVEL info
-                 # don't check tor's return value since it will be killed by shadow at the end of
-                 # the sim
-                 CHECK_RETVAL false
                  ARGS
                    --use-cpu-pinning true
                    --parallelism 2

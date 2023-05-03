@@ -7,9 +7,7 @@ hosts:
   mytesthost:
     network_node_id: 0
     processes:
-    - path: sleep
-      args: '10'
+    - path: "true"
       start_time: 1
-      shutdown_time: 2
-      shutdown_signal: SIGINT
-      expected_final_state: {signaled: SIGINT}
+      # Intentionally incorrect; testing that Shadow correctly fails.
+      expected_final_state: {signaled: SIGTERM}

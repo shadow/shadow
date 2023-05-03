@@ -38,6 +38,9 @@ hosts:
     - path: /usr/bin/python3
       args: -m http.server 80
       start_time: 3s
+      # Tell shadow to expect this process to still be running at the end of the
+      # simulation.
+      expected_final_state: running
   # three hosts with hostnames 'client1', 'client2', and 'client3' using a yaml
   # anchor to avoid duplicating the options for each host
   client1: &client_host

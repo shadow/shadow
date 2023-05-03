@@ -38,6 +38,7 @@ hosts:
     - path: /usr/sbin/nginx
       args: -c ../../../nginx.conf -p .
       start_time: 1
+      expected_final_state: running
   client1: &client_host
     network_node_id: 0
     host_options:
@@ -108,6 +109,7 @@ hosts:
 - [`hosts.<hostname>.processes`](#hostshostnameprocesses)
 - [`hosts.<hostname>.processes[*].args`](#hostshostnameprocessesargs)
 - [`hosts.<hostname>.processes[*].environment`](#hostshostnameprocessesenvironment)
+- [`hosts.<hostname>.processes[*].expected_final_state`](#hostshostnameprocessesexpected_final_state)
 - [`hosts.<hostname>.processes[*].path`](#hostshostnameprocessespath)
 - [`hosts.<hostname>.processes[*].shutdown_signal`](#hostshostnameprocessesshutdown_signal)
 - [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time)
@@ -199,7 +201,7 @@ Initialize randomness using seed N.
 *Required*  
 Type: String OR Integer
 
-The simulated time at which simulated processes are sent a SIGKILL signal.
+The simulated time at which the simulation ends.
 
 #### `general.template_directory`
 
@@ -672,6 +674,33 @@ environment:
 environment: { ENV_A: "1", ENV_B: foo }
 ```
 
+#### `hosts.<hostname>.processes[*].expected_final_state`
+
+Default: \{exited: 0\}  
+Type: \{"exited": \<Integer\>\} OR \{"signaled": [Unix Signal](./shadow_config_overview.md#unix-signals)\} OR "running"
+
+The expected state of the process at the end of the simulation. If the process
+exits before the end of the simulation with an unexpected state, or is still running
+at the end of the simulation when this was not `running`, shadow will log an error
+and return a non-zero status for the simulation.
+
+Use `exited` to indicate that a process should have exited normally; e.g. by returning
+from `main` or calling `exit`.
+
+Use `signaled` to indicate that a process should have been killed by a signal.
+
+Use `running` for a process expected to still be running at the end of the simulation,
+such as a server process that you didn't arrange to shutdown before the end of the simulation.
+(All processes will be killed by Shadow when the simulation ends).
+
+Examples:
+
+- `{exited: 0}`
+- `{exited: 1}`
+- `{signaled: SIGINT}`
+- `{signaled: 9}`
+- `running`
+
 #### `hosts.<hostname>.processes[*].path`
 
 *Required*  
@@ -690,12 +719,31 @@ absolute path as appropriate.
 #### `hosts.<hostname>.processes[*].shutdown_signal`
 
 Default: "SIGTERM"  
-Type: String OR Integer
+Type: [Unix Signal](./shadow_config_overview.md#unix-signals)
 
 The signal that will be sent to the process at
 [`hosts.<hostname>.processes[*].shutdown_time`](#hostshostnameprocessesshutdown_time).
 Signals specified by name should be all-caps and include the SIG prefix; e.g.
 "SIGTERM".
+
+Many long-running processes support exiting cleanly when sent `SIGTERM` or
+`SIGINT`.
+
+If the process is expected to be killed directly by the signal instead of
+catching it and exiting cleanly, you can set
+[`expected_final_state`](#hostshostnameprocessesexpected_final_state) to prevent
+Shadow from interpreting this as an error. e.g. `SIGKILL` cannot be caught, so
+will always result in an end state of `{signaled: SIGKILL}` if the process didn't
+already exit before the signal was sent.
+
+```yaml
+path: sleep
+args: "1000"
+start_time: 1s
+shutdown_time: 2s
+shutdown_signal: SIGKILL
+expected_final_state: {signaled: SIGKILL}
+```
 
 #### `hosts.<hostname>.processes[*].shutdown_time`
 

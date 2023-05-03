@@ -4,26 +4,18 @@ add_shadow_tests(BASENAME exit_after_signal_sched)
 # Regression test for https://github.com/shadow/shadow/issues/1868.
 # Shadow should explicitly fail when a process start time is after
 # the simulation end time.
-add_shadow_tests(BASENAME small_stop_time EXPECT_ERROR TRUE CHECK_RETVAL FALSE)
+add_shadow_tests(BASENAME small_stop_time EXPECT_ERROR TRUE)
 
 # Regression test for https://github.com/shadow/shadow/issues/2152
 add_shadow_tests(
     BASENAME packet_after_simulation_end
-    # Processes still running at the end.
-    CHECK_RETVAL FALSE
     PROPERTIES
       # Requires curl and python
       CONFIGURATIONS extra
     )
 
 # Regression test for https://github.com/shadow/shadow/issues/2151
-add_shadow_tests(
-  BASENAME sigkill_self
-  # Command should die with signal 9, giving exitcode 128+9=137
-  POST_CMD "test `cat hosts/*/*.exitcode` -eq 137"
-  # Shadow should return failure
-  EXPECT_ERROR TRUE
-  CHECK_RETVAL FALSE)
+add_shadow_tests(BASENAME sigkill_self)
 
 add_executable(test_flush_after_exit test_flush_after_exit.c)
 add_linux_tests(BASENAME flush_after_exit COMMAND bash -c "test `./test_flush_after_exit` == 'Hello'")

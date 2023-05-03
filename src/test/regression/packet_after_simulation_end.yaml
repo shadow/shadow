@@ -31,9 +31,14 @@ hosts:
     - path: /usr/bin/python3
       args: -m http.server 80
       start_time: 1s
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:
     - path: /usr/bin/curl
       args: -s server
       start_time: 2s
+      # Network graph has 2s latency, so we expect this process to still be
+      # alive at the end.  (and packets still in flight, which is what we're
+      # testing)
+      expected_final_state: running

@@ -12,6 +12,7 @@ hosts:
     - path: iperf
       args: -s
       start_time: 0s
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:

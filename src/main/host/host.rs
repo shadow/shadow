@@ -27,7 +27,7 @@ use shadow_tsc::Tsc;
 use vasi_sync::scmutex::SelfContainedMutexGuard;
 
 use crate::core::sim_config::PcapConfig;
-use crate::core::support::configuration::QDiscMode;
+use crate::core::support::configuration::{ProcessFinalState, QDiscMode};
 use crate::core::work::event::{Event, EventData};
 use crate::core::work::event_queue::EventQueue;
 use crate::core::work::task::TaskRef;
@@ -376,6 +376,7 @@ impl Host {
         envv: Vec<CString>,
         argv: Vec<CString>,
         pause_for_debugging: bool,
+        expected_final_state: ProcessFinalState,
     ) {
         debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
 
@@ -403,6 +404,7 @@ impl Host {
                 argv,
                 pause_for_debugging,
                 host.params.strace_logging_options,
+                expected_final_state,
             );
             let thread_id = process.borrow(host.root()).thread_group_leader_id();
             host.processes.borrow_mut().insert(process_id, process);
@@ -426,14 +428,22 @@ impl Host {
     }
 
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
-        let Some(processrc) = self.process_borrow(pid) else {
-            trace!("{pid:?} doesn't exist");
-            return;
+        let remove_process = {
+            let Some(processrc) = self.process_borrow(pid) else {
+                trace!("{pid:?} doesn't exist");
+                return;
+            };
+            Worker::set_active_process(&processrc);
+            let process = processrc.borrow(self.root());
+            process.resume(self, tid);
+            Worker::clear_active_process();
+            process.borrow_zombie().is_some() && process.ppid().is_none()
         };
-        Worker::set_active_process(&processrc);
-        let process = processrc.borrow(self.root());
-        process.resume(self, tid);
-        Worker::clear_active_process();
+        if remove_process {
+            trace!("Dropping orphan zombie process {pid:?}");
+            let process = self.processes.borrow_mut().remove(&pid).unwrap();
+            RootedRc::safely_drop(process, self.root());
+        }
     }
 
     #[track_caller]

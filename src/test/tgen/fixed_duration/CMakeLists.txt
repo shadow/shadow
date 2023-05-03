@@ -39,8 +39,6 @@ foreach(client 1stream 10streams 100streams 1000streams)
     add_shadow_tests(BASENAME tgen-duration-${network}-${client}
                     SHADOW_CONFIG ${CMAKE_CURRENT_BINARY_DIR}/${network}-${client}.yaml
                     LOGLEVEL info
-                    # tgen server runs forever, which is not a failure
-                    CHECK_RETVAL false
                     POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh ${network} ${client}"
                     PROPERTIES
                       TIMEOUT ${TIMEOUTVAL}

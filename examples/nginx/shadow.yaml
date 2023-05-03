@@ -12,6 +12,7 @@ hosts:
     - path: nginx
       args: -c ../../../nginx.conf -p .
       start_time: 0s
+      expected_final_state: running
   client1: &client_host
     network_node_id: 0
     processes:

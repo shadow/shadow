@@ -629,6 +629,7 @@ impl<'a> Manager<'a> {
                 envv,
                 argv,
                 pause_for_debugging,
+                proc.expected_final_state,
             );
 
             host.stop_execution_timer();

@@ -21,6 +21,8 @@ use crate::core::support::units::{self, Unit};
 use crate::network::graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::tilde_expansion;
 
+use super::support::configuration::ProcessFinalState;
+
 /// The simulation configuration after processing the configuration options and network graph.
 pub struct SimConfig {
     // deterministic source of randomness for the simulation
@@ -192,6 +194,7 @@ pub struct ProcessInfo {
     pub shutdown_signal: nix::sys::signal::Signal,
     pub args: Vec<OsString>,
     pub env: BTreeMap<EnvName, String>,
+    pub expected_final_state: ProcessFinalState,
 }
 
 #[derive(Debug, Clone)]
@@ -370,6 +373,7 @@ fn build_process(proc: &ProcessOptions, config: &ConfigOptions) -> anyhow::Resul
         shutdown_signal,
         args,
         env: proc.environment.clone(),
+        expected_final_state: proc.expected_final_state,
     })
 }
 

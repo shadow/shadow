@@ -13,6 +13,7 @@ hosts:
     - path: node
       args: /usr/local/bin/http-server -p 80 -d
       start_time: 3s
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:

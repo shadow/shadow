@@ -8,4 +8,4 @@ add_shadow_tests(
       TIMEOUT 30
     )
 
-add_shadow_tests(BASENAME bind_in_new_process CHECK_RETVAL false)
+add_shadow_tests(BASENAME bind_in_new_process)
