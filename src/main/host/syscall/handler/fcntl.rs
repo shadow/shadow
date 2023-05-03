@@ -164,7 +164,6 @@ impl SyscallHandler {
                     }
                 };
 
-                #[allow(irrefutable_let_patterns)]
                 if let File::Pipe(pipe) = file.inner_file() {
                     SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
                 } else {
