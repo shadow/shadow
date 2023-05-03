@@ -65,12 +65,10 @@ then
   rustup override set nightly-2023-03-13
 fi
 
-# This forces installation of the toolchain. When used with Docker,
-# this causes the rust installation get "baked in" to the Docker image layer
-# that runs this script, which is typically what we want.
-#
-# The version specified in the current version of rust-toolchain.toml will still
-# ultimately be respected, installing that toolchain on demand if necessary.
+# This forces installation of the toolchain required in Shadow's
+# "rust-toolchain.toml" (if this script is run from the shadow directory). When
+# used with Docker, this causes the rust installation to get "baked in" to the
+# Docker image layer that runs this script, which is typically what we want.
 cargo --version
 
 # Install a version of the golang std library that supports dynamic linking
