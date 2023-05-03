@@ -9,7 +9,7 @@
   + pkg-config
   + xz-utils
   + lscpu
-  + cargo, rustc (version \~ latest)
+  + rustup (version \~ latest)
   + libclang (version >= 9)
 
 ## APT (Debian/Ubuntu):
@@ -32,7 +32,7 @@ sudo apt-get install -y \
     g++
 
 # rustup: https://rustup.rs
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none
 ```
 
 On older versions of Debian or Ubuntu, the default version of libclang is too
@@ -67,5 +67,5 @@ sudo dnf install -y \
     gcc-c++
 
 # rustup: https://rustup.rs
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none
 ```
