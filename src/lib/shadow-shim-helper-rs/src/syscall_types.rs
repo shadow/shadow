@@ -1,6 +1,6 @@
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::util::NoTypeInference;
+use crate::util::{NoTypeInference, SyncSendPointer};
 
 /// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
 /// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
@@ -23,7 +23,10 @@ pub type UntypedForeignPtr = ForeignPtr<()>;
 #[repr(C)]
 pub struct ForeignPtr<T> {
     val: usize,
-    _phantom: std::marker::PhantomData<T>,
+    // `ForeignPtr` behaves as if it holds a pointer to a `T`, and we want this `ForeignPtr` to be
+    // `Send` + `Sync`
+    #[unsafe_assume_virtual_address_space_independent]
+    _phantom: std::marker::PhantomData<SyncSendPointer<T>>,
 }
 
 impl<T> ForeignPtr<T> {
