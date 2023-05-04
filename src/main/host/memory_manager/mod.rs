@@ -892,7 +892,7 @@ mod export {
         mref.noflush()
     }
 
-    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of the specified
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
     pub extern "C" fn memorymanager_readPtr(
@@ -914,7 +914,7 @@ mod export {
         }
     }
 
-    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of the specified
+    /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_writePtr(

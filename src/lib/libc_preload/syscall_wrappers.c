@@ -249,12 +249,8 @@ INTERPOSE(get_robust_list);
 INTERPOSE(getcpu);
 #endif
 // Skipping SYS_getcwd
-#ifdef SYS_getdents // kernel entry: num=78 func=sys_getdents
-INTERPOSE(getdents);
-#endif
-#ifdef SYS_getdents64 // kernel entry: num=217 func=sys_getdents64
-INTERPOSE(getdents64);
-#endif
+// Skipping SYS_getdents
+// Skipping SYS_getdents64
 #ifdef SYS_getegid // kernel entry: num=108 func=sys_getegid
 INTERPOSE(getegid);
 #endif
@@ -381,12 +377,8 @@ INTERPOSE(ioprio_get);
 #ifdef SYS_ioprio_set // kernel entry: num=251 func=sys_ioprio_set
 INTERPOSE(ioprio_set);
 #endif
-#ifdef SYS_kcmp // kernel entry: num=312 func=sys_kcmp
-INTERPOSE(kcmp);
-#endif
-#ifdef SYS_kexec_file_load // kernel entry: num=320 func=sys_kexec_file_load
-INTERPOSE(kexec_file_load);
-#endif
+// Skipping SYS_kcmp
+// Skipping SYS_kexec_file_load
 #ifdef SYS_kexec_load // kernel entry: num=246 func=sys_kexec_load
 INTERPOSE(kexec_load);
 #endif
@@ -614,9 +606,7 @@ INTERPOSE(ppoll);
 #ifdef SYS_prctl // kernel entry: num=157 func=sys_prctl
 INTERPOSE(prctl);
 #endif
-#ifdef SYS_pread64 // kernel entry: num=17 func=sys_pread64
-INTERPOSE(pread64);
-#endif
+// Skipping SYS_pread64
 // Skipping SYS_preadv
 // Skipping SYS_preadv2
 #ifdef SYS_prlimit64 // kernel entry: num=302 func=sys_prlimit64
@@ -634,15 +624,11 @@ INTERPOSE(process_vm_readv);
 #ifdef SYS_process_vm_writev // kernel entry: num=311 func=sys_process_vm_writev
 INTERPOSE(process_vm_writev);
 #endif
-#ifdef SYS_pselect6 // kernel entry: num=270 func=sys_pselect6
-INTERPOSE(pselect6);
-#endif
+// Skipping SYS_pselect6
 #ifdef SYS_ptrace // kernel entry: num=101 func=sys_ptrace
 INTERPOSE(ptrace);
 #endif
-#ifdef SYS_pwrite64 // kernel entry: num=18 func=sys_pwrite64
-INTERPOSE(pwrite64);
-#endif
+// Skipping SYS_pwrite64
 // Skipping SYS_pwritev
 // Skipping SYS_pwritev2
 #ifdef SYS_quotactl // kernel entry: num=179 func=sys_quotactl
@@ -696,15 +682,11 @@ INTERPOSE(renameat2);
 #ifdef SYS_request_key // kernel entry: num=249 func=sys_request_key
 INTERPOSE(request_key);
 #endif
-#ifdef SYS_restart_syscall // kernel entry: num=219 func=sys_restart_syscall
-INTERPOSE(restart_syscall);
-#endif
+// Skipping SYS_restart_syscall
 #ifdef SYS_rmdir // kernel entry: num=84 func=sys_rmdir
 INTERPOSE(rmdir);
 #endif
-#ifdef SYS_rseq // kernel entry: num=334 func=sys_rseq
-INTERPOSE(rseq);
-#endif
+// Skipping SYS_rseq
 #ifdef SYS_rt_sigaction // kernel entry: num=13 func=sys_rt_sigaction
 INTERPOSE(rt_sigaction);
 #endif

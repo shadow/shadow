@@ -17,8 +17,17 @@ remap['eventfd'] = 'eventfd2' # libc eventfd() calls SYS_eventfd2
 
 # syscalls we should not generate C wrappers for
 skip = set()
-# libc doesn't have an eventfd2() wrapper
+# glibc doesn't have these wrappers
 skip.add('eventfd2')
+skip.add('pselect6')
+skip.add('pread64')
+skip.add('pwrite64')
+skip.add('getdents')
+skip.add('getdents64')
+skip.add('restart_syscall')
+skip.add('kcmp')
+skip.add('kexec_file_load')
+skip.add('rseq')
 # the offset is split into two arguments
 skip.add('preadv')
 skip.add('preadv2')
