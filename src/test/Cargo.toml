@@ -82,10 +82,6 @@ name = "test_random"
 path = "random/test_random.rs"
 
 [[bin]]
-name = "test_pid_assignment"
-path = "unistd/test_pid_assignment.rs"
-
-[[bin]]
 name = "test_unistd"
 path = "unistd/test_unistd.rs"
 

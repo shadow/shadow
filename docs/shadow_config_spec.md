@@ -633,8 +633,7 @@ hosts:
 *Required*  
 Type: Array
 
-Virtual software processes that the host will run. PIDs are assigned from 1000
-on each host, in the order that they appear in this process list.
+Virtual software processes that the host will run.
 
 #### `hosts.<hostname>.processes[*].args`
 
