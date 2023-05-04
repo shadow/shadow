@@ -83,6 +83,10 @@ including `start_time`, `stop_time`, etc.
 
 * Added partial support for the `epoll_pwait2` syscall.
 
+* Enabled CPU spinning in Shadow's scheduler. This significantly improves
+Shadow's runtime performance, but may have higher CPU and power/battery usage.
+https://github.com/shadow/shadow/issues/2877
+
 PATCH changes (bugfixes):
 
 * Fixed a memory leak of about 16 bytes per thread due to
