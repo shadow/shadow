@@ -55,6 +55,10 @@ renamed the host's `options` field to `host_options`.
 an error by default. This can be overridden by the new per-process option
 `expected_final_state`. https://github.com/shadow/shadow/pull/2886
 
+* The per-process `.exitcode` file has been removed due to its confusing semantics,
+and the new `expected_final_state` attribute replacing its primary use-case.
+https://github.com/shadow/shadow/pull/2906
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.

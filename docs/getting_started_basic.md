@@ -84,7 +84,6 @@ For example:
 
 ```bash
 $ ls -l shadow.data/hosts/client1/
--rw-rw-r-- 1 user user   1 Jun  2 16:54 curl.1000.exitcode
 -rw-rw-r-- 1 user user   0 Jun  2 16:54 curl.1000.shimlog
 -rw-r--r-- 1 user user   0 Jun  2 16:54 curl.1000.stderr
 -rw-r--r-- 1 user user 542 Jun  2 16:54 curl.1000.stdout

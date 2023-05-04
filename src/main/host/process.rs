@@ -118,9 +118,6 @@ struct Common {
     // unique id of the program that this process should run
     name: CString,
 
-    // The basename (directory + file stem) for files that should be stored in the data directory.
-    file_basename: PathBuf,
-
     // the name of the executable as provided in shadow's config, for logging purposes
     plugin_name: CString,
 
@@ -169,10 +166,6 @@ impl Common {
         assert_eq!(low_part >> VADDR_BITS, 0);
 
         ManagedPhysicalMemoryAddr::from(high_part | low_part)
-    }
-
-    fn output_file_name(&self, extension: &str) -> PathBuf {
-        Process::static_output_file_name(&self.file_basename, extension)
     }
 
     fn name(&self) -> &str {
@@ -716,7 +709,6 @@ impl Process {
             host_id: host.id(),
             working_dir,
             name,
-            file_basename,
             plugin_name,
         };
         RootedRc::new(
@@ -1228,15 +1220,6 @@ impl Process {
                 panic!("waitpid: {e:?}");
             }
         };
-        let exitcode_path = runnable.common.output_file_name("exitcode");
-        let exitcode_contents = match exit_status {
-            ExitStatus::StoppedByShadow => String::new(),
-            ExitStatus::Normal(n) => format!("{n}"),
-            ExitStatus::Signaled(s) => format!("{}", utility::return_code_for_signal(s)),
-        };
-        if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
-            warn!("Couldn't write exitcode file: {e:?}");
-        }
 
         let (main_result_string, log_level) = {
             let mut s = format!(
