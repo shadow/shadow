@@ -380,14 +380,10 @@ impl Host {
     ) {
         debug_assert!(shutdown_time.is_none() || shutdown_time.unwrap() > start_time);
 
-        // We assign process IDs synchronously, to fulfill shadow's documented
-        // promise that they are assigned in the order they appear in shadow's config;
-        // *not* the order in which they are actually started.
-        // TODO: Change/remove this guarantee?
-        let process_id = self.get_new_process_id();
-
         // Schedule spawning the process.
         let task = TaskRef::new(move |host| {
+            let process_id = host.get_new_process_id();
+
             // We can't move out of these captured variables, since TaskRef takes
             // a Fn, not a FnOnce.
             // TODO: Add support for FnOnce?
@@ -408,23 +404,27 @@ impl Host {
             );
             let thread_id = process.borrow(host.root()).thread_group_leader_id();
             host.processes.borrow_mut().insert(process_id, process);
+
+            if let Some(shutdown_time) = shutdown_time {
+                let task = TaskRef::new(move |host| {
+                    let Some(process) = host.process_borrow(process_id) else {
+                        debug!("Can't send shutdown signal to process {process_id}; it no longer exists");
+                        return;
+                    };
+                    let process = process.borrow(host.root());
+                    let mut siginfo: libc::siginfo_t = pod::zeroed();
+                    siginfo.si_signo = shutdown_signal as i32;
+                    process.signal(host, None, &siginfo);
+                });
+                host.schedule_task_at_emulated_time(
+                    task,
+                    EmulatedTime::SIMULATION_START + shutdown_time,
+                );
+            }
+
             host.resume(process_id, thread_id);
         });
         self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
-
-        if let Some(shutdown_time) = shutdown_time {
-            let task = TaskRef::new(move |host| {
-                let process = host.process_borrow(process_id).unwrap();
-                let process = process.borrow(host.root());
-                let mut siginfo: libc::siginfo_t = pod::zeroed();
-                siginfo.si_signo = shutdown_signal as i32;
-                process.signal(host, None, &siginfo);
-            });
-            self.schedule_task_at_emulated_time(
-                task,
-                EmulatedTime::SIMULATION_START + shutdown_time,
-            );
-        }
     }
 
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {

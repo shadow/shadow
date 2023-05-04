@@ -59,6 +59,9 @@ an error by default. This can be overridden by the new per-process option
 and the new `expected_final_state` attribute replacing its primary use-case.
 https://github.com/shadow/shadow/pull/2906
 
+* Shadow no longer guarantees the order in which simulated process IDs (PIDs)
+are assigned. https://github.com/shadow/shadow/pull/2908
+
 MINOR changes (backwards-compatible):
 
 * Support the `MSG_TRUNC` flag for unix sockets.
