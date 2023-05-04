@@ -1,3 +1,4 @@
 add_shadow_tests(BASENAME shutdown_signal_sigint)
 add_shadow_tests(BASENAME shutdown_signal_sigterm)
 add_shadow_tests(BASENAME shutdown_signal_sigkill)
+add_shadow_tests(BASENAME shutdown_already_exited)

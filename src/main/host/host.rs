@@ -407,7 +407,10 @@ impl Host {
 
             if let Some(shutdown_time) = shutdown_time {
                 let task = TaskRef::new(move |host| {
-                    let process = host.process_borrow(process_id).unwrap();
+                    let Some(process) = host.process_borrow(process_id) else {
+                        debug!("Can't send shutdown signal to process {process_id}; it no longer exists");
+                        return;
+                    };
                     let process = process.borrow(host.root());
                     let mut siginfo: libc::siginfo_t = pod::zeroed();
                     siginfo.si_signo = shutdown_signal as i32;
