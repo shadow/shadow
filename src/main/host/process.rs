@@ -1228,15 +1228,6 @@ impl Process {
                 panic!("waitpid: {e:?}");
             }
         };
-        let exitcode_path = runnable.common.output_file_name("exitcode");
-        let exitcode_contents = match exit_status {
-            ExitStatus::StoppedByShadow => String::new(),
-            ExitStatus::Normal(n) => format!("{n}"),
-            ExitStatus::Signaled(s) => format!("{}", utility::return_code_for_signal(s)),
-        };
-        if let Err(e) = std::fs::write(exitcode_path, exitcode_contents) {
-            warn!("Couldn't write exitcode file: {e:?}");
-        }
 
         let (main_result_string, log_level) = {
             let mut s = format!(
