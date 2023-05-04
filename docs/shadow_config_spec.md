@@ -518,7 +518,7 @@ Count the number of occurrences for individual syscalls.
 
 #### `experimental.use_worker_spinning`
 
-Default: false  
+Default: true  
 Type: Bool
 
 Each worker thread will spin in a `sched_yield` loop while waiting for a new task. This is ignored

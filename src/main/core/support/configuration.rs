@@ -475,7 +475,7 @@ impl Default for ExperimentalOptions {
             unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
             use_memory_manager: Some(true),
             use_cpu_pinning: Some(true),
-            use_worker_spinning: Some(false),
+            use_worker_spinning: Some(true),
             runahead: Some(NullableOption::Value(units::Time::new(
                 1,
                 units::TimePrefix::Milli,
