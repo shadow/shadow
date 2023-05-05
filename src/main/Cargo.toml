@@ -1,6 +1,6 @@
 [package]
 name = "shadow-rs"
-version = "2.5.0"
+version = "3.0.0-pre"
 edition = "2021"
 publish = false
 

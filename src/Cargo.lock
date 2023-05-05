@@ -1333,7 +1333,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-rs"
-version = "2.5.0"
+version = "3.0.0-pre"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-tests"
-version = "2.5.0"
+version = "3.0.0-pre"
 dependencies = [
  "anyhow",
  "libc",
