@@ -1,5 +1,10 @@
 A list of changes since the latest Shadow release.
 
+Changes since 3.0.0-pre:
+
+* Fixed the `host_option_defaults` configuration option, which was incorrectly
+named `host_default_options`.
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files

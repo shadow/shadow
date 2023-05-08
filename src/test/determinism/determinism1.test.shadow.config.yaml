@@ -1,6 +1,6 @@
 general:
   stop_time: 5
-host_default_options:
+host_option_defaults:
   pcap_enabled: true
 network:
   graph:

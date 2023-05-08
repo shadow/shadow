@@ -63,7 +63,7 @@ pub struct CliOptions {
     pub network: NetworkOptions,
 
     #[clap(flatten)]
-    pub host_default_options: HostDefaultOptions,
+    pub host_option_defaults: HostDefaultOptions,
 
     #[clap(flatten)]
     pub experimental: ExperimentalOptions,
@@ -78,7 +78,7 @@ pub struct ConfigFileOptions {
     pub network: NetworkOptions,
 
     #[serde(default)]
-    pub host_default_options: HostDefaultOptions,
+    pub host_option_defaults: HostDefaultOptions,
 
     #[serde(default)]
     pub experimental: ExperimentalOptions,
@@ -107,9 +107,9 @@ impl ConfigOptions {
         // override config options with command line options
         config_file.general = options.general.with_defaults(config_file.general);
         config_file.network = options.network.with_defaults(config_file.network);
-        config_file.host_default_options = options
-            .host_default_options
-            .with_defaults(config_file.host_default_options);
+        config_file.host_option_defaults = options
+            .host_option_defaults
+            .with_defaults(config_file.host_option_defaults);
         config_file.experimental = options.experimental.with_defaults(config_file.experimental);
 
         // copy the host defaults to all of the hosts
@@ -117,7 +117,7 @@ impl ConfigOptions {
             host.host_options = host
                 .host_options
                 .clone()
-                .with_defaults(config_file.host_default_options.clone());
+                .with_defaults(config_file.host_option_defaults.clone());
         }
 
         Self {
