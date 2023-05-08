@@ -127,4 +127,9 @@ impl SyscallHandler {
 
         Ok(libc::pid_t::from(child_tid))
     }
+
+    #[log_syscall(/* rv */libc::pid_t)]
+    pub fn gettid(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+        Ok(libc::pid_t::from(ctx.objs.thread.id()))
+    }
 }

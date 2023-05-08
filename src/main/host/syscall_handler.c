@@ -22,7 +22,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/process.h"
-#include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
@@ -363,7 +362,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getpeername);
             HANDLE_C(getpid);
             HANDLE_C(getppid);
-            HANDLE_C(gettid);
+            HANDLE_RUST(gettid);
             HANDLE_RUST(getrandom);
             HANDLE_C(get_robust_list);
             HANDLE_RUST(getsockname);

@@ -355,7 +355,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall_handler.c",
         "host/syscall_types.c",
         "host/syscall/protected.c",
-        "host/syscall/clone.c",
         "host/syscall/epoll.c",
         "host/syscall/fcntl.c",
         "host/syscall/file.c",

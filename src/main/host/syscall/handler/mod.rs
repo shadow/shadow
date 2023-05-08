@@ -56,6 +56,7 @@ impl SyscallHandler {
             libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
             libc::SYS_getsockname => SyscallHandlerFn::call(Self::getsockname, &mut ctx),
             libc::SYS_getsockopt => SyscallHandlerFn::call(Self::getsockopt, &mut ctx),
+            libc::SYS_gettid => SyscallHandlerFn::call(Self::gettid, &mut ctx),
             libc::SYS_ioctl => SyscallHandlerFn::call(Self::ioctl, &mut ctx),
             libc::SYS_listen => SyscallHandlerFn::call(Self::listen, &mut ctx),
             libc::SYS_mmap => SyscallHandlerFn::call(Self::mmap, &mut ctx),
