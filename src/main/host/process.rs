@@ -220,6 +220,10 @@ pub struct RunnableProcess {
     unsafe_borrow_mut: RefCell<Option<UnsafeBorrowMut>>,
     unsafe_borrows: RefCell<Vec<UnsafeBorrow>>,
 
+    // `clone(2)` documents that if `CLONE_THREAD` is set, then `CLONE_VM` must
+    // also be set. Hence all threads in a process always share the same virtual
+    // address space, and hence we have a `MemoryManager` at the `Process` level
+    // rather than the `Thread` level.
     // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
     // Boxed to avoid invalidating those if Self is moved.
     memory_manager: Box<RefCell<MemoryManager>>,
