@@ -210,6 +210,7 @@ impl ManagedThread {
                     // actually exited.
                     if syscall.syscall_args.number == libc::SYS_exit {
                         let return_code = syscall.syscall_args.args[0].into();
+                        debug!("Short-circuiting syscall exit({return_code})");
                         self.return_code.set(Some(return_code));
                         // Tell mthread to go ahead and make the exit syscall itself.
                         // We *don't* call `_managedthread_continuePlugin` here,

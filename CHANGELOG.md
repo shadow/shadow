@@ -5,6 +5,9 @@ Changes since 3.0.0-pre:
 * Fixed the `host_option_defaults` configuration option, which was incorrectly
 named `host_default_options`.
 
+* Fixed a bug that caused Shadow to panic in some cases when a simulated thread
+exits. https://github.com/shadow/shadow/pull/2913
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
