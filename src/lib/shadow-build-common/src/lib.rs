@@ -47,19 +47,15 @@ impl ShadowBuildCommon {
         println!("cargo:rerun-if-env-changed=CFLAGS");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
 
+        // When adding flags here, consider using `add_compile_options`
+        // in the root CMakeLists.txt instead, where they will be picked
+        // up both here and in our remaining pure C targets.
         b.define("_GNU_SOURCE", None)
             .include(&*self.build_src_root)
             .include(&*self.src_root)
-            // Always include debug symbols and frame pointers for
-            // ease of debugging
-            .flag("-ggdb")
-            .flag("-fno-omit-frame-pointer")
             // Disable extra warnings (-Wall, -Wextra) until if and when they're
             // fixed in our C code.
             .warnings(false)
-            // Enable some select extra warnings
-            .flag("-Wreturn-type")
-            .flag("-Wswitch")
             // By default, *don't* convert any remaining warnings into errors (-Werror).
             // -Werror is currently enabled here via CFLAGS, which
             // cmake sets depending on the option SHADOW_WERROR.
