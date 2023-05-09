@@ -24,7 +24,7 @@ vasi-sync = { path = "../vasi-sync" }
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common" }
-system-deps = "6.0"
+system-deps = "6.1"
 cbindgen = { version = "0.24.3" }
 
 [dev-dependencies]
