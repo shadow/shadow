@@ -10,7 +10,7 @@ path = "lib.rs"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-anyhow = { version = "1.0.69", features = ["backtrace"] }
+anyhow = { version = "1.0.71", features = ["backtrace"] }
 atomic_refcell = "0.1"
 backtrace = "0.3.67"
 bitflags = "2.2"
@@ -18,7 +18,7 @@ bitflags = "2.2"
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513
 bytes = { git = "https://github.com/shadow/bytes", rev = "c48bd4439e7e043300521925524ecdcce7ff6bcc" }
-clap = { version = "4.1.8", features = ["derive", "wrap_help"] }
+clap = { version = "4.2.7", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.2"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
@@ -40,7 +40,7 @@ rayon = "1.7.0"
 regex = "1"
 schemars = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.94"
+serde_json = "1.0.96"
 serde_yaml = "0.9"
 shadow_shmem = { path = "../lib/shmem" }
 shadow_tsc = { path = "../lib/tsc" }
@@ -64,7 +64,7 @@ perf_timers = []
 
 [build-dependencies]
 shadow-build-common = { path = "../lib/shadow-build-common" }
-bindgen = { version = "0.64.0" }
+bindgen = { version = "0.65.1" }
 cbindgen = { version = "0.24.3" }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.1"
