@@ -16,6 +16,47 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
+fn verify_supported_system() -> anyhow::Result<()> {
+    let uts_name = nix::sys::utsname::uname()?;
+    let sysname = uts_name
+        .sysname()
+        .to_str()
+        .with_context(|| "Decoding system name")?;
+    if sysname != "Linux" {
+        anyhow::bail!("Unsupported sysname: {sysname}");
+    }
+    let version = uts_name
+        .release()
+        .to_str()
+        .with_context(|| "Decoding system release")?;
+    let mut version_parts = version.split('.');
+    let Some(major) = version_parts.next() else {
+        anyhow::bail!("Couldn't find major version in : {version}");
+    };
+    let major: i32 = major
+        .parse()
+        .with_context(|| format!("Parsing major version number '{major}'"))?;
+    let Some(minor) = version_parts.next() else {
+        anyhow::bail!("Couldn't find minor version in : {version}");
+    };
+    let minor: i32 = minor
+        .parse()
+        .with_context(|| format!("Parsing minor version number '{minor}'"))?;
+
+    // Keep in sync with `supported_platforms.md`.
+    const MIN_KERNEL_VERSION: (i32, i32) = (5, 4);
+
+    if (major, minor) < MIN_KERNEL_VERSION {
+        anyhow::bail!(
+            "kernel version {major}.{minor} is older than minimum supported version {}.{}",
+            MIN_KERNEL_VERSION.0,
+            MIN_KERNEL_VERSION.1
+        );
+    }
+
+    Ok(())
+}
+
 /// Main entry point for the simulator.
 pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Result<()> {
     if unsafe { c::main_checkGlibVersion() } != 0 {
@@ -177,6 +218,10 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     // log some information
     unsafe { c::main_logBuildInfo(build_info) };
     log_environment(args.clone());
+
+    if let Err(e) = verify_supported_system() {
+        log::warn!("Couldn't verify supported system: {e:?}")
+    }
 
     log::debug!("Startup checks passed, we are ready to start the simulation");
 
