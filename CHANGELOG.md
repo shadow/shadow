@@ -8,6 +8,10 @@ named `host_default_options`.
 * Fixed a bug that caused Shadow to panic in some cases when a simulated thread
 exits. https://github.com/shadow/shadow/pull/2913
 
+* Increased the minimum Linux kernel version to 5.4. This means that users
+on Debian 10 will need to install a newer kernel, e.g. via backports.
+See [supported platforms](supported_platforms.md).
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
