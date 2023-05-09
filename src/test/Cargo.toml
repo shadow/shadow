@@ -166,7 +166,7 @@ name = "test_stdio"
 path = "stdio/test_stdio.rs"
 
 [dependencies]
-anyhow = { version = "1.0.69", features = ["backtrace"] }
+anyhow = { version = "1.0.71", features = ["backtrace"] }
 libc = "0.2"
 nix = "0.26.2"
 rand = { version="0.8.5", features=["small_rng"] }
