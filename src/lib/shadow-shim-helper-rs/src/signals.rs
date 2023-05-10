@@ -20,16 +20,16 @@ pub const SS_AUTODISARM: i32 = 1 << 31;
 /// This is analagous to, but typically smaller than, libc's sigset_t.
 #[repr(C)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
-pub struct shd_kernel_sigset_t {
+pub struct linux_sigset_t {
     val: u64,
 }
 
-impl shd_kernel_sigset_t {
+impl linux_sigset_t {
     pub const EMPTY: Self = Self { val: 0 };
     pub const FULL: Self = Self { val: !0 };
 
     pub fn has(&self, sig: Signal) -> bool {
-        (*self & shd_kernel_sigset_t::from(sig)).val != 0
+        (*self & linux_sigset_t::from(sig)).val != 0
     }
 
     pub fn lowest(&self) -> Option<Signal> {
@@ -46,19 +46,19 @@ impl shd_kernel_sigset_t {
     }
 
     pub fn is_empty(&self) -> bool {
-        *self == shd_kernel_sigset_t::EMPTY
+        *self == linux_sigset_t::EMPTY
     }
 
     pub fn del(&mut self, sig: Signal) {
-        *self &= !shd_kernel_sigset_t::from(sig);
+        *self &= !linux_sigset_t::from(sig);
     }
 
     pub fn add(&mut self, sig: Signal) {
-        *self |= shd_kernel_sigset_t::from(sig);
+        *self |= linux_sigset_t::from(sig);
     }
 }
 
-impl From<Signal> for shd_kernel_sigset_t {
+impl From<Signal> for linux_sigset_t {
     fn from(value: Signal) -> Self {
         let value = value as i32;
         debug_assert!(value <= 64);
@@ -70,13 +70,13 @@ impl From<Signal> for shd_kernel_sigset_t {
 
 #[test]
 fn test_from_signal() {
-    let sigset = shd_kernel_sigset_t::from(Signal::SIGABRT);
+    let sigset = linux_sigset_t::from(Signal::SIGABRT);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(!sigset.has(Signal::SIGSEGV));
-    assert_ne!(sigset, shd_kernel_sigset_t::EMPTY);
+    assert_ne!(sigset, linux_sigset_t::EMPTY);
 }
 
-impl std::ops::BitOr for shd_kernel_sigset_t {
+impl std::ops::BitOr for linux_sigset_t {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -89,13 +89,13 @@ impl std::ops::BitOr for shd_kernel_sigset_t {
 #[test]
 fn test_bitor() {
     let sigset =
-        shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGSEGV);
+        linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitOrAssign for shd_kernel_sigset_t {
+impl std::ops::BitOrAssign for linux_sigset_t {
     fn bitor_assign(&mut self, rhs: Self) {
         self.val |= rhs.val
     }
@@ -103,14 +103,14 @@ impl std::ops::BitOrAssign for shd_kernel_sigset_t {
 
 #[test]
 fn test_bitorassign() {
-    let mut sigset = shd_kernel_sigset_t::from(Signal::SIGABRT);
-    sigset |= shd_kernel_sigset_t::from(Signal::SIGSEGV);
+    let mut sigset = linux_sigset_t::from(Signal::SIGABRT);
+    sigset |= linux_sigset_t::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitAnd for shd_kernel_sigset_t {
+impl std::ops::BitAnd for linux_sigset_t {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -123,16 +123,16 @@ impl std::ops::BitAnd for shd_kernel_sigset_t {
 #[test]
 fn test_bitand() {
     let lhs =
-        shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGSEGV);
+        linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
     let rhs =
-        shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGALRM);
+        linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
     let and = lhs & rhs;
     assert!(and.has(Signal::SIGABRT));
     assert!(!and.has(Signal::SIGSEGV));
     assert!(!and.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitAndAssign for shd_kernel_sigset_t {
+impl std::ops::BitAndAssign for linux_sigset_t {
     fn bitand_assign(&mut self, rhs: Self) {
         self.val &= rhs.val
     }
@@ -141,14 +141,14 @@ impl std::ops::BitAndAssign for shd_kernel_sigset_t {
 #[test]
 fn test_bitand_assign() {
     let mut set =
-        shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGSEGV);
-    set &= shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGALRM);
+        linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
+    set &= linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
     assert!(set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
     assert!(!set.has(Signal::SIGALRM));
 }
 
-impl std::ops::Not for shd_kernel_sigset_t {
+impl std::ops::Not for linux_sigset_t {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -159,7 +159,7 @@ impl std::ops::Not for shd_kernel_sigset_t {
 #[test]
 fn test_not() {
     let set =
-        shd_kernel_sigset_t::from(Signal::SIGABRT) | shd_kernel_sigset_t::from(Signal::SIGSEGV);
+        linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
     let set = !set;
     assert!(!set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
@@ -180,13 +180,14 @@ pub union ShdKernelSigactionUnion {
 /// Compatible with kernel's definition of `struct sigaction`. Different from
 /// libc's in that `ksa_handler` and `ksa_sigaction` are explicitly in a union,
 /// and that `ksa_mask` is the kernel's mask size (64 bits) vs libc's larger one
+/// 
 /// (~1000 bits for glibc).
 ///
 /// We use the field prefix ksa_ to avoid conflicting with macros defined for
 /// the corresponding field names in glibc.
 #[derive(VirtualAddressSpaceIndependent, Copy, Clone)]
 #[repr(C)]
-pub struct shd_kernel_sigaction {
+pub struct linux_sigaction {
     // SAFETY: We do not dereference the pointers in this union, except from the
     // shim, where it is valid to do so.
     #[unsafe_assume_virtual_address_space_independent]
@@ -198,10 +199,10 @@ pub struct shd_kernel_sigaction {
     // SAFETY: We never dereference this field.
     #[unsafe_assume_virtual_address_space_independent]
     ksa_restorer: Option<extern "C" fn()>,
-    ksa_mask: shd_kernel_sigset_t,
+    ksa_mask: linux_sigset_t,
 }
 
-impl shd_kernel_sigaction {
+impl linux_sigaction {
     pub fn handler(&self) -> signal::SigHandler {
         let handler_int: usize = unsafe { self.u.ksa_handler }
             .map(|f| f as usize)
@@ -218,7 +219,7 @@ impl shd_kernel_sigaction {
     }
 }
 
-impl Default for shd_kernel_sigaction {
+impl Default for linux_sigaction {
     fn default() -> Self {
         Self {
             u: ShdKernelSigactionUnion { ksa_handler: None },
@@ -291,46 +292,46 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn shd_sigemptyset() -> shd_kernel_sigset_t {
-        shd_kernel_sigset_t::EMPTY
+    pub extern "C" fn shd_sigemptyset() -> linux_sigset_t {
+        linux_sigset_t::EMPTY
     }
 
     #[no_mangle]
-    pub extern "C" fn shd_sigfullset() -> shd_kernel_sigset_t {
-        shd_kernel_sigset_t::FULL
+    pub extern "C" fn shd_sigfullset() -> linux_sigset_t {
+        linux_sigset_t::FULL
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigaddset(set: *mut shd_kernel_sigset_t, signo: i32) {
+    pub unsafe extern "C" fn shd_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigdelset(set: *mut shd_kernel_sigset_t, signo: i32) {
+    pub unsafe extern "C" fn shd_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigismember(set: *const shd_kernel_sigset_t, signo: i32) -> bool {
+    pub unsafe extern "C" fn shd_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
         let set = unsafe { set.as_ref().unwrap() };
         set.has(signo.try_into().unwrap())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigisemptyset(set: *const shd_kernel_sigset_t) -> bool {
+    pub unsafe extern "C" fn shd_sigisemptyset(set: *const linux_sigset_t) -> bool {
         let set = unsafe { set.as_ref().unwrap() };
         set.is_empty()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shd_sigorset(
-        lhs: *const shd_kernel_sigset_t,
-        rhs: *const shd_kernel_sigset_t,
-    ) -> shd_kernel_sigset_t {
+        lhs: *const linux_sigset_t,
+        rhs: *const linux_sigset_t,
+    ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
         *lhs | *rhs
@@ -338,22 +339,22 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn shd_sigandset(
-        lhs: *const shd_kernel_sigset_t,
-        rhs: *const shd_kernel_sigset_t,
-    ) -> shd_kernel_sigset_t {
+        lhs: *const linux_sigset_t,
+        rhs: *const linux_sigset_t,
+    ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
         *lhs & *rhs
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_signotset(set: *const shd_kernel_sigset_t) -> shd_kernel_sigset_t {
+    pub unsafe extern "C" fn shd_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
         !*set
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_siglowest(set: *const shd_kernel_sigset_t) -> i32 {
+    pub unsafe extern "C" fn shd_siglowest(set: *const linux_sigset_t) -> i32 {
         let set = unsafe { set.as_ref().unwrap() };
         match set.lowest() {
             Some(s) => s as i32,

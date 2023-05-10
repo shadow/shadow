@@ -63,9 +63,9 @@ impl Signal {
 
 #[derive(Copy, Clone)]
 #[allow(non_camel_case_types)]
-pub struct siginfo_t(bindings::siginfo_t);
+pub struct linux_siginfo_t(bindings::siginfo_t);
 
-impl siginfo_t {
+impl linux_siginfo_t {
     pub fn signo(&self) -> i32 {
         // XXX safety
         unsafe { self.0.__bindgen_anon_1.__bindgen_anon_1.si_signo }
@@ -95,7 +95,7 @@ impl siginfo_t {
 }
 
 pub type SigActionHandlerHandler = unsafe extern "C" fn(i32);
-pub type SigActionHandlerAction = unsafe extern "C" fn(i32, *mut siginfo_t, *mut core::ffi::c_void);
+pub type SigActionHandlerAction = unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void);
 
 #[repr(C)]
 pub union SigActionHandler {
@@ -112,14 +112,14 @@ impl SigActionHandler {
     pub const SIG_ERR: Self = Self { special: -1 };
 }
 
-pub type SigActionAction = unsafe extern "C" fn(i32, *mut siginfo_t, *mut core::ffi::c_void);
+pub type SigActionAction = unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void);
 
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 #[allow(non_camel_case_types)]
-pub struct sigaction(bindings::sigaction);
+pub struct linux_sigaction(bindings::sigaction);
 
-impl sigaction {
+impl linux_sigaction {
     pub fn handler(&self) -> SigActionHandler {
         match self.0.sa_handler {
             Some(h) => unsafe { core::mem::transmute(h) },
@@ -135,7 +135,7 @@ impl sigaction {
     }
 }
 
-impl Default for sigaction {
+impl Default for linux_sigaction {
     fn default() -> Self {
         Self(bindings::sigaction {
             sa_handler: Default::default(),
@@ -203,8 +203,8 @@ pub fn defaultaction(sig: Signal) -> DefaultAction {
 #[repr(transparent)]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
-pub struct sigset_t(bindings::sigset_t);
-impl sigset_t {
+pub struct linux_sigset_t(bindings::sigset_t);
+impl linux_sigset_t {
     pub const EMPTY: Self = Self(0);
     pub const FULL: Self = Self(!0);
 
@@ -238,7 +238,7 @@ impl sigset_t {
     }
 }
 
-impl From<Signal> for sigset_t {
+impl From<Signal> for linux_sigset_t {
     fn from(value: Signal) -> Self {
         let value = i32::from(value);
         debug_assert!(value >= 0);
@@ -247,7 +247,7 @@ impl From<Signal> for sigset_t {
     }
 }
 
-impl core::ops::BitOr for sigset_t {
+impl core::ops::BitOr for linux_sigset_t {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -255,13 +255,13 @@ impl core::ops::BitOr for sigset_t {
     }
 }
 
-impl core::ops::BitOrAssign for sigset_t {
+impl core::ops::BitOrAssign for linux_sigset_t {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0
     }
 }
 
-impl core::ops::BitAnd for sigset_t {
+impl core::ops::BitAnd for linux_sigset_t {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -269,13 +269,13 @@ impl core::ops::BitAnd for sigset_t {
     }
 }
 
-impl core::ops::BitAndAssign for sigset_t {
+impl core::ops::BitAndAssign for linux_sigset_t {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0
     }
 }
 
-impl core::ops::Not for sigset_t {
+impl core::ops::Not for linux_sigset_t {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -292,12 +292,12 @@ mod test_sigset {
         // The kernel definition should (currently) be 8 bytes.
         // At some point this may get increased, but it shouldn't be the glibc
         // size of ~100 bytes.
-        assert_eq!(std::mem::size_of::<sigset_t>(), 8);
+        assert_eq!(std::mem::size_of::<linux_sigset_t>(), 8);
     }
 
     #[test]
     fn test_bitor() {
-        let sigset = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+        let sigset = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
         assert!(sigset.has(Signal::SIGABRT));
         assert!(sigset.has(Signal::SIGSEGV));
         assert!(!sigset.has(Signal::SIGALRM));
@@ -305,8 +305,8 @@ mod test_sigset {
 
     #[test]
     fn test_bitorassign() {
-        let mut sigset = sigset_t::from(Signal::SIGABRT);
-        sigset |= sigset_t::from(Signal::SIGSEGV);
+        let mut sigset = linux_sigset_t::from(Signal::SIGABRT);
+        sigset |= linux_sigset_t::from(Signal::SIGSEGV);
         assert!(sigset.has(Signal::SIGABRT));
         assert!(sigset.has(Signal::SIGSEGV));
         assert!(!sigset.has(Signal::SIGALRM));
@@ -314,8 +314,8 @@ mod test_sigset {
 
     #[test]
     fn test_bitand() {
-        let lhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
-        let rhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
+        let lhs = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
+        let rhs = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
         let and = lhs & rhs;
         assert!(and.has(Signal::SIGABRT));
         assert!(!and.has(Signal::SIGSEGV));
@@ -324,8 +324,8 @@ mod test_sigset {
 
     #[test]
     fn test_bitand_assign() {
-        let mut set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
-        set &= sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
+        let mut set = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
+        set &= linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
         assert!(set.has(Signal::SIGABRT));
         assert!(!set.has(Signal::SIGSEGV));
         assert!(!set.has(Signal::SIGALRM));
@@ -333,7 +333,7 @@ mod test_sigset {
 
     #[test]
     fn test_not() {
-        let set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+        let set = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
         let set = !set;
         assert!(!set.has(Signal::SIGABRT));
         assert!(!set.has(Signal::SIGSEGV));

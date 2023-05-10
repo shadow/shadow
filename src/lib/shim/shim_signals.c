@@ -7,7 +7,7 @@
 #include <string.h>
 #include <ucontext.h>
 
-static void _call_signal_handler(const struct shd_kernel_sigaction* action, int signo,
+static void _call_signal_handler(const struct linux_sigaction* action, int signo,
                                  siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
     if (action->ksa_flags & SA_SIGINFO) {
@@ -38,10 +38,10 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
     bool restartable = true;
     while ((signo = shimshmem_takePendingUnblockedSignal(
                 host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
-        shd_kernel_sigset_t blocked_signals =
+        linux_sigset_t blocked_signals =
             shimshmem_getBlockedSignals(host_lock, shim_threadSharedMem());
 
-        struct shd_kernel_sigaction action =
+        struct linux_sigaction action =
             shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
 
         if (action.u.ksa_handler == SIG_IGN) {
@@ -68,7 +68,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         trace("Handling signo %d", signo);
 
-        shd_kernel_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
+        linux_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
         if (!(action.ksa_flags & SA_NODEFER)) {
             // Block another instance of the same signal.
             shd_sigaddset(&handler_mask, signo);
@@ -77,7 +77,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         if (action.ksa_flags & SA_RESETHAND) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct shd_kernel_sigaction){.u.ksa_handler = SIG_DFL});
+                                      &(struct linux_sigaction){.u.ksa_handler = SIG_DFL});
         }
         if (!(action.ksa_flags & SA_RESTART)) {
             restartable = false;
@@ -166,7 +166,7 @@ void shim_handle_hardware_error_signal(int signo, siginfo_t* info, void* void_uc
 
     ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
 
-    shd_kernel_sigset_t pending_signals =
+    linux_sigset_t pending_signals =
         shimshmem_getThreadPendingSignals(host_lock, shim_threadSharedMem());
     if (shd_sigismember(&pending_signals, signo)) {
         warning("Received signal %d when it was already pending", signo);
