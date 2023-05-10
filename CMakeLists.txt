@@ -167,6 +167,17 @@ else()
     MESSAGE(FATAL_ERROR "Unknown build type '${CMAKE_BUILD_TYPE}'; valid types are 'Release' or 'Debug'")
 endif()
 
+# Global compile options for both our Rust and C targets.
+# Propagated through to our Rust build in src/CMakeLists.txt.
+add_compile_options(
+  # Always include debug symbols and frame pointers for ease of debugging
+  -ggdb
+  -fno-omit-frame-pointer
+  # Enable some particularly useful warnings
+  -Wreturn-type
+  -Wswitch
+)
+
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
