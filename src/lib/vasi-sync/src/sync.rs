@@ -5,14 +5,13 @@
 //! in loom instead of executing it natively.
 
 // Use std sync primitives, or loom equivalents
-#[cfg(loom)]
-use std::collections::HashMap;
 #[cfg(not(loom))]
-pub use std::{
+pub use core::{
     sync::atomic,
     sync::atomic::{AtomicI32, AtomicU32, Ordering},
-    sync::Arc,
 };
+#[cfg(loom)]
+use std::collections::HashMap;
 
 // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
 // processes, or into different virtual addresses in the same process, etc.
@@ -39,8 +38,8 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
             futex_word as *const _,
             libc::FUTEX_WAIT,
             val,
-            std::ptr::null() as *const libc::timespec,
-            std::ptr::null_mut() as *mut u32,
+            core::ptr::null() as *const libc::timespec,
+            core::ptr::null_mut() as *mut u32,
             0u32,
         )
     })
@@ -96,8 +95,8 @@ pub fn futex_wake(futex_word: &AtomicU32) -> nix::Result<()> {
             futex_word,
             libc::FUTEX_WAKE,
             1,
-            std::ptr::null() as *const libc::timespec,
-            std::ptr::null_mut() as *mut u32,
+            core::ptr::null() as *const libc::timespec,
+            core::ptr::null_mut() as *mut u32,
             0u32,
         )
     })?;
@@ -157,11 +156,11 @@ unsafe impl<T: ?Sized> Send for MutPtr<T> where T: Send {}
 #[cfg(not(loom))]
 #[derive(Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
-pub struct UnsafeCell<T>(std::cell::UnsafeCell<T>);
+pub struct UnsafeCell<T>(core::cell::UnsafeCell<T>);
 #[cfg(not(loom))]
 impl<T> UnsafeCell<T> {
     pub fn new(data: T) -> UnsafeCell<T> {
-        UnsafeCell(std::cell::UnsafeCell::new(data))
+        UnsafeCell(core::cell::UnsafeCell::new(data))
     }
 
     pub fn get_mut(&self) -> MutPtr<T> {

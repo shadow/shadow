@@ -1,6 +1,5 @@
-use std::error::Error;
-use std::fmt::Display;
-use std::mem::MaybeUninit;
+use core::fmt::Display;
+use core::mem::MaybeUninit;
 
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -126,16 +125,10 @@ pub enum SelfContainedChannelError {
 }
 
 impl Display for SelfContainedChannelError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SelfContainedChannelError::WriterIsClosed => write!(f, "WriterIsClosed"),
         }
-    }
-}
-
-impl Error for SelfContainedChannelError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
     }
 }
 
