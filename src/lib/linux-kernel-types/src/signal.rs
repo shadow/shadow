@@ -1,6 +1,7 @@
 use core::convert::TryFrom;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
+use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
 use crate::constants_bindings;
@@ -64,6 +65,7 @@ impl Signal {
 #[derive(Copy, Clone)]
 #[allow(non_camel_case_types)]
 pub struct linux_siginfo_t(bindings::siginfo_t);
+unsafe impl VirtualAddressSpaceIndependent for linux_siginfo_t {}
 
 impl linux_siginfo_t {
     pub fn signo(&self) -> i32 {
@@ -115,9 +117,11 @@ impl SigActionHandler {
 pub type SigActionAction = unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void);
 
 #[derive(Copy, Clone, Debug)]
-#[repr(transparent)]
+// XXX transparent? but then bindgen turns it into a typedef
+#[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct linux_sigaction(bindings::sigaction);
+unsafe impl VirtualAddressSpaceIndependent for linux_sigaction {}
 
 impl linux_sigaction {
     pub fn handler(&self) -> SigActionHandler {
@@ -204,6 +208,8 @@ pub fn defaultaction(sig: Signal) -> DefaultAction {
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub struct linux_sigset_t(bindings::sigset_t);
+unsafe impl VirtualAddressSpaceIndependent for linux_sigset_t {}
+
 impl linux_sigset_t {
     pub const EMPTY: Self = Self(0);
     pub const FULL: Self = Self(!0);

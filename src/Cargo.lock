@@ -745,7 +745,9 @@ name = "linux-kernel-types"
 version = "0.1.0"
 dependencies = [
  "bindgen",
+ "cbindgen",
  "num_enum",
+ "shadow-build-common",
  "vasi",
 ]
 

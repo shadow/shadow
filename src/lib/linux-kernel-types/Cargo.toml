@@ -10,4 +10,6 @@ num_enum = { version = "0.6.1", default-features=false }
 vasi = { path = "../vasi" }
 
 [build-dependencies]
+shadow-build-common = { path = "../shadow-build-common" }
 bindgen = { version = "0.65.1" }
+cbindgen = { version = "0.24.3" }

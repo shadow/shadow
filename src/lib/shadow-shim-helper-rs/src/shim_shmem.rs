@@ -1,5 +1,5 @@
 use libc::{siginfo_t, stack_t};
-use nix::sys::signal::Signal;
+use linux_kernel_types::signal::Signal;
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
