@@ -21,6 +21,10 @@ versions:
 - Support for any of Shadow's [supported platforms](supported_platforms.md)
   will not be dropped, unless those platforms no longer receive free updates
   and support from the distribution's developer.
+- We will not change the criteria for the minimum supported Linux kernel version
+as documented in [supported platforms](supported_platforms.md). (Note though
+that this still allows us to increase the minimum kernel version as a result of
+dropping support for a platform, which we may do as noted above).
 
 The following may change between ANY versions (MAJOR, MINOR, or PATCH):
 

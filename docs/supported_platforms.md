@@ -16,11 +16,20 @@ unsupported platforms.
 Our policy regarding supported platforms can be found in our ["stability
 guarantees"](semver.md).
 
+## Supported Linux kernel versions
+
 Some Linux distributions support multiple kernel versions, for example an older
 General Availability (GA) kernel and newer hardware-enablement (HWE) kernels.
-We will try to allow Shadow to run on the oldest kernel supported on each
-distribution (the GA kernel), but we are currently only able to regularly test
-on the latest Ubuntu kernel, since that's what GitHub Actions provides.
+We try to allow Shadow to run on the oldest kernel supported on each
+distribution (the GA kernel). However:
+
+* On Debian 10 (buster) We do not support the GA kernel. We do support the HWE
+kernel (e.g. installed via backports).
+* We are currently only able to regularly test on the latest Ubuntu kernel,
+since that's what GitHub Actions provides.
+
+By these criteria, Shadow's oldest supported kernel version is currently 5.4
+(the GA kernel in Ubuntu 20.04.0).
 
 ## Docker
 
