@@ -104,6 +104,12 @@ pub struct ConfigOptions {
 
 impl ConfigOptions {
     pub fn new(mut config_file: ConfigFileOptions, options: CliOptions) -> Self {
+        // the `HostDefaultOptions::default` contains only `None` values, so we must first merge the
+        // config file with the real defaults from `HostDefaultOptions::new_with_defaults`
+        config_file.host_option_defaults = config_file
+            .host_option_defaults
+            .with_defaults(HostDefaultOptions::new_with_defaults());
+
         // override config options with command line options
         config_file.general = options.general.with_defaults(config_file.general);
         config_file.network = options.network.with_defaults(config_file.network);
@@ -507,6 +513,8 @@ static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[clap(next_help_heading = "Host Defaults (Default options for hosts)")]
 #[clap(next_display_order = None)]
 #[serde(default, deny_unknown_fields)]
+// serde will default all fields to `None`, but in the cli help we want the actual defaults
+#[schemars(default = "HostDefaultOptions::new_with_defaults")]
 pub struct HostDefaultOptions {
     /// Log level at which to print node messages
     #[clap(long = "host-log-level", name = "host-log-level")]
@@ -526,11 +534,14 @@ pub struct HostDefaultOptions {
 }
 
 impl HostDefaultOptions {
-    pub fn new_empty() -> Self {
+    pub fn new_with_defaults() -> Self {
         Self {
             log_level: None,
-            pcap_enabled: None,
-            pcap_capture_size: None,
+            pcap_enabled: Some(false),
+            // From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
+            // capture all the data available from the packet". The maximum length of an IP packet
+            // (including the header) is 65535 bytes.
+            pcap_capture_size: Some(units::Bytes::new(65535, units::SiPrefixUpper::Base)),
         }
     }
 
@@ -541,15 +552,18 @@ impl HostDefaultOptions {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for HostDefaultOptions {
     fn default() -> Self {
+        // Our config fields would typically be initialized with their real defaults here in the
+        // `Default::default` implementation, but we need to handle the host options differently
+        // because the global `host_option_defaults` can be overridden by host-specific
+        // `host_options`. So instead we use defaults of `None` here and set the real defaults with
+        // `Self::new_with_defaults` in `ConfigOptions::new`.
         Self {
             log_level: None,
-            pcap_enabled: Some(false),
-            // From pcap(3): "A value of 65535 should be sufficient, on most if not all networks, to
-            // capture all the data available from the packet". The maximum length of an IP packet
-            // (including the header) is 65535 bytes.
-            pcap_capture_size: Some(units::Bytes::new(65535, units::SiPrefixUpper::Base)),
+            pcap_enabled: None,
+            pcap_capture_size: None,
         }
     }
 }
@@ -644,7 +658,7 @@ pub struct HostOptions {
     #[serde(default)]
     pub bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 
-    #[serde(default = "HostDefaultOptions::new_empty")]
+    #[serde(default)]
     pub host_options: HostDefaultOptions,
 }
 
