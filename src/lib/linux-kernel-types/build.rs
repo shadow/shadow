@@ -3,7 +3,7 @@ use std::{env, path::PathBuf};
 fn run_bindgen() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let header_contents ="
+    let header_contents = "
             #include <stdint.h>
             #include <stddef.h>
             #include <linux/signal.h>
@@ -37,6 +37,7 @@ fn run_bindgen() {
         .header_contents("kernel_defs.h", header_contents)
         .allowlist_type("sigset_t")
         .allowlist_type("sigaction")
+        .allowlist_type("siginfo_t")
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file(out_path.join("types.rs"))
