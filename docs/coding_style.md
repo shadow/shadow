@@ -1,5 +1,29 @@
 # Coding style
 
+## Logging
+
+In Rust code, we use the [log](https://docs.rs/log/latest/log/) framework for
+logging. In C code we use a wrapper library that *also* uses Rust's
+[log](https://docs.rs/log/latest/log/) framework internally.
+
+For general guidance on what levels to log at, see [log::Level](https://docs.rs/log/latest/log/enum.Level.html#variants).
+
+Some shadow-specific log level policies:
+
+* We reserve the `Error` level for situations in which the `shadow`
+process as a whole will exit with a non-zero code. Conversely, when `shadow` exits
+with a non-zero code, the user should be able to get some idea of what caused it by
+looking at the `Error`-level log entries.
+
+* `Warning` should be used for messages that ought to be checked by the user
+before trusting the results of a simulation. For example, we use these in
+syscall handlers when an unimplemented syscall or option is used, and shadow is
+forced to return something like `ENOTSUP`, `EINVAL` or `ENOSYS`. In such cases
+the simulation is able to continue, and *might* still be representative of what
+would happen on a real Linux system; e.g. libc will often fall back to an older
+syscall, resulting in minimal impact on the simulated behavior of the managed
+process.
+
 ## Clang-format
 
 Our C code formatting style is defined in our
