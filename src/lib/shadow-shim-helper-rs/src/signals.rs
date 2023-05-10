@@ -3,16 +3,14 @@ use vasi::VirtualAddressSpaceIndependent;
 
 pub const SHD_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
-/// Lowest and highest valid realtime signal, according to signal(7).  We don't
-/// use libc's SIGRTMIN and SIGRTMAX directly since those may omit some signal
-/// numbers that libc reserves for its internal use. We still need to handle
-/// those signal numbers in Shadow.
-pub const SHD_SIGRT_MIN: i32 = 32;
+/// Lowest and highest valid realtime signal, according to signal(7). Careful
+/// to use the kernel definitions here; libc reserves some signal numbers for its
+/// own use.
+pub const SHD_SIGRT_MIN: i32 = linux_kernel_types::SIGRTMIN as i32;
+// XXX: not sure why bindgen doesn't find this in linux_kernel_types.
 pub const SHD_SIGRT_MAX: i32 = 64;
 
-/// Definition is sometimes missing in the userspace headers. We could include
-/// the kernel signal header, but it has definitions that conflict with the
-/// userspace headers.
+//pub const SS_AUTODISARM: i32 = linux_kernel_types::SS_AUTODISARM as i32;
 pub const SS_AUTODISARM: i32 = 1 << 31;
 
 /// Compatible with the Linux kernel's definition of sigset_t on x86_64.
@@ -21,7 +19,7 @@ pub const SS_AUTODISARM: i32 = 1 << 31;
 #[repr(C)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
 pub struct shd_kernel_sigset_t {
-    val: u64,
+    val: linux_kernel_types::sigset_t,
 }
 
 impl shd_kernel_sigset_t {

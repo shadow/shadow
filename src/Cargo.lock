@@ -741,6 +741,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-kernel-types"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "vasi",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1438,6 +1446,7 @@ dependencies = [
  "cbindgen",
  "cc",
  "libc",
+ "linux-kernel-types",
  "log",
  "logger",
  "nix",

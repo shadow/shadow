@@ -3,6 +3,7 @@
 members = [
     "main",
     "test",
+    "lib/linux-kernel-types",
     "lib/shadow-build-common",
     "lib/gml-parser",
     "lib/logger",
