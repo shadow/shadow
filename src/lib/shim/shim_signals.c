@@ -49,7 +49,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         }
 
         if (action.u.ksa_handler == SIG_DFL) {
-            switch (shd_defaultAction(signo)) {
+            switch (linux_defaultAction(signo)) {
                 case SHD_KERNEL_DEFAULT_ACTION_IGN:
                     // Ignore
                     continue;
@@ -68,10 +68,10 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         trace("Handling signo %d", signo);
 
-        linux_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
+        linux_sigset_t handler_mask = linux_sigorset(&blocked_signals, &action.ksa_mask);
         if (!(action.ksa_flags & SA_NODEFER)) {
             // Block another instance of the same signal.
-            shd_sigaddset(&handler_mask, signo);
+            linux_sigaddset(&handler_mask, signo);
         }
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), handler_mask);
 
@@ -168,10 +168,10 @@ void shim_handle_hardware_error_signal(int signo, siginfo_t* info, void* void_uc
 
     linux_sigset_t pending_signals =
         shimshmem_getThreadPendingSignals(host_lock, shim_threadSharedMem());
-    if (shd_sigismember(&pending_signals, signo)) {
+    if (linux_sigismember(&pending_signals, signo)) {
         warning("Received signal %d when it was already pending", signo);
     } else {
-        shd_sigaddset(&pending_signals, signo);
+        linux_sigaddset(&pending_signals, signo);
         shimshmem_setThreadPendingSignals(host_lock, shim_threadSharedMem(), pending_signals);
         shimshmem_setThreadSiginfo(host_lock, shim_threadSharedMem(), signo, info);
     }

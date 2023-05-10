@@ -76,7 +76,7 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
         host_getShimShmemLock(_syscallhandler_getHost(sys)), process_getSharedMem(process), sig);
     if (action.u.ksa_handler == SIG_IGN ||
         (action.u.ksa_handler == SIG_DFL &&
-         shd_defaultAction(sig) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
+         linux_defaultAction(sig) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
         // Don't deliver ignored an signal.
         return syscallreturn_makeDoneI64(0);
     }
@@ -84,14 +84,14 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     linux_sigset_t pending_signals = shimshmem_getThreadPendingSignals(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread));
 
-    if (shd_sigismember(&pending_signals, sig)) {
+    if (linux_sigismember(&pending_signals, sig)) {
         // Signal is already pending. From signal(7):In the case where a standard signal is already
         // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
         // overwritten on arrival of subsequent instances of the same signal.
         return syscallreturn_makeDoneI64(0);
     }
 
-    shd_sigaddset(&pending_signals, sig);
+    linux_sigaddset(&pending_signals, sig);
     shimshmem_setThreadPendingSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                       thread_sharedMem(thread), pending_signals);
     shimshmem_setThreadSiginfo(host_getShimShmemLock(_syscallhandler_getHost(sys)),
@@ -112,7 +112,7 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
 
     linux_sigset_t blocked_signals = shimshmem_getBlockedSignals(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread));
-    if (shd_sigismember(&blocked_signals, sig)) {
+    if (linux_sigismember(&blocked_signals, sig)) {
         // Target thread has the signal blocked. We'll leave it pending, but no
         // need to schedule an event to process the signal. It'll get processed
         // synchronously when the thread executes a syscall that would unblock
@@ -344,12 +344,12 @@ static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, UntypedForeig
 
         switch (how) {
             case SIG_BLOCK: {
-                current_set = shd_sigorset(&current_set, &set);
+                current_set = linux_sigorset(&current_set, &set);
                 break;
             }
             case SIG_UNBLOCK: {
-                linux_sigset_t notset = shd_signotset(&set);
-                current_set = shd_sigandset(&current_set, &notset);
+                linux_sigset_t notset = linux_signotset(&set);
+                current_set = linux_sigandset(&current_set, &notset);
                 break;
             }
             case SIG_SETMASK: {

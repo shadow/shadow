@@ -292,43 +292,43 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn shd_sigemptyset() -> linux_sigset_t {
+    pub extern "C" fn linux_sigemptyset() -> linux_sigset_t {
         linux_sigset_t::EMPTY
     }
 
     #[no_mangle]
-    pub extern "C" fn shd_sigfullset() -> linux_sigset_t {
+    pub extern "C" fn linux_sigfullset() -> linux_sigset_t {
         linux_sigset_t::FULL
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigaddset(set: *mut linux_sigset_t, signo: i32) {
+    pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigdelset(set: *mut linux_sigset_t, signo: i32) {
+    pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
+    pub unsafe extern "C" fn linux_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
         let set = unsafe { set.as_ref().unwrap() };
         set.has(signo.try_into().unwrap())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigisemptyset(set: *const linux_sigset_t) -> bool {
+    pub unsafe extern "C" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
         let set = unsafe { set.as_ref().unwrap() };
         set.is_empty()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigorset(
+    pub unsafe extern "C" fn linux_sigorset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
     ) -> linux_sigset_t {
@@ -338,7 +338,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_sigandset(
+    pub unsafe extern "C" fn linux_sigandset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
     ) -> linux_sigset_t {
@@ -348,13 +348,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
+    pub unsafe extern "C" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
         !*set
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shd_siglowest(set: *const linux_sigset_t) -> i32 {
+    pub unsafe extern "C" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
         let set = unsafe { set.as_ref().unwrap() };
         match set.lowest() {
             Some(s) => s as i32,
@@ -363,7 +363,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn shd_defaultAction(signo: i32) -> ShdKernelDefaultAction {
+    pub extern "C" fn linux_defaultAction(signo: i32) -> ShdKernelDefaultAction {
         let sig = Signal::try_from(signo).unwrap();
         defaultaction(sig)
     }
