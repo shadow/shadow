@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::Deref, pin::Pin};
+use core::{marker::PhantomData, ops::Deref, pin::Pin};
 
 use rkyv::{Archive, Serialize};
 use vasi::VirtualAddressSpaceIndependent;
@@ -345,7 +345,7 @@ impl<'a, T> Drop for SelfContainedMutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for SelfContainedMutexGuard<'a, T> {
+impl<'a, T> core::ops::Deref for SelfContainedMutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -359,7 +359,7 @@ impl<'a, T> std::ops::Deref for SelfContainedMutexGuard<'a, T> {
 
 /// When T is Unpin, we can implement DerefMut. Otherwise it's unsafe
 /// to do so, since SelfContainedMutex is an Archive type.
-impl<'a, T> std::ops::DerefMut for SelfContainedMutexGuard<'a, T>
+impl<'a, T> core::ops::DerefMut for SelfContainedMutexGuard<'a, T>
 where
     T: Unpin,
 {
@@ -411,7 +411,7 @@ where
         // We're effectively cloning the original data, so always initialize the futex
         // into the unlocked state.
         unsafe {
-            std::ptr::addr_of_mut!((*out).futex).write(AtomicFutexWord::new(FutexWord {
+            core::ptr::addr_of_mut!((*out).futex).write(AtomicFutexWord::new(FutexWord {
                 lock_state: UNLOCKED,
                 num_sleepers: 0,
             }))
