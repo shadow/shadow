@@ -12,6 +12,9 @@ exits. https://github.com/shadow/shadow/pull/2913
 on Debian 10 will need to install a newer kernel, e.g. via backports.
 See [supported platforms](supported_platforms.md).
 
+* Fixed a bug causing `host_options` to undo any changes made to
+`host_option_defaults`.
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
