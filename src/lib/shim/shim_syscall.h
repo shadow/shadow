@@ -3,15 +3,16 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <sys/ucontext.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 
 // Ask the shim to handle a syscall. Internally decides whether to execute a
 // native syscall or to emulate the syscall through Shadow.
-long shim_syscall(long n, ...);
+long shim_syscall(const ucontext_t* ctx, long n, ...);
 
 // Same as `shim_syscall()`, but accepts a variable argument list.
-long shim_syscallv(long n, va_list args);
+long shim_syscallv(const ucontext_t* ctx, long n, va_list args);
 
 // Force the native execution of a syscall instruction (using asm so it can't be
 // intercepted).
@@ -22,10 +23,10 @@ long shim_native_syscall(long n, ...);
 long __attribute__((noinline)) shim_native_syscallv(long n, va_list args);
 
 // Force the emulation of the syscall through Shadow.
-long shim_emulated_syscall(long n, ...);
+long shim_emulated_syscall(const ucontext_t* ctx, long n, ...);
 
 // Same as `shim_emulated_syscall()`, but accepts a variable argument list.
-long shim_emulated_syscallv(long n, va_list args);
+long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args);
 
 long __attribute__((noinline)) shim_clone(void* clone_rip, int32_t flags, void* child_stack,
                                           pid_t* ptid, pid_t* ctid, uint64_t newtls);

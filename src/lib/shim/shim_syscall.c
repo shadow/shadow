@@ -19,15 +19,8 @@
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-long __attribute__((noinline)) shim_clone(ucontext_t* clone_ctx, int32_t flags, void* child_stack,
-                                          pid_t* ptid, pid_t* ctid, uint64_t newtls) {
-    if (!clone_ctx) {
-        panic("clone without original context");
-    }
-    void* clone_rip = (void*)clone_ctx->uc_mcontext.gregs[REG_RIP];
-    if (!clone_rip) {
-        panic("clone without RIP");
-    }
+long __attribute__((noinline))
+shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t newtls) {
     long rv = 0;
     // Make the clone syscall, and then in the child thread initialize the shim's state,
     // and then *jump* to the instruction after the original clone syscall instruction.
@@ -47,7 +40,7 @@ long __attribute__((noinline)) shim_clone(ucontext_t* clone_ctx, int32_t flags, 
     register long r8 __asm__("r8") = newtls;
     // Store clone_rip in a callee-save register, so that we can call shim_ensure_init
     // without clobbering it.
-    register long r12 __asm__("r12") = (long)clone_rip;
+    register long r12 __asm__("r12") = (long)&shim_parent_thread_ctx;
     // Store address of shim_ensure_init in a callee-save register.
     // TODO: We ought to be able to put the literal "shim_ensure_init" in
     // the inline assembly and have the assembler resolve the address for
@@ -60,14 +53,20 @@ long __attribute__((noinline)) shim_clone(ucontext_t* clone_ctx, int32_t flags, 
                          "jne shim_native_syscallv_out\n"
                          // Initialize state for this thread
                          "callq *%%r13\n"
+                         // Get pointer to ucontext_t
+                         "callq *%%r12\n"
+                         // Load original RIP
+                         "mov %c[RipOffset](%%rax), %%r12\n"
                          // Restore return value of clone
                          "movq $0, %%rax\n"
-                         // Jump to original clone call site.
+                         // Jump to original RIP.
                          "jmp *%%r12\n"
                          "shim_native_syscallv_out:\n"
                          : "=a"(rv)
                          : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10),
-                           "r"(r8), "r"(r12), "r"(r13)
+                           "r"(r8), "r"(r12), "r"(r13),
+                           [RipOffset] "i"(offsetof(ucontext_t, uc_mcontext) +
+                                           offsetof(mcontext_t, gregs) + REG_RIP * sizeof(uint64_t))
                          : "rcx", "r11", "memory");
     // Wait for child to initialize itself.
     shim_newThreadFinish();
@@ -87,13 +86,12 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
     long rv;
 
     if (n == SYS_clone) {
-        ucontext_t* clone_ctx = shim_seccomp_take_clone_ctx();
         int32_t flags = (int32_t)arg1;
         void* child_stack = (void*)arg2;
         pid_t* ptid = (pid_t*)arg3;
         pid_t* ctid = (pid_t*)arg4;
         uint64_t newtls = arg5;
-        rv = shim_clone(clone_ctx, flags, child_stack, ptid, ctid, newtls);
+        rv = shim_clone(flags, child_stack, ptid, ctid, newtls);
     } else {
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register
@@ -122,7 +120,8 @@ long shim_native_syscall(long n, ...) {
     return rv;
 }
 
-static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
+static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
+                                               const ShimEvent* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
 
@@ -237,7 +236,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
             }
             case SHIM_EVENT_ADD_THREAD_REQ: {
                 const ShimEventAddThreadReq* add_thread_req = shimevent_getAddThreadReqData(&res);
-                shim_newThreadStart(&add_thread_req->ipc_block);
+                shim_newThreadStart(&add_thread_req->ipc_block, ctx);
                 ShimEvent res;
                 shimevent_initAddThreadParentRes(&res);
                 shimevent_sendEventToShadow(ipc, &res);
@@ -251,7 +250,7 @@ static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
     }
 }
 
-long shim_emulated_syscallv(long n, va_list args) {
+long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args) {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     if (n == SYS_exit) {
@@ -268,22 +267,22 @@ long shim_emulated_syscallv(long n, va_list args) {
     ShimEvent e;
     shimevent_initSyscall(&e, &ev_args);
 
-    SysCallReg retval = _shim_emulated_syscall_event(&e);
+    SysCallReg retval = _shim_emulated_syscall_event(ctx, &e);
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 
     return retval.as_i64;
 }
 
-long shim_emulated_syscall(long n, ...) {
+long shim_emulated_syscall(const ucontext_t* ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
-    long rv = shim_emulated_syscallv(n, args);
+    long rv = shim_emulated_syscallv(ctx, n, args);
     va_end(args);
     return rv;
 }
 
-long shim_syscallv(long n, va_list args) {
+long shim_syscallv(const ucontext_t* ctx, long n, va_list args) {
     shim_ensure_init();
 
     long rv;
@@ -298,7 +297,7 @@ long shim_syscallv(long n, va_list args) {
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
               "channel.",
               n);
-        rv = shim_emulated_syscallv(n, args);
+        rv = shim_emulated_syscallv(ctx, n, args);
     } else {
         // The syscall is made directly; ptrace or seccomp will get the syscall signal.
         trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it "
@@ -310,10 +309,10 @@ long shim_syscallv(long n, va_list args) {
     return rv;
 }
 
-long shim_syscall(long n, ...) {
+long shim_syscall(const ucontext_t* ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
-    long rv = shim_syscallv(n, args);
+    long rv = shim_syscallv(ctx, n, args);
     va_end(args);
     return rv;
 }

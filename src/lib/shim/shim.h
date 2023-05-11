@@ -3,6 +3,7 @@
 
 #include <stdatomic.h>
 #include <sys/types.h>
+#include <sys/ucontext.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shmem/shmem_allocator.h"
@@ -24,7 +25,7 @@ struct IPCData* shim_thisThreadEventIPC();
 
 // To be called in parent thread before making the `clone` syscall.
 // It sets up data for the new thread.
-void shim_newThreadStart(const ShMemBlockSerialized* block);
+void shim_newThreadStart(const ShMemBlockSerialized* block, const ucontext_t* clone_ctx);
 
 // To be called in parent thread after making the `clone` syscall.
 // It doesn't return until after the child has initialized itself.

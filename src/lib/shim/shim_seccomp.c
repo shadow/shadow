@@ -21,17 +21,14 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 
-// When emulating a clone syscall, we need to jump to just after the original
-// syscall instruction in the child thread. This stores that address.
-static ShimTlsVar _shim_clone_ctx_var = {0};
-static ucontext_t** _shim_clone_ctx() {
-    return shimtlsvar_ptr(&_shim_clone_ctx_var, sizeof(ucontext_t*));
-}
-
-void* shim_seccomp_take_clone_ctx() {
-    void* ptr = *_shim_clone_ctx();
-    *_shim_clone_ctx() = NULL;
-    return ptr;
+// Used during initialization of a new thread. Stores the context
+// of the original call site of the clone syscall, so that the child
+// can restore it (with modifications such as the syscall return value).
+// TODO: consider dynamically allocating this via mmap instead since it's
+// relatively large, and only needed during initialization of a new thread.
+static ShimTlsVar _shim_parent_thread_ctx_var = {0};
+ucontext_t* shim_parent_thread_ctx() {
+    return shimtlsvar_ptr(&_shim_parent_thread_ctx_var, sizeof(ucontext_t));
 }
 
 // Handler function that receives syscalls that are stopped by the seccomp filter.
@@ -49,18 +46,13 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     const int REG_ARG5 = REG_R8;
     const int REG_ARG6 = REG_R9;
 
-    trace("Trapped syscall %lld", regs[REG_N]);
-
-    if (regs[REG_N] == SYS_clone) {
-        assert(!*_shim_clone_ctx());
-        *_shim_clone_ctx() = ctx;
-    }
+    trace("Trapped syscall %lld at %p", regs[REG_N], (void*)regs[REG_RIP]);
 
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shim_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
+    long rv = shim_syscall(ctx, regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
                            regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;

@@ -33,7 +33,7 @@ static uint64_t _shim_rdtsc_nanos(bool allowNative) {
     // *don't* directly call shim_sys_get_simtime_nanos() here.  We need to go
     // through the syscall code to correctly handle the case where
     // `model_unblocked_syscall_latency` is enabled.
-    long rv = shim_syscall(SYS_clock_gettime, CLOCK_REALTIME, &t);
+    long rv = shim_syscall(NULL, SYS_clock_gettime, CLOCK_REALTIME, &t);
     if (rv != 0) {
         panic("emulated SYS_clock_gettime: %s", strerror(-rv));
     }

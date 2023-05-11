@@ -21,7 +21,7 @@ static long _shim_api_retval_to_errno(long retval) {
 }
 
 long shim_api_syscallv(long n, va_list args) {
-    long rv = shim_syscallv(n, args);
+    long rv = shim_syscallv(NULL, n, args);
     return _shim_api_retval_to_errno(rv);
 }
 
