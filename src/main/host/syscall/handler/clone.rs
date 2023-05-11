@@ -7,6 +7,8 @@ use crate::host::syscall_types::SyscallError;
 
 use super::{SyscallContext, SyscallHandler};
 
+// We don't use nix::sched::CloneFlags here, because nix omits flags
+// that it doesn't support. e.g. https://docs.rs/nix/0.26.2/src/nix/sched.rs.html#57
 bitflags::bitflags! {
     // While `clone` is documented as taking an i32 parameter for flags,
     // in `clone3` its a u64. Promote to u64 throughout.
