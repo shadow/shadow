@@ -27,4 +27,7 @@ long shim_emulated_syscall(long n, ...);
 // Same as `shim_emulated_syscall()`, but accepts a variable argument list.
 long shim_emulated_syscallv(long n, va_list args);
 
+long __attribute__((noinline)) shim_clone(void* clone_rip, int32_t flags, void* child_stack,
+                                          pid_t* ptid, pid_t* ctid, uint64_t newtls);
+
 #endif

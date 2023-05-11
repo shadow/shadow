@@ -127,7 +127,7 @@ void shim_seccomp_init() {
         /* Always allow sched_yield. Sometimes used in IPC with Shadow; emulating
          * would add unnecessary overhead, and potentially cause recursion.
          * `shadow_spin_lock` relies on this exception
-         * 
+         *
          * TODO: Remove this exception, as it could interfere with escaping busy-loops
          * in managed code.
          */
@@ -148,6 +148,13 @@ void shim_seccomp_init() {
         BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_native_syscallv) + 2000,
                  /*true-skip=*/2, /*false-skip=*/0),
         BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_native_syscallv, /*true-skip=*/0,
+                 /*false-skip=*/1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+
+        /* Allow syscalls from `shim_clone` as above. */
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_clone) + 2000,
+                 /*true-skip=*/2, /*false-skip=*/0),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_clone, /*true-skip=*/0,
                  /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
