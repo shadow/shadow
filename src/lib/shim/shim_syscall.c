@@ -52,11 +52,9 @@ shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t 
         "callq *%%r13\n"
         // Get pointer to ucontext_t
         "callq *%%r12\n"
-        // Load original RIP into RDI, which is syscall arg1.
-        // This is the one register we won't be able to
-        // restore, but chances of the call-site needing it
-        // again are relatively low.
-        "mov %c[REG_RIP_offset](%%rax), %%rdi\n"
+        // Push the original instruction pointer onto
+        // the stack, so that we can `ret` to it.
+        "push %c[REG_RIP_offset](%%rax)\n"
         // Restore other general purpose registers
         "mov %c[REG_R8_offset](%%rax), %%r8\n"
         "mov %c[REG_R9_offset](%%rax), %%r9\n"
@@ -67,6 +65,7 @@ shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t 
         "mov %c[REG_R14_offset](%%rax), %%r14\n"
         "mov %c[REG_R15_offset](%%rax), %%r15\n"
         "mov %c[REG_RSI_offset](%%rax), %%rsi\n"
+        "mov %c[REG_RDI_offset](%%rax), %%rdi\n"
         "mov %c[REG_RBX_offset](%%rax), %%rbx\n"
         "mov %c[REG_RDX_offset](%%rax), %%rdx\n"
         "mov %c[REG_RCX_offset](%%rax), %%rcx\n"
@@ -76,16 +75,16 @@ shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t 
         // when code is compiled without frame pointers.
         "mov %c[REG_RBP_offset](%%rax), %%rbp\n"
         // Not restored:
-        // - RSP: already correctly initialized by the native clone syscall
+        // - RSP: already correctly initialized to the new thread's stack
+        //        by the native clone syscall, and will be restores
+        //        to its original value by `ret` below.
         // - RAX: stores the result of the syscall, which we set below.
-        // - RDI: As noted above, we need one "sacrificial" register to hold the
-        //        jump address used below, and this is it.
         // - Floating point and other special registers: hopefully not needed.
 
         // Set return value of clone
         "movq $0, %%rax\n"
         // Jump to original RIP.
-        "jmp *%%rdi\n"
+        "ret\n"
         "shim_native_syscallv_out:\n"
         : "=a"(rv)
         : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10), "r"(r8), "r"(r12),
@@ -98,6 +97,7 @@ shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t 
           [REG_R14_offset] "i"(CTX_REG_OFFSET(REG_R14)),
           [REG_R15_offset] "i"(CTX_REG_OFFSET(REG_R15)),
           [REG_RSI_offset] "i"(CTX_REG_OFFSET(REG_RSI)),
+          [REG_RDI_offset] "i"(CTX_REG_OFFSET(REG_RDI)),
           [REG_RBX_offset] "i"(CTX_REG_OFFSET(REG_RBX)),
           [REG_RDX_offset] "i"(CTX_REG_OFFSET(REG_RDX)),
           [REG_RCX_offset] "i"(CTX_REG_OFFSET(REG_RCX)),
