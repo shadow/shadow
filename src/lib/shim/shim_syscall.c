@@ -16,6 +16,10 @@
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_numbers.h"
 
+// Helper macro for calculating immediate offsets in asm.
+#define CTX_REG_OFFSET(i)                                                                          \
+    (offsetof(ucontext_t, uc_mcontext) + offsetof(mcontext_t, gregs) + sizeof(uint64_t) * (i))
+
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
@@ -29,45 +33,76 @@ shim_clone(int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid, uint64_t 
     // lazily ensures that we don't try to install the sigaltstack from
     // inside the seccomp signal handler. Doing so "works" without error,
     // but is reverted when the signal handler returns.
-    //
-    // Note that from the child thread's point of view, many of the general purpose
-    // registers will have different values than they had in the parent thread just-before.
-    // I can't find any documentation on whether the child thread is allowed to make
-    // any assumptions about the state of such registers, but glibc's implementation
-    // of the clone library function doesn't. If we had to, we could save and restore
-    // the other registers in the same way as we are the RIP register.
     register pid_t* r10 __asm__("r10") = ctid;
     register long r8 __asm__("r8") = newtls;
-    // Store clone_rip in a callee-save register, so that we can call shim_ensure_init
-    // without clobbering it.
-    register long r12 __asm__("r12") = (long)&shim_parent_thread_ctx;
-    // Store address of shim_ensure_init in a callee-save register.
+    // Store address of shim_ensure_init.
     // TODO: We ought to be able to put the literal "shim_ensure_init" in
     // the inline assembly and have the assembler resolve the address for
     // us, but on ubuntu 18.04's gcc this ends up generating a relocation it
     // can't resolve at the link step.
     register long r13 __asm__("r13") = (long)&shim_ensure_init;
-    __asm__ __volatile__("syscall\n"
-                         // If in the parent, done with asm.
-                         "cmp $0, %%rax\n"
-                         "jne shim_native_syscallv_out\n"
-                         // Initialize state for this thread
-                         "callq *%%r13\n"
-                         // Get pointer to ucontext_t
-                         "callq *%%r12\n"
-                         // Load original RIP
-                         "mov %c[RipOffset](%%rax), %%r12\n"
-                         // Restore return value of clone
-                         "movq $0, %%rax\n"
-                         // Jump to original RIP.
-                         "jmp *%%r12\n"
-                         "shim_native_syscallv_out:\n"
-                         : "=a"(rv)
-                         : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10),
-                           "r"(r8), "r"(r12), "r"(r13),
-                           [RipOffset] "i"(offsetof(ucontext_t, uc_mcontext) +
-                                           offsetof(mcontext_t, gregs) + REG_RIP * sizeof(uint64_t))
-                         : "rcx", "r11", "memory");
+    // As above - store this address so that we can call it.
+    register long r12 __asm__("r12") = (long)&shim_parent_thread_ctx;
+    __asm__ __volatile__(
+        "syscall\n"
+        // If in the parent, done with asm.
+        "cmp $0, %%rax\n"
+        "jne shim_native_syscallv_out\n"
+        // Initialize state for this thread
+        "callq *%%r13\n"
+        // Get pointer to ucontext_t
+        "callq *%%r12\n"
+        // Load original RIP into RDI, which is syscall arg1.
+        // This is the one register we won't be able to
+        // restore, but chances of the call-site needing it
+        // again are relatively low.
+        "mov %c[REG_RIP_offset](%%rax), %%rdi\n"
+        // Restore other general purpose registers
+        "mov %c[REG_R8_offset](%%rax), %%r8\n"
+        "mov %c[REG_R9_offset](%%rax), %%r9\n"
+        "mov %c[REG_R10_offset](%%rax), %%r10\n"
+        "mov %c[REG_R11_offset](%%rax), %%r11\n"
+        "mov %c[REG_R12_offset](%%rax), %%r12\n"
+        "mov %c[REG_R13_offset](%%rax), %%r13\n"
+        "mov %c[REG_R14_offset](%%rax), %%r14\n"
+        "mov %c[REG_R15_offset](%%rax), %%r15\n"
+        "mov %c[REG_RSI_offset](%%rax), %%rsi\n"
+        "mov %c[REG_RBX_offset](%%rax), %%rbx\n"
+        "mov %c[REG_RDX_offset](%%rax), %%rdx\n"
+        "mov %c[REG_RCX_offset](%%rax), %%rcx\n"
+        // As conventionally used, the call-site's RBP isn't likely to be
+        // used since it would point to the parent thread's stack.
+        // However, it could be used as a general-purpose register
+        // when code is compiled without frame pointers.
+        "mov %c[REG_RBP_offset](%%rax), %%rbp\n"
+        // Not restored:
+        // - RSP: already correctly initialized by the native clone syscall
+        // - RAX: stores the result of the syscall, which we set below.
+        // - RDI: As noted above, we need one "sacrificial" register to hold the
+        //        jump address used below, and this is it.
+        // - Floating point and other special registers: hopefully not needed.
+
+        // Set return value of clone
+        "movq $0, %%rax\n"
+        // Jump to original RIP.
+        "jmp *%%rdi\n"
+        "shim_native_syscallv_out:\n"
+        : "=a"(rv)
+        : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10), "r"(r8), "r"(r12),
+          "r"(r13), [REG_RIP_offset] "i"(CTX_REG_OFFSET(REG_RIP)),
+          [REG_R8_offset] "i"(CTX_REG_OFFSET(REG_R8)), [REG_R9_offset] "i"(CTX_REG_OFFSET(REG_R9)),
+          [REG_R10_offset] "i"(CTX_REG_OFFSET(REG_R10)),
+          [REG_R11_offset] "i"(CTX_REG_OFFSET(REG_R11)),
+          [REG_R12_offset] "i"(CTX_REG_OFFSET(REG_R12)),
+          [REG_R13_offset] "i"(CTX_REG_OFFSET(REG_R13)),
+          [REG_R14_offset] "i"(CTX_REG_OFFSET(REG_R14)),
+          [REG_R15_offset] "i"(CTX_REG_OFFSET(REG_R15)),
+          [REG_RSI_offset] "i"(CTX_REG_OFFSET(REG_RSI)),
+          [REG_RBX_offset] "i"(CTX_REG_OFFSET(REG_RBX)),
+          [REG_RDX_offset] "i"(CTX_REG_OFFSET(REG_RDX)),
+          [REG_RCX_offset] "i"(CTX_REG_OFFSET(REG_RCX)),
+          [REG_RBP_offset] "i"(CTX_REG_OFFSET(REG_RBP))
+        : "rcx", "r11", "memory");
     // Wait for child to initialize itself.
     shim_newThreadFinish();
     return rv;
