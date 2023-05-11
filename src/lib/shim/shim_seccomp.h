@@ -6,11 +6,13 @@
 #ifndef SRC_LIB_SHIM_SHIM_SECCOMP_H_
 #define SRC_LIB_SHIM_SHIM_SECCOMP_H_
 
+#include <sys/ucontext.h>
+
 // Initialize the seccomp filter and syscall signal handler function.
 void shim_seccomp_init();
 
 // Gets and resets the instruction pointer to which the child should resume
 // execution after a clone syscall.
-void* shim_seccomp_take_clone_rip();
+ucontext_t* shim_seccomp_take_clone_ctx();
 
 #endif // SRC_LIB_SHIM_SHIM_SECCOMP_H_

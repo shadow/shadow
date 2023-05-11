@@ -19,10 +19,14 @@
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-long __attribute__((noinline)) shim_clone(void* clone_rip, int32_t flags, void* child_stack,
+long __attribute__((noinline)) shim_clone(ucontext_t* clone_ctx, int32_t flags, void* child_stack,
                                           pid_t* ptid, pid_t* ctid, uint64_t newtls) {
+    if (!clone_ctx) {
+        panic("clone without original context");
+    }
+    void* clone_rip = (void*)clone_ctx->uc_mcontext.gregs[REG_RIP];
     if (!clone_rip) {
-        panic("clone with RIP");
+        panic("clone without RIP");
     }
     long rv = 0;
     // Make the clone syscall, and then in the child thread initialize the shim's state,
@@ -83,13 +87,13 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
     long rv;
 
     if (n == SYS_clone) {
-        void* clone_rip = shim_seccomp_take_clone_rip();
+        ucontext_t* clone_ctx = shim_seccomp_take_clone_ctx();
         int32_t flags = (int32_t)arg1;
         void* child_stack = (void*)arg2;
         pid_t* ptid = (pid_t*)arg3;
         pid_t* ctid = (pid_t*)arg4;
         uint64_t newtls = arg5;
-        rv = shim_clone(clone_rip, flags, child_stack, ptid, ctid, newtls);
+        rv = shim_clone(clone_ctx, flags, child_stack, ptid, ctid, newtls);
     } else {
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register

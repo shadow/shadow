@@ -23,14 +23,14 @@
 
 // When emulating a clone syscall, we need to jump to just after the original
 // syscall instruction in the child thread. This stores that address.
-static ShimTlsVar _shim_clone_rip_var = {0};
-static void** _shim_clone_rip() {
-    return shimtlsvar_ptr(&_shim_clone_rip_var, sizeof(void*));
+static ShimTlsVar _shim_clone_ctx_var = {0};
+static ucontext_t** _shim_clone_ctx() {
+    return shimtlsvar_ptr(&_shim_clone_ctx_var, sizeof(ucontext_t*));
 }
 
-void* shim_seccomp_take_clone_rip() {
-    void *ptr = *_shim_clone_rip();
-    *_shim_clone_rip() = NULL;
+void* shim_seccomp_take_clone_ctx() {
+    void* ptr = *_shim_clone_ctx();
+    *_shim_clone_ctx() = NULL;
     return ptr;
 }
 
@@ -52,8 +52,8 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     trace("Trapped syscall %lld", regs[REG_N]);
 
     if (regs[REG_N] == SYS_clone) {
-       assert(!*_shim_clone_rip());
-       *_shim_clone_rip() = (void*)regs[REG_RIP];
+        assert(!*_shim_clone_ctx());
+        *_shim_clone_ctx() = ctx;
     }
 
     // Make the syscall via the *the shim's* syscall function (which overrides
