@@ -3,6 +3,7 @@
 
 #include <stdatomic.h>
 #include <sys/types.h>
+#include <sys/ucontext.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shmem/shmem_allocator.h"

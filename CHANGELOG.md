@@ -15,6 +15,10 @@ See [supported platforms](supported_platforms.md).
 * Fixed a bug causing `host_options` to undo any changes made to
 `host_option_defaults`.
 
+* Implemented the `clone3` syscall. Thread libraries we're aware of that use
+`clone3` were gracefully falling back to `clone`, but eventually they may not do so.
+This also reduces noise in shadow's log about an unimplemented syscall being attempted.
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files

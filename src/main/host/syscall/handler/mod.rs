@@ -43,6 +43,7 @@ impl SyscallHandler {
             libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
             libc::SYS_brk => SyscallHandlerFn::call(Self::brk, &mut ctx),
             libc::SYS_clone => SyscallHandlerFn::call(Self::clone, &mut ctx),
+            libc::SYS_clone3 => SyscallHandlerFn::call(Self::clone3, &mut ctx),
             libc::SYS_close => SyscallHandlerFn::call(Self::close, &mut ctx),
             libc::SYS_connect => SyscallHandlerFn::call(Self::connect, &mut ctx),
             libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),

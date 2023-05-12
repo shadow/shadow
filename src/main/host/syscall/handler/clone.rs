@@ -1,4 +1,4 @@
-use log::warn;
+use log::{debug, trace, warn};
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
@@ -7,6 +7,8 @@ use crate::host::syscall_types::SyscallError;
 
 use super::{SyscallContext, SyscallHandler};
 
+// We don't use nix::sched::CloneFlags here, because nix omits flags
+// that it doesn't support. e.g. https://docs.rs/nix/0.26.2/src/nix/sched.rs.html#57
 bitflags::bitflags! {
     // While `clone` is documented as taking an i32 parameter for flags,
     // in `clone3` its a u64. Promote to u64 throughout.
@@ -46,16 +48,7 @@ bitflags::bitflags! {
 }
 
 impl SyscallHandler {
-    // Note that the syscall args are different than the libc wrapper.
-    // See "C library/kernel differences" in clone(2).
-    #[log_syscall(
-        /* rv */libc::pid_t,
-        /* flags */i32,
-        /* child_stack */*const libc::c_void,
-        /* ptid */*const libc::pid_t,
-        /* ctid */*const libc::pid_t,
-        /* newtls */*const libc::c_void)]
-    pub fn clone(
+    fn clone_internal(
         ctx: &mut SyscallContext,
         flags_and_exit_signal: i32,
         child_stack: ForeignPtr<()>,
@@ -126,6 +119,80 @@ impl SyscallHandler {
         }
 
         Ok(libc::pid_t::from(child_tid))
+    }
+    // Note that the syscall args are different than the libc wrapper.
+    // See "C library/kernel differences" in clone(2).
+    #[log_syscall(
+        /* rv */libc::pid_t,
+        /* flags */i32,
+        /* child_stack */*const libc::c_void,
+        /* ptid */*const libc::pid_t,
+        /* ctid */*const libc::pid_t,
+        /* newtls */*const libc::c_void)]
+    pub fn clone(
+        ctx: &mut SyscallContext,
+        flags_and_exit_signal: i32,
+        child_stack: ForeignPtr<()>,
+        ptid: ForeignPtr<libc::pid_t>,
+        ctid: ForeignPtr<libc::pid_t>,
+        newtls: u64,
+    ) -> Result<libc::pid_t, SyscallError> {
+        Self::clone_internal(ctx, flags_and_exit_signal, child_stack, ptid, ctid, newtls)
+    }
+
+    #[log_syscall(
+        /* rv */libc::pid_t,
+        /* args*/*const libc::c_void,
+        /* args_size*/usize)]
+    pub fn clone3(
+        ctx: &mut SyscallContext,
+        args: ForeignPtr<libc::clone_args>,
+        args_size: usize,
+    ) -> Result<libc::pid_t, SyscallError> {
+        if args_size != std::mem::size_of::<libc::clone_args>() {
+            // TODO: allow smaller size, and be careful to only read
+            // as much as the caller specified, and zero-fill the rest.
+            return Err(Errno::EINVAL.into());
+        }
+        let args = ctx.objs.process.memory_borrow().read(args)?;
+        trace!("clone3 args: {args:?}");
+        let Ok(flags) = i32::try_from(args.flags) else {
+            debug!("Couldn't safely truncate flags to 32 bits: {} ({:?})",
+                   args.flags, CloneFlags::from_bits(args.flags));
+            return Err(Errno::EINVAL.into());
+        };
+        if flags & 0xff != 0 {
+            // We can't multiplex through `clone` in this case, since these bits
+            // conflict with the exit signal. Currently this won't happen in practice
+            // because there are no legal flags that use these bits. It's possible
+            // that clone3-flags could be added here, but more likely they'll use
+            // the higher bits first. (clone3 uses 64 bits vs clone's 32).
+            debug!(
+                "clone3 got a flag it can't pass through to clone: {} ({:?})",
+                flags & 0xff,
+                CloneFlags::from_bits(args.flags & 0xff)
+            );
+            return Err(Errno::EINVAL.into());
+        }
+        let Ok(exit_signal) = i32::try_from(args.exit_signal) else {
+            // Couldn't truncate to the 32 bits allowed by `clone`, but
+            // there also aren't any valid signal numbers that need that many bits.
+            debug!("Bad signal number: {}", args.exit_signal);
+            return Err(Errno::EINVAL.into());
+        };
+        if exit_signal & !0xff != 0 {
+            // Couldn't fit into the 8 bits allowed for the signal number by `clone`,
+            // but there also aren't any valid signal numbers that need that many bits.
+            return Err(Errno::EINVAL.into());
+        }
+        Self::clone_internal(
+            ctx,
+            flags | exit_signal,
+            ForeignPtr::<()>::from(args.stack + args.stack_size),
+            ForeignPtr::<libc::pid_t>::from_raw_ptr(args.parent_tid as *mut libc::pid_t),
+            ForeignPtr::<libc::pid_t>::from_raw_ptr(args.child_tid as *mut libc::pid_t),
+            args.tls,
+        )
     }
 
     #[log_syscall(/* rv */libc::pid_t)]

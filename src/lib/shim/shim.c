@@ -102,7 +102,7 @@ void shim_newThreadFinish() {
         if (errno != EAGAIN) {
             panic("shadow_sem_trywait: %s", strerror(errno));
         }
-        if (shim_native_syscall(SYS_sched_yield)) {
+        if (shim_native_syscall(NULL, SYS_sched_yield)) {
             panic("shim_native_syscall(SYS_sched_yield): %s", strerror(errno));
         }
     }

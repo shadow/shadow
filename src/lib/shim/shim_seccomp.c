@@ -21,19 +21,6 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 
-// When emulating a clone syscall, we need to jump to just after the original
-// syscall instruction in the child thread. This stores that address.
-static ShimTlsVar _shim_clone_rip_var = {0};
-static void** _shim_clone_rip() {
-    return shimtlsvar_ptr(&_shim_clone_rip_var, sizeof(void*));
-}
-
-void* shim_seccomp_take_clone_rip() {
-    void *ptr = *_shim_clone_rip();
-    *_shim_clone_rip() = NULL;
-    return ptr;
-}
-
 // Handler function that receives syscalls that are stopped by the seccomp filter.
 static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);
@@ -49,18 +36,13 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     const int REG_ARG5 = REG_R8;
     const int REG_ARG6 = REG_R9;
 
-    trace("Trapped syscall %lld", regs[REG_N]);
-
-    if (regs[REG_N] == SYS_clone) {
-       assert(!*_shim_clone_rip());
-       *_shim_clone_rip() = (void*)regs[REG_RIP];
-    }
+    trace("Trapped syscall %lld at %p", regs[REG_N], (void*)regs[REG_RIP]);
 
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shim_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
+    long rv = shim_syscall(ctx, regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
                            regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
@@ -127,7 +109,7 @@ void shim_seccomp_init() {
         /* Always allow sched_yield. Sometimes used in IPC with Shadow; emulating
          * would add unnecessary overhead, and potentially cause recursion.
          * `shadow_spin_lock` relies on this exception
-         * 
+         *
          * TODO: Remove this exception, as it could interfere with escaping busy-loops
          * in managed code.
          */
@@ -148,6 +130,13 @@ void shim_seccomp_init() {
         BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_native_syscallv) + 2000,
                  /*true-skip=*/2, /*false-skip=*/0),
         BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_native_syscallv, /*true-skip=*/0,
+                 /*false-skip=*/1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+
+        /* Allow syscalls from `shim_clone` as above. */
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_clone) + 2000,
+                 /*true-skip=*/2, /*false-skip=*/0),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_clone, /*true-skip=*/0,
                  /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
