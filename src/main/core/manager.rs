@@ -281,6 +281,10 @@ impl<'a> Manager<'a> {
                 }))
             });
 
+        // shadow is parallelized at the host level, so we don't need more parallelism than the
+        // number of hosts
+        let parallelism = std::cmp::min(parallelism, hosts.len());
+
         // should have either all `Some` values, or all `None` values
         let cpus: Vec<Option<u32>> = cpu_iter.take(parallelism).collect();
         if cpus[0].is_some() {
