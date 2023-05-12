@@ -16,6 +16,7 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
+use crate::core::cpu;
 use crate::core::resource_usage;
 use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
@@ -243,14 +244,14 @@ impl<'a> Manager<'a> {
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
 
-        let parallelism: usize = self
-            .config
-            .general
-            .parallelism
-            .unwrap()
-            .get()
-            .try_into()
-            .unwrap();
+        let parallelism: usize = match self.config.general.parallelism.unwrap() {
+            0 => {
+                let cores = cpu::count_physical_cores().try_into().unwrap();
+                log::info!("The parallelism option was 0, so using parallelism={cores}");
+                cores
+            }
+            x => x.try_into().unwrap(),
+        };
 
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues

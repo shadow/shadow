@@ -19,6 +19,11 @@ See [supported platforms](supported_platforms.md).
 `clone3` were gracefully falling back to `clone`, but eventually they may not do so.
 This also reduces noise in shadow's log about an unimplemented syscall being attempted.
 
+* Added support for a `parallelism` value of 0, which allows Shadow to choose a
+  reasonable parallelism (we currently use the number of phyiscal cores in
+  Shadow's affinity/cgroup). The default value for `parallelism` has also been
+  changed from 1 to 0.
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
