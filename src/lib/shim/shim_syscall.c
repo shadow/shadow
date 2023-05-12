@@ -51,19 +51,13 @@ long __attribute__((noinline)) shim_clone(const ucontext_t* ctx, int32_t flags, 
     long rv = 0;
     register pid_t* r10 __asm__("r10") = ctid;
     register long r8 __asm__("r8") = newtls;
-    // Store address of shim_ensure_init.
-    // TODO: We ought to be able to put the literal "shim_ensure_init" in
-    // the inline assembly and have the assembler resolve the address for
-    // us, but on ubuntu 18.04's gcc this ends up generating a relocation it
-    // can't resolve at the link step.
-    register long r13 __asm__("r13") = (long)&shim_ensure_init;
     __asm__ __volatile__(
         "syscall\n"
         // If in the parent, done with asm.
         "cmp $0, %%rax\n"
         "jne shim_native_syscallv_out\n"
         // Initialize state for this thread
-        "callq *%%r13\n"
+        "call shim_ensure_init\n"
         // Restore general purpose registers
         "mov %c[REG_R8_offset](%%rsp), %%r8\n"
         "mov %c[REG_R9_offset](%%rsp), %%r9\n"
@@ -96,8 +90,8 @@ long __attribute__((noinline)) shim_clone(const ucontext_t* ctx, int32_t flags, 
         "ret\n"
         "shim_native_syscallv_out:\n"
         : "=a"(rv)
-        : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10), "r"(r8),
-          "r"(r13), [REG_RIP_offset] "i"(MCTX_REG_OFFSET(REG_RIP)),
+        : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10),
+          "r"(r8), [REG_RIP_offset] "i"(MCTX_REG_OFFSET(REG_RIP)),
           [CTX_SIZE] "i"(sizeof(ctx->uc_mcontext)), [REG_R8_offset] "i"(MCTX_REG_OFFSET(REG_R8)),
           [REG_R9_offset] "i"(MCTX_REG_OFFSET(REG_R9)),
           [REG_R10_offset] "i"(MCTX_REG_OFFSET(REG_R10)),
