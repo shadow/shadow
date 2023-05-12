@@ -133,12 +133,12 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
+        .header("core/affinity.h")
         .header("core/logger/log_wrapper.h")
         .header("core/main.h")
         .header("core/support/config_handlers.h")
         .header("core/support/definitions.h")
         .header("core/worker.h")
-        .header("host/affinity.h")
         .header("host/descriptor/compat_socket.h")
         .header("host/descriptor/descriptor.h")
         .header("host/descriptor/regular_file.h")
@@ -334,6 +334,7 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
     let mut build = build_common.cc_build();
 
     build.files(&[
+        "core/affinity.c",
         "core/logger/log_wrapper.c",
         "core/support/config_handlers.c",
         "core/main.c",
@@ -348,7 +349,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/descriptor/tcp_cong_reno.c",
         "host/descriptor/timerfd.c",
         "host/descriptor/udp.c",
-        "host/affinity.c",
         "host/process.c",
         "host/futex.c",
         "host/futex_table.c",
