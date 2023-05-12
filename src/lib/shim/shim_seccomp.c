@@ -21,16 +21,6 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 
-// Used during initialization of a new thread. Stores the context
-// of the original call site of the clone syscall, so that the child
-// can restore it (with modifications such as the syscall return value).
-// TODO: consider dynamically allocating this via mmap instead since it's
-// relatively large, and only needed during initialization of a new thread.
-static ShimTlsVar _shim_parent_thread_ctx_var = {0};
-ucontext_t* shim_parent_thread_ctx() {
-    return shimtlsvar_ptr(&_shim_parent_thread_ctx_var, sizeof(ucontext_t));
-}
-
 // Handler function that receives syscalls that are stopped by the seccomp filter.
 static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);

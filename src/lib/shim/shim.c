@@ -77,11 +77,10 @@ static int* _shim_allowNativeSyscallsFlag() {
 static shadow_spinlock_t _startThreadLock = SHADOW_SPINLOCK_STATICALLY_INITD;
 static struct {
     ShMemBlock childIpcBlk;
-    ucontext_t childInitialCtx;
     shadow_sem_t childInitd;
 } _startThread;
 
-void shim_newThreadStart(const ShMemBlockSerialized* block, const ucontext_t* clone_ctx) {
+void shim_newThreadStart(const ShMemBlockSerialized* block) {
     if (shadow_spin_lock(&_startThreadLock)) {
         panic("shadow_spin_lock: %s", strerror(errno));
     };
@@ -89,7 +88,6 @@ void shim_newThreadStart(const ShMemBlockSerialized* block, const ucontext_t* cl
         panic("shadow_sem_init: %s", strerror(errno));
     }
     _startThread.childIpcBlk = shmemserializer_globalBlockDeserialize(block);
-    _startThread.childInitialCtx = *clone_ctx;
 }
 
 void shim_newThreadChildInitd() {
@@ -104,7 +102,7 @@ void shim_newThreadFinish() {
         if (errno != EAGAIN) {
             panic("shadow_sem_trywait: %s", strerror(errno));
         }
-        if (shim_native_syscall(SYS_sched_yield)) {
+        if (shim_native_syscall(NULL, SYS_sched_yield)) {
             panic("shim_native_syscall(SYS_sched_yield): %s", strerror(errno));
         }
     }
@@ -349,10 +347,6 @@ static void _shim_preload_only_child_init_ipc() {
     *_shim_ipcDataBlk() = _startThread.childIpcBlk;
 }
 
-static void _shim_preload_only_child_init_ctx() {
-    *shim_parent_thread_ctx() = _startThread.childInitialCtx;
-}
-
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
@@ -430,7 +424,6 @@ static void _shim_child_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_preload_only_child_init_ipc();
-    _shim_preload_only_child_init_ctx();
     _shim_init_signal_stack();
     _shim_preload_only_child_ipc_wait_for_start_event();
     _shim_child_init_thread_shm();
