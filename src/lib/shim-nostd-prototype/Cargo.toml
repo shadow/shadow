@@ -13,3 +13,17 @@ libc = { version = "0.2.144", default-features=false }
 linux-syscall = "1.0.0"
 vasi = { path = "../vasi" }
 
+# For no-std executable or so targets, we must either provide an eh_personality
+# (which is unstable and hence requires rust nightly), or configure panics to
+# abort instead of unwind.
+# https://docs.rust-embedded.org/embedonomicon/smallest-no-std.html#eh_personality
+#
+# It'd be nice if we could do this for only the affected targets, but cargo
+# requires it to be at the workspace level. Maybe we should put no-std targets
+# in a separate workspace?
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
