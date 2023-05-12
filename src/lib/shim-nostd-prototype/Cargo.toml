@@ -1,0 +1,15 @@
+[package]
+name = "shim-nostd-prototype"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libc = { version = "0.2.144", default-features=false }
+linux-syscall = "1.0.0"
+vasi = { path = "../vasi" }
+
