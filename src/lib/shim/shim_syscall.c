@@ -25,9 +25,9 @@
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-__attribute__((noinline, section("shadow_allow_syscalls")))
-long shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack,
-                                          pid_t* ptid, pid_t* ctid, uint64_t newtls) {
+__attribute__((noinline, section("shadow_allow_syscalls"))) static long
+_shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid,
+            uint64_t newtls) {
     if (!child_stack) {
         panic("clone without a new stack not implemented");
     }
@@ -116,8 +116,8 @@ long shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack,
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-__attribute__((noinline, section("shadow_allow_syscalls")))
-long shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
+__attribute__((noinline, section("shadow_allow_syscalls"))) static long
+_shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
@@ -132,7 +132,7 @@ long shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
         pid_t* ptid = (pid_t*)arg3;
         pid_t* ctid = (pid_t*)arg4;
         uint64_t newtls = arg5;
-        rv = shim_clone(ctx, flags, child_stack, ptid, ctid, newtls);
+        rv = _shim_clone(ctx, flags, child_stack, ptid, ctid, newtls);
     } else {
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register
@@ -156,7 +156,7 @@ long shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
 long shim_native_syscall(const ucontext_t* ctx, long n, ...) {
     va_list args;
     va_start(args, n);
-    long rv = shim_native_syscallv(ctx, n, args);
+    long rv = _shim_native_syscallv(ctx, n, args);
     va_end(args);
     return rv;
 }
@@ -344,7 +344,7 @@ long shim_syscallv(const ucontext_t* ctx, long n, va_list args) {
         trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it "
               "will be handled natively by the kernel.",
               n);
-        rv = shim_native_syscallv(ctx, n, args);
+        rv = _shim_native_syscallv(ctx, n, args);
     }
 
     return rv;
