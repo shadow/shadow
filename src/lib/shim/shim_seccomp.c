@@ -92,6 +92,18 @@ void shim_seccomp_init() {
         panic("prctl: %s", strerror(errno));
     }
 
+    // These symbols are defined by the linker, and give the bounds of the code
+    // section `shadow_allow_syscalls`. If these become link errors, we may need to add/modify
+    // a linker script to explicitly define such symbols ourselves.
+    // https://stackoverflow.com/questions/4156585/how-to-get-the-length-of-a-function-in-bytes/22047976#comment83965391_22047976
+    //
+    // I wasn't able to find clear documentation from `ld` itself about how and
+    // when these symbols are generated, but [`ld(1)`](https://www.man7.org/linux/man-pages/man1/ld.1.html)
+    // does mention them in passing; e.g. the `start-stop-visibility` option controls
+    // their visibility.
+    extern char __start_shadow_allow_syscalls[];
+    extern char __stop_shadow_allow_syscalls[];
+
     /* A bpf program to be loaded as a `seccomp` filter. Unfortunately the
      * documentation for how to write this is pretty sparse. There's a useful
      * example in samples/seccomp/bpf-direct.c of the Linux kernel source tree.
@@ -116,27 +128,16 @@ void shim_seccomp_init() {
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
-        /* See if instruction pointer is within the shim_native_syscallv fn. */
-        /* accumulator := instruction_pointer */
+        /* If the instruction pointer is in section `shadow_allow_syscalls`,
+         * allow. This lets us define functions that are allowed to make native
+         * syscalls, by placing them in that section using
+         * `__attribute__((noinline, section("shadow_allow_syscalls")))` in C
+         * or (untested) `#[link_section = "shadow_allow_syscalls"]` in Rust.
+         */
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
-        /* If it's in `shim_native_syscallv`, allow. We don't know the end address, but it
-         * should be safe-ish to check if it's within a kilobyte or so. We know there are no
-         * other syscall instructions within this library, so the only problem would be if
-         * shim_native_syscallv ended up at the very end of the library object, and a syscall
-         * ended up being made from the very beginning of another library object, loaded just
-         * after ours.
-         *
-         * TODO: Consider using the actual bounds of this object file, from /proc/self/maps. */
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_native_syscallv) + 2000,
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, (long)__stop_shadow_allow_syscalls,
                  /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_native_syscallv, /*true-skip=*/0,
-                 /*false-skip=*/1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-
-        /* Allow syscalls from `shim_clone` as above. */
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_clone) + 2000,
-                 /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_clone, /*true-skip=*/0,
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)__start_shadow_allow_syscalls, /*true-skip=*/0,
                  /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 

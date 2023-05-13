@@ -25,7 +25,8 @@
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-long __attribute__((noinline)) shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack,
+__attribute__((noinline, section("shadow_allow_syscalls")))
+long shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack,
                                           pid_t* ptid, pid_t* ctid, uint64_t newtls) {
     if (!child_stack) {
         panic("clone without a new stack not implemented");
@@ -115,7 +116,8 @@ long __attribute__((noinline)) shim_clone(const ucontext_t* ctx, int32_t flags, 
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.
 // TODO: Drop if/when we whitelist using /proc/self/maps
-long __attribute__((noinline)) shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
+__attribute__((noinline, section("shadow_allow_syscalls")))
+long shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
