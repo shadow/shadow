@@ -19,7 +19,8 @@ pub struct ThreadPerCoreSched<HostType: Host> {
 
 impl<HostType: Host> ThreadPerCoreSched<HostType> {
     /// A new host scheduler with threads that are pinned to the provided OS processors. Each thread
-    /// is assigned many hosts, and threads may steal hosts from other threads.
+    /// is assigned many hosts, and threads may steal hosts from other threads. The number of
+    /// threads created will be the length of `cpu_ids`.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T, yield_spin: bool) -> Self
     where
         T: IntoIterator<Item = HostType>,

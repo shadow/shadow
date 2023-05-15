@@ -17,7 +17,8 @@ pub struct ThreadPerHostSched {
 
 impl ThreadPerHostSched {
     /// A new host scheduler with logical processors that are pinned to the provided OS processors.
-    /// Each logical processor is assigned many threads, and each thread is given a single host.
+    /// Each logical processor is assigned many threads, and each thread is given a single host. The
+    /// number of threads created will be the length of `hosts`.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
     where
         T: IntoIterator<Item = Box<Host>>,

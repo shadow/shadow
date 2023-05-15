@@ -167,11 +167,15 @@ helpful for programs with "busy loops" that otherwise deadlock under Shadow.
 
 #### `general.parallelism`
 
-Default: 1  
+Default: 0  
 Type: Integer
 
-How many parallel threads to use to run the simulation. Optimal performance is
-usually obtained with `nproc`, or sometimes `nproc`/2 with hyperthreading.
+How many parallel threads to use to run the simulation. Optimal performance is usually obtained with
+the number of *physical* CPU cores (`nproc` without hyperthreading or `nproc`/2 with
+hyperthreading).
+
+A value of 0 will allow Shadow to choose the number of threads, typically the number of physical CPU
+cores available in the current CPU affinity mask and cgroup.
 
 Virtual hosts depend on network packets that can potentially arrive from other
 virtual hosts, so each worker can only advance according to the propagation

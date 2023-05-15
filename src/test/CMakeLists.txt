@@ -98,6 +98,11 @@ macro(add_shadow_tests)
       list(APPEND SHADOW_TEST_ARGS "--strace-logging-mode" "standard")
    endif()
 
+   # If parallelism is not explicitly set, we use a single thread
+   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--parallelism.*")
+      list(APPEND SHADOW_TEST_ARGS "--parallelism" "1")
+   endif()
+
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
 
    set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow)

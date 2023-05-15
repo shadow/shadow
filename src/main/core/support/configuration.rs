@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
-use std::num::NonZeroU32;
 use std::os::unix::ffi::OsStrExt;
 use std::str::FromStr;
 
@@ -188,13 +187,12 @@ pub struct GeneralOptions {
     #[serde(default = "default_some_1")]
     pub seed: Option<u32>,
 
-    /// How many parallel threads to use to run the simulation. Optimal
-    /// performance is usually obtained with `nproc`, or sometimes `nproc`/2
-    /// with hyperthreading.
+    /// How many parallel threads to use to run the simulation. A value of 0 will allow Shadow to
+    /// choose the number of threads.
     #[clap(long, short = 'p', value_name = "cores")]
     #[clap(help = GENERAL_HELP.get("parallelism").unwrap().as_str())]
-    #[serde(default = "default_some_nz_1")]
-    pub parallelism: Option<NonZeroU32>,
+    #[serde(default = "default_some_0")]
+    pub parallelism: Option<u32>,
 
     /// The simulated time that ends Shadow's high network bandwidth/reliability bootstrap period
     #[clap(long, value_name = "seconds")]
@@ -1286,14 +1284,14 @@ fn default_some_false() -> Option<bool> {
     Some(false)
 }
 
-/// Helper function for serde default `Some(1)` values.
-fn default_some_1() -> Option<u32> {
-    Some(1)
+/// Helper function for serde default `Some(0)` values.
+fn default_some_0() -> Option<u32> {
+    Some(0)
 }
 
 /// Helper function for serde default `Some(1)` values.
-fn default_some_nz_1() -> Option<NonZeroU32> {
-    Some(std::num::NonZeroU32::new(1).unwrap())
+fn default_some_1() -> Option<u32> {
+    Some(1)
 }
 
 /// Helper function for serde default `Some(NullableOption::Value(1 sec))` values.
