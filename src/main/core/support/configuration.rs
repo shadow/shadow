@@ -567,7 +567,7 @@ impl Default for HostDefaultOptions {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum RunningVal {
     Running,
 }
@@ -661,7 +661,7 @@ pub struct HostOptions {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum LogLevel {
     Error,
     Warning,
@@ -876,7 +876,7 @@ fn default_data_directory() -> Option<String> {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum LogInfoFlag {
     Node,
     Socket,
@@ -938,7 +938,7 @@ impl FromStr for QDiscMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum Compression {
     Xz,
 }
@@ -953,13 +953,15 @@ pub struct FileSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum GraphSource {
     File(FileSource),
     Inline(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+// we use "kebab-case" for other shadow options, but are leaving this as "snake_case" for backwards
+// compatibility
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GraphOptions {
     Gml(GraphSource),
@@ -1111,7 +1113,7 @@ impl std::ops::Deref for Signal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum StraceLoggingMode {
     Off,
     Standard,
