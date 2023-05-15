@@ -5,16 +5,17 @@ use crate::{bindings, constants_bindings};
 
 pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
-/// Lowest and highest valid realtime signal, according to signal(7).  We don't
-/// use libc's SIGRTMIN and SIGRTMAX directly since those may omit some signal
-/// numbers that libc reserves for its internal use. We still need to handle
-/// those signal numbers in Shadow.
-pub const LINUX_SIGRT_MIN: i32 = 32;
+/// Lowest realtime signal number.
+pub const LINUX_SIGRT_MIN: i32 = constants_bindings::SIGRTMIN as i32;
+/// Highest realtime signal number.
+//
+// According to signal(7). bindgen fails to bind this one.
 pub const LINUX_SIGRT_MAX: i32 = 64;
 
-// Definition is sometimes missing in the userspace headers. We could include
-// the kernel signal header, but it has definitions that conflict with the
-// userspace headers.
+/// Definition is sometimes missing in the userspace headers.
+//
+// bindgen fails to bind this one.
+// Copied from linux's include/uapi/linux/signal.h.
 pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
 
 // Bindgen doesn't succesfully bind these constants; maybe because
@@ -144,6 +145,8 @@ impl linux_siginfo_t {
 pub struct linux_sigset_t {
     val: u64,
 }
+static_assertions::assert_eq_align!(linux_sigset_t, bindings::sigset_t);
+static_assertions::assert_eq_size!(linux_sigset_t, bindings::sigset_t);
 
 impl linux_sigset_t {
     pub const EMPTY: Self = Self { val: 0 };

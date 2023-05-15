@@ -29,19 +29,3 @@ mod bindings {
 }
 
 pub mod signal;
-
-use bindings::sigaction;
-unsafe impl vasi::VirtualAddressSpaceIndependent for sigaction {}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn sigset_size() {
-        // The kernel definition should (currently) be 8 bytes.
-        // At some point this may get increased, but it shouldn't be the glibc
-        // size of ~100 bytes.
-        assert_eq!(std::mem::size_of::<bindings::sigset_t>(), 8);
-    }
-}
