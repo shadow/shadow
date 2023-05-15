@@ -21,6 +21,7 @@ use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
@@ -43,7 +44,7 @@ use crate::network::router::Router;
 use crate::network::PacketDevice;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, pod, SyncSendPointer};
+use crate::utility::{self, pod};
 
 pub struct HostParameters {
     pub id: HostId,

@@ -10,6 +10,7 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use super::work::event_queue::EventQueue;
@@ -27,7 +28,6 @@ use crate::network::packet::Packet;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::status_bar;
-use crate::utility::SyncSendPointer;
 
 static USE_OBJECT_COUNTERS: AtomicBool = AtomicBool::new(false);
 

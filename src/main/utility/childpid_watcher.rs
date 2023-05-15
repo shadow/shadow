@@ -627,9 +627,9 @@ mod tests {
 
 mod export {
     use shadow_shim_helper_rs::notnull::*;
+    use shadow_shim_helper_rs::util::SyncSendPointer;
 
     use super::*;
-    use crate::utility::SyncSendPointer;
 
     #[no_mangle]
     pub unsafe extern "C" fn childpidwatcher_new() -> *mut ChildPidWatcher {

@@ -1,6 +1,6 @@
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::util::NoTypeInference;
+use crate::util::{NoTypeInference, SyncSendPointer};
 
 /// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
 /// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
@@ -23,7 +23,10 @@ pub type UntypedForeignPtr = ForeignPtr<()>;
 #[repr(C)]
 pub struct ForeignPtr<T> {
     val: usize,
-    _phantom: std::marker::PhantomData<T>,
+    // `ForeignPtr` behaves as if it holds a pointer to a `T`, and we want this `ForeignPtr` to be
+    // `Send` + `Sync`
+    #[unsafe_assume_virtual_address_space_independent]
+    _phantom: std::marker::PhantomData<SyncSendPointer<T>>,
 }
 
 impl<T> ForeignPtr<T> {
@@ -34,6 +37,7 @@ impl<T> ForeignPtr<T> {
         }
     }
 
+    #[inline]
     pub fn null() -> Self {
         // this will be an invalid pointer so we don't really care what type rust will infer for
         // this `ForeignPtr`
@@ -64,15 +68,18 @@ impl<T> ForeignPtr<T> {
     /// // cast to a u8 pointer
     /// let ptr: ForeignPtr<u8> = ptr.cast();
     /// ```
+    #[inline]
     pub fn cast<U: NoTypeInference>(&self) -> ForeignPtr<U::This> {
         ForeignPtr::new_with_type_inference(self.val)
     }
 
+    #[inline]
     pub fn is_null(&self) -> bool {
         self.val == 0
     }
 
     /// Create a `ForeignPtr` from a raw pointer to plugin memory.
+    #[inline]
     pub fn from_raw_ptr(ptr: *mut T) -> Self {
         let val = ptr as usize;
         // the type of this `ForeignPtr` will be inferred from the pointer type
@@ -80,12 +87,14 @@ impl<T> ForeignPtr<T> {
     }
 
     /// Add an offset to a pointer. `count` is in units of `T`.
+    #[inline]
     pub fn add(&self, count: usize) -> Self {
         let val = self.val;
         Self::new_with_type_inference(val + count * std::mem::size_of::<T>())
     }
 
     /// Subtract an offset from a pointer. `count` is in units of `T`.
+    #[inline]
     pub fn sub(&self, count: usize) -> Self {
         let val = self.val;
         Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
@@ -93,13 +102,16 @@ impl<T> ForeignPtr<T> {
 }
 
 impl<T> From<ForeignPtr<T>> for usize {
+    #[inline]
     fn from(v: ForeignPtr<T>) -> Self {
         v.val
     }
 }
 
+/// Convert an integer to an untyped `ForeignPtr`.
 impl From<usize> for ForeignPtr<()> {
-    fn from(v: usize) -> ForeignPtr<()> {
+    #[inline]
+    fn from(v: usize) -> Self {
         ForeignPtr {
             val: v,
             _phantom: Default::default(),
@@ -107,8 +119,10 @@ impl From<usize> for ForeignPtr<()> {
     }
 }
 
+/// Convert an integer to an untyped `ForeignPtr`.
 impl From<u64> for ForeignPtr<()> {
-    fn from(v: u64) -> ForeignPtr<()> {
+    #[inline]
+    fn from(v: u64) -> Self {
         ForeignPtr {
             val: v.try_into().unwrap(),
             _phantom: Default::default(),
@@ -117,6 +131,7 @@ impl From<u64> for ForeignPtr<()> {
 }
 
 impl<T> From<ForeignPtr<T>> for u64 {
+    #[inline]
     fn from(v: ForeignPtr<T>) -> Self {
         v.val.try_into().unwrap()
     }
@@ -125,6 +140,7 @@ impl<T> From<ForeignPtr<T>> for u64 {
 impl<T> Copy for ForeignPtr<T> {}
 
 impl<T> Clone for ForeignPtr<T> {
+    #[inline]
     fn clone(&self) -> Self {
         *self
     }
@@ -154,18 +170,21 @@ pub struct ManagedPhysicalMemoryAddr {
 }
 
 impl From<ManagedPhysicalMemoryAddr> for usize {
+    #[inline]
     fn from(v: ManagedPhysicalMemoryAddr) -> usize {
         v.val
     }
 }
 
 impl From<usize> for ManagedPhysicalMemoryAddr {
+    #[inline]
     fn from(v: usize) -> ManagedPhysicalMemoryAddr {
         ManagedPhysicalMemoryAddr { val: v }
     }
 }
 
 impl From<u64> for ManagedPhysicalMemoryAddr {
+    #[inline]
     fn from(v: u64) -> ManagedPhysicalMemoryAddr {
         ManagedPhysicalMemoryAddr {
             val: v.try_into().unwrap(),
@@ -174,6 +193,7 @@ impl From<u64> for ManagedPhysicalMemoryAddr {
 }
 
 impl From<ManagedPhysicalMemoryAddr> for u64 {
+    #[inline]
     fn from(v: ManagedPhysicalMemoryAddr) -> u64 {
         v.val.try_into().unwrap()
     }
@@ -190,9 +210,11 @@ pub struct SysCallArgs {
 }
 
 impl SysCallArgs {
+    #[inline]
     pub fn get(&self, i: usize) -> SysCallReg {
         self.args[i]
     }
+    #[inline]
     pub fn number(&self) -> i64 {
         self.number
     }
@@ -214,78 +236,91 @@ static_assertions::assert_eq_align!(SysCallReg, u64);
 static_assertions::assert_eq_size!(SysCallReg, u64);
 
 impl PartialEq for SysCallReg {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         unsafe { self.as_u64 == other.as_u64 }
     }
 }
 
 impl From<u64> for SysCallReg {
+    #[inline]
     fn from(v: u64) -> Self {
         Self { as_u64: v }
     }
 }
 
 impl From<SysCallReg> for u64 {
+    #[inline]
     fn from(v: SysCallReg) -> u64 {
         unsafe { v.as_u64 }
     }
 }
 
 impl From<u32> for SysCallReg {
+    #[inline]
     fn from(v: u32) -> Self {
         Self { as_u64: v as u64 }
     }
 }
 
 impl From<SysCallReg> for u32 {
+    #[inline]
     fn from(v: SysCallReg) -> u32 {
         (unsafe { v.as_u64 }) as u32
     }
 }
 
 impl From<usize> for SysCallReg {
+    #[inline]
     fn from(v: usize) -> Self {
         Self { as_u64: v as u64 }
     }
 }
 
 impl From<SysCallReg> for usize {
+    #[inline]
     fn from(v: SysCallReg) -> usize {
         unsafe { v.as_u64 as usize }
     }
 }
 
 impl From<isize> for SysCallReg {
+    #[inline]
     fn from(v: isize) -> Self {
         Self { as_i64: v as i64 }
     }
 }
 
 impl From<SysCallReg> for isize {
+    #[inline]
     fn from(v: SysCallReg) -> isize {
         unsafe { v.as_i64 as isize }
     }
 }
 
 impl From<i64> for SysCallReg {
+    #[inline]
     fn from(v: i64) -> Self {
         Self { as_i64: v }
     }
 }
 
 impl From<SysCallReg> for i64 {
+    #[inline]
     fn from(v: SysCallReg) -> i64 {
         unsafe { v.as_i64 }
     }
 }
 
 impl From<i32> for SysCallReg {
+    #[inline]
     fn from(v: i32) -> Self {
         Self { as_i64: v as i64 }
     }
 }
 
 impl From<SysCallReg> for i32 {
+    #[inline]
     fn from(v: SysCallReg) -> i32 {
         (unsafe { v.as_i64 }) as i32
     }
@@ -294,6 +329,7 @@ impl From<SysCallReg> for i32 {
 impl TryFrom<SysCallReg> for u8 {
     type Error = <u8 as TryFrom<u64>>::Error;
 
+    #[inline]
     fn try_from(v: SysCallReg) -> Result<u8, Self::Error> {
         (unsafe { v.as_u64 }).try_into()
     }
@@ -302,6 +338,7 @@ impl TryFrom<SysCallReg> for u8 {
 impl TryFrom<SysCallReg> for u16 {
     type Error = <u16 as TryFrom<u64>>::Error;
 
+    #[inline]
     fn try_from(v: SysCallReg) -> Result<u16, Self::Error> {
         (unsafe { v.as_u64 }).try_into()
     }
@@ -310,6 +347,7 @@ impl TryFrom<SysCallReg> for u16 {
 impl TryFrom<SysCallReg> for i8 {
     type Error = <i8 as TryFrom<i64>>::Error;
 
+    #[inline]
     fn try_from(v: SysCallReg) -> Result<i8, Self::Error> {
         (unsafe { v.as_i64 }).try_into()
     }
@@ -318,12 +356,14 @@ impl TryFrom<SysCallReg> for i8 {
 impl TryFrom<SysCallReg> for i16 {
     type Error = <i16 as TryFrom<i64>>::Error;
 
+    #[inline]
     fn try_from(v: SysCallReg) -> Result<i16, Self::Error> {
         (unsafe { v.as_i64 }).try_into()
     }
 }
 
 impl<T> From<ForeignPtr<T>> for SysCallReg {
+    #[inline]
     fn from(v: ForeignPtr<T>) -> Self {
         Self {
             as_ptr: v.cast::<()>(),
@@ -332,6 +372,7 @@ impl<T> From<ForeignPtr<T>> for SysCallReg {
 }
 
 impl<T> From<SysCallReg> for ForeignPtr<T> {
+    #[inline]
     fn from(v: SysCallReg) -> Self {
         // This allows rust to infer the type for the cast. This isn't ideal since we generally want
         // to require that the user be explicit about casts (for example we use the
@@ -344,6 +385,7 @@ impl<T> From<SysCallReg> for ForeignPtr<T> {
 
 // Useful for syscalls whose strongly-typed wrappers return some Result<(), ErrType>
 impl From<()> for SysCallReg {
+    #[inline]
     fn from(_: ()) -> SysCallReg {
         SysCallReg { as_i64: 0 }
     }
