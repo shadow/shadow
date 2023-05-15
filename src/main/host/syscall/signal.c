@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <sys/syscall.h>
 
+#include "lib/linux-api/linux-api.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/host/syscall/kernel_types.h"
@@ -34,11 +35,11 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 
 static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Process* process,
                                                    int sig) {
-    if (sig < 0 || sig > SHD_SIGRT_MAX) {
+    if (sig < 0 || sig > LINUX_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
+    if (sig > LINUX_STANDARD_SIGNAL_MAX_NO) {
         warning("Unimplemented signal %d", sig);
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
@@ -58,11 +59,11 @@ static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Pr
 
 static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thread* thread,
                                                   int sig) {
-    if (sig < 0 || sig > SHD_SIGRT_MAX) {
+    if (sig < 0 || sig > LINUX_SIGRT_MAX) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
+    if (sig > LINUX_STANDARD_SIGNAL_MAX_NO) {
         warning("Unimplemented signal %d", sig);
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
@@ -72,26 +73,25 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     }
 
     const Process* process = thread_getProcess(thread);
-    struct shd_kernel_sigaction action = shimshmem_getSignalAction(
+    struct linux_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), process_getSharedMem(process), sig);
     if (action.u.ksa_handler == SIG_IGN ||
-        (action.u.ksa_handler == SIG_DFL &&
-         shd_defaultAction(sig) == SHD_KERNEL_DEFAULT_ACTION_IGN)) {
+        (action.u.ksa_handler == SIG_DFL && linux_defaultAction(sig) == LINUX_DEFAULT_ACTION_IGN)) {
         // Don't deliver ignored an signal.
         return syscallreturn_makeDoneI64(0);
     }
 
-    shd_kernel_sigset_t pending_signals = shimshmem_getThreadPendingSignals(
+    linux_sigset_t pending_signals = shimshmem_getThreadPendingSignals(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread));
 
-    if (shd_sigismember(&pending_signals, sig)) {
+    if (linux_sigismember(&pending_signals, sig)) {
         // Signal is already pending. From signal(7):In the case where a standard signal is already
         // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
         // overwritten on arrival of subsequent instances of the same signal.
         return syscallreturn_makeDoneI64(0);
     }
 
-    shd_sigaddset(&pending_signals, sig);
+    linux_sigaddset(&pending_signals, sig);
     shimshmem_setThreadPendingSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                       thread_sharedMem(thread), pending_signals);
     shimshmem_setThreadSiginfo(host_getShimShmemLock(_syscallhandler_getHost(sys)),
@@ -110,9 +110,9 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
         return syscallreturn_makeDoneI64(0);
     }
 
-    shd_kernel_sigset_t blocked_signals = shimshmem_getBlockedSignals(
+    linux_sigset_t blocked_signals = shimshmem_getBlockedSignals(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread));
-    if (shd_sigismember(&blocked_signals, sig)) {
+    if (linux_sigismember(&blocked_signals, sig)) {
         // Target thread has the signal blocked. We'll leave it pending, but no
         // need to schedule an event to process the signal. It'll get processed
         // synchronously when the thread executes a syscall that would unblock
@@ -228,7 +228,7 @@ static SyscallReturn _rt_sigaction(SysCallHandler* sys, int signum, UntypedForei
     }
 
     if (oldActPtr.val) {
-        struct shd_kernel_sigaction old_action = shimshmem_getSignalAction(
+        struct linux_sigaction old_action = shimshmem_getSignalAction(
             host_getShimShmemLock(_syscallhandler_getHost(sys)),
             process_getSharedMem(_syscallhandler_getProcess(sys)), signum);
         int rv = process_writePtr(
@@ -243,7 +243,7 @@ static SyscallReturn _rt_sigaction(SysCallHandler* sys, int signum, UntypedForei
             return syscallreturn_makeDoneErrno(EINVAL);
         }
 
-        struct shd_kernel_sigaction new_action;
+        struct linux_sigaction new_action;
         int rv = process_readPtr(
             _syscallhandler_getProcess(sys), &new_action, actPtr, sizeof(new_action));
         if (rv != 0) {
@@ -293,7 +293,7 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
             // in ss.ss_flags and the remaining fields in ss.
             new_ss = (stack_t){.ss_flags = SS_DISABLE};
         }
-        if (new_ss.ss_flags & ~(SS_DISABLE | SS_AUTODISARM)) {
+        if (new_ss.ss_flags & ~(SS_DISABLE | LINUX_SS_AUTODISARM)) {
             // Unrecognized flag.
             return syscallreturn_makeDoneErrno(EINVAL);
         }
@@ -323,7 +323,7 @@ static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, UntypedForeig
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    shd_kernel_sigset_t current_set =
+    linux_sigset_t current_set =
         shimshmem_getBlockedSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                     thread_sharedMem(_syscallhandler_getThread(sys)));
 
@@ -336,7 +336,7 @@ static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, UntypedForeig
     }
 
     if (setPtr.val) {
-        shd_kernel_sigset_t set;
+        linux_sigset_t set;
         int rv = process_readPtr(_syscallhandler_getProcess(sys), &set, setPtr, sizeof(set));
         if (rv < 0) {
             return syscallreturn_makeDoneErrno(-rv);
@@ -344,12 +344,12 @@ static SyscallReturn _rt_sigprocmask(SysCallHandler* sys, int how, UntypedForeig
 
         switch (how) {
             case SIG_BLOCK: {
-                current_set = shd_sigorset(&current_set, &set);
+                current_set = linux_sigorset(&current_set, &set);
                 break;
             }
             case SIG_UNBLOCK: {
-                shd_kernel_sigset_t notset = shd_signotset(&set);
-                current_set = shd_sigandset(&current_set, &notset);
+                linux_sigset_t notset = linux_signotset(&set);
+                current_set = linux_sigandset(&current_set, &notset);
                 break;
             }
             case SIG_SETMASK: {

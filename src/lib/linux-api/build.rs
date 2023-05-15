@@ -9,7 +9,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let config = cbindgen::Config {
         include_guard: Some("linux_kernel_types_h".into()),
         export: cbindgen::ExportConfig {
-            include: vec!["shd_kernel_sigaction".into()],
+            include: vec!["linux_sigaction".into()],
             ..base_config.export.clone()
         },
         ..base_config

@@ -188,7 +188,7 @@ static void _shim_init_signal_stack() {
         // is running on the same thread would clobber the first handler's stack.
         // Instead we want the second handler to push a new frame on the alt
         // stack that's already installed.
-        .ss_flags = SS_AUTODISARM,
+        .ss_flags = LINUX_SS_AUTODISARM,
     };
 
     if (sigaltstack(&stack_descriptor, NULL) != 0) {

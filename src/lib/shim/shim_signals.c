@@ -7,7 +7,7 @@
 #include <string.h>
 #include <ucontext.h>
 
-static void _call_signal_handler(const struct shd_kernel_sigaction* action, int signo,
+static void _call_signal_handler(const struct linux_sigaction* action, int signo,
                                  siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
     if (action->ksa_flags & SA_SIGINFO) {
@@ -38,10 +38,10 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
     bool restartable = true;
     while ((signo = shimshmem_takePendingUnblockedSignal(
                 host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
-        shd_kernel_sigset_t blocked_signals =
+        linux_sigset_t blocked_signals =
             shimshmem_getBlockedSignals(host_lock, shim_threadSharedMem());
 
-        struct shd_kernel_sigaction action =
+        struct linux_sigaction action =
             shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
 
         if (action.u.ksa_handler == SIG_IGN) {
@@ -49,35 +49,35 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         }
 
         if (action.u.ksa_handler == SIG_DFL) {
-            switch (shd_defaultAction(signo)) {
-                case SHD_KERNEL_DEFAULT_ACTION_IGN:
+            switch (linux_defaultAction(signo)) {
+                case LINUX_DEFAULT_ACTION_IGN:
                     // Ignore
                     continue;
-                case SHD_KERNEL_DEFAULT_ACTION_CORE:
-                case SHD_KERNEL_DEFAULT_ACTION_TERM: {
+                case LINUX_DEFAULT_ACTION_CORE:
+                case LINUX_DEFAULT_ACTION_TERM: {
                     // Deliver natively to terminate/drop core.
                     shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
                     _die_with_fatal_signal(signo);
                     panic("Unreachable");
                 }
-                case SHD_KERNEL_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
-                case SHD_KERNEL_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
+                case LINUX_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
+                case LINUX_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
             };
             panic("Unreachable");
         }
 
         trace("Handling signo %d", signo);
 
-        shd_kernel_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
+        linux_sigset_t handler_mask = linux_sigorset(&blocked_signals, &action.ksa_mask);
         if (!(action.ksa_flags & SA_NODEFER)) {
             // Block another instance of the same signal.
-            shd_sigaddset(&handler_mask, signo);
+            linux_sigaddset(&handler_mask, signo);
         }
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), handler_mask);
 
         if (action.ksa_flags & SA_RESETHAND) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct shd_kernel_sigaction){.u.ksa_handler = SIG_DFL});
+                                      &(struct linux_sigaction){.u.ksa_handler = SIG_DFL});
         }
         if (!(action.ksa_flags & SA_RESTART)) {
             restartable = false;
@@ -95,7 +95,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
             // Update the signal-stack configuration while the handler is being run.
             stack_t ss_during_handler;
-            if (ss_original.ss_flags & SS_AUTODISARM) {
+            if (ss_original.ss_flags & LINUX_SS_AUTODISARM) {
                 ss_during_handler = (stack_t){.ss_flags = SS_DISABLE};
             } else {
                 ss_during_handler = ss_original;
@@ -166,12 +166,12 @@ void shim_handle_hardware_error_signal(int signo, siginfo_t* info, void* void_uc
 
     ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
 
-    shd_kernel_sigset_t pending_signals =
+    linux_sigset_t pending_signals =
         shimshmem_getThreadPendingSignals(host_lock, shim_threadSharedMem());
-    if (shd_sigismember(&pending_signals, signo)) {
+    if (linux_sigismember(&pending_signals, signo)) {
         warning("Received signal %d when it was already pending", signo);
     } else {
-        shd_sigaddset(&pending_signals, signo);
+        linux_sigaddset(&pending_signals, signo);
         shimshmem_setThreadPendingSignals(host_lock, shim_threadSharedMem(), pending_signals);
         shimshmem_setThreadSiginfo(host_lock, shim_threadSharedMem(), signo, info);
     }

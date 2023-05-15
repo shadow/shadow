@@ -1,6 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use linux_api::signal::{
-    shd_kernel_sigaction, shd_kernel_sigset_t, SHD_SIGRT_MAX, SHD_STANDARD_SIGNAL_MAX_NO,
+    linux_sigaction, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use nix::sys::signal::Signal;
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
@@ -181,10 +181,10 @@ impl ProcessShmem {
                 host_root,
                 ProcessShmemProtected {
                     host_id,
-                    pending_signals: shd_kernel_sigset_t::EMPTY,
+                    pending_signals: linux_sigset_t::EMPTY,
                     pending_standard_siginfos: [SiginfoWrapper::new();
-                        SHD_STANDARD_SIGNAL_MAX_NO as usize],
-                    signal_actions: [shd_kernel_sigaction::default(); SHD_SIGRT_MAX as usize],
+                        LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+                    signal_actions: [linux_sigaction::default(); LINUX_SIGRT_MAX as usize],
                 },
             ),
         }
@@ -197,16 +197,16 @@ pub struct ProcessShmemProtected {
     pub host_id: HostId,
 
     // Process-directed pending signals.
-    pub pending_signals: shd_kernel_sigset_t,
+    pub pending_signals: linux_sigset_t,
 
     // siginfo for each of the standard signals.
-    pending_standard_siginfos: [SiginfoWrapper; SHD_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [SiginfoWrapper; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // actions for both standard and realtime signals.
     // We currently support configuring handlers for realtime signals, but not
     // actually delivering them. This is to handle the case where handlers are
     // defensively installed, but not used in practice.
-    signal_actions: [shd_kernel_sigaction; SHD_SIGRT_MAX as usize],
+    signal_actions: [linux_sigaction; LINUX_SIGRT_MAX as usize],
 }
 
 impl ProcessShmemProtected {
@@ -228,7 +228,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action(&self, signal: Signal) -> &shd_kernel_sigaction {
+    pub unsafe fn signal_action(&self, signal: Signal) -> &linux_sigaction {
         &self.signal_actions[signal as usize - 1]
     }
 
@@ -237,7 +237,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut shd_kernel_sigaction {
+    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut linux_sigaction {
         &mut self.signal_actions[signal as usize - 1]
     }
 
@@ -276,10 +276,10 @@ impl ThreadShmem {
                 &host.root,
                 ThreadShmemProtected {
                     host_id: host.host_id,
-                    pending_signals: shd_kernel_sigset_t::EMPTY,
+                    pending_signals: linux_sigset_t::EMPTY,
                     pending_standard_siginfos: [SiginfoWrapper::new();
-                        SHD_STANDARD_SIGNAL_MAX_NO as usize],
-                    blocked_signals: shd_kernel_sigset_t::EMPTY,
+                        LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+                    blocked_signals: linux_sigset_t::EMPTY,
                     sigaltstack: StackWrapper(stack_t {
                         ss_sp: std::ptr::null_mut(),
                         ss_flags: libc::SS_DISABLE,
@@ -297,15 +297,15 @@ pub struct ThreadShmemProtected {
     pub host_id: HostId,
 
     // Thread-directed pending signals.
-    pub pending_signals: shd_kernel_sigset_t,
+    pub pending_signals: linux_sigset_t,
 
     // siginfo for each of the 32 standard signals.
-    pending_standard_siginfos: [SiginfoWrapper; SHD_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [SiginfoWrapper; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // Signal mask, e.g. as set by `sigprocmask`.
     // We don't use sigset_t since glibc uses a much larger bitfield than
     // actually supported by the kernel.
-    pub blocked_signals: shd_kernel_sigset_t,
+    pub blocked_signals: linux_sigset_t,
 
     // Configured alternate signal stack for this thread.
     sigaltstack: StackWrapper,
@@ -637,7 +637,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getProcessPendingSignals(
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
-    ) -> shd_kernel_sigset_t {
+    ) -> linux_sigset_t {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
@@ -653,7 +653,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_setProcessPendingSignals(
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
-        s: shd_kernel_sigset_t,
+        s: linux_sigset_t,
     ) {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
@@ -713,7 +713,7 @@ pub mod export {
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
         sig: i32,
-    ) -> shd_kernel_sigaction {
+    ) -> linux_sigaction {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
@@ -728,7 +728,7 @@ pub mod export {
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
         sig: i32,
-        action: *const shd_kernel_sigaction,
+        action: *const linux_sigaction,
     ) {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
@@ -757,7 +757,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getThreadPendingSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-    ) -> shd_kernel_sigset_t {
+    ) -> linux_sigset_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
@@ -773,7 +773,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_setThreadPendingSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-        s: shd_kernel_sigset_t,
+        s: linux_sigset_t,
     ) {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
@@ -832,7 +832,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getBlockedSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-    ) -> shd_kernel_sigset_t {
+    ) -> linux_sigset_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
@@ -848,7 +848,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_setBlockedSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-        s: shd_kernel_sigset_t,
+        s: linux_sigset_t,
     ) {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
