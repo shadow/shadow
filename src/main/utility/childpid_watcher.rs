@@ -6,11 +6,17 @@ use std::sync::Mutex;
 use std::thread;
 
 use nix::errno::Errno;
-use nix::fcntl::{FcntlArg, FdFlag, OFlag};
 use nix::sys::epoll::{
     epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
 };
 use nix::unistd::Pid;
+
+// TODO: consider using std::os::linux::process::PidFd once it's stabilized.
+fn pidfd_open(pid: Pid) -> nix::Result<File> {
+    let raw_fd =
+        nix::errno::Errno::result(unsafe { libc::syscall(libc::SYS_pidfd_open, pid.as_raw(), 0) })?;
+    Ok(unsafe { File::from_raw_fd(raw_fd.try_into().unwrap()) })
+}
 
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
@@ -34,7 +40,7 @@ struct PidData {
     // Registered callbacks.
     callbacks: HashMap<WatchHandle, Box<dyn Send + FnOnce(Pid)>>,
     // After the pid has exited, this fd is closed and set to None.
-    fd: Option<File>,
+    pidfd: Option<File>,
     // Whether this pid has been unregistered. The whole struct is removed after
     // both the pid is unregistered, and `callbacks` is empty.
     unregistered: bool,
@@ -65,7 +71,7 @@ impl Inner {
             // Already unregistered the pid
             return;
         };
-        let Some(fd) = piddata.fd.take() else {
+        let Some(fd) = piddata.pidfd.take() else {
             // Already unwatched the pid
             return;
         };
@@ -79,7 +85,7 @@ impl Inner {
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
-        self.pids.get(&pid).unwrap().fd.is_none()
+        self.pids.get(&pid).unwrap().pidfd.is_none()
     }
 
     fn remove_pid(&mut self, epoll: &File, pid: Pid) {
@@ -224,28 +230,19 @@ impl ChildPidWatcher {
         fork_syscall: i64,
         child_fn: impl FnOnce(),
     ) -> Result<Pid, nix::Error> {
-        let (read_fd, write_fd) = nix::unistd::pipe2(OFlag::O_CLOEXEC)?;
-
         // TODO: Allow vfork when Rust supports it:
         assert!(fork_syscall == libc::SYS_fork);
         let raw_pid = unsafe { libc::syscall(fork_syscall) };
         if raw_pid < 0 {
             let rv = Err(Errno::last());
-            nix::unistd::close(read_fd).unwrap();
-            nix::unistd::close(write_fd).unwrap();
             return rv;
         }
         if raw_pid == 0 {
-            // Keep the write-end of the pipe open.
-            nix::fcntl::fcntl(write_fd, FcntlArg::F_SETFD(FdFlag::empty())).unwrap();
             child_fn();
             panic!("child_fn shouldn't have returned");
         }
-        // Parent doesn't need the write end.
-        nix::unistd::close(write_fd).unwrap();
-
         let pid = Pid::from_raw(raw_pid.try_into().unwrap());
-        self.register_pid(pid, unsafe { File::from_raw_fd(read_fd) });
+        self.register_pid(pid);
 
         Ok(pid)
     }
@@ -266,35 +263,34 @@ impl ChildPidWatcher {
         unsafe { self.fork_watchable_internal(libc::SYS_fork, child_fn) }
     }
 
-    /// Register interest in `pid`, and associate it with `read_fd`.
+    /// Register interest in `pid`.
     ///
-    /// `read_fd` should be the read end of a pipe, whose write end is owned
-    /// *solely* by `pid`, causing `read_fd` to become invalid when `pid` exits.
-    /// In a multi-threaded program care must be taken to prevent a concurrent
-    /// fork from leaking the write end of the pipe into other children. One way
-    /// to avoid this is to use O_CLOEXEC when creating the pipe, and then unset
-    /// O_CLOEXEC in the child before calling exec.
+    /// Will succeed even if `pid` is already dead, in which case callbacks
+    /// registered for this `pid` will immediately be scheduled to run.
     ///
-    /// Be sure to close the parent's write-end of the pipe.
-    ///
-    /// Takes ownership of `read_fd`, and will close it when appropriate.
-    pub fn register_pid(&self, pid: Pid, read_fd: File) {
+    /// `pid` must refer to some process, but that process may be a zombie (dead
+    /// but not yet reaped). Panics if `pid` doesn't exist at all.  The caller
+    /// should ensure the process has not been reaped before calling this
+    /// function both to avoid such panics, and to avoid accidentally watching
+    /// an unrelated process with a recycled `pid`.
+    pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
-        let raw_read_fd = read_fd.as_raw_fd();
+        let pidfd = pidfd_open(pid).unwrap();
+        let raw_pidfd = pidfd.as_raw_fd();
         let prev = inner.pids.insert(
             pid,
             PidData {
                 callbacks: HashMap::new(),
-                fd: Some(read_fd),
+                pidfd: Some(pidfd),
                 unregistered: false,
             },
         );
         assert!(prev.is_none());
-        let mut event = EpollEvent::new(EpollFlags::empty(), pid.as_raw().try_into().unwrap());
+        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, pid.as_raw().try_into().unwrap());
         epoll_ctl(
             self.epoll.as_raw_fd(),
             EpollOp::EpollCtlAdd,
-            raw_read_fd,
+            raw_pidfd,
             Some(&mut event),
         )
         .unwrap();
@@ -336,7 +332,7 @@ impl ChildPidWatcher {
         let pid_data = inner.pids.get_mut(&pid).unwrap();
         assert!(!pid_data.unregistered);
         pid_data.callbacks.insert(handle, Box::new(callback));
-        if pid_data.fd.is_none() {
+        if pid_data.pidfd.is_none() {
             // pid is already dead. Run the callback we just registered.
             inner.send_command(Command::RunCallbacks(pid));
         }
@@ -377,7 +373,7 @@ impl Drop for ChildPidWatcher {
 impl std::fmt::Debug for PidData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PidData")
-            .field("fd", &self.fd)
+            .field("fd", &self.pidfd)
             .field("unregistered", &self.unregistered)
             .finish_non_exhaustive()
     }
@@ -459,17 +455,12 @@ mod tests {
     }
 
     #[test]
-    // can't call foreign function: pipe
+    // can't call foreign functions
     #[cfg_attr(miri, ignore)]
     fn register_after_exit() {
-        let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
         let child = match unsafe { nix::unistd::fork() }.unwrap() {
-            nix::unistd::ForkResult::Parent { child } => {
-                nix::unistd::close(write_fd).unwrap();
-                child
-            }
+            nix::unistd::ForkResult::Parent { child } => child,
             nix::unistd::ForkResult::Child => {
-                nix::unistd::close(read_fd).unwrap();
                 unsafe { libc::_exit(42) };
             }
         };
@@ -482,7 +473,7 @@ mod tests {
         }
 
         let watcher = ChildPidWatcher::new();
-        watcher.register_pid(child, unsafe { File::from_raw_fd(read_fd) });
+        watcher.register_pid(child);
 
         // Used to wait until after the ChildPidWatcher has ran our callback
         let callback_ran = Arc::new((Mutex::new(false), Condvar::new()));
@@ -563,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    // can't call foreign function: pipe
+    // can't call foreign function
     #[cfg_attr(miri, ignore)]
     fn unregister_one() {
         let cb1_ran = Arc::new((Mutex::new(false), Condvar::new()));
@@ -624,4 +615,3 @@ mod tests {
         assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
     }
 }
-    use shadow_shim_helper_rs::util::SyncSendPointer;
