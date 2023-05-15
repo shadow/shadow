@@ -7,6 +7,11 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.2.1"
+# We try to minimize our usage of the libc crate, but currently need it to work
+# around different versions of the kernel headers resulting in different bindgen
+# field names. In particular siginfo_t gets different generated names for its
+# internal (~anonymous) union fields.
+libc = { version = "0.2.144", default-features = false }
 log = { version = "0.4.17", default-features = false }
 # FIXME: remove this dependendency. nix doesn't have a no_std configuration.
 nix = "0.26.2"

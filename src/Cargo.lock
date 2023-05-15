@@ -747,6 +747,7 @@ dependencies = [
  "bindgen",
  "bitflags 2.2.1",
  "cbindgen",
+ "libc",
  "log",
  "nix",
  "shadow-build-common",

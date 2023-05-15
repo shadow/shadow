@@ -1,5 +1,5 @@
 //! This crate constants and types for interacting with the Linux kernel.
-//! It is no_std and doesn't depend on libc.
+//! It is no_std and shouldn't have a runtime dependency on libc.
 
 #![cfg_attr(not(test), no_std)]
 

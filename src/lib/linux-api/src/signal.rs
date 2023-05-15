@@ -43,97 +43,60 @@ bitflags::bitflags! {
 // We can't derive this since the bitflags field uses an internal type.
 unsafe impl VirtualAddressSpaceIndependent for LinuxSigActionFlags {}
 
-#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
+// We use libc::siginfo_t internally, because bindings::siginfo_t gets
+// different field names when generated on different platforms.
+#[derive(Copy, Clone)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-pub struct linux_siginfo_t {
-    // We don't wrap bindings::siginfo_t directly,
-    // since this would introduce a dependency on the original system
-    // header file in the cbindgen'd version of this type, and requiring our C code
-    // to include the kernel headers results in naming conflicts.
-
-    // cbindgen doesn't understand repr(C, align(x)).
-    // alignment validated by static assertion below.
-    _align: u64,
-    // We also can't use core::mem::size_of::<bindings::siginfo_t> to specify
-    // the size here, because that also confuses cbindgen.
-    // Size validated by static assertion below.
-    _padding: [u8; 120],
-}
+pub struct linux_siginfo_t(libc::siginfo_t);
 static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
 static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
 
+unsafe impl VirtualAddressSpaceIndependent for linux_siginfo_t {}
+
 impl linux_siginfo_t {
-    fn as_bound_type(&self) -> &bindings::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+    /// # Safety
+    ///
+    /// Pointer fields must not be dereferenced from outside of their
+    /// native virtual address space.
+    pub unsafe fn as_siginfo(&self) -> &libc::siginfo_t {
+        static_assertions::assert_eq_align!(linux_siginfo_t, libc::siginfo_t);
+        static_assertions::assert_eq_size!(linux_siginfo_t, libc::siginfo_t);
         unsafe { core::mem::transmute(self) }
     }
 
-    fn as_bound_type_mut(&mut self) -> &mut bindings::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+    /// # Safety
+    ///
+    /// Pointer fields must not be dereferenced from outside of their
+    /// native virtual address space.
+    pub unsafe fn as_siginfo_mut(&mut self) -> &mut libc::siginfo_t {
+        static_assertions::assert_eq_align!(linux_siginfo_t, libc::siginfo_t);
+        static_assertions::assert_eq_size!(linux_siginfo_t, libc::siginfo_t);
         unsafe { core::mem::transmute(self) }
     }
 
     pub fn signo(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_signo
-        }
+        unsafe { &self.as_siginfo().si_signo }
     }
 
     pub fn signo_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_signo
-        }
+        unsafe { &mut self.as_siginfo_mut().si_signo }
     }
 
     pub fn errno(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_errno
-        }
+        unsafe { &self.as_siginfo().si_errno }
     }
 
     pub fn errno_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_errno
-        }
+        unsafe { &mut self.as_siginfo_mut().si_errno }
     }
 
     pub fn code(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_code
-        }
+        unsafe { &self.as_siginfo().si_code }
     }
 
     pub fn code_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_code
-        }
+        unsafe { &mut self.as_siginfo_mut().si_code }
     }
 }
 
