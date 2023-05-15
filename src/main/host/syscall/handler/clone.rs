@@ -64,55 +64,161 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         };
 
-        {
-            let required_flags = CloneFlags::CLONE_VM
-                | CloneFlags::CLONE_FS
-                | CloneFlags::CLONE_FILES
-                | CloneFlags::CLONE_SIGHAND
-                | CloneFlags::CLONE_THREAD
-                | CloneFlags::CLONE_SYSVSEM;
-            let missing_flags = required_flags.difference(flags);
-            if !missing_flags.is_empty() {
-                warn!("Missing required clone flags: {missing_flags:?}");
+        // We use this for a consistency check to validate that we've inspected
+        // and emulated all of the provided flags.
+        let mut handled_flags = CloneFlags::empty();
+
+        // The parameters that we'll pass to the native clone call.
+        let mut native_flags = CloneFlags::empty();
+
+        // We emulate the flags that would use these, so we always pass NULL to
+        // the native call.
+        let native_ctid = ForeignPtr::<libc::pid_t>::null();
+        let native_ptid = ForeignPtr::<libc::pid_t>::null();
+
+        // We use the managed-code provided stack.
+        let native_child_stack = child_stack;
+
+        // We use the managed-code provided newtls.
+        let native_newtls = newtls;
+
+        if raw_exit_signal != 0 {
+            warn!("Exit signal is unimplemented");
+            return Err(Errno::ENOTSUP.into());
+        }
+        // We use an i8 here because it needs to fit into the lowest 8 bits of
+        // the flags parameter to the native clone call.
+        let native_raw_exit_signal: i8 = 0;
+
+        if flags.contains(CloneFlags::CLONE_THREAD) {
+            // From clone(2):
+            // > Since Linux 2.5.35, the flags mask must also include
+            // > CLONE_SIGHAND if CLONE_THREAD is specified
+            if !flags.contains(CloneFlags::CLONE_SIGHAND) {
+                debug!("Missing CLONE_SIGHAND");
                 return Err(Errno::EINVAL.into());
             }
+            if !flags.contains(CloneFlags::CLONE_FILES) {
+                // AFAICT from clone(2) this is legal, but we don't yet support
+                // it in Shadow, since the file descriptor table is kept at the
+                // Process level instead of the Thread level.
+                warn!("CLONE_THREAD without CLONE_FILES not supported by shadow");
+                return Err(Errno::ENOTSUP.into());
+            }
+            if !flags.contains(CloneFlags::CLONE_SETTLS) {
+                // Legal in Linux, but the shim will be broken and behave unpredictably.
+                warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
+                return Err(Errno::ENOTSUP.into());
+            }
+            // The native clone call will:
+            // - create a thread.
+            native_flags.insert(CloneFlags::CLONE_THREAD);
+            // - share signal handlers (mandatory anyway)
+            native_flags.insert(CloneFlags::CLONE_SIGHAND);
+            // - share file system info (mostly N/A for shadow, but conventional for threads)
+            native_flags.insert(CloneFlags::CLONE_FS);
+            // - share file descriptors
+            native_flags.insert(CloneFlags::CLONE_FILES);
+            // - share semaphores (mostly N/A for shadow, but conventional for threads)
+            native_flags.insert(CloneFlags::CLONE_SYSVSEM);
+
+            handled_flags.insert(CloneFlags::CLONE_THREAD);
+        } else {
+            warn!("Failing clone: we don't support creating a new process (e.g. fork) yet");
+            return Err(Errno::ENOTSUP.into());
+        }
+
+        if flags.contains(CloneFlags::CLONE_SIGHAND) {
+            // From clone(2):
+            // > Since Linux 2.6.0, the flags mask must also include CLONE_VM if
+            // > CLONE_SIGHAND is specified
+            if !flags.contains(CloneFlags::CLONE_VM) {
+                debug!("Missing CLONE_VM");
+                return Err(Errno::EINVAL.into());
+            }
+            // Currently a no-op since threads always share signal handlers,
+            // and we don't yet support non-CLONE_THREAD.
+            handled_flags.insert(CloneFlags::CLONE_SIGHAND);
+        }
+
+        if flags.contains(CloneFlags::CLONE_FS) {
+            // Currently a no-op since we don't support the related
+            // metadata and syscalls that this affects (e.g. chroot).
+            handled_flags.insert(CloneFlags::CLONE_FS);
+        }
+
+        if flags.contains(CloneFlags::CLONE_FILES) {
+            if !flags.contains(CloneFlags::CLONE_THREAD) {
+                // I *think* we'd just need to wrap the descriptor table
+                // in e.g. a RootedRc, and clone the Rc in this case.
+                warn!("Failing clone: we don't support fork with shared descriptor table");
+                return Err(Errno::ENOTSUP.into());
+            }
+            handled_flags.insert(CloneFlags::CLONE_FILES);
+        }
+
+        if flags.contains(CloneFlags::CLONE_SETTLS) {
+            native_flags.insert(CloneFlags::CLONE_SETTLS);
+            handled_flags.insert(CloneFlags::CLONE_SETTLS);
+        }
+
+        if flags.contains(CloneFlags::CLONE_VM) {
+            native_flags.insert(CloneFlags::CLONE_VM);
+            handled_flags.insert(CloneFlags::CLONE_VM);
+        }
+
+        if flags.contains(CloneFlags::CLONE_SYSVSEM) {
+            // Currently a no-op since we don't support sysv semaphores.
+            handled_flags.insert(CloneFlags::CLONE_SYSVSEM);
+        }
+
+        // Handled after native clone
+        let do_parent_settid = flags.contains(CloneFlags::CLONE_PARENT_SETTID);
+        handled_flags.insert(CloneFlags::CLONE_PARENT_SETTID);
+
+        // Handled after native clone
+        let do_child_settid = flags.contains(CloneFlags::CLONE_CHILD_SETTID);
+        handled_flags.insert(CloneFlags::CLONE_CHILD_SETTID);
+
+        // Handled after native clone
+        let do_child_cleartid = flags.contains(CloneFlags::CLONE_CHILD_CLEARTID);
+        handled_flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
+
+        let unhandled_flags = flags.difference(handled_flags);
+        if !unhandled_flags.is_empty() {
+            warn!("Unhandled clone flags: {unhandled_flags:?}");
+            return Err(Errno::ENOTSUP.into());
         }
 
         let child_tid = {
-            let flags_to_emulate = CloneFlags::CLONE_PARENT_SETTID
-                | CloneFlags::CLONE_CHILD_SETTID
-                | CloneFlags::CLONE_CHILD_CLEARTID;
-            let filtered_flags = flags.difference(flags_to_emulate);
-            if raw_exit_signal != 0 {
-                warn!("Exit signal is unimplemented");
-                return Err(Errno::ENOTSUP.into());
-            }
             let (pctx, thread) = ctx.objs.split_thread();
             thread.handle_clone_syscall(
                 &pctx,
-                filtered_flags.bits(),
-                child_stack,
-                ptid,
-                ctid,
-                newtls,
+                native_flags.bits() | (native_raw_exit_signal as u64),
+                native_child_stack,
+                native_ptid,
+                native_ctid,
+                native_newtls,
             )?
         };
 
-        if flags.contains(CloneFlags::CLONE_PARENT_SETTID) {
+        if do_parent_settid {
             ctx.objs
                 .process
                 .memory_borrow_mut()
                 .write(ptid, &libc::pid_t::from(child_tid))?;
         }
 
-        if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
+        if do_child_settid {
+            // FIXME: handle the case where child doesn't share virtual memory.
+            assert!(flags.contains(CloneFlags::CLONE_VM));
             ctx.objs
                 .process
                 .memory_borrow_mut()
                 .write(ctid, &libc::pid_t::from(child_tid))?;
         }
 
-        if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) {
+        if do_child_cleartid {
             let childrc = ctx.objs.process.thread_borrow(child_tid).unwrap();
             let child = childrc.borrow(ctx.objs.host.root());
             child.set_tid_address(ctid);
