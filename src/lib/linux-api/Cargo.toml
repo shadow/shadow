@@ -6,7 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# FIXME: remove this dependency. While the libc crate supports no_std, it
+# does depend on the C standard library.
+libc = { version = "0.2.144", default-features = false }
+log = { version = "0.4.17", default-features = false }
+# FIXME: remove this dependendency. nix doesn't have a no_std configuration.
+nix = "0.26.2"
 vasi = { path = "../vasi" }
 
 [build-dependencies]
+shadow-build-common = { path = "../shadow-build-common" }
 bindgen = { version = "0.65.1" }
+cbindgen = { version = "0.24.3" }

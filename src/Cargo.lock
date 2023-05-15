@@ -745,6 +745,11 @@ name = "linux-api"
 version = "0.1.0"
 dependencies = [
  "bindgen",
+ "cbindgen",
+ "libc",
+ "log",
+ "nix",
+ "shadow-build-common",
  "vasi",
 ]
 
@@ -1406,6 +1411,7 @@ dependencies = [
  "crossbeam",
  "gml-parser",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "lzma-rs",
@@ -1446,6 +1452,7 @@ dependencies = [
  "cbindgen",
  "cc",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "nix",

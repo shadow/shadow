@@ -1,4 +1,7 @@
 use libc::{siginfo_t, stack_t};
+use linux_api::signal::{
+    shd_kernel_sigaction, shd_kernel_sigset_t, SHD_SIGRT_MAX, SHD_STANDARD_SIGNAL_MAX_NO,
+};
 use nix::sys::signal::Signal;
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
@@ -9,9 +12,6 @@ use crate::HostId;
 use crate::{
     emulated_time::{AtomicEmulatedTime, EmulatedTime},
     rootedcell::{refcell::RootedRefCell, Root},
-    signals::{
-        shd_kernel_sigaction, shd_kernel_sigset_t, SHD_SIGRT_MAX, SHD_STANDARD_SIGNAL_MAX_NO,
-    },
     simulation_time::SimulationTime,
 };
 

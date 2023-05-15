@@ -28,6 +28,8 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/types.rs"));
 }
 
+pub mod signal;
+
 use bindings::sigaction;
 unsafe impl vasi::VirtualAddressSpaceIndependent for sigaction {}
 

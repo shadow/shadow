@@ -12,6 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
+use linux_api::signal::{defaultaction, ShdKernelDefaultAction};
 use log::{debug, info, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -23,7 +24,6 @@ use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::ProcessShmem;
-use shadow_shim_helper_rs::signals::{defaultaction, ShdKernelDefaultAction};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, ManagedPhysicalMemoryAddr};
 use shadow_shim_helper_rs::HostId;
