@@ -744,11 +744,12 @@ dependencies = [
 name = "linux-api"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.3.1",
  "cbindgen",
- "libc",
  "log",
  "nix",
  "shadow-build-common",
+ "static_assertions",
  "vasi",
 ]
 

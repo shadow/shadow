@@ -8,7 +8,7 @@
 #include <ucontext.h>
 
 static void _call_signal_handler(const struct linux_sigaction* action, int signo,
-                                 siginfo_t* siginfo, ucontext_t* ucontext) {
+                                 linux_siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
     if (action->ksa_flags & SA_SIGINFO) {
         action->u.ksa_sigaction(signo, siginfo, ucontext);
@@ -34,7 +34,7 @@ static _Noreturn void _die_with_fatal_signal(int signo) {
 // signal actions had the SA_RESTART flag set.
 bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
     int signo;
-    siginfo_t siginfo;
+    linux_siginfo_t siginfo;
     bool restartable = true;
     while ((signo = shimshmem_takePendingUnblockedSignal(
                 host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {

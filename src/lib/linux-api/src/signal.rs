@@ -1,5 +1,7 @@
-use nix::sys::signal::{self, Signal};
+use nix::sys::signal::Signal;
 use vasi::VirtualAddressSpaceIndependent;
+
+use crate::bindings;
 
 pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
@@ -10,10 +12,129 @@ pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 pub const LINUX_SIGRT_MIN: i32 = 32;
 pub const LINUX_SIGRT_MAX: i32 = 64;
 
-/// Definition is sometimes missing in the userspace headers. We could include
-/// the kernel signal header, but it has definitions that conflict with the
-/// userspace headers.
+// Definition is sometimes missing in the userspace headers. We could include
+// the kernel signal header, but it has definitions that conflict with the
+// userspace headers.
 pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
+
+// Bindgen doesn't succesfully bind these constants; maybe because
+// the macros defining them cast them to pointers.
+//
+// Copied from linux's include/uapi/asm-generic/signal-defs.h.
+pub const LINUX_SIG_DFL: usize = 0;
+pub const LINUX_SIG_IGN: usize = 1;
+pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
+
+bitflags::bitflags! {
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Default)]
+    pub struct LinuxSigActionFlags: core::ffi::c_int {
+        const NOCLDSTOP = bindings::SA_NOCLDSTOP as i32;
+        const NOCLDWAIT = bindings::SA_NOCLDWAIT as i32;
+        const NODEFER = bindings::SA_NODEFER as i32;
+        const ONSTACK = bindings::SA_ONSTACK as i32;
+        const RESETHAND = bindings::SA_RESETHAND as i32;
+        const RESTART = bindings::SA_RESTART as i32;
+        const RESTORER = bindings::SA_RESTORER as i32;
+        const SIGINFO = bindings::SA_SIGINFO as i32;
+    }
+}
+// We can't derive this since the bitflags field uses an internal type.
+unsafe impl VirtualAddressSpaceIndependent for LinuxSigActionFlags {}
+
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct linux_siginfo_t {
+    // We don't wrap bindings::siginfo_t directly,
+    // since this would introduce a dependency on the original system
+    // header file in the cbindgen'd version of this type, and requiring our C code
+    // to include the kernel headers results in naming conflicts.
+
+    // cbindgen doesn't understand repr(C, align(x)).
+    // alignment validated by static assertion below.
+    _align: u64,
+    // We also can't use core::mem::size_of::<bindings::siginfo_t> to specify
+    // the size here, because that also confuses cbindgen.
+    // Size validated by static assertion below.
+    _padding: [u8; 120],
+}
+static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
+static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+
+impl linux_siginfo_t {
+    fn as_bound_type(&self) -> &bindings::siginfo_t {
+        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
+        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+        unsafe { core::mem::transmute(self) }
+    }
+
+    fn as_bound_type_mut(&mut self) -> &mut bindings::siginfo_t {
+        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
+        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+        unsafe { core::mem::transmute(self) }
+    }
+
+    pub fn signo(&self) -> &i32 {
+        unsafe {
+            &self
+                .as_bound_type()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_signo
+        }
+    }
+
+    pub fn signo_mut(&mut self) -> &mut i32 {
+        unsafe {
+            &mut self
+                .as_bound_type_mut()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_signo
+        }
+    }
+
+    pub fn errno(&self) -> &i32 {
+        unsafe {
+            &self
+                .as_bound_type()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_errno
+        }
+    }
+
+    pub fn errno_mut(&mut self) -> &mut i32 {
+        unsafe {
+            &mut self
+                .as_bound_type_mut()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_errno
+        }
+    }
+
+    pub fn code(&self) -> &i32 {
+        unsafe {
+            &self
+                .as_bound_type()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_code
+        }
+    }
+
+    pub fn code_mut(&mut self) -> &mut i32 {
+        unsafe {
+            &mut self
+                .as_bound_type_mut()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                .si_code
+        }
+    }
+}
 
 /// Compatible with the Linux kernel's definition of sigset_t on x86_64.
 ///
@@ -169,7 +290,7 @@ pub union LinuxSigactionUnion {
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
     ksa_handler: Option<extern "C" fn(i32)>,
-    ksa_sigaction: Option<extern "C" fn(i32, *mut libc::siginfo_t, *mut libc::c_void)>,
+    ksa_sigaction: Option<extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)>,
 }
 
 /// Compatible with kernel's definition of `struct sigaction`. Different from
@@ -186,7 +307,7 @@ pub struct linux_sigaction {
     // shim, where it is valid to do so.
     #[unsafe_assume_virtual_address_space_independent]
     u: LinuxSigactionUnion,
-    ksa_flags: i32,
+    ksa_flags: LinuxSigActionFlags,
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
     //
@@ -197,18 +318,23 @@ pub struct linux_sigaction {
 }
 
 impl linux_sigaction {
-    pub fn handler(&self) -> signal::SigHandler {
+    pub fn handler(&self) -> nix::sys::signal::SigHandler {
         let handler_int: usize = unsafe { self.u.ksa_handler }
             .map(|f| f as usize)
             .unwrap_or(0);
-        if handler_int == libc::SIG_IGN {
-            signal::SigHandler::SigIgn
-        } else if handler_int == libc::SIG_DFL {
-            signal::SigHandler::SigDfl
-        } else if self.ksa_flags & libc::SA_SIGINFO != 0 {
-            signal::SigHandler::SigAction(unsafe { self.u.ksa_sigaction.unwrap() })
+        if handler_int == LINUX_SIG_IGN {
+            nix::sys::signal::SigHandler::SigIgn
+        } else if handler_int == LINUX_SIG_DFL {
+            nix::sys::signal::SigHandler::SigDfl
+        } else if self.ksa_flags.contains(LinuxSigActionFlags::SIGINFO) {
+            // We need to cast the function pointer to what nix expects.
+            // To avoid naming and depending on libc we use a transmute.
+            // FIXME: get rid of transmute (and nix deps altogether).
+            nix::sys::signal::SigHandler::SigAction(unsafe {
+                core::mem::transmute(self.u.ksa_sigaction.unwrap())
+            })
         } else {
-            signal::SigHandler::Handler(unsafe { self.u.ksa_handler.unwrap() })
+            nix::sys::signal::SigHandler::Handler(unsafe { self.u.ksa_handler.unwrap() })
         }
     }
 }
