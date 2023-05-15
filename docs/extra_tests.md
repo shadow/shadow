@@ -26,3 +26,18 @@ not complete before the timeout.
 
 If you change the version of tor located at `~/.local/bin/tor`, make sure to
 re-run `./setup build --test`.
+
+## Miri
+
+```bash
+rustup toolchain install nightly
+rustup +nightly component add miri
+
+# Disable isolation for some tests that use the current time (Instant::now).
+# Disable leak-checking for now. Some tests intentionally panic, causing leaks.
+export MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks"
+
+# You must build shadow without miri first to run CMake.
+./setup build --test --debug
+(cd src && cargo +nightly miri test --workspace)
+```
