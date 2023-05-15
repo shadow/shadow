@@ -389,7 +389,7 @@ pub fn update_msghdr(
 ) -> Result<(), Errno> {
     let msg_ptr = ForeignArrayPtr::new(msg_ptr, 1);
     let mut mem_ref = mem.memory_ref_mut(msg_ptr)?;
-    let mut plugin_msg = &mut mem_ref.deref_mut()[0];
+    let plugin_msg = &mut mem_ref.deref_mut()[0];
 
     // write only the msg fields that may have changed
     plugin_msg.msg_namelen = msg.name_len;
