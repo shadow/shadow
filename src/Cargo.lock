@@ -745,11 +745,12 @@ name = "linux-api"
 version = "0.1.0"
 dependencies = [
  "bindgen",
+ "bitflags 2.2.1",
  "cbindgen",
- "libc",
  "log",
  "nix",
  "shadow-build-common",
+ "static_assertions",
  "vasi",
 ]
 

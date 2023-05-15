@@ -29,6 +29,8 @@ fn run_bindgen() {
         .allowlist_var("SIGRTMIN")
         .allowlist_var("SIGRTMAX")
         .allowlist_var("SS_AUTODISARM")
+        // sigaction flags
+        .allowlist_var("SA_.*")
         // signal numbers
         .allowlist_var("SIG.*")
         .generate()
@@ -41,6 +43,7 @@ fn run_bindgen() {
         // Use ::core instead of ::std, since this crate is no_std.
         .use_core()
         .header_contents("kernel_defs.h", header_contents)
+        .allowlist_type("siginfo_t")
         .allowlist_type("sigset_t")
         .allowlist_type("sigaction")
         .generate()
@@ -55,8 +58,9 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 
     let config = cbindgen::Config {
         include_guard: Some("linux_kernel_types_h".into()),
+        after_includes: Some("typedef int32_t LinuxSigActionFlags;\n".into()),
         export: cbindgen::ExportConfig {
-            include: vec!["linux_sigaction".into()],
+            include: vec!["linux_sigaction".into(), "linux_siginfo_t".into()],
             ..base_config.export.clone()
         },
         ..base_config

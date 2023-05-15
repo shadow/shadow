@@ -358,9 +358,12 @@ unsafe impl Send for StackWrapper {}
 // except from the original virtual address space: in the shim.
 unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
 
-#[derive(Debug, Copy, Clone)]
+// TODO: remove this type; it's currently a thin wrapper around
+// linux_api::signal::linux_siginfo_t. This requires updating callers
+// likewise use `linux_api` types instead of `nix` or `libc` types.
+#[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct SiginfoWrapper(libc::siginfo_t);
+pub struct SiginfoWrapper(linux_api::signal::linux_siginfo_t);
 
 // SAFETY: We ensure the contained pointers aren't dereferenced except from the
 // original virtual address space.
@@ -378,11 +381,11 @@ impl SiginfoWrapper {
     }
 
     pub fn signo(&self) -> &libc::c_int {
-        &self.0.si_signo
+        self.0.signo()
     }
 
     pub fn signo_mut(&mut self) -> &mut libc::c_int {
-        &mut self.0.si_signo
+        self.0.signo_mut()
     }
 
     pub fn signal(&self) -> Option<Signal> {
@@ -394,19 +397,19 @@ impl SiginfoWrapper {
     }
 
     pub fn errno(&self) -> &libc::c_int {
-        &self.0.si_errno
+        self.0.errno()
     }
 
     pub fn errno_mut(&mut self) -> &mut libc::c_int {
-        &mut self.0.si_errno
+        self.0.errno_mut()
     }
 
     pub fn code(&self) -> &libc::c_int {
-        &self.0.si_code
+        self.0.code()
     }
 
     pub fn code_mut(&mut self) -> &mut libc::c_int {
-        &mut self.0.si_code
+        self.0.code_mut()
     }
 
     /// # Safety
@@ -414,7 +417,9 @@ impl SiginfoWrapper {
     /// Pointer fields must not be dereferenced from outside of their
     /// native virtual address space.
     pub unsafe fn as_siginfo(&self) -> &libc::siginfo_t {
-        &self.0
+        static_assertions::assert_eq_align!(SiginfoWrapper, libc::siginfo_t);
+        static_assertions::assert_eq_size!(SiginfoWrapper, libc::siginfo_t);
+        unsafe { core::mem::transmute(self) }
     }
 }
 
@@ -426,7 +431,9 @@ impl Default for SiginfoWrapper {
 
 impl From<libc::siginfo_t> for SiginfoWrapper {
     fn from(s: libc::siginfo_t) -> Self {
-        Self(s)
+        static_assertions::assert_eq_align!(SiginfoWrapper, libc::siginfo_t);
+        static_assertions::assert_eq_size!(SiginfoWrapper, libc::siginfo_t);
+        Self(unsafe { core::mem::transmute(s) })
     }
 }
 
@@ -447,6 +454,7 @@ fn signal_from_i32(s: i32) -> Signal {
 pub mod export {
     use std::sync::atomic::Ordering;
 
+    use linux_api::signal::linux_siginfo_t;
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
@@ -865,7 +873,7 @@ pub mod export {
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
         thread: *const ShimShmemThread,
-        info: *mut siginfo_t,
+        info: *mut linux_siginfo_t,
     ) -> i32 {
         let thread = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
@@ -883,7 +891,7 @@ pub mod export {
 
         if let Some((signal, info_res)) = res {
             if !info.is_null() {
-                unsafe { info.write(*info_res.as_siginfo()) };
+                unsafe { info.write(info_res.0) };
             }
             signal as i32
         } else {
