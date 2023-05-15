@@ -60,43 +60,62 @@ impl linux_siginfo_t {
     /// Pointer fields must not be dereferenced from outside of their
     /// native virtual address space.
     pub unsafe fn as_siginfo(&self) -> &libc::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, libc::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, libc::siginfo_t);
-        unsafe { core::mem::transmute(self) }
-    }
-
-    /// # Safety
-    ///
-    /// Pointer fields must not be dereferenced from outside of their
-    /// native virtual address space.
-    pub unsafe fn as_siginfo_mut(&mut self) -> &mut libc::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, libc::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, libc::siginfo_t);
-        unsafe { core::mem::transmute(self) }
+        &self.0
     }
 
     pub fn signo(&self) -> &i32 {
-        unsafe { &self.as_siginfo().si_signo }
+        &self.0.si_signo
     }
 
     pub fn signo_mut(&mut self) -> &mut i32 {
-        unsafe { &mut self.as_siginfo_mut().si_signo }
+        &mut self.0.si_signo
     }
 
     pub fn errno(&self) -> &i32 {
-        unsafe { &self.as_siginfo().si_errno }
+        &self.0.si_errno
     }
 
     pub fn errno_mut(&mut self) -> &mut i32 {
-        unsafe { &mut self.as_siginfo_mut().si_errno }
+        &mut self.0.si_errno
     }
 
     pub fn code(&self) -> &i32 {
-        unsafe { &self.as_siginfo().si_code }
+        &self.0.si_code
     }
 
     pub fn code_mut(&mut self) -> &mut i32 {
-        unsafe { &mut self.as_siginfo_mut().si_code }
+        &mut self.0.si_code
+    }
+
+    pub fn signal(&self) -> Option<Signal> {
+        let signo = *self.signo();
+        if signo == 0 {
+            None
+        } else {
+            // FIXME: temporary workaround for nix's lack of support for realtime
+            // signals.
+            assert!(signo <= libc::SIGRTMAX());
+            Some(unsafe { core::mem::transmute(signo) })
+        }
+    }
+}
+
+impl Default for linux_siginfo_t {
+    fn default() -> Self {
+        Self(unsafe { core::mem::zeroed() })
+    }
+}
+
+impl From<libc::siginfo_t> for linux_siginfo_t {
+    fn from(s: libc::siginfo_t) -> Self {
+        Self(s)
+    }
+}
+
+impl<'a> From<&'a libc::siginfo_t> for &'a linux_siginfo_t {
+    fn from(s: &libc::siginfo_t) -> &linux_siginfo_t {
+        // SAFETY: SiginfoWrapper is a repr[transparent] wrapper
+        unsafe { &*(s as *const _ as *const linux_siginfo_t) }
     }
 }
 

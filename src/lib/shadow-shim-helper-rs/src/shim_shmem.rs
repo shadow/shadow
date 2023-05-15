@@ -1,6 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use linux_api::signal::{
-    linux_sigaction, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
+    linux_sigaction, linux_siginfo_t, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use nix::sys::signal::Signal;
 use shadow_shmem::allocator::ShMemBlockSerialized;
@@ -167,7 +167,7 @@ impl ProcessShmem {
                 ProcessShmemProtected {
                     host_id,
                     pending_signals: linux_sigset_t::EMPTY,
-                    pending_standard_siginfos: [SiginfoWrapper::new();
+                    pending_standard_siginfos: [linux_siginfo_t::default();
                         LINUX_STANDARD_SIGNAL_MAX_NO as usize],
                     signal_actions: [linux_sigaction::default(); LINUX_SIGRT_MAX as usize],
                 },
@@ -185,7 +185,7 @@ pub struct ProcessShmemProtected {
     pub pending_signals: linux_sigset_t,
 
     // siginfo for each of the standard signals.
-    pending_standard_siginfos: [SiginfoWrapper; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [linux_siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // actions for both standard and realtime signals.
     // We currently support configuring handlers for realtime signals, but not
@@ -195,7 +195,7 @@ pub struct ProcessShmemProtected {
 }
 
 impl ProcessShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&SiginfoWrapper> {
+    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&linux_siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal as usize - 1])
         } else {
@@ -229,7 +229,7 @@ impl ProcessShmemProtected {
     pub fn take_pending_unblocked_signal(
         &mut self,
         thread: &ThreadShmemProtected,
-    ) -> Option<(Signal, SiginfoWrapper)> {
+    ) -> Option<(Signal, linux_siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !thread.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -269,7 +269,7 @@ impl ThreadShmem {
                 ThreadShmemProtected {
                     host_id: host.host_id,
                     pending_signals: linux_sigset_t::EMPTY,
-                    pending_standard_siginfos: [SiginfoWrapper::new();
+                    pending_standard_siginfos: [linux_siginfo_t::default();
                         LINUX_STANDARD_SIGNAL_MAX_NO as usize],
                     blocked_signals: linux_sigset_t::EMPTY,
                     sigaltstack: StackWrapper(stack_t {
@@ -292,7 +292,7 @@ pub struct ThreadShmemProtected {
     pub pending_signals: linux_sigset_t,
 
     // siginfo for each of the 32 standard signals.
-    pending_standard_siginfos: [SiginfoWrapper; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [linux_siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // Signal mask, e.g. as set by `sigprocmask`.
     // We don't use sigset_t since glibc uses a much larger bitfield than
@@ -304,7 +304,7 @@ pub struct ThreadShmemProtected {
 }
 
 impl ThreadShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&SiginfoWrapper> {
+    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&linux_siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal as usize - 1])
         } else {
@@ -312,7 +312,7 @@ impl ThreadShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &SiginfoWrapper) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &linux_siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal as usize - 1] = *info;
     }
@@ -334,7 +334,7 @@ impl ThreadShmemProtected {
         &mut self.sigaltstack.0
     }
 
-    pub fn take_pending_unblocked_signal(&mut self) -> Option<(Signal, SiginfoWrapper)> {
+    pub fn take_pending_unblocked_signal(&mut self) -> Option<(Signal, linux_siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !self.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -357,92 +357,6 @@ unsafe impl Send for StackWrapper {}
 // SAFETY: We ensure the contained pointers isn't dereferenced
 // except from the original virtual address space: in the shim.
 unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
-
-// TODO: remove this type; it's currently a thin wrapper around
-// linux_api::signal::linux_siginfo_t. This requires updating callers
-// likewise use `linux_api` types instead of `nix` or `libc` types.
-#[derive(Copy, Clone)]
-#[repr(transparent)]
-pub struct SiginfoWrapper(linux_api::signal::linux_siginfo_t);
-
-// SAFETY: We ensure the contained pointers aren't dereferenced except from the
-// original virtual address space.
-//
-// libc::siginfo_t currently doesn't expose the pointer fields at all, but that
-// could change in the future. This wrapper will never expose them (unless via
-// `unsafe` methods)
-unsafe impl VirtualAddressSpaceIndependent for SiginfoWrapper {}
-
-impl SiginfoWrapper {
-    pub fn new() -> Self {
-        // SAFETY: any bit pattern is a sound value of `siginfo_t`.
-        // TODO: Move the Pod trait out of shadow_rs and use it here.
-        Self(unsafe { std::mem::zeroed() })
-    }
-
-    pub fn signo(&self) -> &libc::c_int {
-        self.0.signo()
-    }
-
-    pub fn signo_mut(&mut self) -> &mut libc::c_int {
-        self.0.signo_mut()
-    }
-
-    pub fn signal(&self) -> Option<Signal> {
-        if self.signo() == &0 {
-            None
-        } else {
-            Some(signal_from_i32(*self.signo()))
-        }
-    }
-
-    pub fn errno(&self) -> &libc::c_int {
-        self.0.errno()
-    }
-
-    pub fn errno_mut(&mut self) -> &mut libc::c_int {
-        self.0.errno_mut()
-    }
-
-    pub fn code(&self) -> &libc::c_int {
-        self.0.code()
-    }
-
-    pub fn code_mut(&mut self) -> &mut libc::c_int {
-        self.0.code_mut()
-    }
-
-    /// # Safety
-    ///
-    /// Pointer fields must not be dereferenced from outside of their
-    /// native virtual address space.
-    pub unsafe fn as_siginfo(&self) -> &libc::siginfo_t {
-        static_assertions::assert_eq_align!(SiginfoWrapper, libc::siginfo_t);
-        static_assertions::assert_eq_size!(SiginfoWrapper, libc::siginfo_t);
-        unsafe { core::mem::transmute(self) }
-    }
-}
-
-impl Default for SiginfoWrapper {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl From<libc::siginfo_t> for SiginfoWrapper {
-    fn from(s: libc::siginfo_t) -> Self {
-        static_assertions::assert_eq_align!(SiginfoWrapper, libc::siginfo_t);
-        static_assertions::assert_eq_size!(SiginfoWrapper, libc::siginfo_t);
-        Self(unsafe { core::mem::transmute(s) })
-    }
-}
-
-impl<'a> From<&'a libc::siginfo_t> for &'a SiginfoWrapper {
-    fn from(s: &libc::siginfo_t) -> &SiginfoWrapper {
-        // SAFETY: SiginfoWrapper is a repr[transparent] wrapper
-        unsafe { &*(s as *const _ as *const SiginfoWrapper) }
-    }
-}
 
 // FIXME: temporary workaround for nix's lack of support for realtime
 // signals.
@@ -891,7 +805,7 @@ pub mod export {
 
         if let Some((signal, info_res)) = res {
             if !info.is_null() {
-                unsafe { info.write(info_res.0) };
+                unsafe { info.write(info_res) };
             }
             signal as i32
         } else {
