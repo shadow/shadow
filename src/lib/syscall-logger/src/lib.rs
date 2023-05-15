@@ -60,7 +60,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
     let context_arg_name;
 
     {
-        let input_fn = match &mut input {
+        let input_fn: &mut _ = match &mut input {
             syn::Item::Fn(input_fn) => input_fn,
             _ => panic!("Expected Item::Fn"),
         };
