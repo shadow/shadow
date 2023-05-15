@@ -922,7 +922,7 @@ fn parse_set_str(s: &str) -> Result<HashSet<String>, <String as FromStr>::Err> {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[repr(C)]
 pub enum QDiscMode {
     Fifo,

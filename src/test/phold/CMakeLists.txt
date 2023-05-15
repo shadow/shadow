@@ -26,5 +26,5 @@ add_shadow_tests(
 add_shadow_tests(
     BASENAME phold-rr-qdisc
     LOGLEVEL info
-    ARGS --use-cpu-pinning true --interface-qdisc roundrobin
+    ARGS --use-cpu-pinning true --interface-qdisc round-robin
     PROPERTIES RUN_SERIAL TRUE)
