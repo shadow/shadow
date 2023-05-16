@@ -225,14 +225,21 @@ impl ChildPidWatcher {
         }
     }
 
-    unsafe fn fork_watchable_internal(
-        &self,
-        fork_syscall: i64,
-        child_fn: impl FnOnce(),
-    ) -> Result<Pid, nix::Error> {
-        // TODO: Allow vfork when Rust supports it:
-        assert!(fork_syscall == libc::SYS_fork);
-        let raw_pid = unsafe { libc::syscall(fork_syscall) };
+    /// Fork a child and register it. Uses `fork` internally; it `vfork` is desired,
+    /// use `register_pid` instead.
+    ///
+    /// Panics if `child_fn` returns.
+    /// TODO: change the type to `FnOnce() -> !` once that's stabilized in Rust.
+    /// <https://github.com/rust-lang/rust/issues/35121>
+    ///
+    /// # Safety
+    ///
+    /// As for fork in Rust in general. *Probably*, *mostly*, safe, since the
+    /// child process gets its own copy of the address space and OS resources etc.
+    /// Still, there may be some dragons here. Best to call exec before too long
+    /// in the child.
+    pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, nix::Error> {
+        let raw_pid = unsafe { libc::syscall(libc::SYS_fork) };
         if raw_pid < 0 {
             let rv = Err(Errno::last());
             return rv;
@@ -245,22 +252,6 @@ impl ChildPidWatcher {
         self.register_pid(pid);
 
         Ok(pid)
-    }
-
-    /// Fork a child and register it. Uses `fork` internally; it `vfork` is desired,
-    /// use `register_pid` instead.
-    ///
-    /// TODO: add a vfork version when Rust supports vfork:
-    /// <https://github.com/rust-lang/rust/issues/58314>
-    ///
-    /// # Safety
-    ///
-    /// As for fork in Rust in general. *Probably*, *mostly*, safe, since the
-    /// child process gets its own copy of the address space and OS resources etc.
-    /// Still, there may be some dragons here. Best to call exec before too long
-    /// in the child.
-    pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, nix::Error> {
-        unsafe { self.fork_watchable_internal(libc::SYS_fork, child_fn) }
     }
 
     /// Register interest in `pid`.
