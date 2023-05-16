@@ -5,9 +5,9 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 bootstrapped_count="$(grep -r --include="tor.*.stdout" "Bootstrapped 100" | wc -l)"
-printf "Bootstrapped count: ${bootstrapped_count}/9\n"
+printf "Bootstrapped count: ${bootstrapped_count}/11\n"
 
-if [ "${bootstrapped_count}" != "9" ]; then
+if [ "${bootstrapped_count}" != "11" ]; then
     printf "Verification ${RED}failed${NC}: Not all tor processes bootstrapped :(\n"
     exit 1
 fi
