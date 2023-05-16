@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
@@ -813,7 +813,7 @@ impl Process {
         let native_pid = {
             let main_thread = main_thread.borrow(host.root());
 
-            info!("starting process '{}'", plugin_name);
+            debug!("starting process '{}'", plugin_name);
 
             Process::set_shared_time(host);
 
@@ -835,7 +835,7 @@ impl Process {
             main_thread.native_pid()
         };
 
-        info!("process '{}' started", plugin_name);
+        debug!("process '{}' started", plugin_name);
 
         if pause_for_debugging {
             // will block until logger output has been flushed
@@ -910,7 +910,7 @@ impl Process {
         #[cfg(feature = "perf_timers")]
         {
             let delay = self.stop_cpu_delay_timer(host);
-            info!("process '{}' ran for {:?}", &*self.name(), delay);
+            debug!("process '{}' ran for {:?}", &*self.name(), delay);
         }
         #[cfg(not(feature = "perf_timers"))]
         debug!("process '{}' done continuing", &*self.name());
@@ -960,7 +960,7 @@ impl Process {
                 debug!("process {} has already stopped", &*self.name());
                 return;
             };
-            info!("terminating process {}", &*self.name());
+            debug!("terminating process {}", &*self.name());
 
             #[cfg(feature = "perf_timers")]
             runnable.start_cpu_delay_timer();
@@ -972,10 +972,10 @@ impl Process {
             #[cfg(feature = "perf_timers")]
             {
                 let delay = runnable.stop_cpu_delay_timer(host);
-                info!("process '{}' stopped in {:?}", &*self.name(), delay);
+                debug!("process '{}' stopped in {:?}", &*self.name(), delay);
             }
             #[cfg(not(feature = "perf_timers"))]
-            info!("process '{}' stopped", &*self.name());
+            debug!("process '{}' stopped", &*self.name());
         }
 
         // Mutates `self.state`, so we need to have dropped `runnable`.
@@ -1156,7 +1156,7 @@ impl Process {
 
     /// Transitions `self` from a `RunnableProcess` to a `ZombieProcess`.
     fn handle_process_exit(&self, host: &Host, killed_by_shadow: bool) {
-        info!(
+        debug!(
             "process '{}' has completed or is otherwise no longer running",
             &*self.name()
         );
@@ -1184,7 +1184,7 @@ impl Process {
         };
 
         #[cfg(feature = "perf_timers")]
-        info!(
+        debug!(
             "total runtime for process '{}' was {:?}",
             runnable.common.name(),
             runnable.total_run_time.get()
@@ -1237,14 +1237,14 @@ impl Process {
                     ExitStatus::StoppedByShadow => ProcessFinalState::Running(RunningVal::Running),
                 };
                 if expected_final_state == actual_final_state {
-                    (s, log::Level::Info)
+                    (s, log::Level::Debug)
                 } else {
                     Worker::increment_plugin_error_count();
                     write!(s, "; expected end state was {expected_final_state} but was {actual_final_state}").unwrap();
                     (s, log::Level::Error)
                 }
             } else {
-                (s, log::Level::Info)
+                (s, log::Level::Debug)
             }
         };
         log::log!(log_level, "{}", main_result_string);

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
-use log::{debug, info, trace};
+use log::{debug, trace};
 use logger::LogLevel;
 use nix::sys::signal::Signal;
 use once_cell::unsync::OnceCell;
@@ -322,7 +322,7 @@ impl Host {
 
         res.stop_execution_timer();
 
-        info!(
+        debug!(
             concat!(
                 "Setup host id '{:?}'",
                 " name '{name}'",
@@ -663,7 +663,7 @@ impl Host {
 
         self.stop_execution_timer();
         #[cfg(feature = "perf_timers")]
-        info!(
+        debug!(
             "host '{}' has been shut down, total execution time was {:?}",
             self.name(),
             self.execution_timer.borrow().elapsed()
