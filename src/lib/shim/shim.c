@@ -350,7 +350,6 @@ static void _shim_preload_only_child_init_ipc() {
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
-    ShimEvent event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
 
     // We're returning control to the parent thread here, who is going to switch
@@ -362,17 +361,18 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     // receiving the start event.
     shim_newThreadChildInitd();
 
+    ShimEventToShim event;
     shimevent_recvEventFromShadow(ipc, &event);
-    assert(shimevent_getId(&event) == SHIM_EVENT_START);
+    assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
 }
 
 static void _shim_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
-    ShimEvent event;
+    ShimEventToShim event;
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event);
-    assert(shimevent_getId(&event) == SHIM_EVENT_START);
+    assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
 }
 
 static void _shim_parent_init_seccomp() {
