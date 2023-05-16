@@ -1,7 +1,8 @@
 # System Configs and Limits
 
 Some Linux system configuration changes are needed to run large-scale Shadow
-simulations (more than about 1000 processes).
+simulations (more than about 1000 processes). If you're just trying Shadow or
+running small simulations, you can skip these steps.
 
 ## Number of Open Files
 
