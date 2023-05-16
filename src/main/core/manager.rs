@@ -907,7 +907,7 @@ fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
 
     let libpath = libpath.ok_or_else(|| anyhow::anyhow!(format!("Could not library in rpath")))?;
 
-    log::info!(
+    log::debug!(
         "Found required preload library {} at path {}",
         libname,
         libpath.display(),

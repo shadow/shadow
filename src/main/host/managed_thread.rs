@@ -3,7 +3,7 @@ use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
-use log::{debug, error, info, log_enabled, trace, Level};
+use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
@@ -136,7 +136,7 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        info!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
+        debug!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
             log_path,
