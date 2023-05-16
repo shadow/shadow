@@ -1,7 +1,7 @@
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scchannel::SelfContainedChannel;
 
-use crate::shim_event::ShimEvent;
+use crate::shim_event::{ShimEventToShadow, ShimEventToShim};
 
 /// Manages communication between the Shadow process and the shim library
 /// running inside Shadow managed threads.
@@ -12,8 +12,8 @@ use crate::shim_event::ShimEvent;
 // the mock IPC helped make some measurement artifacts go away by ensuring
 // the two channels are on the same cache line.
 pub struct IPCData {
-    shadow_to_plugin: SelfContainedChannel<ShimEvent>,
-    plugin_to_shadow: SelfContainedChannel<ShimEvent>,
+    shadow_to_plugin: SelfContainedChannel<ShimEventToShim>,
+    plugin_to_shadow: SelfContainedChannel<ShimEventToShadow>,
 }
 
 impl IPCData {
@@ -25,22 +25,22 @@ impl IPCData {
     }
 
     /// Returns a reference to the "Shadow to Plugin" channel.
-    pub fn to_plugin(&self) -> &SelfContainedChannel<ShimEvent> {
+    pub fn to_plugin(&self) -> &SelfContainedChannel<ShimEventToShim> {
         &self.shadow_to_plugin
     }
 
     /// Returns a reference to the "Plugin to Shadow" channel.
-    pub fn to_shadow(&self) -> &SelfContainedChannel<ShimEvent> {
+    pub fn to_shadow(&self) -> &SelfContainedChannel<ShimEventToShadow> {
         &self.plugin_to_shadow
     }
 
     /// Returns a reference to the "Plugin to Shadow" channel.
-    pub fn from_plugin(&self) -> &SelfContainedChannel<ShimEvent> {
+    pub fn from_plugin(&self) -> &SelfContainedChannel<ShimEventToShadow> {
         &self.plugin_to_shadow
     }
 
     /// Returns a reference to the "Shadow to Plugin" channel.
-    pub fn from_shadow(&self) -> &SelfContainedChannel<ShimEvent> {
+    pub fn from_shadow(&self) -> &SelfContainedChannel<ShimEventToShim> {
         &self.shadow_to_plugin
     }
 }
@@ -88,7 +88,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_sendEventToShadow(
         ipc_data: *const IPCData,
-        ev: *const ShimEvent,
+        ev: *const ShimEventToShadow,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
@@ -97,7 +97,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_sendEventToPlugin(
         ipc_data: *const IPCData,
-        ev: *const ShimEvent,
+        ev: *const ShimEventToShim,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let ev = unsafe { ev.as_ref().unwrap() };
@@ -106,7 +106,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_recvEventFromShadow(
         ipc_data: *const IPCData,
-        ev: *mut ShimEvent,
+        ev: *mut ShimEventToShim,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = ipc_data.from_shadow().receive().unwrap();
@@ -115,12 +115,12 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_recvEventFromPlugin(
         ipc_data: *const IPCData,
-        ev: *mut ShimEvent,
+        ev: *mut ShimEventToShadow,
     ) {
         let ipc_data = unsafe { ipc_data.as_ref().unwrap() };
         let event = match ipc_data.from_plugin().receive() {
             Ok(e) => e,
-            Err(SelfContainedChannelError::WriterIsClosed) => ShimEvent::ProcessDeath,
+            Err(SelfContainedChannelError::WriterIsClosed) => ShimEventToShadow::ProcessDeath,
         };
         unsafe { ev.write(event) };
     }

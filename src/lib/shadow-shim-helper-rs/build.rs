@@ -22,7 +22,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         export: cbindgen::ExportConfig {
             include: vec![
                 "shd_kernel_sigaction".into(),
-                "ShimEvent".into(),
+                "ShimEventToShadow".into(),
+                "ShimEventToShim".into(),
                 "HostId".into(),
                 "SysCallArgs".into(),
                 "SysCallReg".into(),

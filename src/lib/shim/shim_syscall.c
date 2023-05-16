@@ -162,26 +162,26 @@ long shim_native_syscall(const ucontext_t* ctx, long n, ...) {
 }
 
 static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
-                                               const ShimEvent* syscall_event) {
+                                               const ShimEventToShadow* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
 
     trace("sending syscall %ld event on %p",
-          shimevent_getSyscallData(syscall_event)->syscall_args.number, ipc);
+          shimevent2shadow_getSyscallData(syscall_event)->syscall_args.number, ipc);
 
     shimevent_sendEventToShadow(ipc, syscall_event);
     SysCallReg rv = {0};
 
     while (true) {
         trace("waiting for event on %p", ipc);
-        ShimEvent res = {0};
+        ShimEventToShim res = {0};
         shimevent_recvEventFromShadow(ipc, &res);
-        trace("got response of type %d on %p", shimevent_getId(&res), ipc);
+        trace("got response of type %d on %p", shimevent2shim_getId(&res), ipc);
 
-        switch (shimevent_getId(&res)) {
-            case SHIM_EVENT_SYSCALL_COMPLETE: {
+        switch (shimevent2shim_getId(&res)) {
+            case SHIM_EVENT_TO_SHIM_SYSCALL_COMPLETE: {
                 const ShimEventSyscallComplete* syscall_complete =
-                    shimevent_getSyscallCompleteData(&res);
+                    shimevent2shim_getSyscallCompleteData(&res);
                 // We'll ultimately return the provided result.
                 SysCallReg rv = syscall_complete->retval;
 
@@ -215,9 +215,9 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
 
                 return rv;
             }
-            case SHIM_EVENT_SYSCALL_DO_NATIVE: {
+            case SHIM_EVENT_TO_SHIM_SYSCALL_DO_NATIVE: {
                 // Make the original syscall ourselves and use the result.
-                const ShimEventSyscall* syscall = shimevent_getSyscallData(syscall_event);
+                const ShimEventSyscall* syscall = shimevent2shadow_getSyscallData(syscall_event);
                 const SysCallReg* regs = syscall->syscall_args.args;
                 SysCallReg rv = {.as_i64 = shim_native_syscall(ctx, syscall->syscall_args.number,
                                                                regs[0].as_u64, regs[1].as_u64,
@@ -261,30 +261,31 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
 
                 return rv;
             }
-            case SHIM_EVENT_SYSCALL: {
+            case SHIM_EVENT_TO_SHIM_SYSCALL: {
                 // Make the requested syscall ourselves and return the result
                 // to Shadow.
-                const ShimEventSyscall* syscall = shimevent_getSyscallData(&res);
+                const ShimEventSyscall* syscall = shimevent2shim_getSyscallData(&res);
                 const SysCallReg* regs = syscall->syscall_args.args;
                 long syscall_rv = shim_native_syscall(
                     ctx, syscall->syscall_args.number, regs[0].as_u64, regs[1].as_u64,
                     regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
-                ShimEvent syscall_complete_event;
-                shimevent_initSysCallComplete(
+                ShimEventToShadow syscall_complete_event;
+                shimevent2shadow_initSysCallComplete(
                     &syscall_complete_event, (SysCallReg){.as_i64 = syscall_rv}, false);
                 shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
-            case SHIM_EVENT_ADD_THREAD_REQ: {
-                const ShimEventAddThreadReq* add_thread_req = shimevent_getAddThreadReqData(&res);
+            case SHIM_EVENT_TO_SHIM_ADD_THREAD_REQ: {
+                const ShimEventAddThreadReq* add_thread_req =
+                    shimevent2shim_getAddThreadReqData(&res);
                 shim_newThreadStart(&add_thread_req->ipc_block);
-                ShimEvent res;
-                shimevent_initAddThreadParentRes(&res);
+                ShimEventToShadow res;
+                shimevent2shadow_initAddThreadParentRes(&res);
                 shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
             default: {
-                panic("Got unexpected event %d", shimevent_getId(&res));
+                panic("Got unexpected event %d", shimevent2shim_getId(&res));
                 abort();
             }
         }
@@ -305,8 +306,8 @@ long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args) {
         ev_args.args[i].as_u64 = va_arg(args, uint64_t);
     }
 
-    ShimEvent e;
-    shimevent_initSyscall(&e, &ev_args);
+    ShimEventToShadow e;
+    shimevent2shadow_initSyscall(&e, &ev_args);
 
     SysCallReg retval = _shim_emulated_syscall_event(ctx, &e);
 
