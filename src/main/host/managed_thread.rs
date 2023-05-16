@@ -1,7 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
-use std::fs::File;
-use std::os::fd::{FromRawFd, RawFd};
+use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
 use log::{debug, error, info, log_enabled, trace, Level};
@@ -518,15 +517,10 @@ impl ManagedThread {
             .chain(std::iter::once(std::ptr::null_mut()))
             .collect();
 
-        // For childpidwatcher. We use `O_CLOEXEC` to prevent them from leaking
-        // into a concurrently forked child, which would otherwise prevent us from detecting
-        // the closure of the write end of the pipe when this forked process exits.
-        let (pipe_read_fd, pipe_write_fd) = nix::unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
-
         let mut file_actions: libc::posix_spawn_file_actions_t = pod::zeroed();
         Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
 
-        // Dup the write end of the pipe; the dup'd descriptor won't have O_CLOEXEC set.
+        // Dup straceFd; the dup'd descriptor won't have O_CLOEXEC set.
         //
         // Since dup2 is a no-op when the new and old file descriptors are equal, we have
         // to arrange to call dup2 twice - first to a temporary descriptor, and then back
@@ -543,24 +537,6 @@ impl ManagedThread {
         // more awkward method anyway.
         // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
         // https://austingroupbugs.net/view.php?id=411
-        Errno::result(unsafe {
-            libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                pipe_write_fd,
-                libc::STDOUT_FILENO,
-            )
-        })
-        .unwrap();
-        Errno::result(unsafe {
-            libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                libc::STDOUT_FILENO,
-                pipe_write_fd,
-            )
-        })
-        .unwrap();
-
-        // Likewise for straceFd.
         if let Some(strace_fd) = strace_fd {
             Errno::result(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
@@ -631,11 +607,6 @@ impl ManagedThread {
             .unwrap();
         Errno::result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
 
-        // close the write-end of the pipe, so that the child's copy is the
-        // last remaining one, allowing the read-end to be notified when the child
-        // exits.
-        nix::unistd::close(pipe_write_fd).unwrap();
-
         // register the read-end of the pipe, so that we'll be notified of the
         // child's death when the write-end is closed.
         WORKER_SHARED
@@ -643,7 +614,7 @@ impl ManagedThread {
             .as_ref()
             .unwrap()
             .child_pid_watcher()
-            .register_pid(child_pid, unsafe { File::from_raw_fd(pipe_read_fd) });
+            .register_pid(child_pid);
 
         // Drop the cloned argv and env.
         drop(
