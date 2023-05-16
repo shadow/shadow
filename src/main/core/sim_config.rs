@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
@@ -346,22 +347,38 @@ fn build_process(proc: &ProcessOptions, config: &ConfigOptions) -> anyhow::Resul
 
     let expanded_path = tilde_expansion(proc.path.to_str().unwrap());
 
-    // We currently use `which::which`, which searches the `PATH` similarly to a
-    // shell.
-    let canonical_path: PathBuf = which::which(&expanded_path)
-        .map_err(anyhow::Error::from)
-        // `which` returns an absolute path, but it may still contain
-        // symbolic links, .., etc.
-        .and_then(|p| Ok(p.canonicalize()?))
-        .with_context(|| format!("Failed to resolve plugin path '{:?}'", expanded_path))?;
+    // a cache so we don't resolve the same path multiple times
+    static RESOLVED_PATHS: Lazy<RwLock<HashMap<PathBuf, PathBuf>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
 
-    verify_plugin_path(&canonical_path)
-        .with_context(|| format!("Failed to verify plugin path '{:?}'", canonical_path))?;
-    log::info!(
-        "Resolved binary path {:?} to {:?}",
-        proc.path,
-        canonical_path
-    );
+    let canonical_path = RESOLVED_PATHS.read().unwrap().get(&proc.path).cloned();
+    let canonical_path = match canonical_path {
+        Some(x) => x,
+        None => {
+            match RESOLVED_PATHS.write().unwrap().entry(proc.path.clone()) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => {
+                    // We currently use `which::which`, which searches the `PATH` similarly to a
+                    // shell.
+                    let canonical_path = which::which(&expanded_path)
+                        .map_err(anyhow::Error::from)
+                        // `which` returns an absolute path, but it may still contain
+                        // symbolic links, .., etc.
+                        .and_then(|p| Ok(p.canonicalize()?))
+                        .with_context(|| {
+                            format!("Failed to resolve plugin path '{expanded_path:?}'")
+                        })?;
+
+                    verify_plugin_path(&canonical_path).with_context(|| {
+                        format!("Failed to verify plugin path '{canonical_path:?}'")
+                    })?;
+                    log::info!("Resolved binary path {:?} to {canonical_path:?}", proc.path);
+
+                    entry.insert(canonical_path).clone()
+                }
+            }
+        }
+    };
 
     // set argv[0] as the user-provided expanded string, not the canonicalized version
     args.insert(0, expanded_path.into());
