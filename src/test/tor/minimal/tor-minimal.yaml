@@ -84,6 +84,22 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
       expected_final_state: running
+  relay3:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay3 --Nickname relay3
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  relay4:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay3 --Nickname relay4
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
   client:
     network_node_id: 0
     processes:
