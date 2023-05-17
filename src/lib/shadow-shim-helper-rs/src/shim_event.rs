@@ -56,7 +56,6 @@ pub enum ShimEventToShadow {
 // it'd make ShimEvent unsafe for use in shared memory.
 #[allow(clippy::large_enum_variant)]
 pub enum ShimEventToShim {
-    Null,
     /// Sent from Shadow to Shim to allow a shim thread to start executing
     /// after creation.
     Start,
