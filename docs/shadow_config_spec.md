@@ -333,7 +333,7 @@ Log level at which to print host heartbeat messages.
 #### `experimental.interface_qdisc`
 
 Default: "fifo"  
-Type: "fifo" OR "roundrobin"
+Type: "fifo" OR "round-robin"
 
 The queueing discipline to use at the network interface.
 

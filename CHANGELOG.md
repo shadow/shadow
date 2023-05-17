@@ -31,6 +31,9 @@ understand what these log levels mean. To conform to this new policy, we've
 also reduced the severity of logging that we returned `ENOSYS` for a missing syscall
 from `Error` to `Warning`. https://github.com/shadow/shadow/pull/2923
 
+* Changed the value for the experimental `interface_qdisc` option from
+  `roundrobin` to `round-robin`.
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
