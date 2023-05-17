@@ -343,6 +343,47 @@ fn test_mmap_prot_none_mprotect() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Test a typical pattern for JIT'd code that avoids trying to make
+// memory simultaneously writable and executable:
+// * mmap RW
+// * write the code
+// * mprotect from RW to RX
+// * execute
+fn test_mmap_mprotect_exe() -> Result<(), Box<dyn Error>> {
+    let size = 8 * (1 << 20);
+
+    // Initially mapped with RW
+    let buf_ptr = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        )
+    };
+    test_utils::assert_true_else_errno(buf_ptr != libc::MAP_FAILED);
+
+    // Write a single x86-64 `ret` instruction
+    unsafe { *(buf_ptr as *mut u8) = 0xc3 };
+
+    // Update protections to make it RX.
+    let rv = unsafe { libc::mprotect(buf_ptr, size, libc::PROT_READ | libc::PROT_EXEC) };
+    test_utils::assert_true_else_errno(rv == 0);
+
+    // Try executing the buffer
+    let jit_fn: extern "C" fn() = unsafe { core::mem::transmute(buf_ptr) };
+    jit_fn();
+
+    // Unmap allocated memory
+    let rv = unsafe { libc::munmap(buf_ptr, size) };
+
+    nix::errno::Errno::result(rv)?;
+
+    Ok(())
+}
+
 fn test_mmap_file_low(unlink_before_mmap: bool) -> Result<(), Box<dyn Error>> {
     test_mmap_file(0, unlink_before_mmap)
 }
@@ -439,6 +480,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_utils::ShadowTest::new(
             "test_mmap_prot_none_mprotect",
             test_mmap_prot_none_mprotect,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_mmap_mprotect_exe",
+            test_mmap_mprotect_exe,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
