@@ -1,17 +1,35 @@
 use std::io::Write;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddrV4};
 
 use shadow_shim_helper_rs::util::SyncSendPointer;
 
 use crate::cshadow as c;
 use crate::utility::pcap_writer::PacketDisplay;
 
+#[repr(i32)]
 pub enum PacketStatus {
-    RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED as isize,
-    RouterDequeued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DEQUEUED as isize,
-    RouterDropped = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DROPPED as isize,
-    RelayCached = c::_PacketDeliveryStatusFlags_PDS_RELAY_CACHED as isize,
-    RelayForwarded = c::_PacketDeliveryStatusFlags_PDS_RELAY_FORWARDED as isize,
+    SndCreated = c::_PacketDeliveryStatusFlags_PDS_SND_CREATED,
+    SndTcpEnqueueThrottled = c::_PacketDeliveryStatusFlags_PDS_SND_TCP_ENQUEUE_THROTTLED,
+    SndTcpEnqueueRetransmit = c::_PacketDeliveryStatusFlags_PDS_SND_TCP_ENQUEUE_RETRANSMIT,
+    SndTcpDequeueRetransmit = c::_PacketDeliveryStatusFlags_PDS_SND_TCP_DEQUEUE_RETRANSMIT,
+    SndTcpRetransmitted = c::_PacketDeliveryStatusFlags_PDS_SND_TCP_RETRANSMITTED,
+    SndSocketBuffered = c::_PacketDeliveryStatusFlags_PDS_SND_SOCKET_BUFFERED,
+    SndInterfaceSent = c::_PacketDeliveryStatusFlags_PDS_SND_INTERFACE_SENT,
+    InetSent = c::_PacketDeliveryStatusFlags_PDS_INET_SENT,
+    InetDropped = c::_PacketDeliveryStatusFlags_PDS_INET_DROPPED,
+    RouterEnqueued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_ENQUEUED,
+    RouterDequeued = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DEQUEUED,
+    RouterDropped = c::_PacketDeliveryStatusFlags_PDS_ROUTER_DROPPED,
+    RcvInterfaceReceived = c::_PacketDeliveryStatusFlags_PDS_RCV_INTERFACE_RECEIVED,
+    RcvInterfaceDropped = c::_PacketDeliveryStatusFlags_PDS_RCV_INTERFACE_DROPPED,
+    RcvSocketProcessed = c::_PacketDeliveryStatusFlags_PDS_RCV_SOCKET_PROCESSED,
+    RcvSocketDropped = c::_PacketDeliveryStatusFlags_PDS_RCV_SOCKET_DROPPED,
+    RcvTcpEnqueueUnordered = c::_PacketDeliveryStatusFlags_PDS_RCV_TCP_ENQUEUE_UNORDERED,
+    RcvSocketBuffered = c::_PacketDeliveryStatusFlags_PDS_RCV_SOCKET_BUFFERED,
+    RcvSocketDelivered = c::_PacketDeliveryStatusFlags_PDS_RCV_SOCKET_DELIVERED,
+    Destroyed = c::_PacketDeliveryStatusFlags_PDS_DESTROYED,
+    RelayCached = c::_PacketDeliveryStatusFlags_PDS_RELAY_CACHED,
+    RelayForwarded = c::_PacketDeliveryStatusFlags_PDS_RELAY_FORWARDED,
 }
 
 pub struct Packet {
@@ -41,19 +59,19 @@ impl Packet {
         Packet::from_raw(c_ptr)
     }
 
-    pub fn size(&self) -> usize {
+    pub fn total_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
         let sz = unsafe { c::packet_getTotalSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
-    fn _header_size(&self) -> usize {
+    pub fn header_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
         let sz = unsafe { c::packet_getHeaderSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
-    fn _payload_size(&self) -> usize {
+    pub fn payload_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
         let sz = unsafe { c::packet_getPayloadSize(self.c_ptr.ptr()) };
         sz as usize
@@ -65,10 +83,22 @@ impl Packet {
         unsafe { c::packet_addDeliveryStatus(self.c_ptr.ptr(), status_flag) };
     }
 
-    pub fn dst_address(&self) -> Ipv4Addr {
-        Ipv4Addr::from(u32::from_be(unsafe {
+    pub fn src_address(&self) -> SocketAddrV4 {
+        let ip = Ipv4Addr::from(u32::from_be(unsafe {
+            c::packet_getSourceIP(self.c_ptr.ptr())
+        }));
+        let port = u16::from_be(unsafe { c::packet_getSourcePort(self.c_ptr.ptr()) });
+
+        SocketAddrV4::new(ip, port)
+    }
+
+    pub fn dst_address(&self) -> SocketAddrV4 {
+        let ip = Ipv4Addr::from(u32::from_be(unsafe {
             c::packet_getDestinationIP(self.c_ptr.ptr())
-        }))
+        }));
+        let port = u16::from_be(unsafe { c::packet_getDestinationPort(self.c_ptr.ptr()) });
+
+        SocketAddrV4::new(ip, port)
     }
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet
@@ -101,6 +131,12 @@ impl Drop for Packet {
             // we also drop the c packet ref to free it.
             unsafe { c::packet_unref(self.c_ptr.ptr()) }
         }
+    }
+}
+
+impl PacketDisplay for Packet {
+    fn display_bytes(&self, writer: impl Write) -> std::io::Result<()> {
+        self.borrow_inner().cast_const().display_bytes(writer)
     }
 }
 

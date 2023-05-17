@@ -222,7 +222,7 @@ impl Relay {
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == packet.dst_address();
+            let is_local = src.get_address() == *packet.dst_address().ip();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -231,17 +231,17 @@ impl Relay {
                 // Rate limit applies only if we have a token bucket.
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
-                    if let Err(blocking_dur) = tb.comforming_remove(packet.size() as u64) {
+                    if let Err(blocking_dur) = tb.comforming_remove(packet.total_size() as u64) {
                         // Too few tokens, need to block.
                         log::trace!(
                             "Relay src={} dst={} exceeded rate limit, need {} more tokens \
                             for packet of size {}, blocking for {:?}",
                             src.get_address(),
-                            packet.dst_address(),
+                            packet.dst_address().ip(),
                             packet
-                                .size()
+                                .total_size()
                                 .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
-                            packet.size(),
+                            packet.total_size(),
                             blocking_dur
                         );
 
@@ -265,7 +265,7 @@ impl Relay {
                 src.push(packet);
             } else {
                 // The source and destination are different.
-                let dst = host.get_packet_device(packet.dst_address());
+                let dst = host.get_packet_device(*packet.dst_address().ip());
                 dst.push(packet);
             }
         }

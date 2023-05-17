@@ -206,10 +206,10 @@ impl CoDelQueue {
         match self.elements.pop_front() {
             Some(element) => {
                 // Found a packet.
-                debug_assert!(element.packet.size() <= self.total_bytes_stored);
+                debug_assert!(element.packet.total_size() <= self.total_bytes_stored);
                 self.total_bytes_stored = self
                     .total_bytes_stored
-                    .saturating_sub(element.packet.size());
+                    .saturating_sub(element.packet.total_size());
 
                 debug_assert!(now >= &element.enqueue_ts);
                 let standing_delay = now.saturating_duration_since(&element.enqueue_ts);
@@ -305,7 +305,7 @@ impl CoDelQueue {
     pub fn push(&mut self, mut packet: Packet, now: EmulatedTime) {
         if self.elements.len() < LIMIT {
             packet.add_status(PacketStatus::RouterEnqueued);
-            self.total_bytes_stored += packet.size();
+            self.total_bytes_stored += packet.total_size();
             self.elements.push_back(CoDelElement {
                 packet,
                 enqueue_ts: now,
