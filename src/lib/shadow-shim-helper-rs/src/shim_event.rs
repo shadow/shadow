@@ -235,10 +235,4 @@ mod export {
         });
         unsafe { dst.write(event) };
     }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn shimevent_initStart(dst: *mut ShimEventToShim) {
-        let event = ShimEventToShim::Start;
-        unsafe { dst.write(event) };
-    }
 }
