@@ -255,37 +255,6 @@ static void _shim_parent_init_host_shm() {
     assert(shim_hostSharedMem());
 }
 
-static void _shim_parent_init_process_shm() {
-    *_shim_process_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(shimshmem_getProcessShmem(shim_threadSharedMem()));
-    assert(shim_processSharedMem());
-}
-
-static void _shim_parent_init_thread_shm() {
-    const char* shm_blk_buf = getenv("SHADOW_SHM_THREAD_BLK");
-    assert(shm_blk_buf);
-
-    bool err = false;
-    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
-
-    *_shim_thread_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    assert(shim_threadSharedMem());
-}
-
-static void _shim_child_init_thread_shm() {
-    assert(!shim_threadSharedMem());
-    ShMemBlockSerialized shm_blk_serialized;
-
-    long rv = syscall(SYS_shadow_get_shm_blk, &shm_blk_serialized);
-    if (rv != 0) {
-        panic("shadow_get_shm_blk: %s", strerror(errno));
-        abort();
-    }
-
-    *_shim_thread_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    assert(shim_threadSharedMem());
-}
-
 static void _shim_parent_init_ipc() {
     const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
     assert(ipc_blk_buf);
@@ -364,6 +333,12 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     ShimEventToShim event;
     shimevent_recvEventFromShadow(ipc, &event);
     assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
+    const ShimEventStart* start = shimevent2shim_getStart(&event);
+
+    *_shim_thread_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(&start->thread_shmem_block);
+    *_shim_process_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(&start->process_shmem_block);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -373,6 +348,13 @@ static void _shim_ipc_wait_for_start_event() {
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event);
     assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
+
+    const ShimEventStart* start = shimevent2shim_getStart(&event);
+
+    *_shim_thread_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(&start->thread_shmem_block);
+    *_shim_process_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(&start->process_shmem_block);
 }
 
 static void _shim_parent_init_seccomp() {
@@ -407,8 +389,6 @@ static void _shim_parent_init_preload() {
 
     shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
-    _shim_parent_init_thread_shm();
-    _shim_parent_init_process_shm();
     _shim_parent_init_host_shm();
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
@@ -428,7 +408,6 @@ static void _shim_child_init_preload() {
     _shim_preload_only_child_ipc_wait_for_start_event();
 
     _shim_init_signal_stack();
-    _shim_child_init_thread_shm();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }

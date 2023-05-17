@@ -9,8 +9,8 @@ use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
-    ShimEventToShim,
+    ShimEventAddThreadReq, ShimEventStart, ShimEventSyscall, ShimEventSyscallComplete,
+    ShimEventToShadow, ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
 use shadow_shmem::allocator::ShMemBlock;
@@ -186,7 +186,13 @@ impl ManagedThread {
                     // send the message to the shim to call main().
                     // The plugin will run until it makes a blocking call.
                     trace!("sending start event code to {}", self.native_pid.unwrap());
-                    self.continue_plugin(ctx.host, &ShimEventToShim::Start);
+                    self.continue_plugin(
+                        ctx.host,
+                        &ShimEventToShim::Start(ShimEventStart {
+                            thread_shmem_block: ctx.thread.shmem().serialize(),
+                            process_shmem_block: ctx.process.shmem().serialize(),
+                        }),
+                    );
                 }
                 ShimEventToShadow::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but

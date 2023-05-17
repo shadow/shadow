@@ -27,6 +27,15 @@ pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
 }
 
+/// Data for [`ShimEventToShim::Start`]
+/// TODO: Consider splitting into multiple messages
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[repr(C)]
+pub struct ShimEventStart {
+    pub thread_shmem_block: ShMemBlockSerialized,
+    pub process_shmem_block: ShMemBlockSerialized,
+}
+
 /// A message between Shadow and the Shim.
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
@@ -58,7 +67,7 @@ pub enum ShimEventToShadow {
 pub enum ShimEventToShim {
     /// Sent from Shadow to Shim to allow a shim thread to start executing
     /// after creation.
-    Start,
+    Start(ShimEventStart),
     /// Request to execute the given syscall natively.
     Syscall(ShimEventSyscall),
     /// Request from Shadow to Shim to take the included shared memory block,
@@ -156,6 +165,19 @@ mod export {
         let event = unsafe { event.as_ref().unwrap() };
         match event {
             ShimEventToShim::AddThreadReq(data) => data,
+            _ => {
+                panic!("Unexpected event type: {event:?}");
+            }
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn shimevent2shim_getStart(
+        event: *const ShimEventToShim,
+    ) -> *const ShimEventStart {
+        let event = unsafe { event.as_ref().unwrap() };
+        match event {
+            ShimEventToShim::Start(data) => data,
             _ => {
                 panic!("Unexpected event type: {event:?}");
             }
