@@ -9,19 +9,29 @@ NC='\033[0m' # No Color
 EXPECTED_BOOTSTRAP_COUNT=11
 bootstrapped_count="$(grep -r --include="tor.*.stdout" "Bootstrapped 100" | wc -l)"
 printf "Bootstrapped count: ${bootstrapped_count}/$EXPECTED_BOOTSTRAP_COUNT\n"
-
 if [ "${bootstrapped_count}" != "$EXPECTED_BOOTSTRAP_COUNT" ]; then
     printf "Verification ${RED}failed${NC}: Not all tor processes bootstrapped :(\n"
     exit 1
 fi
 
-EXPECTED_STREAM_COUNT=80
-stream_count="$(grep -r --include="tgen.*.stdout" "stream-success" | wc -l)"
-printf "Successful tgen stream count: ${stream_count}/$EXPECTED_STREAM_COUNT\n"
+check_host () {
+    local NAME=$1
+    local MINIMUM_STREAMS=$2
+    local TOTAL_STREAMS=$3
+    local stream_count=$(grep -c stream-success hosts/$NAME/tgen.*.stdout)
+    printf "Successful $NAME stream count: ${stream_count}/$TOTAL_STREAMS (minimum $MINIMUM_STREAMS)\n"
+    if [ "${stream_count}" -lt "$MINIMUM_STREAMS" ]; then
+        printf "Verification ${RED}failed${NC}: Not enough $NAME streams were successful :(\n"
+        exit 1
+    fi
+}
 
-if [ "${stream_count}" != "$EXPECTED_STREAM_COUNT" ]; then
-    printf "Verification ${RED}failed${NC}: Not all tgen streams were successful :(\n"
-    exit 1
-fi
+check_host client 10 10
+check_host torclient 10 10
+check_host torbridgeclient 10 10
+check_host fileserver 30 30
 
-printf "Verification ${GREEN}suceeded${NC}: Yay :)\n"
+check_host torhiddenclient 10 10
+check_host hiddenserver 10 10
+
+printf "Verification ${GREEN}succeeded${NC}: Yay :)\n"
