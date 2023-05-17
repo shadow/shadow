@@ -253,7 +253,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
         break
 #define UNSUPPORTED(s)                                                                             \
     case SYS_##s:                                                                                  \
-        error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
+        warning(                                                                                   \
+            "Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);    \
         scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
@@ -555,9 +556,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
                         "host %s",
                         args->number, sys->threadId, process_getPluginName(process),
                         host_getName(host));
-                error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
-                      "unusual behavior",
-                      ENOSYS, args->number);
                 scr = syscallreturn_makeDoneI64(-ENOSYS);
 
                 if (straceLoggingMode != STRACE_FMT_MODE_OFF) {

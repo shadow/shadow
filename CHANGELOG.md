@@ -24,6 +24,13 @@ This also reduces noise in shadow's log about an unimplemented syscall being att
   Shadow's affinity/cgroup). The default value for `parallelism` has also been
   changed from 1 to 0.
 
+* Added a concrete policy about log levels to our [style
+guide](https://shadow.github.io/docs/guide/coding_style.html). While this is
+aimed primarily at shadow developers, it may also be useful for users to
+understand what these log levels mean. To conform to this new policy, we've
+also reduced the severity of logging that we returned `ENOSYS` for a missing syscall
+from `Error` to `Warning`. https://github.com/shadow/shadow/pull/2923
+
 MAJOR changes (breaking):
 
 * Removed deprecated python scripts that only worked on Shadow 1.x config files
