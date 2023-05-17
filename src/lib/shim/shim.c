@@ -402,6 +402,9 @@ static void _shim_parent_set_working_dir() {
 static void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    _shim_parent_init_ipc();
+    _shim_ipc_wait_for_start_event();
+
     shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
     _shim_parent_init_thread_shm();
@@ -409,10 +412,8 @@ static void _shim_parent_init_preload() {
     _shim_parent_init_host_shm();
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
-    _shim_parent_init_ipc();
     _shim_init_signal_stack();
     _shim_parent_init_death_signal();
-    _shim_ipc_wait_for_start_event();
     _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
@@ -424,8 +425,9 @@ static void _shim_child_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_preload_only_child_init_ipc();
-    _shim_init_signal_stack();
     _shim_preload_only_child_ipc_wait_for_start_event();
+
+    _shim_init_signal_stack();
     _shim_child_init_thread_shm();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
