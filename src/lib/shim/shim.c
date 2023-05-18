@@ -319,7 +319,7 @@ static void _shim_preload_only_child_init_ipc() {
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
-    trace("waiting for start event on %p", shim_thisThreadEventIPC);
+    trace("waiting for start event on %p", shim_thisThreadEventIPC());
 
     // We're returning control to the parent thread here, who is going to switch
     // back to their own TLS.
@@ -330,31 +330,38 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     // receiving the start event.
     shim_newThreadChildInitd();
 
-    ShimEventToShim event;
-    shimevent_recvEventFromShadow(ipc, &event);
-    assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
-    const ShimEventStart* start = shimevent2shim_getStart(&event);
+    ShMemBlockSerialized thread_blk_serialized;
+    ShimEventToShadow start_req;
+    shimevent2shadow_initStartReq(&start_req, &thread_blk_serialized, NULL);
+    shimevent_sendEventToShadow(ipc, &start_req);
+
+    ShimEventToShim start_res;
+    shimevent_recvEventFromShadow(ipc, &start_res);
+    assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
 
     *_shim_thread_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&start->thread_shmem_block);
-    *_shim_process_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&start->process_shmem_block);
+        shmemserializer_globalBlockDeserialize(&thread_blk_serialized);
 }
 
 static void _shim_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
-    ShimEventToShim event;
-    trace("waiting for start event on %p", shim_thisThreadEventIPC);
-    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event);
-    assert(shimevent2shim_getId(&event) == SHIM_EVENT_TO_SHIM_START);
+    trace("waiting for start event on %p", shim_thisThreadEventIPC());
 
-    const ShimEventStart* start = shimevent2shim_getStart(&event);
+    ShMemBlockSerialized thread_blk_serialized;
+    ShMemBlockSerialized process_blk_serialized;
+    ShimEventToShadow start_req;
+    shimevent2shadow_initStartReq(&start_req, &thread_blk_serialized, &process_blk_serialized);
+    shimevent_sendEventToShadow(shim_thisThreadEventIPC(), &start_req);
+
+    ShimEventToShim start_res;
+    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &start_res);
+    assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
 
     *_shim_thread_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&start->thread_shmem_block);
+        shmemserializer_globalBlockDeserialize(&thread_blk_serialized);
     *_shim_process_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&start->process_shmem_block);
+        shmemserializer_globalBlockDeserialize(&process_blk_serialized);
 }
 
 static void _shim_parent_init_seccomp() {

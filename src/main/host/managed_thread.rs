@@ -9,8 +9,8 @@ use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadReq, ShimEventStart, ShimEventSyscall, ShimEventSyscallComplete,
-    ShimEventToShadow, ShimEventToShim,
+    ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
+    ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
 use shadow_shmem::allocator::ShMemBlock;
@@ -183,16 +183,46 @@ impl ManagedThread {
         loop {
             match *self.current_event.borrow() {
                 ShimEventToShadow::Null => {
-                    // send the message to the shim to call main().
-                    // The plugin will run until it makes a blocking call.
-                    trace!("sending start event code to {}", self.native_pid.unwrap());
-                    self.continue_plugin(
-                        ctx.host,
-                        &ShimEventToShim::Start(ShimEventStart {
-                            thread_shmem_block: ctx.thread.shmem().serialize(),
-                            process_shmem_block: ctx.process.shmem().serialize(),
-                        }),
+                    // Initialize the shim.
+                    trace!(
+                        "waiting for start event from shim with native pid {}",
+                        self.native_pid.unwrap()
                     );
+                    // In most places we use `wait_for_next_event` instead of
+                    // using the IPC channel directly, but it assumes the shim's
+                    // shared memory is already initialized and that we
+                    // previously called `continue_plugin`, which we haven't
+                    // yet.
+                    let start_req = match self.ipc_shmem.from_plugin().receive() {
+                        Ok(ShimEventToShadow::StartReq(s)) => s,
+                        other => panic!("Unexpected result from shim: {other:?}"),
+                    };
+
+                    // Write the serialized thread shmem handle directly to shim
+                    // memory.
+                    ctx.process
+                        .memory_borrow_mut()
+                        .write(
+                            start_req.thread_shmem_block_to_init,
+                            &ctx.thread.shmem().serialize(),
+                        )
+                        .unwrap();
+
+                    if !start_req.process_shmem_block_to_init.is_null() {
+                        // Write the serialized process shmem handle directly to
+                        // shim memory.
+                        ctx.process
+                            .memory_borrow_mut()
+                            .write(
+                                start_req.process_shmem_block_to_init,
+                                &ctx.process.shmem().serialize(),
+                            )
+                            .unwrap();
+                    }
+
+                    // send the message to the shim to call main().
+                    trace!("sending start event code to shim");
+                    self.continue_plugin(ctx.host, &ShimEventToShim::StartRes);
                 }
                 ShimEventToShadow::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but
@@ -261,6 +291,7 @@ impl ManagedThread {
                     };
                 }
                 e @ ShimEventToShadow::SyscallComplete(_)
+                | e @ ShimEventToShadow::StartReq(_)
                 | e @ ShimEventToShadow::AddThreadParentRes => panic!("Unexpected event: {e:?}"),
             }
             assert!(self.is_running());

@@ -1,7 +1,7 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::syscall_types::{SysCallArgs, SysCallReg};
+use crate::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -27,13 +27,14 @@ pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
 }
 
-/// Data for [`ShimEventToShim::Start`]
-/// TODO: Consider splitting into multiple messages
+/// Data for [`ShimEventToShadow::StartReq`]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct ShimEventStart {
-    pub thread_shmem_block: ShMemBlockSerialized,
-    pub process_shmem_block: ShMemBlockSerialized,
+pub struct ShimEventStartReq {
+    /// Shim pointer to be initd by Shadow. Required.
+    pub thread_shmem_block_to_init: ForeignPtr<ShMemBlockSerialized>,
+    /// Shim pointer to be initd by Shadow. Optional.
+    pub process_shmem_block_to_init: ForeignPtr<ShMemBlockSerialized>,
 }
 
 /// A message between Shadow and the Shim.
@@ -46,6 +47,9 @@ pub struct ShimEventStart {
 #[allow(clippy::large_enum_variant)]
 pub enum ShimEventToShadow {
     Null,
+    /// First message from the shim, requesting that it's ready to start
+    /// executing.
+    StartReq(ShimEventStartReq),
     /// The whole process has died.
     /// We inject this event to trigger cleanup after we've detected that the
     /// native process has died.
@@ -65,9 +69,9 @@ pub enum ShimEventToShadow {
 // it'd make ShimEvent unsafe for use in shared memory.
 #[allow(clippy::large_enum_variant)]
 pub enum ShimEventToShim {
-    /// Sent from Shadow to Shim to allow a shim thread to start executing
-    /// after creation.
-    Start(ShimEventStart),
+    /// First message from shadow, indicating that it is ready for
+    /// the shim to start executing.
+    StartRes,
     /// Request to execute the given syscall natively.
     Syscall(ShimEventSyscall),
     /// Request from Shadow to Shim to take the included shared memory block,
@@ -172,16 +176,16 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent2shim_getStart(
-        event: *const ShimEventToShim,
-    ) -> *const ShimEventStart {
-        let event = unsafe { event.as_ref().unwrap() };
-        match event {
-            ShimEventToShim::Start(data) => data,
-            _ => {
-                panic!("Unexpected event type: {event:?}");
-            }
-        }
+    pub unsafe extern "C" fn shimevent2shadow_initStartReq(
+        dst: *mut ShimEventToShadow,
+        thread_shmem_to_init: *mut ShMemBlockSerialized,
+        process_shmem_to_init: *mut ShMemBlockSerialized,
+    ) {
+        let event = ShimEventToShadow::StartReq(ShimEventStartReq {
+            thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_shmem_to_init),
+            process_shmem_block_to_init: ForeignPtr::from_raw_ptr(process_shmem_to_init),
+        });
+        unsafe { dst.write(event) }
     }
 
     #[no_mangle]
