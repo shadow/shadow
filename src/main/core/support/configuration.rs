@@ -29,6 +29,9 @@ const END_HELP_TEXT: &str = "\
 #[clap(name = "Shadow", about = START_HELP_TEXT, after_help = END_HELP_TEXT)]
 #[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
 #[clap(next_display_order = None)]
+// clap only shows the possible values for bool options (unless we add support for the other
+// non-bool options in the future), which isn't very helpful
+#[clap(hide_possible_values = true)]
 pub struct CliOptions {
     /// Path to the Shadow configuration file. Use '-' to read from stdin
     #[clap(required_unless_present_any(&["show_build_info", "shm_cleanup"]))]
