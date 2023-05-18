@@ -19,7 +19,7 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
-use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected};
+use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ManagerShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
@@ -76,6 +76,7 @@ pub struct HostParameters {
     pub unblocked_syscall_latency: SimulationTime,
     pub unblocked_vdso_latency: SimulationTime,
     pub strace_logging_options: Option<FmtOptions>,
+    pub shim_log_level: LogLevel,
 }
 
 use super::cpu::Cpu;
@@ -208,6 +209,7 @@ impl Host {
         host_root_path: &Path,
         raw_cpu_freq_khz: u64,
         dns: *mut cshadow::DNS,
+        manager_shmem: &ShMemBlock<ManagerShmem>,
     ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
@@ -231,6 +233,8 @@ impl Host {
             params.unblocked_vdso_latency,
             nix::unistd::getpid().as_raw(),
             params.native_tsc_frequency,
+            params.shim_log_level,
+            manager_shmem,
         );
         let shim_shmem =
             UnsafeCell::new(shadow_shmem::allocator::Allocator::global().alloc(host_shmem));

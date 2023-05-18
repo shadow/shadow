@@ -1,6 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use nix::sys::signal::Signal;
-use shadow_shmem::allocator::ShMemBlockSerialized;
+use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
@@ -52,6 +52,12 @@ macro_rules! assert_shmem_safe {
 
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
+pub struct ManagerShmem {
+    pub log_start_time_micros: i64,
+}
+
+#[derive(VirtualAddressSpaceIndependent)]
+#[repr(C)]
 pub struct HostShmem {
     pub host_id: HostId,
 
@@ -87,10 +93,15 @@ pub struct HostShmem {
 
     // Current simulation time.
     pub sim_time: AtomicEmulatedTime,
+
+    pub shim_log_level: logger::LogLevel,
+
+    pub manager_shmem: ShMemBlockSerialized,
 }
 assert_shmem_safe!(HostShmem, _hostshmem_test_fn);
 
 impl HostShmem {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         host_id: HostId,
         model_unblocked_syscall_latency: bool,
@@ -99,6 +110,8 @@ impl HostShmem {
         unblocked_vdso_latency: SimulationTime,
         shadow_pid: libc::pid_t,
         tsc_hz: u64,
+        shim_log_level: ::logger::LogLevel,
+        manager_shmem: &ShMemBlock<ManagerShmem>,
     ) -> Self {
         Self {
             host_id,
@@ -115,6 +128,8 @@ impl HostShmem {
             shadow_pid,
             tsc_hz,
             sim_time: AtomicEmulatedTime::new(EmulatedTime::MIN),
+            shim_log_level,
+            manager_shmem: manager_shmem.serialize(),
         }
     }
 
@@ -447,6 +462,7 @@ pub mod export {
 
     // Legacy type names; keeping the more verbose names for the C API, since
     // they're not namespaced.
+    pub type ShimShmemManager = ManagerShmem;
     pub type ShimShmemHost = HostShmem;
     pub type ShimShmemHostLock = HostShmemProtected;
     pub type ShimShmemProcess = ProcessShmem;
@@ -522,6 +538,17 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getLogLevel(
+        host_mem: *const ShimShmemHost,
+    ) -> ::logger::LogLevel {
+        let host_mem = unsafe { host_mem.as_ref().unwrap() };
+        host_mem.shim_log_level
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getEmulatedTime(
         host_mem: *const ShimShmemHost,
     ) -> CEmulatedTime {
@@ -575,6 +602,18 @@ pub mod export {
     ) -> libc::c_int {
         let process_mem = unsafe { process.as_ref().unwrap() };
         process_mem.strace_fd.unwrap_or(-1)
+    }
+
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable. The returned pointer is
+    /// borrowed from `host`.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getHostManagerShmem(
+        host: *const ShimShmemHost,
+    ) -> *const ShMemBlockSerialized {
+        let host = unsafe { host.as_ref().unwrap() };
+        &host.manager_shmem
     }
 
     /// # Safety
@@ -967,5 +1006,18 @@ pub mod export {
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
         SimulationTime::to_c_simtime(Some(host.unblocked_vdso_latency))
+    }
+
+    /// Get the logging start time
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[no_mangle]
+    pub unsafe extern "C" fn shimshmem_getLoggingStartTime(
+        manager: *const ShimShmemManager,
+    ) -> i64 {
+        let manager = unsafe { manager.as_ref().unwrap() };
+        manager.log_start_time_micros
     }
 }
