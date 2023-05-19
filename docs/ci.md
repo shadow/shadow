@@ -47,7 +47,7 @@ run an interactive shell in a container built from that image.
 e.g.:
 
 ```{.bash}
-docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:ubuntu-22.04-gcc-debug /bin/bash
+docker run --shm-size=1024g --security-opt=seccomp=unconfined -it shadowsim/shadow-ci:ubuntu-22.04-gcc-debug /bin/bash
 ```
 
 If the failure happened in the middle of building the Docker image, you can do
@@ -67,5 +67,5 @@ You can start a container from the image where Docker tried (and failed) to run
 `ci/the build_and_install.sh` script was executed with:
 
 ```{.bash}
-docker run --tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt=seccomp=unconfined -it a11c4a554ef8 /bin/bash
+docker run --shm-size=1024g --security-opt=seccomp=unconfined -it a11c4a554ef8 /bin/bash
 ```
