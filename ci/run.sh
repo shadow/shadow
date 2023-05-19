@@ -125,9 +125,8 @@ EOF
 
     # Start the container and copy the most recent code.
     DOCKER_CREATE_FLAGS=()
-    # Shadow needs some space allocated to /dev/shm, and it should be mounted as
-    # executable.
-    DOCKER_CREATE_FLAGS+=("--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g")
+    # Shadow needs some extra space allocated to /dev/shm
+    DOCKER_CREATE_FLAGS+=("--shm-size=1024g")
     # Docker's default seccomp policy disables the `personality` syscall, which
     # shadow uses to disable ASLR. This causes shadow's determinism tests to fail.
     # https://github.com/moby/moby/issues/43011

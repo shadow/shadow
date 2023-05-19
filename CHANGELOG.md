@@ -14,7 +14,8 @@ MINOR changes (backwards-compatible):
 
 PATCH changes (bugfixes):
 
-*
+* Updated documentation and tests to reflect that shadow no longer requires
+`/dev/shm` to be executable. (This requirement was actually removed in v3.0.0)
 
 Full changelog since v3.0.0:
 
