@@ -23,7 +23,7 @@ use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
-use crate::utility::{childpid_watcher, pod, syscall};
+use crate::utility::{pod, syscall};
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -45,8 +45,6 @@ pub struct ManagedThread {
     /* holds the event for the most recent call from the plugin/shim */
     current_event: RefCell<ShimEventToShadow>,
 
-    notification_handle: Option<childpid_watcher::WatchHandle>,
-
     native_pid: Option<nix::unistd::Pid>,
     native_tid: Option<nix::unistd::Pid>,
 
@@ -58,25 +56,6 @@ pub struct ManagedThread {
 }
 
 impl ManagedThread {
-    /// Create a new `ManagedThread`.
-    // While this currently doesn't take any arguments, it wouldn't be
-    // surprising if we end up needing to add some.
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        let ipc_shmem =
-            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
-        Self {
-            ipc_shmem,
-            is_running: Cell::new(false),
-            return_code: Cell::new(None),
-            current_event: RefCell::new(ShimEventToShadow::Null),
-            notification_handle: None,
-            native_pid: None,
-            native_tid: None,
-            affinity: Cell::new(cshadow::AFFINITY_UNINIT),
-        }
-    }
-
     pub fn native_pid(&self) -> nix::unistd::Pid {
         self.native_pid.unwrap()
     }
@@ -105,18 +84,19 @@ impl ManagedThread {
     }
 
     pub fn run(
-        &mut self,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
         log_path: &CStr,
-    ) {
+    ) -> Self {
+        let ipc_shmem =
+            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
         envv.push(
             CString::new(format!(
                 "SHADOW_IPC_BLK={}",
-                self.ipc_shmem.serialize().encode_to_string()
+                ipc_shmem.serialize().encode_to_string()
             ))
             .unwrap(),
         );
@@ -129,18 +109,18 @@ impl ManagedThread {
         )
         .unwrap();
 
-        let child_pid = self.spawn(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd);
+        let child_pid = Self::spawn(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd);
 
         // should be opened in the shim, so no need for it anymore
         nix::unistd::close(shimlog_fd).unwrap();
 
         // In Linux, the PID is equal to the TID of its first thread.
-        self.native_pid = Some(child_pid);
-        self.native_tid = Some(child_pid);
+        let native_pid = child_pid;
+        let native_tid = child_pid;
 
         // Configure the child_pid_watcher to close the IPC channel when the child dies.
-        let handle = {
-            let ipc = self.ipc_shmem.clone();
+        {
+            let ipc = ipc_shmem.clone();
             WORKER_SHARED
                 .borrow()
                 .as_ref()
@@ -150,9 +130,16 @@ impl ManagedThread {
                     ipc.from_plugin().close_writer();
                 })
         };
-        self.notification_handle = Some(handle);
 
-        self.is_running.set(true);
+        Self {
+            ipc_shmem,
+            is_running: Cell::new(true),
+            return_code: Cell::new(None),
+            current_event: RefCell::new(ShimEventToShadow::Null),
+            native_pid: Some(native_pid),
+            native_tid: Some(native_tid),
+            affinity: Cell::new(cshadow::AFFINITY_UNINIT),
+        }
     }
 
     pub fn resume(&self, ctx: &ThreadContext) -> ResumeResult {
@@ -322,7 +309,7 @@ impl ManagedThread {
     ) -> Result<ManagedThread, Errno> {
         let child_ipc_shmem =
             Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
-        let child_notification_handle = {
+        {
             let child_ipc_shmem = child_ipc_shmem.clone();
             WORKER_SHARED
                 .borrow()
@@ -367,7 +354,6 @@ impl ManagedThread {
             is_running: Cell::new(true),
             return_code: Cell::new(None),
             current_event: RefCell::new(ShimEventToShadow::Null),
-            notification_handle: Some(child_notification_handle),
             native_pid: self.native_pid,
             native_tid: Some(nix::unistd::Pid::from_raw(child_native_tid)),
             // TODO: can we assume it's inherited from the current thread affinity?
@@ -492,7 +478,6 @@ impl ManagedThread {
     }
 
     fn spawn(
-        &self,
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
