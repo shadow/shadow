@@ -121,7 +121,10 @@ struct Common {
     // the name of the executable as provided in shadow's config, for logging purposes
     plugin_name: CString,
 
-    // absolute path to the process's working directory
+    // absolute path to the process's working directory.
+    // Currently we enforce that this is in sync with the native working directory
+    // by disallowing `chdir`.
+    // See https://github.com/shadow/shadow/issues/2960
     working_dir: CString,
 }
 
