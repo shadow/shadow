@@ -45,8 +45,8 @@ pub struct ManagedThread {
     /* holds the event for the most recent call from the plugin/shim */
     current_event: RefCell<ShimEventToShadow>,
 
-    native_pid: Option<nix::unistd::Pid>,
-    native_tid: Option<nix::unistd::Pid>,
+    native_pid: nix::unistd::Pid,
+    native_tid: nix::unistd::Pid,
 
     // Value storing the current CPU affinity of the thread (more precisely,
     // of the native thread backing this thread object). This value will be set
@@ -57,11 +57,11 @@ pub struct ManagedThread {
 
 impl ManagedThread {
     pub fn native_pid(&self) -> nix::unistd::Pid {
-        self.native_pid.unwrap()
+        self.native_pid
     }
 
     pub fn native_tid(&self) -> nix::unistd::Pid {
-        self.native_tid.unwrap()
+        self.native_tid
     }
 
     /// Make the specified syscall on the native thread.
@@ -136,8 +136,8 @@ impl ManagedThread {
             is_running: Cell::new(true),
             return_code: Cell::new(None),
             current_event: RefCell::new(ShimEventToShadow::Null),
-            native_pid: Some(native_pid),
-            native_tid: Some(native_tid),
+            native_pid,
+            native_tid,
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
         }
     }
@@ -159,7 +159,7 @@ impl ManagedThread {
                     // Initialize the shim.
                     trace!(
                         "waiting for start event from shim with native pid {}",
-                        self.native_pid.unwrap()
+                        self.native_pid
                     );
                     // In most places we use `continue_plugin` instead of using
                     // the IPC channel directly, but we don't have a message to
@@ -355,7 +355,7 @@ impl ManagedThread {
             return_code: Cell::new(None),
             current_event: RefCell::new(ShimEventToShadow::Null),
             native_pid: self.native_pid,
-            native_tid: Some(nix::unistd::Pid::from_raw(child_native_tid)),
+            native_tid: nix::unistd::Pid::from_raw(child_native_tid),
             // TODO: can we assume it's inherited from the current thread affinity?
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
         })
