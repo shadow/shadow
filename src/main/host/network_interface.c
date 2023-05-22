@@ -247,11 +247,16 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
         packet = compatsocket_pullOutPacket(&socket, host);
 
-        *socketOut = socket;
-
-        if (packet) {
-            compatsocket_updatePacketHeader(&socket, host, packet);
+        if (packet == NULL) {
+            /* socket had no packet, unref it from the sendable queue */
+            compatsocket_unref(&socket);
+            continue;
         }
+
+        /* we're returning the socket, so we must ref it */
+        *socketOut = compatsocket_refAs(&socket);
+
+        compatsocket_updatePacketHeader(&socket, host, packet);
 
         if (compatsocket_peekNextOutPacket(&socket)) {
             /* socket has more packets, and is still reffed from before */
@@ -260,9 +265,11 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
             /* socket has no more packets, unref it from the sendable queue */
             compatsocket_unref(&socket);
         }
+
+        return packet;
     }
 
-    return packet;
+    return NULL;
 }
 
 /* first-in-first-out queuing discipline ($ man tc)*/
@@ -283,11 +290,16 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         packet = compatsocket_pullOutPacket(&socket, host);
 
-        *socketOut = socket;
-
-        if (packet) {
-            compatsocket_updatePacketHeader(&socket, host, packet);
+        if (packet == NULL) {
+            /* socket had no packet, unref it from the sendable queue */
+            compatsocket_unref(&socket);
+            continue;
         }
+
+        /* we're returning the socket, so we must ref it */
+        *socketOut = compatsocket_refAs(&socket);
+
+        compatsocket_updatePacketHeader(&socket, host, packet);
 
         if (compatsocket_peekNextOutPacket(&socket)) {
             /* socket has more packets, and is still reffed from before */
@@ -296,9 +308,11 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             /* socket has no more packets, unref it from the sendable queue */
             compatsocket_unref(&socket);
         }
+
+        return packet;
     }
 
-    return packet;
+    return NULL;
 }
 
 static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, const Host* host,
@@ -320,8 +334,10 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
 
     const Host* src = worker_getCurrentHost();
 
-    // Now actually pop and send the packet.
+    // We will have an owned reference, so need to deref later.
     CompatSocket socket = {0};
+
+    // Now actually pop and send the packet.
     Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &socket);
 
     if (packet != NULL) {
@@ -336,6 +352,10 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
         if (tracker != NULL && socket.type != CST_NONE) {
             tracker_addOutputBytes(tracker, packet, &socket);
         }
+    }
+
+    if (socket.type != CST_NONE) {
+        compatsocket_unref(&socket);
     }
 
     return packet;

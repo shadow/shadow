@@ -6,7 +6,7 @@ use nix::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ProcessShmem, ThreadShmem};
+use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
@@ -295,7 +295,6 @@ impl Thread {
         host: &Host,
         process_id: ProcessId,
         thread_id: ThreadId,
-        process_shmem: &ShMemBlock<ProcessShmem>,
     ) -> RootedRc<RootedRefCell<Self>> {
         let thread = Self {
             mthread: RefCell::new(ManagedThread::new()),
@@ -313,7 +312,6 @@ impl Thread {
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
-                process_shmem.serialize(),
                 thread_id.into(),
             )),
         };
@@ -355,7 +353,6 @@ impl Thread {
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &ctx.host.shim_shmem_lock_borrow().unwrap(),
-                ctx.process.shmem().serialize(),
                 child_tid.into(),
             )),
         };
@@ -365,7 +362,7 @@ impl Thread {
     }
 
     /// Shared memory for this thread.
-    pub fn shmem(&self) -> &ThreadShmem {
+    pub fn shmem(&self) -> &ShMemBlock<ThreadShmem> {
         &self.shim_shared_memory
     }
 
@@ -373,19 +370,11 @@ impl Thread {
         &self,
         plugin_path: &CStr,
         argv: Vec<CString>,
-        mut envv: Vec<CString>,
+        envv: Vec<CString>,
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) {
-        envv.push(
-            CString::new(format!(
-                "SHADOW_SHM_THREAD_BLK={}",
-                self.shim_shared_memory.serialize().encode_to_string()
-            ))
-            .unwrap(),
-        );
-
         self.mthread
             .borrow_mut()
             .run(plugin_path, argv, envv, working_dir, strace_fd, log_path);

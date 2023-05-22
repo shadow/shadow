@@ -56,7 +56,7 @@ jobs:
       # 65536k. github's default docker seccomp policy seems to disallow
       # process_vm_readv and process_vm_writev; disable it altogether. See
       # https://docs.docker.com/engine/security/seccomp/
-      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=1024g --security-opt seccomp=unconfined'
+      options: '--shm-size=1024g --security-opt seccomp=unconfined'
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}

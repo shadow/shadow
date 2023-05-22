@@ -1,0 +1,60 @@
+Run real applications over simulated networks.
+
+For documentation, visit https://shadow.github.io/docs/guide
+
+Usage: shadow [OPTIONS] [CONFIG]
+
+Arguments:
+  [CONFIG]  Path to the Shadow configuration file. Use '-' to read from stdin
+
+Options:
+      --debug-hosts <hostnames>  Pause after starting any processes on the comma-delimited list of
+                                 hostnames
+  -g, --gdb                      Pause to allow gdb to attach
+  -h, --help                     Print help (see more with '--help')
+      --shm-cleanup              Exit after running shared memory cleanup routine
+      --show-build-info          Exit after printing build information
+      --show-config              Exit after printing the final configuration
+  -V, --version                  Print version
+
+General (Override configuration file options):
+      --bootstrap-end-time <seconds>
+          The simulated time that ends Shadow's high network bandwidth/reliability bootstrap period
+          [default: "0 sec"]
+  -d, --data-directory <path>
+          Path to store simulation output [default: "shadow.data"]
+  -e, --template-directory <path>
+          Path to recursively copy during startup and use as the data-directory [default: null]
+      --heartbeat-interval <seconds>
+          Interval at which to print heartbeat messages [default: "1 sec"]
+  -l, --log-level <level>
+          Log level of output written on stdout. If Shadow was built in release mode, then log
+          messages at level 'trace' will always be dropped [default: "info"]
+      --model-unblocked-syscall-latency <bool>
+          Model syscalls and VDSO functions that don't block as having some latency. This should
+          have minimal effect on typical simulations, but can be helpful for programs with "busy
+          loops" that otherwise deadlock under Shadow. [default: false]
+  -p, --parallelism <cores>
+          How many parallel threads to use to run the simulation. A value of 0 will allow Shadow to
+          choose the number of threads. [default: 0]
+      --progress <bool>
+          Show the simulation progress on stderr [default: false]
+      --seed <N>
+          Initialize randomness using seed N [default: 1]
+      --stop-time <seconds>
+          The simulated time at which simulated processes are sent a SIGKILL signal
+
+Network (Override network options):
+      --use-shortest-path <bool>  When routing packets, follow the shortest path rather than
+                                  following a direct edge between nodes. If false, the network graph
+                                  is required to be complete. [default: true]
+
+Host Defaults (Default options for hosts):
+      --host-log-level <level>     Log level at which to print node messages [default: null]
+      --pcap-capture-size <bytes>  How much data to capture per packet (header and payload) if pcap
+                                   logging is enabled [default: "65535 B"]
+      --pcap-enabled <bool>        Should shadow generate pcap files? [default: false]
+
+If units are not specified, all values are assumed to be given in their base unit (seconds, bytes,
+bits, etc). Units can optionally be specified (for example: '1024 B', '1024 bytes', '1 KiB', '1
+kibibyte', etc) and are case-sensitive.
