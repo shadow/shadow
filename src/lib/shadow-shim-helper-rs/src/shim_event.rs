@@ -46,7 +46,6 @@ pub struct ShimEventStartReq {
 // it'd make ShimEvent unsafe for use in shared memory.
 #[allow(clippy::large_enum_variant)]
 pub enum ShimEventToShadow {
-    Null,
     /// First message from the shim, requesting that it's ready to start
     /// executing.
     StartReq(ShimEventStartReq),

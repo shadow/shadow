@@ -132,11 +132,21 @@ impl ManagedThread {
                 })
         };
 
+        trace!(
+            "waiting for start event from shim with native pid {}",
+            native_pid
+        );
+        let start_req = ipc_shmem.from_plugin().receive().unwrap();
+        match &start_req {
+            ShimEventToShadow::StartReq(_) => (),
+            other => panic!("Unexpected result from shim: {other:?}"),
+        };
+
         Self {
             ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
-            current_event: RefCell::new(ShimEventToShadow::Null),
+            current_event: RefCell::new(start_req),
             native_pid,
             native_tid,
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
@@ -156,20 +166,7 @@ impl ManagedThread {
             let mut current_event = self.current_event.borrow_mut();
             let last_event = *current_event;
             *current_event = match last_event {
-                ShimEventToShadow::Null => {
-                    // Initialize the shim.
-                    trace!(
-                        "waiting for start event from shim with native pid {}",
-                        self.native_pid
-                    );
-                    // In most places we use `continue_plugin` instead of using
-                    // the IPC channel directly, but we don't have a message to
-                    // send yet.
-                    let start_req = match self.ipc_shmem.from_plugin().receive() {
-                        Ok(ShimEventToShadow::StartReq(s)) => s,
-                        other => panic!("Unexpected result from shim: {other:?}"),
-                    };
-
+                ShimEventToShadow::StartReq(start_req) => {
                     // Write the serialized thread shmem handle directly to shim
                     // memory.
                     ctx.process
@@ -263,7 +260,6 @@ impl ManagedThread {
                     }
                 }
                 e @ ShimEventToShadow::SyscallComplete(_)
-                | e @ ShimEventToShadow::StartReq(_)
                 | e @ ShimEventToShadow::AddThreadParentRes => panic!("Unexpected event: {e:?}"),
             };
             assert!(self.is_running());
@@ -350,11 +346,21 @@ impl ManagedThread {
         )?);
         trace!("native clone treated tid {child_native_tid}");
 
+        trace!(
+            "waiting for start event from shim with native tid {}",
+            child_native_tid
+        );
+        let start_req = child_ipc_shmem.from_plugin().receive().unwrap();
+        match &start_req {
+            ShimEventToShadow::StartReq(_) => (),
+            other => panic!("Unexpected result from shim: {other:?}"),
+        };
+
         Ok(Self {
             ipc_shmem: child_ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
-            current_event: RefCell::new(ShimEventToShadow::Null),
+            current_event: RefCell::new(start_req),
             native_pid: self.native_pid,
             native_tid: nix::unistd::Pid::from_raw(child_native_tid),
             // TODO: can we assume it's inherited from the current thread affinity?
