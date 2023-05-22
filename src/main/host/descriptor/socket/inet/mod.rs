@@ -459,6 +459,11 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocket_peekNextOutPacket(socket: *const InetSocket) -> *const c::Packet {
         let socket = unsafe { socket.as_ref() }.unwrap();
+        // The `Packet` returned from `peek_next_out_packet` will be dropped and the refcount of the
+        // inner `c::Packet` will decrease. Since we're returning a pointer to the `c::Packet`, this
+        // would typically lead to a use-after-free bug, but this "peek" function assumes that the
+        // socket continues to hold its own reference to the `c::Packet`, so the refcount should not
+        // reduce to 0 here.
         socket
             .borrow()
             .peek_next_out_packet()
