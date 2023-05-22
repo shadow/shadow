@@ -695,7 +695,6 @@ impl Process {
             &mut desc_table.borrow_mut(),
             &strace_logging,
             &file_basename,
-            &shim_shared_mem_block,
             &working_dir,
             envv,
             argv,
@@ -779,7 +778,6 @@ impl Process {
         descriptor_table: &mut DescriptorTable,
         strace_logging: &Option<StraceLogging>,
         file_basename: &Path,
-        process_shmem: &ShMemBlock<ProcessShmem>,
         working_dir: &CString,
         envv: Vec<CString>,
         argv: Vec<CString>,
@@ -809,7 +807,7 @@ impl Process {
 
         // Create the main thread and add it to our thread list.
         let tid = ThreadId::from(process_id);
-        let main_thread = Thread::new(host, process_id, tid, process_shmem);
+        let main_thread = Thread::new(host, process_id, tid);
         let native_pid = {
             let main_thread = main_thread.borrow(host.root());
 
