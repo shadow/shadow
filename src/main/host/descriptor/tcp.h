@@ -42,6 +42,8 @@ enum _TCPCongestionType {
 
 TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize);
 
+void tcp_setRustSocket(TCP* tcp, InetSocketWeak* rustSocket);
+
 // clang-format off
 /* Returns a positive number to indicate that we have not yet sent a SYN
  * packet, i.e., connect() has not been called.
