@@ -810,7 +810,7 @@ impl Process {
 
         // Create the main thread and add it to our thread list.
         let tid = ThreadId::from(process_id);
-        let main_thread = Thread::new(host, process_id, tid);
+        let main_thread = Thread::spawn(host, process_id, tid);
         let native_pid = {
             let main_thread = main_thread.borrow(host.root());
 

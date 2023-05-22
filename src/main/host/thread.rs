@@ -291,7 +291,7 @@ impl Thread {
         Ok(())
     }
 
-    pub fn new(
+    pub fn spawn(
         host: &Host,
         process_id: ProcessId,
         thread_id: ThreadId,
