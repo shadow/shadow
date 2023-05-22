@@ -118,6 +118,10 @@ static void _tcp_logCongestionInfo(TCP* tcp);
 struct _TCP {
     LegacySocket super;
 
+    // this adds a circular reference between the rust `LegacyTcpSocket` and this `TCP`, but we
+    // can't avoid it because `_flush` calls back into the host
+    InetSocketWeak* rustSocket;
+
     enum TCPState state;
     enum TCPState stateLast;
     enum TCPFlags flags;
@@ -742,9 +746,12 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
         }
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
-            legacyfile_ref(tcp);
-            TaskRef* closeTask = taskref_new_bound(
-                host_getID(host), _tcp_runCloseTimerExpiredTask, tcp, NULL, legacyfile_unref, NULL);
+            utility_alwaysAssert(tcp->rustSocket != NULL);
+            const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+            utility_alwaysAssert(inetSocket != NULL);
+            TaskRef* closeTask =
+                taskref_new_bound(host_getID(host), _tcp_runCloseTimerExpiredTask,
+                                  (void*)inetSocket, NULL, inetsocket_dropVoid, NULL);
             CSimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
             /* if a child of a server initiated the close, close more quickly */
@@ -761,9 +768,13 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
     }
 }
 
-static void _tcp_runCloseTimerExpiredTask(const Host* host, gpointer voidTcp, gpointer userData) {
-    TCP* tcp = voidTcp;
+static void _tcp_runCloseTimerExpiredTask(const Host* host, gpointer voidInetSocket,
+                                          gpointer userData) {
+    const InetSocket* inetSocket = voidInetSocket;
+    utility_alwaysAssert(inetSocket != NULL);
+    TCP* tcp = inetsocket_asLegacyTcp(inetSocket);
     MAGIC_ASSERT(tcp);
+
     _tcp_setState(tcp, host, TCPS_CLOSED);
 }
 
@@ -1059,10 +1070,12 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, const Host* host, CSimulation
     gboolean success = priorityqueue_push(tcp->retransmit.scheduledTimerExpirations, expireTimePtr);
 
     if(success) {
-        legacyfile_ref(tcp);
+        utility_alwaysAssert(tcp->rustSocket != NULL);
+        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+        utility_alwaysAssert(inetSocket != NULL);
         TaskRef* retexpTask =
-            taskref_new_bound(host_getID(host), _tcp_runRetransmitTimerExpiredTask, tcp, NULL,
-                              legacyfile_unref, NULL);
+            taskref_new_bound(host_getID(host), _tcp_runRetransmitTimerExpiredTask,
+                              (void*)inetSocket, NULL, inetsocket_dropVoid, NULL);
         host_scheduleTaskWithDelay(host, retexpTask, delay);
         taskref_drop(retexpTask);
 
@@ -1327,7 +1340,16 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
         /* socket will queue it ASAP */
-        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), host, packet);
+
+        utility_alwaysAssert(tcp->rustSocket != NULL);
+        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+        utility_alwaysAssert(inetSocket != NULL);
+
+        CompatSocket compatSocket = compatsocket_fromInetSocket(inetSocket);
+
+        gboolean success =
+            legacysocket_addToOutputBuffer(&(tcp->super), compatSocket, host, packet);
+
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
 
@@ -1419,9 +1441,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
     }
 }
 
-static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidTcp,
+static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidInetSocket,
                                                gpointer unused) {
-    TCP* tcp = voidTcp;
+    const InetSocket* inetSocket = voidInetSocket;
+    utility_alwaysAssert(inetSocket != NULL);
+    TCP* tcp = inetsocket_asLegacyTcp(inetSocket);
     MAGIC_ASSERT(tcp);
 
     /* a timer expired, update our timer tracking state */
@@ -1961,9 +1985,12 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
           &tcp->super.super);
 }
 
-static void _tcp_sendACKTaskCallback(const Host* host, gpointer voidTcp, gpointer userData) {
-    TCP* tcp = voidTcp;
+static void _tcp_sendACKTaskCallback(const Host* host, gpointer voidInetSocket, gpointer userData) {
+    const InetSocket* inetSocket = voidInetSocket;
+    utility_alwaysAssert(inetSocket != NULL);
+    TCP* tcp = inetsocket_asLegacyTcp(inetSocket);
     MAGIC_ASSERT(tcp);
+
     tcp->send.delayedACKIsScheduled = FALSE;
     if(tcp->send.delayedACKCounter > 0) {
         trace("sending a delayed ACK now");
@@ -2306,10 +2333,12 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
-                TaskRef* sendACKTask = taskref_new_bound(
-                    host_getID(host), _tcp_sendACKTaskCallback, tcp, NULL, legacyfile_unref, NULL);
-                /* taks holds a ref to tcp */
-                legacyfile_ref(tcp);
+                utility_alwaysAssert(tcp->rustSocket != NULL);
+                const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+                utility_alwaysAssert(inetSocket != NULL);
+                TaskRef* sendACKTask =
+                    taskref_new_bound(host_getID(host), _tcp_sendACKTaskCallback, (void*)inetSocket,
+                                      NULL, inetsocket_dropVoid, NULL);
 
                 /* figure out what we should use as delay */
                 CSimulationTime delay = 0;
@@ -2660,6 +2689,11 @@ static void _tcp_free(LegacyFile* descriptor) {
     tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
+    if (tcp->rustSocket != NULL) {
+        inetsocketweak_drop(tcp->rustSocket);
+        tcp->rustSocket = NULL;
+    }
+
     legacyfile_clear((LegacyFile*)tcp);
     MAGIC_CLEAR(tcp);
     g_free(tcp);
@@ -2774,6 +2808,12 @@ SocketFunctionTable tcp_functions = {_tcp_close,
                                      _tcp_connectToPeer,
                                      _tcp_dropPacket,
                                      MAGIC_VALUE};
+
+/* takes ownership of the `InetSocketWeak` */
+void tcp_setRustSocket(TCP* tcp, InetSocketWeak* rustSocket) {
+    utility_alwaysAssert(tcp->rustSocket == NULL);
+    tcp->rustSocket = rustSocket;
+}
 
 TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);

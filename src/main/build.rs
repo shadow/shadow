@@ -16,7 +16,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
-        c.add_opaque_types(&["RootedRefCell_StateEventSource"]);
+        c.add_opaque_types(&["RootedRefCell_StateEventSource", "InetSocketWeak"]);
         c
     };
 
@@ -280,7 +280,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::core::support::configuration::QDiscMode;")
         .raw_line("use crate::host::descriptor::File;")
         .raw_line("use crate::host::descriptor::OpenFile;")
-        .raw_line("use crate::host::descriptor::socket::inet::InetSocket;")
+        .raw_line("use crate::host::descriptor::socket::inet::{InetSocket, InetSocketWeak};")
         .raw_line("use crate::host::host::Host;")
         .raw_line("use crate::host::memory_manager::MemoryManager;")
         .raw_line("use crate::host::process::Process;")

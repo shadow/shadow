@@ -152,7 +152,10 @@ static gssize _udp_sendUserData(LegacySocket* socket, const Thread* thread,
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* buffer it in the transport layer, to be sent out when possible */
-    gboolean success = legacysocket_addToOutputBuffer((LegacySocket*)udp, host, packet);
+    CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
+    compatSocket = compatsocket_refAs(&compatSocket);
+    gboolean success =
+        legacysocket_addToOutputBuffer((LegacySocket*)udp, compatSocket, host, packet);
 
     gsize bytes_sent = 0;
     /* counter maintenance */

@@ -59,7 +59,11 @@ pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
 }
 mod export {
     use super::*;
+
+    use std::net::Ipv4Addr;
+
     use crate::core::worker;
+    use crate::host::host::Host;
 
     /// Notify listeners using the global callback queue. If the queue hasn't been set using
     /// [`with_global_cb_queue`], the listeners will be notified here before returning.
@@ -82,6 +86,35 @@ mod export {
                     event_source.notify_listeners(status.into(), changed.into(), cb_queue)
                 })
                 .unwrap();
+            });
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn socket_wants_to_send_with_global_cb_queue(
+        host: *const Host,
+        socket: c::CompatSocket,
+        ip: libc::in_addr_t,
+    ) {
+        let host = unsafe { host.as_ref() }.unwrap();
+        let ip = Ipv4Addr::from(u32::from_be(ip));
+
+        let host_id = host.id();
+
+        with_global_cb_queue(|| {
+            C_CALLBACK_QUEUE.with(|cb_queue| {
+                let mut cb_queue = cb_queue.borrow_mut();
+                // must not be `None` since it will be set to `Some` by `with_global_cb_queue`
+                let cb_queue = cb_queue.deref_mut().as_mut().unwrap();
+
+                cb_queue.add(move |_cb_queue| {
+                    worker::Worker::with_active_host(|host| {
+                        assert_eq!(host.id(), host_id);
+                        host.notify_socket_has_packets(ip, &socket);
+                        unsafe { c::compatsocket_unref(&socket) };
+                    })
+                    .unwrap();
+                });
             });
         });
     }

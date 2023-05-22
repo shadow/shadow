@@ -427,7 +427,13 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocket_drop(socket: *const InetSocket) {
         assert!(!socket.is_null());
-        unsafe { Box::from_raw(socket as *mut InetSocket) };
+        unsafe { Box::from_raw(socket.cast_mut()) };
+    }
+
+    /// Helper for GLib functions that take a `TaskObjectFreeFunc`. See [`inetsocket_drop`].
+    #[no_mangle]
+    pub extern "C" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
+        inetsocket_drop(socket.cast_const().cast())
     }
 
     /// Increment the ref count of the `InetSocket` object. The returned pointer will not be the
@@ -499,6 +505,24 @@ mod export {
         let mut packet = Packet::from_raw(packet);
         socket.borrow().update_packet_header(&mut packet);
         packet.into_inner();
+    }
+
+    /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
+    /// legacy TCP socket or if `socket` is already mutably borrowed. Will never return `NULL`.
+    #[no_mangle]
+    pub extern "C" fn inetsocket_asLegacyTcp(socket: *const InetSocket) -> *mut c::TCP {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+
+        #[allow(irrefutable_let_patterns)]
+        let InetSocket::LegacyTcp(socket) = socket else {
+            panic!("Socket was not a legacy TCP socket: {socket:?}");
+        };
+
+        let ptr = socket.borrow().as_legacy_tcp();
+        // this should never be true
+        assert!(!ptr.is_null());
+
+        ptr
     }
 
     /// Decrement the ref count of the `InetSocketWeak` object. The pointer must not be used after

@@ -64,7 +64,13 @@ impl LegacyTcpSocket {
             _counter: ObjectCounter::new("LegacyTcpSocket"),
         };
 
-        Arc::new(AtomicRefCell::new(socket))
+        let rv = Arc::new(AtomicRefCell::new(socket));
+
+        let inet_socket = InetSocket::LegacyTcp(rv.clone());
+        let inet_socket = Box::into_raw(Box::new(inet_socket.downgrade()));
+        unsafe { c::tcp_setRustSocket(legacy_tcp, inet_socket) };
+
+        rv
     }
 
     /// Get a canonical handle for this socket. We use the address of the `TCP` object so that the

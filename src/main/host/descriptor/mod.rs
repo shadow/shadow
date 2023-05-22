@@ -572,7 +572,9 @@ impl OpenFileInner {
 impl std::ops::Drop for OpenFileInner {
     fn drop(&mut self) {
         // ignore any return value
-        let _ = CallbackQueue::queue_and_run(|cb_queue| self.close_helper(cb_queue));
+        let _ = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| self.close_helper(cb_queue))
+        });
     }
 }
 
