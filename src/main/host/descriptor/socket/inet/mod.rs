@@ -1,5 +1,5 @@
 use std::net::SocketAddrV4;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
 use legacy_tcp::LegacyTcpSocket;
@@ -49,6 +49,12 @@ impl InetSocket {
         Ok(match self {
             Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
         })
+    }
+
+    pub fn downgrade(&self) -> InetSocketWeak {
+        match self {
+            Self::LegacyTcp(x) => InetSocketWeak::LegacyTcp(Arc::downgrade(x)),
+        }
     }
 
     pub fn canonical_handle(&self) -> usize {
@@ -344,6 +350,19 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
     }
 }
 
+#[derive(Clone)]
+pub enum InetSocketWeak {
+    LegacyTcp(Weak<AtomicRefCell<LegacyTcpSocket>>),
+}
+
+impl InetSocketWeak {
+    pub fn upgrade(&self) -> Option<InetSocket> {
+        match self {
+            Self::LegacyTcp(x) => x.upgrade().map(InetSocket::LegacyTcp),
+        }
+    }
+}
+
 /// Associate the socket with a network interface. If the local address is unspecified, the socket
 /// will be associated with every available interface. If the local address has a port of 0, a
 /// non-zero port will be chosen. The final local address will be returned. If the peer address is
@@ -480,5 +499,25 @@ mod export {
         let mut packet = Packet::from_raw(packet);
         socket.borrow().update_packet_header(&mut packet);
         packet.into_inner();
+    }
+
+    /// Decrement the ref count of the `InetSocketWeak` object. The pointer must not be used after
+    /// calling this function.
+    #[no_mangle]
+    pub extern "C" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
+        assert!(!socket.is_null());
+        unsafe { Box::from_raw(socket) };
+    }
+
+    /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
+    /// references and has been dropped.
+    #[no_mangle]
+    pub extern "C" fn inetsocketweak_upgrade(socket: *const InetSocketWeak) -> *mut InetSocket {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        socket
+            .upgrade()
+            .map(Box::new)
+            .map(Box::into_raw)
+            .unwrap_or(std::ptr::null_mut())
     }
 }
