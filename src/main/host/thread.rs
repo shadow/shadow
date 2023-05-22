@@ -302,7 +302,8 @@ impl Thread {
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) -> RootedRc<RootedRefCell<Self>> {
-        let mthread = ManagedThread::run(plugin_path, argv, envv, working_dir, strace_fd, log_path);
+        let mthread =
+            ManagedThread::spawn(plugin_path, argv, envv, working_dir, strace_fd, log_path);
 
         let thread = Self {
             mthread: RefCell::new(mthread),

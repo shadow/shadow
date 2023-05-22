@@ -83,7 +83,7 @@ impl ManagedThread {
         }
     }
 
-    pub fn run(
+    pub fn spawn(
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
@@ -109,7 +109,8 @@ impl ManagedThread {
         )
         .unwrap();
 
-        let child_pid = Self::spawn(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd);
+        let child_pid =
+            Self::spawn_native(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd);
 
         // should be opened in the shim, so no need for it anymore
         nix::unistd::close(shimlog_fd).unwrap();
@@ -477,7 +478,7 @@ impl ManagedThread {
         });
     }
 
-    fn spawn(
+    fn spawn_native(
         plugin_path: &CStr,
         argv: Vec<CString>,
         mut envv: Vec<CString>,
