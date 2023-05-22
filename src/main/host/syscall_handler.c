@@ -475,23 +475,23 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             //// Needs to either change *both* the native and emulated
             //// working directory, or get rid of one of them.
             //// See https://github.com/shadow/shadow/issues/2960
-            // NATIVE(chdir);
-            // NATIVE(fchdir);
+            UNSUPPORTED(chdir);
+            UNSUPPORTED(fchdir);
 
-            // NATIVE(io_getevents);
-            // NATIVE(waitid);
-            // NATIVE(msync);
+            UNSUPPORTED(io_getevents);
+            UNSUPPORTED(waitid);
+            UNSUPPORTED(msync);
 
-            //// copying data between various types of fds
-            // NATIVE(copy_file_range);
-            // NATIVE(sendfile);
-            // NATIVE(splice);
-            // NATIVE(vmsplice);
-            // NATIVE(tee);
+            // copying data between various types of fds
+            UNSUPPORTED(copy_file_range);
+            UNSUPPORTED(sendfile);
+            UNSUPPORTED(splice);
+            UNSUPPORTED(vmsplice);
+            UNSUPPORTED(tee);
 
             //// additional socket io
-            // NATIVE(recvmmsg);
-            // NATIVE(sendmmsg);
+            UNSUPPORTED(recvmmsg);
+            UNSUPPORTED(sendmmsg);
 
             // ***************************************
             // We think we don't need to handle these
