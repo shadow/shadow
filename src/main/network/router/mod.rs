@@ -4,7 +4,7 @@ use std::net::Ipv4Addr;
 use self::codel_queue::CoDelQueue;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
 use crate::utility::{Magic, ObjectCounter};
 mod codel_queue;
@@ -34,19 +34,19 @@ impl Router {
         }
     }
 
-    fn push_inner(&self, packet: Packet, now: EmulatedTime) {
+    fn push_inner(&self, packet: PacketRc, now: EmulatedTime) {
         self.magic.debug_check();
         self.inbound_packets.borrow_mut().push(packet, now);
     }
 
-    fn pop_inner(&self, now: EmulatedTime) -> Option<Packet> {
+    fn pop_inner(&self, now: EmulatedTime) -> Option<PacketRc> {
         self.magic.debug_check();
         self.inbound_packets.borrow_mut().pop(now)
     }
 
     /// Routes the packet from the source host through the virtual internet to
     /// the destination host.
-    fn route_outgoing_packet(&self, packet: Packet) {
+    fn route_outgoing_packet(&self, packet: PacketRc) {
         // TODO: move Worker::send_packet to here?
         let cpacket = packet.into_inner();
         Worker::with_active_host(|src_host| unsafe { Worker::send_packet(src_host, cpacket) })
@@ -56,7 +56,7 @@ impl Router {
 
     /// Routes the packet from the virtual internet into our CoDel queue, which
     /// can then be received by the destiantion host by calling pop().
-    pub fn route_incoming_packet(&self, packet: Packet) {
+    pub fn route_incoming_packet(&self, packet: PacketRc) {
         self.push_inner(packet, Worker::current_time().unwrap())
     }
 }
@@ -66,12 +66,12 @@ impl PacketDevice for Router {
         self.address
     }
 
-    fn pop(&self) -> Option<Packet> {
+    fn pop(&self) -> Option<PacketRc> {
         // When the host calls pop, we provide the next packet from the CoDel queue.
         self.pop_inner(Worker::current_time().unwrap())
     }
 
-    fn push(&self, packet: Packet) {
+    fn push(&self, packet: PacketRc) {
         // When the host calls push, we send to the virtual internet.
         self.route_outgoing_packet(packet);
     }
@@ -100,7 +100,7 @@ mod tests {
         const N: usize = 10;
 
         for _ in 1..=N {
-            router.push_inner(Packet::mock_new(), now);
+            router.push_inner(PacketRc::mock_new(), now);
             assert!(router.inbound_packets.borrow().peek().is_some());
         }
         for _ in 1..=N {

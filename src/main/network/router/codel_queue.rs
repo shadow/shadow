@@ -15,7 +15,7 @@ use std::{collections::VecDeque, time::Duration};
 use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::SimulationTime};
 
 use crate::cshadow as c;
-use crate::network::packet::{Packet, PacketStatus};
+use crate::network::packet::{PacketRc, PacketStatus};
 
 /// The target minimum standing queue delay time, corresponding to the "TARGET"
 /// parameter in the RFC. This is recommended to be set to 5 milliseconds in
@@ -34,7 +34,7 @@ const LIMIT: usize = usize::MAX;
 
 /// Encodes if CoDel determines that the next available packet can be dropped.
 struct CoDelPopItem {
-    packet: Packet,
+    packet: PacketRc,
     ok_to_drop: bool,
 }
 
@@ -49,7 +49,7 @@ enum CoDelMode {
 
 /// An entry in the CoDel queque.
 struct CoDelElement {
-    packet: Packet,
+    packet: PacketRc,
     enqueue_ts: EmulatedTime,
 }
 
@@ -111,7 +111,7 @@ impl CoDelQueue {
     /// operation will return the same packet, since it could be dropped by the
     /// queue between the `peek()` and `pop()` operations.
     #[cfg(test)]
-    pub fn peek(&self) -> Option<&Packet> {
+    pub fn peek(&self) -> Option<&PacketRc> {
         self.elements.front().map(|x| &x.packet)
     }
 
@@ -122,7 +122,7 @@ impl CoDelQueue {
     /// that conforms to the standing delay requirements is returned.
     /// Requires the current time as an argument to avoid calling into the
     /// worker module internally.
-    pub fn pop(&mut self, now: EmulatedTime) -> Option<Packet> {
+    pub fn pop(&mut self, now: EmulatedTime) -> Option<PacketRc> {
         let maybe_packet = match self.codel_pop(&now) {
             Some(item) => match item.ok_to_drop {
                 true => match self.mode {
@@ -148,7 +148,7 @@ impl CoDelQueue {
         })
     }
 
-    fn drop_from_store_mode(&mut self, now: &EmulatedTime, packet: Packet) -> Option<Packet> {
+    fn drop_from_store_mode(&mut self, now: &EmulatedTime, packet: PacketRc) -> Option<PacketRc> {
         debug_assert_eq!(self.mode, CoDelMode::Store);
 
         // Drop one packet and move to drop mode.
@@ -170,7 +170,7 @@ impl CoDelQueue {
         next_item.map(|x| x.packet)
     }
 
-    fn drop_from_drop_mode(&mut self, now: &EmulatedTime, packet: Packet) -> Option<Packet> {
+    fn drop_from_drop_mode(&mut self, now: &EmulatedTime, packet: PacketRc) -> Option<PacketRc> {
         debug_assert_eq!(self.mode, CoDelMode::Drop);
 
         let mut item = Some(CoDelPopItem {
@@ -302,7 +302,7 @@ impl CoDelQueue {
     /// Append a packet to the end of the queue.
     /// Requires the current time as an argument to avoid calling into the
     /// worker module internally.
-    pub fn push(&mut self, mut packet: Packet, now: EmulatedTime) {
+    pub fn push(&mut self, mut packet: PacketRc, now: EmulatedTime) {
         if self.elements.len() < LIMIT {
             packet.add_status(PacketStatus::RouterEnqueued);
             self.total_bytes_stored += packet.total_size();
@@ -318,7 +318,7 @@ impl CoDelQueue {
         }
     }
 
-    fn drop_packet(&self, mut packet: Packet) {
+    fn drop_packet(&self, mut packet: PacketRc) {
         packet.add_status(PacketStatus::RouterDropped);
     }
 }
@@ -351,7 +351,7 @@ mod tests {
 
         for i in 1..=N {
             assert_eq!(cdq.len(), i - 1);
-            cdq.push(Packet::mock_new(), now);
+            cdq.push(PacketRc::mock_new(), now);
             assert_eq!(cdq.len(), i);
         }
         for i in 1..=N {
@@ -396,7 +396,7 @@ mod tests {
 
         let mut cdq = CoDelQueue::new();
         for _ in 0..5 {
-            cdq.push(Packet::mock_new(), start);
+            cdq.push(PacketRc::mock_new(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
 
@@ -445,7 +445,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 6;
         for _ in 0..N {
-            cdq.push(Packet::mock_new(), start);
+            cdq.push(PacketRc::mock_new(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
         assert_eq!(cdq.len(), N);
@@ -478,7 +478,7 @@ mod tests {
         // low-delay packets should put us back into store mode.
         for _ in 0..3 {
             // Add some low-delay packets
-            cdq.push(Packet::mock_new(), start + TARGET + INTERVAL * 2u64 - one);
+            cdq.push(PacketRc::mock_new(), start + TARGET + INTERVAL * 2u64 - one);
         }
         cdq.pop(start + TARGET + INTERVAL * 2u64);
         assert_eq!(cdq.mode, CoDelMode::Store);
@@ -502,7 +502,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 20;
         for _ in 0..N {
-            cdq.push(Packet::mock_new(), start);
+            cdq.push(PacketRc::mock_new(), start);
         }
         assert_eq!(cdq.len(), N);
 

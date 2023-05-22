@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 
 pub mod graph;
 pub mod net_namespace;
@@ -10,8 +10,8 @@ pub mod router;
 
 pub trait PacketDevice {
     fn get_address(&self) -> Ipv4Addr;
-    fn pop(&self) -> Option<Packet>;
-    fn push(&self, packet: Packet);
+    fn pop(&self) -> Option<PacketRc>;
+    fn push(&self, packet: PacketRc);
 }
 
 #[cfg(test)]

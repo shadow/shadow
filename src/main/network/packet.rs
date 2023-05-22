@@ -32,31 +32,31 @@ pub enum PacketStatus {
     RelayForwarded = c::_PacketDeliveryStatusFlags_PDS_RELAY_FORWARDED,
 }
 
-pub struct Packet {
+pub struct PacketRc {
     c_ptr: SyncSendPointer<c::Packet>,
 }
 
-impl std::fmt::Debug for Packet {
+impl std::fmt::Debug for PacketRc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Packet").finish_non_exhaustive()
     }
 }
 
-impl PartialEq for Packet {
+impl PartialEq for PacketRc {
     fn eq(&self, other: &Self) -> bool {
         self.c_ptr.ptr() == other.c_ptr.ptr()
     }
 }
 
-impl Eq for Packet {}
+impl Eq for PacketRc {}
 
-impl Packet {
+impl PacketRc {
     #[cfg(test)]
     /// Creates an empty packet for unit tests.
-    pub fn mock_new() -> Packet {
+    pub fn mock_new() -> PacketRc {
         let c_ptr = unsafe { c::packet_new_inner(1, 1) };
         unsafe { c::packet_setMock(c_ptr) };
-        Packet::from_raw(c_ptr)
+        PacketRc::from_raw(c_ptr)
     }
 
     pub fn total_size(&self) -> usize {
@@ -124,7 +124,7 @@ impl Packet {
     }
 }
 
-impl Drop for Packet {
+impl Drop for PacketRc {
     fn drop(&mut self) {
         if !self.c_ptr.ptr().is_null() {
             // If the rust packet is dropped before into_inner() is called,
@@ -134,7 +134,7 @@ impl Drop for Packet {
     }
 }
 
-impl PacketDisplay for Packet {
+impl PacketDisplay for PacketRc {
     fn display_bytes(&self, writer: impl Write) -> std::io::Result<()> {
         self.borrow_inner().cast_const().display_bytes(writer)
     }

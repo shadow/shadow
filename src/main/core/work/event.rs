@@ -3,7 +3,7 @@ use shadow_shim_helper_rs::HostId;
 
 use super::task::TaskRef;
 use crate::host::host::Host;
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::utility::{Magic, ObjectCounter};
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct Event {
 impl Event {
     /// A new packet event, which is an event for packets arriving from the Internet. Packet events
     /// do not include packets on localhost.
-    pub fn new_packet(packet: Packet, time: EmulatedTime, src_host: &Host) -> Self {
+    pub fn new_packet(packet: PacketRc, time: EmulatedTime, src_host: &Host) -> Self {
         Self {
             magic: Magic::new(),
             time,
@@ -111,7 +111,7 @@ pub enum EventData {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PacketEventData {
-    packet: Packet,
+    packet: PacketRc,
     src_host_id: HostId,
     src_host_event_id: u64,
 }
@@ -122,7 +122,7 @@ pub struct LocalEventData {
     event_id: u64,
 }
 
-impl From<PacketEventData> for Packet {
+impl From<PacketEventData> for PacketRc {
     fn from(data: PacketEventData) -> Self {
         data.packet
     }

@@ -20,7 +20,7 @@ use crate::host::syscall::io::{write_partial, IoVec};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::net_namespace::NetworkNamespace;
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
@@ -122,7 +122,7 @@ impl LegacyTcpSocket {
         self.has_open_file = val;
     }
 
-    pub fn push_in_packet(&mut self, packet: Packet, _cb_queue: &mut CallbackQueue) {
+    pub fn push_in_packet(&mut self, packet: PacketRc, _cb_queue: &mut CallbackQueue) {
         let packet = packet.into_inner();
 
         Worker::with_active_host(|host| {
@@ -131,7 +131,7 @@ impl LegacyTcpSocket {
         .unwrap();
     }
 
-    pub fn pull_out_packet(&mut self, _cb_queue: &mut CallbackQueue) -> Option<Packet> {
+    pub fn pull_out_packet(&mut self, _cb_queue: &mut CallbackQueue) -> Option<PacketRc> {
         let packet = Worker::with_active_host(|host| unsafe {
             c::legacysocket_pullOutPacket(self.as_legacy_socket(), host)
         })
@@ -141,22 +141,22 @@ impl LegacyTcpSocket {
             return None;
         }
 
-        Some(Packet::from_raw(packet))
+        Some(PacketRc::from_raw(packet))
     }
 
-    pub fn peek_next_out_packet(&self) -> Option<Packet> {
+    pub fn peek_next_out_packet(&self) -> Option<PacketRc> {
         let packet = unsafe { c::legacysocket_peekNextOutPacket(self.as_legacy_socket()) };
 
         if packet.is_null() {
             return None;
         }
 
-        let packet = Packet::from_raw(packet);
+        let packet = PacketRc::from_raw(packet);
         unsafe { c::packet_ref(packet.borrow_inner()) }
         Some(packet)
     }
 
-    pub fn update_packet_header(&self, packet: &mut Packet) {
+    pub fn update_packet_header(&self, packet: &mut PacketRc) {
         Worker::with_active_host(|host| unsafe {
             c::tcp_networkInterfaceIsAboutToSendPacket(
                 self.as_legacy_tcp(),

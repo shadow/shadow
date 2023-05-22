@@ -14,7 +14,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
 use crate::network::net_namespace::NetworkNamespace;
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
@@ -211,10 +211,10 @@ impl InetSocketRef<'_> {
 // inet socket-specific functions
 impl InetSocketRef<'_> {
     enum_passthrough!(self, (), LegacyTcp;
-        pub fn peek_next_out_packet(&self) -> Option<Packet>
+        pub fn peek_next_out_packet(&self) -> Option<PacketRc>
     );
     enum_passthrough!(self, (packet), LegacyTcp;
-        pub fn update_packet_header(&self, packet: &mut Packet)
+        pub fn update_packet_header(&self, packet: &mut PacketRc)
     );
 }
 
@@ -307,16 +307,16 @@ impl InetSocketRefMut<'_> {
 // inet socket-specific functions
 impl InetSocketRefMut<'_> {
     enum_passthrough!(self, (packet, cb_queue), LegacyTcp;
-        pub fn push_in_packet(&mut self, packet: Packet, cb_queue: &mut CallbackQueue)
+        pub fn push_in_packet(&mut self, packet: PacketRc, cb_queue: &mut CallbackQueue)
     );
     enum_passthrough!(self, (cb_queue), LegacyTcp;
-        pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<Packet>
+        pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc>
     );
     enum_passthrough!(self, (), LegacyTcp;
-        pub fn peek_next_out_packet(&self) -> Option<Packet>
+        pub fn peek_next_out_packet(&self) -> Option<PacketRc>
     );
     enum_passthrough!(self, (packet), LegacyTcp;
-        pub fn update_packet_header(&self, packet: &mut Packet)
+        pub fn update_packet_header(&self, packet: &mut PacketRc)
     );
 }
 
@@ -451,7 +451,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocket_pushInPacket(socket: *const InetSocket, packet: *mut c::Packet) {
         let socket = unsafe { socket.as_ref() }.unwrap();
-        let packet = Packet::from_raw(packet);
+        let packet = PacketRc::from_raw(packet);
 
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
@@ -496,7 +496,7 @@ mod export {
         packet: *mut c::Packet,
     ) {
         let socket = unsafe { socket.as_ref() }.unwrap();
-        let mut packet = Packet::from_raw(packet);
+        let mut packet = PacketRc::from_raw(packet);
         socket.borrow().update_packet_header(&mut packet);
         packet.into_inner();
     }

@@ -24,7 +24,7 @@ use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{Thread, ThreadId};
 use crate::network::graph::{IpAssignment, RoutingInfo};
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::status_bar;
@@ -393,7 +393,7 @@ impl Worker {
         };
 
         // copy the packet
-        let packet = Packet::from_raw(unsafe { cshadow::packet_copy(packet) });
+        let packet = PacketRc::from_raw(unsafe { cshadow::packet_copy(packet) });
 
         // delay the packet until the next round
         let mut deliver_time = current_time + delay;
@@ -618,7 +618,7 @@ impl WorkerShared {
     /// (is outside of the current scheduling round, etc).
     pub fn push_packet_to_host(
         &self,
-        packet: Packet,
+        packet: PacketRc,
         dst_host_id: HostId,
         time: EmulatedTime,
         src_host: &Host,
