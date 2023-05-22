@@ -472,8 +472,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // **************************************
             // Not handled (yet):
             // **************************************
+            //// Needs to either change *both* the native and emulated
+            //// working directory, or get rid of one of them.
+            //// See https://github.com/shadow/shadow/issues/2960
             // NATIVE(chdir);
             // NATIVE(fchdir);
+
             // NATIVE(io_getevents);
             // NATIVE(waitid);
             // NATIVE(msync);
