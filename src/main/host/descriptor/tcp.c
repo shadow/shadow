@@ -2465,9 +2465,12 @@ gssize tcp_sendUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gs
     return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
-static void _tcp_sendWindowUpdate(const Host* host, gpointer voidTcp, gpointer data) {
-    TCP* tcp = voidTcp;
+static void _tcp_sendWindowUpdate(const Host* host, gpointer voidInetSocket, gpointer data) {
+    const InetSocket* inetSocket = voidInetSocket;
+    utility_alwaysAssert(inetSocket != NULL);
+    TCP* tcp = inetsocket_asLegacyTcp(inetSocket);
     MAGIC_ASSERT(tcp);
+
     trace("%s <-> %s: receive window opened, advertising the new "
             "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
             tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
@@ -2629,10 +2632,12 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
         /* our receive window just opened, make sure the sender knows it can
          * send more. otherwise we get into a deadlock situation!
          * make sure we don't send multiple events when read is called many times per instant */
-        legacyfile_ref(tcp);
-
-        TaskRef* updateWindowTask = taskref_new_bound(
-            host_getID(host), _tcp_sendWindowUpdate, tcp, NULL, legacyfile_unref, NULL);
+        utility_alwaysAssert(tcp->rustSocket != NULL);
+        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+        utility_alwaysAssert(inetSocket != NULL);
+        TaskRef* updateWindowTask =
+            taskref_new_bound(host_getID(host), _tcp_sendWindowUpdate, (void*)inetSocket, NULL,
+                              inetsocket_dropVoid, NULL);
         host_scheduleTaskWithDelay(host, updateWindowTask, 1);
         taskref_drop(updateWindowTask);
 
