@@ -90,33 +90,17 @@ impl ManagedThread {
     /// Panics if the native thread is dead or dies during the syscall,
     /// including if the syscall itself is SYS_exit or SYS_exit_group.
     pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
-        {
-            let mut syscall_args = SysCallArgs {
-                number: n,
-                args: [SysCallReg::from(0u64); 6],
-            };
-            syscall_args.args[..args.len()].copy_from_slice(args);
-            self.continue_plugin(
-                ctx.host,
-                &ShimEventToShim::Syscall(ShimEventSyscall { syscall_args }),
-            );
-        }
-
-        match self.wait_for_next_event(ctx.host) {
-            Ok(ShimEventToShadow::SyscallComplete(res)) => res.retval,
-            Err(SelfContainedChannelError::WriterIsClosed) => {
-                // This should only happen if the syscall was SYS_exit or
-                // SYS_exit_group, or if the process was killed externally, e.g.
-                // by sending a signal from outside of shadow. These cases would be
-                // tricky to support, and we shouldn't need to.
-                // TODO: would be nice to report the exit status, but this is
-                // currently the job of the Process, making it tricky to do from
-                // here in a nice way.
-                panic!("Plugin exited while executing native syscall {n}");
-            }
-            other => {
-                panic!("Unexpected response from plugin: {other:?}");
-            }
+        let mut syscall_args = SysCallArgs {
+            number: n,
+            args: [SysCallReg::from(0u64); 6],
+        };
+        syscall_args.args[..args.len()].copy_from_slice(args);
+        match self.continue_plugin(
+            ctx.host,
+            &ShimEventToShim::Syscall(ShimEventSyscall { syscall_args }),
+        ) {
+            ShimEventToShadow::SyscallComplete(res) => res.retval,
+            other => panic!("Unexpected response from plugin: {other:?}"),
         }
     }
 
@@ -181,18 +165,18 @@ impl ManagedThread {
         ctx.process.free_unsafe_borrows_flush().unwrap();
 
         loop {
-            match *self.current_event.borrow() {
+            let mut current_event = self.current_event.borrow_mut();
+            let last_event = *current_event;
+            *current_event = match last_event {
                 ShimEventToShadow::Null => {
                     // Initialize the shim.
                     trace!(
                         "waiting for start event from shim with native pid {}",
                         self.native_pid.unwrap()
                     );
-                    // In most places we use `wait_for_next_event` instead of
-                    // using the IPC channel directly, but it assumes the shim's
-                    // shared memory is already initialized and that we
-                    // previously called `continue_plugin`, which we haven't
-                    // yet.
+                    // In most places we use `continue_plugin` instead of using
+                    // the IPC channel directly, but we don't have a message to
+                    // send yet.
                     let start_req = match self.ipc_shmem.from_plugin().receive() {
                         Ok(ShimEventToShadow::StartReq(s)) => s,
                         other => panic!("Unexpected result from shim: {other:?}"),
@@ -222,7 +206,7 @@ impl ManagedThread {
 
                     // send the message to the shim to call main().
                     trace!("sending start event code to shim");
-                    self.continue_plugin(ctx.host, &ShimEventToShim::StartRes);
+                    self.continue_plugin(ctx.host, &ShimEventToShim::StartRes)
                 }
                 ShimEventToShadow::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but
@@ -288,18 +272,13 @@ impl ManagedThread {
                         SyscallReturn::Native => {
                             self.continue_plugin(ctx.host, &ShimEventToShim::SyscallDoNative)
                         }
-                    };
+                    }
                 }
                 e @ ShimEventToShadow::SyscallComplete(_)
                 | e @ ShimEventToShadow::StartReq(_)
                 | e @ ShimEventToShadow::AddThreadParentRes => panic!("Unexpected event: {e:?}"),
-            }
-            assert!(self.is_running());
-
-            *self.current_event.borrow_mut() = match self.wait_for_next_event(ctx.host) {
-                Ok(e) => e,
-                Err(SelfContainedChannelError::WriterIsClosed) => ShimEventToShadow::ProcessDeath,
             };
+            assert!(self.is_running());
         }
     }
 
@@ -356,14 +335,13 @@ impl ManagedThread {
         };
 
         // Send the IPC block for the new mthread to use.
-        self.continue_plugin(
+        match self.continue_plugin(
             ctx.host,
             &ShimEventToShim::AddThreadReq(ShimEventAddThreadReq {
                 ipc_block: child_ipc_shmem.serialize(),
             }),
-        );
-        match self.wait_for_next_event(ctx.host) {
-            Ok(ShimEventToShadow::AddThreadParentRes) => (),
+        ) {
+            ShimEventToShadow::AddThreadParentRes => (),
             r => panic!("Unexpected result: {r:?}"),
         };
 
@@ -397,7 +375,8 @@ impl ManagedThread {
         })
     }
 
-    fn continue_plugin(&self, host: &Host, event: &ShimEventToShim) {
+    #[must_use]
+    fn continue_plugin(&self, host: &Host, event: &ShimEventToShim) -> ShimEventToShadow {
         // Update shared state before transferring control.
         host.shim_shmem_lock_borrow_mut().unwrap().max_runahead_time =
             Worker::max_event_runahead_time(host);
@@ -409,16 +388,14 @@ impl ManagedThread {
         host.unlock_shmem();
 
         self.ipc_shmem.to_plugin().send(*event);
-    }
 
-    fn wait_for_next_event(
-        &self,
-        host: &Host,
-    ) -> Result<ShimEventToShadow, SelfContainedChannelError> {
-        let event = self.ipc_shmem.from_plugin().receive();
+        let event = match self.ipc_shmem.from_plugin().receive() {
+            Ok(e) => e,
+            Err(SelfContainedChannelError::WriterIsClosed) => ShimEventToShadow::ProcessDeath,
+        };
 
-        // The managed mthread has yielded control back to us. Reacquire the shared
-        // memory lock, which we released in `continue_plugin`.
+        // Reacquire the shared memory lock, now that the shim has yielded control
+        // back to us.
         host.lock_shmem();
 
         // Update time, which may have been incremented in the shim.
