@@ -9,7 +9,10 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let mut config = cbindgen::Config {
         sys_includes: vec!["signal.h".into()],
         include_guard: Some("shim_helpers_h".into()),
-        includes: vec!["lib/shmem/shmem_allocator.h".into()],
+        includes: vec![
+            "lib/shmem/shmem_allocator.h".into(),
+            "lib/logger/logger.h".into(),
+        ],
         // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
         // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,
         // alignment, non-zst fields, and field order as `ForeignPtr<()>`.
@@ -37,6 +40,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     };
 
     config.add_opaque_types(&[
+        "ShimShmemManager",
         "ShimShmemHost",
         "ShimShmemHostLock",
         "ShimShmemProcess",

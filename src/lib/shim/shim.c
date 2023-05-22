@@ -62,6 +62,13 @@ static ShMemBlock* _shim_host_shared_mem_blk() {
 }
 ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
 
+// Per-manager state shared with Shadow.
+static ShMemBlock* _shim_manager_shared_mem_blk() {
+    static ShMemBlock block = {0};
+    return &block;
+}
+ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
+
 // We disable syscall interposition when this is > 0.
 static int* _shim_allowNativeSyscallsFlag() {
     static ShimTlsVar v = {0};
@@ -190,18 +197,7 @@ static void _shim_init_signal_stack() {
 }
 
 static void _shim_parent_init_logging() {
-    // Set logger start time from environment variable.
-    {
-        const char* logger_start_time_string = getenv("SHADOW_LOG_START_TIME");
-        if (!logger_start_time_string) {
-            panic("Missing SHADOW_LOG_START_TIME");
-        }
-        int64_t logger_start_time;
-        if (sscanf(logger_start_time_string, "%" PRId64, &logger_start_time) != 1) {
-            panic("Couldn't parse logger start time string %s", logger_start_time_string);
-        };
-        logger_set_global_start_time_micros(logger_start_time);
-    }
+    logger_set_global_start_time_micros(shimshmem_getLoggingStartTime(shim_managerSharedMem()));
 
     // Redirect logger to stdout (shadow sets stdout and stderr to the shim log).
     {
@@ -214,18 +210,8 @@ static void _shim_parent_init_logging() {
         logger_setDefault(shimlogger_new(log_file));
     }
 
-    // Set log level
-    {
-        const char* level_string = getenv("SHADOW_LOG_LEVEL");
-        if (!level_string) {
-            panic("Missing SHADOW_LOG_LEVEL");
-        }
-        int level;
-        if (sscanf(level_string, "%d", &level) != 1) {
-            panic("Couldn't parse log level %s", level_string);
-        };
-        logger_setLevel(logger_getDefault(), level);
-    }
+    int level = shimshmem_getLogLevel(shim_hostSharedMem());
+    logger_setLevel(logger_getDefault(), level);
 }
 
 static void _shim_parent_init_death_signal() {
@@ -247,6 +233,12 @@ static void _shim_parent_init_death_signal() {
         error("Shadow exited.");
         exit(EXIT_FAILURE);
     }
+}
+
+static void _shim_parent_init_manager_shm() {
+    *_shim_manager_shared_mem_blk() =
+        shmemserializer_globalBlockDeserialize(shimshmem_getHostManagerShmem(shim_hostSharedMem()));
+    assert(shim_managerSharedMem());
 }
 
 static void _shim_parent_init_host_shm() {
@@ -397,6 +389,7 @@ static void _shim_parent_init_preload() {
     shim_install_hardware_error_handlers();
     patch_vdso((void*)getauxval(AT_SYSINFO_EHDR));
     _shim_parent_init_host_shm();
+    _shim_parent_init_manager_shm();
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
     _shim_init_signal_stack();

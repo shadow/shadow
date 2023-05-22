@@ -12,9 +12,11 @@ use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
+use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::cpu;
@@ -23,7 +25,7 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
-use crate::core::support::configuration::{self, ConfigOptions, EnvName, Flatten, LogLevel};
+use crate::core::support::configuration::{self, ConfigOptions, EnvName, Flatten};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
@@ -57,6 +59,7 @@ pub struct Manager<'a> {
     check_mem_usage: bool,
 
     meminfo_file: std::fs::File,
+    shmem: ShMemBlock<'static, ManagerShmem>,
 }
 
 impl<'a> Manager<'a> {
@@ -197,6 +200,10 @@ impl<'a> Manager<'a> {
         let meminfo_file =
             std::fs::File::open("/proc/meminfo").context("Failed to open '/proc/meminfo'")?;
 
+        let shmem = shadow_shmem::allocator::Allocator::global().alloc(ManagerShmem {
+            log_start_time_micros: unsafe { c::logger_get_global_start_time_micros() },
+        });
+
         Ok(Self {
             manager_config: Some(manager_config),
             controller,
@@ -213,6 +220,7 @@ impl<'a> Manager<'a> {
             check_fd_usage: true,
             check_mem_usage: true,
             meminfo_file,
+            shmem,
         })
     }
 
@@ -595,9 +603,21 @@ impl<'a> Manager<'a> {
                 unblocked_syscall_latency: self.config.unblocked_syscall_latency(),
                 unblocked_vdso_latency: self.config.unblocked_vdso_latency(),
                 strace_logging_options: self.config.strace_logging_mode(),
+                shim_log_level: host_info
+                    .log_level
+                    .unwrap_or_else(|| self.config.general.log_level.unwrap())
+                    .to_c_loglevel(),
             };
 
-            Box::new(unsafe { Host::new(params, &self.hosts_path, self.raw_frequency, dns) })
+            Box::new(unsafe {
+                Host::new(
+                    params,
+                    &self.hosts_path,
+                    self.raw_frequency,
+                    dns,
+                    self.shmem(),
+                )
+            })
         };
 
         host.lock_shmem();
@@ -614,11 +634,7 @@ impl<'a> Manager<'a> {
                 .map(|x| CString::new(x.as_bytes()).unwrap())
                 .collect();
 
-            let shim_log_level = host_info
-                .log_level
-                .unwrap_or_else(|| self.config.general.log_level.unwrap());
-
-            let envv = self.generate_env_vars(proc.env.clone(), shim_log_level);
+            let envv = self.generate_env_vars(proc.env.clone());
             let envv: Vec<CString> = envv
                 .iter()
                 .map(|x| CString::new(x.as_bytes()).unwrap())
@@ -648,27 +664,9 @@ impl<'a> Manager<'a> {
 
     // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
     // much less painful
-    fn generate_env_vars(
-        &self,
-        env: BTreeMap<EnvName, String>,
-        shim_log_level: LogLevel,
-    ) -> Vec<OsString> {
+    fn generate_env_vars(&self, env: BTreeMap<EnvName, String>) -> Vec<OsString> {
         let mut env: BTreeMap<EnvName, OsString> =
             env.into_iter().map(|(k, v)| (k, v.into())).collect();
-
-        // pass the (real) start time to the plugin, so that shim-side logging can log real time
-        // from the correct offset.
-        env.insert(
-            EnvName::new("SHADOW_LOG_START_TIME").unwrap(),
-            unsafe { c::logger_get_global_start_time_micros() }
-                .to_string()
-                .into(),
-        );
-
-        env.insert(
-            EnvName::new("SHADOW_LOG_LEVEL").unwrap(),
-            shim_log_level.to_c_loglevel().to_string().into(),
-        );
 
         // also insert the plugin preload entries
         // precendence here is:
@@ -851,6 +849,10 @@ impl<'a> Manager<'a> {
         let avl_pages: u64 = avl_pages.try_into().unwrap();
 
         Ok(page_size * avl_pages)
+    }
+
+    pub fn shmem(&self) -> &ShMemBlock<ManagerShmem> {
+        &self.shmem
     }
 }
 
