@@ -57,6 +57,7 @@ bindgen_flags+=("--allowlist-var=SA_.*")
 # Signal types
 bindgen_flags+=("--allowlist-type=sigset_t")
 bindgen_flags+=("--allowlist-type=siginfo_t")
+bindgen_flags+=("--allowlist-type=sigaction")
 
 # Output
 bindgen_flags+=("-o" "src/bindings.rs")

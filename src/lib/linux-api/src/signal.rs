@@ -388,9 +388,15 @@ pub struct linux_sigaction {
     ksa_restorer: Option<extern "C" fn()>,
     ksa_mask: linux_sigset_t,
 }
+static_assertions::assert_eq_align!(linux_sigaction, bindings::sigaction);
+static_assertions::assert_eq_size!(linux_sigaction, bindings::sigaction);
 
 impl linux_sigaction {
     pub fn handler(&self) -> &LinuxSignalHandler {
+        assert_eq!(
+            memoffset::offset_of!(linux_sigaction, u),
+            memoffset::offset_of!(bindings::sigaction, sa_handler)
+        );
         &self.u
     }
 }

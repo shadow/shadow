@@ -66,6 +66,73 @@ pub type __kernel_uid32_t = ::core::ffi::c_uint;
 pub type __kernel_clock_t = __kernel_long_t;
 pub type __kernel_timer_t = ::core::ffi::c_int;
 pub type sigset_t = ::core::ffi::c_ulong;
+pub type __signalfn_t = ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
+pub type __sighandler_t = __signalfn_t;
+pub type __restorefn_t = ::core::option::Option<unsafe extern "C" fn()>;
+pub type __sigrestore_t = __restorefn_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct sigaction {
+    pub sa_handler: __sighandler_t,
+    pub sa_flags: ::core::ffi::c_ulong,
+    pub sa_restorer: __sigrestore_t,
+    pub sa_mask: sigset_t,
+}
+#[test]
+fn bindgen_test_layout_sigaction() {
+    const UNINIT: ::core::mem::MaybeUninit<sigaction> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<sigaction>(),
+        32usize,
+        concat!("Size of: ", stringify!(sigaction))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<sigaction>(),
+        8usize,
+        concat!("Alignment of ", stringify!(sigaction))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sa_handler) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigaction),
+            "::",
+            stringify!(sa_handler)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sa_flags) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigaction),
+            "::",
+            stringify!(sa_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sa_restorer) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigaction),
+            "::",
+            stringify!(sa_restorer)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sa_mask) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sigaction),
+            "::",
+            stringify!(sa_mask)
+        )
+    );
+}
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union sigval {
