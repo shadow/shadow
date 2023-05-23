@@ -12,13 +12,12 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, LinuxDefaultAction};
+use linux_api::signal::{defaultaction, LinuxDefaultAction, Signal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-use nix::sys::signal as nixsignal;
-use nix::sys::signal::Signal;
 use nix::sys::stat::Mode;
+use nix::sys::signal as nixsignal;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -413,7 +412,7 @@ impl RunnableProcess {
         delta
     }
 
-    fn interrupt_with_signal(&self, host: &Host, signal: nixsignal::Signal) {
+    fn interrupt_with_signal(&self, host: &Host, signal: Signal) {
         let threads = self.threads.borrow();
         for thread in threads.values() {
             let thread = thread.borrow(host.root());
@@ -464,8 +463,8 @@ impl RunnableProcess {
             // SAFETY: We don't try to call any of the function pointers.
             let action = unsafe { process_shmem_protected.signal_action(signal) };
             let handler = action.handler();
-            if handler == nixsignal::SigHandler::SigIgn
-                || (handler == nixsignal::SigHandler::SigDfl
+            if handler.is_sig_ign()
+                || (handler.is_sig_dfl()
                     && defaultaction(signal) == LinuxDefaultAction::IGN)
             {
                 return;
@@ -860,7 +859,7 @@ impl Process {
             );
             eprintln!("{}", msg);
 
-            nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
+            nix::sys::signal::raise(nixsignal::Signal::SIGTSTP).unwrap();
         }
 
         main_thread
@@ -965,7 +964,7 @@ impl Process {
             #[cfg(feature = "perf_timers")]
             runnable.start_cpu_delay_timer();
 
-            if let Err(err) = nix::sys::signal::kill(runnable.native_pid(), Signal::SIGKILL) {
+            if let Err(err) = nixsignal::kill(runnable.native_pid(), nixsignal::Signal::SIGKILL) {
                 warn!("kill: {:?}", err);
             }
 
@@ -1206,7 +1205,7 @@ impl Process {
             killed_by_shadow,
             nix::sys::wait::waitpid(runnable.native_pid, None),
         ) {
-            (true, Ok(WaitStatus::Signaled(_pid, Signal::SIGKILL, _core_dump))) => {
+            (true, Ok(WaitStatus::Signaled(_pid, nixsignal::Signal::SIGKILL, _core_dump))) => {
                 ExitStatus::StoppedByShadow
             }
             (true, waitstatus) => {

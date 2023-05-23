@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use nix::sys::signal::Signal;
+use linux_api::signal::Signal;
 
 use super::host::Host;
 use crate::cshadow;

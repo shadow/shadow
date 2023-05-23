@@ -1,8 +1,7 @@
 use libc::{siginfo_t, stack_t};
 use linux_api::signal::{
-    linux_sigaction, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
+    linux_sigaction, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO, Signal,
 };
-use nix::sys::signal::Signal;
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;

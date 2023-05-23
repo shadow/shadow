@@ -1,4 +1,4 @@
-use nix::sys::signal::Signal;
+use num_enum::{TryFromPrimitive, IntoPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
@@ -25,6 +25,57 @@ pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
 pub const LINUX_SIG_DFL: usize = 0;
 pub const LINUX_SIG_IGN: usize = 1;
 pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
+
+// signal names
+#[derive(Debug, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
+#[repr(i32)]
+pub enum Signal {
+    SIGHUP = bindings::SIGHUP as i32,
+    SIGINT = bindings::SIGINT as i32,
+    SIGQUIT = bindings::SIGQUIT as i32,
+    SIGILL = bindings::SIGILL as i32,
+    SIGTRAP = bindings::SIGTRAP as i32,
+    SIGABRT = bindings::SIGABRT as i32,
+    SIGBUS = bindings::SIGBUS as i32,
+    SIGFPE = bindings::SIGFPE as i32,
+    SIGKILL = bindings::SIGKILL as i32,
+    SIGUSR1 = bindings::SIGUSR1 as i32,
+    SIGSEGV = bindings::SIGSEGV as i32,
+    SIGUSR2 = bindings::SIGUSR2 as i32,
+    SIGPIPE = bindings::SIGPIPE as i32,
+    SIGALRM = bindings::SIGALRM as i32,
+    SIGTERM = bindings::SIGTERM as i32,
+    SIGSTKFLT = bindings::SIGSTKFLT as i32,
+    SIGCHLD = bindings::SIGCHLD as i32,
+    SIGCONT = bindings::SIGCONT as i32,
+    SIGSTOP = bindings::SIGSTOP as i32,
+    SIGTSTP = bindings::SIGTSTP as i32,
+    SIGTTIN = bindings::SIGTTIN as i32,
+    SIGTTOU = bindings::SIGTTOU as i32,
+    SIGURG = bindings::SIGURG as i32,
+    SIGXCPU = bindings::SIGXCPU as i32,
+    SIGXFSZ = bindings::SIGXFSZ as i32,
+    SIGVTALRM = bindings::SIGVTALRM as i32,
+    SIGPROF = bindings::SIGPROF as i32,
+    SIGWINCH = bindings::SIGWINCH as i32,
+    SIGIO = bindings::SIGIO as i32,
+    SIGPWR = bindings::SIGPWR as i32,
+    SIGSYS = bindings::SIGSYS as i32,
+}
+
+impl Signal {
+    const fn const_alias(from: u32, to: Self) -> Self {
+        if to as i32 != from as i32 {
+            // Can't use a format string here since this function is `const`
+            panic!("Incorrect alias")
+        }
+        to
+    }
+    pub const SIGIOT: Self = Self::const_alias(bindings::SIGIOT, Self::SIGABRT);
+    pub const SIGPOLL: Self = Self::const_alias(bindings::SIGPOLL, Self::SIGIO);
+    pub const SIGUNUSED: Self = Self::const_alias(bindings::SIGUNUSED, Self::SIGSYS);
+}
+
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -289,11 +340,27 @@ fn test_not() {
 /// in Rust. <https://github.com/rust-lang/rust/issues/49804>
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union LinuxSigactionUnion {
+pub union LinuxSignalHandler {
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
     ksa_handler: Option<extern "C" fn(i32)>,
     ksa_sigaction: Option<extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)>,
+}
+
+impl LinuxSignalHandler {
+    fn as_usize(&self) -> usize {
+        unsafe { self.ksa_handler }
+            .map(|f| f as usize)
+            .unwrap_or(0)
+    }
+
+    pub fn is_sig_ign(&self) -> bool {
+        self.as_usize() == LINUX_SIG_IGN
+    }
+
+    pub fn is_sig_dfl(&self) -> bool {
+        self.as_usize() == LINUX_SIG_DFL
+    }
 }
 
 /// Compatible with kernel's definition of `struct sigaction`. Different from
@@ -309,7 +376,7 @@ pub struct linux_sigaction {
     // SAFETY: We do not dereference the pointers in this union, except from the
     // shim, where it is valid to do so.
     #[unsafe_assume_virtual_address_space_independent]
-    u: LinuxSigactionUnion,
+    u: LinuxSignalHandler,
     ksa_flags: LinuxSigActionFlags,
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
@@ -321,31 +388,15 @@ pub struct linux_sigaction {
 }
 
 impl linux_sigaction {
-    pub fn handler(&self) -> nix::sys::signal::SigHandler {
-        let handler_int: usize = unsafe { self.u.ksa_handler }
-            .map(|f| f as usize)
-            .unwrap_or(0);
-        if handler_int == LINUX_SIG_IGN {
-            nix::sys::signal::SigHandler::SigIgn
-        } else if handler_int == LINUX_SIG_DFL {
-            nix::sys::signal::SigHandler::SigDfl
-        } else if self.ksa_flags.contains(LinuxSigActionFlags::SIGINFO) {
-            // We need to cast the function pointer to what nix expects.
-            // To avoid naming and depending on libc we use a transmute.
-            // FIXME: get rid of transmute (and nix deps altogether).
-            nix::sys::signal::SigHandler::SigAction(unsafe {
-                core::mem::transmute(self.u.ksa_sigaction.unwrap())
-            })
-        } else {
-            nix::sys::signal::SigHandler::Handler(unsafe { self.u.ksa_handler.unwrap() })
-        }
+    pub fn handler(&self) -> &LinuxSignalHandler {
+        &self.u
     }
 }
 
 impl Default for linux_sigaction {
     fn default() -> Self {
         Self {
-            u: LinuxSigactionUnion { ksa_handler: None },
+            u: LinuxSignalHandler { ksa_handler: None },
             ksa_flags: Default::default(),
             ksa_restorer: Default::default(),
             ksa_mask: Default::default(),
@@ -404,10 +455,6 @@ pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
         | SIGUSR1
         | SIGUSR2
         | SIGVTALRM => Action::TERM,
-        _ => {
-            log::error!("Unhandled signal {}", sig);
-            Action::CORE
-        },
     }
 }
 
