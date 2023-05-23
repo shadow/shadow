@@ -352,6 +352,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(fgetxattr);
             HANDLE_C(flistxattr);
             HANDLE_C(flock);
+            HANDLE_RUST(fork);
             HANDLE_C(fremovexattr);
             HANDLE_C(fsetxattr);
             HANDLE_C(fstat);
@@ -466,6 +467,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(uname);
             HANDLE_C(unlinkat);
             HANDLE_C(utimensat);
+            HANDLE_RUST(vfork);
             HANDLE_RUST(write);
             HANDLE_RUST(writev);
 

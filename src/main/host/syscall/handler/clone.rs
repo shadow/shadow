@@ -299,6 +299,36 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */libc::pid_t)]
+    pub fn fork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+        // This should be the correct call to `clone_internal`, but `clone_internal`
+        // will currently return an error.
+        Self::clone_internal(
+            ctx,
+            CloneFlags::empty(),
+            Some(Signal::SIGCHLD),
+            ForeignPtr::<()>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            0,
+        )
+    }
+
+    #[log_syscall(/* rv */libc::pid_t)]
+    pub fn vfork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+        // This should be the correct call to `clone_internal`, but `clone_internal`
+        // will currently return an error.
+        Self::clone_internal(
+            ctx,
+            CloneFlags::CLONE_VFORK | CloneFlags::CLONE_VM,
+            Some(Signal::SIGCHLD),
+            ForeignPtr::<()>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            0,
+        )
+    }
+
+    #[log_syscall(/* rv */libc::pid_t)]
     pub fn gettid(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
         Ok(libc::pid_t::from(ctx.objs.thread.id()))
     }
