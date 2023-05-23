@@ -151,7 +151,9 @@ impl LegacyTcpSocket {
             return None;
         }
 
-        Some(Packet::from_raw(packet))
+        let packet = Packet::from_raw(packet);
+        unsafe { c::packet_ref(packet.borrow_inner()) }
+        Some(packet)
     }
 
     pub fn update_packet_header(&self, packet: &mut Packet) {
