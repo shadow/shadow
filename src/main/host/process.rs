@@ -12,12 +12,12 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, LinuxDefaultAction, Signal};
+use linux_api::signal::{defaultaction, LinuxDefaultAction, LinuxSignal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-use nix::sys::stat::Mode;
 use nix::sys::signal as nixsignal;
+use nix::sys::stat::Mode;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -412,7 +412,7 @@ impl RunnableProcess {
         delta
     }
 
-    fn interrupt_with_signal(&self, host: &Host, signal: Signal) {
+    fn interrupt_with_signal(&self, host: &Host, signal: LinuxSignal) {
         let threads = self.threads.borrow();
         for thread in threads.values() {
             let thread = thread.borrow(host.root());
@@ -451,7 +451,7 @@ impl RunnableProcess {
         if siginfo.si_signo == 0 {
             return;
         }
-        let signal = Signal::try_from(siginfo.si_signo).unwrap();
+        let signal = LinuxSignal::try_from(siginfo.si_signo).unwrap();
 
         // Scope for `process_shmem_protected`
         {
@@ -464,8 +464,7 @@ impl RunnableProcess {
             let action = unsafe { process_shmem_protected.signal_action(signal) };
             let handler = action.handler();
             if handler.is_sig_ign()
-                || (handler.is_sig_dfl()
-                    && defaultaction(signal) == LinuxDefaultAction::IGN)
+                || (handler.is_sig_dfl() && defaultaction(signal) == LinuxDefaultAction::IGN)
             {
                 return;
             }

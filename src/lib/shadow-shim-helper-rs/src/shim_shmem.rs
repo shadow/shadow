@@ -1,6 +1,6 @@
 use libc::{siginfo_t, stack_t};
 use linux_api::signal::{
-    linux_sigaction, linux_sigset_t, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO, Signal,
+    linux_sigaction, linux_sigset_t, LinuxSignal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
@@ -209,7 +209,7 @@ pub struct ProcessShmemProtected {
 }
 
 impl ProcessShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&SiginfoWrapper> {
+    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&SiginfoWrapper> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal as usize - 1])
         } else {
@@ -217,7 +217,7 @@ impl ProcessShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &siginfo_t) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal as usize - 1] = (*info).into();
     }
@@ -227,7 +227,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action(&self, signal: Signal) -> &linux_sigaction {
+    pub unsafe fn signal_action(&self, signal: LinuxSignal) -> &linux_sigaction {
         &self.signal_actions[signal as usize - 1]
     }
 
@@ -236,14 +236,14 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut linux_sigaction {
+    pub unsafe fn signal_action_mut(&mut self, signal: LinuxSignal) -> &mut linux_sigaction {
         &mut self.signal_actions[signal as usize - 1]
     }
 
     pub fn take_pending_unblocked_signal(
         &mut self,
         thread: &ThreadShmemProtected,
-    ) -> Option<(Signal, SiginfoWrapper)> {
+    ) -> Option<(LinuxSignal, SiginfoWrapper)> {
         let pending_unblocked_signals = self.pending_signals & !thread.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -311,7 +311,7 @@ pub struct ThreadShmemProtected {
 }
 
 impl ThreadShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&SiginfoWrapper> {
+    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&SiginfoWrapper> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal as usize - 1])
         } else {
@@ -319,7 +319,7 @@ impl ThreadShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &SiginfoWrapper) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &SiginfoWrapper) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal as usize - 1] = *info;
     }
@@ -341,7 +341,7 @@ impl ThreadShmemProtected {
         &mut self.sigaltstack.0
     }
 
-    pub fn take_pending_unblocked_signal(&mut self) -> Option<(Signal, SiginfoWrapper)> {
+    pub fn take_pending_unblocked_signal(&mut self) -> Option<(LinuxSignal, SiginfoWrapper)> {
         let pending_unblocked_signals = self.pending_signals & !self.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -395,7 +395,7 @@ impl SiginfoWrapper {
         self.0.signo_mut()
     }
 
-    pub fn signal(&self) -> Option<Signal> {
+    pub fn signal(&self) -> Option<LinuxSignal> {
         if self.signo() == &0 {
             None
         } else {
@@ -453,7 +453,7 @@ impl<'a> From<&'a libc::siginfo_t> for &'a SiginfoWrapper {
 
 // FIXME: temporary workaround for nix's lack of support for realtime
 // signals.
-fn signal_from_i32(s: i32) -> Signal {
+fn signal_from_i32(s: i32) -> LinuxSignal {
     assert!(s <= libc::SIGRTMAX());
     unsafe { std::mem::transmute(s) }
 }

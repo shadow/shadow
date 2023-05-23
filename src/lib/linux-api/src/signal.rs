@@ -1,4 +1,4 @@
-use num_enum::{TryFromPrimitive, IntoPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
@@ -29,7 +29,7 @@ pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
 // signal names
 #[derive(Debug, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
-pub enum Signal {
+pub enum LinuxSignal {
     SIGHUP = bindings::SIGHUP as i32,
     SIGINT = bindings::SIGINT as i32,
     SIGQUIT = bindings::SIGQUIT as i32,
@@ -63,7 +63,7 @@ pub enum Signal {
     SIGSYS = bindings::SIGSYS as i32,
 }
 
-impl Signal {
+impl LinuxSignal {
     const fn const_alias(from: u32, to: Self) -> Self {
         if to as i32 != from as i32 {
             // Can't use a format string here since this function is `const`
@@ -75,7 +75,6 @@ impl Signal {
     pub const SIGPOLL: Self = Self::const_alias(bindings::SIGPOLL, Self::SIGIO);
     pub const SIGUNUSED: Self = Self::const_alias(bindings::SIGUNUSED, Self::SIGSYS);
 }
-
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -203,16 +202,16 @@ impl linux_sigset_t {
     pub const EMPTY: Self = Self { val: 0 };
     pub const FULL: Self = Self { val: !0 };
 
-    pub fn has(&self, sig: Signal) -> bool {
+    pub fn has(&self, sig: LinuxSignal) -> bool {
         (*self & linux_sigset_t::from(sig)).val != 0
     }
 
-    pub fn lowest(&self) -> Option<Signal> {
+    pub fn lowest(&self) -> Option<LinuxSignal> {
         if self.val == 0 {
             return None;
         }
         for i in 1..=LINUX_SIGRT_MAX {
-            let s = Signal::try_from(i).unwrap();
+            let s = LinuxSignal::try_from(i).unwrap();
             if self.has(s) {
                 return Some(s);
             }
@@ -224,17 +223,17 @@ impl linux_sigset_t {
         *self == linux_sigset_t::EMPTY
     }
 
-    pub fn del(&mut self, sig: Signal) {
+    pub fn del(&mut self, sig: LinuxSignal) {
         *self &= !linux_sigset_t::from(sig);
     }
 
-    pub fn add(&mut self, sig: Signal) {
+    pub fn add(&mut self, sig: LinuxSignal) {
         *self |= linux_sigset_t::from(sig);
     }
 }
 
-impl From<Signal> for linux_sigset_t {
-    fn from(value: Signal) -> Self {
+impl From<LinuxSignal> for linux_sigset_t {
+    fn from(value: LinuxSignal) -> Self {
         let value = value as i32;
         debug_assert!(value <= 64);
         Self {
@@ -245,9 +244,9 @@ impl From<Signal> for linux_sigset_t {
 
 #[test]
 fn test_from_signal() {
-    let sigset = linux_sigset_t::from(Signal::SIGABRT);
-    assert!(sigset.has(Signal::SIGABRT));
-    assert!(!sigset.has(Signal::SIGSEGV));
+    let sigset = linux_sigset_t::from(LinuxSignal::SIGABRT);
+    assert!(sigset.has(LinuxSignal::SIGABRT));
+    assert!(!sigset.has(LinuxSignal::SIGSEGV));
     assert_ne!(sigset, linux_sigset_t::EMPTY);
 }
 
@@ -263,10 +262,11 @@ impl core::ops::BitOr for linux_sigset_t {
 
 #[test]
 fn test_bitor() {
-    let sigset = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
-    assert!(sigset.has(Signal::SIGABRT));
-    assert!(sigset.has(Signal::SIGSEGV));
-    assert!(!sigset.has(Signal::SIGALRM));
+    let sigset =
+        linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGSEGV);
+    assert!(sigset.has(LinuxSignal::SIGABRT));
+    assert!(sigset.has(LinuxSignal::SIGSEGV));
+    assert!(!sigset.has(LinuxSignal::SIGALRM));
 }
 
 impl core::ops::BitOrAssign for linux_sigset_t {
@@ -277,11 +277,11 @@ impl core::ops::BitOrAssign for linux_sigset_t {
 
 #[test]
 fn test_bitorassign() {
-    let mut sigset = linux_sigset_t::from(Signal::SIGABRT);
-    sigset |= linux_sigset_t::from(Signal::SIGSEGV);
-    assert!(sigset.has(Signal::SIGABRT));
-    assert!(sigset.has(Signal::SIGSEGV));
-    assert!(!sigset.has(Signal::SIGALRM));
+    let mut sigset = linux_sigset_t::from(LinuxSignal::SIGABRT);
+    sigset |= linux_sigset_t::from(LinuxSignal::SIGSEGV);
+    assert!(sigset.has(LinuxSignal::SIGABRT));
+    assert!(sigset.has(LinuxSignal::SIGSEGV));
+    assert!(!sigset.has(LinuxSignal::SIGALRM));
 }
 
 impl core::ops::BitAnd for linux_sigset_t {
@@ -296,12 +296,14 @@ impl core::ops::BitAnd for linux_sigset_t {
 
 #[test]
 fn test_bitand() {
-    let lhs = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
-    let rhs = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
+    let lhs =
+        linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGSEGV);
+    let rhs =
+        linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGALRM);
     let and = lhs & rhs;
-    assert!(and.has(Signal::SIGABRT));
-    assert!(!and.has(Signal::SIGSEGV));
-    assert!(!and.has(Signal::SIGALRM));
+    assert!(and.has(LinuxSignal::SIGABRT));
+    assert!(!and.has(LinuxSignal::SIGSEGV));
+    assert!(!and.has(LinuxSignal::SIGALRM));
 }
 
 impl core::ops::BitAndAssign for linux_sigset_t {
@@ -312,11 +314,12 @@ impl core::ops::BitAndAssign for linux_sigset_t {
 
 #[test]
 fn test_bitand_assign() {
-    let mut set = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
-    set &= linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGALRM);
-    assert!(set.has(Signal::SIGABRT));
-    assert!(!set.has(Signal::SIGSEGV));
-    assert!(!set.has(Signal::SIGALRM));
+    let mut set =
+        linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGSEGV);
+    set &= linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGALRM);
+    assert!(set.has(LinuxSignal::SIGABRT));
+    assert!(!set.has(LinuxSignal::SIGSEGV));
+    assert!(!set.has(LinuxSignal::SIGALRM));
 }
 
 impl core::ops::Not for linux_sigset_t {
@@ -329,11 +332,12 @@ impl core::ops::Not for linux_sigset_t {
 
 #[test]
 fn test_not() {
-    let set = linux_sigset_t::from(Signal::SIGABRT) | linux_sigset_t::from(Signal::SIGSEGV);
+    let set =
+        linux_sigset_t::from(LinuxSignal::SIGABRT) | linux_sigset_t::from(LinuxSignal::SIGSEGV);
     let set = !set;
-    assert!(!set.has(Signal::SIGABRT));
-    assert!(!set.has(Signal::SIGSEGV));
-    assert!(set.has(Signal::SIGALRM));
+    assert!(!set.has(LinuxSignal::SIGABRT));
+    assert!(!set.has(LinuxSignal::SIGSEGV));
+    assert!(set.has(LinuxSignal::SIGALRM));
 }
 
 /// In C this is conventionally an anonymous union, but those aren't supported
@@ -349,9 +353,7 @@ pub union LinuxSignalHandler {
 
 impl LinuxSignalHandler {
     fn as_usize(&self) -> usize {
-        unsafe { self.ksa_handler }
-            .map(|f| f as usize)
-            .unwrap_or(0)
+        unsafe { self.ksa_handler }.map(|f| f as usize).unwrap_or(0)
     }
 
     pub fn is_sig_ign(&self) -> bool {
@@ -415,9 +417,9 @@ pub enum LinuxDefaultAction {
     CONT,
 }
 
-pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
+pub fn defaultaction(sig: LinuxSignal) -> LinuxDefaultAction {
     use LinuxDefaultAction as Action;
-    use Signal::*;
+    use LinuxSignal::*;
     match sig  {
         SIGCONT => Action::CONT,
         // aka SIGIOT
@@ -474,14 +476,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
-        let signo = Signal::try_from(signo).unwrap();
+        let signo = LinuxSignal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = unsafe { set.as_mut().unwrap() };
-        let signo = Signal::try_from(signo).unwrap();
+        let signo = LinuxSignal::try_from(signo).unwrap();
         set.del(signo);
     }
 
@@ -534,7 +536,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
-        let sig = Signal::try_from(signo).unwrap();
+        let sig = LinuxSignal::try_from(signo).unwrap();
         defaultaction(sig)
     }
 }
