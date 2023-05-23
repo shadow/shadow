@@ -5,6 +5,7 @@ members = [
     "test",
     "lib/shadow-build-common",
     "lib/gml-parser",
+    "lib/linux-api",
     "lib/logger",
     "lib/shmem",
     "lib/shadow-shim-helper-rs",
