@@ -7,14 +7,6 @@
 
 #include "main/bindings/c/bindings.h"
 
-void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun) {
-    *siginfo = (siginfo_t){
-        .si_signo = SIGALRM,
-        .si_code = SI_TIMER,
-        .si_overrun = overrun,
-    };
-}
-
 bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error) {
     GError* gError = NULL;
 

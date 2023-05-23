@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::signal::{SigInfo, Signal};
 use log::{debug, trace};
 use logger::LogLevel;
-use nix::sys::signal::Signal;
 use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -42,9 +42,9 @@ use crate::network::net_namespace::NetworkNamespace;
 use crate::network::relay::{RateLimit, Relay};
 use crate::network::router::Router;
 use crate::network::PacketDevice;
+use crate::utility;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, pod};
 
 pub struct HostParameters {
     pub id: HostId,
@@ -375,7 +375,7 @@ impl Host {
         &self,
         start_time: SimulationTime,
         shutdown_time: Option<SimulationTime>,
-        shutdown_signal: Signal,
+        shutdown_signal: nix::sys::signal::Signal,
         plugin_name: CString,
         plugin_path: CString,
         envv: Vec<CString>,
@@ -417,8 +417,11 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let mut siginfo: libc::siginfo_t = pod::zeroed();
-                    siginfo.si_signo = shutdown_signal as i32;
+                    let siginfo = SigInfo::new_for_kill(
+                        Signal::try_from(shutdown_signal as i32).unwrap(),
+                        1,
+                        0,
+                    );
                     process.signal(host, None, &siginfo);
                 });
                 host.schedule_task_at_emulated_time(

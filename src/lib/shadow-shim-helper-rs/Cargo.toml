@@ -20,6 +20,8 @@ shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 vasi-sync = { path = "../vasi-sync" }
+linux-api = { path = "../linux-api" }
+bytemuck = "1.13.1"
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }

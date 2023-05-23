@@ -16,8 +16,4 @@ bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char*
 // Free all data allocated by `process_parseArgStr()`.
 void process_parseArgStrFree(char** argv, char* error);
 
-// Helper for the Rust Process. `siginfo_t` is difficult to initialize from Rust,
-// due to opaque fields and macro magic in its C definition.
-void process_initSiginfoForAlarm(siginfo_t* siginfo, int overrun);
-
 #endif /* SHD_PROCESS_H_ */

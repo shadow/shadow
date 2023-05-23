@@ -1,3 +1,4 @@
+use linux_api::sched::CloneFlags;
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::sys::signal::Signal;
@@ -11,46 +12,6 @@ use crate::host::syscall_types::SyscallError;
 use crate::host::thread::Thread;
 
 use super::{SyscallContext, SyscallHandler};
-
-// We don't use nix::sched::CloneFlags here, because nix omits flags
-// that it doesn't support. e.g. https://docs.rs/nix/0.26.2/src/nix/sched.rs.html#57
-bitflags::bitflags! {
-    // While `clone` is documented as taking an i32 parameter for flags,
-    // in `clone3` its a u64. Promote to u64 throughout.
-    #[derive(Copy, Clone, Debug)]
-    pub struct CloneFlags: u64 {
-        // Not exported by the libc crate.
-        // Manually copied from sched.h.
-        const CLONE_CLEAR_SIGHAND = 0x100000000;
-        const CLONE_INTO_CGROUP = 0x200000000;
-        const CLONE_NEWTIME = 0x00000080;
-
-        const CLONE_VM = libc::CLONE_VM as u64;
-        const CLONE_FS = libc::CLONE_FS as u64;
-        const CLONE_FILES = libc::CLONE_FILES as u64;
-        const CLONE_SIGHAND = libc::CLONE_SIGHAND as u64;
-        const CLONE_PIDFD = libc::CLONE_PIDFD as u64;
-        const CLONE_PTRACE = libc::CLONE_PTRACE as u64;
-        const CLONE_VFORK = libc::CLONE_VFORK as u64;
-        const CLONE_PARENT = libc::CLONE_PARENT as u64;
-        const CLONE_THREAD = libc::CLONE_THREAD as u64;
-        const CLONE_NEWNS = libc::CLONE_NEWNS as u64;
-        const CLONE_SYSVSEM = libc::CLONE_SYSVSEM as u64;
-        const CLONE_SETTLS = libc::CLONE_SETTLS as u64;
-        const CLONE_PARENT_SETTID = libc::CLONE_PARENT_SETTID as u64;
-        const CLONE_CHILD_CLEARTID = libc::CLONE_CHILD_CLEARTID as u64;
-        const CLONE_DETACHED = libc::CLONE_DETACHED as u64;
-        const CLONE_UNTRACED = libc::CLONE_UNTRACED as u64;
-        const CLONE_CHILD_SETTID = libc::CLONE_CHILD_SETTID as u64;
-        const CLONE_NEWCGROUP = libc::CLONE_NEWCGROUP as u64;
-        const CLONE_NEWUTS = libc::CLONE_NEWUTS as u64;
-        const CLONE_NEWIPC = libc::CLONE_NEWIPC as u64;
-        const CLONE_NEWUSER = libc::CLONE_NEWUSER as u64;
-        const CLONE_NEWPID = libc::CLONE_NEWPID as u64;
-        const CLONE_NEWNET = libc::CLONE_NEWNET as u64;
-        const CLONE_IO = libc::CLONE_IO as u64;
-    }
-}
 
 impl SyscallHandler {
     fn clone_internal(

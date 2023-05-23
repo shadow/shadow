@@ -500,9 +500,8 @@ bool syscallcondition_wakeupForSignal(SysCallCondition* cond, const Host* host, 
 
     ShimShmemHostLock* hostLock = host_getShimShmemLock(host);
     const Thread* thread = host_getThread(host, cond->threadId);
-    shd_kernel_sigset_t blockedSignals =
-        shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
-    if (shd_sigismember(&blockedSignals, signo)) {
+    linux_sigset_t blockedSignals = shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
+    if (linux_sigismember(&blockedSignals, signo)) {
         // Signal is blocked. Don't schedule.
         return false;
     }

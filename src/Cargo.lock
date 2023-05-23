@@ -203,6 +203,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytemuck"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -741,6 +747,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-api"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.3.1",
+ "bytemuck",
+ "cbindgen",
+ "log",
+ "memoffset 0.9.0",
+ "num_enum",
+ "shadow-build-common",
+ "static_assertions",
+ "vasi",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -917,6 +938,26 @@ checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
  "hermit-abi 0.2.6",
  "libc",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a015b430d3c108a207fd776d2e2196aaf8b1cf8cf93253e3a097ff3085076a1"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96667db765a921f7b295ffee8b60472b686a51d4f21c2ee4ffdb94c7013b65a6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1400,6 +1441,7 @@ dependencies = [
  "backtrace",
  "bindgen",
  "bitflags 2.3.1",
+ "bytemuck",
  "bytes",
  "cbindgen",
  "cc",
@@ -1407,6 +1449,7 @@ dependencies = [
  "crossbeam",
  "gml-parser",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "lzma-rs",
@@ -1444,9 +1487,11 @@ dependencies = [
 name = "shadow-shim-helper-rs"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cbindgen",
  "cc",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "nix",
