@@ -1340,15 +1340,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
         /* socket will queue it ASAP */
-
-        utility_alwaysAssert(tcp->rustSocket != NULL);
-        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
-        utility_alwaysAssert(inetSocket != NULL);
-
-        CompatSocket compatSocket = compatsocket_fromInetSocket(inetSocket);
-
-        gboolean success =
-            legacysocket_addToOutputBuffer(&(tcp->super), compatSocket, host, packet);
+        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), host, packet);
 
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
