@@ -291,13 +291,22 @@ impl Thread {
         Ok(())
     }
 
-    pub fn new(
+    pub fn spawn(
         host: &Host,
         process_id: ProcessId,
         thread_id: ThreadId,
+        plugin_path: &CStr,
+        argv: Vec<CString>,
+        envv: Vec<CString>,
+        working_dir: &CStr,
+        strace_fd: Option<RawFd>,
+        log_path: &CStr,
     ) -> RootedRc<RootedRefCell<Self>> {
+        let mthread =
+            ManagedThread::spawn(plugin_path, argv, envv, working_dir, strace_fd, log_path);
+
         let thread = Self {
-            mthread: RefCell::new(ManagedThread::new()),
+            mthread: RefCell::new(mthread),
             syscallhandler: unsafe {
                 SendPointer::new(c::syscallhandler_new(
                     host.id(),
@@ -364,20 +373,6 @@ impl Thread {
     /// Shared memory for this thread.
     pub fn shmem(&self) -> &ShMemBlock<ThreadShmem> {
         &self.shim_shared_memory
-    }
-
-    pub fn run(
-        &self,
-        plugin_path: &CStr,
-        argv: Vec<CString>,
-        envv: Vec<CString>,
-        working_dir: &CStr,
-        strace_fd: Option<RawFd>,
-        log_path: &CStr,
-    ) {
-        self.mthread
-            .borrow_mut()
-            .run(plugin_path, argv, envv, working_dir, strace_fd, log_path);
     }
 
     pub fn resume(&self, ctx: &ProcessContext) -> ResumeResult {

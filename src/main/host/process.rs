@@ -810,10 +810,7 @@ impl Process {
 
         // Create the main thread and add it to our thread list.
         let tid = ThreadId::from(process_id);
-        let main_thread = Thread::new(host, process_id, tid);
-        let native_pid = {
-            let main_thread = main_thread.borrow(host.root());
-
+        let main_thread = {
             debug!("starting process '{}'", plugin_name);
 
             Process::set_shared_time(host);
@@ -825,15 +822,17 @@ impl Process {
             )
             .unwrap();
 
-            main_thread.run(
+            Thread::spawn(
+                host,
+                process_id,
+                tid,
                 plugin_path,
                 argv,
                 envv,
                 working_dir,
                 strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
                 &shimlog_path,
-            );
-            main_thread.native_pid()
+            )
         };
 
         debug!("process '{}' started", plugin_name);
@@ -857,7 +856,7 @@ impl Process {
               \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
               \n** this task, and then typing \"fg\".\
               \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
-                native_pid = i32::from(native_pid)
+                native_pid = i32::from(main_thread.borrow(host.root()).native_pid())
             );
             eprintln!("{}", msg);
 
