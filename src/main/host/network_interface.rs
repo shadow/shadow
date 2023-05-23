@@ -7,7 +7,7 @@ use shadow_shim_helper_rs::HostId;
 
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow as c;
-use crate::network::packet::Packet;
+use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
 use crate::utility::{self, HostTreePointer};
 
@@ -143,15 +143,15 @@ impl PacketDevice for NetworkInterface {
         self.addr
     }
 
-    fn pop(&self) -> Option<Packet> {
+    fn pop(&self) -> Option<PacketRc> {
         let packet_ptr = unsafe { c::networkinterface_pop(self.c_ptr.ptr()) };
         match packet_ptr.is_null() {
             true => None,
-            false => Some(Packet::from_raw(packet_ptr)),
+            false => Some(PacketRc::from_raw(packet_ptr)),
         }
     }
 
-    fn push(&self, packet: Packet) {
+    fn push(&self, packet: PacketRc) {
         let packet_ptr = packet.into_inner();
         unsafe { c::networkinterface_push(self.c_ptr.ptr(), packet_ptr) };
         unsafe { c::packet_unref(packet_ptr) };

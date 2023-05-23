@@ -11,40 +11,40 @@ use crate::cshadow as c;
 use crate::host::host::Host;
 use crate::network::packet::PacketStatus;
 use crate::network::relay::token_bucket::TokenBucket;
-use crate::network::Packet;
+use crate::network::PacketRc;
 use crate::utility::ObjectCounter;
 
 mod token_bucket;
 
-/// A `Relay` forwards `Packet`s between `PacketDevice`s, optionally enforcing a
-/// bandwidth limit on the rate at which we forward `Packet`s between devices.
-/// The `Relay` is considered the "active" part of the `Packet` forwarding
-/// process: it initiates `Packet` forwarding and internally schedules tasks to
-/// ensure that `Packet`s are continually forwarded over time without exceeding
+/// A `Relay` forwards `PacketRc`s between `PacketDevice`s, optionally enforcing a
+/// bandwidth limit on the rate at which we forward `PacketRc`s between devices.
+/// The `Relay` is considered the "active" part of the `PacketRc` forwarding
+/// process: it initiates `PacketRc` forwarding and internally schedules tasks to
+/// ensure that `PacketRc`s are continually forwarded over time without exceeding
 /// the configured `RateLimit`.
 ///
 /// An `Ipv4Addr` associated with a source `PacketDevice` object is supplied
 /// when creating a `Relay`. This `Ipv4Addr` is only meaningful to the extent
 /// that the `Host` understands how to map this `Ipv4Addr` to the intended
 /// `PacketDevice` when `Host::get_packet_device(Ipv4Addr)` is called. This
-/// source `PacketDevice` supplies the `Relay` with a stream of `Packet`s
+/// source `PacketDevice` supplies the `Relay` with a stream of `PacketRc`s
 /// (through its implementation of `PacketDevice::pop()`) that the `Relay` will
 /// forward to a destination.
 ///
 /// `Relay::notify()` must be called whenever the source `PacketDevice` changes
 /// state from empty to non-empty, to trigger an idle `Relay` to start
-/// forwarding `Packet`s again.
+/// forwarding `PacketRc`s again.
 ///
-/// For each `Packet` that needs to be forwarded, the `Relay` uses the
-/// `Packet`'s destination `Ipv4Addr` to obtain the destination `PacketDevice`
+/// For each `PacketRc` that needs to be forwarded, the `Relay` uses the
+/// `PacketRc`'s destination `Ipv4Addr` to obtain the destination `PacketDevice`
 /// from the `Host` by calling its `Host::get_packet_device(Ipv4Addr)` function.
-/// The `Packet` is forwarded to the destination through the destination
+/// The `PacketRc` is forwarded to the destination through the destination
 /// `PacketDevice`'s implementation of `PacketDevice::push()`.
 ///
 /// This design allows the `Host` to use `Host::get_packet_device` to define its
 /// own routing table.
 ///
-/// Note that `Packet`s forwarded between identical source and destination
+/// Note that `PacketRc`s forwarded between identical source and destination
 /// `PacketDevices` are considered "local" to that device and exempt from any
 /// configured `RateLimit`.
 pub struct Relay {
@@ -58,7 +58,7 @@ struct RelayInternal {
     rate_limiter: Option<TokenBucket>,
     src_dev_address: Ipv4Addr,
     state: RelayState,
-    next_packet: Option<Packet>,
+    next_packet: Option<PacketRc>,
 }
 
 /// Track's the `Relay`s state, which typically moves from Idle to Pending to
@@ -82,7 +82,7 @@ pub enum RateLimit {
 }
 
 impl Relay {
-    /// Creates a new `Relay` that will forward `Packet`s following the given
+    /// Creates a new `Relay` that will forward `PacketRc`s following the given
     /// `RateLimit` from the `PacketDevice` returned by the `Host` when passing
     /// the given `src_dev_address` to `Host::get_packet_device()`. The `Relay`
     /// internally schedules tasks as needed to ensure packets continue to be
@@ -222,7 +222,7 @@ impl Relay {
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == packet.dst_address();
+            let is_local = src.get_address() == *packet.dst_address().ip();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -231,17 +231,17 @@ impl Relay {
                 // Rate limit applies only if we have a token bucket.
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
-                    if let Err(blocking_dur) = tb.comforming_remove(packet.size() as u64) {
+                    if let Err(blocking_dur) = tb.comforming_remove(packet.total_size() as u64) {
                         // Too few tokens, need to block.
                         log::trace!(
                             "Relay src={} dst={} exceeded rate limit, need {} more tokens \
                             for packet of size {}, blocking for {:?}",
                             src.get_address(),
-                            packet.dst_address(),
+                            packet.dst_address().ip(),
                             packet
-                                .size()
+                                .total_size()
                                 .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
-                            packet.size(),
+                            packet.total_size(),
                             blocking_dur
                         );
 
@@ -265,7 +265,7 @@ impl Relay {
                 src.push(packet);
             } else {
                 // The source and destination are different.
-                let dst = host.get_packet_device(packet.dst_address());
+                let dst = host.get_packet_device(*packet.dst_address().ip());
                 dst.push(packet);
             }
         }
