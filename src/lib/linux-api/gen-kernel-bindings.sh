@@ -59,6 +59,9 @@ bindgen_flags+=("--allowlist-type=sigset_t")
 bindgen_flags+=("--allowlist-type=siginfo_t")
 bindgen_flags+=("--allowlist-type=sigaction")
 
+# Clone flags
+bindgen_flags+=("--allowlist-var=CLONE_.*")
+
 # Output
 bindgen_flags+=("-o" "src/bindings.rs")
 

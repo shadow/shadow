@@ -1,3 +1,4 @@
+use linux_api::sched::LinuxCloneFlags;
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -6,46 +7,6 @@ use syscall_logger::log_syscall;
 use crate::host::syscall_types::SyscallError;
 
 use super::{SyscallContext, SyscallHandler};
-
-// We don't use nix::sched::CloneFlags here, because nix omits flags
-// that it doesn't support. e.g. https://docs.rs/nix/0.26.2/src/nix/sched.rs.html#57
-bitflags::bitflags! {
-    // While `clone` is documented as taking an i32 parameter for flags,
-    // in `clone3` its a u64. Promote to u64 throughout.
-    #[derive(Copy, Clone, Debug)]
-    pub struct CloneFlags: u64 {
-        // Not exported by the libc crate.
-        // Manually copied from sched.h.
-        const CLONE_CLEAR_SIGHAND = 0x100000000;
-        const CLONE_INTO_CGROUP = 0x200000000;
-        const CLONE_NEWTIME = 0x00000080;
-
-        const CLONE_VM = libc::CLONE_VM as u64;
-        const CLONE_FS = libc::CLONE_FS as u64;
-        const CLONE_FILES = libc::CLONE_FILES as u64;
-        const CLONE_SIGHAND = libc::CLONE_SIGHAND as u64;
-        const CLONE_PIDFD = libc::CLONE_PIDFD as u64;
-        const CLONE_PTRACE = libc::CLONE_PTRACE as u64;
-        const CLONE_VFORK = libc::CLONE_VFORK as u64;
-        const CLONE_PARENT = libc::CLONE_PARENT as u64;
-        const CLONE_THREAD = libc::CLONE_THREAD as u64;
-        const CLONE_NEWNS = libc::CLONE_NEWNS as u64;
-        const CLONE_SYSVSEM = libc::CLONE_SYSVSEM as u64;
-        const CLONE_SETTLS = libc::CLONE_SETTLS as u64;
-        const CLONE_PARENT_SETTID = libc::CLONE_PARENT_SETTID as u64;
-        const CLONE_CHILD_CLEARTID = libc::CLONE_CHILD_CLEARTID as u64;
-        const CLONE_DETACHED = libc::CLONE_DETACHED as u64;
-        const CLONE_UNTRACED = libc::CLONE_UNTRACED as u64;
-        const CLONE_CHILD_SETTID = libc::CLONE_CHILD_SETTID as u64;
-        const CLONE_NEWCGROUP = libc::CLONE_NEWCGROUP as u64;
-        const CLONE_NEWUTS = libc::CLONE_NEWUTS as u64;
-        const CLONE_NEWIPC = libc::CLONE_NEWIPC as u64;
-        const CLONE_NEWUSER = libc::CLONE_NEWUSER as u64;
-        const CLONE_NEWPID = libc::CLONE_NEWPID as u64;
-        const CLONE_NEWNET = libc::CLONE_NEWNET as u64;
-        const CLONE_IO = libc::CLONE_IO as u64;
-    }
-}
 
 impl SyscallHandler {
     fn clone_internal(
@@ -59,17 +20,17 @@ impl SyscallHandler {
         let raw_flags = flags_and_exit_signal as u32 & !0xff;
         let raw_exit_signal = flags_and_exit_signal as u32 & 0xff;
 
-        let Some(flags) = CloneFlags::from_bits(raw_flags as u64) else {
+        let Some(flags) = LinuxCloneFlags::from_bits(raw_flags as u64) else {
             warn!("Couldn't parse clone flags: {raw_flags:?}");
             return Err(Errno::EINVAL.into());
         };
 
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
-        let mut handled_flags = CloneFlags::empty();
+        let mut handled_flags = LinuxCloneFlags::empty();
 
         // The parameters that we'll pass to the native clone call.
-        let mut native_flags = CloneFlags::empty();
+        let mut native_flags = LinuxCloneFlags::empty();
 
         // We emulate the flags that would use these, so we always pass NULL to
         // the native call.
@@ -90,99 +51,99 @@ impl SyscallHandler {
         // the flags parameter to the native clone call.
         let native_raw_exit_signal: i8 = 0;
 
-        if flags.contains(CloneFlags::CLONE_THREAD) {
+        if flags.contains(LinuxCloneFlags::CLONE_THREAD) {
             // From clone(2):
             // > Since Linux 2.5.35, the flags mask must also include
             // > CLONE_SIGHAND if CLONE_THREAD is specified
-            if !flags.contains(CloneFlags::CLONE_SIGHAND) {
+            if !flags.contains(LinuxCloneFlags::CLONE_SIGHAND) {
                 debug!("Missing CLONE_SIGHAND");
                 return Err(Errno::EINVAL.into());
             }
-            if !flags.contains(CloneFlags::CLONE_FILES) {
+            if !flags.contains(LinuxCloneFlags::CLONE_FILES) {
                 // AFAICT from clone(2) this is legal, but we don't yet support
                 // it in Shadow, since the file descriptor table is kept at the
                 // Process level instead of the Thread level.
                 warn!("CLONE_THREAD without CLONE_FILES not supported by shadow");
                 return Err(Errno::ENOTSUP.into());
             }
-            if !flags.contains(CloneFlags::CLONE_SETTLS) {
+            if !flags.contains(LinuxCloneFlags::CLONE_SETTLS) {
                 // Legal in Linux, but the shim will be broken and behave unpredictably.
                 warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
                 return Err(Errno::ENOTSUP.into());
             }
             // The native clone call will:
             // - create a thread.
-            native_flags.insert(CloneFlags::CLONE_THREAD);
+            native_flags.insert(LinuxCloneFlags::CLONE_THREAD);
             // - share signal handlers (mandatory anyway)
-            native_flags.insert(CloneFlags::CLONE_SIGHAND);
+            native_flags.insert(LinuxCloneFlags::CLONE_SIGHAND);
             // - share file system info (mostly N/A for shadow, but conventional for threads)
-            native_flags.insert(CloneFlags::CLONE_FS);
+            native_flags.insert(LinuxCloneFlags::CLONE_FS);
             // - share file descriptors
-            native_flags.insert(CloneFlags::CLONE_FILES);
+            native_flags.insert(LinuxCloneFlags::CLONE_FILES);
             // - share semaphores (mostly N/A for shadow, but conventional for threads)
-            native_flags.insert(CloneFlags::CLONE_SYSVSEM);
+            native_flags.insert(LinuxCloneFlags::CLONE_SYSVSEM);
 
-            handled_flags.insert(CloneFlags::CLONE_THREAD);
+            handled_flags.insert(LinuxCloneFlags::CLONE_THREAD);
         } else {
             warn!("Failing clone: we don't support creating a new process (e.g. fork) yet");
             return Err(Errno::ENOTSUP.into());
         }
 
-        if flags.contains(CloneFlags::CLONE_SIGHAND) {
+        if flags.contains(LinuxCloneFlags::CLONE_SIGHAND) {
             // From clone(2):
             // > Since Linux 2.6.0, the flags mask must also include CLONE_VM if
             // > CLONE_SIGHAND is specified
-            if !flags.contains(CloneFlags::CLONE_VM) {
+            if !flags.contains(LinuxCloneFlags::CLONE_VM) {
                 debug!("Missing CLONE_VM");
                 return Err(Errno::EINVAL.into());
             }
             // Currently a no-op since threads always share signal handlers,
             // and we don't yet support non-CLONE_THREAD.
-            handled_flags.insert(CloneFlags::CLONE_SIGHAND);
+            handled_flags.insert(LinuxCloneFlags::CLONE_SIGHAND);
         }
 
-        if flags.contains(CloneFlags::CLONE_FS) {
+        if flags.contains(LinuxCloneFlags::CLONE_FS) {
             // Currently a no-op since we don't support the related
             // metadata and syscalls that this affects (e.g. chroot).
-            handled_flags.insert(CloneFlags::CLONE_FS);
+            handled_flags.insert(LinuxCloneFlags::CLONE_FS);
         }
 
-        if flags.contains(CloneFlags::CLONE_FILES) {
-            if !flags.contains(CloneFlags::CLONE_THREAD) {
+        if flags.contains(LinuxCloneFlags::CLONE_FILES) {
+            if !flags.contains(LinuxCloneFlags::CLONE_THREAD) {
                 // I *think* we'd just need to wrap the descriptor table
                 // in e.g. a RootedRc, and clone the Rc in this case.
                 warn!("Failing clone: we don't support fork with shared descriptor table");
                 return Err(Errno::ENOTSUP.into());
             }
-            handled_flags.insert(CloneFlags::CLONE_FILES);
+            handled_flags.insert(LinuxCloneFlags::CLONE_FILES);
         }
 
-        if flags.contains(CloneFlags::CLONE_SETTLS) {
-            native_flags.insert(CloneFlags::CLONE_SETTLS);
-            handled_flags.insert(CloneFlags::CLONE_SETTLS);
+        if flags.contains(LinuxCloneFlags::CLONE_SETTLS) {
+            native_flags.insert(LinuxCloneFlags::CLONE_SETTLS);
+            handled_flags.insert(LinuxCloneFlags::CLONE_SETTLS);
         }
 
-        if flags.contains(CloneFlags::CLONE_VM) {
-            native_flags.insert(CloneFlags::CLONE_VM);
-            handled_flags.insert(CloneFlags::CLONE_VM);
+        if flags.contains(LinuxCloneFlags::CLONE_VM) {
+            native_flags.insert(LinuxCloneFlags::CLONE_VM);
+            handled_flags.insert(LinuxCloneFlags::CLONE_VM);
         }
 
-        if flags.contains(CloneFlags::CLONE_SYSVSEM) {
+        if flags.contains(LinuxCloneFlags::CLONE_SYSVSEM) {
             // Currently a no-op since we don't support sysv semaphores.
-            handled_flags.insert(CloneFlags::CLONE_SYSVSEM);
+            handled_flags.insert(LinuxCloneFlags::CLONE_SYSVSEM);
         }
 
         // Handled after native clone
-        let do_parent_settid = flags.contains(CloneFlags::CLONE_PARENT_SETTID);
-        handled_flags.insert(CloneFlags::CLONE_PARENT_SETTID);
+        let do_parent_settid = flags.contains(LinuxCloneFlags::CLONE_PARENT_SETTID);
+        handled_flags.insert(LinuxCloneFlags::CLONE_PARENT_SETTID);
 
         // Handled after native clone
-        let do_child_settid = flags.contains(CloneFlags::CLONE_CHILD_SETTID);
-        handled_flags.insert(CloneFlags::CLONE_CHILD_SETTID);
+        let do_child_settid = flags.contains(LinuxCloneFlags::CLONE_CHILD_SETTID);
+        handled_flags.insert(LinuxCloneFlags::CLONE_CHILD_SETTID);
 
         // Handled after native clone
-        let do_child_cleartid = flags.contains(CloneFlags::CLONE_CHILD_CLEARTID);
-        handled_flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
+        let do_child_cleartid = flags.contains(LinuxCloneFlags::CLONE_CHILD_CLEARTID);
+        handled_flags.insert(LinuxCloneFlags::CLONE_CHILD_CLEARTID);
 
         let unhandled_flags = flags.difference(handled_flags);
         if !unhandled_flags.is_empty() {
@@ -211,7 +172,7 @@ impl SyscallHandler {
 
         if do_child_settid {
             // FIXME: handle the case where child doesn't share virtual memory.
-            assert!(flags.contains(CloneFlags::CLONE_VM));
+            assert!(flags.contains(LinuxCloneFlags::CLONE_VM));
             ctx.objs
                 .process
                 .memory_borrow_mut()
@@ -264,7 +225,7 @@ impl SyscallHandler {
         trace!("clone3 args: {args:?}");
         let Ok(flags) = i32::try_from(args.flags) else {
             debug!("Couldn't safely truncate flags to 32 bits: {} ({:?})",
-                   args.flags, CloneFlags::from_bits(args.flags));
+                   args.flags, LinuxCloneFlags::from_bits(args.flags));
             return Err(Errno::EINVAL.into());
         };
         if flags & 0xff != 0 {
@@ -276,7 +237,7 @@ impl SyscallHandler {
             debug!(
                 "clone3 got a flag it can't pass through to clone: {} ({:?})",
                 flags & 0xff,
-                CloneFlags::from_bits(args.flags & 0xff)
+                LinuxCloneFlags::from_bits(args.flags & 0xff)
             );
             return Err(Errno::EINVAL.into());
         }

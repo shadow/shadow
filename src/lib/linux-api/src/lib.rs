@@ -19,4 +19,5 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod sched;
 pub mod signal;
