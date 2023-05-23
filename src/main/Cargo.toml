@@ -22,6 +22,7 @@ clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.2"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
+linux-api = { path = "../lib/linux-api" }
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 logger = { path = "../lib/logger" }

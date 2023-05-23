@@ -10,8 +10,9 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         sys_includes: vec!["signal.h".into()],
         include_guard: Some("shim_helpers_h".into()),
         includes: vec![
-            "lib/shmem/shmem_allocator.h".into(),
+            "lib/linux-api/linux-api.h".into(),
             "lib/logger/logger.h".into(),
+            "lib/shmem/shmem_allocator.h".into(),
         ],
         // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
         // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,

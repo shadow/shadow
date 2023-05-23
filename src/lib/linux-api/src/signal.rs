@@ -76,7 +76,7 @@ fn test_from_signal() {
     assert_ne!(sigset, shd_kernel_sigset_t::EMPTY);
 }
 
-impl std::ops::BitOr for shd_kernel_sigset_t {
+impl core::ops::BitOr for shd_kernel_sigset_t {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -95,7 +95,7 @@ fn test_bitor() {
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitOrAssign for shd_kernel_sigset_t {
+impl core::ops::BitOrAssign for shd_kernel_sigset_t {
     fn bitor_assign(&mut self, rhs: Self) {
         self.val |= rhs.val
     }
@@ -110,7 +110,7 @@ fn test_bitorassign() {
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitAnd for shd_kernel_sigset_t {
+impl core::ops::BitAnd for shd_kernel_sigset_t {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -132,7 +132,7 @@ fn test_bitand() {
     assert!(!and.has(Signal::SIGALRM));
 }
 
-impl std::ops::BitAndAssign for shd_kernel_sigset_t {
+impl core::ops::BitAndAssign for shd_kernel_sigset_t {
     fn bitand_assign(&mut self, rhs: Self) {
         self.val &= rhs.val
     }
@@ -148,7 +148,7 @@ fn test_bitand_assign() {
     assert!(!set.has(Signal::SIGALRM));
 }
 
-impl std::ops::Not for shd_kernel_sigset_t {
+impl core::ops::Not for shd_kernel_sigset_t {
     type Output = Self;
 
     fn not(self) -> Self::Output {

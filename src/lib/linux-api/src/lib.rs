@@ -18,3 +18,5 @@
 #[allow(clippy::all)]
 #[allow(unused)]
 mod bindings;
+
+pub mod signal;

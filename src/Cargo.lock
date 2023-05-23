@@ -743,6 +743,14 @@ dependencies = [
 [[package]]
 name = "linux-api"
 version = "0.1.0"
+dependencies = [
+ "cbindgen",
+ "libc",
+ "log",
+ "nix",
+ "shadow-build-common",
+ "vasi",
+]
 
 [[package]]
 name = "linux-raw-sys"
@@ -1411,6 +1419,7 @@ dependencies = [
  "crossbeam",
  "gml-parser",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "lzma-rs",
@@ -1451,6 +1460,7 @@ dependencies = [
  "cbindgen",
  "cc",
  "libc",
+ "linux-api",
  "log",
  "logger",
  "nix",
