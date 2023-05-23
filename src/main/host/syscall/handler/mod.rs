@@ -52,6 +52,7 @@ impl SyscallHandler {
             libc::SYS_eventfd => SyscallHandlerFn::call(Self::eventfd, &mut ctx),
             libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
+            libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
@@ -94,6 +95,7 @@ impl SyscallHandler {
             libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
+            libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
             libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
             _ => {

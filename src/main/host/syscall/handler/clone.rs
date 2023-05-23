@@ -1,5 +1,6 @@
 use log::{debug, trace, warn};
 use nix::errno::Errno;
+use nix::sys::signal::Signal;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -50,20 +51,13 @@ bitflags::bitflags! {
 impl SyscallHandler {
     fn clone_internal(
         ctx: &mut SyscallContext,
-        flags_and_exit_signal: i32,
+        flags: CloneFlags,
+        exit_signal: Option<Signal>,
         child_stack: ForeignPtr<()>,
         ptid: ForeignPtr<libc::pid_t>,
         ctid: ForeignPtr<libc::pid_t>,
         newtls: u64,
     ) -> Result<libc::pid_t, SyscallError> {
-        let raw_flags = flags_and_exit_signal as u32 & !0xff;
-        let raw_exit_signal = flags_and_exit_signal as u32 & 0xff;
-
-        let Some(flags) = CloneFlags::from_bits(raw_flags as u64) else {
-            warn!("Couldn't parse clone flags: {raw_flags:?}");
-            return Err(Errno::EINVAL.into());
-        };
-
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
         let mut handled_flags = CloneFlags::empty();
@@ -82,7 +76,7 @@ impl SyscallHandler {
         // We use the managed-code provided newtls.
         let native_newtls = newtls;
 
-        if raw_exit_signal != 0 {
+        if exit_signal.is_some() {
             warn!("Exit signal is unimplemented");
             return Err(Errno::ENOTSUP.into());
         }
@@ -124,7 +118,7 @@ impl SyscallHandler {
 
             handled_flags.insert(CloneFlags::CLONE_THREAD);
         } else {
-            warn!("Failing clone: we don't support creating a new process (e.g. fork) yet");
+            warn!("Failing clone: we don't support creating a new process (e.g. fork, vfork) yet");
             return Err(Errno::ENOTSUP.into());
         }
 
@@ -243,7 +237,25 @@ impl SyscallHandler {
         ctid: ForeignPtr<libc::pid_t>,
         newtls: u64,
     ) -> Result<libc::pid_t, SyscallError> {
-        Self::clone_internal(ctx, flags_and_exit_signal, child_stack, ptid, ctid, newtls)
+        let raw_flags = flags_and_exit_signal as u32 & !0xff;
+        let raw_exit_signal = (flags_and_exit_signal as u32 & 0xff) as i32;
+
+        let Some(flags) = CloneFlags::from_bits(raw_flags as u64) else {
+            debug!("Couldn't parse clone flags: {raw_flags:x}");
+            return Err(Errno::EINVAL.into());
+        };
+
+        let exit_signal = if raw_exit_signal == 0 {
+            None
+        } else {
+            let Ok(exit_signal) = Signal::try_from(raw_exit_signal) else {
+                debug!("Bad exit signal: {raw_exit_signal:?}");
+                return Err(Errno::EINVAL.into());
+            };
+            Some(exit_signal)
+        };
+
+        Self::clone_internal(ctx, flags, exit_signal, child_stack, ptid, ctid, newtls)
     }
 
     #[log_syscall(
@@ -262,42 +274,57 @@ impl SyscallHandler {
         }
         let args = ctx.objs.process.memory_borrow().read(args)?;
         trace!("clone3 args: {args:?}");
-        let Ok(flags) = i32::try_from(args.flags) else {
-            debug!("Couldn't safely truncate flags to 32 bits: {} ({:?})",
-                   args.flags, CloneFlags::from_bits(args.flags));
+        let Some(flags) = CloneFlags::from_bits(args.flags) else {
+            debug!("Couldn't parse clone flags: {:x}", args.flags);
             return Err(Errno::EINVAL.into());
         };
-        if flags & 0xff != 0 {
-            // We can't multiplex through `clone` in this case, since these bits
-            // conflict with the exit signal. Currently this won't happen in practice
-            // because there are no legal flags that use these bits. It's possible
-            // that clone3-flags could be added here, but more likely they'll use
-            // the higher bits first. (clone3 uses 64 bits vs clone's 32).
-            debug!(
-                "clone3 got a flag it can't pass through to clone: {} ({:?})",
-                flags & 0xff,
-                CloneFlags::from_bits(args.flags & 0xff)
-            );
-            return Err(Errno::EINVAL.into());
-        }
-        let Ok(exit_signal) = i32::try_from(args.exit_signal) else {
-            // Couldn't truncate to the 32 bits allowed by `clone`, but
-            // there also aren't any valid signal numbers that need that many bits.
-            debug!("Bad signal number: {}", args.exit_signal);
-            return Err(Errno::EINVAL.into());
+        let exit_signal = if args.exit_signal == 0 {
+            None
+        } else {
+            let Ok(exit_signal) = Signal::try_from(args.exit_signal as i32) else {
+                debug!("Bad signal number: {}", args.exit_signal);
+                return Err(Errno::EINVAL.into());
+            };
+            Some(exit_signal)
         };
-        if exit_signal & !0xff != 0 {
-            // Couldn't fit into the 8 bits allowed for the signal number by `clone`,
-            // but there also aren't any valid signal numbers that need that many bits.
-            return Err(Errno::EINVAL.into());
-        }
         Self::clone_internal(
             ctx,
-            flags | exit_signal,
+            flags,
+            exit_signal,
             ForeignPtr::<()>::from(args.stack + args.stack_size),
             ForeignPtr::<libc::pid_t>::from_raw_ptr(args.parent_tid as *mut libc::pid_t),
             ForeignPtr::<libc::pid_t>::from_raw_ptr(args.child_tid as *mut libc::pid_t),
             args.tls,
+        )
+    }
+
+    #[log_syscall(/* rv */libc::pid_t)]
+    pub fn fork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+        // This should be the correct call to `clone_internal`, but `clone_internal`
+        // will currently return an error.
+        Self::clone_internal(
+            ctx,
+            CloneFlags::empty(),
+            Some(Signal::SIGCHLD),
+            ForeignPtr::<()>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            0,
+        )
+    }
+
+    #[log_syscall(/* rv */libc::pid_t)]
+    pub fn vfork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+        // This should be the correct call to `clone_internal`, but `clone_internal`
+        // will currently return an error.
+        Self::clone_internal(
+            ctx,
+            CloneFlags::CLONE_VFORK | CloneFlags::CLONE_VM,
+            Some(Signal::SIGCHLD),
+            ForeignPtr::<()>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<libc::pid_t>::null(),
+            0,
         )
     }
 
