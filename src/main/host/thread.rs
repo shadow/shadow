@@ -337,7 +337,7 @@ impl Thread {
         ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
     ) -> Result<ThreadId, Errno> {
-        let child_tid = ThreadId::from(ctx.host.get_new_process_id());
+        let child_tid = ctx.host.get_new_thread_id();
         let child_mthread = self.mthread.borrow().handle_clone_syscall(
             &ctx.with_thread(self),
             flags,

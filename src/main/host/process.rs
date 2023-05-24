@@ -89,6 +89,12 @@ impl From<ProcessId> for libc::pid_t {
     }
 }
 
+impl From<ThreadId> for ProcessId {
+    fn from(value: ThreadId) -> Self {
+        ProcessId::try_from(libc::pid_t::from(value)).unwrap()
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ExitStatus {
     Normal(i32),

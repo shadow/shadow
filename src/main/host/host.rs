@@ -148,7 +148,7 @@ pub struct Host {
     data_dir_path_cstring: CString,
 
     // virtual process and event id counter
-    process_id_counter: Cell<u32>,
+    thread_id_counter: Cell<libc::pid_t>,
     event_id_counter: Cell<u64>,
     packet_id_counter: Cell<u64>,
 
@@ -240,7 +240,7 @@ impl Host {
             UnsafeCell::new(shadow_shmem::allocator::Allocator::global().alloc(host_shmem));
 
         // Process IDs start at 1000
-        let process_id_counter = Cell::new(1000);
+        let thread_id_counter = Cell::new(1000);
         let event_id_counter = Cell::new(0);
         let packet_id_counter = Cell::new(0);
         let determinism_sequence_counter = Cell::new(0);
@@ -313,7 +313,7 @@ impl Host {
             net_ns,
             data_dir_path,
             data_dir_path_cstring,
-            process_id_counter,
+            thread_id_counter,
             event_id_counter,
             packet_id_counter,
             packet_priority_counter,
@@ -387,7 +387,7 @@ impl Host {
 
         // Schedule spawning the process.
         let task = TaskRef::new(move |host| {
-            let process_id = host.get_new_process_id();
+            let process_id = ProcessId::from(host.get_new_thread_id());
 
             // We can't move out of these captured variables, since TaskRef takes
             // a Fn, not a FnOnce.
@@ -580,9 +580,9 @@ impl Host {
         res
     }
 
-    pub fn get_new_process_id(&self) -> ProcessId {
-        let res = self.process_id_counter.get();
-        self.process_id_counter.set(res + 1);
+    pub fn get_new_thread_id(&self) -> ThreadId {
+        let res = self.thread_id_counter.get();
+        self.thread_id_counter.set(res + 1);
         res.try_into().unwrap()
     }
 
@@ -927,12 +927,6 @@ mod export {
     pub unsafe extern "C" fn host_nextEventTime(hostrc: *const Host) -> CEmulatedTime {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         EmulatedTime::to_c_emutime(hostrc.next_event_time())
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_getNewProcessID(hostrc: *const Host) -> u32 {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.get_new_process_id().into()
     }
 
     #[no_mangle]
