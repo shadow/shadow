@@ -8,6 +8,7 @@ use crate::host::descriptor::Descriptor;
 pub const FD_MAX: u32 = i32::MAX as u32;
 
 /// Map of file handles to file descriptors. Typically owned by a Process.
+#[derive(Clone)]
 pub struct DescriptorTable {
     descriptors: HashMap<DescriptorHandle, Descriptor>,
 
