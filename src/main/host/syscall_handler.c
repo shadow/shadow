@@ -239,7 +239,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
+                host, process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);     \
         }                                                                                          \
         break
 #define NATIVE(s)                                                                                  \
@@ -248,7 +248,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
         scr = syscallreturn_makeNative();                                                          \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
+                host, process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);     \
         }                                                                                          \
         break
 #define UNSUPPORTED(s)                                                                             \
@@ -258,7 +258,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
         scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
         if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
             scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
+                host, process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);     \
         }                                                                                          \
         break
 #define HANDLE_RUST(s)                                                                             \
@@ -567,8 +567,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
                 if (straceLoggingMode != STRACE_FMT_MODE_OFF) {
                     char arg_str[20] = {0};
                     snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
-                    scr = log_syscall(process, straceLoggingMode, sys->threadId, "syscall", arg_str,
-                                      &args->args, scr);
+                    scr = log_syscall(host, process, straceLoggingMode, sys->threadId, "syscall",
+                                      arg_str, &args->args, scr);
                 }
 
                 break;

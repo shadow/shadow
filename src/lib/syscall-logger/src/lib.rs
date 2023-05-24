@@ -145,7 +145,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
         pub fn #syscall_name(
             #syscall_args_and_types
         ) #syscall_ret_type {
-            let Some(strace_fmt_options) = #context_arg_name.objs.process.strace_logging_options() else {
+            let Some(strace_fmt_options) = #context_arg_name.objs.process.strace_logging_options(#context_arg_name.objs.host.root()) else {
                 // exit early if strace logging is not enabled
                 return Self::#syscall_name_original(#(#syscall_args),*);
             };
@@ -186,7 +186,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, #context_arg_name.args.args, strace_fmt_options, &*memory);
 
             if let Some(ref syscall_rv) = syscall_rv {
-                #context_arg_name.objs.process.with_strace_file(|file| {
+                #context_arg_name.objs.process.with_strace_file(#context_arg_name.objs.host.root(), |file| {
                     write_syscall(
                         file,
                         &Worker::current_time().unwrap(),

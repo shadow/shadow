@@ -191,7 +191,8 @@ pub struct RunnableProcess {
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
-    strace_logging: Option<StraceLogging>,
+    // strace logging file, if any. Shared with forked Processes.
+    strace_logging: Option<RootedRc<RootedRefCell<StraceLogging>>>,
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
@@ -307,16 +308,21 @@ impl RunnableProcess {
         self.memory_manager.borrow_mut()
     }
 
-    pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.strace_logging.as_ref().map(|x| x.options)
+    pub fn strace_logging_options(&self, root: &Root) -> Option<FmtOptions> {
+        self.strace_logging.as_ref().map(|x| x.borrow(root).options)
     }
 
     /// If strace logging is disabled, this function will do nothing and return `None`.
-    pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
+    pub fn with_strace_file<T>(
+        &self,
+        root: &Root,
+        f: impl FnOnce(&mut std::fs::File) -> T,
+    ) -> Option<T> {
         let Some(ref strace_logging) = self.strace_logging else {
             return None;
         };
 
+        let strace_logging = strace_logging.borrow(root);
         let mut file = strace_logging.file.borrow_mut();
         Some(f(&mut file))
     }
@@ -729,7 +735,9 @@ impl Process {
                         memory_manager: Box::new(RefCell::new(memory_manager)),
                         desc_table,
                         itimer_real,
-                        strace_logging,
+                        strace_logging: strace_logging.map(|s| {
+                            RootedRc::new(host.root(), RootedRefCell::new(host.root(), s))
+                        }),
                         dumpable: Cell::new(cshadow::SUID_DUMP_USER),
                         native_pid,
                         unsafe_borrow_mut: RefCell::new(None),
@@ -1067,13 +1075,17 @@ impl Process {
     }
 
     /// Deprecated wrapper for `RunnableProcess::strace_logging_options`
-    pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.runnable().unwrap().strace_logging_options()
+    pub fn strace_logging_options(&self, root: &Root) -> Option<FmtOptions> {
+        self.runnable().unwrap().strace_logging_options(root)
     }
 
     /// Deprecated wrapper for `RunnableProcess::with_strace_file`
-    pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        self.runnable().unwrap().with_strace_file(f)
+    pub fn with_strace_file<T>(
+        &self,
+        root: &Root,
+        f: impl FnOnce(&mut std::fs::File) -> T,
+    ) -> Option<T> {
+        self.runnable().unwrap().with_strace_file(root, f)
     }
 
     /// Deprecated wrapper for `RunnableProcess::descriptor_table_borrow`
@@ -1179,9 +1191,14 @@ impl Process {
         let mut opt_state = self.state.borrow_mut();
 
         let state = opt_state.take().unwrap();
-        let ProcessState::Runnable(runnable) = state else {
+        let ProcessState::Runnable(mut runnable) = state else {
             unreachable!("Tried to handle process exit of non-running process");
         };
+
+        runnable
+            .strace_logging
+            .take()
+            .map(|s| RootedRc::safely_drop(s, host.root()));
 
         #[cfg(feature = "perf_timers")]
         debug!(
@@ -1932,16 +1949,17 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_straceLoggingMode(proc: *const Process) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.strace_logging_options().into()
+        Worker::with_active_host(|host| proc.strace_logging_options(host.root()).into()).unwrap()
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn process_straceFd(proc: *const Process) -> RawFd {
         let proc = unsafe { proc.as_ref().unwrap() };
-        match &proc.runnable().unwrap().strace_logging {
-            Some(x) => x.file.borrow().as_raw_fd(),
+        Worker::with_active_host(|host| match &proc.runnable().unwrap().strace_logging {
+            Some(x) => x.borrow(host.root()).file.borrow().as_raw_fd(),
             None => -1,
-        }
+        })
+        .unwrap()
     }
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations
