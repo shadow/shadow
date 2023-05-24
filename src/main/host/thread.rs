@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
+use std::ops::Deref;
 use std::os::fd::RawFd;
 
 use nix::errno::Errno;
@@ -53,6 +54,11 @@ pub struct Thread {
 impl IsSend for Thread {}
 
 impl Thread {
+    /// Minimal wrapper around the native managed thread.
+    pub fn mthread(&self) -> impl Deref<Target = ManagedThread> + '_ {
+        self.mthread.borrow()
+    }
+
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall_raw(
         &self,
@@ -328,46 +334,30 @@ impl Thread {
         RootedRc::new(root, RootedRefCell::new(root, thread))
     }
 
-    pub fn handle_clone_syscall(
-        &self,
-        ctx: &ProcessContext,
-        flags: libc::c_ulong,
-        child_stack: ForeignPtr<()>,
-        ptid: ForeignPtr<libc::pid_t>,
-        ctid: ForeignPtr<libc::pid_t>,
-        newtls: libc::c_ulong,
-    ) -> Result<ThreadId, Errno> {
-        let child_tid = ctx.host.get_new_thread_id();
-        let child_mthread = self.mthread.borrow().handle_clone_syscall(
-            &ctx.with_thread(self),
-            flags,
-            child_stack,
-            ptid,
-            ctid,
-            newtls,
-        )?;
+    /// Create a new `Thread`, wrapping `mthread`. Intended for use by
+    /// syscall handlers such as `clone`.
+    pub fn wrap_mthread(
+        host: &Host,
+        mthread: ManagedThread,
+        pid: ProcessId,
+        tid: ThreadId,
+    ) -> Result<Thread, Errno> {
         let child = Self {
-            mthread: RefCell::new(child_mthread),
+            mthread: RefCell::new(mthread),
             syscallhandler: unsafe {
-                SendPointer::new(c::syscallhandler_new(
-                    ctx.host.id(),
-                    ctx.process.id().into(),
-                    child_tid.into(),
-                ))
+                SendPointer::new(c::syscallhandler_new(host.id(), pid.into(), tid.into()))
             },
             cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
-            id: child_tid,
-            host_id: ctx.host.id(),
-            process_id: ctx.process.id(),
+            id: tid,
+            host_id: host.id(),
+            process_id: pid,
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
-                &ctx.host.shim_shmem_lock_borrow().unwrap(),
-                child_tid.into(),
+                &host.shim_shmem_lock_borrow().unwrap(),
+                tid.into(),
             )),
         };
-        let childrc = RootedRc::new(ctx.host.root(), RootedRefCell::new(ctx.host.root(), child));
-        ctx.process.add_thread(ctx.host, childrc);
-        Ok(child_tid)
+        Ok(child)
     }
 
     /// Shared memory for this thread.
@@ -548,37 +538,6 @@ mod export {
     pub unsafe extern "C" fn thread_getID(thread: *const Thread) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.id().into()
-    }
-
-    /// Create a new child thread as for `clone(2)`. Returns the new thread id
-    /// on success, or a negative errno on failure.
-    #[no_mangle]
-    pub unsafe extern "C" fn thread_clone(
-        thread: *const Thread,
-        flags: libc::c_ulong,
-        child_stack: UntypedForeignPtr,
-        ptid: UntypedForeignPtr,
-        ctid: UntypedForeignPtr,
-        newtls: libc::c_ulong,
-    ) -> libc::pid_t {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            Worker::with_active_process(|process| {
-                thread
-                    .handle_clone_syscall(
-                        &ProcessContext::new(host, process),
-                        flags,
-                        child_stack,
-                        ptid.cast::<libc::pid_t>(),
-                        ctid.cast::<libc::pid_t>(),
-                        newtls,
-                    )
-                    .map(libc::pid_t::from)
-                    .unwrap_or_else(|e| -(e as i32))
-            })
-            .unwrap()
-        })
-        .unwrap()
     }
 
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread

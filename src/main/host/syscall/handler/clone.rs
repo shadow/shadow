@@ -1,10 +1,14 @@
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::sys::signal::Signal;
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
+use crate::host::process::ProcessId;
 use crate::host::syscall_types::SyscallError;
+use crate::host::thread::Thread;
 
 use super::{SyscallContext, SyscallHandler};
 
@@ -184,17 +188,34 @@ impl SyscallHandler {
             return Err(Errno::ENOTSUP.into());
         }
 
-        let child_tid = {
-            let (pctx, thread) = ctx.objs.split_thread();
-            thread.handle_clone_syscall(
-                &pctx,
-                native_flags.bits() | (native_raw_exit_signal as u64),
-                native_child_stack,
-                native_ptid,
-                native_ctid,
-                native_newtls,
-            )?
+        let child_mthread = ctx.objs.thread.mthread().native_clone(
+            ctx.objs,
+            native_flags.bits() | (native_raw_exit_signal as u64),
+            native_child_stack,
+            native_ptid,
+            native_ctid,
+            native_newtls,
+        )?;
+
+        let child_tid = ctx.objs.host.get_new_thread_id();
+        let child_pid = if flags.contains(CloneFlags::CLONE_THREAD) {
+            ctx.objs.process.id()
+        } else {
+            ProcessId::from(child_tid)
         };
+
+        let child_thread =
+            Thread::wrap_mthread(ctx.objs.host, child_mthread, child_pid, child_tid)?;
+
+        if flags.contains(CloneFlags::CLONE_THREAD) {
+            let childrc = RootedRc::new(
+                ctx.objs.host.root(),
+                RootedRefCell::new(ctx.objs.host.root(), child_thread),
+            );
+            ctx.objs.process.add_thread(ctx.objs.host, childrc);
+        } else {
+            unreachable!("Should have already bailed above");
+        }
 
         if do_parent_settid {
             ctx.objs
@@ -220,6 +241,7 @@ impl SyscallHandler {
 
         Ok(libc::pid_t::from(child_tid))
     }
+
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
     #[log_syscall(
