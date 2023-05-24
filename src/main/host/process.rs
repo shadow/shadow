@@ -1195,10 +1195,9 @@ impl Process {
             unreachable!("Tried to handle process exit of non-running process");
         };
 
-        runnable
-            .strace_logging
-            .take()
-            .map(|s| RootedRc::safely_drop(s, host.root()));
+        if let Some(s) = runnable.strace_logging.take() {
+            RootedRc::safely_drop(s, host.root())
+        }
 
         #[cfg(feature = "perf_timers")]
         debug!(
