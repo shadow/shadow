@@ -418,7 +418,8 @@ gsize _legacysocket_getOutputBufferSpaceIncludingTCP(LegacySocket* socket) {
     return space;
 }
 
-gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, Packet* packet) {
+gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, CompatSocket compatSocket,
+                                        const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
 
     /* check if the packet fits */
@@ -453,8 +454,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, 
 
     /* tell the interface to include us when sending out to the network */
     in_addr_t ip = packet_getSourceIP(packet);
-    CompatSocket compat_socket = compatsocket_fromLegacySocket(socket);
-    host_socketWantsToSend(host, &compat_socket, ip);
+    socket_wants_to_send_with_global_cb_queue(host, compatSocket, ip);
 
     return TRUE;
 }

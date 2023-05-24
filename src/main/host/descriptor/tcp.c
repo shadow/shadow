@@ -1327,7 +1327,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
         /* socket will queue it ASAP */
-        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), host, packet);
+        CompatSocket compatSocket = compatsocket_fromLegacySocket(&(tcp->super));
+        compatSocket = compatsocket_refAs(&compatSocket);
+        gboolean success =
+            legacysocket_addToOutputBuffer(&(tcp->super), compatSocket, host, packet);
+
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
 
