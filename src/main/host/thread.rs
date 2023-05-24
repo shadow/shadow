@@ -1,12 +1,8 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::{CStr, CString};
 use std::ops::Deref;
-use std::os::fd::RawFd;
 
 use nix::errno::Errno;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
-use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
@@ -295,43 +291,6 @@ impl Thread {
     ) -> nix::Result<()> {
         self.native_munmap(ctx, ptr, size)?;
         Ok(())
-    }
-
-    pub fn spawn(
-        host: &Host,
-        process_id: ProcessId,
-        thread_id: ThreadId,
-        plugin_path: &CStr,
-        argv: Vec<CString>,
-        envv: Vec<CString>,
-        working_dir: &CStr,
-        strace_fd: Option<RawFd>,
-        log_path: &CStr,
-    ) -> RootedRc<RootedRefCell<Self>> {
-        let mthread =
-            ManagedThread::spawn(plugin_path, argv, envv, working_dir, strace_fd, log_path);
-
-        let thread = Self {
-            mthread: RefCell::new(mthread),
-            syscallhandler: unsafe {
-                SendPointer::new(c::syscallhandler_new(
-                    host.id(),
-                    process_id.into(),
-                    thread_id.into(),
-                ))
-            },
-            cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
-            id: thread_id,
-            host_id: host.id(),
-            process_id,
-            tid_address: Cell::new(ForeignPtr::null()),
-            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
-                &host.shim_shmem_lock_borrow().unwrap(),
-                thread_id.into(),
-            )),
-        };
-        let root = host.root();
-        RootedRc::new(root, RootedRefCell::new(root, thread))
     }
 
     /// Create a new `Thread`, wrapping `mthread`. Intended for use by

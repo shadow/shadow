@@ -100,7 +100,7 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        debug!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
+        debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
             log_path,

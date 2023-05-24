@@ -387,8 +387,6 @@ impl Host {
 
         // Schedule spawning the process.
         let task = TaskRef::new(move |host| {
-            let process_id = ProcessId::from(host.get_new_thread_id());
-
             // We can't move out of these captured variables, since TaskRef takes
             // a Fn, not a FnOnce.
             // TODO: Add support for FnOnce?
@@ -398,7 +396,6 @@ impl Host {
 
             let process = Process::spawn(
                 host,
-                process_id,
                 plugin_name,
                 &plugin_path,
                 envv,
@@ -407,7 +404,10 @@ impl Host {
                 host.params.strace_logging_options,
                 expected_final_state,
             );
-            let thread_id = process.borrow(host.root()).thread_group_leader_id();
+            let (process_id, thread_id) = {
+                let process = process.borrow(host.root());
+                (process.id(), process.thread_group_leader_id())
+            };
             host.processes.borrow_mut().insert(process_id, process);
 
             if let Some(shutdown_time) = shutdown_time {
