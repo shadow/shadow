@@ -141,7 +141,7 @@ gssize payload_getData(Payload* payload, const Thread* thread, gsize offset,
             thread_getProcess(thread), destBuffer, payload->data + offset, copyLength);
         if (err) {
             _payload_unlock(payload);
-            return -err;
+            return err;
         }
     }
 
@@ -170,7 +170,7 @@ gssize payload_getDataWithMemoryManager(Payload* payload, gsize offset,
             memorymanager_writePtr(mem, destBuffer, payload->data + offset, copyLength);
         if (err) {
             _payload_unlock(payload);
-            return -err;
+            return err;
         }
     }
 
