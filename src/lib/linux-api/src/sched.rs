@@ -3,7 +3,7 @@ use crate::bindings;
 bitflags::bitflags! {
     // While `clone` is documented as taking an i32 parameter for flags,
     // in `clone3` its a u64. Promote to u64 throughout.
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct LinuxCloneFlags: u64 {
         const CLONE_CLEAR_SIGHAND = bindings::CLONE_CLEAR_SIGHAND;
         const CLONE_INTO_CGROUP = bindings::CLONE_INTO_CGROUP;
