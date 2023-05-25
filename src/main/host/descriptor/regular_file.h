@@ -11,10 +11,9 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/syscall.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/uio.h>
 #include <unistd.h>
+
+#include <linux/time.h>
 
 #include "main/core/support/definitions.h"
 #include "main/host/syscall/kernel_types.h"

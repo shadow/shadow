@@ -7,9 +7,10 @@
 
 #include <errno.h>
 #include <inttypes.h>
-#include <linux/futex.h>
 #include <stdbool.h>
-#include <sys/time.h>
+
+#include <linux/futex.h>
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"

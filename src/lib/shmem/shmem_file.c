@@ -7,16 +7,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <linux/time.h>
+
+#include "lib/linux-api/linux-api.h"
+#include "lib/linux-api/util.h"
 #include "lib/logger/logger.h"
 #include "lib/shmem/shmem_util.h"
 
@@ -30,7 +31,7 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
 
     struct timespec ts = {0};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    linux_clock_gettime(CLOCK_MONOTONIC, &ts);
 
     pid_t pid = getpid();
 

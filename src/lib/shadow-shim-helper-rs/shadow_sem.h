@@ -9,7 +9,8 @@
 #include <assert.h>
 #include <stdalign.h>
 #include <stdint.h>
-#include <sys/time.h>
+
+#include <linux/time.h>
 
 #ifdef __cplusplus
 extern "C" {

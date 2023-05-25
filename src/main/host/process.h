@@ -7,8 +7,10 @@
 #ifndef SHD_PROCESS_H_
 #define SHD_PROCESS_H_
 
-#include <signal.h>
+#include <stdint.h>
 #include <stdbool.h>
+
+#include <linux/signal.h>
 
 // A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned
 // pointers must be freed using `process_parseArgStrFree()`.

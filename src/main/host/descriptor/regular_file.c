@@ -16,12 +16,13 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/xattr.h>
 #include <syscall.h>
 #include <unistd.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"

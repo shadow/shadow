@@ -795,6 +795,7 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "cc",
+ "linux-api",
  "shadow-build-common",
 ]
 
@@ -1541,6 +1542,7 @@ dependencies = [
  "bindgen",
  "cc",
  "libc",
+ "linux-api",
  "logger",
  "nix",
  "once_cell",

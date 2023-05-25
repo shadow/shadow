@@ -7,22 +7,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     let mut config = cbindgen::Config {
-        sys_includes: vec!["signal.h".into()],
         include_guard: Some("shim_helpers_h".into()),
-        includes: vec![
-            "lib/linux-api/linux-api.h".into(),
-            "lib/logger/logger.h".into(),
-            "lib/shmem/shmem_allocator.h".into(),
-        ],
-        // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
-        // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,
-        // alignment, non-zst fields, and field order as `ForeignPtr<()>`.
-        after_includes: Some(
-            "typedef struct CompatUntypedForeignPtr {\n    \
-                 uintptr_t val;\n\
-             } UntypedForeignPtr;\n"
-                .into(),
-        ),
         export: cbindgen::ExportConfig {
             include: vec![
                 "shd_kernel_sigaction".into(),
@@ -40,6 +25,12 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         ..base_config
     };
 
+    config.add_includes_as_raw(&[
+        "lib/linux-api/linux-api.h",
+        "lib/logger/logger.h",
+        "lib/shmem/shmem_allocator.h",
+    ]);
+
     config.add_opaque_types(&[
         "ShimShmemManager",
         "ShimShmemHost",
@@ -48,6 +39,15 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         "ShimShmemThread",
         "IPCData",
     ]);
+
+    // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
+    // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,
+    // alignment, non-zst fields, and field order as `ForeignPtr<()>`.
+    config.add_after_includes(concat!(
+        "typedef struct CompatUntypedForeignPtr {\n",
+        "    uintptr_t val;\n",
+        "} UntypedForeignPtr;\n"
+    ));
 
     cbindgen::Builder::new()
         .with_crate(crate_dir)

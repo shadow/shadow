@@ -7,7 +7,6 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"

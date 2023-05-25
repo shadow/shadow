@@ -5,10 +5,9 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <sys/param.h>
 #include <unistd.h>
 
-#define SHD_SHMEM_FILE_NAME_NBYTES (NAME_MAX < 256 ? NAME_MAX : 256)
+#define SHD_SHMEM_FILE_NAME_NBYTES 256 
 
 typedef struct _ShMemFile {
     void* p;

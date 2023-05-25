@@ -8,11 +8,11 @@
 #include <glib.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <sys/time.h>
 #include <sys/types.h>
-#include <time.h>
 #include <unistd.h>
 #include <inttypes.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"

@@ -10,8 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/syscall.h>
-#include <sys/time.h>
-#include <time.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"

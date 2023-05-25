@@ -7,16 +7,16 @@
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <time.h>
 #include <ucontext.h>
 #include <unistd.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"

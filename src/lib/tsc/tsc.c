@@ -6,9 +6,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
-#include <x86intrin.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 

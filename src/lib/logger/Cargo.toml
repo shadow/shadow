@@ -6,11 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+linux-api = { path = "../linux-api" }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
 bindgen = { version = "0.65.1" }
 shadow-build-common = { path = "../shadow-build-common" }
+linux-api = { path = "../linux-api" }
 
 [lib]
 path = "src/lib.rs"

@@ -7,7 +7,8 @@
 #define SRC_MAIN_HOST_SHD_SYSCALL_HANDLER_H_
 
 #include <glib.h>
-#include <sys/time.h>
+
+#include <linux/time.h>
 
 typedef struct _SysCallHandler SysCallHandler;
 

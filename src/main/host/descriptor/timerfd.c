@@ -7,9 +7,9 @@
 
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
 #include <sys/timerfd.h>
-#include <time.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"

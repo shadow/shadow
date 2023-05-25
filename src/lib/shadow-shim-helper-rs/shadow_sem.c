@@ -5,13 +5,14 @@
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
-#include <linux/futex.h>
-#include <semaphore.h>
 #include <stdalign.h>
 #include <stdbool.h>
 #include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
+#include <linux/futex.h>
+#include <linux/time.h>
 
 static _Atomic(uint32_t)* _shadow_sem_futex_addr(shadow_sem_t* s) {
     static_assert(sizeof(s->_value) == 4, "futex must be exactly 4 bytes large");

@@ -6,11 +6,11 @@
 #include "main/host/syscall/protected.h"
 
 #include <errno.h>
-#include <sys/time.h>
 #include <sys/timerfd.h>
 #include <sys/types.h>
-#include <time.h>
 #include <unistd.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"

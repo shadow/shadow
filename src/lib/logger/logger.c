@@ -1,39 +1,33 @@
 #include "lib/logger/logger.h"
 
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/param.h>
-#include <sys/time.h>
-#include <time.h>
 #include <unistd.h>
+
+#include <linux/time.h>
+
+#include "lib/linux-api/linux-api.h"
+#include "lib/linux-api/util.h"
 
 #define USEC_PER_SEC 1000000ULL
 
-// Process start time, initialized explicitly or on first use.
-static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
+// Process start time, initialized by logger_set_global_start_time_micros.
 static bool _start_time_initd = false;
 static int64_t _monotonic_start_time_micros;
-static void _init_start_time() {
-    if (_start_time_initd) {
-        // Was already initialized explicitly using
-        // logger_set_global_start_time_micros.
-        return;
-    }
-    _start_time_initd = true;
-    _monotonic_start_time_micros = logger_now_micros();
-}
+
+void logger_abort() {
+    linux_kill(0, SIGABRT);
+    asm("ud2");
+};
 
 int64_t logger_now_micros() {
     struct timespec res;
-    clock_gettime(CLOCK_REALTIME, &res);
+    linux_clock_gettime(CLOCK_REALTIME, &res);
     return (res.tv_sec * USEC_PER_SEC) + (res.tv_nsec / 1000);
 }
 
 int64_t logger_get_global_start_time_micros() {
-    pthread_once(&_start_time_once, _init_start_time);
     int64_t t = _monotonic_start_time_micros;
     return t;
 }
@@ -122,7 +116,8 @@ static void _stderrlogger_log(Logger* logger, LogLevel level, const char* fileNa
     buf[offset++] = '\n';
 
     if (write(STDERR_FILENO, buf, offset) < 0) {
-        abort();
+        // "panic" would recurse here.
+        asm("ud2");
     }
 
     in_logger = false;

@@ -7,7 +7,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <time.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"

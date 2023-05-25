@@ -6,9 +6,10 @@
 #include "main/host/syscall/process.h"
 
 #include <errno.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <sys/syscall.h>
+
+#include <linux/signal.h>
 
 #include "lib/linux-api/linux-api.h"
 #include "lib/logger/logger.h"

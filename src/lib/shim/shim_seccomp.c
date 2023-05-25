@@ -6,15 +6,16 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <linux/filter.h>
-#include <linux/seccomp.h>
-#include <signal.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/ucontext.h>
 #include <unistd.h>
+
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <linux/signal.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim_logger.h"

@@ -7,9 +7,13 @@
 #ifndef SHD_SOCKET_H_
 #define SHD_SOCKET_H_
 
-#include <glib.h>
-#include <netinet/in.h>
-#include <sys/un.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+
+#include <linux/in.h>
+#include <linux/socket.h>
+#include <linux/un.h>
 
 typedef struct _LegacySocket LegacySocket;
 typedef struct _SocketFunctionTable SocketFunctionTable;
@@ -21,16 +25,16 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 #include "main/host/syscall_types.h"
 #include "main/routing/packet.minimal.h"
 
-typedef gboolean (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);
-typedef gint (*SocketConnectToPeerFunc)(LegacySocket* socket, const Host* host, in_addr_t ip,
+typedef bool (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);
+typedef int (*SocketConnectToPeerFunc)(LegacySocket* socket, const Host* host, in_addr_t ip,
                                         in_port_t port, sa_family_t family);
 typedef void (*SocketProcessFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 typedef void (*SocketDropFunc)(LegacySocket* socket, const Host* host, Packet* packet);
 
-typedef gssize (*SocketSendFunc)(LegacySocket* socket, const Thread* thread,
+typedef ssize_t (*SocketSendFunc)(LegacySocket* socket, const Thread* thread,
                                  UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
                                  in_port_t port);
-typedef gssize (*SocketReceiveFunc)(LegacySocket* socket, const Thread* thread,
+typedef ssize_t (*SocketReceiveFunc)(LegacySocket* socket, const Thread* thread,
                                     UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
                                     in_port_t* port);
 
@@ -96,42 +100,42 @@ Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host);
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket);
 Packet* legacysocket_peekNextInPacket(const LegacySocket* socket);
 
-gssize legacysocket_sendUserData(LegacySocket* socket, const Thread* thread,
+ssize_t legacysocket_sendUserData(LegacySocket* socket, const Thread* thread,
                                  UntypedForeignPtr buffer, gsize nBytes, in_addr_t ip,
                                  in_port_t port);
-gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
+ssize_t legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
                                     UntypedForeignPtr buffer, gsize nBytes, in_addr_t* ip,
                                     in_port_t* port);
 
-gsize legacysocket_getInputBufferSize(LegacySocket* socket);
+size_t legacysocket_getInputBufferSize(LegacySocket* socket);
 void legacysocket_setInputBufferSize(LegacySocket* socket, gsize newSize);
-gsize legacysocket_getInputBufferLength(LegacySocket* socket);
-gsize legacysocket_getInputBufferSpace(LegacySocket* socket);
-gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, Packet* packet);
+size_t legacysocket_getInputBufferLength(LegacySocket* socket);
+size_t legacysocket_getInputBufferSpace(LegacySocket* socket);
+bool legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, Packet* packet);
 Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* host);
 
-gsize legacysocket_getOutputBufferSize(LegacySocket* socket);
+size_t legacysocket_getOutputBufferSize(LegacySocket* socket);
 void legacysocket_setOutputBufferSize(LegacySocket* socket, gsize newSize);
-gsize legacysocket_getOutputBufferLength(LegacySocket* socket);
-gsize legacysocket_getOutputBufferSpace(LegacySocket* socket);
-gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, Packet* packet);
+size_t legacysocket_getOutputBufferLength(LegacySocket* socket);
+size_t legacysocket_getOutputBufferSpace(LegacySocket* socket);
+bool legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, Packet* packet);
 Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* host);
 
-gboolean legacysocket_isBound(LegacySocket* socket);
-gboolean legacysocket_getPeerName(LegacySocket* socket, in_addr_t* ip, in_port_t* port);
+bool legacysocket_isBound(LegacySocket* socket);
+bool legacysocket_getPeerName(LegacySocket* socket, in_addr_t* ip, in_port_t* port);
 void legacysocket_setPeerName(LegacySocket* socket, in_addr_t ip, in_port_t port);
-gboolean legacysocket_getSocketName(LegacySocket* socket, in_addr_t* ip, in_port_t* port);
+bool legacysocket_getSocketName(LegacySocket* socket, in_addr_t* ip, in_port_t* port);
 void legacysocket_setSocketName(LegacySocket* socket, in_addr_t ip, in_port_t port);
 
 ProtocolType legacysocket_getProtocol(LegacySocket* socket);
 
-gboolean legacysocket_isFamilySupported(LegacySocket* socket, sa_family_t family);
-gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t ip,
+bool legacysocket_isFamilySupported(LegacySocket* socket, sa_family_t family);
+int legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t ip,
                                 in_port_t port, sa_family_t family);
 
-gboolean legacysocket_isUnix(LegacySocket* socket);
+bool legacysocket_isUnix(LegacySocket* socket);
 void legacysocket_setUnix(LegacySocket* socket, gboolean isUnixSocket);
 void legacysocket_setUnixPath(LegacySocket* socket, const gchar* path, gboolean isBound);
-gchar* legacysocket_getUnixPath(LegacySocket* socket);
+char* legacysocket_getUnixPath(LegacySocket* socket);
 
 #endif /* SHD_SOCKET_H_ */

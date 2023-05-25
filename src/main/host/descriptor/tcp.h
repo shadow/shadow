@@ -7,10 +7,13 @@
 #ifndef SHD_TCP_H_
 #define SHD_TCP_H_
 
-#include <glib.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/un.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include <linux/in.h>
+#include <linux/tcp.h>
+#include <linux/un.h>
 
 #include "main/core/support/definitions.h"
 #include "main/host/syscall_types.h"
@@ -40,7 +43,7 @@ enum _TCPCongestionType {
     TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
 };
 
-TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize);
+TCP* tcp_new(const Host* host, uint32_t receiveBufferSize, uint32_t sendBufferSize);
 
 // clang-format off
 /* Returns a positive number to indicate that we have not yet sent a SYN
@@ -59,39 +62,39 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize);
  * -ECONNREFUSED: the 3-way handshake failed
  * -EALREADY: connect() was called and we are waiting for the 3-way handshake
  */
-gint tcp_getConnectionError(TCP* tcp);
+int tcp_getConnectionError(TCP* tcp);
 // clang-format on
 
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
-void tcp_enterServerMode(TCP* tcp, const Host* host, pid_t process, gint backlog);
-void tcp_updateServerBacklog(TCP* tcp, gint backlog);
+void tcp_enterServerMode(TCP* tcp, const Host* host, pid_t process, int backlog);
+void tcp_updateServerBacklog(TCP* tcp, int backlog);
 /* Address and port must be in network byte order. */
-gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* port,
-                          gint* acceptedHandle);
+int tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* port,
+                          int* acceptedHandle);
 
 struct TCPCong_ *tcp_cong(TCP *tcp);
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 
-gsize tcp_getOutputBufferLength(TCP* tcp);
-gsize tcp_getInputBufferLength(TCP* tcp);
-gsize tcp_getNotSentBytes(TCP* tcp);
+size_t tcp_getOutputBufferLength(TCP* tcp);
+size_t tcp_getInputBufferLength(TCP* tcp);
+size_t tcp_getNotSentBytes(TCP* tcp);
 
 void tcp_disableSendBufferAutotuning(TCP* tcp);
 void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 
-gboolean tcp_isValidListener(TCP* tcp);
-gboolean tcp_isListeningAllowed(TCP* tcp);
+bool tcp_isValidListener(TCP* tcp);
+bool tcp_isListeningAllowed(TCP* tcp);
 
-gssize tcp_sendUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
+ssize_t tcp_sendUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
                         in_addr_t ip, in_port_t port, const MemoryManager* mem);
-gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
+ssize_t tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gsize nBytes,
                            in_addr_t* ip, in_port_t* port, MemoryManager* mem);
 
-gint tcp_shutdown(TCP* tcp, const Host* host, gint how);
+int tcp_shutdown(TCP* tcp, const Host* host, int how);
 
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet* packet);
 
-TCPCongestionType tcpCongestion_getType(const gchar* type);
+TCPCongestionType tcpCongestion_getType(const char* type);
 
 #endif /* SHD_TCP_H_ */

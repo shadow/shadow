@@ -4,12 +4,15 @@
  */
 
 #include <errno.h>
-#include <signal.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/ucontext.h>
-#include <time.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include <linux/signal.h>
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"

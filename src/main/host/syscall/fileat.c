@@ -9,9 +9,10 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include <linux/time.h>
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
