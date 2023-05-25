@@ -26,5 +26,7 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod errno;
 pub mod sched;
 pub mod signal;
+pub mod time;

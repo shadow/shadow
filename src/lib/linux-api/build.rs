@@ -8,6 +8,10 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         include_guard: Some("linux_kernel_types_h".into()),
         export: cbindgen::ExportConfig {
             include: vec!["linux_sigaction".into(), "linux_siginfo_t".into()],
+            // Not sure why cbindgen tries to wrap this. The bindings it generates
+            // are broken though because the individual Errno values are translated
+            // as e.g. `bindings_LINUX_EINVAL` instead of `LINUX_EINVAL`.
+            exclude: vec!["Errno".into()],
             ..base_config.export.clone()
         },
         ..base_config

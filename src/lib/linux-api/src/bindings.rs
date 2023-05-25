@@ -3,6 +3,139 @@
 /* Build script: ./gen-kernel-bindings.sh */
 /* Kernel tag: v6.2 */
 
+pub const LINUX_EPERM: u32 = 1;
+pub const LINUX_ENOENT: u32 = 2;
+pub const LINUX_ESRCH: u32 = 3;
+pub const LINUX_EINTR: u32 = 4;
+pub const LINUX_EIO: u32 = 5;
+pub const LINUX_ENXIO: u32 = 6;
+pub const LINUX_E2BIG: u32 = 7;
+pub const LINUX_ENOEXEC: u32 = 8;
+pub const LINUX_EBADF: u32 = 9;
+pub const LINUX_ECHILD: u32 = 10;
+pub const LINUX_EAGAIN: u32 = 11;
+pub const LINUX_ENOMEM: u32 = 12;
+pub const LINUX_EACCES: u32 = 13;
+pub const LINUX_EFAULT: u32 = 14;
+pub const LINUX_ENOTBLK: u32 = 15;
+pub const LINUX_EBUSY: u32 = 16;
+pub const LINUX_EEXIST: u32 = 17;
+pub const LINUX_EXDEV: u32 = 18;
+pub const LINUX_ENODEV: u32 = 19;
+pub const LINUX_ENOTDIR: u32 = 20;
+pub const LINUX_EISDIR: u32 = 21;
+pub const LINUX_EINVAL: u32 = 22;
+pub const LINUX_ENFILE: u32 = 23;
+pub const LINUX_EMFILE: u32 = 24;
+pub const LINUX_ENOTTY: u32 = 25;
+pub const LINUX_ETXTBSY: u32 = 26;
+pub const LINUX_EFBIG: u32 = 27;
+pub const LINUX_ENOSPC: u32 = 28;
+pub const LINUX_ESPIPE: u32 = 29;
+pub const LINUX_EROFS: u32 = 30;
+pub const LINUX_EMLINK: u32 = 31;
+pub const LINUX_EPIPE: u32 = 32;
+pub const LINUX_EDOM: u32 = 33;
+pub const LINUX_ERANGE: u32 = 34;
+pub const LINUX_EDEADLK: u32 = 35;
+pub const LINUX_ENAMETOOLONG: u32 = 36;
+pub const LINUX_ENOLCK: u32 = 37;
+pub const LINUX_ENOSYS: u32 = 38;
+pub const LINUX_ENOTEMPTY: u32 = 39;
+pub const LINUX_ELOOP: u32 = 40;
+pub const LINUX_EWOULDBLOCK: u32 = 11;
+pub const LINUX_ENOMSG: u32 = 42;
+pub const LINUX_EIDRM: u32 = 43;
+pub const LINUX_ECHRNG: u32 = 44;
+pub const LINUX_EL2NSYNC: u32 = 45;
+pub const LINUX_EL3HLT: u32 = 46;
+pub const LINUX_EL3RST: u32 = 47;
+pub const LINUX_ELNRNG: u32 = 48;
+pub const LINUX_EUNATCH: u32 = 49;
+pub const LINUX_ENOCSI: u32 = 50;
+pub const LINUX_EL2HLT: u32 = 51;
+pub const LINUX_EBADE: u32 = 52;
+pub const LINUX_EBADR: u32 = 53;
+pub const LINUX_EXFULL: u32 = 54;
+pub const LINUX_ENOANO: u32 = 55;
+pub const LINUX_EBADRQC: u32 = 56;
+pub const LINUX_EBADSLT: u32 = 57;
+pub const LINUX_EDEADLOCK: u32 = 35;
+pub const LINUX_EBFONT: u32 = 59;
+pub const LINUX_ENOSTR: u32 = 60;
+pub const LINUX_ENODATA: u32 = 61;
+pub const LINUX_ETIME: u32 = 62;
+pub const LINUX_ENOSR: u32 = 63;
+pub const LINUX_ENONET: u32 = 64;
+pub const LINUX_ENOPKG: u32 = 65;
+pub const LINUX_EREMOTE: u32 = 66;
+pub const LINUX_ENOLINK: u32 = 67;
+pub const LINUX_EADV: u32 = 68;
+pub const LINUX_ESRMNT: u32 = 69;
+pub const LINUX_ECOMM: u32 = 70;
+pub const LINUX_EPROTO: u32 = 71;
+pub const LINUX_EMULTIHOP: u32 = 72;
+pub const LINUX_EDOTDOT: u32 = 73;
+pub const LINUX_EBADMSG: u32 = 74;
+pub const LINUX_EOVERFLOW: u32 = 75;
+pub const LINUX_ENOTUNIQ: u32 = 76;
+pub const LINUX_EBADFD: u32 = 77;
+pub const LINUX_EREMCHG: u32 = 78;
+pub const LINUX_ELIBACC: u32 = 79;
+pub const LINUX_ELIBBAD: u32 = 80;
+pub const LINUX_ELIBSCN: u32 = 81;
+pub const LINUX_ELIBMAX: u32 = 82;
+pub const LINUX_ELIBEXEC: u32 = 83;
+pub const LINUX_EILSEQ: u32 = 84;
+pub const LINUX_ERESTART: u32 = 85;
+pub const LINUX_ESTRPIPE: u32 = 86;
+pub const LINUX_EUSERS: u32 = 87;
+pub const LINUX_ENOTSOCK: u32 = 88;
+pub const LINUX_EDESTADDRREQ: u32 = 89;
+pub const LINUX_EMSGSIZE: u32 = 90;
+pub const LINUX_EPROTOTYPE: u32 = 91;
+pub const LINUX_ENOPROTOOPT: u32 = 92;
+pub const LINUX_EPROTONOSUPPORT: u32 = 93;
+pub const LINUX_ESOCKTNOSUPPORT: u32 = 94;
+pub const LINUX_EOPNOTSUPP: u32 = 95;
+pub const LINUX_EPFNOSUPPORT: u32 = 96;
+pub const LINUX_EAFNOSUPPORT: u32 = 97;
+pub const LINUX_EADDRINUSE: u32 = 98;
+pub const LINUX_EADDRNOTAVAIL: u32 = 99;
+pub const LINUX_ENETDOWN: u32 = 100;
+pub const LINUX_ENETUNREACH: u32 = 101;
+pub const LINUX_ENETRESET: u32 = 102;
+pub const LINUX_ECONNABORTED: u32 = 103;
+pub const LINUX_ECONNRESET: u32 = 104;
+pub const LINUX_ENOBUFS: u32 = 105;
+pub const LINUX_EISCONN: u32 = 106;
+pub const LINUX_ENOTCONN: u32 = 107;
+pub const LINUX_ESHUTDOWN: u32 = 108;
+pub const LINUX_ETOOMANYREFS: u32 = 109;
+pub const LINUX_ETIMEDOUT: u32 = 110;
+pub const LINUX_ECONNREFUSED: u32 = 111;
+pub const LINUX_EHOSTDOWN: u32 = 112;
+pub const LINUX_EHOSTUNREACH: u32 = 113;
+pub const LINUX_EALREADY: u32 = 114;
+pub const LINUX_EINPROGRESS: u32 = 115;
+pub const LINUX_ESTALE: u32 = 116;
+pub const LINUX_EUCLEAN: u32 = 117;
+pub const LINUX_ENOTNAM: u32 = 118;
+pub const LINUX_ENAVAIL: u32 = 119;
+pub const LINUX_EISNAM: u32 = 120;
+pub const LINUX_EREMOTEIO: u32 = 121;
+pub const LINUX_EDQUOT: u32 = 122;
+pub const LINUX_ENOMEDIUM: u32 = 123;
+pub const LINUX_EMEDIUMTYPE: u32 = 124;
+pub const LINUX_ECANCELED: u32 = 125;
+pub const LINUX_ENOKEY: u32 = 126;
+pub const LINUX_EKEYEXPIRED: u32 = 127;
+pub const LINUX_EKEYREVOKED: u32 = 128;
+pub const LINUX_EKEYREJECTED: u32 = 129;
+pub const LINUX_EOWNERDEAD: u32 = 130;
+pub const LINUX_ENOTRECOVERABLE: u32 = 131;
+pub const LINUX_ERFKILL: u32 = 132;
+pub const LINUX_EHWPOISON: u32 = 133;
 pub const LINUX_CLONE_VM: u32 = 256;
 pub const LINUX_CLONE_FS: u32 = 512;
 pub const LINUX_CLONE_FILES: u32 = 1024;
@@ -33,6 +166,18 @@ pub const LINUX_CLONE_NEWTIME: u32 = 128;
 pub const LINUX_CLONE_ARGS_SIZE_VER0: u32 = 64;
 pub const LINUX_CLONE_ARGS_SIZE_VER1: u32 = 80;
 pub const LINUX_CLONE_ARGS_SIZE_VER2: u32 = 88;
+pub const LINUX_CLOCK_REALTIME: u32 = 0;
+pub const LINUX_CLOCK_MONOTONIC: u32 = 1;
+pub const LINUX_CLOCK_PROCESS_CPUTIME_ID: u32 = 2;
+pub const LINUX_CLOCK_THREAD_CPUTIME_ID: u32 = 3;
+pub const LINUX_CLOCK_MONOTONIC_RAW: u32 = 4;
+pub const LINUX_CLOCK_REALTIME_COARSE: u32 = 5;
+pub const LINUX_CLOCK_MONOTONIC_COARSE: u32 = 6;
+pub const LINUX_CLOCK_BOOTTIME: u32 = 7;
+pub const LINUX_CLOCK_REALTIME_ALARM: u32 = 8;
+pub const LINUX_CLOCK_BOOTTIME_ALARM: u32 = 9;
+pub const LINUX_CLOCK_SGI_CYCLE: u32 = 10;
+pub const LINUX_CLOCK_TAI: u32 = 11;
 pub const LINUX_SIGHUP: u32 = 1;
 pub const LINUX_SIGINT: u32 = 2;
 pub const LINUX_SIGQUIT: u32 = 3;
@@ -148,6 +293,7 @@ pub const LINUX_POLL_ERR: u32 = 4;
 pub const LINUX_POLL_PRI: u32 = 5;
 pub const LINUX_POLL_HUP: u32 = 6;
 pub const LINUX_SYS_SECCOMP: u32 = 1;
+pub const LINUX_EMT_TAGOVF: u32 = 1;
 pub const LINUX_SIGEV_SIGNAL: u32 = 0;
 pub const LINUX_SIGEV_NONE: u32 = 1;
 pub const LINUX_SIGEV_THREAD: u32 = 2;
@@ -157,8 +303,51 @@ pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___kernel_long_t = ::core::ffi::c_long;
 pub type linux___kernel_pid_t = ::core::ffi::c_int;
 pub type linux___kernel_uid32_t = ::core::ffi::c_uint;
+pub type linux___kernel_old_time_t = linux___kernel_long_t;
 pub type linux___kernel_clock_t = linux___kernel_long_t;
 pub type linux___kernel_timer_t = ::core::ffi::c_int;
+pub type linux___kernel_clockid_t = ::core::ffi::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_timespec {
+    pub ltv_sec: linux___kernel_old_time_t,
+    pub ltv_nsec: ::core::ffi::c_long,
+}
+#[test]
+fn bindgen_test_layout_timespec() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_timespec> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_timespec>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_timespec))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_timespec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_timespec))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ltv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timespec),
+            "::",
+            stringify!(ltv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ltv_nsec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timespec),
+            "::",
+            stringify!(ltv_nsec)
+        )
+    );
+}
 pub type linux_sigset_t = ::core::ffi::c_ulong;
 pub type linux___signalfn_t =
     ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
@@ -166,7 +355,7 @@ pub type linux___sighandler_t = linux___signalfn_t;
 pub type linux___restorefn_t = ::core::option::Option<unsafe extern "C" fn()>;
 pub type linux___sigrestore_t = linux___restorefn_t;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_sigaction {
     pub lsa_handler: linux___sighandler_t,
     pub lsa_flags: ::core::ffi::c_ulong,
@@ -282,7 +471,7 @@ pub union linux___sifields {
     pub l_sigsys: linux___sifields__bindgen_ty_7,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_1 {
     pub l_pid: linux___kernel_pid_t,
     pub l_uid: linux___kernel_uid32_t,
@@ -441,7 +630,7 @@ fn bindgen_test_layout___sifields__bindgen_ty_3() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_4 {
     pub l_pid: linux___kernel_pid_t,
     pub l_uid: linux___kernel_uid32_t,
@@ -531,7 +720,7 @@ pub union linux___sifields__bindgen_ty_5__bindgen_ty_1 {
     pub l_perf: linux___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1 {
     pub l_dummy_bnd: [::core::ffi::c_char; 8usize],
     pub l_lower: *mut ::core::ffi::c_void,
@@ -591,7 +780,7 @@ fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2 {
     pub l_dummy_pkey: [::core::ffi::c_char; 8usize],
     pub l_pkey: linux___u32,
@@ -640,7 +829,7 @@ fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3 {
     pub l_data: ::core::ffi::c_ulong,
     pub l_type: linux___u32,
@@ -798,7 +987,7 @@ fn bindgen_test_layout___sifields__bindgen_ty_5() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_6 {
     pub l_band: ::core::ffi::c_long,
     pub l_fd: ::core::ffi::c_int,
@@ -840,7 +1029,7 @@ fn bindgen_test_layout___sifields__bindgen_ty_6() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___sifields__bindgen_ty_7 {
     pub l_call_addr: *mut ::core::ffi::c_void,
     pub l_syscall: ::core::ffi::c_int,
