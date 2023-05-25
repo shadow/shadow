@@ -8,7 +8,6 @@ bitflags::bitflags! {
         const CLONE_CLEAR_SIGHAND = bindings::CLONE_CLEAR_SIGHAND;
         const CLONE_INTO_CGROUP = bindings::CLONE_INTO_CGROUP;
         const CLONE_NEWTIME = bindings::CLONE_NEWTIME as u64;
-
         const CLONE_VM = bindings::CLONE_VM as u64;
         const CLONE_FS = bindings::CLONE_FS as u64;
         const CLONE_FILES = bindings::CLONE_FILES as u64;
