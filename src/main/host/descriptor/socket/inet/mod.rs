@@ -451,6 +451,9 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocket_pushInPacket(socket: *const InetSocket, packet: *mut c::Packet) {
         let socket = unsafe { socket.as_ref() }.unwrap();
+
+        // we don't own the reference to the packet, so we need our own reference
+        unsafe { c::packet_ref(packet) };
         let packet = PacketRc::from_raw(packet);
 
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
