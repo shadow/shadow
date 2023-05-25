@@ -249,6 +249,9 @@ impl linux_siginfo_t {
             ._overrun = overrun;
     }
 
+    /// # Safety
+    /// 
+    /// The overrun field must be known to be initialized.
     #[inline]
     pub unsafe fn get_overrun(&mut self) -> i32 {
         // union fields are always in the same position in the unions where they are defined.
