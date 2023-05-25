@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, LinuxDefaultAction, LinuxSignal};
+use linux_api::signal::{defaultaction, linux_siginfo_t, LinuxDefaultAction, LinuxSignal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -447,11 +447,11 @@ impl RunnableProcess {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
-        if siginfo.si_signo == 0 {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &linux_siginfo_t) {
+        if *siginfo.signo() == 0 {
             return;
         }
-        let signal = LinuxSignal::try_from(siginfo.si_signo).unwrap();
+        let signal = LinuxSignal::try_from(*siginfo.signo()).unwrap();
 
         // Scope for `process_shmem_protected`
         {
@@ -578,11 +578,10 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
         return;
     };
     let timer = runnable.itimer_real.borrow();
-    let mut siginfo: libc::siginfo_t = unsafe { std::mem::zeroed() };
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
-    unsafe { cshadow::process_initSiginfoForAlarm(&mut siginfo, expiration_count) };
+    let siginfo = linux_siginfo_t::new_sigalrm(expiration_count);
     process.signal(host, None, &siginfo);
 }
 
@@ -983,7 +982,7 @@ impl Process {
     /// See `RunnableProcess::signal`.
     ///
     /// No-op if the `self` is a `ZombieProcess`.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &libc::siginfo_t) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &linux_siginfo_t) {
         // Using full-match here to force update if we add more states later.
         match self.state.borrow().as_ref().unwrap() {
             ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo),
@@ -2035,7 +2034,7 @@ mod export {
     pub unsafe extern "C" fn process_signal(
         target_proc: *const Process,
         current_running_thread: *const Thread,
-        siginfo: *const libc::siginfo_t,
+        siginfo: *const linux_siginfo_t,
     ) {
         let target_proc = unsafe { target_proc.as_ref().unwrap() };
         let current_running_thread = unsafe { current_running_thread.as_ref() };

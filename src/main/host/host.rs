@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::signal::{linux_siginfo_t, LinuxSignal};
 use log::{debug, trace};
 use logger::LogLevel;
 use nix::sys::signal::Signal;
@@ -42,9 +43,9 @@ use crate::network::net_namespace::NetworkNamespace;
 use crate::network::relay::{RateLimit, Relay};
 use crate::network::router::Router;
 use crate::network::PacketDevice;
+use crate::utility;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
-use crate::utility::{self, pod};
 
 pub struct HostParameters {
     pub id: HostId,
@@ -417,8 +418,11 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let mut siginfo: libc::siginfo_t = pod::zeroed();
-                    siginfo.si_signo = shutdown_signal as i32;
+                    let siginfo = linux_siginfo_t::new(
+                        LinuxSignal::try_from(shutdown_signal as i32).unwrap(),
+                        0,
+                        0,
+                    );
                     process.signal(host, None, &siginfo);
                 });
                 host.schedule_task_at_emulated_time(

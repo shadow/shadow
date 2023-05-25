@@ -44,13 +44,12 @@ static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Pr
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    siginfo_t siginfo = {
-        .si_signo = sig,
-        .si_errno = 0,
-        .si_code = SI_USER,
-        .si_pid = sys->processId,
-        .si_uid = 0,
-    };
+    if (sig == 0) {
+        return syscallreturn_makeDoneI64(0);
+    }
+
+    linux_siginfo_t siginfo = linux_siginfo_new(sig, 0, SI_USER);
+    linux_siginfo_set_pid(&siginfo, sys->processId);
 
     process_signal(process, _syscallhandler_getThread(sys), &siginfo);
 
@@ -94,15 +93,11 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     linux_sigaddset(&pending_signals, sig);
     shimshmem_setThreadPendingSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                       thread_sharedMem(thread), pending_signals);
-    shimshmem_setThreadSiginfo(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                               thread_sharedMem(thread), sig,
-                               &(siginfo_t){
-                                   .si_signo = sig,
-                                   .si_errno = 0,
-                                   .si_code = SI_TKILL,
-                                   .si_pid = sys->processId,
-                                   .si_uid = 0,
-                               });
+    linux_siginfo_t info = linux_siginfo_new(sig, 0, SI_TKILL);
+    linux_siginfo_set_pid(&info, sys->processId);
+    linux_siginfo_set_uid(&info, 0);
+    shimshmem_setThreadSiginfo(
+        host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread), sig, &info);
 
     if (thread_getID(thread) == sys->threadId) {
         // Target is the current thread. It'll be handled synchronously when the

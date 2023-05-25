@@ -120,7 +120,7 @@ pub struct linux_siginfo_t {
     // We also can't use core::mem::size_of::<bindings::siginfo_t> to specify
     // the size here, because that also confuses cbindgen.
     // Size validated by static assertion below.
-    _padding: [MaybeUninit<u8>; 100],
+    _padding: MaybeUninit<[u8; 100]>,
 }
 static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
 static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
@@ -149,28 +149,127 @@ fn test_linux_siginfo_layout() {
 }
 
 impl linux_siginfo_t {
+    fn as_bound_type(&self) -> &bindings::siginfo_t {
+        // SAFETY: Same layout. The `MaybeUninit` `_padding` section corresponds
+        // to unions in the bound type, which still require `unsafe` to read.
+        unsafe { &*(self as *const _ as *const bindings::siginfo_t) }
+    }
+
+    fn as_bound_type_mut(&mut self) -> &mut bindings::siginfo_t {
+        // SAFETY: Same layout. The `MaybeUninit` `_padding` section corresponds
+        // to unions in the bound type, which still require `unsafe` to read.
+        unsafe { &mut *(self as *mut _ as *mut bindings::siginfo_t) }
+    }
+
+    #[inline]
     pub fn signo(&self) -> &i32 {
         &self.lsi_signo
     }
 
+    #[inline]
     pub fn signo_mut(&mut self) -> &mut i32 {
         &mut self.lsi_signo
     }
 
+    #[inline]
     pub fn errno(&self) -> &i32 {
         &self.lsi_errno
     }
 
+    #[inline]
     pub fn errno_mut(&mut self) -> &mut i32 {
         &mut self.lsi_errno
     }
 
+    #[inline]
     pub fn code(&self) -> &i32 {
         &self.lsi_code
     }
 
+    #[inline]
     pub fn code_mut(&mut self) -> &mut i32 {
         &mut self.lsi_code
+    }
+
+    #[inline]
+    pub fn set_pid(&mut self, pid: i32) {
+        // union fields are always in the same position in the unions where they are defined.
+        self.as_bound_type_mut()
+            .__bindgen_anon_1
+            .__bindgen_anon_1
+            ._sifields
+            ._kill
+            ._pid = pid;
+    }
+
+    #[inline]
+    pub fn set_uid(&mut self, uid: u32) {
+        // union fields are always in the same position in the unions where they are defined.
+        self.as_bound_type_mut()
+            .__bindgen_anon_1
+            .__bindgen_anon_1
+            ._sifields
+            ._rt
+            ._uid = uid;
+    }
+
+    #[inline]
+    pub fn set_overrun(&mut self, overrun: i32) {
+        // union fields are always in the same position in the unions where they are defined.
+        self.as_bound_type_mut()
+            .__bindgen_anon_1
+            .__bindgen_anon_1
+            ._sifields
+            ._timer
+            ._overrun = overrun;
+    }
+
+    #[inline]
+    pub unsafe fn get_overrun(&mut self) -> i32 {
+        // union fields are always in the same position in the unions where they are defined.
+        unsafe {
+            self.as_bound_type()
+                .__bindgen_anon_1
+                .__bindgen_anon_1
+                ._sifields
+                ._timer
+                ._overrun
+        }
+    }
+
+    #[inline]
+    pub fn new(signal: LinuxSignal, errno: i32, code: i32) -> Self {
+        linux_siginfo_t {
+            lsi_signo: signal.into(),
+            lsi_errno: errno,
+            lsi_code: code,
+            _align: Default::default(),
+            _padding: MaybeUninit::zeroed(),
+        }
+    }
+
+    #[inline]
+    pub fn new_sigalrm(overrun: i32) -> Self {
+        let mut s = linux_siginfo_t {
+            lsi_signo: LinuxSignal::SIGALRM.into(),
+            lsi_errno: 0,
+            lsi_code: bindings::SI_TIMER,
+            _align: Default::default(),
+            _padding: MaybeUninit::uninit(),
+        };
+        s.as_bound_type_mut()
+            .__bindgen_anon_1
+            .__bindgen_anon_1
+            ._sifields
+            ._timer
+            ._overrun = overrun;
+        s
+    }
+}
+
+impl Default for linux_siginfo_t {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
     }
 }
 
@@ -556,5 +655,28 @@ mod export {
     pub extern "C" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
         let sig = LinuxSignal::try_from(signo).unwrap();
         defaultaction(sig)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn linux_siginfo_new(
+        lsi_signo: i32,
+        lsi_errno: i32,
+        lsi_code: i32,
+    ) -> linux_siginfo_t {
+        // TODO: Lift errno and code types.
+        let signal = LinuxSignal::try_from(lsi_signo).unwrap();
+        linux_siginfo_t::new(signal, lsi_errno, lsi_code)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn linux_siginfo_set_pid(si: *mut linux_siginfo_t, pid: i32) {
+        let si = unsafe { si.as_mut().unwrap() };
+        si.set_pid(pid)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn linux_siginfo_set_uid(si: *mut linux_siginfo_t, uid: u32) {
+        let si = unsafe { si.as_mut().unwrap() };
+        si.set_uid(uid)
     }
 }

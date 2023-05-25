@@ -173,7 +173,15 @@ void shim_handle_hardware_error_signal(int signo, siginfo_t* info, void* void_uc
     } else {
         linux_sigaddset(&pending_signals, signo);
         shimshmem_setThreadPendingSignals(host_lock, shim_threadSharedMem(), pending_signals);
-        shimshmem_setThreadSiginfo(host_lock, shim_threadSharedMem(), signo, info);
+        // So far we've gotten away with assuming that the libc and kernel
+        // siginfo_t's are the same.
+        //
+        // TODO: Use a raw SYS_sigaction syscall in the first place, so that we
+        // can know for sure that we're getting the kernel definition in the
+        // handler. e.g. wrap the syscall in linux-api, and have the handler
+        // specifically get a `linux_siginfo_t`.
+        shimshmem_setThreadSiginfo(
+            host_lock, shim_threadSharedMem(), signo, (linux_siginfo_t*)info);
     }
 
     shim_process_signals(host_lock, void_ucontext);

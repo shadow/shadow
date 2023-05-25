@@ -51,6 +51,9 @@ bindgen_flags+=("--raw-line=/* Kernel tag: $LINUX_TAG */")
 # Signal names
 bindgen_flags+=("--allowlist-var=SIG.*")
 
+# Signal constants, including SI_TIMER
+bindgen_flags+=("--allowlist-var=SI_.*")
+
 # sigaction flags
 bindgen_flags+=("--allowlist-var=SA_.*")
 
