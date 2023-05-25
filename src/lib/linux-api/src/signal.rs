@@ -1,3 +1,5 @@
+use core::mem::MaybeUninit;
+
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -6,7 +8,11 @@ use crate::bindings;
 pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
 /// Lowest realtime signal number.
-pub const LINUX_SIGRT_MIN: i32 = bindings::SIGRTMIN as i32;
+// We defined as a constant and cross-validate so that it gets exported
+// via cbindgen.
+pub const LINUX_SIGRT_MIN: i32 = 32;
+static_assertions::const_assert_eq!(LINUX_SIGRT_MIN, bindings::SIGRTMIN as i32);
+
 /// Highest realtime signal number.
 //
 // According to signal(7). bindgen fails to bind this one.
@@ -29,6 +35,7 @@ pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
 // signal names
 #[derive(Debug, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum LinuxSignal {
     SIGHUP = bindings::SIGHUP as i32,
     SIGINT = bindings::SIGINT as i32,
@@ -97,10 +104,15 @@ unsafe impl VirtualAddressSpaceIndependent for LinuxSigActionFlags {}
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct linux_siginfo_t {
-    // We don't wrap bindings::siginfo_t directly,
-    // since this would introduce a dependency on the original system
-    // header file in the cbindgen'd version of this type, and requiring our C code
-    // to include the kernel headers results in naming conflicts.
+    // We have to prefix these field names to avoid conflicts with
+    // macros in our exported C bindings.
+    lsi_signo: i32,
+    lsi_errno: i32,
+    lsi_code: i32,
+
+    // TODO: Consider defining the rest of the fields. It's a lot of nested
+    // unions, so may not be worth fully defining here. Instead we can just
+    // add accessor methods for the fields we need.
 
     // cbindgen doesn't understand repr(C, align(x)).
     // alignment validated by static assertion below.
@@ -108,82 +120,57 @@ pub struct linux_siginfo_t {
     // We also can't use core::mem::size_of::<bindings::siginfo_t> to specify
     // the size here, because that also confuses cbindgen.
     // Size validated by static assertion below.
-    _padding: [u8; 120],
+    _padding: [MaybeUninit<u8>; 100],
 }
 static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
 static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
 
+#[cfg(test)]
+#[test]
+fn test_linux_siginfo_layout() {
+    assert_eq!(
+        memoffset::offset_of!(linux_siginfo_t, lsi_signo),
+        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
+            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_signo)
+    );
+    assert_eq!(
+        memoffset::offset_of!(linux_siginfo_t, lsi_errno),
+        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
+            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_errno)
+    );
+    assert_eq!(
+        memoffset::offset_of!(linux_siginfo_t, lsi_code),
+        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
+            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_code)
+    );
+}
+
 impl linux_siginfo_t {
-    fn as_bound_type(&self) -> &bindings::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
-        unsafe { core::mem::transmute(self) }
-    }
-
-    fn as_bound_type_mut(&mut self) -> &mut bindings::siginfo_t {
-        static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
-        static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
-        unsafe { core::mem::transmute(self) }
-    }
-
     pub fn signo(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_signo
-        }
+        &self.lsi_signo
     }
 
     pub fn signo_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_signo
-        }
+        &mut self.lsi_signo
     }
 
     pub fn errno(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_errno
-        }
+        &self.lsi_errno
     }
 
     pub fn errno_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_errno
-        }
+        &mut self.lsi_errno
     }
 
     pub fn code(&self) -> &i32 {
-        unsafe {
-            &self
-                .as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_code
-        }
+        &self.lsi_code
     }
 
     pub fn code_mut(&mut self) -> &mut i32 {
-        unsafe {
-            &mut self
-                .as_bound_type_mut()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .si_code
-        }
+        &mut self.lsi_code
     }
 }
 
@@ -347,13 +334,13 @@ fn test_not() {
 pub union LinuxSignalHandler {
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
-    ksa_handler: Option<extern "C" fn(i32)>,
-    ksa_sigaction: Option<extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)>,
+    lsa_handler: Option<unsafe extern "C" fn(i32)>,
+    lsa_sigaction: Option<unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)>,
 }
 
 impl LinuxSignalHandler {
     fn as_usize(&self) -> usize {
-        unsafe { self.ksa_handler }.map(|f| f as usize).unwrap_or(0)
+        unsafe { self.lsa_handler }.map(|f| f as usize).unwrap_or(0)
     }
 
     pub fn is_sig_ign(&self) -> bool {
@@ -370,7 +357,7 @@ impl LinuxSignalHandler {
 /// and that `ksa_mask` is the kernel's mask size (64 bits) vs libc's larger one
 /// (~1000 bits for glibc).
 ///
-/// We use the field prefix ksa_ to avoid conflicting with macros defined for
+/// We use the field prefix lsa_ to avoid conflicting with macros defined for
 /// the corresponding field names in glibc.
 #[derive(VirtualAddressSpaceIndependent, Copy, Clone)]
 #[repr(C)]
@@ -378,25 +365,50 @@ pub struct linux_sigaction {
     // SAFETY: We do not dereference the pointers in this union, except from the
     // shim, where it is valid to do so.
     #[unsafe_assume_virtual_address_space_independent]
-    u: LinuxSignalHandler,
-    ksa_flags: LinuxSigActionFlags,
+    pub u: LinuxSignalHandler,
+    pub lsa_flags: LinuxSigActionFlags,
     // Rust guarantees that the outer Option doesn't change the size:
     // https://doc.rust-lang.org/std/option/index.html#representation
     //
     // SAFETY: We never dereference this field.
     #[unsafe_assume_virtual_address_space_independent]
-    ksa_restorer: Option<extern "C" fn()>,
-    ksa_mask: linux_sigset_t,
+    pub lsa_restorer: Option<extern "C" fn()>,
+    pub lsa_mask: linux_sigset_t,
 }
 static_assertions::assert_eq_align!(linux_sigaction, bindings::sigaction);
 static_assertions::assert_eq_size!(linux_sigaction, bindings::sigaction);
 
+#[cfg(test)]
+#[test]
+fn test_linux_sigaction_layout() {
+    assert_eq!(
+        memoffset::offset_of!(linux_sigaction, u)
+            + memoffset::offset_of_union!(LinuxSignalHandler, lsa_handler),
+        memoffset::offset_of!(bindings::sigaction, sa_handler)
+    );
+    // Bindgen doesn't create an `sa_sigaction` field; both `sa_handler` and
+    // `sa_sigaction` are stored directly in `sa_handler`.
+    assert_eq!(
+        memoffset::offset_of!(linux_sigaction, u)
+            + memoffset::offset_of_union!(LinuxSignalHandler, lsa_sigaction),
+        memoffset::offset_of!(bindings::sigaction, sa_handler)
+    );
+    assert_eq!(
+        memoffset::offset_of!(linux_sigaction, lsa_flags),
+        memoffset::offset_of!(bindings::sigaction, sa_flags)
+    );
+    assert_eq!(
+        memoffset::offset_of!(linux_sigaction, lsa_restorer),
+        memoffset::offset_of!(bindings::sigaction, sa_restorer)
+    );
+    assert_eq!(
+        memoffset::offset_of!(linux_sigaction, lsa_mask),
+        memoffset::offset_of!(bindings::sigaction, sa_mask)
+    );
+}
+
 impl linux_sigaction {
     pub fn handler(&self) -> &LinuxSignalHandler {
-        assert_eq!(
-            memoffset::offset_of!(linux_sigaction, u),
-            memoffset::offset_of!(bindings::sigaction, sa_handler)
-        );
         &self.u
     }
 }
@@ -404,10 +416,10 @@ impl linux_sigaction {
 impl Default for linux_sigaction {
     fn default() -> Self {
         Self {
-            u: LinuxSignalHandler { ksa_handler: None },
-            ksa_flags: Default::default(),
-            ksa_restorer: Default::default(),
-            ksa_mask: Default::default(),
+            u: LinuxSignalHandler { lsa_handler: None },
+            lsa_flags: Default::default(),
+            lsa_restorer: Default::default(),
+            lsa_mask: Default::default(),
         }
     }
 }

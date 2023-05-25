@@ -10,10 +10,10 @@
 static void _call_signal_handler(const struct linux_sigaction* action, int signo,
                                  linux_siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
-    if (action->ksa_flags & SA_SIGINFO) {
-        action->u.ksa_sigaction(signo, siginfo, ucontext);
+    if (action->lsa_flags & SA_SIGINFO) {
+        action->u.lsa_sigaction(signo, siginfo, ucontext);
     } else {
-        action->u.ksa_handler(signo);
+        action->u.lsa_handler(signo);
     }
     shim_swapAllowNativeSyscalls(true);
 }
@@ -44,11 +44,11 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         struct linux_sigaction action =
             shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
 
-        if (action.u.ksa_handler == SIG_IGN) {
+        if (action.u.lsa_handler == SIG_IGN) {
             continue;
         }
 
-        if (action.u.ksa_handler == SIG_DFL) {
+        if (action.u.lsa_handler == SIG_DFL) {
             switch (linux_defaultAction(signo)) {
                 case LINUX_DEFAULT_ACTION_IGN:
                     // Ignore
@@ -68,23 +68,23 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         trace("Handling signo %d", signo);
 
-        linux_sigset_t handler_mask = linux_sigorset(&blocked_signals, &action.ksa_mask);
-        if (!(action.ksa_flags & SA_NODEFER)) {
+        linux_sigset_t handler_mask = linux_sigorset(&blocked_signals, &action.lsa_mask);
+        if (!(action.lsa_flags & SA_NODEFER)) {
             // Block another instance of the same signal.
             linux_sigaddset(&handler_mask, signo);
         }
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), handler_mask);
 
-        if (action.ksa_flags & SA_RESETHAND) {
+        if (action.lsa_flags & SA_RESETHAND) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct linux_sigaction){.u.ksa_handler = SIG_DFL});
+                                      &(struct linux_sigaction){.u.lsa_handler = SIG_DFL});
         }
-        if (!(action.ksa_flags & SA_RESTART)) {
+        if (!(action.lsa_flags & SA_RESTART)) {
             restartable = false;
         }
 
         const stack_t ss_original = shimshmem_getSigAltStack(host_lock, shim_threadSharedMem());
-        if (action.ksa_flags & SA_ONSTACK && !(ss_original.ss_flags & SS_DISABLE)) {
+        if (action.lsa_flags & SA_ONSTACK && !(ss_original.ss_flags & SS_DISABLE)) {
             // Call handler on the configured signal stack.
 
             if (ss_original.ss_flags & SS_ONSTACK) {
