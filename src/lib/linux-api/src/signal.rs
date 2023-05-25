@@ -93,7 +93,7 @@ impl LinuxSignal {
     pub const SIGRT_MAX: Self = Self(LINUX_SIGRT_MAX);
 
     const fn const_alias(from: u32, to: Self) -> Self {
-        if to.0 as i32 != from as i32 {
+        if from as i32 != to.0 {
             // Can't use a format string here since this function is `const`
             panic!("Incorrect alias")
         }

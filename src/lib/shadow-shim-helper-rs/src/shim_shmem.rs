@@ -733,7 +733,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         let info = unsafe { info.as_ref().unwrap() };
-        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info.into());
+        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
     }
 
     /// # Safety
