@@ -12,6 +12,8 @@
 
 #define USEC_PER_SEC 1000000ULL
 
+_Noreturn void logger_abort() { abort(); }
+
 // Process start time, initialized explicitly or on first use.
 static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
 static bool _start_time_initd = false;
